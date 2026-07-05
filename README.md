@@ -14,22 +14,25 @@ Built for self-hosters and homelab folks. It does the tedious work of reading Tr
 ```
 🛡️ StackWatch — scan results for 2026-06-28 09:00
 12 images scanned, 3 affected
-Priority: 🟠 1 need care · 🟢 9 safe
 
-✅ Actionable now (fixed)
-🟠 nginx:1.25.3   CRITICAL 1 / HIGH 4
-   • openssl 3.0.7 → 3.0.11 (CRITICAL 1)
-   • +3 lower-risk fixes (HIGH 4): libssl3, zlib1g, libxml2
-🟠 myapp:latest   CRITICAL 0 / HIGH 2
+🆕 New since last scan (2)
+🟠 nginx:1.25.3
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 Distro security update
+🟠 myapp:latest
    • webpack 4.46.0 → 5.89.0 (CRITICAL 0 / HIGH 1)  🟠 Needs care (major version bump) [lang]
-   • +1 lower-risk fixes (HIGH 1): postcss
 
-9 lower-risk fix(es) summarized — full list in the generic webhook payload.
+✅ Resolved since last scan (1)
+• myapp:latest: postcss
+
+📌 Open now: CRITICAL 1 / HIGH 6 across 3 image(s) — oldest unresolved 12 days
 ```
 
-Instead of dumping every CVE, it tells you the one upgrade that needs a human decision
-(a major-version bump that might break things), collapses the safe patch/minor fixes into
-a single line, and stays silent on the days there's nothing to act on.
+Instead of dumping every CVE every day, it tells you **what changed**: new findings in
+full detail (with a semver hint on whether the upgrade needs a human decision), what got
+resolved, and a one-line running total whose age keeps nagging you — gently — about the
+things you haven't fixed yet. On days where nothing changed, you get one line, not a wall
+of text. A full report goes out once a week (configurable), and the complete data is
+always available via the generic webhook.
 
 ## What it does
 
@@ -39,7 +42,8 @@ a single line, and stays silent on the days there's nothing to act on.
 4. Sorts them by Trivy's `Status` (fixable now / waiting on upstream / won't fix)
 5. Aggregates per package and annotates upgrade risk (for language packages, semver tells you whether the bump is safe or needs care)
 6. Flags base-OS end-of-life (EOL) as top priority
-7. Notifies Slack / webhook once a day — but only when there's something worth acting on
+7. Diffs against the previous scan, so you're notified about **changes**, not reminded of what you already know
+8. Notifies Slack / webhook once a day — but only when there's something worth acting on
 
 ## Quick start
 
@@ -52,8 +56,12 @@ $EDITOR config.yml
 docker run -d --name stackwatch \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -v "$PWD/config.yml:/etc/stackwatch/config.yml:ro" \
+  -v stackwatch-state:/var/lib/stackwatch \
   ghcr.io/kitsunetrail/stackwatch:latest
 ```
+
+(The `stackwatch-state` volume keeps the scan history that powers diff notifications;
+without it, everything is re-announced as new whenever the container is recreated.)
 
 That's it — every container on the host (no matter which compose project or one-off `docker run` started it) is scanned daily.
 You don't need one per container or per compose project: **one instance per host**.
@@ -72,6 +80,12 @@ docker compose logs -f
 
 See [config.example.yml](config.example.yml). At minimum, set one of `notify.slack_webhook_url` or `notify.generic_webhook_url` and you're good to go.
 
+Notable knobs:
+
+- `notify.mode` — `diff` (default) notifies only what changed since the last scan, plus a one-line "open now" summary; `full` resends the complete report every scan.
+- `notify.full_report_day` — in diff mode, the weekday to also send the complete report (default `monday`, `never` to disable).
+- `state.path` — where diff mode remembers previous scans (default `/var/lib/stackwatch/state.json`).
+
 ## Development
 
 ```sh
@@ -80,7 +94,7 @@ go test ./...          # also runs integration tests that use Trivy (needs trivy
 go build ./...
 ```
 
-The pipeline is split into small packages: `docker` (enumerate) → `scanner` (run & parse Trivy) → `analyze` (sort, aggregate, assess) → `notify` (format & send), tied together by `runner`.
+The pipeline is split into small packages: `docker` (enumerate) → `scanner` (run & parse Trivy) → `analyze` (sort, aggregate, assess) → `state` (persist & diff against the previous scan) → `notify` (format & send), tied together by `runner`.
 
 ## License
 

@@ -22,7 +22,7 @@ func TestSlackNotifier_Send(t *testing.T) {
 	defer srv.Close()
 
 	n := SlackNotifier{WebhookURL: srv.URL}
-	if err := n.Send(context.Background(), sampleReport()); err != nil {
+	if err := n.Send(context.Background(), Message{Report: sampleReport()}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if gotContentType != "application/json" {
@@ -47,7 +47,7 @@ func TestSlackNotifier_HTTPError(t *testing.T) {
 	defer srv.Close()
 
 	n := SlackNotifier{WebhookURL: srv.URL}
-	if err := n.Send(context.Background(), sampleReport()); err == nil {
+	if err := n.Send(context.Background(), Message{Report: sampleReport()}); err == nil {
 		t.Fatal("expected error on 500 response, got nil")
 	}
 }
@@ -61,7 +61,7 @@ func TestWebhookNotifier_Send(t *testing.T) {
 	defer srv.Close()
 
 	n := WebhookNotifier{URL: srv.URL}
-	if err := n.Send(context.Background(), sampleReport()); err != nil {
+	if err := n.Send(context.Background(), Message{Report: sampleReport()}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if _, ok := got["summary"]; !ok {
@@ -81,7 +81,7 @@ func TestMultiNotifier_SendsToAll(t *testing.T) {
 	defer s2.Close()
 
 	m := Multi(SlackNotifier{WebhookURL: s1.URL}, WebhookNotifier{URL: s2.URL})
-	if err := m.Send(context.Background(), sampleReport()); err != nil {
+	if err := m.Send(context.Background(), Message{Report: sampleReport()}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if hits != 2 {

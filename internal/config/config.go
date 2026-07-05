@@ -18,6 +18,7 @@ type Config struct {
 	Scan     ScanConfig
 	Notify   NotifyConfig
 	Docker   DockerConfig
+	State    StateConfig
 }
 
 type ScheduleConfig struct {
@@ -45,11 +46,24 @@ type ScanConfig struct {
 type NotifyConfig struct {
 	SlackWebhookURL   string
 	GenericWebhookURL string
-	NotifyOnClean     bool // also notify when nothing was found
+	NotifyOnClean     bool   // also notify when nothing was found
+	Mode              string // "diff" (default) or "full"
+	FullReportDay     string // diff mode: weekday of the weekly full report; "never" disables
+}
+
+// FullReportWeekday parses FullReportDay into a time.Weekday. ok is false when
+// the weekly full report is disabled ("never").
+func (n NotifyConfig) FullReportWeekday() (time.Weekday, bool) {
+	day, ok := weekdays[strings.ToLower(n.FullReportDay)]
+	return day, ok
 }
 
 type DockerConfig struct {
 	Socket string
+}
+
+type StateConfig struct {
+	Path string // where diff-mode scan state is persisted
 }
 
 // rawConfig mirrors the YAML shape. Pointers are used where "absent" must be
@@ -66,16 +80,31 @@ type rawConfig struct {
 		SlackWebhookURL   string `yaml:"slack_webhook_url"`
 		GenericWebhookURL string `yaml:"generic_webhook_url"`
 		NotifyOnClean     bool   `yaml:"notify_on_clean"`
+		Mode              string `yaml:"mode"`
+		FullReportDay     string `yaml:"full_report_day"`
 	} `yaml:"notify"`
 	Docker struct {
 		Socket string `yaml:"socket"`
 	} `yaml:"docker"`
+	State struct {
+		Path string `yaml:"path"`
+	} `yaml:"state"`
 }
 
-const defaultSocket = "/var/run/docker.sock"
+const (
+	defaultSocket        = "/var/run/docker.sock"
+	defaultStatePath     = "/var/lib/stackwatch/state.json"
+	defaultFullReportDay = "monday"
+)
 
 var validSeverities = map[string]bool{
 	"UNKNOWN": true, "LOW": true, "MEDIUM": true, "HIGH": true, "CRITICAL": true,
+}
+
+var weekdays = map[string]time.Weekday{
+	"sunday": time.Sunday, "monday": time.Monday, "tuesday": time.Tuesday,
+	"wednesday": time.Wednesday, "thursday": time.Thursday,
+	"friday": time.Friday, "saturday": time.Saturday,
 }
 
 // Load reads and parses the config file at path.
@@ -104,6 +133,7 @@ func Parse(data []byte) (Config, error) {
 		Scan:   ScanConfig{Severity: raw.Scan.Severity},
 		Notify: NotifyConfig(raw.Notify),
 		Docker: DockerConfig{Socket: raw.Docker.Socket},
+		State:  StateConfig{Path: raw.State.Path},
 	}
 
 	applyDefaults(&c)
@@ -122,6 +152,15 @@ func applyDefaults(c *Config) {
 	if c.Docker.Socket == "" {
 		c.Docker.Socket = defaultSocket
 	}
+	if c.Notify.Mode == "" {
+		c.Notify.Mode = "diff"
+	}
+	if c.Notify.FullReportDay == "" {
+		c.Notify.FullReportDay = defaultFullReportDay
+	}
+	if c.State.Path == "" {
+		c.State.Path = defaultStatePath
+	}
 }
 
 func validate(c *Config) error {
@@ -139,6 +178,16 @@ func validate(c *Config) error {
 	// value is an error.
 	if _, _, ok := c.Schedule.DailyTime(); !ok && c.Schedule.DailyAt != "" {
 		return fmt.Errorf("config: schedule.daily_at %q is not a valid HH:MM time", c.Schedule.DailyAt)
+	}
+	m := strings.ToLower(c.Notify.Mode)
+	if m != "diff" && m != "full" {
+		return fmt.Errorf("config: invalid notify.mode %q (allowed: diff, full)", c.Notify.Mode)
+	}
+	c.Notify.Mode = m
+	if day := strings.ToLower(c.Notify.FullReportDay); day != "never" {
+		if _, ok := weekdays[day]; !ok {
+			return fmt.Errorf("config: invalid notify.full_report_day %q (a weekday name or \"never\")", c.Notify.FullReportDay)
+		}
 	}
 	return nil
 }

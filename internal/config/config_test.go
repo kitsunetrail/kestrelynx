@@ -24,6 +24,61 @@ func TestParse_Defaults(t *testing.T) {
 	if !c.Schedule.RunOnStart {
 		t.Errorf("default RunOnStart = false, want true")
 	}
+	if c.Notify.Mode != "diff" {
+		t.Errorf("default Mode = %q, want diff", c.Notify.Mode)
+	}
+	if c.Notify.FullReportDay != "monday" {
+		t.Errorf("default FullReportDay = %q, want monday", c.Notify.FullReportDay)
+	}
+	if c.State.Path != "/var/lib/stackwatch/state.json" {
+		t.Errorf("default State.Path = %q", c.State.Path)
+	}
+}
+
+func TestParse_NotifyModeAndFullReportDay(t *testing.T) {
+	c, err := Parse([]byte(`
+notify:
+  slack_webhook_url: "https://x.test"
+  mode: "FULL"
+  full_report_day: "Friday"
+state:
+  path: "/data/state.json"
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if c.Notify.Mode != "full" {
+		t.Errorf("Mode = %q, want normalized full", c.Notify.Mode)
+	}
+	if day, ok := c.Notify.FullReportWeekday(); !ok || day.String() != "Friday" {
+		t.Errorf("FullReportWeekday = %v ok=%v, want Friday true", day, ok)
+	}
+	if c.State.Path != "/data/state.json" {
+		t.Errorf("State.Path = %q", c.State.Path)
+	}
+}
+
+func TestParse_FullReportDayNever(t *testing.T) {
+	c, err := Parse([]byte(`
+notify:
+  slack_webhook_url: "https://x.test"
+  full_report_day: "never"
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if _, ok := c.Notify.FullReportWeekday(); ok {
+		t.Error("never should disable the weekly full report")
+	}
+}
+
+func TestParse_InvalidModeAndDay(t *testing.T) {
+	if _, err := Parse([]byte("notify: { slack_webhook_url: \"https://x.test\", mode: \"delta\" }")); err == nil {
+		t.Fatal("expected error for invalid notify.mode")
+	}
+	if _, err := Parse([]byte("notify: { slack_webhook_url: \"https://x.test\", full_report_day: \"noday\" }")); err == nil {
+		t.Fatal("expected error for invalid notify.full_report_day")
+	}
 }
 
 func TestParse_FullOverride(t *testing.T) {

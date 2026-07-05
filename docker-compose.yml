@@ -19,3 +19,9 @@ services:
       # Read-only: StackWatch only lists containers, it never controls them.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./config.yml:/etc/stackwatch/config.yml:ro
+      # Diff-mode scan state (first-seen dates), so notifications stay
+      # diff-based across container recreation.
+      - stackwatch-state:/var/lib/stackwatch
+
+volumes:
+  stackwatch-state:

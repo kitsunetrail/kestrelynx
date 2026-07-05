@@ -8,6 +8,7 @@ import (
 
 	"github.com/kitsunetrail/stackwatch/internal/analyze"
 	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/stackwatch/internal/state"
 )
 
 var genTime = time.Date(2026, 6, 24, 9, 0, 0, 0, time.UTC)
@@ -47,9 +48,9 @@ func TestFormatSlackText_Sections(t *testing.T) {
 		"Distro security update", // OS distro_update label
 		"Needs care",             // lang caution label
 		"end-of-life",            // EOSL
-		"e2fsprogs",  // affected
-		"gcc-8-base", // wont_fix
-		"broken:1",   // scan error
+		"e2fsprogs",              // affected
+		"gcc-8-base",             // wont_fix
+		"broken:1",               // scan error
 		"pull failed",
 	}
 	for _, s := range mustContain {
@@ -112,8 +113,158 @@ func TestFormatSlackText_Clean(t *testing.T) {
 	}
 }
 
+// diffFixture runs sampleReport through state.Compute against empty state, so
+// every finding comes back as a KindNew change with realistic groups.
+func diffFixture() (analyze.Report, state.Diff) {
+	r := sampleReport()
+	d, _ := state.Compute(state.State{}, r)
+	return r, d
+}
+
+func TestFormatSlackDiffText_NewFindings(t *testing.T) {
+	r, d := diffFixture()
+	out := FormatSlackDiffText(r, d, false)
+
+	mustContain := []string{
+		"New since last scan",
+		"New: base OS end-of-life", // EOSL first seen goes through the diff too
+		"web:1.0",
+		"libc-bin",
+		"setuptools",
+		"Open now: CRITICAL 1 / HIGH 3",
+		"broken:1", // scan errors always shown
+		"pull failed",
+	}
+	for _, s := range mustContain {
+		if !strings.Contains(out, s) {
+			t.Errorf("output missing %q\n---\n%s", s, out)
+		}
+	}
+	if strings.Contains(out, "Resolved since last scan") {
+		t.Errorf("no resolved section expected on first run:\n%s", out)
+	}
+}
+
+func TestFormatSlackDiffText_Heartbeat(t *testing.T) {
+	r := sampleReport()
+	_, st := state.Compute(state.State{}, r)
+	// Second scan, same findings: no changes.
+	d, _ := state.Compute(st, r)
+	out := FormatSlackDiffText(r, d, false)
+
+	if !strings.Contains(out, "No changes since last scan") {
+		t.Errorf("expected heartbeat line:\n%s", out)
+	}
+	if !strings.Contains(out, "Open now: CRITICAL 1 / HIGH 3") {
+		t.Errorf("heartbeat must keep the open summary:\n%s", out)
+	}
+	if strings.Contains(out, "libc-bin") {
+		t.Errorf("heartbeat must not repeat finding details:\n%s", out)
+	}
+}
+
+func TestFormatSlackDiffText_AgeAndEscalation(t *testing.T) {
+	r := sampleReport()
+	old := genTime.AddDate(0, 0, -20)
+	st := state.State{Version: 1, Findings: map[string]state.Entry{
+		"web:1.0\tlibc-bin": {FirstSeen: old, Fixable: true, VulnIDs: []string{"CVE-1"}},
+	}, EOSL: map[string]time.Time{}}
+	d, _ := state.Compute(st, r)
+	out := FormatSlackDiffText(r, d, false)
+
+	if !strings.Contains(out, "🔴 oldest unresolved 20 day(s)") {
+		t.Errorf("expected escalated age marker for a 20-day-old finding:\n%s", out)
+	}
+}
+
+func TestFormatSlackDiffText_Resolved(t *testing.T) {
+	r := sampleReport()
+	st := state.State{Version: 1, Findings: map[string]state.Entry{
+		"web:1.0\tlibc-bin": {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-1"}},
+		"gone:1\told-pkg":   {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-9"}},
+	}, EOSL: map[string]time.Time{}}
+	d, _ := state.Compute(st, r)
+	out := FormatSlackDiffText(r, d, false)
+
+	if !strings.Contains(out, "Resolved since last scan") || !strings.Contains(out, "gone:1: old-pkg") {
+		t.Errorf("expected resolved section for gone:1 old-pkg:\n%s", out)
+	}
+}
+
+func TestFormatSlackDiffText_WeeklyFullReport(t *testing.T) {
+	r := sampleReport()
+	_, st := state.Compute(state.State{}, r)
+	d, _ := state.Compute(st, r) // unchanged day
+	out := FormatSlackDiffText(r, d, true)
+
+	if !strings.Contains(out, "Weekly full report") {
+		t.Errorf("expected weekly full report heading:\n%s", out)
+	}
+	// Full body repeats every open finding even though nothing changed.
+	for _, s := range []string{"libc-bin", "e2fsprogs", "gcc-8-base", "end-of-life"} {
+		if !strings.Contains(out, s) {
+			t.Errorf("full report missing %q:\n%s", s, out)
+		}
+	}
+}
+
+func TestFormatSlackDiffText_AllResolvedCelebrates(t *testing.T) {
+	clean := analyze.Build([]scanner.ImageScan{{Image: "ok:1"}}, genTime)
+	st := state.State{Version: 1, Findings: map[string]state.Entry{
+		"ok:1\topenssl": {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-1"}},
+	}, EOSL: map[string]time.Time{}}
+	d, _ := state.Compute(st, clean)
+	out := FormatSlackDiffText(clean, d, false)
+
+	if !strings.Contains(out, "Resolved since last scan") {
+		t.Errorf("expected resolved section:\n%s", out)
+	}
+	if !strings.Contains(out, "Open now: none") {
+		t.Errorf("expected all-clear open line:\n%s", out)
+	}
+}
+
+func TestBuildWebhookPayload_Diff(t *testing.T) {
+	r, d := diffFixture()
+	data, err := json.Marshal(BuildWebhookPayload(r, &d))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var p map[string]any
+	if err := json.Unmarshal(data, &p); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	diff, ok := p["diff"].(map[string]any)
+	if !ok {
+		t.Fatalf("diff missing/wrong type: %T", p["diff"])
+	}
+	if n := len(diff["new"].([]any)); n != 4 {
+		t.Errorf("diff.new = %d entries, want 4", n)
+	}
+	first := diff["new"].([]any)[0].(map[string]any)
+	for _, key := range []string{"image", "package", "kind", "critical", "high"} {
+		if _, ok := first[key]; !ok {
+			t.Errorf("diff entry missing %q: %v", key, first)
+		}
+	}
+	// Full sections must still be present alongside the diff.
+	if _, ok := p["actionable"]; !ok {
+		t.Error("payload must keep full sections in diff mode")
+	}
+}
+
+func TestBuildWebhookPayload_NoDiffOmitted(t *testing.T) {
+	data, err := json.Marshal(BuildWebhookPayload(sampleReport(), nil))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(data), `"diff"`) {
+		t.Error("diff key should be omitted in full mode")
+	}
+}
+
 func TestBuildWebhookPayload(t *testing.T) {
-	data, err := json.Marshal(BuildWebhookPayload(sampleReport()))
+	data, err := json.Marshal(BuildWebhookPayload(sampleReport(), nil))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

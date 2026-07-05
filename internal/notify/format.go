@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/kitsunetrail/stackwatch/internal/analyze"
+	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/stackwatch/internal/state"
 )
 
 const timeLayout = "2006-01-02 15:04"
@@ -16,6 +18,10 @@ const timeLayout = "2006-01-02 15:04"
 // collapsePreview caps how many package names are listed when the lower-risk
 // fixes are collapsed into a single summary line.
 const collapsePreview = 5
+
+// staleDays is the age at which the "still open" heartbeat escalates: after
+// this many days an unresolved finding stops being news and starts being debt.
+const staleDays = 14
 
 // FormatSlackText renders a report as a Slack message body (mrkdwn). It leads
 // with a one-line priority summary, then shows the findings that need a human
@@ -33,31 +39,161 @@ func FormatSlackText(r analyze.Report) string {
 		return b.String()
 	}
 
-	writeHeadline(&b, summarize(r))
+	writeFullBody(&b, r)
+	return b.String()
+}
+
+// writeFullBody renders the complete open-findings view (headline, EOSL,
+// sections, scan failures). Shared by full mode and the diff-mode weekly
+// full report.
+func writeFullBody(b *strings.Builder, r analyze.Report) {
+	writeHeadline(b, summarize(r))
 
 	if len(r.EOSLImages) > 0 {
 		b.WriteString("\n*⛔ Base OS end-of-life (top priority)*\n")
 		for _, img := range r.EOSLImages {
+			fmt.Fprintf(b, "• %s — base OS is EOL (no more security updates coming)\n", img)
+		}
+	}
+
+	collapsed := writeActionable(b, r.Actionable)
+	writeSection(b, "ℹ️ No fix yet (affected / waiting on upstream)", r.Watch, false)
+	writeSection(b, "🔕 Upstream won't fix (will_not_fix)", r.WontFix, false)
+	writeScanErrors(b, r.ScanErrors)
+
+	if collapsed > 0 {
+		fmt.Fprintf(b, "\n_%d lower-risk fix(es) summarized — full list in the generic webhook payload._\n", collapsed)
+	}
+}
+
+// FormatSlackDiffText renders the diff-mode Slack message: what is new or
+// resolved since the previous scan, then a one-line "open now" summary with the
+// age of the oldest unresolved finding (docs/NOTIFICATION_SPEC.md §7). Repeating
+// the same list daily trains the reader to ignore it; age does the reminding
+// instead. When fullReport is true (weekly digest day) the one-liner is replaced
+// by the complete open-findings view.
+func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "🛡️ *StackWatch* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
+	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
+
+	if !d.HasChanges() && !fullReport {
+		b.WriteString("\nNo changes since last scan.\n")
+		writeScanErrors(&b, r.ScanErrors)
+		writeOpenNow(&b, r, d)
+		return b.String()
+	}
+
+	if len(d.NewEOSL) > 0 {
+		b.WriteString("\n*⛔ New: base OS end-of-life (top priority)*\n")
+		for _, img := range d.NewEOSL {
 			fmt.Fprintf(&b, "• %s — base OS is EOL (no more security updates coming)\n", img)
 		}
 	}
 
-	collapsed := writeActionable(&b, r.Actionable)
-	writeSection(&b, "ℹ️ No fix yet (affected / waiting on upstream)", r.Watch, false)
-	writeSection(&b, "🔕 Upstream won't fix (will_not_fix)", r.WontFix, false)
+	writeChanges(&b, d.Changes)
+	writeResolved(&b, d)
 
-	if len(r.ScanErrors) > 0 {
-		b.WriteString("\n*⚠️ Scan failures*\n")
-		for _, e := range r.ScanErrors {
-			fmt.Fprintf(&b, "• %s — %s\n", e.Image, e.Err)
+	if fullReport {
+		b.WriteString("\n*📋 Weekly full report — everything currently open*\n")
+		writeFullBody(&b, r)
+	} else {
+		writeScanErrors(&b, r.ScanErrors)
+		writeOpenNow(&b, r, d)
+	}
+	return b.String()
+}
+
+// writeChanges renders the new/changed findings grouped per image, in report
+// priority order, each package line in full detail.
+func writeChanges(b *strings.Builder, changes []state.Change) {
+	if len(changes) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n*🆕 New since last scan (%d)*\n", len(changes))
+	lastImage := ""
+	for _, c := range changes {
+		if c.Image != lastImage {
+			fmt.Fprintf(b, "%s %s\n", changesEmoji(c), c.Image)
+			lastImage = c.Image
+		}
+		for _, g := range c.Groups {
+			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(c))
 		}
 	}
+}
 
-	if collapsed > 0 {
-		fmt.Fprintf(&b, "\n_%d lower-risk fix(es) summarized — full list in the generic webhook payload._\n", collapsed)
+// changeSuffix annotates why a known package reappears in the new section.
+func changeSuffix(c state.Change) string {
+	switch c.Kind {
+	case state.KindNewCVEs:
+		return fmt.Sprintf(" — %d new CVE(s)", c.NewCVEs)
+	case state.KindNowFixable:
+		return " — fix now available"
+	default:
+		return ""
 	}
+}
 
-	return b.String()
+func changesEmoji(c state.Change) string {
+	for _, g := range c.Groups {
+		if g.Critical > 0 {
+			return "🔴"
+		}
+	}
+	return "🟠"
+}
+
+// writeResolved renders findings that disappeared since the previous scan, one
+// line per image. Seeing yesterday's fix confirmed is the reward loop of diff
+// mode, so it is never collapsed away.
+func writeResolved(b *strings.Builder, d state.Diff) {
+	if len(d.Resolved) == 0 && len(d.ResolvedEOSL) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n*✅ Resolved since last scan (%d)*\n", len(d.Resolved)+len(d.ResolvedEOSL))
+	for _, img := range d.ResolvedEOSL {
+		fmt.Fprintf(b, "• %s — base OS no longer EOL\n", img)
+	}
+	byImage := map[string][]string{}
+	var imgOrder []string
+	for _, res := range d.Resolved {
+		if _, ok := byImage[res.Image]; !ok {
+			imgOrder = append(imgOrder, res.Image)
+		}
+		byImage[res.Image] = append(byImage[res.Image], res.Package)
+	}
+	for _, img := range imgOrder {
+		fmt.Fprintf(b, "• %s: %s\n", img, strings.Join(byImage[img], ", "))
+	}
+}
+
+// writeOpenNow renders the one-line ambient summary that keeps unresolved
+// findings from being forgotten between changes.
+func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
+	if !r.HasFindings() {
+		b.WriteString("\n🎉 Open now: none — all clear\n")
+		return
+	}
+	fmt.Fprintf(b, "\n📌 Open now: CRITICAL %d / HIGH %d across %d image(s)", d.OpenCritical, d.OpenHigh, d.OpenImages)
+	if days := d.OldestOpenDays(r.GeneratedAt); days > 0 {
+		if days >= staleDays {
+			fmt.Fprintf(b, " — 🔴 oldest unresolved %d day(s)", days)
+		} else {
+			fmt.Fprintf(b, " — oldest unresolved %d day(s)", days)
+		}
+	}
+	b.WriteString("\n_Details in the generic webhook payload, or in the weekly full report._\n")
+}
+
+func writeScanErrors(b *strings.Builder, errs []analyze.ScanError) {
+	if len(errs) == 0 {
+		return
+	}
+	b.WriteString("\n*⚠️ Scan failures*\n")
+	for _, e := range errs {
+		fmt.Fprintf(b, "• %s — %s\n", e.Image, e.Err)
+	}
 }
 
 // priority holds the headline counts shown at the top of the message.
@@ -130,7 +266,7 @@ func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings) int {
 		var rest []analyze.PackageGroup
 		for _, g := range img.Packages {
 			if needsAttention(g) {
-				writePackage(b, g, true)
+				writePackage(b, g, true, "")
 			} else {
 				rest = append(rest, g)
 			}
@@ -154,12 +290,12 @@ func writeSection(b *strings.Builder, title string, imgs []analyze.ImageFindings
 	for _, img := range imgs {
 		fmt.Fprintf(b, "%s %s  CRITICAL %d / HIGH %d\n", imageEmoji(img), img.Image, img.CriticalCount(), img.TotalCount()-img.CriticalCount())
 		for _, g := range img.Packages {
-			writePackage(b, g, fixed)
+			writePackage(b, g, fixed, "")
 		}
 	}
 }
 
-func writePackage(b *strings.Builder, g analyze.PackageGroup, fixed bool) {
+func writePackage(b *strings.Builder, g analyze.PackageGroup, fixed bool, suffix string) {
 	b.WriteString("   • ")
 	if fixed {
 		fmt.Fprintf(b, "%s %s → %s", g.Package, g.InstalledVer, g.FixedVer)
@@ -173,6 +309,7 @@ func writePackage(b *strings.Builder, g analyze.PackageGroup, fixed bool) {
 	if g.Class == "lang" {
 		b.WriteString(" [lang]")
 	}
+	b.WriteString(suffix)
 	b.WriteString("\n")
 }
 
@@ -233,6 +370,32 @@ type webhookPayload struct {
 	Watch       []imagePayload `json:"watch"`
 	WontFix     []imagePayload `json:"wont_fix"`
 	ScanErrors  []errorPayload `json:"scan_errors"`
+	Diff        *diffPayload   `json:"diff,omitempty"`
+}
+
+// diffPayload mirrors state.Diff for webhook consumers. The full sections above
+// are always present; the diff is additive so receivers can build their own
+// "what changed" view without keeping state.
+type diffPayload struct {
+	New           []changePayload   `json:"new"`
+	Resolved      []resolvedPayload `json:"resolved"`
+	NewEOSL       []string          `json:"new_eosl"`
+	ResolvedEOSL  []string          `json:"resolved_eosl"`
+	OldestOpenDay int               `json:"oldest_open_days"`
+}
+
+type changePayload struct {
+	Image    string `json:"image"`
+	Package  string `json:"package"`
+	Kind     string `json:"kind"` // new | new_cves | now_fixable
+	NewCVEs  int    `json:"new_cve_count,omitempty"`
+	Critical int    `json:"critical"`
+	High     int    `json:"high"`
+}
+
+type resolvedPayload struct {
+	Image   string `json:"image"`
+	Package string `json:"package"`
 }
 
 type summary struct {
@@ -263,8 +426,10 @@ type errorPayload struct {
 
 // BuildWebhookPayload produces the structured JSON payload for the generic
 // webhook. It is returned as a value so callers (and tests) can marshal it.
-func BuildWebhookPayload(r analyze.Report) any {
-	return webhookPayload{
+// The payload always carries the full current data (the webhook's role is the
+// unabridged record); d adds the diff section when diff mode is on.
+func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
+	p := webhookPayload{
 		GeneratedAt: r.GeneratedAt.Format(time.RFC3339),
 		Summary: summary{
 			ImagesTotal:    r.ImagesTotal,
@@ -276,6 +441,46 @@ func BuildWebhookPayload(r analyze.Report) any {
 		WontFix:    imagePayloads(r.WontFix),
 		ScanErrors: errorPayloads(r.ScanErrors),
 	}
+	if d != nil {
+		p.Diff = buildDiffPayload(r, *d)
+	}
+	return p
+}
+
+func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
+	dp := &diffPayload{
+		New:           []changePayload{},
+		Resolved:      []resolvedPayload{},
+		NewEOSL:       emptyIfNil(d.NewEOSL),
+		ResolvedEOSL:  emptyIfNil(d.ResolvedEOSL),
+		OldestOpenDay: d.OldestOpenDays(r.GeneratedAt),
+	}
+	for _, c := range d.Changes {
+		var crit, high int
+		for _, g := range c.Groups {
+			crit += g.Critical
+			high += g.High
+		}
+		dp.New = append(dp.New, changePayload{
+			Image:    c.Image,
+			Package:  c.Package,
+			Kind:     string(c.Kind),
+			NewCVEs:  c.NewCVEs,
+			Critical: crit,
+			High:     high,
+		})
+	}
+	for _, res := range d.Resolved {
+		dp.Resolved = append(dp.Resolved, resolvedPayload{Image: res.Image, Package: res.Package})
+	}
+	return dp
+}
+
+func emptyIfNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 func imagePayloads(imgs []analyze.ImageFindings) []imagePayload {

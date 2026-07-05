@@ -18,6 +18,7 @@ import (
 	"github.com/kitsunetrail/stackwatch/internal/notify"
 	"github.com/kitsunetrail/stackwatch/internal/runner"
 	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/stackwatch/internal/state"
 )
 
 func main() {
@@ -43,8 +44,15 @@ func main() {
 		Scanner:       scanner.Trivy{Severity: cfg.Scan.Severity},
 		Notifier:      notifier,
 		NotifyOnClean: cfg.Notify.NotifyOnClean,
+		FullReportDay: runner.NoFullReport,
 		Now:           time.Now,
 		Log:           log,
+	}
+	if cfg.Notify.Mode == "diff" {
+		r.Store = state.FileStore{Path: cfg.State.Path}
+		if day, ok := cfg.Notify.FullReportWeekday(); ok {
+			r.FullReportDay = day
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -53,7 +61,9 @@ func main() {
 	log.Info("stackwatch started",
 		"daily_at", cfg.Schedule.DailyAt,
 		"run_on_start", cfg.Schedule.RunOnStart,
-		"severity", cfg.Scan.Severity)
+		"severity", cfg.Scan.Severity,
+		"mode", cfg.Notify.Mode,
+		"full_report_day", cfg.Notify.FullReportDay)
 
 	if err := r.Loop(ctx, cfg.Schedule); err != nil && !errors.Is(err, context.Canceled) {
 		log.Error("runner loop", "err", err)

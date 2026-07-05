@@ -11,11 +11,22 @@ import (
 	"time"
 
 	"github.com/kitsunetrail/stackwatch/internal/analyze"
+	"github.com/kitsunetrail/stackwatch/internal/state"
 )
 
-// Notifier delivers a report to a destination.
+// Message is one notification: the full report, plus the diff against the
+// previous scan when diff mode is on (nil Diff = full mode, render everything).
+// FullReport asks diff mode to append the complete open-findings view (the
+// weekly digest day).
+type Message struct {
+	Report     analyze.Report
+	Diff       *state.Diff
+	FullReport bool
+}
+
+// Notifier delivers a message to a destination.
 type Notifier interface {
-	Send(ctx context.Context, r analyze.Report) error
+	Send(ctx context.Context, m Message) error
 }
 
 // defaultClient is used when a notifier has no client configured.
@@ -27,32 +38,40 @@ type SlackNotifier struct {
 	Client     *http.Client
 }
 
-func (n SlackNotifier) Send(ctx context.Context, r analyze.Report) error {
-	body := map[string]string{"text": FormatSlackText(r)}
+func (n SlackNotifier) Send(ctx context.Context, m Message) error {
+	text := ""
+	if m.Diff != nil {
+		text = FormatSlackDiffText(m.Report, *m.Diff, m.FullReport)
+	} else {
+		text = FormatSlackText(m.Report)
+	}
+	body := map[string]string{"text": text}
 	return postJSON(ctx, client(n.Client), n.WebhookURL, body)
 }
 
-// WebhookNotifier posts the structured JSON payload to a generic endpoint.
+// WebhookNotifier posts the structured JSON payload to a generic endpoint. It
+// always carries the full data regardless of mode (docs/NOTIFICATION_SPEC.md §5:
+// Slack is the summary, the webhook is the record).
 type WebhookNotifier struct {
 	URL    string
 	Client *http.Client
 }
 
-func (n WebhookNotifier) Send(ctx context.Context, r analyze.Report) error {
-	return postJSON(ctx, client(n.Client), n.URL, BuildWebhookPayload(r))
+func (n WebhookNotifier) Send(ctx context.Context, m Message) error {
+	return postJSON(ctx, client(n.Client), n.URL, BuildWebhookPayload(m.Report, m.Diff))
 }
 
-// MultiNotifier fans a report out to several notifiers, attempting all even if
+// MultiNotifier fans a message out to several notifiers, attempting all even if
 // some fail, and joining their errors.
 type MultiNotifier []Notifier
 
 // Multi builds a MultiNotifier from the given notifiers.
 func Multi(notifiers ...Notifier) MultiNotifier { return MultiNotifier(notifiers) }
 
-func (m MultiNotifier) Send(ctx context.Context, r analyze.Report) error {
+func (m MultiNotifier) Send(ctx context.Context, msg Message) error {
 	var errs []error
 	for _, n := range m {
-		if err := n.Send(ctx, r); err != nil {
+		if err := n.Send(ctx, msg); err != nil {
 			errs = append(errs, err)
 		}
 	}

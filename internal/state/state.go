@@ -23,9 +23,15 @@ const version = 1
 
 // Entry is the persisted memory of one finding (one package within one image,
 // across all Trivy statuses).
+//
+// Priority was added for Phase 1+ (docs/TRIAGE_SPEC.md §5.3) without a version
+// bump: state written before the upgrade simply decodes with an empty
+// Priority, which suppresses escalation detection for one cycle instead of
+// re-announcing every known finding as new.
 type Entry struct {
 	FirstSeen time.Time `json:"first_seen"`
 	Fixable   bool      `json:"fixable"` // any of the package's CVEs has a fix
+	Priority  string    `json:"priority,omitempty"`
 	VulnIDs   []string  `json:"vuln_ids"`
 }
 
@@ -117,6 +123,7 @@ type ChangeKind string
 
 const (
 	KindNew        ChangeKind = "new"         // package not seen before
+	KindEscalated  ChangeKind = "escalated"   // known package's priority rose (e.g. a CVE entered KEV)
 	KindNewCVEs    ChangeKind = "new_cves"    // known package gained CVEs
 	KindNowFixable ChangeKind = "now_fixable" // known package's fix became available
 )
@@ -151,6 +158,14 @@ type Diff struct {
 	OpenHigh     int
 	OpenImages   int
 	OldestOpen   time.Time // zero when nothing is open
+
+	// Triage breakdown (zero when triage is off). Counts are package groups,
+	// the unit shown to the user. OldestUrgent ages only act_now/watch (and
+	// EOSL) findings: an old "low" is the triage working as designed, not debt.
+	OpenActNow   int
+	OpenWatch    int
+	OpenLow      int
+	OldestUrgent time.Time
 }
 
 // HasChanges reports whether anything is new or resolved since the last scan.
@@ -160,11 +175,17 @@ func (d Diff) HasChanges() bool {
 
 // OldestOpenDays is the age in whole days of the oldest open finding at now,
 // 0 when nothing is open or everything was first seen today.
-func (d Diff) OldestOpenDays(now time.Time) int {
-	if d.OldestOpen.IsZero() {
+func (d Diff) OldestOpenDays(now time.Time) int { return wholeDays(d.OldestOpen, now) }
+
+// OldestUrgentDays is the age in whole days of the oldest open act_now/watch
+// (or EOSL) finding at now.
+func (d Diff) OldestUrgentDays(now time.Time) int { return wholeDays(d.OldestUrgent, now) }
+
+func wholeDays(t, now time.Time) int {
+	if t.IsZero() {
 		return 0
 	}
-	days := int(now.Sub(d.OldestOpen).Hours() / 24)
+	days := int(now.Sub(t).Hours() / 24)
 	if days < 0 {
 		return 0
 	}
@@ -204,7 +225,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 					order = append(order, k)
 				}
 				c.groups = append(c.groups, g)
-				for _, id := range g.VulnIDs {
+				for _, id := range g.VulnIDs() {
 					c.ids[id] = true
 				}
 				if g.Status == scanner.StatusFixed {
@@ -228,12 +249,22 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		if known {
 			firstSeen = prevE.FirstSeen
 		}
-		next.Findings[k] = Entry{FirstSeen: firstSeen, Fixable: c.fixable, VulnIDs: ids}
+		prio := analyze.MaxPriority(c.groups)
+		next.Findings[k] = Entry{FirstSeen: firstSeen, Fixable: c.fixable, Priority: string(prio), VulnIDs: ids}
 
 		change := Change{Image: keyImage(k), Package: keyPackage(k), Groups: c.groups}
 		switch {
 		case !known:
 			change.Kind = KindNew
+		// Escalation outranks the other kinds: "this got urgent" is the news,
+		// whatever caused it. An empty stored priority (state written before
+		// the triage upgrade, or triage previously off) never escalates —
+		// there is no baseline to have risen from. Degraded intel suppresses
+		// escalations too: severity-only fallback inflates every priority, and
+		// announcing that en masse would turn a feed outage into a false alarm
+		// storm (the header warning carries the news instead).
+		case !r.Intel.Degraded() && prevE.Priority != "" && prio.Rank() > analyze.Priority(prevE.Priority).Rank():
+			change.Kind = KindEscalated
 		case countNew(ids, prevE.VulnIDs) > 0:
 			change.Kind = KindNewCVEs
 			change.NewCVEs = countNew(ids, prevE.VulnIDs)
@@ -287,10 +318,24 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		if d.OldestOpen.IsZero() || e.FirstSeen.Before(d.OldestOpen) {
 			d.OldestOpen = e.FirstSeen
 		}
+		switch analyze.Priority(e.Priority) {
+		case analyze.PriorityActNow:
+			d.OpenActNow++
+		case analyze.PriorityWatch:
+			d.OpenWatch++
+		case analyze.PriorityLow:
+			d.OpenLow++
+		}
+		if urgent(e.Priority) && (d.OldestUrgent.IsZero() || e.FirstSeen.Before(d.OldestUrgent)) {
+			d.OldestUrgent = e.FirstSeen
+		}
 	}
 	for _, t := range next.EOSL {
 		if d.OldestOpen.IsZero() || t.Before(d.OldestOpen) {
 			d.OldestOpen = t
+		}
+		if d.OldestUrgent.IsZero() || t.Before(d.OldestUrgent) {
+			d.OldestUrgent = t
 		}
 	}
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix} {
@@ -300,6 +345,13 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		}
 	}
 	return d, next
+}
+
+// urgent reports whether a stored priority counts toward the heartbeat's
+// staleness escalation.
+func urgent(p string) bool {
+	pr := analyze.Priority(p)
+	return pr == analyze.PriorityActNow || pr == analyze.PriorityWatch
 }
 
 // countNew counts ids not present in prev (both sorted or not; prev is small).

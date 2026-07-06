@@ -45,8 +45,13 @@ func FormatSlackText(r analyze.Report) string {
 
 // writeFullBody renders the complete open-findings view (headline, EOSL,
 // sections, scan failures). Shared by full mode and the diff-mode weekly
-// full report.
+// full report. With triage on, the view is organized by priority instead of
+// fix status (docs/TRIAGE_SPEC.md §6).
 func writeFullBody(b *strings.Builder, r analyze.Report) {
+	if r.Triage {
+		writeTriageBody(b, r)
+		return
+	}
 	writeHeadline(b, summarize(r))
 
 	if len(r.EOSLImages) > 0 {
@@ -80,7 +85,7 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string
 	if !d.HasChanges() && !fullReport {
 		b.WriteString("\nNo changes since last scan.\n")
 		writeScanErrors(&b, r.ScanErrors)
-		writeOpenNow(&b, r, d)
+		writeAnyOpenNow(&b, r, d)
 		return b.String()
 	}
 
@@ -91,7 +96,12 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string
 		}
 	}
 
-	writeChanges(&b, d.Changes)
+	if r.Triage {
+		writeIntelWarning(&b, r)
+		writeTriageChanges(&b, r, d.Changes)
+	} else {
+		writeChanges(&b, d.Changes)
+	}
 	writeResolved(&b, d)
 
 	if fullReport {
@@ -99,9 +109,18 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string
 		writeFullBody(&b, r)
 	} else {
 		writeScanErrors(&b, r.ScanErrors)
-		writeOpenNow(&b, r, d)
+		writeAnyOpenNow(&b, r, d)
 	}
 	return b.String()
+}
+
+// writeAnyOpenNow picks the heartbeat style for the report's mode.
+func writeAnyOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
+	if r.Triage {
+		writeTriageOpenNow(b, r, d)
+		return
+	}
+	writeOpenNow(b, r, d)
 }
 
 // writeChanges renders the new/changed findings grouped per image, in report
@@ -387,10 +406,12 @@ type diffPayload struct {
 type changePayload struct {
 	Image    string `json:"image"`
 	Package  string `json:"package"`
-	Kind     string `json:"kind"` // new | new_cves | now_fixable
+	Kind     string `json:"kind"` // new | escalated | new_cves | now_fixable
 	NewCVEs  int    `json:"new_cve_count,omitempty"`
 	Critical int    `json:"critical"`
 	High     int    `json:"high"`
+	Priority string `json:"priority,omitempty"` // triage: act_now | watch | low
+	Reason   string `json:"reason,omitempty"`   // escalated: evidence for the new verdict
 }
 
 type resolvedPayload struct {
@@ -399,8 +420,19 @@ type resolvedPayload struct {
 }
 
 type summary struct {
-	ImagesTotal    int `json:"images_total"`
-	ImagesAffected int `json:"images_affected"`
+	ImagesTotal    int            `json:"images_total"`
+	ImagesAffected int            `json:"images_affected"`
+	PriorityCounts map[string]int `json:"priority_counts,omitempty"` // triage: act_now / watch / low
+	Intel          *intelPayload  `json:"intel,omitempty"`           // triage: data freshness
+}
+
+// intelPayload tells webhook consumers how much to trust the priorities in
+// this payload.
+type intelPayload struct {
+	Degraded  bool `json:"degraded"`
+	KEVOK     bool `json:"kev_ok"`
+	EPSSOK    bool `json:"epss_ok"`
+	StaleDays int  `json:"stale_days"`
 }
 
 type imagePayload struct {
@@ -416,7 +448,28 @@ type findingPayload struct {
 	Status         string         `json:"status"`
 	SeverityCounts map[string]int `json:"severity_counts"`
 	UpgradeRisk    string         `json:"upgrade_risk"`
+	Priority       string         `json:"priority,omitempty"` // triage verdict for the package
 	VulnIDs        []string       `json:"vuln_ids"`
+	Vulns          []vulnPayload  `json:"vulns"` // per-CVE detail (superset of vuln_ids)
+}
+
+// vulnPayload is the per-CVE record: id and severity always; the triage fields
+// carry the enrichment when triage is on. EPSS is null when no score is known.
+type vulnPayload struct {
+	ID         string       `json:"id"`
+	Severity   string       `json:"severity"`
+	URL        string       `json:"url,omitempty"` // scanner's primary advisory
+	KEV        bool         `json:"kev"`
+	Ransomware bool         `json:"ransomware,omitempty"`
+	EPSS       *float64     `json:"epss"`
+	Priority   string       `json:"priority,omitempty"`
+	Refs       []refPayload `json:"refs,omitempty"` // vendor advisory, discussions
+}
+
+type refPayload struct {
+	Kind  string `json:"kind"` // vendor | discussion
+	Label string `json:"label"`
+	URL   string `json:"url"`
 }
 
 type errorPayload struct {
@@ -441,6 +494,20 @@ func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
 		WontFix:    imagePayloads(r.WontFix),
 		ScanErrors: errorPayloads(r.ScanErrors),
 	}
+	if r.Triage {
+		pv := r.ByPriority()
+		p.Summary.PriorityCounts = map[string]int{
+			"act_now": analyze.GroupCount(pv.ActNow),
+			"watch":   analyze.GroupCount(pv.Watch),
+			"low":     analyze.GroupCount(pv.Low),
+		}
+		p.Summary.Intel = &intelPayload{
+			Degraded:  r.Intel.Degraded(),
+			KEVOK:     r.Intel.KEVOK,
+			EPSSOK:    r.Intel.EPSSOK,
+			StaleDays: r.Intel.StaleDays,
+		}
+	}
 	if d != nil {
 		p.Diff = buildDiffPayload(r, *d)
 	}
@@ -461,14 +528,19 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			crit += g.Critical
 			high += g.High
 		}
-		dp.New = append(dp.New, changePayload{
+		cp := changePayload{
 			Image:    c.Image,
 			Package:  c.Package,
 			Kind:     string(c.Kind),
 			NewCVEs:  c.NewCVEs,
 			Critical: crit,
 			High:     high,
-		})
+			Priority: string(analyze.MaxPriority(c.Groups)),
+		}
+		if c.Kind == state.KindEscalated {
+			cp.Reason = changeEvidence(r, c)
+		}
+		dp.New = append(dp.New, cp)
 	}
 	for _, res := range d.Resolved {
 		dp.Resolved = append(dp.Resolved, resolvedPayload{Image: res.Image, Package: res.Package})
@@ -488,6 +560,25 @@ func imagePayloads(imgs []analyze.ImageFindings) []imagePayload {
 	for _, img := range imgs {
 		findings := make([]findingPayload, 0, len(img.Packages))
 		for _, g := range img.Packages {
+			vulns := make([]vulnPayload, 0, len(g.Vulns))
+			for _, v := range g.Vulns {
+				vp := vulnPayload{
+					ID:         v.ID,
+					Severity:   string(v.Severity),
+					URL:        v.URL,
+					KEV:        v.KEV,
+					Ransomware: v.Ransomware,
+					Priority:   string(v.Priority),
+				}
+				if v.EPSSKnown {
+					epss := v.EPSS
+					vp.EPSS = &epss
+				}
+				for _, ref := range v.Refs {
+					vp.Refs = append(vp.Refs, refPayload(ref))
+				}
+				vulns = append(vulns, vp)
+			}
 			findings = append(findings, findingPayload{
 				Package:        g.Package,
 				Installed:      g.InstalledVer,
@@ -495,7 +586,9 @@ func imagePayloads(imgs []analyze.ImageFindings) []imagePayload {
 				Status:         string(g.Status),
 				SeverityCounts: map[string]int{"CRITICAL": g.Critical, "HIGH": g.High},
 				UpgradeRisk:    string(g.Risk),
-				VulnIDs:        g.VulnIDs,
+				Priority:       string(g.Priority),
+				VulnIDs:        g.VulnIDs(),
+				Vulns:          vulns,
 			})
 		}
 		out = append(out, imagePayload{

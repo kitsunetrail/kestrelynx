@@ -7,10 +7,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/kitsunetrail/stackwatch/internal/analyze"
 	"github.com/kitsunetrail/stackwatch/internal/config"
+	"github.com/kitsunetrail/stackwatch/internal/intel"
 	"github.com/kitsunetrail/stackwatch/internal/notify"
 	"github.com/kitsunetrail/stackwatch/internal/scanner"
 	"github.com/kitsunetrail/stackwatch/internal/state"
@@ -37,16 +39,28 @@ type StateStore interface {
 	Save(state.State) error
 }
 
+// IntelSource supplies exploitation intel for the triage layer (implemented by
+// intel.Source). Discussions is only consulted for act-now CVEs and only when
+// discussion links are enabled.
+type IntelSource interface {
+	Lookup(ctx context.Context, ids []string) (map[string]intel.Enrichment, intel.Freshness, error)
+	Discussions(ctx context.Context, ids []string) map[string]intel.Discussion
+}
+
 // Runner holds the collaborators for one scan cycle.
 type Runner struct {
-	Lister        ImageLister
-	Scanner       ImageScanner
-	Notifier      Notifier
-	NotifyOnClean bool
-	Store         StateStore   // nil = full mode (re-send everything each cycle)
-	FullReportDay time.Weekday // diff mode: weekday of the full digest; NoFullReport disables
-	Now           func() time.Time
-	Log           *slog.Logger
+	Lister          ImageLister
+	Scanner         ImageScanner
+	Notifier        Notifier
+	NotifyOnClean   bool
+	Store           StateStore   // nil = full mode (re-send everything each cycle)
+	FullReportDay   time.Weekday // diff mode: weekday of the full digest; NoFullReport disables
+	Intel           IntelSource  // nil = triage off (Phase 1 severity-only output)
+	ActNowEPSS      float64      // triage thresholds (config.Triage)
+	WatchEPSS       float64
+	DiscussionLinks bool // look up HN discussions for act-now CVEs
+	Now             func() time.Time
+	Log             *slog.Logger
 }
 
 // NoFullReport disables the weekly full report in diff mode.
@@ -86,11 +100,86 @@ func (r Runner) RunOnce(ctx context.Context) error {
 		scans = append(scans, scan)
 	}
 
-	report := analyze.Build(scans, r.now())
+	report := analyze.Build(scans, r.triage(ctx, scans), r.now())
 	if r.Store == nil {
 		return r.sendFull(ctx, report)
 	}
 	return r.sendDiff(ctx, report)
+}
+
+// triage looks up exploitation intel for every vulnerability the scans found
+// and assembles the triage input for analyze.Build. Intel failures never fail
+// the cycle: the triage degrades (and says so in the notification) while the
+// scan and delivery proceed (docs/TRIAGE_SPEC.md §3).
+func (r Runner) triage(ctx context.Context, scans []scanner.ImageScan) analyze.Triage {
+	if r.Intel == nil {
+		return analyze.Triage{}
+	}
+	log := r.log()
+
+	seen := map[string]bool{}
+	ids := []string{}
+	for _, s := range scans {
+		for _, f := range s.Findings {
+			if !seen[f.VulnID] {
+				seen[f.VulnID] = true
+				ids = append(ids, f.VulnID)
+			}
+		}
+	}
+
+	enrich, fresh, err := r.Intel.Lookup(ctx, ids)
+	if err != nil {
+		log.Warn("intel lookup incomplete", "err", err)
+	}
+	if fresh.Degraded() {
+		log.Warn("vulnerability intel unavailable; falling back to severity-only triage")
+	}
+
+	converted := make(map[string]analyze.Enrichment, len(enrich))
+	for id, e := range enrich {
+		converted[id] = analyze.Enrichment(e)
+	}
+	tr := analyze.Triage{
+		Enabled:    true,
+		ActNowEPSS: r.ActNowEPSS,
+		WatchEPSS:  r.WatchEPSS,
+		Enrich:     converted,
+		Intel:      analyze.IntelStatus{KEVOK: fresh.KEVOK, EPSSOK: fresh.EPSSOK, StaleDays: fresh.StaleDays},
+	}
+	tr.Refs = r.discussionRefs(ctx, tr)
+	return tr
+}
+
+// discussionRefs collects HN discussion links for the CVEs whose intel already
+// signals act_now. Only those IDs are ever sent as search queries (the
+// documented exception to "nothing leaves the host" — a handful of world-famous
+// CVEs, and only with DiscussionLinks on). Degraded intel means no act-now
+// signals to trust, so nothing is queried.
+func (r Runner) discussionRefs(ctx context.Context, tr analyze.Triage) map[string][]analyze.Ref {
+	if !r.DiscussionLinks || tr.Intel.Degraded() {
+		return nil
+	}
+	var ids []string
+	for id, e := range tr.Enrich {
+		if tr.SignalsActNow(e) {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	sort.Strings(ids) // deterministic query order
+
+	refs := map[string][]analyze.Ref{}
+	for id, d := range r.Intel.Discussions(ctx, ids) {
+		refs[id] = []analyze.Ref{{
+			Kind:  "discussion",
+			Label: fmt.Sprintf("HN (%d pts)", d.Points),
+			URL:   d.URL,
+		}}
+	}
+	return refs
 }
 
 // sendFull is the stateless full mode: re-send everything whenever there is

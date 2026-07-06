@@ -16,33 +16,49 @@ Built for self-hosters and homelab folks. It does the tedious work of reading Tr
 12 images scanned, 3 affected
 
 🆕 New since last scan (2)
-🟠 nginx:1.25.3
-   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 Distro security update
-🟠 myapp:latest
-   • webpack 4.46.0 → 5.89.0 (CRITICAL 0 / HIGH 1)  🟠 Needs care (major version bump) [lang]
+🚨 nginx:1.25.3
+   • libnghttp2-14 1.52.0-1 → 1.52.0-1+deb12u1 (HIGH 2)  🟢 Distro security update
+     ↳ CVE-2023-44487 HIGH · CISA KEV (exploited in the wild) · EPSS >99%
+       📎 advisory · vendor advisory · 💬 HN (166 pts)
+🔕 myapp:latest
+   • webpack 4.46.0 → 5.89.0 (HIGH 1)  🟠 Needs care (major version bump) [lang]
 
 ✅ Resolved since last scan (1)
 • myapp:latest: postcss
 
-📌 Open now: CRITICAL 1 / HIGH 6 across 3 image(s) — oldest unresolved 12 days
+📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 4 low — oldest urgent unresolved 12 day(s)
 ```
 
-Instead of dumping every CVE every day, it tells you **what changed**: new findings in
-full detail (with a semver hint on whether the upgrade needs a human decision), what got
-resolved, and a one-line running total whose age keeps nagging you — gently — about the
-things you haven't fixed yet. On days where nothing changed, you get one line, not a wall
-of text. A full report goes out once a week (configurable), and the complete data is
-always available via the generic webhook.
+Instead of dumping every CVE every day, it tells you **what changed** — and which of it
+actually matters. Every finding is triaged into **act now / watch / low** by combining
+severity with real-world exploitation signals: the [CISA KEV catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
+(confirmed exploitation in the wild) and [EPSS](https://www.first.org/epss/) (predicted
+exploitation probability). A CRITICAL that nobody is exploiting stays out of your way; a
+HIGH that ransomware crews are actively using tops the message, with the evidence right
+there. If a known CVE gets added to KEV overnight, the next digest calls it out as
+**⬆️ escalated** — that's the notification you actually needed. On days where nothing
+changed, you get one line, not a wall of text. A full report goes out once a week
+(configurable), and the complete data is always available via the generic webhook.
+
+Act-now findings also carry the links a responder would search for anyway: the advisory,
+the vendor guidance from the KEV entry, and the Hacker News discussion when a substantial
+one exists. Links, not AI summaries — every line in the message is a verifiable fact.
+
+**Privacy note**: the intel feeds are bulk downloads joined locally — your CVE list never
+leaves the host, with one documented exception: discussion-link lookup queries
+hn.algolia.com for **act-now CVEs only** (a handful of well-known, actively exploited
+CVEs). Set `triage.discussion_links: false` for zero CVE egress.
 
 ## What it does
 
 1. Reads the unique images of your running containers from `docker.sock` (read-only)
 2. Scans each image with [Trivy](https://github.com/aquasecurity/trivy) (CVE DB is handled by Trivy)
 3. Keeps only **HIGH / CRITICAL** findings
-4. Sorts them by Trivy's `Status` (fixable now / waiting on upstream / won't fix)
+4. Triages each CVE into **act now / watch / low** using CISA KEV and EPSS (fetched in bulk daily, joined locally; disable with `triage.enabled: false`)
+   and attaches advisory / vendor-guidance / HN-discussion links to act-now findings
 5. Aggregates per package and annotates upgrade risk (for language packages, semver tells you whether the bump is safe or needs care)
 6. Flags base-OS end-of-life (EOL) as top priority
-7. Diffs against the previous scan, so you're notified about **changes**, not reminded of what you already know
+7. Diffs against the previous scan, so you're notified about **changes** — including a known CVE **escalating** (entering KEV, EPSS spike) — not reminded of what you already know
 8. Notifies Slack / webhook once a day — but only when there's something worth acting on
 
 ## Quick start
@@ -85,6 +101,7 @@ Notable knobs:
 - `notify.mode` — `diff` (default) notifies only what changed since the last scan, plus a one-line "open now" summary; `full` resends the complete report every scan.
 - `notify.full_report_day` — in diff mode, the weekday to also send the complete report (default `monday`, `never` to disable).
 - `state.path` — where diff mode remembers previous scans (default `/var/lib/stackwatch/state.json`).
+- `triage.enabled` — KEV/EPSS-based prioritization (default `true`). Adds outbound HTTPS to `www.cisa.gov` and `epss.empiricalsecurity.com` (two bulk downloads per day, cached next to the state file); set to `false` for severity-only notifications with no extra egress. Thresholds (`act_now_epss`, `watch_epss`) and mirror URLs are configurable.
 
 ## Development
 
@@ -94,7 +111,7 @@ go test ./...          # also runs integration tests that use Trivy (needs trivy
 go build ./...
 ```
 
-The pipeline is split into small packages: `docker` (enumerate) → `scanner` (run & parse Trivy) → `analyze` (sort, aggregate, assess) → `state` (persist & diff against the previous scan) → `notify` (format & send), tied together by `runner`.
+The pipeline is split into small packages: `docker` (enumerate) → `scanner` (run & parse Trivy) → `intel` (fetch & cache KEV/EPSS) → `analyze` (triage, aggregate, assess) → `state` (persist & diff against the previous scan) → `notify` (format & send), tied together by `runner`.
 
 ## License
 

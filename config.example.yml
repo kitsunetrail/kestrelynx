@@ -36,3 +36,25 @@ state:
   # Where diff mode remembers previous scans (JSON, one small file). Mount a
   # volume here so first-seen dates survive container recreation.
   path: "/var/lib/stackwatch/state.json"
+
+triage:
+  # Rank findings by real-world exploitation signals instead of severity alone:
+  # CISA KEV (confirmed exploitation) and EPSS (predicted probability) are
+  # downloaded in bulk once a day and joined locally by CVE id — your CVE list
+  # never leaves the host. Notifications become three buckets: act now / watch /
+  # low. Adds outbound HTTPS to www.cisa.gov and epss.empiricalsecurity.com;
+  # set enabled: false to opt out (severity-only notifications, no extra egress).
+  enabled: true
+  # EPSS probability at or above which a CVE is "act now". 0.10 = 10%.
+  act_now_epss: 0.10
+  # EPSS probability at or above which a CVE is at least "watch". 0.01 = 1%.
+  watch_epss: 0.01
+  # Mirror URLs for air-gapped environments. Empty = the official feeds.
+  kev_url: ""
+  epss_url: ""
+  # Attach the Hacker News discussion link to "act now" findings. Unlike the
+  # bulk feeds above, this sends those CVE IDs (only — a handful of well-known,
+  # actively exploited CVEs) as search queries to hn.algolia.com. Set to false
+  # for zero CVE egress; advisory links from the KEV notes still work (they
+  # come from the bulk feed).
+  discussion_links: true

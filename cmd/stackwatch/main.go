@@ -10,11 +10,13 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/kitsunetrail/stackwatch/internal/config"
 	"github.com/kitsunetrail/stackwatch/internal/docker"
+	"github.com/kitsunetrail/stackwatch/internal/intel"
 	"github.com/kitsunetrail/stackwatch/internal/notify"
 	"github.com/kitsunetrail/stackwatch/internal/runner"
 	"github.com/kitsunetrail/stackwatch/internal/scanner"
@@ -54,6 +56,19 @@ func main() {
 			r.FullReportDay = day
 		}
 	}
+	if cfg.Triage.Enabled {
+		// The intel cache lives next to the diff state so one volume mount
+		// covers both.
+		r.Intel = &intel.Source{
+			CacheDir: filepath.Join(filepath.Dir(cfg.State.Path), "intel"),
+			KEVURL:   cfg.Triage.KEVURL,
+			EPSSURL:  cfg.Triage.EPSSURL,
+			Log:      log,
+		}
+		r.ActNowEPSS = cfg.Triage.ActNowEPSS
+		r.WatchEPSS = cfg.Triage.WatchEPSS
+		r.DiscussionLinks = cfg.Triage.DiscussionLinks
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -63,7 +78,8 @@ func main() {
 		"run_on_start", cfg.Schedule.RunOnStart,
 		"severity", cfg.Scan.Severity,
 		"mode", cfg.Notify.Mode,
-		"full_report_day", cfg.Notify.FullReportDay)
+		"full_report_day", cfg.Notify.FullReportDay,
+		"triage", cfg.Triage.Enabled)
 
 	if err := r.Loop(ctx, cfg.Schedule); err != nil && !errors.Is(err, context.Canceled) {
 		log.Error("runner loop", "err", err)

@@ -16,7 +16,7 @@ var (
 )
 
 func report(t time.Time, scans ...scanner.ImageScan) analyze.Report {
-	return analyze.Build(scans, t)
+	return analyze.Build(scans, analyze.Triage{}, t)
 }
 
 func finding(image, pkg, vulnID string, status scanner.Status) scanner.Finding {
@@ -223,3 +223,93 @@ func TestCompute_EOSLLifecycle(t *testing.T) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// --- Phase 1+ triage (docs/TRIAGE_SPEC.md §5.3) ---
+
+// triaged builds a report with triage enabled and the given enrichment.
+func triaged(t time.Time, enrich map[string]analyze.Enrichment, scans ...scanner.ImageScan) analyze.Report {
+	tr := analyze.Triage{
+		Enabled: true, ActNowEPSS: 0.10, WatchEPSS: 0.01,
+		Enrich: enrich, Intel: analyze.IntelStatus{KEVOK: true, EPSSOK: true},
+	}
+	return analyze.Build(scans, tr, t)
+}
+
+func TestCompute_EscalationWhenCVEEntersKEV(t *testing.T) {
+	scan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		finding("web:1", "openssl", "CVE-1", scanner.StatusFixed), // HIGH, no signal → low
+	}}
+	_, st := Compute(empty(), triaged(day1, nil, scan))
+	if got := st.Findings["web:1\topenssl"].Priority; got != "low" {
+		t.Fatalf("stored priority = %q, want low", got)
+	}
+
+	// Next day the same CVE is listed in KEV.
+	d, next := Compute(st, triaged(day2, map[string]analyze.Enrichment{"CVE-1": {KEV: true}}, scan))
+	if len(d.Changes) != 1 || d.Changes[0].Kind != KindEscalated {
+		t.Fatalf("Changes = %+v, want one KindEscalated", d.Changes)
+	}
+	if got := next.Findings["web:1\topenssl"].Priority; got != "act_now" {
+		t.Errorf("stored priority = %q, want act_now", got)
+	}
+	if got := next.Findings["web:1\topenssl"].FirstSeen; !got.Equal(day1) {
+		t.Errorf("FirstSeen = %v, want preserved %v (escalation is not a new finding)", got, day1)
+	}
+}
+
+func TestCompute_EscalationOutranksNewCVEs(t *testing.T) {
+	_, st := Compute(empty(), triaged(day1, nil, scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		finding("web:1", "openssl", "CVE-1", scanner.StatusFixed),
+	}}))
+	// A new KEV-listed CVE lands on the known package: both "new CVEs" and
+	// "escalated" are true; escalated is the headline.
+	d, _ := Compute(st, triaged(day2, map[string]analyze.Enrichment{"CVE-2": {KEV: true}}, scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		finding("web:1", "openssl", "CVE-1", scanner.StatusFixed),
+		finding("web:1", "openssl", "CVE-2", scanner.StatusFixed),
+	}}))
+	if len(d.Changes) != 1 || d.Changes[0].Kind != KindEscalated {
+		t.Fatalf("Changes = %+v, want one KindEscalated", d.Changes)
+	}
+}
+
+func TestCompute_NoEscalationFromPreTriageState(t *testing.T) {
+	scan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		finding("web:1", "openssl", "CVE-1", scanner.StatusFixed),
+	}}
+	// day1 state was written without triage (upgrade scenario): empty priority.
+	_, st := Compute(empty(), report(day1, scan))
+	if got := st.Findings["web:1\topenssl"].Priority; got != "" {
+		t.Fatalf("pre-triage priority = %q, want empty", got)
+	}
+	d, next := Compute(st, triaged(day2, map[string]analyze.Enrichment{"CVE-1": {KEV: true}}, scan))
+	if d.HasChanges() {
+		t.Errorf("first triaged run over legacy state must not announce escalations: %+v", d.Changes)
+	}
+	if got := next.Findings["web:1\topenssl"].Priority; got != "act_now" {
+		t.Errorf("stored priority = %q, want act_now (baseline established)", got)
+	}
+}
+
+func TestCompute_PriorityBreakdownAndOldestUrgent(t *testing.T) {
+	lowScan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		finding("web:1", "zlib", "CVE-LOW", scanner.StatusFixed), // HIGH, no signal → low
+	}}
+	_, st := Compute(empty(), triaged(day1, nil, lowScan))
+
+	// day2 a KEV finding appears; the low finding is now a day old.
+	bothScan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		finding("web:1", "zlib", "CVE-LOW", scanner.StatusFixed),
+		finding("web:1", "openssl", "CVE-KEV", scanner.StatusFixed),
+	}}
+	d, _ := Compute(st, triaged(day2, map[string]analyze.Enrichment{"CVE-KEV": {KEV: true}}, bothScan))
+
+	if d.OpenActNow != 1 || d.OpenWatch != 0 || d.OpenLow != 1 {
+		t.Errorf("open breakdown = act_now %d / watch %d / low %d, want 1/0/1", d.OpenActNow, d.OpenWatch, d.OpenLow)
+	}
+	if d.OldestOpenDays(day2) != 1 {
+		t.Errorf("OldestOpenDays = %d, want 1 (the low finding)", d.OldestOpenDays(day2))
+	}
+	if d.OldestUrgentDays(day2) != 0 {
+		t.Errorf("OldestUrgentDays = %d, want 0 (old low findings are not urgent debt)", d.OldestUrgentDays(day2))
+	}
+}

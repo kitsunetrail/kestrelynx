@@ -19,6 +19,7 @@ type Config struct {
 	Notify   NotifyConfig
 	Docker   DockerConfig
 	State    StateConfig
+	Triage   TriageConfig
 }
 
 type ScheduleConfig struct {
@@ -66,6 +67,21 @@ type StateConfig struct {
 	Path string // where diff-mode scan state is persisted
 }
 
+// TriageConfig controls the Phase 1+ triage layer (docs/TRIAGE_SPEC.md §7).
+// Disabling it also stops the KEV/EPSS feed downloads — the explicit way out
+// for users who don't want the extra egress.
+type TriageConfig struct {
+	Enabled    bool
+	ActNowEPSS float64 // EPSS probability at or above which a CVE is act_now
+	WatchEPSS  float64 // EPSS probability at or above which a CVE is at least watch
+	KEVURL     string  // override for air-gapped mirrors; empty = CISA
+	EPSSURL    string  // override for air-gapped mirrors; empty = FIRST/Empirical Security
+	// DiscussionLinks looks up the HN discussion for act-now CVEs. Unlike the
+	// bulk feeds this sends those CVE IDs (only) as search queries; off = zero
+	// CVE egress (docs/TRIAGE_SPEC.md §8).
+	DiscussionLinks bool
+}
+
 // rawConfig mirrors the YAML shape. Pointers are used where "absent" must be
 // distinguished from a zero value (booleans whose default is true).
 type rawConfig struct {
@@ -89,12 +105,24 @@ type rawConfig struct {
 	State struct {
 		Path string `yaml:"path"`
 	} `yaml:"state"`
+	Triage struct {
+		Enabled         *bool    `yaml:"enabled"`
+		ActNowEPSS      *float64 `yaml:"act_now_epss"`
+		WatchEPSS       *float64 `yaml:"watch_epss"`
+		KEVURL          string   `yaml:"kev_url"`
+		EPSSURL         string   `yaml:"epss_url"`
+		DiscussionLinks *bool    `yaml:"discussion_links"`
+	} `yaml:"triage"`
 }
 
 const (
 	defaultSocket        = "/var/run/docker.sock"
 	defaultStatePath     = "/var/lib/stackwatch/state.json"
 	defaultFullReportDay = "monday"
+	// Default EPSS thresholds (docs/TRIAGE_SPEC.md §4): 10% predicted
+	// exploitation probability is act_now territory, 1% is worth watching.
+	defaultActNowEPSS = 0.10
+	defaultWatchEPSS  = 0.01
 )
 
 var validSeverities = map[string]bool{
@@ -134,6 +162,14 @@ func Parse(data []byte) (Config, error) {
 		Notify: NotifyConfig(raw.Notify),
 		Docker: DockerConfig{Socket: raw.Docker.Socket},
 		State:  StateConfig{Path: raw.State.Path},
+		Triage: TriageConfig{
+			Enabled:         boolOr(raw.Triage.Enabled, true),
+			ActNowEPSS:      floatOr(raw.Triage.ActNowEPSS, defaultActNowEPSS),
+			WatchEPSS:       floatOr(raw.Triage.WatchEPSS, defaultWatchEPSS),
+			KEVURL:          raw.Triage.KEVURL,
+			EPSSURL:         raw.Triage.EPSSURL,
+			DiscussionLinks: boolOr(raw.Triage.DiscussionLinks, true),
+		},
 	}
 
 	applyDefaults(&c)
@@ -189,10 +225,22 @@ func validate(c *Config) error {
 			return fmt.Errorf("config: invalid notify.full_report_day %q (a weekday name or \"never\")", c.Notify.FullReportDay)
 		}
 	}
+	if c.Triage.Enabled {
+		if c.Triage.WatchEPSS <= 0 || c.Triage.WatchEPSS > c.Triage.ActNowEPSS || c.Triage.ActNowEPSS > 1 {
+			return fmt.Errorf("config: triage thresholds must satisfy 0 < watch_epss (%v) <= act_now_epss (%v) <= 1", c.Triage.WatchEPSS, c.Triage.ActNowEPSS)
+		}
+	}
 	return nil
 }
 
 func boolOr(p *bool, def bool) bool {
+	if p != nil {
+		return *p
+	}
+	return def
+}
+
+func floatOr(p *float64, def float64) float64 {
 	if p != nil {
 		return *p
 	}

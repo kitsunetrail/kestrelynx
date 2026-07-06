@@ -43,7 +43,7 @@ func TestBuild_RoutesByStatus(t *testing.T) {
 			f("demo:1.0", scanner.ClassOS, "gcc-8-base", "8.3", "", scanner.StatusWontFix, scanner.SeverityHigh, "CVE-3"),
 		},
 	}}
-	r := Build(scans, fixedTime)
+	r := Build(scans, Triage{}, fixedTime)
 
 	if len(r.Actionable) != 1 || len(r.Watch) != 1 || len(r.WontFix) != 1 {
 		t.Fatalf("section sizes: actionable=%d watch=%d wontfix=%d", len(r.Actionable), len(r.Watch), len(r.WontFix))
@@ -61,7 +61,7 @@ func TestBuild_GroupsByPackageAndCounts(t *testing.T) {
 	}
 	finds = append(finds, f("demo:1.0", scanner.ClassOS, "libc-bin", "2.28-10", "2.28-10+deb10u2", scanner.StatusFixed, scanner.SeverityHigh, "CVE-E"))
 
-	r := Build([]scanner.ImageScan{{Image: "demo:1.0", Findings: finds}}, fixedTime)
+	r := Build([]scanner.ImageScan{{Image: "demo:1.0", Findings: finds}}, Triage{}, fixedTime)
 	g := pkgGroup(t, r.Actionable, "demo:1.0", "libc-bin")
 
 	if g.Critical != 4 || g.High != 1 {
@@ -70,12 +70,13 @@ func TestBuild_GroupsByPackageAndCounts(t *testing.T) {
 	if g.Total() != 5 {
 		t.Errorf("Total = %d, want 5", g.Total())
 	}
-	if len(g.VulnIDs) != 5 {
-		t.Errorf("VulnIDs = %v, want 5 unique", g.VulnIDs)
+	ids := g.VulnIDs()
+	if len(ids) != 5 {
+		t.Errorf("VulnIDs = %v, want 5 unique", ids)
 	}
 	// deterministic ordering
-	if g.VulnIDs[0] != "CVE-A" {
-		t.Errorf("VulnIDs not sorted: %v", g.VulnIDs)
+	if ids[0] != "CVE-A" {
+		t.Errorf("VulnIDs not sorted: %v", ids)
 	}
 }
 
@@ -93,7 +94,7 @@ func TestBuild_RiskLabels(t *testing.T) {
 			f("demo:1.0", scanner.ClassLang, "weird", "abc", "xyz", scanner.StatusFixed, scanner.SeverityHigh, "CVE-W"),
 		},
 	}}
-	r := Build(scans, fixedTime)
+	r := Build(scans, Triage{}, fixedTime)
 
 	cases := map[string]Risk{
 		"libc-bin":   RiskDistroUpdate,
@@ -115,7 +116,7 @@ func TestBuild_NonFixedHasNoRisk(t *testing.T) {
 			f("demo:1.0", scanner.ClassOS, "e2fsprogs", "1.44", "", scanner.StatusAffected, scanner.SeverityHigh, "CVE-2"),
 		},
 	}}
-	r := Build(scans, fixedTime)
+	r := Build(scans, Triage{}, fixedTime)
 	if got := pkgGroup(t, r.Watch, "demo:1.0", "e2fsprogs").Risk; got != RiskNone {
 		t.Errorf("affected Risk = %q, want empty", got)
 	}
@@ -126,7 +127,7 @@ func TestBuild_EOSLAndErrors(t *testing.T) {
 		{Image: "old:1", OSEOSL: true, Findings: nil},
 		{Image: "broken:1", Err: errString("pull failed")},
 	}
-	r := Build(scans, fixedTime)
+	r := Build(scans, Triage{}, fixedTime)
 
 	if len(r.EOSLImages) != 1 || r.EOSLImages[0] != "old:1" {
 		t.Errorf("EOSLImages = %v", r.EOSLImages)
@@ -150,7 +151,7 @@ func TestBuild_SortsCriticalFirst(t *testing.T) {
 			f("demo:1.0", scanner.ClassOS, "zzz-crit", "1", "2", scanner.StatusFixed, scanner.SeverityCritical, "CVE-C"),
 		},
 	}}
-	r := Build(scans, fixedTime)
+	r := Build(scans, Triage{}, fixedTime)
 	pkgs := r.Actionable[0].Packages
 	// zzz-crit (CRITICAL) must sort before aaa-high despite alphabetical order.
 	if pkgs[0].Package != "zzz-crit" {
@@ -167,7 +168,7 @@ func TestBuild_FromRealSample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	r := Build([]scanner.ImageScan{scan}, fixedTime)
+	r := Build([]scanner.ImageScan{scan}, Triage{}, fixedTime)
 	if !r.HasIssues() {
 		t.Fatal("expected issues from sample")
 	}

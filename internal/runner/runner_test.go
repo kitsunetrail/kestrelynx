@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kitsunetrail/stackwatch/internal/analyze"
 	"github.com/kitsunetrail/stackwatch/internal/config"
+	"github.com/kitsunetrail/stackwatch/internal/intel"
 	"github.com/kitsunetrail/stackwatch/internal/notify"
 	"github.com/kitsunetrail/stackwatch/internal/scanner"
 	"github.com/kitsunetrail/stackwatch/internal/state"
@@ -328,5 +330,182 @@ func TestUntilNext_IntervalMode(t *testing.T) {
 	d := untilNext(config.ScheduleConfig{}, clock())
 	if d != 24*time.Hour {
 		t.Errorf("interval mode = %v, want 24h", d)
+	}
+}
+
+// --- triage wiring ---
+
+type fakeIntel struct {
+	askedIDs      []string
+	enrich        map[string]intel.Enrichment
+	fresh         intel.Freshness
+	err           error
+	discussionIDs []string // ids passed to Discussions (nil = never called)
+	discussions   map[string]intel.Discussion
+}
+
+func (f *fakeIntel) Lookup(_ context.Context, ids []string) (map[string]intel.Enrichment, intel.Freshness, error) {
+	f.askedIDs = ids
+	return f.enrich, f.fresh, f.err
+}
+
+func (f *fakeIntel) Discussions(_ context.Context, ids []string) map[string]intel.Discussion {
+	f.discussionIDs = ids
+	return f.discussions
+}
+
+func TestRunOnce_TriageWiring(t *testing.T) {
+	notif := &fakeNotifier{}
+	src := &fakeIntel{
+		enrich: map[string]intel.Enrichment{"CVE-1": {KEV: true, EPSS: 0.9, EPSSKnown: true}},
+		fresh:  intel.Freshness{KEVOK: true, EPSSOK: true},
+	}
+	r := Runner{
+		Lister:     fakeLister{images: []string{"vuln:1"}},
+		Scanner:    vulnScan(),
+		Notifier:   notif,
+		Intel:      src,
+		ActNowEPSS: 0.10,
+		WatchEPSS:  0.01,
+		Now:        clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(src.askedIDs) != 1 || src.askedIDs[0] != "CVE-1" {
+		t.Errorf("intel asked for %v, want the scan's CVE IDs", src.askedIDs)
+	}
+	rep := notif.msg.Report
+	if !rep.Triage {
+		t.Fatal("report should be triaged when Intel is wired")
+	}
+	if got := analyze.GroupCount(rep.ByPriority().ActNow); got != 1 {
+		t.Errorf("act_now groups = %d, want 1 (KEV finding)", got)
+	}
+}
+
+func TestRunOnce_TriageIntelFailureStillNotifies(t *testing.T) {
+	notif := &fakeNotifier{}
+	src := &fakeIntel{err: errors.New("feeds down"), fresh: intel.Freshness{}}
+	r := Runner{
+		Lister:     fakeLister{images: []string{"vuln:1"}},
+		Scanner:    vulnScan(),
+		Notifier:   notif,
+		Intel:      src,
+		ActNowEPSS: 0.10,
+		WatchEPSS:  0.01,
+		Now:        clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce must not fail on intel errors: %v", err)
+	}
+	if !notif.called {
+		t.Fatal("notification must go out despite intel failure")
+	}
+	if !notif.msg.Report.Intel.Degraded() {
+		t.Error("report should carry the degraded intel status")
+	}
+}
+
+func TestRunOnce_NoIntelMeansNoTriage(t *testing.T) {
+	notif := &fakeNotifier{}
+	r := Runner{
+		Lister:   fakeLister{images: []string{"vuln:1"}},
+		Scanner:  vulnScan(),
+		Notifier: notif,
+		Now:      clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if notif.msg.Report.Triage {
+		t.Error("report must not be triaged when Intel is nil")
+	}
+}
+
+func TestRunOnce_DiscussionLinksOnlyForActNowIDs(t *testing.T) {
+	notif := &fakeNotifier{}
+	src := &fakeIntel{
+		enrich: map[string]intel.Enrichment{
+			"CVE-1": {KEV: true},                    // act_now signal
+			"CVE-2": {EPSS: 0.002, EPSSKnown: true}, // low: must not be queried
+		},
+		fresh: intel.Freshness{KEVOK: true, EPSSOK: true},
+		discussions: map[string]intel.Discussion{
+			"CVE-1": {Title: "t", URL: "https://news.ycombinator.com/item?id=1", Points: 166},
+		},
+	}
+	scanTwo := fakeScanner{byImage: map[string]scanner.ImageScan{
+		"vuln:1": {Image: "vuln:1", Findings: []scanner.Finding{
+			{Image: "vuln:1", Class: scanner.ClassOS, Package: "libc", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
+			{Image: "vuln:1", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-2"},
+		}},
+	}}
+	r := Runner{
+		Lister:          fakeLister{images: []string{"vuln:1"}},
+		Scanner:         scanTwo,
+		Notifier:        notif,
+		Intel:           src,
+		ActNowEPSS:      0.10,
+		WatchEPSS:       0.01,
+		DiscussionLinks: true,
+		Now:             clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(src.discussionIDs) != 1 || src.discussionIDs[0] != "CVE-1" {
+		t.Errorf("Discussions queried with %v, want only the act-now CVE", src.discussionIDs)
+	}
+	// The link must reach the rendered report.
+	pv := notif.msg.Report.ByPriority()
+	top := pv.ActNow[0].Packages[0].TopVuln()
+	if len(top.Refs) != 1 || top.Refs[0].Kind != "discussion" || top.Refs[0].URL != "https://news.ycombinator.com/item?id=1" {
+		t.Errorf("act-now vuln refs = %+v, want the HN discussion", top.Refs)
+	}
+}
+
+func TestRunOnce_DiscussionLinksOffQueriesNothing(t *testing.T) {
+	notif := &fakeNotifier{}
+	src := &fakeIntel{
+		enrich: map[string]intel.Enrichment{"CVE-1": {KEV: true}},
+		fresh:  intel.Freshness{KEVOK: true, EPSSOK: true},
+	}
+	r := Runner{
+		Lister:          fakeLister{images: []string{"vuln:1"}},
+		Scanner:         vulnScan(),
+		Notifier:        notif,
+		Intel:           src,
+		ActNowEPSS:      0.10,
+		WatchEPSS:       0.01,
+		DiscussionLinks: false,
+		Now:             clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if src.discussionIDs != nil {
+		t.Errorf("Discussions must not be called when disabled, got %v", src.discussionIDs)
+	}
+}
+
+func TestRunOnce_DegradedIntelSkipsDiscussions(t *testing.T) {
+	notif := &fakeNotifier{}
+	src := &fakeIntel{err: errors.New("down"), fresh: intel.Freshness{}}
+	r := Runner{
+		Lister:          fakeLister{images: []string{"vuln:1"}},
+		Scanner:         vulnScan(),
+		Notifier:        notif,
+		Intel:           src,
+		ActNowEPSS:      0.10,
+		WatchEPSS:       0.01,
+		DiscussionLinks: true,
+		Now:             clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if src.discussionIDs != nil {
+		t.Errorf("degraded intel must not trigger discussion queries, got %v", src.discussionIDs)
 	}
 }

@@ -185,3 +185,83 @@ notify:
 		t.Errorf("empty daily_at should yield ok=false")
 	}
 }
+
+func TestParse_TriageDefaults(t *testing.T) {
+	c, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !c.Triage.Enabled {
+		t.Error("default Triage.Enabled = false, want true")
+	}
+	if c.Triage.ActNowEPSS != 0.10 || c.Triage.WatchEPSS != 0.01 {
+		t.Errorf("default thresholds = %v/%v, want 0.10/0.01", c.Triage.ActNowEPSS, c.Triage.WatchEPSS)
+	}
+	if c.Triage.KEVURL != "" || c.Triage.EPSSURL != "" {
+		t.Errorf("default URLs should be empty (library defaults apply): %q %q", c.Triage.KEVURL, c.Triage.EPSSURL)
+	}
+}
+
+func TestParse_TriageOverrides(t *testing.T) {
+	c, err := Parse([]byte(`
+notify:
+  slack_webhook_url: "https://x.test"
+triage:
+  enabled: true
+  act_now_epss: 0.5
+  watch_epss: 0.05
+  kev_url: "https://mirror.test/kev.json"
+  epss_url: "https://mirror.test/epss.csv.gz"
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if c.Triage.ActNowEPSS != 0.5 || c.Triage.WatchEPSS != 0.05 {
+		t.Errorf("thresholds = %v/%v, want 0.5/0.05", c.Triage.ActNowEPSS, c.Triage.WatchEPSS)
+	}
+	if c.Triage.KEVURL != "https://mirror.test/kev.json" {
+		t.Errorf("KEVURL = %q", c.Triage.KEVURL)
+	}
+}
+
+func TestParse_TriageDisabled(t *testing.T) {
+	c, err := Parse([]byte(`
+notify:
+  slack_webhook_url: "https://x.test"
+triage:
+  enabled: false
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if c.Triage.Enabled {
+		t.Error("Triage.Enabled = true, want false")
+	}
+}
+
+func TestParse_TriageInvalidThresholds(t *testing.T) {
+	for _, body := range []string{
+		"act_now_epss: 0.005\n  watch_epss: 0.01", // watch > act_now
+		"watch_epss: 0",     // watch must be > 0
+		"act_now_epss: 1.5", // above 1
+	} {
+		_, err := Parse([]byte("notify:\n  slack_webhook_url: \"https://x.test\"\ntriage:\n  " + body + "\n"))
+		if err == nil || !strings.Contains(err.Error(), "triage") {
+			t.Errorf("thresholds %q: err = %v, want triage validation error", body, err)
+		}
+	}
+}
+
+func TestParse_TriageDisabledSkipsThresholdValidation(t *testing.T) {
+	// A nonsensical threshold must not block someone turning the feature off.
+	_, err := Parse([]byte(`
+notify:
+  slack_webhook_url: "https://x.test"
+triage:
+  enabled: false
+  watch_epss: 0
+`))
+	if err != nil {
+		t.Errorf("Parse: %v, want disabled triage to skip threshold validation", err)
+	}
+}

@@ -45,7 +45,12 @@ type ScanConfig struct {
 }
 
 type NotifyConfig struct {
-	SlackWebhookURL   string
+	SlackWebhookURL string
+	// Slack Web API delivery: a bot token (chat:write) plus destination
+	// channel. Replaces the webhook and additionally posts the full report to
+	// the summary's thread (design/slack-thread-report-spec.md).
+	SlackBotToken     string
+	SlackChannel      string
 	GenericWebhookURL string
 	NotifyOnClean     bool   // also notify when nothing was found
 	Mode              string // "diff" (default) or "full"
@@ -94,6 +99,8 @@ type rawConfig struct {
 	} `yaml:"scan"`
 	Notify struct {
 		SlackWebhookURL   string `yaml:"slack_webhook_url"`
+		SlackBotToken     string `yaml:"slack_bot_token"`
+		SlackChannel      string `yaml:"slack_channel"`
 		GenericWebhookURL string `yaml:"generic_webhook_url"`
 		NotifyOnClean     bool   `yaml:"notify_on_clean"`
 		Mode              string `yaml:"mode"`
@@ -200,8 +207,14 @@ func applyDefaults(c *Config) {
 }
 
 func validate(c *Config) error {
-	if c.Notify.SlackWebhookURL == "" && c.Notify.GenericWebhookURL == "" {
-		return fmt.Errorf("config: at least one notify target (slack_webhook_url or generic_webhook_url) is required")
+	if (c.Notify.SlackBotToken == "") != (c.Notify.SlackChannel == "") {
+		return fmt.Errorf("config: slack_bot_token and slack_channel must be set together")
+	}
+	if c.Notify.SlackBotToken != "" && c.Notify.SlackWebhookURL != "" {
+		return fmt.Errorf("config: configure either slack_webhook_url or slack_bot_token, not both")
+	}
+	if c.Notify.SlackWebhookURL == "" && c.Notify.SlackBotToken == "" && c.Notify.GenericWebhookURL == "" {
+		return fmt.Errorf("config: at least one notify target (slack_webhook_url, slack_bot_token, or generic_webhook_url) is required")
 	}
 	for i, s := range c.Scan.Severity {
 		up := strings.ToUpper(strings.TrimSpace(s))

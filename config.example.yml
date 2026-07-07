@@ -15,6 +15,13 @@ scan:
 notify:
   # Slack Incoming Webhook (sends a preformatted message).
   slack_webhook_url: ""
+  # Slack Web API delivery (alternative to the webhook — set one, not both):
+  # a bot token with chat:write plus the destination channel ID. On top of the
+  # same channel summary, this posts the full open-findings report into the
+  # summary's thread (urgent/watch expanded, low as a count), and on quiet
+  # days links back to the last full report instead.
+  slack_bot_token: ""
+  slack_channel: ""
   # Generic webhook (POSTs structured JSON). The receiver can process it freely.
   generic_webhook_url: ""
   # Whether to send a message even when nothing is wrong. Defaults to false (notify only on findings).

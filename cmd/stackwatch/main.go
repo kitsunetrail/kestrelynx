@@ -91,6 +91,11 @@ func main() {
 // buildNotifier assembles the configured notify targets into one Notifier.
 func buildNotifier(c config.NotifyConfig) runner.Notifier {
 	var notifiers []notify.Notifier
+	// Config validation guarantees the token and webhook are mutually
+	// exclusive; the API path adds the thread report the webhook can't do.
+	if c.SlackBotToken != "" {
+		notifiers = append(notifiers, notify.SlackAPINotifier{Token: c.SlackBotToken, Channel: c.SlackChannel})
+	}
 	if c.SlackWebhookURL != "" {
 		notifiers = append(notifiers, notify.SlackNotifier{WebhookURL: c.SlackWebhookURL})
 	}

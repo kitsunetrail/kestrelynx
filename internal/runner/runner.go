@@ -214,6 +214,10 @@ func (r Runner) sendDiff(ctx context.Context, report analyze.Report) error {
 		log.Warn("load state failed; treating all findings as new", "err", err)
 	}
 	diff, next := state.Compute(prev, report)
+	// The last-full-report ref carries over verbatim unless this cycle posts a
+	// fresh thread: a failed (or skipped) post must keep the old link alive
+	// (design/slack-thread-report-spec.md §4).
+	next.LastFullReport = prev.LastFullReport
 
 	fullToday := r.FullReportDay != NoFullReport && r.now().Weekday() == r.FullReportDay
 	send := report.HasIssues() || diff.HasChanges() || r.NotifyOnClean
@@ -222,9 +226,25 @@ func (r Runner) sendDiff(ctx context.Context, report analyze.Report) error {
 		return r.saveState(next)
 	}
 
-	m := notify.Message{Report: report, Diff: &diff, FullReport: fullToday}
+	res := &notify.ThreadResult{}
+	m := notify.Message{
+		Report:     report,
+		Diff:       &diff,
+		FullReport: fullToday,
+		// The thread mirrors the channel: post the full state when something
+		// changed (or on the weekly digest day); on quiet days the summary
+		// links to the previous thread instead.
+		Thread:     diff.HasChanges() || fullToday,
+		FirstSeen:  next.FirstSeen,
+		LastReport: prev.LastFullReport,
+		Result:     res,
+	}
 	if err := r.Notifier.Send(ctx, m); err != nil {
 		return fmt.Errorf("send notification: %w", err)
+	}
+	if res.Ref.TS != "" {
+		ref := res.Ref
+		next.LastFullReport = &ref
 	}
 	log.Info("notification sent",
 		"new", len(diff.Changes),
@@ -232,6 +252,7 @@ func (r Runner) sendDiff(ctx context.Context, report analyze.Report) error {
 		"open_critical", diff.OpenCritical,
 		"open_high", diff.OpenHigh,
 		"full_report", fullToday,
+		"thread_report", res.Ref.TS != "",
 		"scan_errors", len(report.ScanErrors))
 	return r.saveState(next)
 }

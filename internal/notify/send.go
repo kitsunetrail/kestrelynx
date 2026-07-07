@@ -18,10 +18,29 @@ import (
 // previous scan when diff mode is on (nil Diff = full mode, render everything).
 // FullReport asks diff mode to append the complete open-findings view (the
 // weekly digest day).
+//
+// The thread-report fields (design/slack-thread-report-spec.md) are consumed
+// by SlackAPINotifier only; webhook notifiers ignore them. Thread asks for the
+// full open-findings report to be posted as replies under the summary message.
+// FirstSeen looks up a finding's first-seen time for the "open N day(s)"
+// lines. LastReport is the most recent successfully posted thread (nil when
+// none). Result, when non-nil, receives the ref of a thread posted by this
+// send, so the caller can persist it only after delivery succeeded.
 type Message struct {
 	Report     analyze.Report
 	Diff       *state.Diff
 	FullReport bool
+
+	Thread     bool
+	FirstSeen  func(image, pkg string) (time.Time, bool)
+	LastReport *state.ReportRef
+	Result     *ThreadResult
+}
+
+// ThreadResult is the out-slot for a thread post: a zero Ref means no thread
+// was posted (or it failed before completing).
+type ThreadResult struct {
+	Ref state.ReportRef
 }
 
 // Notifier delivers a message to a destination.
@@ -39,14 +58,16 @@ type SlackNotifier struct {
 }
 
 func (n SlackNotifier) Send(ctx context.Context, m Message) error {
-	text := ""
-	if m.Diff != nil {
-		text = FormatSlackDiffText(m.Report, *m.Diff, m.FullReport)
-	} else {
-		text = FormatSlackText(m.Report)
-	}
-	body := map[string]string{"text": text}
+	body := map[string]string{"text": summaryText(m)}
 	return postJSON(ctx, client(n.Client), n.WebhookURL, body)
+}
+
+// summaryText renders the channel message body for the message's mode.
+func summaryText(m Message) string {
+	if m.Diff != nil {
+		return FormatSlackDiffText(m.Report, *m.Diff, m.FullReport)
+	}
+	return FormatSlackText(m.Report)
 }
 
 // WebhookNotifier posts the structured JSON payload to a generic endpoint. It

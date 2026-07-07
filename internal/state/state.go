@@ -36,10 +36,32 @@ type Entry struct {
 }
 
 // State is everything remembered between scan cycles.
+//
+// LastFullReport was added for the Slack thread report
+// (design/slack-thread-report-spec.md) without a version bump: older state
+// decodes with a nil ref, which simply forces one fresh full-report post.
 type State struct {
-	Version  int                  `json:"version"`
-	Findings map[string]Entry     `json:"findings"` // keyed by image \t package
-	EOSL     map[string]time.Time `json:"eosl"`     // image -> first seen as EOL
+	Version        int                  `json:"version"`
+	Findings       map[string]Entry     `json:"findings"` // keyed by image \t package
+	EOSL           map[string]time.Time `json:"eosl"`     // image -> first seen as EOL
+	LastFullReport *ReportRef           `json:"last_full_report,omitempty"`
+}
+
+// ReportRef locates the Slack message whose thread carries the most recent
+// full open-findings report. Channel records the configured destination at
+// post time: if notifications later move elsewhere, the permalink points at a
+// thread the new channel's readers may not see, so the ref is treated as
+// absent and the next cycle posts a fresh full report.
+type ReportRef struct {
+	Channel   string `json:"channel_id"`
+	TS        string `json:"ts"`
+	Permalink string `json:"permalink"`
+}
+
+// ValidFor reports whether the ref can serve as the "last full report" link
+// for the given destination channel. Safe to call on a nil ref.
+func (r *ReportRef) ValidFor(channel string) bool {
+	return r != nil && r.TS != "" && r.Permalink != "" && r.Channel == channel
 }
 
 // empty returns a fresh, usable state.
@@ -63,6 +85,13 @@ func keyPackage(k string) string {
 		return k[i+1:]
 	}
 	return ""
+}
+
+// FirstSeen returns when the finding (image, pkg) was first observed. ok is
+// false for findings this state has never recorded.
+func (s State) FirstSeen(image, pkg string) (time.Time, bool) {
+	e, ok := s.Findings[key(image, pkg)]
+	return e.FirstSeen, ok
 }
 
 // FileStore persists State as a single JSON file, written atomically.

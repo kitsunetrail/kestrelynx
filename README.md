@@ -98,6 +98,7 @@ See [config.example.yml](config.example.yml). At minimum, set one of `notify.sla
 
 Notable knobs:
 
+- `notify.slack_bot_token` + `notify.slack_channel` — deliver via the Slack Web API instead of a webhook (set one or the other). Same channel summary, plus a **full open-findings report in the summary's thread**: urgent/watch findings expanded with evidence, references, and how long each has been open; low collapsed to a count. On no-change days the summary links back to the last full report instead of re-posting it. Needs a bot token with the `chat:write` scope invited to the channel.
 - `notify.mode` — `diff` (default) notifies only what changed since the last scan, plus a one-line "open now" summary; `full` resends the complete report every scan.
 - `notify.full_report_day` — in diff mode, the weekday to also send the complete report (default `monday`, `never` to disable).
 - `state.path` — where diff mode remembers previous scans (default `/var/lib/stackwatch/state.json`).

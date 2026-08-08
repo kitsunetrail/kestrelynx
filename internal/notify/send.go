@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 
@@ -59,7 +60,7 @@ type SlackNotifier struct {
 
 func (n SlackNotifier) Send(ctx context.Context, m Message) error {
 	body := map[string]string{"text": summaryText(m)}
-	return postJSON(ctx, client(n.Client), n.WebhookURL, body)
+	return postJSON(ctx, client(n.Client), "slack webhook", n.WebhookURL, body)
 }
 
 // summaryText renders the channel message body for the message's mode.
@@ -79,7 +80,7 @@ type WebhookNotifier struct {
 }
 
 func (n WebhookNotifier) Send(ctx context.Context, m Message) error {
-	return postJSON(ctx, client(n.Client), n.URL, BuildWebhookPayload(m.Report, m.Diff))
+	return postJSON(ctx, client(n.Client), "generic webhook", n.URL, BuildWebhookPayload(m.Report, m.Diff))
 }
 
 // MultiNotifier fans a message out to several notifiers, attempting all even if
@@ -106,26 +107,62 @@ func client(c *http.Client) *http.Client {
 	return defaultClient
 }
 
-func postJSON(ctx context.Context, c *http.Client, url string, body any) error {
+// postJSON posts body to endpoint. Errors name the destination only by dest
+// (e.g. "slack webhook"): webhook URLs are credentials — a Slack Incoming
+// Webhook URL is the whole secret — so they must never reach logs.
+func postJSON(ctx context.Context, c *http.Client, dest, endpoint string, body any) error {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return fmt.Errorf("build request for %s: %w", dest, redact(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.Do(req)
 	if err != nil {
-		return fmt.Errorf("post to %s: %w", url, err)
+		return fmt.Errorf("post to %s: %w", dest, redact(err))
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("post to %s: unexpected status %s", url, resp.Status)
+		// resp.Status carries the server's reason phrase verbatim; report
+		// only the numeric code so no server-chosen text reaches logs.
+		return fmt.Errorf("post to %s: unexpected status %d", dest, resp.StatusCode)
 	}
 	return nil
+}
+
+// redactedError hides the original error text — which may embed the webhook
+// URL — behind a scrubbed message, while Unwrap keeps the original chain
+// reachable for errors.Is / errors.As (context.DeadlineExceeded etc.).
+type redactedError struct {
+	msg string
+	err error
+}
+
+func (e *redactedError) Error() string { return e.msg }
+func (e *redactedError) Unwrap() error { return e.err }
+
+// redact discards err's text entirely and substitutes a classification:
+// transport errors can embed the webhook URL (url.Error wrappers carry the
+// full URL) or server-reflected fragments of it (redirect Location parse
+// errors, malformed headers), so no message derived from the original error
+// is safe to log. Scrubbing by substring cannot cover partial reflections, so
+// the text is fixed; the original chain stays inspectable through Unwrap.
+func redact(err error) error {
+	msg := "request failed"
+	var nerr net.Error
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		msg = "timeout"
+	case errors.Is(err, context.Canceled):
+		msg = "canceled"
+	case errors.As(err, &nerr) && nerr.Timeout():
+		msg = "timeout"
+	}
+	return &redactedError{msg: msg, err: err}
 }

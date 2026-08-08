@@ -36,7 +36,7 @@ notify:
   full_report_day: "monday"
 
 docker:
-  # Path to docker.sock, mounted read-only.
+  # Path to docker.sock. StackWatch only performs GET /containers/json.
   socket: "/var/run/docker.sock"
 
 state:

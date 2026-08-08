@@ -16,7 +16,9 @@ services:
       # Set it to your local zone, e.g. Asia/Tokyo, America/New_York.
       - TZ=UTC
     volumes:
-      # Read-only: StackWatch only lists containers, it never controls them.
+      # StackWatch only performs GET /containers/json to list running containers.
+      # Note: :ro makes the filesystem mount read-only but does NOT restrict
+      # Docker API operations — mount docker.sock only into images you trust.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./config.yml:/etc/stackwatch/config.yml:ro
       # Diff-mode scan state (first-seen dates), so notifications stay

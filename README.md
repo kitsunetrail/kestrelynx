@@ -51,7 +51,7 @@ CVEs). Set `triage.discussion_links: false` for zero CVE egress.
 
 ## What it does
 
-1. Reads the unique images of your running containers from `docker.sock` (read-only)
+1. Reads the unique images of your running containers from `docker.sock` (a single `GET /containers/json` — it never controls containers)
 2. Scans each image with [Trivy](https://github.com/aquasecurity/trivy) (CVE DB is handled by Trivy)
 3. Keeps only **HIGH / CRITICAL** findings
 4. Triages each CVE into **act now / watch / low** using CISA KEV and EPSS (fetched in bulk daily, joined locally; disable with `triage.enabled: false`)
@@ -68,7 +68,7 @@ CVEs). Set `triage.discussion_links: false` for zero CVE egress.
 cp config.example.yml config.yml
 $EDITOR config.yml
 
-# 2. Run it (mount docker.sock read-only)
+# 2. Run it
 docker run -d --name stackwatch \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -v "$PWD/config.yml:/etc/stackwatch/config.yml:ro" \
@@ -78,6 +78,12 @@ docker run -d --name stackwatch \
 
 (The `stackwatch-state` volume keeps the scan history that powers diff notifications;
 without it, everything is re-announced as new whenever the container is recreated.)
+
+**A note on the Docker socket**: StackWatch only performs a GET request to list running
+containers (`GET /containers/json`) — it never starts, stops, or modifies anything.
+However, mounting `docker.sock` gives the container privileged access to the Docker API;
+`:ro` makes the filesystem mount read-only but does not restrict Docker API operations.
+Mount the Docker socket only into images you trust.
 
 That's it — every container on the host (no matter which compose project or one-off `docker run` started it) is scanned daily.
 You don't need one per container or per compose project: **one instance per host**.

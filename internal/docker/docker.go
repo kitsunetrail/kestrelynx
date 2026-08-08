@@ -1,7 +1,7 @@
 // Package docker lists running containers via the Docker Engine API over a
-// read-only docker.sock mount. It deliberately avoids the full Docker Go SDK to
+// docker.sock mount. It deliberately avoids the full Docker Go SDK to
 // keep the binary small (single `docker run`, no heavy deps); only the
-// /containers/json endpoint is needed.
+// /containers/json endpoint is needed (a single GET — nothing is controlled).
 package docker
 
 import (

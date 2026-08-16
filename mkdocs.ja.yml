@@ -12,6 +12,25 @@ edit_uri: edit/main/docs-ja/
 theme:
   language: ja
 
+extra:
+  consent:
+    title: Cookieの使用について
+    description: >-
+      このドキュメントの利用状況を把握し、改善するためにGoogle Analyticsを使用します。
+      同意した場合にのみアクセス情報を収集します。
+    cookies:
+      analytics:
+        name: Google Analytics
+        checked: false
+    actions:
+      - accept
+      - reject
+      - manage
+
+copyright: >-
+  Copyright &copy; 2026 Kitsune Trail ·
+  <a href="#__consent">Cookie設定を変更</a>
+
 nav:
   - ホーム: index.md
   - ドキュメント:

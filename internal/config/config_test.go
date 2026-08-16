@@ -30,7 +30,7 @@ func TestParse_Defaults(t *testing.T) {
 	if c.Notify.FullReportDay != "monday" {
 		t.Errorf("default FullReportDay = %q, want monday", c.Notify.FullReportDay)
 	}
-	if c.State.Path != "/var/lib/stackwatch/state.json" {
+	if c.State.Path != "/var/lib/kestrelynx/state.json" {
 		t.Errorf("default State.Path = %q", c.State.Path)
 	}
 }

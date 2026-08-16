@@ -1,5 +1,5 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://kitsunetrail.github.io/stackwatch/sitemap.xml
-Sitemap: https://kitsunetrail.github.io/stackwatch/ja/sitemap.xml
+Sitemap: https://kitsunetrail.github.io/kestrelynx/sitemap.xml
+Sitemap: https://kitsunetrail.github.io/kestrelynx/ja/sitemap.xml

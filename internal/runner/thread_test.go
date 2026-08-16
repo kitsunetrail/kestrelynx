@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kitsunetrail/stackwatch/internal/notify"
-	"github.com/kitsunetrail/stackwatch/internal/state"
+	"github.com/kitsunetrail/kestrelynx/internal/notify"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 // threadNotifier is a fakeNotifier that also reports a posted thread ref, the

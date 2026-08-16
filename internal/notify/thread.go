@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/analyze"
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
 // threadMsgLimit caps one thread message's mrkdwn text. Slack renders roughly

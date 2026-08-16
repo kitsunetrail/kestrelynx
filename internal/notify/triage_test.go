@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kitsunetrail/stackwatch/internal/analyze"
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
-	"github.com/kitsunetrail/stackwatch/internal/state"
+	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 // triageRules is the default-threshold triage config with healthy intel.

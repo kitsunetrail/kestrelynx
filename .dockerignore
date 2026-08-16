@@ -2,5 +2,5 @@
 design
 *.md
 config.yml
-/stackwatch
+/kestrelynx
 internal/scanner/testdata/real_*.json

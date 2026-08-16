@@ -1,10 +1,10 @@
 # 設定
 
 YAML設定ファイルについて説明します。コンテナイメージでは既定で
-`/etc/stackwatch/config.yml`を使用します。未知のYAMLフィールドはエラーになるようになってます。
+`/etc/kestrelynx/config.yml`を使用します。未知のYAMLフィールドはエラーになるようになってます。
 
 コメント付きの完全な例は
-[`config.example.yml`](https://github.com/kitsunetrail/stackwatch/blob/main/config.example.yml)に
+[`config.example.yml`](https://github.com/kitsunetrail/kestrelynx/blob/main/config.example.yml)に
 あります。
 
 ## スケジュール
@@ -12,7 +12,7 @@ YAML設定ファイルについて説明します。コンテナイメージで�
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
 | `schedule.daily_at` | 空 | `HH:MM`形式のローカル時刻。空の場合は起動時点から24時間ごとに実行します。 |
-| `schedule.run_on_start` | `true` | StackWatchの起動直後に1回スキャンします。 |
+| `schedule.run_on_start` | `true` | KestreLynxの起動直後に1回スキャンします。 |
 
 `daily_at`で使用するタイムゾーンは、コンテナの`TZ`環境変数で指定します。
 
@@ -59,7 +59,7 @@ diffモードでは、新規検出、解消、修正可能化、緊急度上昇�
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
 | `docker.socket` | `/var/run/docker.sock` | Dockerソケットのパスです。 |
-| `state.path` | `/var/lib/stackwatch/state.json` | スキャン履歴と差分計算に使用するファイルです。 |
+| `state.path` | `/var/lib/kestrelynx/state.json` | スキャン履歴と差分計算に使用するファイルです。 |
 
 `state.path`を含むディレクトリをDockerボリュームで永続化してください。
 

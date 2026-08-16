@@ -199,7 +199,7 @@ func (s *Source) download(ctx context.Context, url, path string, validate func(s
 
 // --- KEV ---
 
-// kevCatalog is the subset of the CISA KEV JSON schema StackWatch reads.
+// kevCatalog is the subset of the CISA KEV JSON schema KestreLynx reads.
 type kevCatalog struct {
 	Vulnerabilities []struct {
 		CVEID                      string `json:"cveID"`

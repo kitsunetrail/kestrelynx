@@ -1,5 +1,5 @@
 // Package scanner runs Trivy against container images and converts its JSON
-// output into StackWatch's neutral Finding/ImageScan types.
+// output into KestreLynx's neutral Finding/ImageScan types.
 //
 // The neutral types deliberately hide Trivy's schema so that downstream
 // packages (analyze, notify) never import Trivy-shaped data, and so a
@@ -32,7 +32,7 @@ const (
 	StatusWontFix  Status = "will_not_fix"
 )
 
-// Severity is restricted in practice to HIGH/CRITICAL because StackWatch asks
+// Severity is restricted in practice to HIGH/CRITICAL because KestreLynx asks
 // Trivy to filter, but the raw string is preserved as-is.
 type Severity string
 
@@ -67,7 +67,7 @@ type ImageScan struct {
 }
 
 // trivyReport is the subset of Trivy's JSON schema (SchemaVersion 2) that
-// StackWatch depends on. Fields we don't use are intentionally omitted.
+// KestreLynx depends on. Fields we don't use are intentionally omitted.
 type trivyReport struct {
 	ArtifactName string `json:"ArtifactName"`
 	Metadata     struct {

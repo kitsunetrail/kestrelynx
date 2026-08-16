@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
 var fixedTime = time.Date(2026, 6, 24, 9, 0, 0, 0, time.UTC)

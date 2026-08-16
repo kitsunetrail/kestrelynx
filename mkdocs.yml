@@ -1,10 +1,10 @@
-site_name: StackWatch
-site_url: https://kitsunetrail.github.io/stackwatch/
+site_name: KestreLynx
+site_url: https://kitsunetrail.github.io/kestrelynx/
 site_description: >-
-  Official documentation and technical articles for StackWatch, an open-source
+  Official documentation and technical articles for KestreLynx, an open-source
   vulnerability change monitor for Docker hosts.
-repo_name: kitsunetrail/stackwatch
-repo_url: https://github.com/kitsunetrail/stackwatch
+repo_name: kitsunetrail/kestrelynx
+repo_url: https://github.com/kitsunetrail/kestrelynx
 edit_uri: edit/main/docs/
 
 theme:
@@ -84,15 +84,15 @@ extra:
       - manage
   alternate:
     - name: English
-      link: /stackwatch/
+      link: /kestrelynx/
       lang: en
     - name: 日本語
-      link: /stackwatch/ja/
+      link: /kestrelynx/ja/
       lang: ja
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/kitsunetrail/stackwatch
-      name: StackWatch on GitHub
+      link: https://github.com/kitsunetrail/kestrelynx
+      name: KestreLynx on GitHub
     - icon: fontawesome/brands/x-twitter
       link: https://x.com/kitsunetraildev
       name: KitsuneTrail on X

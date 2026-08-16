@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/analyze"
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
 // seenDaysAgo builds a firstSeen lookup that reports every finding as first

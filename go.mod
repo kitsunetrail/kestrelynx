@@ -1,4 +1,4 @@
-module github.com/kitsunetrail/stackwatch
+module github.com/kitsunetrail/kestrelynx
 
 go 1.26.4
 

@@ -1,6 +1,6 @@
 # Dockerイメージの脆弱性通知
 
-StackWatchは、Dockerホストで現在稼働しているイメージをスキャンし、
+KestreLynxは、Dockerホストで現在稼働しているイメージをスキャンし、
 対応が必要な脆弱性の変化を通知する軽量なオープンソースエージェントです。
 
 毎日同じスキャン結果をすべて送るのではなく、**新規検出**、**解消**、
@@ -11,7 +11,7 @@ StackWatchは、Dockerホストで現在稼働しているイメージをスキ�
 
 <div class="grid cards" markdown>
 
--   :material-rocket-launch-outline: **StackWatchセットアップ手順**
+-   :material-rocket-launch-outline: **KestreLynxセットアップ手順**
 
     ---
 
@@ -26,10 +26,10 @@ StackWatchは、Dockerホストで現在稼働しているイメージをスキ�
 
     変更検出と悪用情報から、検出結果をact now、watch、lowに分類方法を記載しています。
 
-    [StackWatchの仕組み](documentation/how-it-works.md)
+    [KestreLynxの仕組み](documentation/how-it-works.md)
 
 
 </div>
 
 !!! warning "初期リリース"
-    StackWatchは現在、DockerホストのCVE通知に重点を置いたMVPです。
+    KestreLynxは現在、DockerホストのCVE通知に重点を置いたMVPです。

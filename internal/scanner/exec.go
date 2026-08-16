@@ -9,7 +9,7 @@ import (
 )
 
 // Trivy runs the Trivy CLI. The binary is shelled out to (ADR-002) rather than
-// linked as a library, so Trivy can be upgraded independently of StackWatch.
+// linked as a library, so Trivy can be upgraded independently of KestreLynx.
 type Trivy struct {
 	// BinPath is the trivy executable; empty means look it up on PATH.
 	BinPath string
@@ -17,7 +17,7 @@ type Trivy struct {
 	Severity []string
 }
 
-// New returns a Trivy with StackWatch defaults (HIGH/CRITICAL, trivy on PATH).
+// New returns a Trivy with KestreLynx defaults (HIGH/CRITICAL, trivy on PATH).
 func New() Trivy {
 	return Trivy{Severity: []string{"HIGH", "CRITICAL"}}
 }

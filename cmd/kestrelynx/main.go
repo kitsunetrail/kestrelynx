@@ -1,4 +1,4 @@
-// Command stackwatch scans the host's running container images for HIGH/CRITICAL
+// Command kestrelynx scans the host's running container images for HIGH/CRITICAL
 // vulnerabilities and notifies Slack/webhook on a schedule. See docs/ for the
 // full design.
 package main
@@ -14,17 +14,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/config"
-	"github.com/kitsunetrail/stackwatch/internal/docker"
-	"github.com/kitsunetrail/stackwatch/internal/intel"
-	"github.com/kitsunetrail/stackwatch/internal/notify"
-	"github.com/kitsunetrail/stackwatch/internal/runner"
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
-	"github.com/kitsunetrail/stackwatch/internal/state"
+	"github.com/kitsunetrail/kestrelynx/internal/config"
+	"github.com/kitsunetrail/kestrelynx/internal/docker"
+	"github.com/kitsunetrail/kestrelynx/internal/intel"
+	"github.com/kitsunetrail/kestrelynx/internal/notify"
+	"github.com/kitsunetrail/kestrelynx/internal/runner"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 func main() {
-	configPath := flag.String("config", "/etc/stackwatch/config.yml", "path to config file")
+	configPath := flag.String("config", "/etc/kestrelynx/config.yml", "path to config file")
 	flag.Parse()
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -73,7 +73,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	log.Info("stackwatch started",
+	log.Info("kestrelynx started",
 		"daily_at", cfg.Schedule.DailyAt,
 		"run_on_start", cfg.Schedule.RunOnStart,
 		"severity", cfg.Scan.Severity,
@@ -85,7 +85,7 @@ func main() {
 		log.Error("runner loop", "err", err)
 		os.Exit(1)
 	}
-	log.Info("stackwatch stopped")
+	log.Info("kestrelynx stopped")
 }
 
 // buildNotifier assembles the configured notify targets into one Notifier.

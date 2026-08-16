@@ -7,10 +7,10 @@ package analyze
 import (
 	"sort"
 
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
-// Priority is StackWatch's triage verdict for a vulnerability. It is kept
+// Priority is KestreLynx's triage verdict for a vulnerability. It is kept
 // separate from Severity (ADR-008): severity is the reported impact, priority
 // is our judgement of urgency, and the evidence for it is always shown.
 type Priority string

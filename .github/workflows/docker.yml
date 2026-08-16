@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # Documentation-only commits should publish Pages, not rebuild the image.
+    paths-ignore:
+      - "docs/**"
+      - "docs-ja/**"
+      - "mkdocs.yml"
+      - "mkdocs.ja.yml"
+      - "requirements-docs.txt"
+      - ".github/workflows/docs.yml"
+      - "README.md"
   workflow_dispatch:
 
 # GITHUB_TOKEN needs packages:write to push to ghcr; no PAT required.

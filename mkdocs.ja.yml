@@ -1,0 +1,23 @@
+INHERIT: mkdocs.yml
+
+site_name: StackWatch ドキュメント
+site_url: https://kitsunetrail.github.io/stackwatch/ja/
+site_description: >-
+  Dockerホスト向けのオープンソース脆弱性変更監視ツールStackWatchの
+  公式ドキュメントと技術記事。
+docs_dir: docs-ja
+site_dir: site/ja
+edit_uri: edit/main/docs-ja/
+
+theme:
+  language: ja
+
+nav:
+  - ホーム: index.md
+  - ドキュメント:
+      - 概要: documentation/index.md
+      - セットアップ: documentation/getting-started.md
+      - 設定: documentation/configuration.md
+      - 仕組み: documentation/how-it-works.md
+  - 技術記事:
+      - 概要: articles/index.md

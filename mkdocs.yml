@@ -1,0 +1,81 @@
+site_name: StackWatch
+site_url: https://kitsunetrail.github.io/stackwatch/
+site_description: >-
+  Official documentation and technical articles for StackWatch, an open-source
+  vulnerability change monitor for Docker hosts.
+repo_name: kitsunetrail/stackwatch
+repo_url: https://github.com/kitsunetrail/stackwatch
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  icon:
+    logo: material/shield-search
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Documentation:
+      - Overview: documentation/index.md
+      - Setup: documentation/getting-started.md
+      - Configuration: documentation/configuration.md
+      - How it works: documentation/how-it-works.md
+  - Articles:
+      - Overview: articles/index.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra:
+  alternate:
+    - name: English
+      link: /stackwatch/
+      lang: en
+    - name: 日本語
+      link: /stackwatch/ja/
+      lang: ja
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/kitsunetrail/stackwatch
+      name: StackWatch on GitHub
+    - icon: fontawesome/brands/x-twitter
+      link: https://x.com/kitsunetraildev
+      name: KitsuneTrail on X
+
+copyright: Copyright &copy; 2026 Kitsune Trail

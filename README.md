@@ -3,6 +3,10 @@
 [![CI](https://github.com/kitsunetrail/stackwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/kitsunetrail/stackwatch/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
+[Documentation](https://kitsunetrail.github.io/stackwatch/) ·
+[日本語](https://kitsunetrail.github.io/stackwatch/ja/) ·
+[Configuration reference](https://kitsunetrail.github.io/stackwatch/documentation/configuration/)
+
 > An agent that scans your running Docker containers every day and sends only the **actionable vulnerabilities** — prioritized — to Slack or a webhook.
 
 Built for self-hosters and homelab folks. It does the tedious work of reading Trivy's raw output for you, and surfaces what you can fix *right now*.
@@ -117,6 +121,25 @@ go test ./... -short   # fast unit tests (no Docker / network needed)
 go test ./...          # also runs integration tests that use Trivy (needs trivy + network)
 go build ./...
 ```
+
+Build and preview the documentation locally:
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements-docs.txt
+mkdocs serve
+```
+
+Preview the Japanese documentation in a separate process:
+
+```sh
+mkdocs serve --config-file mkdocs.ja.yml
+```
+
+Documentation changes pushed to `main` are built and deployed by
+[`docs.yml`](.github/workflows/docs.yml). Before the first deployment, select
+**GitHub Actions** under **Settings → Pages → Build and deployment → Source**.
 
 The pipeline is split into small packages: `docker` (enumerate) → `scanner` (run & parse Trivy) → `intel` (fetch & cache KEV/EPSS) → `analyze` (triage, aggregate, assess) → `state` (persist & diff against the previous scan) → `notify` (format & send), tied together by `runner`.
 

@@ -295,11 +295,14 @@ func writeTriageOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
 		seg = append(seg, fmt.Sprintf("🔕 %d low", d.OpenLow))
 	}
 	fmt.Fprintf(b, "\n📌 Open now: %s", strings.Join(seg, " / "))
+	// "act-now/watch", not "urgent": the age covers both buckets (an old low
+	// is the triage doing its job), and calling a watch-only backlog "urgent"
+	// misreads as act-now debt when the act-now count is zero.
 	if days := d.OldestUrgentDays(r.GeneratedAt); days > 0 {
 		if days >= staleDays {
-			fmt.Fprintf(b, " — 🔴 oldest urgent unresolved %d day(s)", days)
+			fmt.Fprintf(b, " — 🔴 oldest act-now/watch unresolved %d day(s)", days)
 		} else {
-			fmt.Fprintf(b, " — oldest urgent unresolved %d day(s)", days)
+			fmt.Fprintf(b, " — oldest act-now/watch unresolved %d day(s)", days)
 		}
 	}
 	b.WriteString("\n_Details in the generic webhook payload, or in the weekly full report._\n")

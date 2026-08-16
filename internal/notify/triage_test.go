@@ -161,8 +161,27 @@ func TestFormatSlackDiffText_TriageHeartbeatAgesUrgentOnly(t *testing.T) {
 	if !strings.Contains(out, "🔕 1 low") {
 		t.Errorf("heartbeat should show the open low count:\n%s", out)
 	}
-	if strings.Contains(out, "oldest urgent") {
+	if strings.Contains(out, "oldest act-now/watch") {
 		t.Errorf("an old low finding must not age the heartbeat:\n%s", out)
+	}
+}
+
+// The heartbeat age names its subject ("act-now/watch"): an aged watch-only
+// backlog was misread as urgent act-now debt under the old "oldest urgent"
+// wording.
+func TestFormatSlackDiffText_TriageHeartbeatAgeWording(t *testing.T) {
+	watchScan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-W"},
+	}}
+	enrich := map[string]analyze.Enrichment{"CVE-W": {EPSS: 0.03, EPSSKnown: true}}
+	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{watchScan}, triageRules(enrich), genTime))
+	// 20 days later, still open, still watch: aged past staleDays, red.
+	r := analyze.Build([]scanner.ImageScan{watchScan}, triageRules(enrich), genTime.AddDate(0, 0, 20))
+	d, _ := state.Compute(st, r)
+
+	out := FormatSlackDiffText(r, d, false)
+	if !strings.Contains(out, "🔴 oldest act-now/watch unresolved 20 day(s)") {
+		t.Errorf("aged watch finding must age the heartbeat under its own name:\n%s", out)
 	}
 }
 

@@ -26,7 +26,7 @@ Built for self-hosters and homelab folks. It does the tedious work of reading Tr
 ✅ Resolved since last scan (1)
 • myapp:latest: postcss
 
-📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 4 low — oldest urgent unresolved 12 day(s)
+📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 4 low — oldest act-now/watch unresolved 12 day(s)
 ```
 
 Instead of dumping every CVE every day, it tells you **what changed** — and which of it

@@ -68,7 +68,7 @@ func triageThreadSections(r analyze.Report, firstSeen func(image, pkg string) (t
 	pv := r.ByPriority()
 	var secs []threadSection
 	if n := analyze.GroupCount(pv.ActNow); n > 0 {
-		secs = append(secs, threadBucket(r, fmt.Sprintf("*🚨 URGENT (%d) — exploited or likely to be*", n), pv.ActNow, firstSeen))
+		secs = append(secs, threadBucket(r, fmt.Sprintf("*🚨 ACT NOW (%d) — exploited or likely to be*", n), pv.ActNow, firstSeen))
 	}
 	if n := analyze.GroupCount(pv.Watch); n > 0 {
 		secs = append(secs, threadBucket(r, fmt.Sprintf("*👀 WATCH (%d) — not urgent, keep an eye on*", n), pv.Watch, firstSeen))
@@ -117,7 +117,7 @@ func threadBucket(r analyze.Report, title string, imgs []analyze.ImageFindings, 
 }
 
 // threadImageMarker picks the per-image line marker: in triage mode the
-// bucket header (URGENT/WATCH/LOW) already carries the priority signal, so a
+// bucket header (ACT NOW/WATCH/LOW) already carries the priority signal, so a
 // severity emoji per image would be redundant and just uses a plain bullet.
 // The status-based fallback (triage off) has no such bucket signal, so it
 // keeps the severity emoji.

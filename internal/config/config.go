@@ -1,4 +1,4 @@
-// Package config loads and validates StackWatch's single YAML config file
+// Package config loads and validates KestreLynx's single YAML config file
 // (docs/ARCHITECTURE.md §5). Parsing applies defaults so a minimal file — just
 // one notify target — is enough to run.
 package config
@@ -124,7 +124,7 @@ type rawConfig struct {
 
 const (
 	defaultSocket        = "/var/run/docker.sock"
-	defaultStatePath     = "/var/lib/stackwatch/state.json"
+	defaultStatePath     = "/var/lib/kestrelynx/state.json"
 	defaultFullReportDay = "monday"
 	// Default EPSS thresholds (docs/TRIAGE_SPEC.md §4): 10% predicted
 	// exploitation probability is act_now territory, 1% is worth watching.

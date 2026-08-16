@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/analyze"
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
 // version guards the on-disk format. A mismatch is treated as no prior state

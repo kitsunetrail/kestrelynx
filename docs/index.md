@@ -1,10 +1,10 @@
 # Vulnerability notifications for Docker images
 
-StackWatch is a lightweight, open-source agent that scans the images currently
+KestreLynx is a lightweight, open-source agent that scans the images currently
 running on a Docker host and reports changes in vulnerabilities that require
 attention.
 
-Instead of sending the same complete scan results every day, StackWatch
+Instead of sending the same complete scan results every day, KestreLynx
 highlights **new findings**, **resolved findings**, **changes in fix
 availability**, and **priority escalations**. It combines
 [Trivy](https://trivy.dev/) scan results with
@@ -13,7 +13,7 @@ availability**, and **priority escalations**. It combines
 
 <div class="grid cards" markdown>
 
--   :material-rocket-launch-outline: **Set up StackWatch**
+-   :material-rocket-launch-outline: **Set up KestreLynx**
 
     ---
 
@@ -29,10 +29,10 @@ availability**, and **priority escalations**. It combines
     Learn how change detection and exploitation intelligence classify findings
     as act now, watch, or low.
 
-    [How StackWatch works](documentation/how-it-works.md)
+    [How KestreLynx works](documentation/how-it-works.md)
 
 </div>
 
 !!! warning "Early release"
-    StackWatch is currently an MVP focused on CVE notifications for Docker
+    KestreLynx is currently an MVP focused on CVE notifications for Docker
     hosts.

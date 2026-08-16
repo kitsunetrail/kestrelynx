@@ -1,17 +1,17 @@
 # Configuration
 
 This page describes the YAML configuration file. The container image uses
-`/etc/stackwatch/config.yml` by default. Unknown YAML fields produce an error.
+`/etc/kestrelynx/config.yml` by default. Unknown YAML fields produce an error.
 
 The complete annotated example is available in
-[`config.example.yml`](https://github.com/kitsunetrail/stackwatch/blob/main/config.example.yml).
+[`config.example.yml`](https://github.com/kitsunetrail/kestrelynx/blob/main/config.example.yml).
 
 ## Schedule
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `schedule.daily_at` | empty | Local time in `HH:MM`. When empty, run every 24 hours from startup. |
-| `schedule.run_on_start` | `true` | Run one scan immediately when StackWatch starts. |
+| `schedule.run_on_start` | `true` | Run one scan immediately when KestreLynx starts. |
 
 Use the container's `TZ` environment variable to select the timezone used by
 `daily_at`.
@@ -52,14 +52,14 @@ reposting it.
 
 Diff mode reports new findings, resolved findings, changes in fix availability,
 and priority escalations. When findings remain open but nothing changed,
-StackWatch sends a short heartbeat instead of repeating the entire report.
+KestreLynx sends a short heartbeat instead of repeating the entire report.
 
 ## State and Docker
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `docker.socket` | `/var/run/docker.sock` | Path to the Docker socket. |
-| `state.path` | `/var/lib/stackwatch/state.json` | File used for scan history and diff calculations. |
+| `state.path` | `/var/lib/kestrelynx/state.json` | File used for scan history and diff calculations. |
 
 Persist the directory containing `state.path` with a Docker volume.
 

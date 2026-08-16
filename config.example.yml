@@ -1,4 +1,4 @@
-# StackWatch configuration (single self-contained file). Copy to config.yml to use.
+# KestreLynx configuration (single self-contained file). Copy to config.yml to use.
 # Setting at least one notify target is enough to run; omit the rest to use defaults.
 
 schedule:
@@ -36,13 +36,13 @@ notify:
   full_report_day: "monday"
 
 docker:
-  # Path to docker.sock. StackWatch only performs GET /containers/json.
+  # Path to docker.sock. KestreLynx only performs GET /containers/json.
   socket: "/var/run/docker.sock"
 
 state:
   # Where diff mode remembers previous scans (JSON, one small file). Mount a
   # volume here so first-seen dates survive container recreation.
-  path: "/var/lib/stackwatch/state.json"
+  path: "/var/lib/kestrelynx/state.json"
 
 triage:
   # Rank findings by real-world exploitation signals instead of severity alone:

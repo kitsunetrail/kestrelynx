@@ -1,6 +1,6 @@
-# How StackWatch works
+# How KestreLynx works
 
-StackWatch turns point-in-time Trivy scan results into notifications organized
+KestreLynx turns point-in-time Trivy scan results into notifications organized
 around two views:
 
 - **Changes since the previous scan** — posted to the Slack channel in the
@@ -9,7 +9,7 @@ around two views:
   bot delivery is configured and in the generic webhook payload.
 
 Repeating every CVE every day makes new risk easy to miss, while reporting only
-changes makes it hard to see what remains unresolved. StackWatch handles these
+changes makes it hard to see what remains unresolved. KestreLynx handles these
 two views separately.
 
 ```text
@@ -39,21 +39,21 @@ Compare the current groups with persisted state
 
 ### Discover running images
 
-StackWatch calls `GET /containers/json` through the configured Docker socket.
+KestreLynx calls `GET /containers/json` through the configured Docker socket.
 It reads the image reference used by each running container, removes duplicates,
 and sorts the result. If ten containers use the same image reference, that image
 is scanned once in the cycle.
 
-One StackWatch container monitors one Docker host. Stopped containers and images
+One KestreLynx container monitors one Docker host. Stopped containers and images
 that are present on disk but not used by a running container are outside the
 scan scope.
 
-If StackWatch cannot list the running containers, the cycle ends without
+If KestreLynx cannot list the running containers, the cycle ends without
 changing the saved state. A later scheduled cycle will try again.
 
 ### Scan each unique image
 
-StackWatch runs the Trivy CLI separately for each unique image and requests JSON
+KestreLynx runs the Trivy CLI separately for each unique image and requests JSON
 output. The configured `scan.severity` values are passed to Trivy; the default is
 `HIGH,CRITICAL`.
 
@@ -80,23 +80,23 @@ has a fix while another CVE in the same package does not.
 
 ## 2. Three independent classifications
 
-StackWatch deliberately keeps severity, fix status, and priority separate.
+KestreLynx deliberately keeps severity, fix status, and priority separate.
 They describe different facts and should not be interpreted as synonyms.
 
 | Classification | Source | Question it answers |
 | --- | --- | --- |
 | Severity | Trivy/advisory data | How large could the impact be? |
 | Fix status | Trivy | Is an upstream fix currently available? |
-| Priority | StackWatch triage | How urgently should this be reviewed, given exploitation evidence? |
+| Priority | KestreLynx triage | How urgently should this be reviewed, given exploitation evidence? |
 
 For example, a CRITICAL CVE can be **Watch** when it has no strong exploitation
 signal, while a HIGH CVE can be **Act now** because it is in CISA KEV.
 
 ### Fix status
 
-StackWatch preserves Trivy's status as the canonical remediation state:
+KestreLynx preserves Trivy's status as the canonical remediation state:
 
-| Trivy status | Meaning in StackWatch |
+| Trivy status | Meaning in KestreLynx |
 | --- | --- |
 | `fixed` | A fixed version is available. |
 | `affected` | The package is affected, but no fix is available yet. |
@@ -107,7 +107,7 @@ rearranged by priority so the most urgent work appears first.
 
 ### Upgrade-risk hint
 
-For a `fixed` package, StackWatch annotates the size or type of the proposed
+For a `fixed` package, KestreLynx annotates the size or type of the proposed
 version change:
 
 | Label | Rule |
@@ -122,14 +122,14 @@ Release notes, application compatibility, and tests still matter.
 
 ### End-of-life base OS
 
-When Trivy reports that an image's base OS is end of life, StackWatch shows the
+When Trivy reports that an image's base OS is end of life, KestreLynx shows the
 image in a separate **EOL base** section above the vulnerability buckets. EOL is
 not a CVE priority: it means that normal security updates may no longer arrive,
 so rebuilding on a supported base image is usually the appropriate response.
 
 ## 3. Exploitation-based triage
 
-Triage is enabled by default. StackWatch enriches the CVE IDs found by Trivy
+Triage is enabled by default. KestreLynx enriches the CVE IDs found by Trivy
 with two data sources:
 
 - **CISA KEV** identifies vulnerabilities known to have been exploited in the
@@ -172,7 +172,7 @@ package, counts that package once, and uses its highest current priority.
 
 ### Feed download, cache, and privacy
 
-KEV and EPSS are downloaded in bulk. StackWatch then matches CVE IDs locally;
+KEV and EPSS are downloaded in bulk. KestreLynx then matches CVE IDs locally;
 it does not submit the host's complete CVE list to those services. The feed
 cache is stored in the `intel` directory beside `state.path`.
 
@@ -182,7 +182,7 @@ cache is stored in the `intel` directory beside `state.path`.
   and the notification identifies the missing source.
 - Downloads are validated before replacing the existing cache.
 
-If neither source is usable, StackWatch enters **degraded triage**. It displays
+If neither source is usable, KestreLynx enters **degraded triage**. It displays
 a warning and falls back to CRITICAL = Act now and other selected severities =
 Watch. Nothing is placed in Low while exploitation intelligence is unavailable.
 Priority-escalation events are also suppressed for that cycle, avoiding a feed
@@ -195,8 +195,8 @@ the CVE ID matches and the discussion has at least 20 points. Set the option to
 
 ## 4. Diff state and change detection
 
-In the default `diff` mode, StackWatch stores history in `state.path` (default:
-`/var/lib/stackwatch/state.json`). The directory should be persisted with a
+In the default `diff` mode, KestreLynx stores history in `state.path` (default:
+`/var/lib/kestrelynx/state.json`). The directory should be persisted with a
 Docker volume.
 
 For each image and package, state records:
@@ -226,7 +226,7 @@ Only the highest-precedence reason is shown when several conditions become true
 in the same cycle. Priority decreases are silent, but the new lower priority is
 saved and can be used as the baseline for a later escalation.
 
-“Resolved” means that the finding is no longer in StackWatch's current scope.
+“Resolved” means that the finding is no longer in KestreLynx's current scope.
 Possible causes include installing a fix, changing the image, stopping the
 container, changing the selected severity levels, or a scanner-data change. It
 does not by itself prove that a patch was installed.
@@ -243,7 +243,7 @@ If delivery is required, state is saved only after all configured destinations
 succeed. A failed delivery therefore causes the same changes to be retried on
 the next cycle rather than silently lost.
 
-When several destinations are configured, StackWatch attempts all of them. A
+When several destinations are configured, KestreLynx attempts all of them. A
 partial failure can cause the successful destination to receive the same change
 again on the next cycle; delivery favors not losing an alert over exactly-once
 semantics.
@@ -299,7 +299,7 @@ omitted from Slack; the structured generic webhook carries the full list.
 Every Slack channel notification starts with the scan time and two image counts:
 
 ```text
-🛡️ StackWatch — scan results for 2026-08-16 09:00
+🛡️ KestreLynx — scan results for 2026-08-16 09:00
 4 images scanned, 3 affected
 ```
 
@@ -327,7 +327,7 @@ report. Its sections appear in this order when applicable:
 An abbreviated example is:
 
 ```text
-🛡️ StackWatch — scan results for 2026-08-16 09:00
+🛡️ KestreLynx — scan results for 2026-08-16 09:00
 4 images scanned, 3 affected
 
 🆕 New since last scan (1)
@@ -522,7 +522,7 @@ multiple replies at image or line boundaries. Slack API calls are retried up to
 three times; the new thread reference is saved only after the report finishes.
 
 On the first Bot API notification, after a channel change, or when no valid
-previous permalink exists, StackWatch creates a fresh report thread so future
+previous permalink exists, KestreLynx creates a fresh report thread so future
 heartbeats have a valid destination.
 
 ## 7. Generic webhook
@@ -584,7 +584,7 @@ escalation is unavailable because no priority baseline is computed.
 Suppose `openssl` in an image has one HIGH CVE with EPSS 0.4% and no KEV entry.
 
 1. On the first scan, the package is **New** and its priority is **Low**.
-2. The next day, the result is unchanged. StackWatch sends only the open-count
+2. The next day, the result is unchanged. KestreLynx sends only the open-count
    heartbeat in Slack.
 3. A fix appears. The package is reported as **Now fixable** and its version
    change is annotated.
@@ -593,5 +593,5 @@ Suppose `openssl` in an image has one HIGH CVE with EPSS 0.4% and no KEV entry.
 5. After the container image is updated and the package no longer appears, the
    finding is reported as **Resolved**.
 
-This sequence is the core of StackWatch: retain enough history to report a
+This sequence is the core of KestreLynx: retain enough history to report a
 meaningful change, while preserving the current state for investigation.

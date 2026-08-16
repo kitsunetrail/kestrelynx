@@ -50,11 +50,11 @@ func TestScan_BadImage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	scan := New().Scan(ctx, "stackwatch.invalid/does-not-exist:0")
+	scan := New().Scan(ctx, "kestrelynx.invalid/does-not-exist:0")
 	if scan.Err == nil {
 		t.Fatal("expected Err for unresolvable image, got nil")
 	}
-	if scan.Image != "stackwatch.invalid/does-not-exist:0" {
+	if scan.Image != "kestrelynx.invalid/does-not-exist:0" {
 		t.Errorf("Image = %q, want the requested ref even on failure", scan.Image)
 	}
 }

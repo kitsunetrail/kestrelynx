@@ -1,6 +1,6 @@
 # セットアップ手順
 
-StackWatchはDockerホストごとに1つのコンテナとして動作します。  
+KestreLynxはDockerホストごとに1つのコンテナとして動作します。  
 実行中のコンテナが使用しているイメージを特定してスキャンし、その結果をSlackまたは
 Webhookへ送信します。
 
@@ -28,14 +28,14 @@ notify:
   slack_webhook_url: "https://hooks.slack.com/services/..."
 ```
 
-StackWatchを起動します。
+KestreLynxを起動します。
 
 ```bash
 docker compose up -d
 docker compose logs -f
 ```
 
-同梱のComposeファイルは、スキャン履歴を`stackwatch-state`ボリュームへ
+同梱のComposeファイルは、スキャン履歴を`kestrelynx-state`ボリュームへ
 永続化します。  
 この状態データは、コンテナを再作成した後も差分通知と初回検出日を
 維持するために必要です。
@@ -43,11 +43,11 @@ docker compose logs -f
 ## Dockerで実行
 
 ```bash
-docker run -d --name stackwatch \
+docker run -d --name kestrelynx \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v "$PWD/config.yml:/etc/stackwatch/config.yml:ro" \
-  -v stackwatch-state:/var/lib/stackwatch \
-  ghcr.io/kitsunetrail/stackwatch:latest
+  -v "$PWD/config.yml:/etc/kestrelynx/config.yml:ro" \
+  -v kestrelynx-state:/var/lib/kestrelynx \
+  ghcr.io/kitsunetrail/kestrelynx:latest
 ```
 
 ## タイムゾーンを設定

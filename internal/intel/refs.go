@@ -102,7 +102,7 @@ func (s *Source) Discussions(ctx context.Context, ids []string) map[string]Discu
 	return out
 }
 
-// algoliaResponse is the subset of the HN search response StackWatch reads.
+// algoliaResponse is the subset of the HN search response KestreLynx reads.
 type algoliaResponse struct {
 	Hits []struct {
 		Title       string                     `json:"title"`

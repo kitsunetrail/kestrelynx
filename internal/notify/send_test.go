@@ -38,7 +38,7 @@ func TestSlackNotifier_Send(t *testing.T) {
 	if err := json.Unmarshal([]byte(gotBody), &payload); err != nil {
 		t.Fatalf("body not JSON: %v\n%s", err, gotBody)
 	}
-	if !strings.Contains(payload.Text, "StackWatch") {
+	if !strings.Contains(payload.Text, "KestreLynx") {
 		t.Errorf("text missing header: %q", payload.Text)
 	}
 }

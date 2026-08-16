@@ -1,11 +1,11 @@
-# StackWatch
+# KestreLynx
 
-[![CI](https://github.com/kitsunetrail/stackwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/kitsunetrail/stackwatch/actions/workflows/ci.yml)
+[![CI](https://github.com/kitsunetrail/kestrelynx/actions/workflows/ci.yml/badge.svg)](https://github.com/kitsunetrail/kestrelynx/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-[Documentation](https://kitsunetrail.github.io/stackwatch/) ·
-[日本語](https://kitsunetrail.github.io/stackwatch/ja/) ·
-[Configuration reference](https://kitsunetrail.github.io/stackwatch/documentation/configuration/)
+[Documentation](https://kitsunetrail.github.io/kestrelynx/) ·
+[日本語](https://kitsunetrail.github.io/kestrelynx/ja/) ·
+[Configuration reference](https://kitsunetrail.github.io/kestrelynx/documentation/configuration/)
 
 > An agent that scans your running Docker containers every day and sends only the **actionable vulnerabilities** — prioritized — to Slack or a webhook.
 
@@ -16,7 +16,7 @@ Built for self-hosters and homelab folks. It does the tedious work of reading Tr
 ## What a notification looks like
 
 ```
-🛡️ StackWatch — scan results for 2026-06-28 09:00
+🛡️ KestreLynx — scan results for 2026-06-28 09:00
 12 images scanned, 3 affected
 
 🆕 New since last scan (2)
@@ -73,17 +73,17 @@ cp config.example.yml config.yml
 $EDITOR config.yml
 
 # 2. Run it
-docker run -d --name stackwatch \
+docker run -d --name kestrelynx \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v "$PWD/config.yml:/etc/stackwatch/config.yml:ro" \
-  -v stackwatch-state:/var/lib/stackwatch \
-  ghcr.io/kitsunetrail/stackwatch:latest
+  -v "$PWD/config.yml:/etc/kestrelynx/config.yml:ro" \
+  -v kestrelynx-state:/var/lib/kestrelynx \
+  ghcr.io/kitsunetrail/kestrelynx:latest
 ```
 
-(The `stackwatch-state` volume keeps the scan history that powers diff notifications;
+(The `kestrelynx-state` volume keeps the scan history that powers diff notifications;
 without it, everything is re-announced as new whenever the container is recreated.)
 
-**A note on the Docker socket**: StackWatch only performs a GET request to list running
+**A note on the Docker socket**: KestreLynx only performs a GET request to list running
 containers (`GET /containers/json`) — it never starts, stops, or modifies anything.
 However, mounting `docker.sock` gives the container privileged access to the Docker API;
 `:ro` makes the filesystem mount read-only but does not restrict Docker API operations.
@@ -111,7 +111,7 @@ Notable knobs:
 - `notify.slack_bot_token` + `notify.slack_channel` — deliver via the Slack Web API instead of a webhook (set one or the other). Same channel summary, plus a **full open-findings report in the summary's thread**: urgent/watch findings expanded with evidence, references, and how long each has been open; low collapsed to a count. On no-change days the summary links back to the last full report instead of re-posting it. Needs a bot token with the `chat:write` scope invited to the channel.
 - `notify.mode` — `diff` (default) notifies only what changed since the last scan, plus a one-line "open now" summary; `full` resends the complete report every scan.
 - `notify.full_report_day` — in diff mode, the weekday to also send the complete report (default `monday`, `never` to disable).
-- `state.path` — where diff mode remembers previous scans (default `/var/lib/stackwatch/state.json`).
+- `state.path` — where diff mode remembers previous scans (default `/var/lib/kestrelynx/state.json`).
 - `triage.enabled` — KEV/EPSS-based prioritization (default `true`). Adds outbound HTTPS to `www.cisa.gov` and `epss.empiricalsecurity.com` (two bulk downloads per day, cached next to the state file); set to `false` for severity-only notifications with no extra egress. Thresholds (`act_now_epss`, `watch_epss`) and mirror URLs are configurable.
 
 ## Development

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/state"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 // slackFake is a minimal Slack Web API double for chat.postMessage and

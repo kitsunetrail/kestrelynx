@@ -3,7 +3,7 @@ package analyze
 import (
 	"testing"
 
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
 // tr is a triage config with the default thresholds and healthy intel.

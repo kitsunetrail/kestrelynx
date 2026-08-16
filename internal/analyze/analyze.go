@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
 // Risk is the update-risk hint attached to a fixable package.

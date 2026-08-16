@@ -15,7 +15,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/state"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 const (

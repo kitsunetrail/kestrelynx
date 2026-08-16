@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/analyze"
-	"github.com/kitsunetrail/stackwatch/internal/config"
-	"github.com/kitsunetrail/stackwatch/internal/intel"
-	"github.com/kitsunetrail/stackwatch/internal/notify"
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
-	"github.com/kitsunetrail/stackwatch/internal/state"
+	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/config"
+	"github.com/kitsunetrail/kestrelynx/internal/intel"
+	"github.com/kitsunetrail/kestrelynx/internal/notify"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 type fakeLister struct {

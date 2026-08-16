@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/analyze"
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
-	"github.com/kitsunetrail/stackwatch/internal/state"
+	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 var genTime = time.Date(2026, 6, 24, 9, 0, 0, 0, time.UTC)
@@ -56,7 +56,7 @@ func TestFormatSlackText_Sections(t *testing.T) {
 	out := FormatSlackText(sampleReport())
 
 	mustContain := []string{
-		"StackWatch",
+		"KestreLynx",
 		"2026-06-24",
 		"web:1.0",
 		"libc-bin",

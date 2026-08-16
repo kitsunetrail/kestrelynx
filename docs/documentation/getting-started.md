@@ -1,6 +1,6 @@
 # Setup instructions
 
-StackWatch runs as one container per Docker host. It discovers and scans the
+KestreLynx runs as one container per Docker host. It discovers and scans the
 images used by running containers, then sends the results to Slack or a webhook.
 
 ## Requirements
@@ -27,25 +27,25 @@ notify:
   slack_webhook_url: "https://hooks.slack.com/services/..."
 ```
 
-Start StackWatch.
+Start KestreLynx.
 
 ```bash
 docker compose up -d
 docker compose logs -f
 ```
 
-The included Compose file persists scan history in the `stackwatch-state`
+The included Compose file persists scan history in the `kestrelynx-state`
 volume. This state is required to preserve change-based notifications and
 first-seen dates after the container is recreated.
 
 ## Run with Docker
 
 ```bash
-docker run -d --name stackwatch \
+docker run -d --name kestrelynx \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v "$PWD/config.yml:/etc/stackwatch/config.yml:ro" \
-  -v stackwatch-state:/var/lib/stackwatch \
-  ghcr.io/kitsunetrail/stackwatch:latest
+  -v "$PWD/config.yml:/etc/kestrelynx/config.yml:ro" \
+  -v kestrelynx-state:/var/lib/kestrelynx \
+  ghcr.io/kitsunetrail/kestrelynx:latest
 ```
 
 ## Set the timezone

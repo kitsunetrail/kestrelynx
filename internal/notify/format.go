@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunetrail/stackwatch/internal/analyze"
-	"github.com/kitsunetrail/stackwatch/internal/scanner"
-	"github.com/kitsunetrail/stackwatch/internal/state"
+	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 const timeLayout = "2006-01-02 15:04"
@@ -31,7 +31,7 @@ const staleDays = 14
 // A report with no issues yields a short "all clear" message.
 func FormatSlackText(r analyze.Report) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "🛡️ *StackWatch* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
+	fmt.Fprintf(&b, "🛡️ *KestreLynx* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
 
 	if !r.HasIssues() {
@@ -79,7 +79,7 @@ func writeFullBody(b *strings.Builder, r analyze.Report) {
 // by the complete open-findings view.
 func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "🛡️ *StackWatch* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
+	fmt.Fprintf(&b, "🛡️ *KestreLynx* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
 
 	if !d.HasChanges() && !fullReport {

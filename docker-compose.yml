@@ -1,4 +1,4 @@
-# StackWatch deployment — one instance per host, scans every running container.
+# KestreLynx deployment — one instance per host, scans every running container.
 #
 # Setup:
 #   cp config.example.yml config.yml     # then put your Slack webhook in config.yml
@@ -7,23 +7,23 @@
 #
 # config.yml holds your webhook URL (a secret) and is gitignored — never commit it.
 services:
-  stackwatch:
-    image: ghcr.io/kitsunetrail/stackwatch:latest
-    container_name: stackwatch
+  kestrelynx:
+    image: ghcr.io/kitsunetrail/kestrelynx:latest
+    container_name: kestrelynx
     restart: unless-stopped
     environment:
       # The schedule.daily_at time in config.yml is interpreted in this timezone.
       # Set it to your local zone, e.g. Asia/Tokyo, America/New_York.
       - TZ=UTC
     volumes:
-      # StackWatch only performs GET /containers/json to list running containers.
+      # KestreLynx only performs GET /containers/json to list running containers.
       # Note: :ro makes the filesystem mount read-only but does NOT restrict
       # Docker API operations — mount docker.sock only into images you trust.
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./config.yml:/etc/stackwatch/config.yml:ro
+      - ./config.yml:/etc/kestrelynx/config.yml:ro
       # Diff-mode scan state (first-seen dates), so notifications stay
       # diff-based across container recreation.
-      - stackwatch-state:/var/lib/stackwatch
+      - kestrelynx-state:/var/lib/kestrelynx
 
 volumes:
-  stackwatch-state:
+  kestrelynx-state:

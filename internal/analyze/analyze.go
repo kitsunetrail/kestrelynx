@@ -136,8 +136,9 @@ func (r Report) HasIssues() bool {
 
 // vulnInfo is the per-CVE data captured from the scanner during accumulation.
 type vulnInfo struct {
-	sev scanner.Severity
-	url string
+	sev   scanner.Severity
+	url   string
+	title string
 }
 
 // pkgAcc accumulates a package group while deduplicating CVEs by ID.
@@ -189,7 +190,14 @@ func Build(scans []scanner.ImageScan, tr Triage, now time.Time) Report {
 				}
 				pkgs[find.Package] = acc
 			}
-			acc.vulns[find.VulnID] = vulnInfo{sev: find.Severity, url: find.URL}
+			// The same CVE ID can appear on more than one Trivy result line (e.g.
+			// matched via more than one data source); prefer whichever line carries
+			// a non-empty Title rather than letting a later, title-less line blank it.
+			title := find.Title
+			if title == "" {
+				title = acc.vulns[find.VulnID].title
+			}
+			acc.vulns[find.VulnID] = vulnInfo{sev: find.Severity, url: find.URL, title: title}
 		}
 	}
 
@@ -233,6 +241,7 @@ func finalize(acc *pkgAcc, tr Triage) PackageGroup {
 			ID:         id,
 			Severity:   info.sev,
 			URL:        info.url,
+			Title:      info.title,
 			KEV:        e.KEV,
 			Ransomware: e.Ransomware,
 			EPSS:       e.EPSS,

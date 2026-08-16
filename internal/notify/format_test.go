@@ -35,6 +35,23 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
+// riskLabel must name its subject ("upgrade:"): a green label next to a
+// CRITICAL count was misread as "this vulnerability is safe". Full-string
+// match so a wording regression cannot hide behind a substring.
+func TestRiskLabel(t *testing.T) {
+	cases := map[analyze.Risk]string{
+		analyze.RiskDistroUpdate: "🟢 upgrade: distro security patch",
+		analyze.RiskSafe:         "🟢 upgrade: low-risk",
+		analyze.RiskCaution:      "🟠 upgrade: major version bump — needs care",
+		analyze.RiskUnknown:      "⚪ upgrade: risk unknown",
+	}
+	for r, want := range cases {
+		if got := riskLabel(r); got != want {
+			t.Errorf("riskLabel(%q) = %q, want %q", r, got, want)
+		}
+	}
+}
+
 func TestFormatSlackText_Sections(t *testing.T) {
 	out := FormatSlackText(sampleReport())
 
@@ -45,12 +62,12 @@ func TestFormatSlackText_Sections(t *testing.T) {
 		"libc-bin",
 		"2.28-10 → 2.28-10+deb10u2",
 		"setuptools",
-		"Distro security update", // OS distro_update label
-		"Needs care",             // lang caution label
-		"end-of-life",            // EOSL
-		"e2fsprogs",              // affected
-		"gcc-8-base",             // wont_fix
-		"broken:1",               // scan error
+		"distro security patch", // OS distro_update label
+		"needs care",            // lang caution label
+		"end-of-life",           // EOSL
+		"e2fsprogs",             // affected
+		"gcc-8-base",            // wont_fix
+		"broken:1",              // scan error
 		"pull failed",
 	}
 	for _, s := range mustContain {
@@ -300,6 +317,82 @@ func TestBuildWebhookPayload(t *testing.T) {
 	for _, key := range []string{"package", "installed", "fixed", "severity_counts", "upgrade_risk", "vuln_ids"} {
 		if _, ok := fnd[key]; !ok {
 			t.Errorf("finding missing %q: %v", key, fnd)
+		}
+	}
+}
+
+// The webhook's per-CVE record must carry the scanner's Title when the
+// scanner supplied one, and omit the key entirely rather than send "" when it
+// didn't (the receiver's zero-value default should be "no title", not "").
+func TestBuildWebhookPayload_VulnTitle(t *testing.T) {
+	scans := []scanner.ImageScan{{
+		Image: "demo:1.0",
+		Findings: []scanner.Finding{
+			{Image: "demo:1.0", Class: scanner.ClassOS, Package: "libc-bin", InstalledVer: "2.28-10", FixedVer: "2.28-10+deb10u2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-TITLED", Title: "glibc: example title"},
+			{Image: "demo:1.0", Class: scanner.ClassOS, Package: "gcc-8-base", InstalledVer: "8.3", FixedVer: "8.4", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-UNTITLED"},
+		},
+	}}
+	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	data, err := json.Marshal(BuildWebhookPayload(r, nil))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var p struct {
+		Actionable []struct {
+			Findings []struct {
+				Package string `json:"package"`
+				Vulns   []struct {
+					ID    string `json:"id"`
+					Title string `json:"title"`
+				} `json:"vulns"`
+			} `json:"findings"`
+		} `json:"actionable"`
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	var titled, untitled bool
+	for _, img := range p.Actionable {
+		for _, f := range img.Findings {
+			for _, v := range f.Vulns {
+				switch v.ID {
+				case "CVE-TITLED":
+					titled = true
+					if v.Title != "glibc: example title" {
+						t.Errorf("CVE-TITLED title = %q, want %q", v.Title, "glibc: example title")
+					}
+				case "CVE-UNTITLED":
+					untitled = true
+					if v.Title != "" {
+						t.Errorf("CVE-UNTITLED title = %q, want empty", v.Title)
+					}
+				}
+			}
+		}
+	}
+	if !titled || !untitled {
+		t.Fatalf("expected both a titled and an untitled CVE in the payload: titled=%v untitled=%v", titled, untitled)
+	}
+
+	// The key itself must be absent (omitempty), not present as "title":"".
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+	act := raw["actionable"].([]any)
+	for _, imgAny := range act {
+		img := imgAny.(map[string]any)
+		for _, fAny := range img["findings"].([]any) {
+			f := fAny.(map[string]any)
+			for _, vAny := range f["vulns"].([]any) {
+				v := vAny.(map[string]any)
+				if v["id"] == "CVE-UNTITLED" {
+					if _, ok := v["title"]; ok {
+						t.Errorf("CVE-UNTITLED must omit the title key entirely, got %v", v)
+					}
+				}
+			}
 		}
 	}
 }

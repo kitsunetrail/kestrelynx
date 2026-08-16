@@ -367,13 +367,13 @@ func imageEmoji(img analyze.ImageFindings) string {
 func riskLabel(r analyze.Risk) string {
 	switch r {
 	case analyze.RiskDistroUpdate:
-		return "🟢 Distro security update"
+		return "🟢 upgrade: distro security patch"
 	case analyze.RiskSafe:
-		return "🟢 Relatively safe"
+		return "🟢 upgrade: low-risk"
 	case analyze.RiskCaution:
-		return "🟠 Needs care (major version bump)"
+		return "🟠 upgrade: major version bump — needs care"
 	case analyze.RiskUnknown:
-		return "⚪ Upgrade risk unknown"
+		return "⚪ upgrade: risk unknown"
 	default:
 		return ""
 	}
@@ -458,7 +458,8 @@ type findingPayload struct {
 type vulnPayload struct {
 	ID         string       `json:"id"`
 	Severity   string       `json:"severity"`
-	URL        string       `json:"url,omitempty"` // scanner's primary advisory
+	URL        string       `json:"url,omitempty"`   // scanner's primary advisory
+	Title      string       `json:"title,omitempty"` // short human-readable summary, if the scanner supplied one
 	KEV        bool         `json:"kev"`
 	Ransomware bool         `json:"ransomware,omitempty"`
 	EPSS       *float64     `json:"epss"`
@@ -566,6 +567,7 @@ func imagePayloads(imgs []analyze.ImageFindings) []imagePayload {
 					ID:         v.ID,
 					Severity:   string(v.Severity),
 					URL:        v.URL,
+					Title:      v.Title,
 					KEV:        v.KEV,
 					Ransomware: v.Ransomware,
 					Priority:   string(v.Priority),

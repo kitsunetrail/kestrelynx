@@ -79,6 +79,19 @@ func TestParseReport_OSFindingFields(t *testing.T) {
 	if f.URL != "https://example.test/CVE-OS-FIXED" {
 		t.Errorf("URL = %q", f.URL)
 	}
+	if f.Title != "glibc: example title for CVE-OS-FIXED" {
+		t.Errorf("Title = %q", f.Title)
+	}
+}
+
+// A Trivy entry with no Title field must parse as an empty string, not fail
+// or leave a stale value from a previous entry.
+func TestParseReport_MissingTitleIsEmpty(t *testing.T) {
+	scan, _ := ParseReport(loadFixture(t, "sample.json"))
+	f := findByVuln(t, scan, "CVE-OS-WONTFIX")
+	if f.Title != "" {
+		t.Errorf("Title = %q, want empty (fixture has no Title field)", f.Title)
+	}
 }
 
 func TestParseReport_LangClassMapping(t *testing.T) {
@@ -120,7 +133,7 @@ func TestParseReport_RealOutput(t *testing.T) {
 		t.Errorf("len(Findings) = %d, want >=100", len(scan.Findings))
 	}
 	// Every finding must carry the core fields we rely on downstream.
-	var sawOS, sawLang, sawFixed bool
+	var sawOS, sawLang, sawFixed, sawTitle bool
 	for _, f := range scan.Findings {
 		if f.VulnID == "" || f.Package == "" || f.Severity == "" {
 			t.Fatalf("incomplete finding: %+v", f)
@@ -134,8 +147,11 @@ func TestParseReport_RealOutput(t *testing.T) {
 		if f.Status == StatusFixed {
 			sawFixed = true
 		}
+		if f.Title != "" {
+			sawTitle = true
+		}
 	}
-	if !sawOS || !sawLang || !sawFixed {
-		t.Errorf("coverage: os=%v lang=%v fixed=%v", sawOS, sawLang, sawFixed)
+	if !sawOS || !sawLang || !sawFixed || !sawTitle {
+		t.Errorf("coverage: os=%v lang=%v fixed=%v title=%v", sawOS, sawLang, sawFixed, sawTitle)
 	}
 }

@@ -159,6 +159,43 @@ func TestBuild_SortsCriticalFirst(t *testing.T) {
 	}
 }
 
+func TestBuild_VulnRefCarriesTitle(t *testing.T) {
+	scans := []scanner.ImageScan{{
+		Image: "demo:1.0",
+		Findings: []scanner.Finding{
+			{Image: "demo:1.0", Class: scanner.ClassOS, Package: "libc-bin", InstalledVer: "2.28-10", FixedVer: "2.28-10+deb10u2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-T", Title: "glibc: example title"},
+		},
+	}}
+	r := Build(scans, Triage{}, fixedTime)
+	g := pkgGroup(t, r.Actionable, "demo:1.0", "libc-bin")
+	if got := g.TopVuln().Title; got != "glibc: example title" {
+		t.Errorf("TopVuln().Title = %q, want %q", got, "glibc: example title")
+	}
+}
+
+// The same CVE ID can appear on more than one Trivy result line (e.g. an OS
+// package matched by more than one data source); a title-less line must not
+// blank out a title already captured for that ID, regardless of arrival order.
+func TestBuild_DuplicateVulnIDPrefersNonEmptyTitle(t *testing.T) {
+	titledFirst := []scanner.Finding{
+		{Image: "demo:1.0", Class: scanner.ClassOS, Package: "libc-bin", InstalledVer: "2.28-10", FixedVer: "2.28-10+deb10u2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-T", Title: "glibc: example title"},
+		{Image: "demo:1.0", Class: scanner.ClassOS, Package: "libc-bin", InstalledVer: "2.28-10", FixedVer: "2.28-10+deb10u2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-T", Title: ""},
+	}
+	titledSecond := []scanner.Finding{
+		{Image: "demo:1.0", Class: scanner.ClassOS, Package: "libc-bin", InstalledVer: "2.28-10", FixedVer: "2.28-10+deb10u2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-T", Title: ""},
+		{Image: "demo:1.0", Class: scanner.ClassOS, Package: "libc-bin", InstalledVer: "2.28-10", FixedVer: "2.28-10+deb10u2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-T", Title: "glibc: example title"},
+	}
+	for name, finds := range map[string][]scanner.Finding{"titled_first": titledFirst, "titled_second": titledSecond} {
+		t.Run(name, func(t *testing.T) {
+			r := Build([]scanner.ImageScan{{Image: "demo:1.0", Findings: finds}}, Triage{}, fixedTime)
+			g := pkgGroup(t, r.Actionable, "demo:1.0", "libc-bin")
+			if got := g.TopVuln().Title; got != "glibc: example title" {
+				t.Errorf("TopVuln().Title = %q, want the non-empty title regardless of arrival order", got)
+			}
+		})
+	}
+}
+
 func TestBuild_FromRealSample(t *testing.T) {
 	data, err := readSample()
 	if err != nil {

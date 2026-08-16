@@ -93,6 +93,7 @@ type VulnRef struct {
 	ID         string
 	Severity   scanner.Severity
 	URL        string // scanner's primary advisory link for this CVE
+	Title      string // short human-readable summary, if the scanner supplied one
 	KEV        bool
 	Ransomware bool
 	EPSS       float64

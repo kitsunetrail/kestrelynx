@@ -85,9 +85,9 @@ func writeActNow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindi
 	if len(imgs) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*🚨 Act now (%d)*\n", analyze.GroupCount(imgs))
+	fmt.Fprintf(b, "\n*🚨 Act now (%d) — exploited or likely to be*\n", analyze.GroupCount(imgs))
 	for _, img := range imgs {
-		fmt.Fprintf(b, "%s %s\n", imageEmoji(img), img.Image)
+		fmt.Fprintf(b, "• %s\n", img.Image)
 		for _, g := range img.Packages {
 			writePackage(b, g, g.Status == scanner.StatusFixed, "")
 			writeEvidence(b, r, g)
@@ -101,9 +101,9 @@ func writeWatch(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindin
 	if len(imgs) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*👀 Watch (%d)*\n", analyze.GroupCount(imgs))
+	fmt.Fprintf(b, "\n*👀 Watch (%d) — not urgent, keep an eye on*\n", analyze.GroupCount(imgs))
 	for _, img := range imgs {
-		fmt.Fprintf(b, "%s %s\n", imageEmoji(img), img.Image)
+		fmt.Fprintf(b, "• %s\n", img.Image)
 		for _, g := range img.Packages {
 			suffix := ""
 			if ev := shortEvidence(r, g.TopVuln()); ev != "" {

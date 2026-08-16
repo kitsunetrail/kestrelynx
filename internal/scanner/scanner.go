@@ -52,6 +52,7 @@ type Finding struct {
 	Severity     Severity
 	VulnID       string
 	URL          string
+	Title        string // short human-readable summary of the vulnerability, if Trivy supplied one
 }
 
 // ImageScan is the result of scanning a single image. Err is non-nil when the
@@ -85,6 +86,7 @@ type trivyReport struct {
 			Status           string `json:"Status"`
 			Severity         string `json:"Severity"`
 			PrimaryURL       string `json:"PrimaryURL"`
+			Title            string `json:"Title"`
 		} `json:"Vulnerabilities"`
 	} `json:"Results"`
 }
@@ -117,6 +119,7 @@ func ParseReport(data []byte) (ImageScan, error) {
 				Severity:     Severity(v.Severity),
 				VulnID:       v.VulnerabilityID,
 				URL:          v.PrimaryURL,
+				Title:        v.Title,
 			})
 		}
 	}

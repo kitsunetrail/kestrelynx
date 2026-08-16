@@ -51,10 +51,11 @@ func TestFormatSlackText_TriageLayout(t *testing.T) {
 
 	mustContain := []string{
 		"*Priority:* ⛔ 1 EOL base · 🚨 1 act now · 👀 1 watch · 🔕 1 low",
-		"*🚨 Act now (1)*",
+		"*🚨 Act now (1) — exploited or likely to be*",
+		"• web:1.0", // image lines are plain bullets in triage mode
 		"openssl 3.0.7 → 3.0.11",
 		"CVE-KEV CRITICAL · CISA KEV (exploited in the wild) · EPSS 94% · 🧨 ransomware campaign",
-		"*👀 Watch (1)*",
+		"*👀 Watch (1) — not urgent, keep an eye on*",
 		"e2fsprogs 1.44 (no fix available)",
 		"CVE-WAIT · EPSS 3%",
 		"*🔕 Low priority (1)*",
@@ -69,6 +70,11 @@ func TestFormatSlackText_TriageLayout(t *testing.T) {
 	// The low bucket is a count, not a listing.
 	if strings.Contains(out, "dpkg 1.19.7") {
 		t.Errorf("low-priority package should be collapsed to a count:\n%s", out)
+	}
+	// Triage mode drops the per-image severity emoji: the bucket header
+	// already carries the urgency signal.
+	if strings.Contains(out, "🔴") {
+		t.Errorf("triage mode must not show a severity emoji on image lines:\n%s", out)
 	}
 	// Order: act now before watch before low.
 	if !(strings.Index(out, "Act now") < strings.Index(out, "Watch (") &&
@@ -86,7 +92,7 @@ func TestFormatSlackText_TriageNoFixActNow(t *testing.T) {
 		},
 	}}
 	out := FormatSlackText(analyze.Build(scans, triageRules(map[string]analyze.Enrichment{"CVE-K": {KEV: true}}), genTime))
-	if !strings.Contains(out, "*🚨 Act now (1)*") {
+	if !strings.Contains(out, "*🚨 Act now (1) — exploited or likely to be*") {
 		t.Errorf("KEV without fix must stay act now:\n%s", out)
 	}
 	if !strings.Contains(out, "no fix yet, consider mitigation") {

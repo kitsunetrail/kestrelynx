@@ -68,10 +68,10 @@ func triageThreadSections(r analyze.Report, firstSeen func(image, pkg string) (t
 	pv := r.ByPriority()
 	var secs []threadSection
 	if n := analyze.GroupCount(pv.ActNow); n > 0 {
-		secs = append(secs, threadBucket(r, fmt.Sprintf("*🚨 URGENT (%d)*", n), pv.ActNow, firstSeen))
+		secs = append(secs, threadBucket(r, fmt.Sprintf("*🚨 URGENT (%d) — exploited or likely to be*", n), pv.ActNow, firstSeen))
 	}
 	if n := analyze.GroupCount(pv.Watch); n > 0 {
-		secs = append(secs, threadBucket(r, fmt.Sprintf("*👀 WATCH (%d)*", n), pv.Watch, firstSeen))
+		secs = append(secs, threadBucket(r, fmt.Sprintf("*👀 WATCH (%d) — not urgent, keep an eye on*", n), pv.Watch, firstSeen))
 	}
 	if n := analyze.GroupCount(pv.Low); n > 0 {
 		secs = append(secs, threadSection{blocks: []string{
@@ -106,7 +106,7 @@ func threadBucket(r analyze.Report, title string, imgs []analyze.ImageFindings, 
 	s := threadSection{title: title}
 	for _, img := range imgs {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s %s\n", imageEmoji(img), img.Image)
+		fmt.Fprintf(&b, "%s %s\n", threadImageMarker(r, img), img.Image)
 		for _, g := range img.Packages {
 			writePackage(&b, g, g.Status == scanner.StatusFixed, "")
 			writeThreadDetail(&b, r, img.Image, g, firstSeen)
@@ -116,8 +116,21 @@ func threadBucket(r analyze.Report, title string, imgs []analyze.ImageFindings, 
 	return s
 }
 
+// threadImageMarker picks the per-image line marker: in triage mode the
+// bucket header (URGENT/WATCH/LOW) already carries the priority signal, so a
+// severity emoji per image would be redundant and just uses a plain bullet.
+// The status-based fallback (triage off) has no such bucket signal, so it
+// keeps the severity emoji.
+func threadImageMarker(r analyze.Report, img analyze.ImageFindings) string {
+	if r.Triage {
+		return "•"
+	}
+	return imageEmoji(img)
+}
+
 // writeThreadDetail renders one package's thread detail: the headline CVE's
-// evidence and references, the remaining CVE ids, and the open age.
+// evidence, its Trivy title (a one-line "what is this" the CVE ID alone
+// doesn't convey), references, the remaining CVE ids, and the open age.
 func writeThreadDetail(b *strings.Builder, r analyze.Report, image string, g analyze.PackageGroup, firstSeen func(image, pkg string) (time.Time, bool)) {
 	if top := g.TopVuln(); top.ID != "" {
 		// With triage off there is no intel to cite (and evidence() would
@@ -134,6 +147,9 @@ func writeThreadDetail(b *strings.Builder, r analyze.Report, image string, g ana
 			b.WriteString(" — upstream won't fix, consider replacing")
 		}
 		b.WriteString("\n")
+		if top.Title != "" {
+			fmt.Fprintf(b, "       %s\n", top.Title)
+		}
 		writeRefs(b, top)
 		writeAlsoIDs(b, g)
 	}

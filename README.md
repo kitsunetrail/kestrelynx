@@ -17,11 +17,11 @@ Built for self-hosters and homelab folks. It does the tedious work of reading Tr
 
 🆕 New since last scan (2)
 🚨 nginx:1.25.3
-   • libnghttp2-14 1.52.0-1 → 1.52.0-1+deb12u1 (HIGH 2)  🟢 Distro security update
+   • libnghttp2-14 1.52.0-1 → 1.52.0-1+deb12u1 (HIGH 2)  🟢 upgrade: distro security patch
      ↳ CVE-2023-44487 HIGH · CISA KEV (exploited in the wild) · EPSS >99%
        📎 advisory · vendor advisory · 💬 HN (166 pts)
 🔕 myapp:latest
-   • webpack 4.46.0 → 5.89.0 (HIGH 1)  🟠 Needs care (major version bump) [lang]
+   • webpack 4.46.0 → 5.89.0 (HIGH 1)  🟠 upgrade: major version bump — needs care [lang]
 
 ✅ Resolved since last scan (1)
 • myapp:latest: postcss

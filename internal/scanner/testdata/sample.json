@@ -18,7 +18,8 @@
           "FixedVersion": "2.28-10+deb10u2",
           "Status": "fixed",
           "Severity": "CRITICAL",
-          "PrimaryURL": "https://example.test/CVE-OS-FIXED"
+          "PrimaryURL": "https://example.test/CVE-OS-FIXED",
+          "Title": "glibc: example title for CVE-OS-FIXED"
         },
         {
           "VulnerabilityID": "CVE-OS-WONTFIX",

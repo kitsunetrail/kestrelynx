@@ -28,11 +28,12 @@ func TestBuildThreadMessages_TriageLayout(t *testing.T) {
 	mustContain := []string{
 		"📊 *Full report — 2026-06-24 09:00*",
 		"*⛔ EOL base images (1)*",
-		"*🚨 URGENT (1)*",
+		"*🚨 URGENT (1) — exploited or likely to be*",
+		"• web:1.0", // image lines are plain bullets in triage mode
 		"openssl 3.0.7 → 3.0.11",
 		"CVE-KEV CRITICAL · CISA KEV (exploited in the wild) · EPSS 94%",
 		"⏱ open 3 day(s) — first seen 2026-06-21",
-		"*👀 WATCH (1)*",
+		"*👀 WATCH (1) — not urgent, keep an eye on*",
 		"e2fsprogs 1.44 (no fix available)",
 		"no fix yet, consider mitigation",
 		"*🔕 LOW (1)*",
@@ -46,10 +47,81 @@ func TestBuildThreadMessages_TriageLayout(t *testing.T) {
 	if strings.Contains(out, "dpkg 1.19.7") {
 		t.Errorf("low-priority package must not be expanded:\n%s", out)
 	}
+	// Triage mode drops the per-image severity emoji: the bucket header
+	// already carries the urgency signal.
+	if strings.Contains(out, "🔴") {
+		t.Errorf("triage thread must not show a severity emoji on image lines:\n%s", out)
+	}
 	// Order: urgent before watch before low.
 	if !(strings.Index(out, "URGENT") < strings.Index(out, "WATCH") &&
 		strings.Index(out, "WATCH") < strings.Index(out, "LOW")) {
 		t.Errorf("bucket order wrong:\n%s", out)
+	}
+}
+
+// findPkgGroup pulls one package's group out of a report section by image and
+// package name, failing the test if absent.
+func findPkgGroup(t *testing.T, section []analyze.ImageFindings, image, pkg string) analyze.PackageGroup {
+	t.Helper()
+	for _, img := range section {
+		if img.Image != image {
+			continue
+		}
+		for _, g := range img.Packages {
+			if g.Package == pkg {
+				return g
+			}
+		}
+	}
+	t.Fatalf("package %q not found for image %q", pkg, image)
+	return analyze.PackageGroup{}
+}
+
+// The thread detail line shows the headline CVE's Trivy title right after its
+// evidence line, 7-space indented, but only for the headline CVE (not the
+// "also:" ids folded behind it).
+func TestWriteThreadDetail_TitleLine(t *testing.T) {
+	scans := []scanner.ImageScan{{
+		Image: "app:1",
+		Findings: []scanner.Finding{
+			{Image: "app:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-A", Title: "libx: headline vulnerability title"},
+			{Image: "app:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-B", Title: "libx: secondary vulnerability title"},
+		},
+	}}
+	r := analyze.Build(scans, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
+	g := findPkgGroup(t, r.Actionable, "app:1", "libx")
+
+	var b strings.Builder
+	writeThreadDetail(&b, r, "app:1", g, nil)
+	out := b.String()
+
+	if !strings.Contains(out, "\n       libx: headline vulnerability title\n") {
+		t.Errorf("expected the headline CVE's title on its own 7-space-indented line:\n%s", out)
+	}
+	if strings.Contains(out, "secondary vulnerability title") {
+		t.Errorf("the also: line must not expand the secondary CVE's title:\n%s", out)
+	}
+}
+
+// No Title line at all when the headline CVE has no Title (e.g. Trivy didn't
+// supply one for this CVE).
+func TestWriteThreadDetail_NoTitleLineWhenEmpty(t *testing.T) {
+	scans := []scanner.ImageScan{{
+		Image: "app:1",
+		Findings: []scanner.Finding{
+			{Image: "app:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-A"},
+		},
+	}}
+	r := analyze.Build(scans, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
+	g := findPkgGroup(t, r.Actionable, "app:1", "libx")
+
+	var b strings.Builder
+	writeThreadDetail(&b, r, "app:1", g, nil)
+	out := b.String()
+
+	wantEvidence := "     ↳ CVE-A CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a\n"
+	if out != wantEvidence {
+		t.Errorf("expected only the evidence line (no title line to follow):\nout  = %q\nwant = %q", out, wantEvidence)
 	}
 }
 
@@ -102,7 +174,7 @@ func wideReport(images int) analyze.Report {
 		img := fmt.Sprintf("svc-%02d:1.0", i)
 		id := fmt.Sprintf("CVE-%04d", i)
 		scans = append(scans, scanner.ImageScan{Image: img, Findings: []scanner.Finding{
-			{Image: img, Class: scanner.ClassOS, Package: "libfoo", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: id},
+			{Image: img, Class: scanner.ClassOS, Package: "libfoo", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: id, Title: fmt.Sprintf("libfoo: crafted input flaw %04d", i)},
 		}})
 		enrich[id] = analyze.Enrichment{KEV: true}
 	}
@@ -121,7 +193,7 @@ func TestBuildThreadMessages_SplitsAtLimit(t *testing.T) {
 		}
 	}
 	// Continuation messages repeat the section header.
-	if !strings.Contains(msgs[1], "*🚨 URGENT (12)* _(cont.)_") {
+	if !strings.Contains(msgs[1], "*🚨 URGENT (12) — exploited or likely to be* _(cont.)_") {
 		t.Errorf("continuation must repeat the section title:\n%s", msgs[1])
 	}
 	// Every image appears exactly once across the whole thread.
@@ -132,12 +204,21 @@ func TestBuildThreadMessages_SplitsAtLimit(t *testing.T) {
 			t.Errorf("image %s should appear exactly once, got %d", img, strings.Count(all, img))
 		}
 	}
+	// Title lines ride in the same block as their package: a split boundary
+	// must neither drop nor duplicate them.
+	for i := 0; i < 12; i++ {
+		title := fmt.Sprintf("libfoo: crafted input flaw %04d", i)
+		if strings.Count(all, title) != 1 {
+			t.Errorf("title %q should appear exactly once, got %d", title, strings.Count(all, title))
+		}
+	}
 }
 
 func TestBuildThreadMessages_TriageOffFallback(t *testing.T) {
 	out := strings.Join(BuildThreadMessages(sampleReport(), seenDaysAgo(1), 0), "\n")
 	mustContain := []string{
 		"*✅ Actionable now (fixed)*",
+		"🔴 web:1.0", // triage off: no bucket signal, severity emoji stays
 		"libc-bin",
 		"setuptools", // low-risk fixes are NOT collapsed in the thread
 		"*ℹ️ No fix yet (affected / waiting on upstream)*",

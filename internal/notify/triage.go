@@ -300,7 +300,7 @@ func writeTriageOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
 	// misreads as act-now debt when the act-now count is zero.
 	if days := d.OldestUrgentDays(r.GeneratedAt); days > 0 {
 		if days >= staleDays {
-			fmt.Fprintf(b, " — 🔴 oldest act-now/watch unresolved %d day(s)", days)
+			fmt.Fprintf(b, " — ⏰ oldest act-now/watch unresolved %d day(s)", days)
 		} else {
 			fmt.Fprintf(b, " — oldest act-now/watch unresolved %d day(s)", days)
 		}

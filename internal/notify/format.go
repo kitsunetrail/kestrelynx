@@ -197,7 +197,7 @@ func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
 	fmt.Fprintf(b, "\n📌 Open now: CRITICAL %d / HIGH %d across %d image(s)", d.OpenCritical, d.OpenHigh, d.OpenImages)
 	if days := d.OldestOpenDays(r.GeneratedAt); days > 0 {
 		if days >= staleDays {
-			fmt.Fprintf(b, " — 🔴 oldest unresolved %d day(s)", days)
+			fmt.Fprintf(b, " — ⏰ oldest unresolved %d day(s)", days)
 		} else {
 			fmt.Fprintf(b, " — oldest unresolved %d day(s)", days)
 		}

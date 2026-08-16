@@ -189,7 +189,7 @@ func TestFormatSlackDiffText_AgeAndEscalation(t *testing.T) {
 	d, _ := state.Compute(st, r)
 	out := FormatSlackDiffText(r, d, false)
 
-	if !strings.Contains(out, "🔴 oldest unresolved 20 day(s)") {
+	if !strings.Contains(out, "⏰ oldest unresolved 20 day(s)") {
 		t.Errorf("expected escalated age marker for a 20-day-old finding:\n%s", out)
 	}
 }

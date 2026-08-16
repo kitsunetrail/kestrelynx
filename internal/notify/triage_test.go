@@ -180,7 +180,7 @@ func TestFormatSlackDiffText_TriageHeartbeatAgeWording(t *testing.T) {
 	d, _ := state.Compute(st, r)
 
 	out := FormatSlackDiffText(r, d, false)
-	if !strings.Contains(out, "🔴 oldest act-now/watch unresolved 20 day(s)") {
+	if !strings.Contains(out, "⏰ oldest act-now/watch unresolved 20 day(s)") {
 		t.Errorf("aged watch finding must age the heartbeat under its own name:\n%s", out)
 	}
 }

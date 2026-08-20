@@ -48,7 +48,7 @@ type NotifyConfig struct {
 	SlackWebhookURL string
 	// Slack Web API delivery: a bot token (chat:write) plus destination
 	// channel. Replaces the webhook and additionally posts the full report to
-	// the summary's thread (design/slack-thread-report-spec.md).
+	// the summary's thread.
 	SlackBotToken     string
 	SlackChannel      string
 	GenericWebhookURL string

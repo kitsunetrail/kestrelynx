@@ -20,9 +20,9 @@ import (
 // FullReport asks diff mode to append the complete open-findings view (the
 // weekly digest day).
 //
-// The thread-report fields (design/slack-thread-report-spec.md) are consumed
-// by SlackAPINotifier only; webhook notifiers ignore them. Thread asks for the
-// full open-findings report to be posted as replies under the summary message.
+// The thread-report fields are consumed by SlackAPINotifier only; webhook
+// notifiers ignore them. Thread asks for the full open-findings report to be
+// posted as replies under the summary message.
 // FirstSeen looks up a finding's first-seen time for the "open N day(s)"
 // lines. LastReport is the most recent successfully posted thread (nil when
 // none). Result, when non-nil, receives the ref of a thread posted by this

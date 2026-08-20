@@ -215,8 +215,7 @@ func (r Runner) sendDiff(ctx context.Context, report analyze.Report) error {
 	}
 	diff, next := state.Compute(prev, report)
 	// The last-full-report ref carries over verbatim unless this cycle posts a
-	// fresh thread: a failed (or skipped) post must keep the old link alive
-	// (design/slack-thread-report-spec.md §4).
+	// fresh thread: a failed (or skipped) post must keep the old link alive.
 	next.LastFullReport = prev.LastFullReport
 
 	fullToday := r.FullReportDay != NoFullReport && r.now().Weekday() == r.FullReportDay

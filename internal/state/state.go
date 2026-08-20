@@ -37,9 +37,9 @@ type Entry struct {
 
 // State is everything remembered between scan cycles.
 //
-// LastFullReport was added for the Slack thread report
-// (design/slack-thread-report-spec.md) without a version bump: older state
-// decodes with a nil ref, which simply forces one fresh full-report post.
+// LastFullReport was added for the Slack thread report without a version
+// bump: older state decodes with a nil ref, which simply forces one fresh
+// full-report post.
 type State struct {
 	Version        int                  `json:"version"`
 	Findings       map[string]Entry     `json:"findings"` // keyed by image \t package

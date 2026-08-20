@@ -1,4 +1,4 @@
-// Thread-report rendering (design/slack-thread-report-spec.md): the channel
+// Thread-report rendering: the channel
 // message stays the diff ("what changed"), while its thread carries the state
 // ("what is open right now"). The thread expands urgent and watch findings in
 // full — per-CVE evidence, references, and how long each finding has been

@@ -1,4 +1,4 @@
-// Slack Web API delivery (design/slack-thread-report-spec.md). An incoming
+// Slack Web API delivery. An incoming
 // webhook cannot thread: it never returns the posted message's ts and cannot
 // reply to one. The bot-token path can — posting returns ts, replies target
 // it as thread_ts, and chat.getPermalink turns it into the "Last full report"

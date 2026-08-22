@@ -52,17 +52,17 @@ Scanning, vulnerability analysis, state comparison, and notification will remain
 ## Logic
 
 - **Image content is identified by the `ImageID` (the image config digest) reported by Docker.**
-  - Registry-side digests (RepoDigests) do not exist for locally built images and can hold multiple values, so they are not used as identifiers; they are kept as display attributes.
-  - When a digest cannot be obtained, the image is treated as "unverified" instead of guessing, and that state is made visible in notifications.
+    - Registry-side digests (RepoDigests) do not exist for locally built images and can hold multiple values, so they are not used as identifiers; they are kept as display attributes.
+    - When a digest cannot be obtained, the image is treated as "unverified" instead of guessing, and that state is made visible in notifications.
 - **Scans are executed by digest, not by image name.**
-  - Scanning by name risks examining a different image than the running one if the tag moves just before the scan.
-  - Specifying the digest guarantees that exactly the running image is scanned.
+    - Scanning by name risks examining a different image than the running one if the tag moves just before the scan.
+    - Specifying the digest guarantees that exactly the running image is scanned.
 - **Scan history and notifications remain keyed by image name, as they are today.**
-  - Keying history by digest would re-notify all vulnerabilities as "resolved + new" on every image update; keeping the name as the key means existing state files keep working without conversion and no migration step is needed.
-  - Digests are recorded as additional information, and an image replacement appears as a single informational line in notifications.
+    - Keying history by digest would re-notify all vulnerabilities as "resolved + new" on every image update; keeping the name as the key means existing state files keep working without conversion and no migration step is needed.
+    - Digests are recorded as additional information, and an image replacement appears as a single informational line in notifications.
 - **This phase targets a single Docker host.**
-  - When extending to multiple hosts or Kubernetes, adapters are added while keeping the identifier semantics (the image config digest) shared.
-  - If a runtime cannot provide a digest with this meaning, the image is treated as unverified.
+    - When extending to multiple hosts or Kubernetes, adapters are added while keeping the identifier semantics (the image config digest) shared.
+    - If a runtime cannot provide a digest with this meaning, the image is treated as unverified.
 
 ## Questions under consideration
 

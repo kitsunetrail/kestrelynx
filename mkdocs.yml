@@ -69,22 +69,6 @@ markdown_extensions:
       alternate_style: true
 
 extra:
-  analytics:
-    provider: google
-    property: G-C3KJHGBQ9E
-  consent:
-    title: Cookie consent
-    description: >-
-      We use Google Analytics to understand how this documentation is used and
-      to improve it. Analytics is enabled only with your consent.
-    cookies:
-      analytics:
-        name: Google Analytics
-        checked: true
-    actions:
-      - accept
-      - reject
-      - manage
   alternate:
     - name: English
       link: /kestrelynx/
@@ -100,6 +84,4 @@ extra:
       link: https://x.com/kitsunetraildev
       name: KitsuneTrail on X
 
-copyright: >-
-  Copyright &copy; 2026 Kitsune Trail ·
-  <a href="#__consent">Change cookie settings</a>
+copyright: Copyright &copy; 2026 Kitsune Trail

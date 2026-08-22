@@ -45,6 +45,9 @@ nav:
       - Setup: documentation/getting-started.md
       - Configuration: documentation/configuration.md
       - How it works: documentation/how-it-works.md
+  - Development:
+      - Overview: development/index.md
+      - Identity model: development/identity-model.md
   - Articles:
       - Overview: articles/index.md
 

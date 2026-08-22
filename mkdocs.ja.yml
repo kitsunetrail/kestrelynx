@@ -38,5 +38,8 @@ nav:
       - セットアップ: documentation/getting-started.md
       - 設定: documentation/configuration.md
       - 仕組み: documentation/how-it-works.md
+  - 開発ログ:
+      - 概要: development/index.md
+      - 識別モデル: development/identity-model.md
   - 技術記事:
       - 概要: articles/index.md

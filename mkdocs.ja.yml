@@ -26,3 +26,4 @@ nav:
       - 識別モデル: development/identity-model.md
   - 技術記事:
       - 概要: articles/index.md
+      - CVEの基礎と公開の流れ: articles/cve-basics-and-publication-flow-ja.md

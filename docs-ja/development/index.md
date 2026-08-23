@@ -1,6 +1,5 @@
 # 開発ログ
 
-このセクションでは、KestreLynxがどのように発展しているかを記録します。
 取り組んでいる課題、試した方法、実装中に分かったこと、技術判断について記載します。
 
 開発ログは作業中の内容を扱います。
@@ -9,4 +8,4 @@
 ## 現在の開発ログ
 
 - [識別モデルの開発](identity-model.md) — イメージ名を中心とした処理から、Environment、
-  Workload、container、不変なimage digestを結び付けられるモデルへ移行します。
+  Workload、container、不変なimage digestを結び付けられるモデル移行

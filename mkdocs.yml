@@ -11,7 +11,6 @@ theme:
   name: material
   language: en
   icon:
-    logo: material/shield-search
     repo: fontawesome/brands/github
   palette:
     - media: "(prefers-color-scheme: light)"
@@ -38,6 +37,9 @@ theme:
     - search.suggest
     - content.code.copy
 
+extra_css:
+  - stylesheets/extra.css
+
 nav:
   - Home: index.md
   - Documentation:
@@ -50,6 +52,7 @@ nav:
       - Identity model: development/identity-model.md
   - Articles:
       - Overview: articles/index.md
+      - CVE Basics and the Publication Process: articles/cve-basics-and-publication-flow.md
 
 plugins:
   - search

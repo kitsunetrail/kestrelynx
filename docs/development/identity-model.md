@@ -1,8 +1,8 @@
 # Developing the Identity Model
 
-- **Status:** In progress
+- **Status:** Implemented (Docker adapter, single host)
 - **Started:** August 22, 2026
-- **Last updated:** August 22, 2026
+- **Last updated:** August 23, 2026
 
 ## Purpose
 
@@ -64,12 +64,21 @@ Scanning, vulnerability analysis, state comparison, and notification will remain
     - When extending to multiple hosts or Kubernetes, adapters are added while keeping the identifier semantics (the image config digest) shared.
     - If a runtime cannot provide a digest with this meaning, the image is treated as unverified.
 
-## Questions under consideration
+## Decisions
 
-- How should a Docker host be identified so it remains the same host after restarts or container recreation?
-- Which service should a container started without Compose belong to?
+The two questions previously under consideration were settled by fixing the scope of this phase to a single Docker host.
+
+- **Docker host identification is not attempted in this phase.** Tracking history from multiple hosts in one state file needs an identifier saying "which host this record belongs to", but no candidate was stable enough: KestreLynx itself runs in a container so it cannot simply read the host's hostname, and daemon IDs or machine IDs change on reinstallation, so nothing reliably survives reboots and container recreation. The single-host assumption makes this identification unnecessary (the state's `image reference + package` keys are collision-free only under it). Handling multiple hosts or multiple runtimes is a future phase; when that happens, the history subject gains a stable, configuration-supplied scope key (Environment / Workload) rather than a runtime-derived identifier.
+- **Mapping a container to the service it belongs to is not attempted in this phase.** For Compose-launched containers, labels such as `com.docker.compose.service` tell us which service a container belongs to, but containers started directly with `docker run` simply carry no such information. This phase does not attempt the container-to-service mapping at all: runtime-specific information such as Compose labels and container IDs stays inside the Docker adapter, and only `Ref`, `ContentID`, and `RegistryDigests` cross into the common model. The mapping will be handled by a future workload model.
 
 ## Update history
+
+### August 23, 2026
+
+- Implemented the identity model. The `ImageID` reported by Docker becomes the `ContentID` after boundary validation (`sha256:` + 64 hex digits); resolved images are scanned by `ContentID` (with `--image-src docker`), while unresolved images fall back to scanning by reference and notifications state explicitly that the match with the running content is unconfirmed.
+- State keeps its existing keys and version; `ContentID` and `Images` (per-reference digest sets) are recorded as additional fields, and image replacements are delivered as a single notification line. A copy of the production state file was verified to load without conversion.
+- When only some of the entities behind one reference fail to scan, findings are conservatively merged with the previous cycle and resolution decisions are deferred, preventing false notifications.
+- The two open questions (how to identify a host, how to map containers to services) moved to decisions by making the single-host assumption explicit.
 
 ### August 22, 2026
 

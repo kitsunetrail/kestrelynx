@@ -1,8 +1,8 @@
 # 識別モデルの開発
 
-- **状態:** 開発中
+- **状態:** 実装済み(Docker adapter / 単一ホスト)
 - **開始日:** 2026-08-22
-- **最終更新:** 2026-08-22
+- **最終更新:** 2026-08-23
 
 ## 目的
 
@@ -64,12 +64,21 @@ Docker連携を最初のRuntime Adapterとして実装し、Adapterは稼働中�
     - 複数ホストやKubernetesへ拡張する際は、識別子の意味(image configのdigest)を共通に保ったままAdapterを追加する。
     - 実行環境からこの意味でのdigestを取得できない場合は、未確認として扱う。
 
-## 検討中の課題
+## 決定事項
 
-- Dockerホストをどう識別するか。再起動やcontainerの再作成後も、同じホストとして認識できる方法を決める。
-- Composeを使わずに起動したcontainerを、どのサービスに属するものとして扱うかを決める。
+検討中だった2つの課題は、本フェーズの適用範囲を単一Dockerホストに固定することで、次のとおり決定した。
+
+- **Dockerホストの識別は本フェーズでは行わない。** 複数ホストの履歴を1つのstateで扱うには「どのホストの記録か」を示す識別子が必要だが、hostnameはKestreLynx自身がコンテナ内で動くため素直に取得できず、daemon IDやmachine-idも再インストールで変わるため、再起動やcontainer再作成をまたいで安定して取得できる方法が思い浮かばなかった。本フェーズは単一ホスト前提とすることでこの識別自体を不要にした(stateの`image reference + package`キーは単一ホスト前提でのみ衝突しない)。複数ホストや複数Runtimeを扱うのは将来フェーズで扱い、その際はRuntime由来の揺らぐ識別子ではなく、設定で与える安定したscopeキー(Environment / Workload)を履歴の主体へ追加する。
+- **「このcontainerはどのサービスのものか」の対応付けは、本フェーズでは行わない。** Composeで起動したcontainerはラベル(`com.docker.compose.service`等)を見れば所属するサービスが分かるが、`docker run`等で直接起動したcontainerには、どのサービスのものかを示す情報がそもそも存在しない。本フェーズではcontainerとサービスの対応付け自体を扱わず、Composeラベルやcontainer IDなどRuntime固有の情報はDocker adapterの内部に留め、共通モデルへは`Ref` / `ContentID` / `RegistryDigests`のみを渡す。この対応付けは将来のWorkloadモデルで扱う。
 
 ## 更新履歴
+
+### 2026-08-23
+
+- 識別モデルを実装した。Dockerが報告する`ImageID`を境界検証(`sha256:`+64桁16進)した値を`ContentID`とし、解決済みイメージは`ContentID`指定(`--image-src docker`)でスキャン、未解決イメージはreference指定に切り替えて「稼働実体との一致未確認」を通知に明示する。
+- stateはキー・versionとも従来のまま、`ContentID`と`Images`(reference単位のdigest集合)を追加フィールドとして記録し、イメージ置換を1行の通知として配線した。既存stateファイルは無変換で読めることを本番stateのコピーで確認した。
+- 同一referenceの一部実体のみスキャン失敗した場合は、前回とのfindings保守マージと解決判定の保留で誤通知を防ぐ。
+- 検討中だった課題2件(ホストの識別方法・containerとサービスの対応付け)は、単一ホスト前提の明確化により決定事項へ移動した。
 
 ### 2026-08-22
 

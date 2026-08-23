@@ -140,6 +140,53 @@ func TestByPriority_RegroupsAcrossStatusSections(t *testing.T) {
 	}
 }
 
+// TestByPriority_PreservesContentIDForSingleEntity guards against regrouping
+// by Ref alone: the ordinary single-resolved-entity case must keep its
+// ContentID through ByPriority, not just through the status sections.
+func TestByPriority_PreservesContentIDForSingleEntity(t *testing.T) {
+	scans := []scanner.ImageScan{
+		resolvedScan("app:1", contentA, nil,
+			f("app:1", scanner.ClassOS, "openssl", "3.0.7", "3.0.11", scanner.StatusFixed, scanner.SeverityCritical, "CVE-KEV")),
+	}
+	enrich := map[string]Enrichment{"CVE-KEV": {KEV: true}}
+	r := Build(scans, tr(enrich), fixedTime)
+	pv := r.ByPriority()
+
+	if len(pv.ActNow) != 1 || pv.ActNow[0].ContentID != contentA {
+		t.Fatalf("ActNow = %+v, want one entry with ContentID %s", pv.ActNow, contentA)
+	}
+}
+
+// TestByPriority_AmbiguousReferenceStaysSplit is the regression case: keying
+// the priority regrouping on Ref alone would silently merge an Ambiguous
+// reference's two distinct entities back into one section, undoing the
+// (Ref, ContentID) aggregation the status sections already enforce.
+func TestByPriority_AmbiguousReferenceStaysSplit(t *testing.T) {
+	scans := []scanner.ImageScan{
+		resolvedScan("app:1", contentA, nil,
+			f("app:1", scanner.ClassOS, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityCritical, "CVE-A")),
+		resolvedScan("app:1", contentB, nil,
+			f("app:1", scanner.ClassOS, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityCritical, "CVE-B")),
+	}
+	enrich := map[string]Enrichment{"CVE-A": {KEV: true}, "CVE-B": {KEV: true}}
+	r := Build(scans, tr(enrich), fixedTime)
+	pv := r.ByPriority()
+
+	if len(pv.ActNow) != 2 {
+		t.Fatalf("ActNow = %+v, want two separate entries (one per ContentID), not merged", pv.ActNow)
+	}
+	seen := map[string]bool{}
+	for _, img := range pv.ActNow {
+		if img.Image != "app:1" {
+			t.Errorf("unexpected Image %q", img.Image)
+		}
+		seen[img.ContentID] = true
+	}
+	if !seen[contentA] || !seen[contentB] {
+		t.Errorf("ContentIDs seen = %v, want both %s and %s", seen, contentA, contentB)
+	}
+}
+
 func TestBuild_TriageDisabledLeavesNoPriorities(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "app:1",

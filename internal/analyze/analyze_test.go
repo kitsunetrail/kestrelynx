@@ -196,6 +196,212 @@ func TestBuild_DuplicateVulnIDPrefersNonEmptyTitle(t *testing.T) {
 	}
 }
 
+// --- Phase 2 identity model: inventory and (Ref, ContentID) aggregation ---
+
+const (
+	contentA = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	contentB = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
+
+// resolvedScan builds an IdentityResolved ImageScan pinned to contentID.
+func resolvedScan(ref, contentID string, digests []string, finds ...scanner.Finding) scanner.ImageScan {
+	return scanner.ImageScan{
+		Image: ref, ContentID: contentID, ExpectedContentID: contentID,
+		RegistryDigests: digests, IdentityResolved: true, Findings: finds,
+	}
+}
+
+func imgObs(t *testing.T, images []ImageObservation, ref string) ImageObservation {
+	t.Helper()
+	for _, o := range images {
+		if o.Ref == ref {
+			return o
+		}
+	}
+	t.Fatalf("no ImageObservation for ref %q in %+v", ref, images)
+	return ImageObservation{}
+}
+
+func TestBuild_InventorySingleResolvedEntity(t *testing.T) {
+	r := Build([]scanner.ImageScan{
+		resolvedScan("web:1", contentA, []string{"web@sha256:reg1"}),
+	}, Triage{}, fixedTime)
+
+	o := imgObs(t, r.Images, "web:1")
+	if len(o.ContentIDs) != 1 || o.ContentIDs[0] != contentA {
+		t.Errorf("ContentIDs = %v, want [%s]", o.ContentIDs, contentA)
+	}
+	if !o.IdentityResolved || o.Ambiguous || o.ScanFailed || o.PartialFailure {
+		t.Errorf("flags = %+v, want resolved/non-ambiguous/non-failed", o)
+	}
+	if len(o.RegistryDigests) != 1 || o.RegistryDigests[0] != "web@sha256:reg1" {
+		t.Errorf("RegistryDigests = %v", o.RegistryDigests)
+	}
+}
+
+func TestBuild_InventoryUnresolvedReferenceExcludesFallbackAttributes(t *testing.T) {
+	// A reference-fallback scan can still carry a ScannedContentID/RepoDigests
+	// (whatever Trivy happened to resolve), but these are never attributes of
+	// a specific running entity and must not enter the inventory's verified
+	// sets.
+	r := Build([]scanner.ImageScan{{
+		Image: "web:1", ContentID: contentA, ExpectedContentID: "",
+		RegistryDigests: []string{"web@sha256:whatever"}, IdentityResolved: false,
+	}}, Triage{}, fixedTime)
+
+	o := imgObs(t, r.Images, "web:1")
+	if len(o.ContentIDs) != 0 {
+		t.Errorf("ContentIDs = %v, want empty for unresolved reference", o.ContentIDs)
+	}
+	if len(o.RegistryDigests) != 0 {
+		t.Errorf("RegistryDigests = %v, want empty (fallback attributes excluded)", o.RegistryDigests)
+	}
+	if o.IdentityResolved {
+		t.Error("IdentityResolved should be false")
+	}
+}
+
+func TestBuild_InventoryAmbiguousReference(t *testing.T) {
+	r := Build([]scanner.ImageScan{
+		resolvedScan("web:1", contentA, []string{"web@sha256:reg1"}),
+		resolvedScan("web:1", contentB, []string{"web@sha256:reg2"}),
+	}, Triage{}, fixedTime)
+
+	o := imgObs(t, r.Images, "web:1")
+	if !o.Ambiguous {
+		t.Error("Ambiguous should be true for two distinct verified ContentIDs under one ref")
+	}
+	if len(o.ContentIDs) != 2 || o.ContentIDs[0] != contentA || o.ContentIDs[1] != contentB {
+		t.Errorf("ContentIDs = %v, want sorted [%s %s]", o.ContentIDs, contentA, contentB)
+	}
+	if len(o.RegistryDigests) != 2 {
+		t.Errorf("RegistryDigests = %v, want union of both entities", o.RegistryDigests)
+	}
+	if !o.IdentityResolved {
+		t.Error("IdentityResolved should be true when every entity resolved")
+	}
+}
+
+func TestBuild_InventoryFullFailure(t *testing.T) {
+	r := Build([]scanner.ImageScan{
+		{Image: "web:1", Err: errString("pull failed")},
+	}, Triage{}, fixedTime)
+
+	o := imgObs(t, r.Images, "web:1")
+	if !o.ScanFailed || o.PartialFailure {
+		t.Errorf("flags = %+v, want ScanFailed only", o)
+	}
+}
+
+func TestBuild_InventoryPartialFailure(t *testing.T) {
+	r := Build([]scanner.ImageScan{
+		resolvedScan("web:1", contentA, nil),
+		{Image: "web:1", ExpectedContentID: contentB, IdentityResolved: true, Err: errString("pull failed")},
+	}, Triage{}, fixedTime)
+
+	o := imgObs(t, r.Images, "web:1")
+	if !o.PartialFailure || o.ScanFailed {
+		t.Errorf("flags = %+v, want PartialFailure only (one of two entities failed)", o)
+	}
+	// ContentIDs is Docker-observed, not Trivy-scan-observed: the failed
+	// entity's ExpectedContentID survives the scan failure (chunk1,
+	// scanner/exec.go), so it still belongs in the set even though Trivy
+	// never actually scanned it.
+	if len(o.ContentIDs) != 2 || o.ContentIDs[0] != contentA || o.ContentIDs[1] != contentB {
+		t.Errorf("ContentIDs = %v, want both Docker-observed entities [%s %s]", o.ContentIDs, contentA, contentB)
+	}
+	if !o.Ambiguous {
+		t.Error("Ambiguous should be true: two distinct verified ContentIDs are running, regardless of scan outcome")
+	}
+	if !o.IdentityResolved {
+		t.Error("IdentityResolved should be true: every entity had a Docker-observed ContentID, independent of scan success")
+	}
+	if len(o.RegistryDigests) != 0 {
+		t.Errorf("RegistryDigests = %v, want empty: the failed entity never produced Trivy Metadata", o.RegistryDigests)
+	}
+}
+
+// TestBuild_InventoryFailedResolvedEntityStillContributesIdentity is the
+// single-entity case of the same principle: a Trivy scan failure must not
+// demote a Docker-observed, boundary-validated ContentID to "unresolved" —
+// those are independent facts (chunk1, scanner/exec.go).
+func TestBuild_InventoryFailedResolvedEntityStillContributesIdentity(t *testing.T) {
+	r := Build([]scanner.ImageScan{
+		{Image: "web:1", ExpectedContentID: contentA, IdentityResolved: true, Err: errString("pull failed")},
+	}, Triage{}, fixedTime)
+
+	o := imgObs(t, r.Images, "web:1")
+	if !o.ScanFailed {
+		t.Error("ScanFailed should be true: the only entity's scan failed")
+	}
+	if !o.IdentityResolved {
+		t.Error("IdentityResolved should be true: Docker still resolved the ContentID even though the scan failed")
+	}
+	if len(o.ContentIDs) != 1 || o.ContentIDs[0] != contentA {
+		t.Errorf("ContentIDs = %v, want [%s] even though the scan failed", o.ContentIDs, contentA)
+	}
+}
+
+// TestBuild_InventoryMixedResolvedAndUnresolvedEntities covers the case
+// state.Compute relies on to blank Entry.ContentID: one entity resolves a
+// ContentID and scans fine, a sibling under the same reference never had one
+// (reference-fallback). The reference is not Ambiguous (only one verified
+// ContentID exists) but is not fully IdentityResolved either.
+func TestBuild_InventoryMixedResolvedAndUnresolvedEntities(t *testing.T) {
+	r := Build([]scanner.ImageScan{
+		resolvedScan("web:1", contentA, nil),
+		{Image: "web:1"}, // reference-fallback: no ExpectedContentID
+	}, Triage{}, fixedTime)
+
+	o := imgObs(t, r.Images, "web:1")
+	if o.Ambiguous {
+		t.Error("Ambiguous should be false: only one verified ContentID exists")
+	}
+	if o.IdentityResolved {
+		t.Error("IdentityResolved should be false: one entity never resolved a ContentID")
+	}
+	if len(o.ContentIDs) != 1 || o.ContentIDs[0] != contentA {
+		t.Errorf("ContentIDs = %v, want the one verified entity [%s]", o.ContentIDs, contentA)
+	}
+}
+
+func TestBuild_AmbiguousRefSplitsIntoSeparateSections(t *testing.T) {
+	r := Build([]scanner.ImageScan{
+		resolvedScan("web:1", contentA, nil, f("web:1", scanner.ClassLang, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityHigh, "CVE-A")),
+		resolvedScan("web:1", contentB, nil, f("web:1", scanner.ClassLang, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityHigh, "CVE-B")),
+	}, Triage{}, fixedTime)
+
+	if len(r.Actionable) != 2 {
+		t.Fatalf("Actionable = %+v, want 2 separate entries (one per ContentID)", r.Actionable)
+	}
+	seen := map[string]bool{}
+	for _, img := range r.Actionable {
+		if img.Image != "web:1" {
+			t.Errorf("unexpected Image %q", img.Image)
+		}
+		seen[img.ContentID] = true
+		if len(img.Packages) != 1 || img.Packages[0].VulnIDs()[0] == "" {
+			t.Errorf("packages = %+v", img.Packages)
+		}
+	}
+	if !seen[contentA] || !seen[contentB] {
+		t.Errorf("ContentIDs seen = %v, want both %s and %s", seen, contentA, contentB)
+	}
+}
+
+func TestBuild_SingleEntityContentIDIsEmpty(t *testing.T) {
+	// The ordinary (non-ambiguous, no ContentID) case must render exactly as
+	// before: ContentID empty, one ImageFindings entry.
+	scans := []scanner.ImageScan{{
+		Image:    "demo:1.0",
+		Findings: []scanner.Finding{f("demo:1.0", scanner.ClassOS, "libc-bin", "1", "2", scanner.StatusFixed, scanner.SeverityCritical, "CVE-1")},
+	}}
+	r := Build(scans, Triage{}, fixedTime)
+	if len(r.Actionable) != 1 || r.Actionable[0].ContentID != "" {
+		t.Errorf("Actionable = %+v, want single entry with empty ContentID", r.Actionable)
+	}
+}
+
 func TestBuild_FromRealSample(t *testing.T) {
 	data, err := readSample()
 	if err != nil {

@@ -28,11 +28,38 @@ const version = 1
 // bump: state written before the upgrade simply decodes with an empty
 // Priority, which suppresses escalation detection for one cycle instead of
 // re-announcing every known finding as new.
+//
+// ContentID was added for the Phase 2 identity model without a version
+// bump, for the same reason: it is the single verified entity confirmed
+// running under the entry's reference as of this cycle. It is left empty
+// whenever that isn't a safe claim to make this cycle — the reference is
+// Ambiguous (more than one distinct entity) or partially failed to scan (a
+// sibling entity's success this cycle makes the stored identity stale) —
+// rather than showing a possibly-stale identity as if it were current. A
+// *full* scan failure is the
+// existing untouched-carryover case (see Compute): the entry, ContentID
+// included, is left exactly as it was, since no other entity's success this
+// cycle could have made it misleading.
 type Entry struct {
 	FirstSeen time.Time `json:"first_seen"`
 	Fixable   bool      `json:"fixable"` // any of the package's CVEs has a fix
 	Priority  string    `json:"priority,omitempty"`
 	VulnIDs   []string  `json:"vuln_ids"`
+	ContentID string    `json:"content_id,omitempty"`
+}
+
+// ImageMeta is the persisted identity record for one reference. ContentIDs/
+// Ambiguous are Docker-observed data (analyze.ImageObservation.ContentIDs
+// survives a Trivy scan failure unchanged, chunk1), so Compute refreshes
+// them every cycle regardless of scan outcome. LastSeen alone follows a
+// stricter rule: only updated on a cycle where every entity under the
+// reference scanned successfully; otherwise the last confirmed value carries
+// over.
+type ImageMeta struct {
+	ContentIDs      []string  `json:"content_ids,omitempty"`
+	RegistryDigests []string  `json:"registry_digests,omitempty"`
+	Ambiguous       bool      `json:"ambiguous,omitempty"`
+	LastSeen        time.Time `json:"last_seen"`
 }
 
 // State is everything remembered between scan cycles.
@@ -40,10 +67,15 @@ type Entry struct {
 // LastFullReport was added for the Slack thread report without a version
 // bump: older state decodes with a nil ref, which simply forces one fresh
 // full-report post.
+//
+// Images was added for the Phase 2 identity model without a version bump:
+// older state decodes with a nil map, and the first cycle on the new binary
+// simply records the current identity information as a fresh baseline.
 type State struct {
 	Version        int                  `json:"version"`
-	Findings       map[string]Entry     `json:"findings"` // keyed by image \t package
-	EOSL           map[string]time.Time `json:"eosl"`     // image -> first seen as EOL
+	Findings       map[string]Entry     `json:"findings"`         // keyed by image \t package
+	EOSL           map[string]time.Time `json:"eosl"`             // image -> first seen as EOL
+	Images         map[string]ImageMeta `json:"images,omitempty"` // keyed by reference
 	LastFullReport *ReportRef           `json:"last_full_report,omitempty"`
 }
 
@@ -66,7 +98,12 @@ func (r *ReportRef) ValidFor(channel string) bool {
 
 // empty returns a fresh, usable state.
 func empty() State {
-	return State{Version: version, Findings: map[string]Entry{}, EOSL: map[string]time.Time{}}
+	return State{
+		Version:  version,
+		Findings: map[string]Entry{},
+		EOSL:     map[string]time.Time{},
+		Images:   map[string]ImageMeta{},
+	}
 }
 
 // key identifies a finding. Tab is not a valid character in image references or
@@ -124,6 +161,9 @@ func (s FileStore) Load() (State, error) {
 	if st.EOSL == nil {
 		st.EOSL = map[string]time.Time{}
 	}
+	if st.Images == nil {
+		st.Images = map[string]ImageMeta{}
+	}
 	return st, nil
 }
 
@@ -175,6 +215,21 @@ type Resolved struct {
 	Package string
 }
 
+// ImageReplacement is one reference whose running content changed between
+// scans. It fires only when both the previous and current verified
+// ContentID sets are non-empty and differ as sets — never on first
+// observation (an empty-to-non-empty transition is the identity model
+// recording data for the first time, not a replacement). Detection does not
+// depend on scan success: ContentIDs is
+// Docker-observed and survives a Trivy scan failure unchanged (see
+// replacedImages), so a genuine replacement is still reported even if the new
+// content's own scan failed.
+type ImageReplacement struct {
+	Ref            string
+	PrevContentIDs []string
+	ContentIDs     []string
+}
+
 // Diff is what changed between the previous scan and the current report, plus
 // the ambient "still open" summary used for the heartbeat line.
 type Diff struct {
@@ -182,6 +237,7 @@ type Diff struct {
 	ResolvedEOSL []string
 	Changes      []Change
 	Resolved     []Resolved
+	Replaced     []ImageReplacement
 
 	OpenCritical int
 	OpenHigh     int
@@ -199,7 +255,7 @@ type Diff struct {
 
 // HasChanges reports whether anything is new or resolved since the last scan.
 func (d Diff) HasChanges() bool {
-	return len(d.Changes) > 0 || len(d.Resolved) > 0 || len(d.NewEOSL) > 0 || len(d.ResolvedEOSL) > 0
+	return len(d.Changes) > 0 || len(d.Resolved) > 0 || len(d.NewEOSL) > 0 || len(d.ResolvedEOSL) > 0 || len(d.Replaced) > 0
 }
 
 // OldestOpenDays is the age in whole days of the oldest open finding at now,
@@ -232,14 +288,44 @@ type current struct {
 // the next state to persist. Findings of images whose scan failed this cycle
 // are carried over untouched — a transient pull failure must not report every
 // known finding as resolved and re-announce it tomorrow.
+//
+// Report.Images (the identity inventory) is the sole source for two things:
+// updating State.Images, and classifying each reference as fully failed
+// (every entity failed to scan; existing behavior, carry findings over
+// untouched and suppress Resolved), partially failed (some but not all
+// entities failed; carry over the findings only the failed entity
+// contributed, and conservatively merge the findings both contributed, so a
+// sibling entity's temporary scan failure can never look like "fixed" or
+// "gone" and then reappear as new/escalated once it recovers), or fully
+// resolved (ordinary diffing, unaffected).
 func Compute(prev State, r analyze.Report) (Diff, State) {
 	next := empty()
 	now := r.GeneratedAt
 
-	failed := map[string]bool{}
-	for _, e := range r.ScanErrors {
-		failed[e.Image] = true
+	// refContentID holds, for each reference, the single verified ContentID
+	// safe to publish as "the" entity running there this cycle: every entity
+	// under the reference had a Docker-observed ContentID this cycle
+	// (IdentityResolved — independent of scan success), there is exactly one
+	// distinct value among them (not Ambiguous), and the reference did not
+	// (partially) fail to scan. Every other case — Ambiguous, a mix of
+	// resolved and reference-fallback entities, or a (partial) scan failure —
+	// is deliberately left absent.
+	refContentID := map[string]string{}
+	fullyFailedRef := map[string]bool{}
+	partiallyFailedRef := map[string]bool{}
+	for _, o := range r.Images {
+		if o.ScanFailed {
+			fullyFailedRef[o.Ref] = true
+		}
+		if o.PartialFailure {
+			partiallyFailedRef[o.Ref] = true
+		}
+		if o.IdentityResolved && !o.Ambiguous && !o.ScanFailed && !o.PartialFailure && len(o.ContentIDs) == 1 {
+			refContentID[o.Ref] = o.ContentIDs[0]
+		}
 	}
+	next.Images = nextImages(prev.Images, r.Images, now)
+	d := Diff{Replaced: replacedImages(prev.Images, r.Images)}
 
 	cur := map[string]*current{}
 	order := []string{} // report order: sections are already priority-sorted
@@ -264,8 +350,8 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		}
 	}
 
-	var d Diff
 	for _, k := range order {
+		ref := keyImage(k)
 		c := cur[k]
 		ids := make([]string, 0, len(c.ids))
 		for id := range c.ids {
@@ -279,9 +365,26 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			firstSeen = prevE.FirstSeen
 		}
 		prio := analyze.MaxPriority(c.groups)
-		next.Findings[k] = Entry{FirstSeen: firstSeen, Fixable: c.fixable, Priority: string(prio), VulnIDs: ids}
 
-		change := Change{Image: keyImage(k), Package: keyPackage(k), Groups: c.groups}
+		// Conservative merge: a partially-failed reference's cur view only
+		// reflects the entities that scanned successfully this cycle, so what
+		// gets persisted must not regress below what a sibling entity
+		// contributed last time it succeeded: VulnIDs is the union of prev and
+		// cur, Fixable is prev||cur, and Priority is whichever is higher.
+		storeIDs, storeFixable, storePrio := ids, c.fixable, prio
+		if partiallyFailedRef[ref] && known {
+			storeIDs = mergeSorted(ids, prevE.VulnIDs)
+			storeFixable = storeFixable || prevE.Fixable
+			if prevPrio := analyze.Priority(prevE.Priority); prevPrio.Rank() > storePrio.Rank() {
+				storePrio = prevPrio
+			}
+		}
+		next.Findings[k] = Entry{
+			FirstSeen: firstSeen, Fixable: storeFixable, Priority: string(storePrio),
+			VulnIDs: storeIDs, ContentID: refContentID[ref],
+		}
+
+		change := Change{Image: ref, Package: keyPackage(k), Groups: c.groups}
 		switch {
 		case !known:
 			change.Kind = KindNew
@@ -309,11 +412,25 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		if _, ok := cur[k]; ok {
 			continue
 		}
-		if failed[keyImage(k)] {
-			next.Findings[k] = e // scan failed: unknown, not resolved
+		ref := keyImage(k)
+		switch {
+		case fullyFailedRef[ref]:
+			// Existing full-failure behavior: carry the entry over exactly as
+			// it was, ContentID included — there is no sibling entity whose
+			// success could make a stale ContentID misleading here.
+			next.Findings[k] = e
+			continue
+		case partiallyFailedRef[ref]:
+			// This finding belonged to the one entity that failed to scan
+			// this cycle while a sibling under the same ref succeeded. Carry
+			// it over unknown-but-not-resolved, and blank ContentID — unlike
+			// the full-failure case, a sibling's success this cycle makes it
+			// misleading to keep asserting an old identity as current.
+			e.ContentID = ""
+			next.Findings[k] = e
 			continue
 		}
-		d.Resolved = append(d.Resolved, Resolved{Image: keyImage(k), Package: keyPackage(k)})
+		d.Resolved = append(d.Resolved, Resolved{Image: ref, Package: keyPackage(k)})
 	}
 	sort.Slice(d.Resolved, func(i, j int) bool {
 		if d.Resolved[i].Image != d.Resolved[j].Image {
@@ -334,7 +451,10 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		if _, ok := next.EOSL[img]; ok {
 			continue
 		}
-		if failed[img] {
+		// Same conservative carryover as findings: a reference that lost its
+		// only EOSL-reporting entity to a (partial) scan failure this cycle
+		// must not look like the base image got un-EOL'd.
+		if fullyFailedRef[img] || partiallyFailedRef[img] {
 			next.EOSL[img] = prev.EOSL[img]
 			continue
 		}
@@ -374,6 +494,85 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		}
 	}
 	return d, next
+}
+
+// nextImages builds State.Images for the next cycle from this cycle's
+// identity inventory. ContentIDs/Ambiguous are Docker-observed data
+// (analyze.ImageObservation.ContentIDs survives a Trivy scan failure
+// unchanged, chunk1) and so are refreshed every cycle regardless of scan
+// outcome. RegistryDigests only ever comes from a successful, resolved scan's
+// Trivy Metadata (analyze.Build already only populates it from those), so a
+// cycle with no such scan for a reference correctly records none rather than
+// keeping a possibly-stale digest from a different entity. LastSeen alone
+// follows a stricter rule: updated only when every entity under the
+// reference scanned successfully this cycle; otherwise the last confirmed
+// value carries over.
+func nextImages(prevImages map[string]ImageMeta, obs []analyze.ImageObservation, now time.Time) map[string]ImageMeta {
+	next := map[string]ImageMeta{}
+	for _, o := range obs {
+		meta := ImageMeta{ContentIDs: o.ContentIDs, RegistryDigests: o.RegistryDigests, Ambiguous: o.Ambiguous}
+		if !o.ScanFailed && !o.PartialFailure {
+			meta.LastSeen = now
+		} else if prevMeta, ok := prevImages[o.Ref]; ok {
+			meta.LastSeen = prevMeta.LastSeen
+		}
+		next[o.Ref] = meta
+	}
+	return next
+}
+
+// replacedImages detects image-replacement events: a reference whose
+// verified ContentID set is non-empty both last cycle and this cycle, and
+// differs between the two. ContentIDs is Docker-observed and independent of
+// scan success (see nextImages), so this comparison is not gated on
+// ScanFailed/PartialFailure — the set is accurate either way.
+func replacedImages(prevImages map[string]ImageMeta, obs []analyze.ImageObservation) []ImageReplacement {
+	var out []ImageReplacement
+	for _, o := range obs {
+		prevMeta, known := prevImages[o.Ref]
+		if !known || len(prevMeta.ContentIDs) == 0 || len(o.ContentIDs) == 0 {
+			continue // migration-initial (or never-resolved) on either side: never fires
+		}
+		if !equalStrings(prevMeta.ContentIDs, o.ContentIDs) {
+			out = append(out, ImageReplacement{Ref: o.Ref, PrevContentIDs: prevMeta.ContentIDs, ContentIDs: o.ContentIDs})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Ref < out[j].Ref })
+	return out
+}
+
+// equalStrings reports whether two already-sorted string slices hold the same
+// set of values.
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// mergeSorted returns the sorted union of two ID sets.
+func mergeSorted(a, b []string) []string {
+	seen := make(map[string]bool, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, id := range a {
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	for _, id := range b {
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // urgent reports whether a stored priority counts toward the heartbeat's

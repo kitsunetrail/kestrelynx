@@ -196,17 +196,24 @@ func GroupCount(imgs []ImageFindings) int {
 // ByPriority builds the priority view from the status-based sections. The
 // status sections remain the report's canonical structure (ADR-010, webhook
 // compatibility); this is the Slack rendering's axis.
+//
+// Regrouping keys on (Ref, ContentID) — the same imgKey the status sections
+// already use (analyze.go) — not on Ref alone: keying on Ref alone would
+// silently merge an Ambiguous reference's distinct entities back into one
+// section and blank out ContentID even for the ordinary single-entity case,
+// undoing the identity-model aggregation this view is built from.
 func (r Report) ByPriority() PriorityView {
-	buckets := map[Priority]map[string][]PackageGroup{}
+	buckets := map[Priority]map[imgKey][]PackageGroup{}
 	for _, section := range [][]ImageFindings{r.Actionable, r.Watch, r.WontFix} {
 		for _, img := range section {
+			k := imgKey{ref: img.Image, contentID: img.ContentID}
 			for _, g := range img.Packages {
 				m := buckets[g.Priority]
 				if m == nil {
-					m = map[string][]PackageGroup{}
+					m = map[imgKey][]PackageGroup{}
 					buckets[g.Priority] = m
 				}
-				m[img.Image] = append(m[img.Image], g)
+				m[k] = append(m[k], g)
 			}
 		}
 	}
@@ -218,14 +225,14 @@ func (r Report) ByPriority() PriorityView {
 }
 
 // bucketSection finalizes one priority bucket into sorted ImageFindings.
-func bucketSection(images map[string][]PackageGroup) []ImageFindings {
+func bucketSection(images map[imgKey][]PackageGroup) []ImageFindings {
 	if len(images) == 0 {
 		return nil
 	}
 	out := make([]ImageFindings, 0, len(images))
-	for image, groups := range images {
+	for k, groups := range images {
 		sortPackages(groups)
-		out = append(out, ImageFindings{Image: image, Packages: groups})
+		out = append(out, ImageFindings{Image: k.ref, ContentID: k.contentID, Packages: groups})
 	}
 	sortImages(out)
 	return out

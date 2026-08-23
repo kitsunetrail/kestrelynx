@@ -2,7 +2,5 @@
 
 基礎知識、運用方法、関連するセキュリティ技術について記載します。
 
-## 現在の技術記事
-
-- [CVEの基礎と公開の流れ](cve-basics-and-publication-flow-ja.md) — CVE IDの意味、CVEプログラムの運営体制、
+- 2026年8月23日 — [CVEの基礎と公開の流れ](cve-basics-and-publication-flow-ja.md) — CVE IDの意味、CVEプログラムの運営体制、
   脆弱性の報告から公開までの流れを記載

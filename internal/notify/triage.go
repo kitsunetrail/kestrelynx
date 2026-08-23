@@ -19,21 +19,23 @@ import (
 // It is the triage-mode counterpart of writeFullBody.
 func writeTriageBody(b *strings.Builder, r analyze.Report) {
 	pv := r.ByPriority()
+	byRef := imagesByRef(r)
 	writeTriageHeadline(b, r, pv)
 	writeIntelWarning(b, r)
 
 	if len(r.EOSLImages) > 0 {
 		b.WriteString("\n*⛔ Base OS end-of-life (top priority)*\n")
 		for _, img := range r.EOSLImages {
-			fmt.Fprintf(b, "• %s — base OS is EOL (no more security updates coming)\n", img)
+			fmt.Fprintf(b, "• %s — base OS is EOL (no more security updates coming)\n", refLabel(img, byRef))
 		}
 	}
 
-	writeActNow(b, r, pv.ActNow)
-	writeWatch(b, r, pv.Watch)
+	writeActNow(b, r, pv.ActNow, byRef)
+	writeWatch(b, r, pv.Watch, byRef)
 	writeLow(b, pv.Low)
-	writeScanErrors(b, r.ScanErrors)
+	writeScanErrors(b, r.ScanErrors, byRef)
 	writeIntelStale(b, r)
+	writeUnresolvedRefs(b, r)
 }
 
 // writeTriageHeadline is the one-line summary that replaces the severity
@@ -81,13 +83,13 @@ func writeIntelStale(b *strings.Builder, r analyze.Report) {
 
 // writeActNow renders the act-now bucket in full: package line plus an
 // evidence line per package.
-func writeActNow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings) {
+func writeActNow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation) {
 	if len(imgs) == 0 {
 		return
 	}
 	fmt.Fprintf(b, "\n*🚨 Act now (%d) — exploited or likely to be*\n", analyze.GroupCount(imgs))
 	for _, img := range imgs {
-		fmt.Fprintf(b, "• %s\n", img.Image)
+		fmt.Fprintf(b, "• %s\n", imageLabel(img, byRef))
 		for _, g := range img.Packages {
 			writePackage(b, g, g.Status == scanner.StatusFixed, "")
 			writeEvidence(b, r, g)
@@ -97,13 +99,13 @@ func writeActNow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindi
 
 // writeWatch renders the watch bucket compactly: one package line with a short
 // reason, no separate evidence line.
-func writeWatch(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings) {
+func writeWatch(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation) {
 	if len(imgs) == 0 {
 		return
 	}
 	fmt.Fprintf(b, "\n*👀 Watch (%d) — not urgent, keep an eye on*\n", analyze.GroupCount(imgs))
 	for _, img := range imgs {
-		fmt.Fprintf(b, "• %s\n", img.Image)
+		fmt.Fprintf(b, "• %s\n", imageLabel(img, byRef))
 		for _, g := range img.Packages {
 			suffix := ""
 			if ev := shortEvidence(r, g.TopVuln()); ev != "" {
@@ -231,6 +233,7 @@ func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Ch
 	if len(changes) == 0 {
 		return
 	}
+	byRef := imagesByRef(r)
 	sorted := make([]state.Change, len(changes))
 	copy(sorted, changes)
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -248,7 +251,7 @@ func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Ch
 	lastImage := ""
 	for _, c := range sorted {
 		if c.Image != lastImage {
-			fmt.Fprintf(b, "%s %s\n", priorityEmoji(analyze.MaxPriority(c.Groups)), c.Image)
+			fmt.Fprintf(b, "%s %s\n", priorityEmoji(analyze.MaxPriority(c.Groups)), refLabel(c.Image, byRef))
 			lastImage = c.Image
 		}
 		for _, g := range c.Groups {

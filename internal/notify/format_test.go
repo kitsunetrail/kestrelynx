@@ -306,18 +306,57 @@ func TestBuildWebhookPayload(t *testing.T) {
 		}
 	}
 
-	// drill into one actionable finding for field shape
+	// drill into web:1.0's actionable entry and pin its existing fields to
+	// real values/types, not just key presence: a future change to the
+	// identity-field wiring must not silently reshape or drop a pre-existing
+	// field.
 	act := p["actionable"].([]any)
-	if len(act) == 0 {
-		t.Fatal("actionable empty")
+	if len(act) != 1 {
+		t.Fatalf("actionable = %d entries, want 1", len(act))
 	}
 	img := act[0].(map[string]any)
+	if img["image"] != "web:1.0" {
+		t.Errorf("image = %v, want web:1.0", img["image"])
+	}
+	sevCounts, ok := img["severity_counts"].(map[string]any)
+	if !ok {
+		t.Fatalf("severity_counts missing/wrong type: %T", img["severity_counts"])
+	}
+	// libc-bin (1 CRITICAL) + setuptools (1 HIGH), the image's two fixed
+	// packages (sampleReport's affected/wont_fix packages sit in other
+	// sections and never reach Actionable's counts).
+	if sevCounts["CRITICAL"].(float64) != 1 || sevCounts["HIGH"].(float64) != 1 {
+		t.Errorf("severity_counts = %v, want CRITICAL:1 HIGH:1", sevCounts)
+	}
+
 	finds := img["findings"].([]any)
+	if len(finds) != 2 {
+		t.Fatalf("findings = %d entries, want 2 (libc-bin, setuptools)", len(finds))
+	}
+	// sortPackages puts the CRITICAL-bearing package first: libc-bin.
 	fnd := finds[0].(map[string]any)
-	for _, key := range []string{"package", "installed", "fixed", "severity_counts", "upgrade_risk", "vuln_ids"} {
-		if _, ok := fnd[key]; !ok {
-			t.Errorf("finding missing %q: %v", key, fnd)
-		}
+	if fnd["package"] != "libc-bin" {
+		t.Fatalf("findings[0].package = %v, want libc-bin", fnd["package"])
+	}
+	if fnd["installed"] != "2.28-10" {
+		t.Errorf("installed = %v, want 2.28-10", fnd["installed"])
+	}
+	if fnd["fixed"] != "2.28-10+deb10u2" {
+		t.Errorf("fixed = %v, want 2.28-10+deb10u2", fnd["fixed"])
+	}
+	if fnd["status"] != "fixed" {
+		t.Errorf("status = %v, want fixed", fnd["status"])
+	}
+	if fnd["upgrade_risk"] != "distro_update" {
+		t.Errorf("upgrade_risk = %v, want distro_update (OS package)", fnd["upgrade_risk"])
+	}
+	fndSev, ok := fnd["severity_counts"].(map[string]any)
+	if !ok || fndSev["CRITICAL"].(float64) != 1 || fndSev["HIGH"].(float64) != 0 {
+		t.Errorf("finding severity_counts = %v, want CRITICAL:1 HIGH:0", fnd["severity_counts"])
+	}
+	vulnIDs, ok := fnd["vuln_ids"].([]any)
+	if !ok || len(vulnIDs) != 1 || vulnIDs[0] != "CVE-1" {
+		t.Errorf("vuln_ids = %v, want [CVE-1]", fnd["vuln_ids"])
 	}
 }
 

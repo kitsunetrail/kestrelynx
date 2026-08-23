@@ -450,6 +450,86 @@ func TestRunOnce_DiffMode_FullReportDay(t *testing.T) {
 	}
 }
 
+// --- identity model: Replaced persistence across a failed send ---
+
+// TestRunOnce_DiffMode_SendFailure_ReplacedPersistsToNextCycle guards the
+// claim that a failed delivery cannot lose an image-replacement event: state
+// is only saved after a successful send (sendDiff), so if cycle 2's send
+// fails, state still reflects cycle 1's content. Cycle 3 (delivery succeeds)
+// must therefore report the replacement again rather than silently dropping
+// it because state had already "moved past" it.
+//
+// The lister and scanner must agree on which content is running each cycle
+// (docker.RunningImage.ContentID feeds scanner.ScanTarget.ContentID, which
+// the real scanner.Trivy.Scan echoes back as ExpectedContentID,
+// internal/scanner/exec.go:reconcileTarget) — a lister reporting no
+// ContentID while the fake scanner claims a resolved identity is an
+// unrealistic combination that no real pipeline would produce.
+func TestRunOnce_DiffMode_SendFailure_ReplacedPersistsToNextCycle(t *testing.T) {
+	cidA := "sha256:" + strings.Repeat("a", 64)
+	cidB := "sha256:" + strings.Repeat("b", 64)
+
+	imagesWith := func(cid string) []docker.RunningImage {
+		return []docker.RunningImage{{Ref: "app:1", ContentID: cid}}
+	}
+	scanWith := func(cid string) *fakeScanner {
+		return &fakeScanner{byImage: map[string]scanner.ImageScan{
+			"app:1": {Image: "app:1", ExpectedContentID: cid, IdentityResolved: true},
+		}}
+	}
+	wantReplaced := func(t *testing.T, got []state.ImageReplacement) {
+		t.Helper()
+		if len(got) != 1 {
+			t.Fatalf("Replaced = %+v, want 1 entry", got)
+		}
+		rep := got[0]
+		if rep.Ref != "app:1" || len(rep.PrevContentIDs) != 1 || rep.PrevContentIDs[0] != cidA || len(rep.ContentIDs) != 1 || rep.ContentIDs[0] != cidB {
+			t.Errorf("Replaced entry = %+v, want Ref=app:1 PrevContentIDs=[%s] ContentIDs=[%s]", rep, cidA, cidB)
+		}
+	}
+
+	store := &fakeStore{}
+	r := Runner{
+		Lister:        fakeLister{images: imagesWith(cidA)},
+		Scanner:       scanWith(cidA),
+		Notifier:      &fakeNotifier{},
+		Store:         store,
+		FullReportDay: NoFullReport,
+		Now:           clock,
+	}
+	// Cycle 1: establishes ContentID A as the running content.
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("cycle 1: %v", err)
+	}
+	store.st = *store.saved
+
+	// Cycle 2: content changes to B, but delivery fails — state must not
+	// advance, so the replacement is not yet recorded as seen. The diff is
+	// still computed before the (failed) send attempt, so its actual
+	// Replaced content is verified here too, not just its presence later.
+	failNotif := &fakeNotifier{err: errors.New("slack down")}
+	r.Lister = fakeLister{images: imagesWith(cidB)}
+	r.Scanner = scanWith(cidB)
+	r.Notifier = failNotif
+	if err := r.RunOnce(context.Background()); err == nil {
+		t.Fatal("cycle 2: expected send error")
+	}
+	if store.saveCalls != 1 {
+		t.Fatalf("cycle 2: state must not be saved after a failed send, saveCalls = %d", store.saveCalls)
+	}
+	wantReplaced(t, failNotif.msg.Diff.Replaced)
+
+	// Cycle 3: same content B again, delivery now succeeds. State still
+	// reflects cycle 1's ContentID A (cycle 2's save was skipped), so the
+	// replacement must be reported again rather than lost.
+	notif3 := &fakeNotifier{}
+	r.Notifier = notif3
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("cycle 3: %v", err)
+	}
+	wantReplaced(t, notif3.msg.Diff.Replaced)
+}
+
 func TestNextDaily(t *testing.T) {
 	now := time.Date(2026, 6, 24, 10, 0, 0, 0, time.UTC)
 	// 09:00 already passed today → tomorrow 09:00

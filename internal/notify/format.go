@@ -5,6 +5,7 @@ package notify
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -28,7 +29,11 @@ const staleDays = 14
 // decision — EOL base images, CRITICALs, and major-version bumps — in full,
 // while collapsing the bulk of low-risk fixes into a per-image one-liner. The
 // full, unabridged data is always available via the generic webhook payload.
-// A report with no issues yields a short "all clear" message.
+// A report with no issues yields a short "all clear" message — but even then,
+// an unresolved (reference-fallback) image must still be called out: "clean"
+// from a scan that never confirmed which entity it scanned is not the same
+// claim as "confirmed clean", and the short-circuit below must not silently
+// swallow that distinction.
 func FormatSlackText(r analyze.Report) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "🛡️ *KestreLynx* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
@@ -36,6 +41,7 @@ func FormatSlackText(r analyze.Report) string {
 
 	if !r.HasIssues() {
 		b.WriteString("\n✅ All clear (no HIGH/CRITICAL vulnerabilities found)\n")
+		writeUnresolvedRefs(&b, r)
 		return b.String()
 	}
 
@@ -53,18 +59,20 @@ func writeFullBody(b *strings.Builder, r analyze.Report) {
 		return
 	}
 	writeHeadline(b, summarize(r))
+	byRef := imagesByRef(r)
 
 	if len(r.EOSLImages) > 0 {
 		b.WriteString("\n*⛔ Base OS end-of-life (top priority)*\n")
 		for _, img := range r.EOSLImages {
-			fmt.Fprintf(b, "• %s — base OS is EOL (no more security updates coming)\n", img)
+			fmt.Fprintf(b, "• %s — base OS is EOL (no more security updates coming)\n", refLabel(img, byRef))
 		}
 	}
 
-	collapsed := writeActionable(b, r.Actionable)
-	writeSection(b, "ℹ️ No fix yet (affected / waiting on upstream)", r.Watch, false)
-	writeSection(b, "🔕 Upstream won't fix (will_not_fix)", r.WontFix, false)
-	writeScanErrors(b, r.ScanErrors)
+	collapsed := writeActionable(b, r.Actionable, byRef)
+	writeSection(b, "ℹ️ No fix yet (affected / waiting on upstream)", r.Watch, false, byRef)
+	writeSection(b, "🔕 Upstream won't fix (will_not_fix)", r.WontFix, false, byRef)
+	writeScanErrors(b, r.ScanErrors, byRef)
+	writeUnresolvedRefs(b, r)
 
 	if collapsed > 0 {
 		fmt.Fprintf(b, "\n_%d lower-risk fix(es) summarized — full list in the generic webhook payload._\n", collapsed)
@@ -82,17 +90,29 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string
 	fmt.Fprintf(&b, "🛡️ *KestreLynx* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
 
+	byRef := imagesByRef(r)
+
+	// Replaced is handled ahead of the "No changes" check: it is itself a
+	// change (state.Diff.HasChanges() includes it), so it must never be
+	// silently absorbed into a heartbeat that only looks at findings. A clean
+	// image's replacement is news too.
+	writeReplaced(&b, d.Replaced)
+
 	if !d.HasChanges() && !fullReport {
 		b.WriteString("\nNo changes since last scan.\n")
-		writeScanErrors(&b, r.ScanErrors)
+		writeScanErrors(&b, r.ScanErrors, byRef)
 		writeAnyOpenNow(&b, r, d)
+		// A clean, unresolved (reference-fallback) image must not go
+		// unmentioned just because it has no changes/findings to report —
+		// silence here would read as "confirmed clean".
+		writeUnresolvedRefs(&b, r)
 		return b.String()
 	}
 
 	if len(d.NewEOSL) > 0 {
 		b.WriteString("\n*⛔ New: base OS end-of-life (top priority)*\n")
 		for _, img := range d.NewEOSL {
-			fmt.Fprintf(&b, "• %s — base OS is EOL (no more security updates coming)\n", img)
+			fmt.Fprintf(&b, "• %s — base OS is EOL (no more security updates coming)\n", refLabel(img, byRef))
 		}
 	}
 
@@ -100,18 +120,166 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string
 		writeIntelWarning(&b, r)
 		writeTriageChanges(&b, r, d.Changes)
 	} else {
-		writeChanges(&b, d.Changes)
+		writeChanges(&b, d.Changes, byRef)
 	}
-	writeResolved(&b, d)
+	writeResolved(&b, d, byRef)
 
 	if fullReport {
 		b.WriteString("\n*📋 Weekly full report — everything currently open*\n")
+		// writeFullBody (via writeTriageBody or its own tail) carries its own
+		// writeUnresolvedRefs call, so it is not repeated here.
 		writeFullBody(&b, r)
 	} else {
-		writeScanErrors(&b, r.ScanErrors)
+		writeScanErrors(&b, r.ScanErrors, byRef)
 		writeAnyOpenNow(&b, r, d)
+		writeUnresolvedRefs(&b, r)
 	}
 	return b.String()
+}
+
+// writeReplaced renders the images whose verified running content changed
+// since the previous scan: one line per image, previous content digest(s)
+// vs current.
+// Fires independently of findings — even a clean image's replacement is news
+// the diff exists to carry.
+func writeReplaced(b *strings.Builder, replaced []state.ImageReplacement) {
+	if len(replaced) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n*🔄 Image content changed (%d)*\n", len(replaced))
+	for _, rep := range replaced {
+		fmt.Fprintf(b, "• %s: image updated (%s → %s)\n", rep.Ref, joinShortDigests(rep.PrevContentIDs), joinShortDigests(rep.ContentIDs))
+	}
+}
+
+// joinShortDigests renders a ContentID set as short, comma-joined digests for
+// display. The sets themselves (state.ImageReplacement's Prev/ContentIDs) are
+// already sorted upstream, so this only shortens each value — it never
+// reorders.
+func joinShortDigests(ids []string) string {
+	short := make([]string, len(ids))
+	for i, id := range ids {
+		short[i] = shortDigest(id)
+	}
+	return strings.Join(short, ", ")
+}
+
+// shortDigest is the display form of a content digest across the notify
+// layer: the "sha256:" prefix stripped, then the leading 12 hex characters
+// — a single rule shared by the Replaced lines and the ambiguous-reference
+// heading annotation below.
+func shortDigest(contentID string) string {
+	hex := strings.TrimPrefix(contentID, "sha256:")
+	if len(hex) > 12 {
+		return hex[:12]
+	}
+	return hex
+}
+
+// imagesByRef indexes the report's identity inventory by reference, serving
+// two different kinds of lookup that must not be confused:
+//   - Per-entity renderers with an analyze.ImageFindings in hand (imageLabel,
+//     imagePayloads) use it only for the reference's aggregate Ambiguous
+//     status and RegistryDigests — never for IdentityResolved, since that
+//     aggregate would misreport a resolved entity as unresolved whenever a
+//     sibling under the same reference fell back to scanning by reference.
+//     Per-entity resolution is ImageFindings.ContentID's own job.
+//   - Reference-only renderers with nothing but a bare ref string (refLabel:
+//     diff/EOSL/scan-error lines that are reference-keyed by design) have no
+//     per-entity ContentID to fall back on, so the reference's aggregate
+//     IdentityResolved — "did every entity under this ref resolve this
+//     cycle" — is the coarsest signal available and the correct one to use
+//     there.
+//
+// Ambiguous is also computed report-wide here rather than re-derived from the
+// status sections, which — split across Actionable/Watch/WontFix — could miss
+// a sibling entity landing in a different bucket.
+func imagesByRef(r analyze.Report) map[string]analyze.ImageObservation {
+	out := make(map[string]analyze.ImageObservation, len(r.Images))
+	for _, o := range r.Images {
+		out[o.Ref] = o
+	}
+	return out
+}
+
+// identityUnconfirmedText is the single wording for "this identity could not
+// be pinned this cycle", shared by every rendering context so a future
+// wording change cannot silently drift between them: the entity-level
+// heading annotation (imageLabel), the reference-level line annotation
+// (refLabel), and the cross-cutting summary list (writeUnresolvedRefs).
+const identityUnconfirmedText = "identity unconfirmed: scanned by reference"
+
+// imageLabel is the display name for one ImageFindings entry, annotated per
+// the identity model: unresolved (ContentID empty — a reference-fallback
+// scan) gets an explicit warning that the entity actually running there was
+// never confirmed; resolved-but-ambiguous (more than one distinct entity
+// currently running under the same reference) gets the short content digest
+// appended so the per-entity sections can be told apart. The ordinary
+// single-entity case (the vast majority) renders exactly as before.
+func imageLabel(img analyze.ImageFindings, byRef map[string]analyze.ImageObservation) string {
+	switch {
+	case img.ContentID == "":
+		return img.Image + " — " + identityUnconfirmedText
+	case byRef[img.Image].Ambiguous:
+		return img.Image + " (" + shortDigest(img.ContentID) + ")"
+	default:
+		return img.Image
+	}
+}
+
+// refLabel is the reference-level counterpart of imageLabel, for renderers
+// that only ever have a bare reference string — not an analyze.ImageFindings
+// entry with its own ContentID — because they sit downstream of the
+// reference-keyed diff history or the per-reference EOSL/scan-error lists
+// (state.Change.Image, state.Resolved.Image, analyze.ScanError.Image, an EOSL
+// image name: diff history stays reference-keyed on purpose, so per-entity
+// ContentID is not available to restore here). It appends the same warning
+// whenever the reference's identity inventory (analyze.Report.Images, looked
+// up by ref) says at least one entity running under it was unresolved this
+// cycle. Unlike imageLabel it never appends a short digest for an Ambiguous
+// reference: a diff/EOSL/error line is already a union across every entity
+// running under the reference, so there is no single content id to show. A
+// reference absent from byRef — not scanned this cycle, e.g. a Resolved/gone
+// image — is left unannotated: no data is not the same claim as
+// "unconfirmed".
+func refLabel(ref string, byRef map[string]analyze.ImageObservation) string {
+	if obs, ok := byRef[ref]; ok && !obs.IdentityResolved {
+		return ref + " — " + identityUnconfirmedText
+	}
+	return ref
+}
+
+// unresolvedRefsLine renders the cross-cutting summary of every reference
+// with at least one unresolved entity this cycle: a reference-fallback scan
+// of a *clean* image must not go unmentioned just because it produced no
+// findings, no EOSL warning, and no scan error — silence there would read as
+// "confirmed clean" when it is really "scanned by reference, unconfirmed".
+// "" when every reference resolved this cycle. Sorted for stable output.
+// Shared by writeUnresolvedRefs (the Slack messages) and the thread report,
+// so the two never drift apart.
+func unresolvedRefsLine(r analyze.Report) string {
+	var refs []string
+	for _, o := range r.Images {
+		if !o.IdentityResolved {
+			refs = append(refs, o.Ref)
+		}
+	}
+	if len(refs) == 0 {
+		return ""
+	}
+	sort.Strings(refs)
+	return fmt.Sprintf("⚠️ %s — %s\n", identityUnconfirmedText, strings.Join(refs, ", "))
+}
+
+// writeUnresolvedRefs appends unresolvedRefsLine to a Slack message body, if
+// non-empty. Fires independently of findings/EOSL/scan errors. Doubling up
+// with a heading-level annotation (imageLabel/refLabel) elsewhere in the same
+// message is expected and fine — both draw from identityUnconfirmedText, so
+// the wording never drifts between the two.
+func writeUnresolvedRefs(b *strings.Builder, r analyze.Report) {
+	if line := unresolvedRefsLine(r); line != "" {
+		b.WriteString("\n" + line)
+	}
 }
 
 // writeAnyOpenNow picks the heartbeat style for the report's mode.
@@ -125,7 +293,7 @@ func writeAnyOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
 
 // writeChanges renders the new/changed findings grouped per image, in report
 // priority order, each package line in full detail.
-func writeChanges(b *strings.Builder, changes []state.Change) {
+func writeChanges(b *strings.Builder, changes []state.Change, byRef map[string]analyze.ImageObservation) {
 	if len(changes) == 0 {
 		return
 	}
@@ -133,7 +301,7 @@ func writeChanges(b *strings.Builder, changes []state.Change) {
 	lastImage := ""
 	for _, c := range changes {
 		if c.Image != lastImage {
-			fmt.Fprintf(b, "%s %s\n", changesEmoji(c), c.Image)
+			fmt.Fprintf(b, "%s %s\n", changesEmoji(c), refLabel(c.Image, byRef))
 			lastImage = c.Image
 		}
 		for _, g := range c.Groups {
@@ -166,13 +334,13 @@ func changesEmoji(c state.Change) string {
 // writeResolved renders findings that disappeared since the previous scan, one
 // line per image. Seeing yesterday's fix confirmed is the reward loop of diff
 // mode, so it is never collapsed away.
-func writeResolved(b *strings.Builder, d state.Diff) {
+func writeResolved(b *strings.Builder, d state.Diff, byRef map[string]analyze.ImageObservation) {
 	if len(d.Resolved) == 0 && len(d.ResolvedEOSL) == 0 {
 		return
 	}
 	fmt.Fprintf(b, "\n*✅ Resolved since last scan (%d)*\n", len(d.Resolved)+len(d.ResolvedEOSL))
 	for _, img := range d.ResolvedEOSL {
-		fmt.Fprintf(b, "• %s — base OS no longer EOL\n", img)
+		fmt.Fprintf(b, "• %s — base OS no longer EOL\n", refLabel(img, byRef))
 	}
 	byImage := map[string][]string{}
 	var imgOrder []string
@@ -183,7 +351,7 @@ func writeResolved(b *strings.Builder, d state.Diff) {
 		byImage[res.Image] = append(byImage[res.Image], res.Package)
 	}
 	for _, img := range imgOrder {
-		fmt.Fprintf(b, "• %s: %s\n", img, strings.Join(byImage[img], ", "))
+		fmt.Fprintf(b, "• %s: %s\n", refLabel(img, byRef), strings.Join(byImage[img], ", "))
 	}
 }
 
@@ -205,13 +373,13 @@ func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
 	b.WriteString("\n_Details in the generic webhook payload, or in the weekly full report._\n")
 }
 
-func writeScanErrors(b *strings.Builder, errs []analyze.ScanError) {
+func writeScanErrors(b *strings.Builder, errs []analyze.ScanError, byRef map[string]analyze.ImageObservation) {
 	if len(errs) == 0 {
 		return
 	}
 	b.WriteString("\n*⚠️ Scan failures*\n")
 	for _, e := range errs {
-		fmt.Fprintf(b, "• %s — %s\n", e.Image, e.Err)
+		fmt.Fprintf(b, "• %s — %s\n", refLabel(e.Image, byRef), e.Err)
 	}
 }
 
@@ -274,14 +442,14 @@ func needsAttention(g analyze.PackageGroup) bool {
 // writeActionable renders the fixable section, showing packages that need
 // attention in full and collapsing the rest into one summary line per image.
 // Returns the total number of packages collapsed.
-func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings) int {
+func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation) int {
 	if len(imgs) == 0 {
 		return 0
 	}
 	b.WriteString("\n*✅ Actionable now (fixed)*\n")
 	collapsed := 0
 	for _, img := range imgs {
-		fmt.Fprintf(b, "%s %s  CRITICAL %d / HIGH %d\n", imageEmoji(img), img.Image, img.CriticalCount(), img.TotalCount()-img.CriticalCount())
+		fmt.Fprintf(b, "%s %s  CRITICAL %d / HIGH %d\n", imageEmoji(img), imageLabel(img, byRef), img.CriticalCount(), img.TotalCount()-img.CriticalCount())
 		var rest []analyze.PackageGroup
 		for _, g := range img.Packages {
 			if needsAttention(g) {
@@ -301,13 +469,13 @@ func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings) int {
 // writeSection renders an image section with every package shown in full. Used
 // for the watch / won't-fix sections, which are not actionable now and are
 // typically short.
-func writeSection(b *strings.Builder, title string, imgs []analyze.ImageFindings, fixed bool) {
+func writeSection(b *strings.Builder, title string, imgs []analyze.ImageFindings, fixed bool, byRef map[string]analyze.ImageObservation) {
 	if len(imgs) == 0 {
 		return
 	}
 	fmt.Fprintf(b, "\n*%s*\n", title)
 	for _, img := range imgs {
-		fmt.Fprintf(b, "%s %s  CRITICAL %d / HIGH %d\n", imageEmoji(img), img.Image, img.CriticalCount(), img.TotalCount()-img.CriticalCount())
+		fmt.Fprintf(b, "%s %s  CRITICAL %d / HIGH %d\n", imageEmoji(img), imageLabel(img, byRef), img.CriticalCount(), img.TotalCount()-img.CriticalCount())
 		for _, g := range img.Packages {
 			writePackage(b, g, fixed, "")
 		}
@@ -398,9 +566,19 @@ type webhookPayload struct {
 type diffPayload struct {
 	New           []changePayload   `json:"new"`
 	Resolved      []resolvedPayload `json:"resolved"`
+	Replaced      []replacedPayload `json:"replaced"`
 	NewEOSL       []string          `json:"new_eosl"`
 	ResolvedEOSL  []string          `json:"resolved_eosl"`
 	OldestOpenDay int               `json:"oldest_open_days"`
+}
+
+// replacedPayload mirrors state.ImageReplacement: a reference whose verified
+// running content changed since the previous scan. The ID sets are already
+// sorted upstream.
+type replacedPayload struct {
+	Ref            string   `json:"ref"`
+	PrevContentIDs []string `json:"prev_content_ids"`
+	ContentIDs     []string `json:"content_ids"`
 }
 
 type changePayload struct {
@@ -439,6 +617,22 @@ type imagePayload struct {
 	Image          string           `json:"image"`
 	SeverityCounts map[string]int   `json:"severity_counts"`
 	Findings       []findingPayload `json:"findings"`
+
+	// Identity fields. ContentID mirrors analyze.ImageFindings.ContentID:
+	// non-empty only when this entity's identity was resolved (single
+	// confirmed entity — the ordinary case, or one entry of an Ambiguous
+	// reference). IdentityResolved and ScanTargetKind are both entity-level,
+	// derived from that same ContentID (non-empty => resolved / "content_id";
+	// empty => unresolved / "reference") — never the reference's aggregate
+	// IdentityResolved (analyze.Report.Images), so a resolved entity is never
+	// reported as unresolved just because a sibling under the same reference
+	// fell back to scanning by reference. RegistryDigests alone is the
+	// reference's identity inventory, looked up by Image (ImageFindings
+	// carries no per-entity RegistryDigests of its own).
+	ContentID        string   `json:"content_id,omitempty"`
+	RegistryDigests  []string `json:"registry_digests"`
+	IdentityResolved bool     `json:"identity_resolved"`
+	ScanTargetKind   string   `json:"scan_target_kind"` // content_id | reference
 }
 
 type findingPayload struct {
@@ -483,6 +677,7 @@ type errorPayload struct {
 // The payload always carries the full current data (the webhook's role is the
 // unabridged record); d adds the diff section when diff mode is on.
 func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
+	byRef := imagesByRef(r)
 	p := webhookPayload{
 		GeneratedAt: r.GeneratedAt.Format(time.RFC3339),
 		Summary: summary{
@@ -490,9 +685,9 @@ func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
 			ImagesAffected: r.AffectedImageCount(),
 		},
 		EOSLImages: r.EOSLImages,
-		Actionable: imagePayloads(r.Actionable),
-		Watch:      imagePayloads(r.Watch),
-		WontFix:    imagePayloads(r.WontFix),
+		Actionable: imagePayloads(r.Actionable, byRef),
+		Watch:      imagePayloads(r.Watch, byRef),
+		WontFix:    imagePayloads(r.WontFix, byRef),
 		ScanErrors: errorPayloads(r.ScanErrors),
 	}
 	if r.Triage {
@@ -519,6 +714,7 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 	dp := &diffPayload{
 		New:           []changePayload{},
 		Resolved:      []resolvedPayload{},
+		Replaced:      []replacedPayload{},
 		NewEOSL:       emptyIfNil(d.NewEOSL),
 		ResolvedEOSL:  emptyIfNil(d.ResolvedEOSL),
 		OldestOpenDay: d.OldestOpenDays(r.GeneratedAt),
@@ -546,6 +742,13 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 	for _, res := range d.Resolved {
 		dp.Resolved = append(dp.Resolved, resolvedPayload{Image: res.Image, Package: res.Package})
 	}
+	for _, rep := range d.Replaced {
+		dp.Replaced = append(dp.Replaced, replacedPayload{
+			Ref:            rep.Ref,
+			PrevContentIDs: emptyIfNil(rep.PrevContentIDs),
+			ContentIDs:     emptyIfNil(rep.ContentIDs),
+		})
+	}
 	return dp
 }
 
@@ -556,7 +759,7 @@ func emptyIfNil(s []string) []string {
 	return s
 }
 
-func imagePayloads(imgs []analyze.ImageFindings) []imagePayload {
+func imagePayloads(imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation) []imagePayload {
 	out := make([]imagePayload, 0, len(imgs))
 	for _, img := range imgs {
 		findings := make([]findingPayload, 0, len(img.Packages))
@@ -593,10 +796,26 @@ func imagePayloads(imgs []analyze.ImageFindings) []imagePayload {
 				Vulns:          vulns,
 			})
 		}
+		// scan_target_kind and identity_resolved are both entity-level (this
+		// ImageFindings' own ContentID), not the reference's aggregate
+		// IdentityResolved: a mixed reference (one entity pinned by ContentID,
+		// a sibling on reference-fallback) must not report a resolved entity
+		// as identity_resolved=false just because a sibling wasn't.
+		// RegistryDigests alone stays a Ref-level lookup (analyze.ImageFindings
+		// carries no per-entity RegistryDigests of its own).
+		resolved := img.ContentID != ""
+		scanTargetKind := "reference"
+		if resolved {
+			scanTargetKind = "content_id"
+		}
 		out = append(out, imagePayload{
-			Image:          img.Image,
-			SeverityCounts: map[string]int{"CRITICAL": img.CriticalCount(), "HIGH": img.TotalCount() - img.CriticalCount()},
-			Findings:       findings,
+			Image:            img.Image,
+			SeverityCounts:   map[string]int{"CRITICAL": img.CriticalCount(), "HIGH": img.TotalCount() - img.CriticalCount()},
+			Findings:         findings,
+			ContentID:        img.ContentID,
+			RegistryDigests:  emptyIfNil(byRef[img.Image].RegistryDigests),
+			IdentityResolved: resolved,
+			ScanTargetKind:   scanTargetKind,
 		})
 	}
 	return out

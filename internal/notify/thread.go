@@ -45,33 +45,39 @@ func BuildThreadMessages(r analyze.Report, firstSeen func(image, pkg string) (ti
 		limit = threadMsgLimit
 	}
 	title := fmt.Sprintf("📊 *Full report — %s*", r.GeneratedAt.Format(timeLayout))
+	byRef := imagesByRef(r)
 
 	var secs []threadSection
 	if len(r.EOSLImages) > 0 {
 		s := threadSection{title: fmt.Sprintf("*⛔ EOL base images (%d)*", len(r.EOSLImages))}
 		for _, img := range r.EOSLImages {
-			s.blocks = append(s.blocks, fmt.Sprintf("• %s — base OS is EOL (no more security updates coming)\n", img))
+			s.blocks = append(s.blocks, fmt.Sprintf("• %s — base OS is EOL (no more security updates coming)\n", refLabel(img, byRef)))
 		}
 		secs = append(secs, s)
 	}
 	if r.Triage {
-		secs = append(secs, triageThreadSections(r, firstSeen)...)
+		secs = append(secs, triageThreadSections(r, byRef, firstSeen)...)
 	} else {
-		secs = append(secs, statusThreadSections(r, firstSeen)...)
+		secs = append(secs, statusThreadSections(r, byRef, firstSeen)...)
+	}
+	// Same cross-cutting "identity unconfirmed" summary as the Slack messages,
+	// wired into the thread report too.
+	if line := unresolvedRefsLine(r); line != "" {
+		secs = append(secs, threadSection{blocks: []string{"\n" + line}})
 	}
 	return packThread(title, secs, limit)
 }
 
 // triageThreadSections is the priority-ordered body: urgent and watch in full
 // detail, low as a count-only line.
-func triageThreadSections(r analyze.Report, firstSeen func(image, pkg string) (time.Time, bool)) []threadSection {
+func triageThreadSections(r analyze.Report, byRef map[string]analyze.ImageObservation, firstSeen func(image, pkg string) (time.Time, bool)) []threadSection {
 	pv := r.ByPriority()
 	var secs []threadSection
 	if n := analyze.GroupCount(pv.ActNow); n > 0 {
-		secs = append(secs, threadBucket(r, fmt.Sprintf("*🚨 ACT NOW (%d) — exploited or likely to be*", n), pv.ActNow, firstSeen))
+		secs = append(secs, threadBucket(r, byRef, fmt.Sprintf("*🚨 ACT NOW (%d) — exploited or likely to be*", n), pv.ActNow, firstSeen))
 	}
 	if n := analyze.GroupCount(pv.Watch); n > 0 {
-		secs = append(secs, threadBucket(r, fmt.Sprintf("*👀 WATCH (%d) — not urgent, keep an eye on*", n), pv.Watch, firstSeen))
+		secs = append(secs, threadBucket(r, byRef, fmt.Sprintf("*👀 WATCH (%d) — not urgent, keep an eye on*", n), pv.Watch, firstSeen))
 	}
 	if n := analyze.GroupCount(pv.Low); n > 0 {
 		secs = append(secs, threadSection{blocks: []string{
@@ -83,9 +89,9 @@ func triageThreadSections(r analyze.Report, firstSeen func(image, pkg string) (t
 
 // statusThreadSections is the triage-off fallback: the status-based sections
 // with every package expanded (no low bucket exists to collapse).
-func statusThreadSections(r analyze.Report, firstSeen func(image, pkg string) (time.Time, bool)) []threadSection {
+func statusThreadSections(r analyze.Report, byRef map[string]analyze.ImageObservation, firstSeen func(image, pkg string) (time.Time, bool)) []threadSection {
 	section := func(title string, imgs []analyze.ImageFindings) threadSection {
-		return threadBucket(r, "*"+title+"*", imgs, firstSeen)
+		return threadBucket(r, byRef, "*"+title+"*", imgs, firstSeen)
 	}
 	var secs []threadSection
 	if len(r.Actionable) > 0 {
@@ -102,11 +108,11 @@ func statusThreadSections(r analyze.Report, firstSeen func(image, pkg string) (t
 
 // threadBucket renders one bucket, one block per image so message splits fall
 // between images.
-func threadBucket(r analyze.Report, title string, imgs []analyze.ImageFindings, firstSeen func(image, pkg string) (time.Time, bool)) threadSection {
+func threadBucket(r analyze.Report, byRef map[string]analyze.ImageObservation, title string, imgs []analyze.ImageFindings, firstSeen func(image, pkg string) (time.Time, bool)) threadSection {
 	s := threadSection{title: title}
 	for _, img := range imgs {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s %s\n", threadImageMarker(r, img), img.Image)
+		fmt.Fprintf(&b, "%s %s\n", threadImageMarker(r, img), imageLabel(img, byRef))
 		for _, g := range img.Packages {
 			writePackage(&b, g, g.Status == scanner.StatusFixed, "")
 			writeThreadDetail(&b, r, img.Image, g, firstSeen)

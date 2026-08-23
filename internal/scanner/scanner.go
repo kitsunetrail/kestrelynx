@@ -10,6 +10,8 @@ package scanner
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"sort"
 )
 
 // PkgClass distinguishes OS packages (distro versioning, not semver) from
@@ -64,6 +66,38 @@ type ImageScan struct {
 	OSEOSL   bool // base OS is end-of-life: no more security updates
 	Findings []Finding
 	Err      error
+
+	// Identity fields. They describe what was actually scanned, separately
+	// from Image (the display name pinned to the caller's reference). See
+	// docs/development/identity-model.md.
+	ContentID         string   // Trivy's Metadata.ImageID, boundary-validated (the "ScannedContentID")
+	ExpectedContentID string   // the ContentID the caller asked Trivy to scan (ScanTarget.ContentID)
+	RegistryDigests   []string // Metadata.RepoDigests, sorted; a display/correlation attribute, never an identity
+	IdentityResolved  bool     // true when this scan was pinned to ExpectedContentID rather than falling back to Image
+}
+
+// ScanTarget names the image to scan. Ref is always the display name pinned
+// to the result; ContentID, when set, is the boundary-validated OCI image
+// config digest that pins the scan to a specific running image instead of a
+// reference that could move between enumeration and scan.
+type ScanTarget struct {
+	Ref       string
+	ContentID string
+}
+
+// contentIDPattern mirrors the Docker adapter's boundary validation for the
+// OCI image config digest. Kept as a small local check rather than a shared
+// package: the scanner and docker packages must not couple over this
+// internal detail for a single call site.
+var contentIDPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+// validContentID returns imageID if it validates, "" otherwise. No
+// normalization or guessing.
+func validContentID(imageID string) string {
+	if contentIDPattern.MatchString(imageID) {
+		return imageID
+	}
+	return ""
 }
 
 // trivyReport is the subset of Trivy's JSON schema (SchemaVersion 2) that
@@ -75,6 +109,8 @@ type trivyReport struct {
 			Family string `json:"Family"`
 			EOSL   bool   `json:"EOSL"`
 		} `json:"OS"`
+		ImageID     string   `json:"ImageID"`
+		RepoDigests []string `json:"RepoDigests"`
 	} `json:"Metadata"`
 	Results []struct {
 		Class           string `json:"Class"`
@@ -100,10 +136,18 @@ func ParseReport(data []byte) (ImageScan, error) {
 		return ImageScan{}, fmt.Errorf("parse trivy report: %w", err)
 	}
 
+	var registryDigests []string
+	if len(r.Metadata.RepoDigests) > 0 {
+		registryDigests = append([]string(nil), r.Metadata.RepoDigests...)
+		sort.Strings(registryDigests)
+	}
+
 	scan := ImageScan{
-		Image:    r.ArtifactName,
-		OSFamily: r.Metadata.OS.Family,
-		OSEOSL:   r.Metadata.OS.EOSL,
+		Image:           r.ArtifactName,
+		OSFamily:        r.Metadata.OS.Family,
+		OSEOSL:          r.Metadata.OS.EOSL,
+		ContentID:       validContentID(r.Metadata.ImageID),
+		RegistryDigests: registryDigests,
 	}
 
 	for _, res := range r.Results {

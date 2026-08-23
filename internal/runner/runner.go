@@ -12,6 +12,7 @@ import (
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
 	"github.com/kitsunetrail/kestrelynx/internal/config"
+	"github.com/kitsunetrail/kestrelynx/internal/docker"
 	"github.com/kitsunetrail/kestrelynx/internal/intel"
 	"github.com/kitsunetrail/kestrelynx/internal/notify"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
@@ -20,12 +21,12 @@ import (
 
 // ImageLister enumerates running container images (implemented by docker.Client).
 type ImageLister interface {
-	RunningImages(ctx context.Context) ([]string, error)
+	RunningImages(ctx context.Context) ([]docker.RunningImage, error)
 }
 
-// ImageScanner scans one image (implemented by scanner.Trivy).
+// ImageScanner scans one image target (implemented by scanner.Trivy).
 type ImageScanner interface {
-	Scan(ctx context.Context, image string) scanner.ImageScan
+	Scan(ctx context.Context, target scanner.ScanTarget) scanner.ImageScan
 }
 
 // Notifier delivers a message (implemented by notify.Notifier).
@@ -91,20 +92,69 @@ func (r Runner) RunOnce(ctx context.Context) error {
 	}
 	log.Info("scanning images", "count", len(images))
 
-	scans := make([]scanner.ImageScan, 0, len(images))
-	for _, img := range images {
-		scan := r.Scanner.Scan(ctx, img)
-		if scan.Err != nil {
-			log.Warn("image scan failed", "image", img, "err", scan.Err)
-		}
-		scans = append(scans, scan)
-	}
+	scans := r.scanAll(ctx, images)
 
 	report := analyze.Build(scans, r.triage(ctx, scans), r.now())
 	if r.Store == nil {
 		return r.sendFull(ctx, report)
 	}
 	return r.sendDiff(ctx, report)
+}
+
+// scanAll scans every running image, de-duplicating on the boundary-validated
+// ContentID: the same content running under several references is scanned
+// once and the result is replicated to each alias reference. Images whose
+// ContentID did not resolve are scanned individually by reference and never
+// join the ContentID de-duplication (they already can't collide there, since
+// docker.RunningImages itself de-duplicates on (Ref, ContentID)).
+func (r Runner) scanAll(ctx context.Context, images []docker.RunningImage) []scanner.ImageScan {
+	log := r.log()
+	scans := make([]scanner.ImageScan, 0, len(images))
+	byContentID := map[string]scanner.ImageScan{}
+
+	for _, img := range images {
+		if img.ContentID == "" {
+			result := r.Scanner.Scan(ctx, scanner.ScanTarget{Ref: img.Ref})
+			if result.Err != nil {
+				log.Warn("image scan failed", "image", img.Ref, "resolved", false, "err", result.Err)
+			}
+			log.Info("scanned image", "ref", img.Ref, "resolved", false)
+			scans = append(scans, result)
+			continue
+		}
+
+		result, ok := byContentID[img.ContentID]
+		if !ok {
+			result = r.Scanner.Scan(ctx, scanner.ScanTarget{Ref: img.Ref, ContentID: img.ContentID})
+			if result.Err != nil {
+				log.Warn("image scan failed", "image", img.Ref, "content_id", img.ContentID, "resolved", true, "err", result.Err)
+			}
+			byContentID[img.ContentID] = result
+		}
+		log.Info("scanned image", "ref", img.Ref, "content_id", img.ContentID, "resolved", true)
+		scans = append(scans, retarget(result, img.Ref))
+	}
+	return scans
+}
+
+// retarget deep-copies scan and relabels it for ref. A ContentID-pinned scan
+// result is shared across every alias reference running the same content, so
+// each alias must get its own Findings slice — mutating one ref's copy must
+// never reach another's.
+func retarget(scan scanner.ImageScan, ref string) scanner.ImageScan {
+	out := scan
+	out.Image = ref
+	if scan.Findings != nil {
+		out.Findings = make([]scanner.Finding, len(scan.Findings))
+		for i, f := range scan.Findings {
+			f.Image = ref
+			out.Findings[i] = f
+		}
+	}
+	if scan.RegistryDigests != nil {
+		out.RegistryDigests = append([]string(nil), scan.RegistryDigests...)
+	}
+	return out
 }
 
 // triage looks up exploitation intel for every vulnerability the scans found

@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"regexp"
 	"sort"
 	"time"
 )
@@ -43,13 +44,35 @@ func newClient(baseURL string, hc *http.Client) *Client {
 
 // container is the subset of /containers/json we use.
 type container struct {
-	Image string `json:"Image"`
+	Image   string `json:"Image"`
+	ImageID string `json:"ImageID"`
 }
 
-// RunningImages returns the sorted, de-duplicated image references of all
-// running containers. Multiple containers sharing an image yield one entry so
-// each image is scanned once (docs/REQUIREMENTS.md F-2).
-func (c *Client) RunningImages(ctx context.Context) ([]string, error) {
+// contentIDPattern is the boundary check for the OCI image config digest: an
+// exact "sha256:" followed by 64 lowercase hex characters. Anything else
+// (wrong length, uppercase, a different algorithm) fails validation outright
+// — no normalization or guessing.
+var contentIDPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+// RunningImage is one running container's image identity as reported by
+// Docker. Ref is the human-readable reference used for display and history
+// continuity. ContentID is the boundary-validated OCI image config digest
+// that identifies the image's actual content; it is empty whenever Docker's
+// ImageID is missing or does not validate, in which case the raw value (if
+// any) is kept in RawImageID for diagnostics only — it never participates in
+// identity comparisons or de-duplication.
+type RunningImage struct {
+	Ref        string
+	ContentID  string
+	RawImageID string
+}
+
+// RunningImages returns the sorted, de-duplicated running images of all
+// containers. De-duplication is keyed on (Ref, ContentID): the same image
+// name running the same validated content yields one entry, while the same
+// name running distinct content is kept as separate entries so scanning and
+// identity never silently merge them (docs/REQUIREMENTS.md F-2).
+func (c *Client) RunningImages(ctx context.Context) ([]RunningImage, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/containers/json", nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
@@ -71,15 +94,32 @@ func (c *Client) RunningImages(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("decode containers: %w", err)
 	}
 
-	seen := map[string]bool{}
-	images := make([]string, 0, len(containers))
+	type dedupKey struct{ ref, contentID string }
+	seen := map[dedupKey]bool{}
+	images := make([]RunningImage, 0, len(containers))
 	for _, ct := range containers {
-		if ct.Image == "" || seen[ct.Image] {
+		if ct.Image == "" {
 			continue
 		}
-		seen[ct.Image] = true
-		images = append(images, ct.Image)
+		ri := RunningImage{Ref: ct.Image}
+		switch {
+		case contentIDPattern.MatchString(ct.ImageID):
+			ri.ContentID = ct.ImageID
+		case ct.ImageID != "":
+			ri.RawImageID = ct.ImageID
+		}
+		k := dedupKey{ri.Ref, ri.ContentID}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		images = append(images, ri)
 	}
-	sort.Strings(images)
+	sort.Slice(images, func(i, j int) bool {
+		if images[i].Ref != images[j].Ref {
+			return images[i].Ref < images[j].Ref
+		}
+		return images[i].ContentID < images[j].ContentID
+	})
 	return images, nil
 }

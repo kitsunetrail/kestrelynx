@@ -36,32 +36,77 @@ func (t Trivy) severity() string {
 	return strings.Join(t.Severity, ",")
 }
 
-// Scan scans a single image reference. A scan failure (e.g. the image cannot be
-// pulled) is reported via ImageScan.Err rather than a returned error, so one bad
-// image never aborts a whole run; callers iterate and surface Err per image.
-func (t Trivy) Scan(ctx context.Context, image string) ImageScan {
+// trivyArgs builds the CLI arguments for scanning target. When ContentID is
+// set, the scan is pinned to that content and restricted to the local Docker
+// image store (--image-src docker) so Trivy can never resolve a different
+// image than the one Docker reported running. The Ref-only fallback path
+// keeps its arguments exactly as before (existing behavior; no
+// --image-src is added).
+func (t Trivy) trivyArgs(target ScanTarget) []string {
 	args := []string{
 		"image",
 		"--quiet",
 		"--format", "json",
 		"--severity", t.severity(),
-		image,
 	}
+	if target.ContentID != "" {
+		return append(args, "--image-src", "docker", target.ContentID)
+	}
+	return append(args, target.Ref)
+}
+
+// reconcileTarget applies the Expected/Scanned identity check to a freshly
+// parsed report for a ContentID-pinned scan: a mismatch is an environment
+// anomaly, not a finding, so it is surfaced as a scan error rather than
+// attributed to the running content.
+// scan.Image is always pinned to target.Ref (ArtifactName is the sha256
+// string for ContentID-pinned scans, confirmed in production).
+func reconcileTarget(scan ImageScan, target ScanTarget) ImageScan {
+	scan.Image = target.Ref
+	scan.ExpectedContentID = target.ContentID
+	scan.IdentityResolved = target.ContentID != ""
+	if target.ContentID != "" && scan.ContentID != target.ContentID {
+		return ImageScan{
+			Image:             target.Ref,
+			ExpectedContentID: target.ContentID,
+			ContentID:         scan.ContentID,
+			IdentityResolved:  true,
+			Err: fmt.Errorf("trivy scan %s: scanned content %q does not match expected %q",
+				target.Ref, scan.ContentID, target.ContentID),
+		}
+	}
+	return scan
+}
+
+// Scan scans a single image target. A scan failure (e.g. the image cannot be
+// pulled) is reported via ImageScan.Err rather than a returned error, so one bad
+// image never aborts a whole run; callers iterate and surface Err per image.
+func (t Trivy) Scan(ctx context.Context, target ScanTarget) ImageScan {
+	args := t.trivyArgs(target)
+	scanArg := args[len(args)-1]
+
 	cmd := exec.CommandContext(ctx, t.bin(), args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return ImageScan{Image: image, Err: fmt.Errorf("trivy scan %s: %w: %s", image, err, strings.TrimSpace(stderr.String()))}
+		return ImageScan{
+			Image:             target.Ref,
+			ExpectedContentID: target.ContentID,
+			IdentityResolved:  target.ContentID != "",
+			Err:               fmt.Errorf("trivy scan %s: %w: %s", scanArg, err, strings.TrimSpace(stderr.String())),
+		}
 	}
 
 	scan, err := ParseReport(stdout.Bytes())
 	if err != nil {
-		return ImageScan{Image: image, Err: fmt.Errorf("trivy scan %s: %w", image, err)}
+		return ImageScan{
+			Image:             target.Ref,
+			ExpectedContentID: target.ContentID,
+			IdentityResolved:  target.ContentID != "",
+			Err:               fmt.Errorf("trivy scan %s: %w", scanArg, err),
+		}
 	}
-	// Trivy's ArtifactName should equal the requested ref, but pin it to what we
-	// asked for so downstream labelling is always the caller's reference.
-	scan.Image = image
-	return scan
+	return reconcileTarget(scan, target)
 }

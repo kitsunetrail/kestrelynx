@@ -155,3 +155,52 @@ func TestParseReport_RealOutput(t *testing.T) {
 		t.Errorf("coverage: os=%v lang=%v fixed=%v title=%v", sawOS, sawLang, sawFixed, sawTitle)
 	}
 }
+
+// The real Trivy output's Metadata.ImageID / RepoDigests must parse into
+// ContentID / RegistryDigests. Guards against schema drift in the identity
+// fields we depend on.
+func TestParseReport_RealOutput_Identity(t *testing.T) {
+	scan, err := ParseReport(loadFixture(t, "real_python_3.9.1-slim.json"))
+	if err != nil {
+		t.Fatalf("ParseReport(real): %v", err)
+	}
+	wantContentID := "sha256:8c84baace4b3b0763ef5cfbe5b5518e5f23aa53adb92f22e6ba74aad40b98e13"
+	if scan.ContentID != wantContentID {
+		t.Errorf("ContentID = %q, want %q", scan.ContentID, wantContentID)
+	}
+	wantDigests := []string{"python@sha256:bf3ec573c0ae0d0c619c3f3e0e9490878432bf7a5c63a643b6c39c9878b51191"}
+	if len(scan.RegistryDigests) != len(wantDigests) || scan.RegistryDigests[0] != wantDigests[0] {
+		t.Errorf("RegistryDigests = %v, want %v", scan.RegistryDigests, wantDigests)
+	}
+}
+
+// A Metadata.ImageID that doesn't validate must fall back to an unresolved
+// ContentID rather than being normalized or guessed at.
+func TestParseReport_MalformedImageIDIsUnresolved(t *testing.T) {
+	data := []byte(`{
+		"ArtifactName": "demo:1.0",
+		"Metadata": {"OS": {"Family": "debian", "EOSL": false}, "ImageID": "sha256:tooshort"}
+	}`)
+	scan, err := ParseReport(data)
+	if err != nil {
+		t.Fatalf("ParseReport: %v", err)
+	}
+	if scan.ContentID != "" {
+		t.Errorf("ContentID = %q, want empty for a malformed Metadata.ImageID", scan.ContentID)
+	}
+}
+
+// Empty RepoDigests must surface as an empty slice, not a fabricated value.
+func TestParseReport_EmptyRepoDigests(t *testing.T) {
+	data := []byte(`{
+		"ArtifactName": "demo:1.0",
+		"Metadata": {"OS": {"Family": "debian", "EOSL": false}}
+	}`)
+	scan, err := ParseReport(data)
+	if err != nil {
+		t.Fatalf("ParseReport: %v", err)
+	}
+	if len(scan.RegistryDigests) != 0 {
+		t.Errorf("RegistryDigests = %v, want empty", scan.RegistryDigests)
+	}
+}

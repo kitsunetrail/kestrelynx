@@ -69,8 +69,11 @@ Scanning, vulnerability analysis, state comparison, and notification will remain
 - How should a Docker host be identified so it remains the same host after restarts or container recreation?
 - Which service should a container started without Compose belong to?
 
-## Development log
+## Update history
 
-- Started organizing the current scan process and defining the identity model
-- Created the identity model development document
-- Decided the identifier choice, scan method, and history migration approach
+### August 22, 2026
+
+- Because a mutable tag can point a scan to a different image from the one running, we decided to separate the display name from the content identifier.
+- Because `RepoDigests` can be absent from local images or contain multiple values, we selected `ImageID` to identify image content and run scans by digest.
+- Using the digest as the history key would cause unnecessary re-notifications, so image names remain the history and notification keys while the digest records changes to the underlying image.
+- The first phase targets a single Docker host. Multiple hosts and Kubernetes will be supported by adding runtime adapters.

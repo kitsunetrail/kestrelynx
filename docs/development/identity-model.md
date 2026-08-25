@@ -1,6 +1,6 @@
 # Developing the Identity Model
 
-- **Status:** Implemented (Docker adapter, single host)
+- **Status:** Implemented (image content identity; Docker, single host — container-to-service mapping and multi-host identification are future work)
 - **Started:** August 22, 2026
 - **Last updated:** August 23, 2026
 

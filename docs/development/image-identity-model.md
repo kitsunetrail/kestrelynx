@@ -1,4 +1,4 @@
-# Developing the Identity Model
+# Developing the Image Identity Model
 
 - **Status:** Implemented (image content identity; Docker, single host — container-to-service mapping and multi-host identification are future work)
 - **Started:** August 22, 2026
@@ -75,7 +75,7 @@ The two questions previously under consideration were settled by fixing the scop
 
 ### August 23, 2026
 
-- Implemented the identity model. The `ImageID` reported by Docker becomes the `ContentID` after boundary validation (`sha256:` + 64 hex digits); resolved images are scanned by `ContentID` (with `--image-src docker`), while unresolved images fall back to scanning by reference and notifications state explicitly that the match with the running content is unconfirmed.
+- Implemented the image identity model. The `ImageID` reported by Docker becomes the `ContentID` after boundary validation (`sha256:` + 64 hex digits); resolved images are scanned by `ContentID` (with `--image-src docker`), while unresolved images fall back to scanning by reference and notifications state explicitly that the match with the running content is unconfirmed.
 - State keeps its existing keys and version; `ContentID` and `Images` (per-reference digest sets) are recorded as additional fields, and image replacements are delivered as a single notification line. A copy of the production state file was verified to load without conversion.
 - When only some of the entities behind one reference fail to scan, findings are conservatively merged with the previous cycle and resolution decisions are deferred, preventing false notifications.
 - The two open questions (how to identify a host, how to map containers to services) moved to decisions by making the single-host assumption explicit.

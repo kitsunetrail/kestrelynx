@@ -49,7 +49,8 @@ nav:
       - How it works: documentation/how-it-works.md
   - Development:
       - Overview: development/index.md
-      - Identity model: development/identity-model.md
+      - Environment and workload model: development/environment-workload-model.md
+      - Image identity model: development/image-identity-model.md
   - Articles:
       - Overview: articles/index.md
       - CVE Basics and the Publication Process: articles/cve-basics-and-publication-flow.md

@@ -69,7 +69,7 @@ type ImageScan struct {
 
 	// Identity fields. They describe what was actually scanned, separately
 	// from Image (the display name pinned to the caller's reference). See
-	// docs/development/identity-model.md.
+	// docs/development/image-identity-model.md.
 	ContentID         string   // Trivy's Metadata.ImageID, boundary-validated (the "ScannedContentID")
 	ExpectedContentID string   // the ContentID the caller asked Trivy to scan (ScanTarget.ContentID)
 	RegistryDigests   []string // Metadata.RepoDigests, sorted; a display/correlation attribute, never an identity

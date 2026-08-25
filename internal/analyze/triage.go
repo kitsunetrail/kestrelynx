@@ -201,7 +201,7 @@ func GroupCount(imgs []ImageFindings) int {
 // already use (analyze.go) — not on Ref alone: keying on Ref alone would
 // silently merge an Ambiguous reference's distinct entities back into one
 // section and blank out ContentID even for the ordinary single-entity case,
-// undoing the identity-model aggregation this view is built from.
+// undoing the image-identity aggregation this view is built from.
 func (r Report) ByPriority() PriorityView {
 	buckets := map[Priority]map[imgKey][]PackageGroup{}
 	for _, section := range [][]ImageFindings{r.Actionable, r.Watch, r.WontFix} {

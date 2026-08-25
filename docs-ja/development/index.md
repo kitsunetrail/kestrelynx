@@ -7,9 +7,10 @@
 
 ## 進行中
 
-現在進行中の開発はありません。
+- [Environment / Workloadモデルの開発](environment-workload-model.md) — 複数の実行環境と
+  サービスを識別し、脆弱性の記録へ結び付けるモデルの設計(検討中)
 
 ## 完了
 
-- [識別モデルの開発](identity-model.md) — イメージ名を中心とした処理から、Environment、
-  Workload、container、不変なimage digestを結び付けられるモデルへの移行(実装済み)
+- [イメージ識別モデルの開発](image-identity-model.md) — イメージ名を中心とした処理から、実際の内容を
+  特定できる不変なimage digestでイメージ実体を識別する処理への移行(実装済み)

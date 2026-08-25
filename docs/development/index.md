@@ -7,9 +7,10 @@ For instructions on currently available features, see [Documentation](../documen
 
 ## In progress
 
-Nothing is in progress right now.
+- [Developing the environment and workload model](environment-workload-model.md) — designing a model that identifies
+  environments and services and connects them to vulnerability records (in design)
 
 ## Completed
 
-- [Developing the identity model](identity-model.md) — migration from image-name-based processing to a model that connects
-  environments, workloads, containers, and immutable image digests (implemented)
+- [Developing the image identity model](image-identity-model.md) — migration from image-name-based processing to identifying
+  image content by immutable digests (implemented)

@@ -11,27 +11,10 @@ availability**, and **priority escalations**. It combines
 [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and
 [EPSS](https://www.first.org/epss/) data to separate urgent problems from noise.
 
-<div class="grid cards" markdown>
-
--   :material-rocket-launch-outline: **Set up KestreLynx**
-
-    ---
-
-    Install one container on a Docker host and send the results to Slack or a
-    webhook.
-
-    [Setup instructions](documentation/getting-started.md)
-
--   :material-bell-badge-outline: **Notification decision logic**
-
-    ---
-
-    Learn how change detection and exploitation intelligence classify findings
-    as act now, watch, or low.
-
-    [How KestreLynx works](documentation/how-it-works.md)
-
-</div>
+- :material-rocket-launch-outline: [Setup instructions](documentation/getting-started.md)
+- :material-bell-badge-outline: [Notification decision logic](documentation/how-it-works.md)
+- :material-hammer-wrench: [Development logs](development/index.md)
+- :material-book-open-page-variant-outline: [Technical articles](articles/index.md)
 
 !!! warning "Early release"
     KestreLynx is currently an MVP focused on CVE notifications for Docker

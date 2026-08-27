@@ -4,3 +4,5 @@
 
 - 2026年8月23日 — [CVEの基礎と公開の流れ](cve-basics-and-publication-flow-ja.md) — CVE IDの意味、CVEプログラムの運営体制、
   脆弱性の報告から公開までの流れを記載
+- 2026年8月25日 — [KEV Catalogの基礎と使い方](kev-known-exploited-vulnerabilities-ja.md) — KEV Catalogの説明、KEV Catalogへの登録条件、
+  公開されているデータ、脆弱性管理での使い方を記載

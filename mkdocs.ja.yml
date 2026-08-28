@@ -1,7 +1,7 @@
 INHERIT: mkdocs.yml
 
 site_name: KestreLynx ドキュメント
-site_url: https://kitsunetrail.github.io/kestrelynx/ja/
+site_url: https://kestrelynx.dev/ja/
 site_description: >-
   Dockerホスト向けのオープンソース脆弱性変更監視ツールKestreLynxの
   公式ドキュメントと技術記事。

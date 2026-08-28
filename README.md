@@ -3,9 +3,9 @@
 [![CI](https://github.com/kitsunetrail/kestrelynx/actions/workflows/ci.yml/badge.svg)](https://github.com/kitsunetrail/kestrelynx/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-[Documentation](https://kitsunetrail.github.io/kestrelynx/) ·
-[日本語](https://kitsunetrail.github.io/kestrelynx/ja/) ·
-[Configuration reference](https://kitsunetrail.github.io/kestrelynx/documentation/configuration/)
+[Documentation](https://kestrelynx.dev/) ·
+[日本語](https://kestrelynx.dev/ja/) ·
+[Configuration reference](https://kestrelynx.dev/documentation/configuration/)
 
 > An agent that scans your running Docker containers every day and sends only the **actionable vulnerabilities** — prioritized — to Slack or a webhook.
 

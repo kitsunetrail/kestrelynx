@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
@@ -24,6 +25,21 @@ const collapsePreview = 5
 // this many days an unresolved finding stops being news and starts being debt.
 const staleDays = 14
 
+// writeHeader renders the product header line shared by full and diff-mode
+// Slack messages. A named environment gets inserted once, right after the
+// product name; the unnamed default environment renders exactly the text
+// that predates the environment model, so a single-host deployment that
+// never set environment.name sees byte-identical output. Renderers with no
+// header line of their own (e.g. the thread report) do not call this and are
+// unaffected.
+func writeHeader(b *strings.Builder, r analyze.Report) {
+	if r.Environment.Name != "" {
+		fmt.Fprintf(b, "🛡️ *KestreLynx* [%s] — scan results for %s\n", r.Environment.Name, r.GeneratedAt.Format(timeLayout))
+		return
+	}
+	fmt.Fprintf(b, "🛡️ *KestreLynx* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
+}
+
 // FormatSlackText renders a report as a Slack message body (mrkdwn). It leads
 // with a one-line priority summary, then shows the findings that need a human
 // decision — EOL base images, CRITICALs, and major-version bumps — in full,
@@ -36,7 +52,7 @@ const staleDays = 14
 // swallow that distinction.
 func FormatSlackText(r analyze.Report) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "🛡️ *KestreLynx* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
+	writeHeader(&b, r)
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
 
 	if !r.HasIssues() {
@@ -87,7 +103,7 @@ func writeFullBody(b *strings.Builder, r analyze.Report) {
 // by the complete open-findings view.
 func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "🛡️ *KestreLynx* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
+	writeHeader(&b, r)
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
 
 	byRef := imagesByRef(r)
@@ -550,14 +566,24 @@ func riskLabel(r analyze.Risk) string {
 // --- generic webhook payload ---
 
 type webhookPayload struct {
-	GeneratedAt string         `json:"generated_at"`
-	Summary     summary        `json:"summary"`
-	EOSLImages  []string       `json:"eosl_images"`
-	Actionable  []imagePayload `json:"actionable"`
-	Watch       []imagePayload `json:"watch"`
-	WontFix     []imagePayload `json:"wont_fix"`
-	ScanErrors  []errorPayload `json:"scan_errors"`
-	Diff        *diffPayload   `json:"diff,omitempty"`
+	GeneratedAt string              `json:"generated_at"`
+	Environment *environmentPayload `json:"environment,omitempty"`
+	Summary     summary             `json:"summary"`
+	EOSLImages  []string            `json:"eosl_images"`
+	Actionable  []imagePayload      `json:"actionable"`
+	Watch       []imagePayload      `json:"watch"`
+	WontFix     []imagePayload      `json:"wont_fix"`
+	ScanErrors  []errorPayload      `json:"scan_errors"`
+	Diff        *diffPayload        `json:"diff,omitempty"`
+}
+
+// environmentPayload mirrors inventory.Environment. Kind is always present —
+// BuildWebhookPayload always populates the pointer, since even the unnamed
+// default environment has a Kind — while Name is omitted for the unnamed
+// default rather than sent as "".
+type environmentPayload struct {
+	Kind string `json:"kind"`
+	Name string `json:"name,omitempty"`
 }
 
 // diffPayload mirrors state.Diff for webhook consumers. The full sections above
@@ -618,6 +644,14 @@ type imagePayload struct {
 	SeverityCounts map[string]int   `json:"severity_counts"`
 	Findings       []findingPayload `json:"findings"`
 
+	// Containers is the entity-level observation backing this section entry
+	// (analyze.ImageFindings.Containers): every running container matching
+	// this (Image, ContentID) exactly. Unlike RegistryDigests below this is
+	// per-entity, not a Ref-level union — a reference running two distinct
+	// verified contents lists each content's own containers under its own
+	// section entry, not a merged set.
+	Containers []containerPayload `json:"containers"`
+
 	// Identity fields. ContentID mirrors analyze.ImageFindings.ContentID:
 	// non-empty only when this entity's identity was resolved (single
 	// confirmed entity — the ordinary case, or one entry of an Ambiguous
@@ -633,6 +667,25 @@ type imagePayload struct {
 	RegistryDigests  []string `json:"registry_digests"`
 	IdentityResolved bool     `json:"identity_resolved"`
 	ScanTargetKind   string   `json:"scan_target_kind"` // content_id | reference
+}
+
+// containerPayload mirrors inventory.Container: the container's own display
+// name, plus whatever Workload association was found for it.
+type containerPayload struct {
+	Name     string          `json:"name"`
+	Workload workloadPayload `json:"workload"`
+}
+
+// workloadPayload mirrors inventory.Workload. Kind is always written,
+// including "unknown" — inventory.WorkloadUnknown is the Go empty string so
+// a zero-valued Workload reads as unknown by construction, but the webhook
+// contract spells it out explicitly so a receiver can tell "no association
+// found" apart from "this payload version doesn't carry workloads at all".
+// Group/Name are omitted when unknown, since neither is meaningful then.
+type workloadPayload struct {
+	Kind  string `json:"kind"`
+	Group string `json:"group,omitempty"`
+	Name  string `json:"name,omitempty"`
 }
 
 type findingPayload struct {
@@ -680,6 +733,10 @@ func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
 	byRef := imagesByRef(r)
 	p := webhookPayload{
 		GeneratedAt: r.GeneratedAt.Format(time.RFC3339),
+		Environment: &environmentPayload{
+			Kind: string(r.Environment.Kind),
+			Name: r.Environment.Name,
+		},
 		Summary: summary{
 			ImagesTotal:    r.ImagesTotal,
 			ImagesAffected: r.AffectedImageCount(),
@@ -812,6 +869,7 @@ func imagePayloads(imgs []analyze.ImageFindings, byRef map[string]analyze.ImageO
 			Image:            img.Image,
 			SeverityCounts:   map[string]int{"CRITICAL": img.CriticalCount(), "HIGH": img.TotalCount() - img.CriticalCount()},
 			Findings:         findings,
+			Containers:       containerPayloads(img.Containers),
 			ContentID:        img.ContentID,
 			RegistryDigests:  emptyIfNil(byRef[img.Image].RegistryDigests),
 			IdentityResolved: resolved,
@@ -819,6 +877,35 @@ func imagePayloads(imgs []analyze.ImageFindings, byRef map[string]analyze.ImageO
 		})
 	}
 	return out
+}
+
+// containerPayloads converts an entity's observed containers to their
+// webhook form. Empty/nil input yields an empty slice, not null — matching
+// the other list fields in imagePayload (e.g. RegistryDigests via
+// emptyIfNil).
+func containerPayloads(cs []inventory.Container) []containerPayload {
+	out := make([]containerPayload, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, containerPayload{
+			Name: c.Name,
+			Workload: workloadPayload{
+				Kind:  workloadKindPayload(c.Workload.Kind),
+				Group: c.Workload.Group,
+				Name:  c.Workload.Name,
+			},
+		})
+	}
+	return out
+}
+
+// workloadKindPayload maps inventory.WorkloadKind to its webhook string,
+// writing out "unknown" explicitly for inventory.WorkloadUnknown (the Go
+// zero value, "") rather than letting it serialize as an empty string.
+func workloadKindPayload(k inventory.WorkloadKind) string {
+	if k == inventory.WorkloadUnknown {
+		return "unknown"
+	}
+	return string(k)
 }
 
 func errorPayloads(errs []analyze.ScanError) []errorPayload {

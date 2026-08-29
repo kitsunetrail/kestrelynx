@@ -65,3 +65,24 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Notify IndexNow
+        continue-on-error: true
+        shell: bash
+        run: |
+          en_sitemap=$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 https://kestrelynx.dev/sitemap.xml)
+          ja_sitemap=$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 https://kestrelynx.dev/ja/sitemap.xml)
+          urls=$(printf '%s\n%s\n' "$en_sitemap" "$ja_sitemap" \
+            | grep -o '<loc>[^<]*</loc>' | sed 's|</\?loc>||g' | jq -R . | jq -s .)
+          test "$(jq 'length' <<<"$urls")" -gt 0
+          payload=$(jq -n --argjson urls "$urls" '{
+            host: "kestrelynx.dev",
+            key: "c118876f78a02513746eb9fc5da2cf5c",
+            keyLocation: "https://kestrelynx.dev/c118876f78a02513746eb9fc5da2cf5c.txt",
+            urlList: $urls
+          }')
+          code=$(curl --silent --output /dev/null --write-out "%{http_code}" \
+            --connect-timeout 10 --max-time 30 \
+            -X POST "https://api.indexnow.org/indexnow" \
+            -H "Content-Type: application/json; charset=utf-8" -d "$payload")
+          echo "IndexNow response: HTTP $code"
+          test "$code" = "200" -o "$code" = "202"

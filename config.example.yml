@@ -40,12 +40,15 @@ docker:
   socket: "/var/run/docker.sock"
 
 environment:
-  # Stable, human-chosen name for the environment this instance watches
-  # (e.g. "prod", "prod-vps"). Shown in the Slack header and included in the
-  # generic webhook payload, so multiple KestreLynx instances (or channels)
-  # can be told apart. Lowercase alphanumerics and hyphens only, 1-63 bytes,
-  # must start and end with an alphanumeric. Leave empty to use the unnamed
-  # default environment (current single-host behavior, unchanged).
+  # Optional name for this instance's scan history (e.g. "prod-vps"). This
+  # names the history, not the machine: it is not derived from hostname/IP
+  # and does not identify the host. Keep it unchanged across host rebuilds
+  # and migrations and the history continues as the same environment. When
+  # set, it is shown in the Slack header and in the generic webhook payload
+  # so reports from multiple KestreLynx instances can be told apart.
+  # Lowercase alphanumerics and hyphens only, 1-63 bytes, must start and
+  # end with an alphanumeric. Leave empty for the unnamed default
+  # environment (current single-host behavior, unchanged).
   name: ""
 
 state:

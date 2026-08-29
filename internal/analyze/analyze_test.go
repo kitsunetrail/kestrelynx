@@ -43,7 +43,7 @@ func TestBuild_RoutesByStatus(t *testing.T) {
 			f("demo:1.0", scanner.ClassOS, "gcc-8-base", "8.3", "", scanner.StatusWontFix, scanner.SeverityHigh, "CVE-3"),
 		},
 	}}
-	r := Build(scans, Triage{}, fixedTime)
+	r := Build(scans, nil, Triage{}, fixedTime)
 
 	if len(r.Actionable) != 1 || len(r.Watch) != 1 || len(r.WontFix) != 1 {
 		t.Fatalf("section sizes: actionable=%d watch=%d wontfix=%d", len(r.Actionable), len(r.Watch), len(r.WontFix))
@@ -61,7 +61,7 @@ func TestBuild_GroupsByPackageAndCounts(t *testing.T) {
 	}
 	finds = append(finds, f("demo:1.0", scanner.ClassOS, "libc-bin", "2.28-10", "2.28-10+deb10u2", scanner.StatusFixed, scanner.SeverityHigh, "CVE-E"))
 
-	r := Build([]scanner.ImageScan{{Image: "demo:1.0", Findings: finds}}, Triage{}, fixedTime)
+	r := Build([]scanner.ImageScan{{Image: "demo:1.0", Findings: finds}}, nil, Triage{}, fixedTime)
 	g := pkgGroup(t, r.Actionable, "demo:1.0", "libc-bin")
 
 	if g.Critical != 4 || g.High != 1 {
@@ -94,7 +94,7 @@ func TestBuild_RiskLabels(t *testing.T) {
 			f("demo:1.0", scanner.ClassLang, "weird", "abc", "xyz", scanner.StatusFixed, scanner.SeverityHigh, "CVE-W"),
 		},
 	}}
-	r := Build(scans, Triage{}, fixedTime)
+	r := Build(scans, nil, Triage{}, fixedTime)
 
 	cases := map[string]Risk{
 		"libc-bin":   RiskDistroUpdate,
@@ -116,7 +116,7 @@ func TestBuild_NonFixedHasNoRisk(t *testing.T) {
 			f("demo:1.0", scanner.ClassOS, "e2fsprogs", "1.44", "", scanner.StatusAffected, scanner.SeverityHigh, "CVE-2"),
 		},
 	}}
-	r := Build(scans, Triage{}, fixedTime)
+	r := Build(scans, nil, Triage{}, fixedTime)
 	if got := pkgGroup(t, r.Watch, "demo:1.0", "e2fsprogs").Risk; got != RiskNone {
 		t.Errorf("affected Risk = %q, want empty", got)
 	}
@@ -127,7 +127,7 @@ func TestBuild_EOSLAndErrors(t *testing.T) {
 		{Image: "old:1", OSEOSL: true, Findings: nil},
 		{Image: "broken:1", Err: errString("pull failed")},
 	}
-	r := Build(scans, Triage{}, fixedTime)
+	r := Build(scans, nil, Triage{}, fixedTime)
 
 	if len(r.EOSLImages) != 1 || r.EOSLImages[0] != "old:1" {
 		t.Errorf("EOSLImages = %v", r.EOSLImages)
@@ -151,7 +151,7 @@ func TestBuild_SortsCriticalFirst(t *testing.T) {
 			f("demo:1.0", scanner.ClassOS, "zzz-crit", "1", "2", scanner.StatusFixed, scanner.SeverityCritical, "CVE-C"),
 		},
 	}}
-	r := Build(scans, Triage{}, fixedTime)
+	r := Build(scans, nil, Triage{}, fixedTime)
 	pkgs := r.Actionable[0].Packages
 	// zzz-crit (CRITICAL) must sort before aaa-high despite alphabetical order.
 	if pkgs[0].Package != "zzz-crit" {
@@ -166,7 +166,7 @@ func TestBuild_VulnRefCarriesTitle(t *testing.T) {
 			{Image: "demo:1.0", Class: scanner.ClassOS, Package: "libc-bin", InstalledVer: "2.28-10", FixedVer: "2.28-10+deb10u2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-T", Title: "glibc: example title"},
 		},
 	}}
-	r := Build(scans, Triage{}, fixedTime)
+	r := Build(scans, nil, Triage{}, fixedTime)
 	g := pkgGroup(t, r.Actionable, "demo:1.0", "libc-bin")
 	if got := g.TopVuln().Title; got != "glibc: example title" {
 		t.Errorf("TopVuln().Title = %q, want %q", got, "glibc: example title")
@@ -187,7 +187,7 @@ func TestBuild_DuplicateVulnIDPrefersNonEmptyTitle(t *testing.T) {
 	}
 	for name, finds := range map[string][]scanner.Finding{"titled_first": titledFirst, "titled_second": titledSecond} {
 		t.Run(name, func(t *testing.T) {
-			r := Build([]scanner.ImageScan{{Image: "demo:1.0", Findings: finds}}, Triage{}, fixedTime)
+			r := Build([]scanner.ImageScan{{Image: "demo:1.0", Findings: finds}}, nil, Triage{}, fixedTime)
 			g := pkgGroup(t, r.Actionable, "demo:1.0", "libc-bin")
 			if got := g.TopVuln().Title; got != "glibc: example title" {
 				t.Errorf("TopVuln().Title = %q, want the non-empty title regardless of arrival order", got)
@@ -225,7 +225,7 @@ func imgObs(t *testing.T, images []ImageObservation, ref string) ImageObservatio
 func TestBuild_InventorySingleResolvedEntity(t *testing.T) {
 	r := Build([]scanner.ImageScan{
 		resolvedScan("web:1", contentA, []string{"web@sha256:reg1"}),
-	}, Triage{}, fixedTime)
+	}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
 	if len(o.ContentIDs) != 1 || o.ContentIDs[0] != contentA {
@@ -247,7 +247,7 @@ func TestBuild_InventoryUnresolvedReferenceExcludesFallbackAttributes(t *testing
 	r := Build([]scanner.ImageScan{{
 		Image: "web:1", ContentID: contentA, ExpectedContentID: "",
 		RegistryDigests: []string{"web@sha256:whatever"}, IdentityResolved: false,
-	}}, Triage{}, fixedTime)
+	}}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
 	if len(o.ContentIDs) != 0 {
@@ -265,7 +265,7 @@ func TestBuild_InventoryAmbiguousReference(t *testing.T) {
 	r := Build([]scanner.ImageScan{
 		resolvedScan("web:1", contentA, []string{"web@sha256:reg1"}),
 		resolvedScan("web:1", contentB, []string{"web@sha256:reg2"}),
-	}, Triage{}, fixedTime)
+	}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
 	if !o.Ambiguous {
@@ -285,7 +285,7 @@ func TestBuild_InventoryAmbiguousReference(t *testing.T) {
 func TestBuild_InventoryFullFailure(t *testing.T) {
 	r := Build([]scanner.ImageScan{
 		{Image: "web:1", Err: errString("pull failed")},
-	}, Triage{}, fixedTime)
+	}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
 	if !o.ScanFailed || o.PartialFailure {
@@ -297,7 +297,7 @@ func TestBuild_InventoryPartialFailure(t *testing.T) {
 	r := Build([]scanner.ImageScan{
 		resolvedScan("web:1", contentA, nil),
 		{Image: "web:1", ExpectedContentID: contentB, IdentityResolved: true, Err: errString("pull failed")},
-	}, Triage{}, fixedTime)
+	}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
 	if !o.PartialFailure || o.ScanFailed {
@@ -328,7 +328,7 @@ func TestBuild_InventoryPartialFailure(t *testing.T) {
 func TestBuild_InventoryFailedResolvedEntityStillContributesIdentity(t *testing.T) {
 	r := Build([]scanner.ImageScan{
 		{Image: "web:1", ExpectedContentID: contentA, IdentityResolved: true, Err: errString("pull failed")},
-	}, Triage{}, fixedTime)
+	}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
 	if !o.ScanFailed {
@@ -351,7 +351,7 @@ func TestBuild_InventoryMixedResolvedAndUnresolvedEntities(t *testing.T) {
 	r := Build([]scanner.ImageScan{
 		resolvedScan("web:1", contentA, nil),
 		{Image: "web:1"}, // reference-fallback: no ExpectedContentID
-	}, Triage{}, fixedTime)
+	}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
 	if o.Ambiguous {
@@ -369,7 +369,7 @@ func TestBuild_AmbiguousRefSplitsIntoSeparateSections(t *testing.T) {
 	r := Build([]scanner.ImageScan{
 		resolvedScan("web:1", contentA, nil, f("web:1", scanner.ClassLang, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityHigh, "CVE-A")),
 		resolvedScan("web:1", contentB, nil, f("web:1", scanner.ClassLang, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityHigh, "CVE-B")),
-	}, Triage{}, fixedTime)
+	}, nil, Triage{}, fixedTime)
 
 	if len(r.Actionable) != 2 {
 		t.Fatalf("Actionable = %+v, want 2 separate entries (one per ContentID)", r.Actionable)
@@ -396,7 +396,7 @@ func TestBuild_SingleEntityContentIDIsEmpty(t *testing.T) {
 		Image:    "demo:1.0",
 		Findings: []scanner.Finding{f("demo:1.0", scanner.ClassOS, "libc-bin", "1", "2", scanner.StatusFixed, scanner.SeverityCritical, "CVE-1")},
 	}}
-	r := Build(scans, Triage{}, fixedTime)
+	r := Build(scans, nil, Triage{}, fixedTime)
 	if len(r.Actionable) != 1 || r.Actionable[0].ContentID != "" {
 		t.Errorf("Actionable = %+v, want single entry with empty ContentID", r.Actionable)
 	}
@@ -411,7 +411,7 @@ func TestBuild_FromRealSample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	r := Build([]scanner.ImageScan{scan}, Triage{}, fixedTime)
+	r := Build([]scanner.ImageScan{scan}, nil, Triage{}, fixedTime)
 	if !r.HasIssues() {
 		t.Fatal("expected issues from sample")
 	}

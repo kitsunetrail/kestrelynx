@@ -28,7 +28,7 @@ func sampleReport() analyze.Report {
 		},
 		{Image: "broken:1", Err: errString("pull failed")},
 	}
-	return analyze.Build(scans, analyze.Triage{}, genTime)
+	return analyze.Build(scans, nil, analyze.Triage{}, genTime)
 }
 
 type errString string
@@ -98,7 +98,7 @@ func collapseReport() analyze.Report {
 	for _, n := range []string{"safe-a", "safe-b", "safe-c", "safe-d", "safe-e", "safe-f", "safe-g"} {
 		finds = append(finds, scanner.Finding{Image: "big:1", Class: scanner.ClassLang, Package: n, InstalledVer: "1.0.0", FixedVer: "1.2.0", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "H-" + n})
 	}
-	return analyze.Build([]scanner.ImageScan{{Image: "big:1", Findings: finds}}, analyze.Triage{}, genTime)
+	return analyze.Build([]scanner.ImageScan{{Image: "big:1", Findings: finds}}, nil, analyze.Triage{}, genTime)
 }
 
 func TestFormatSlackText_CollapsesLowRisk(t *testing.T) {
@@ -123,7 +123,7 @@ func TestFormatSlackText_CollapsesLowRisk(t *testing.T) {
 }
 
 func TestFormatSlackText_Clean(t *testing.T) {
-	clean := analyze.Build([]scanner.ImageScan{{Image: "ok:1"}}, analyze.Triage{}, genTime)
+	clean := analyze.Build([]scanner.ImageScan{{Image: "ok:1"}}, nil, analyze.Triage{}, genTime)
 	out := FormatSlackText(clean)
 	if !strings.Contains(out, "All clear") {
 		t.Errorf("clean report should say All clear, got:\n%s", out)
@@ -226,7 +226,7 @@ func TestFormatSlackDiffText_WeeklyFullReport(t *testing.T) {
 }
 
 func TestFormatSlackDiffText_AllResolvedCelebrates(t *testing.T) {
-	clean := analyze.Build([]scanner.ImageScan{{Image: "ok:1"}}, analyze.Triage{}, genTime)
+	clean := analyze.Build([]scanner.ImageScan{{Image: "ok:1"}}, nil, analyze.Triage{}, genTime)
 	st := state.State{Version: 1, Findings: map[string]state.Entry{
 		"ok:1\topenssl": {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-1"}},
 	}, EOSL: map[string]time.Time{}}
@@ -371,7 +371,7 @@ func TestBuildWebhookPayload_VulnTitle(t *testing.T) {
 			{Image: "demo:1.0", Class: scanner.ClassOS, Package: "gcc-8-base", InstalledVer: "8.3", FixedVer: "8.4", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-UNTITLED"},
 		},
 	}}
-	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	data, err := json.Marshal(BuildWebhookPayload(r, nil))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)

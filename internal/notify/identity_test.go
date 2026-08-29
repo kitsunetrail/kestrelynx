@@ -35,7 +35,7 @@ func TestFormatSlackDiffText_Replaced(t *testing.T) {
 	}}
 	// Both images are clean (no findings): a replacement on a clean image must
 	// still be reported.
-	r := analyze.Build([]scanner.ImageScan{{Image: "nginx:latest"}, {Image: "redis:7"}}, analyze.Triage{}, genTime)
+	r := analyze.Build([]scanner.ImageScan{{Image: "nginx:latest"}, {Image: "redis:7"}}, nil, analyze.Triage{}, genTime)
 	out := FormatSlackDiffText(r, d, false)
 
 	if !strings.Contains(out, "Image content changed (2)") {
@@ -70,7 +70,7 @@ func TestBuildWebhookPayload_Replaced(t *testing.T) {
 	d := state.Diff{Replaced: []state.ImageReplacement{
 		{Ref: "nginx:latest", PrevContentIDs: []string{prevA}, ContentIDs: []string{curA}},
 	}}
-	r := analyze.Build([]scanner.ImageScan{{Image: "nginx:latest"}}, analyze.Triage{}, genTime)
+	r := analyze.Build([]scanner.ImageScan{{Image: "nginx:latest"}}, nil, analyze.Triage{}, genTime)
 
 	data, err := json.Marshal(BuildWebhookPayload(r, &d))
 	if err != nil {
@@ -149,7 +149,7 @@ func TestBuildWebhookPayload_ImageIdentityFields(t *testing.T) {
 			},
 		},
 	}
-	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	data, err := json.Marshal(BuildWebhookPayload(r, nil))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -228,7 +228,7 @@ func TestIdentity_ReferenceFallback(t *testing.T) {
 			{Image: "legacy:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
 		},
 	}}
-	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 
 	out := FormatSlackText(r)
 	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference") {
@@ -278,7 +278,7 @@ func TestIdentity_MixedResolvedAndFallbackUnderSameRef(t *testing.T) {
 			{Image: "mixed:1", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-FALLBACK"},
 		}},
 	}
-	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 
 	// Sanity-check the premise: the reference's aggregate IdentityResolved is
 	// false because one of its two entities never resolved.
@@ -364,7 +364,7 @@ func TestFormatSlackText_TriageUnresolvedWarning(t *testing.T) {
 			{Image: "legacy:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "", Status: scanner.StatusAffected, Severity: scanner.SeverityHigh, VulnID: "CVE-K"},
 		},
 	}}
-	out := FormatSlackText(analyze.Build(scans, triageRules(map[string]analyze.Enrichment{"CVE-K": {KEV: true}}), genTime))
+	out := FormatSlackText(analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-K": {KEV: true}}), genTime))
 	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference") {
 		t.Errorf("expected the unresolved-identity warning in the triage act-now heading:\n%s", out)
 	}
@@ -379,7 +379,7 @@ func TestBuildThreadMessages_UnresolvedIdentityWarning(t *testing.T) {
 			{Image: "legacy:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
 		},
 	}}
-	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	out := strings.Join(BuildThreadMessages(r, nil, 0), "\n")
 	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference") {
 		t.Errorf("expected the unresolved-identity warning in the thread report:\n%s", out)
@@ -402,7 +402,7 @@ func TestFormatSlackText_AmbiguousDigest(t *testing.T) {
 			{Image: "nginx:latest", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-B"},
 		}},
 	}
-	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	out := FormatSlackText(r)
 
 	wantA := "nginx:latest (" + strings.Repeat("a", 12) + ")"
@@ -425,7 +425,7 @@ func TestFormatSlackText_SingleEntityNoDigestSuffix(t *testing.T) {
 			{Image: "app:1", Class: scanner.ClassOS, Package: "libc", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
 		},
 	}}
-	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	out := FormatSlackText(r)
 	if strings.Contains(out, strings.Repeat("c", 12)) {
 		t.Errorf("a single resolved entity must not show its digest:\n%s", out)
@@ -450,7 +450,7 @@ func TestFormatSlackDiffText_UnresolvedRefAnnotation_Changes(t *testing.T) {
 	scan := scanner.ImageScan{Image: "legacy:1", Findings: []scanner.Finding{
 		{Image: "legacy:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
 	}}
-	r := analyze.Build([]scanner.ImageScan{scan}, analyze.Triage{}, genTime)
+	r := analyze.Build([]scanner.ImageScan{scan}, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(state.State{}, r)
 	out := FormatSlackDiffText(r, d, false)
 
@@ -471,7 +471,7 @@ func TestFormatSlackDiffText_UnresolvedRefAnnotation_Resolved(t *testing.T) {
 	}, EOSL: map[string]time.Time{}}
 	// This cycle's scan of the same (still unresolved) reference is clean:
 	// the package resolved, but its identity is still never confirmed.
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, analyze.Triage{}, genTime)
+	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(prevState, r)
 	out := FormatSlackDiffText(r, d, false)
 
@@ -498,7 +498,7 @@ func TestFormatSlackDiffText_AmbiguousRefNoDigest(t *testing.T) {
 			{Image: "nginx:latest", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-B"},
 		}},
 	}
-	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(state.State{}, r)
 	out := FormatSlackDiffText(r, d, false)
 
@@ -522,7 +522,7 @@ func TestFormatSlackDiffText_AmbiguousRefNoDigest(t *testing.T) {
 // (reference-fallback) scan, must not silently say "All clear" with no
 // mention of the unconfirmed identity.
 func TestFormatSlackText_CleanUnresolvedStillWarns(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, analyze.Triage{}, genTime)
+	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, analyze.Triage{}, genTime)
 	if r.HasIssues() {
 		t.Fatal("test premise broken: expected a clean report with no issues")
 	}
@@ -539,7 +539,7 @@ func TestFormatSlackText_CleanUnresolvedStillWarns(t *testing.T) {
 // triage on, exercising FormatSlackText's shared (mode-agnostic) All-clear
 // short-circuit.
 func TestFormatSlackText_TriageCleanUnresolvedStillWarns(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, triageRules(nil), genTime)
+	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, triageRules(nil), genTime)
 	out := FormatSlackText(r)
 	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — legacy:1") {
 		t.Errorf("expected the unresolved-refs summary in triage mode too:\n%s", out)
@@ -549,7 +549,7 @@ func TestFormatSlackText_TriageCleanUnresolvedStillWarns(t *testing.T) {
 // TestFormatSlackDiffText_CleanUnresolvedStillWarns is the diff-mode
 // (heartbeat / "No changes") counterpart.
 func TestFormatSlackDiffText_CleanUnresolvedStillWarns(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, analyze.Triage{}, genTime)
+	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(state.State{}, r)
 	out := FormatSlackDiffText(r, d, false)
 	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — legacy:1") {
@@ -560,7 +560,7 @@ func TestFormatSlackDiffText_CleanUnresolvedStillWarns(t *testing.T) {
 // TestFormatSlackText_EOSLUnresolvedRef: an EOSL base-image warning for an
 // unresolved reference must carry the same annotation inline.
 func TestFormatSlackText_EOSLUnresolvedRef(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1", OSEOSL: true}}, analyze.Triage{}, genTime)
+	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1", OSEOSL: true}}, nil, analyze.Triage{}, genTime)
 	out := FormatSlackText(r)
 	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference — base OS is EOL") {
 		t.Errorf("expected the unresolved warning inline on the EOSL line:\n%s", out)
@@ -570,7 +570,7 @@ func TestFormatSlackText_EOSLUnresolvedRef(t *testing.T) {
 // TestFormatSlackText_ScanErrorUnresolvedRef: a scan-failure line for an
 // unresolved reference must carry the same annotation inline.
 func TestFormatSlackText_ScanErrorUnresolvedRef(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1", Err: errString("pull failed")}}, analyze.Triage{}, genTime)
+	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1", Err: errString("pull failed")}}, nil, analyze.Triage{}, genTime)
 	out := FormatSlackText(r)
 	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference — pull failed") {
 		t.Errorf("expected the unresolved warning inline on the scan-error line:\n%s", out)
@@ -586,7 +586,7 @@ func TestBuildThreadMessages_UnresolvedRefsSummarySection(t *testing.T) {
 			{Image: "legacy:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
 		},
 	}}
-	r := analyze.Build(scans, analyze.Triage{}, genTime)
+	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	out := strings.Join(BuildThreadMessages(r, nil, 0), "\n")
 	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — legacy:1") {
 		t.Errorf("expected the cross-cutting unresolved-refs summary section in the thread report:\n%s", out)

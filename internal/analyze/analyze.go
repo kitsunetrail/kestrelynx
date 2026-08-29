@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
@@ -75,6 +76,11 @@ type ImageFindings struct {
 	Image     string
 	ContentID string // ExpectedContentID (Docker-observed); empty only when unresolved
 	Packages  []PackageGroup
+	// Containers is the entity-level observation backing this section entry:
+	// every container whose (Ref, ContentID) matches (Image, ContentID)
+	// exactly, in the order containers was passed to Build. Nil when Build
+	// received no containers, or none matched this entity.
+	Containers []inventory.Container
 }
 
 // CriticalCount sums CRITICAL CVEs across the image's packages.
@@ -147,6 +153,10 @@ type ImageObservation struct {
 	// state must not silently drop the failed entity's findings just because
 	// a sibling entity under the same Ref succeeded.
 	PartialFailure bool
+	// Containers is the union of every container observed running Ref this
+	// cycle, across all of its entities (ContentIDs). Nil when Build received
+	// no containers, or none matched this reference.
+	Containers []inventory.Container
 }
 
 // Report is the triaged output, ready for the notify layer. Sections are
@@ -165,6 +175,10 @@ type Report struct {
 	Triage      bool        // priorities were assigned (renderers use ByPriority)
 	Intel       IntelStatus // freshness of the intel behind the priorities
 	GeneratedAt time.Time
+	// Environment identifies the runtime instance this cycle observed. Build
+	// never sets it (it has no scan-derived meaning to interpret); the caller
+	// copies it in from config/composition-root state.
+	Environment inventory.Environment
 }
 
 // AffectedImageCount is the number of distinct images with any issue (findings
@@ -231,7 +245,7 @@ type obsAcc struct {
 // Build triages and aggregates scan results into a Report. tr supplies the
 // exploitation intel and thresholds for priority assignment (zero value =
 // triage off, Phase 1 behavior). now is injected for deterministic output.
-func Build(scans []scanner.ImageScan, tr Triage, now time.Time) Report {
+func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triage, now time.Time) Report {
 	r := Report{GeneratedAt: now, ImagesTotal: len(scans), Triage: tr.Enabled, Intel: tr.Intel}
 
 	// status -> (ref, contentID) -> package -> accumulator
@@ -315,17 +329,46 @@ func Build(scans []scanner.ImageScan, tr Triage, now time.Time) Report {
 	}
 
 	sort.Strings(r.EOSLImages)
-	r.Actionable = buildSection(byStatus[scanner.StatusFixed], tr)
-	r.Watch = buildSection(byStatus[scanner.StatusAffected], tr)
-	r.WontFix = buildSection(byStatus[scanner.StatusWontFix], tr)
-	r.Images = buildInventory(obs)
+	byKey, byRef := indexContainers(containers)
+	r.Actionable = buildSection(byStatus[scanner.StatusFixed], tr, byKey)
+	r.Watch = buildSection(byStatus[scanner.StatusAffected], tr, byKey)
+	r.WontFix = buildSection(byStatus[scanner.StatusWontFix], tr, byKey)
+	r.Images = buildInventory(obs, byRef)
 	return r
+}
+
+// indexContainers groups containers for attachment to the report: byKey for
+// the entity-level join (an ImageFindings entry's exact (Image, ContentID)),
+// byRef for the reference-level union (every ImageObservation entity under
+// Ref). imgKey doubles as the entity join key here because a container whose
+// identity did not resolve has ContentID == "", which collapses the join to
+// ref-only for exactly those containers — matching the unresolved
+// ImageFindings entries (ContentID == "") they correspond to, and no others.
+// A container with an empty Ref is never scanned (DistinctImages excludes
+// it) and so never joins anything here either. Containers is nil when the
+// caller passed none, and lookups on a nil map simply return nil, so every
+// attached field stays nil and existing output is unaffected.
+func indexContainers(containers []inventory.Container) (byKey map[imgKey][]inventory.Container, byRef map[string][]inventory.Container) {
+	if len(containers) == 0 {
+		return nil, nil
+	}
+	byKey = map[imgKey][]inventory.Container{}
+	byRef = map[string][]inventory.Container{}
+	for _, c := range containers {
+		if c.Image.Ref == "" {
+			continue
+		}
+		k := imgKey{ref: c.Image.Ref, contentID: c.Image.ContentID}
+		byKey[k] = append(byKey[k], c)
+		byRef[c.Image.Ref] = append(byRef[c.Image.Ref], c)
+	}
+	return byKey, byRef
 }
 
 // buildInventory finalizes the per-reference identity inventory that backs
 // State.Images and the partial-failure rule: every scanned reference appears
 // exactly once, independent of whether it produced any findings.
-func buildInventory(obs map[string]*obsAcc) []ImageObservation {
+func buildInventory(obs map[string]*obsAcc, byRef map[string][]inventory.Container) []ImageObservation {
 	if len(obs) == 0 {
 		return nil
 	}
@@ -352,6 +395,7 @@ func buildInventory(obs map[string]*obsAcc) []ImageObservation {
 			IdentityResolved: a.total > 0 && !a.anyUnresolved,
 			ScanFailed:       a.total > 0 && a.failed == a.total,
 			PartialFailure:   a.failed > 0 && a.failed < a.total,
+			Containers:       byRef[ref],
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Ref < out[j].Ref })
@@ -359,7 +403,7 @@ func buildInventory(obs map[string]*obsAcc) []ImageObservation {
 }
 
 // buildSection finalizes one status bucket into sorted ImageFindings.
-func buildSection(images map[imgKey]map[string]*pkgAcc, tr Triage) []ImageFindings {
+func buildSection(images map[imgKey]map[string]*pkgAcc, tr Triage, byKey map[imgKey][]inventory.Container) []ImageFindings {
 	if len(images) == 0 {
 		return nil
 	}
@@ -370,7 +414,7 @@ func buildSection(images map[imgKey]map[string]*pkgAcc, tr Triage) []ImageFindin
 			groups = append(groups, finalize(acc, tr))
 		}
 		sortPackages(groups)
-		out = append(out, ImageFindings{Image: k.ref, ContentID: k.contentID, Packages: groups})
+		out = append(out, ImageFindings{Image: k.ref, ContentID: k.contentID, Packages: groups, Containers: byKey[k]})
 	}
 	sortImages(out)
 	return out

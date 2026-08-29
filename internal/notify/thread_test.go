@@ -88,7 +88,7 @@ func TestWriteThreadDetail_TitleLine(t *testing.T) {
 			{Image: "app:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-B", Title: "libx: secondary vulnerability title"},
 		},
 	}}
-	r := analyze.Build(scans, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
+	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
 	g := findPkgGroup(t, r.Actionable, "app:1", "libx")
 
 	var b strings.Builder
@@ -112,7 +112,7 @@ func TestWriteThreadDetail_NoTitleLineWhenEmpty(t *testing.T) {
 			{Image: "app:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-A"},
 		},
 	}}
-	r := analyze.Build(scans, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
+	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
 	g := findPkgGroup(t, r.Actionable, "app:1", "libx")
 
 	var b strings.Builder
@@ -143,7 +143,7 @@ func TestBuildThreadMessages_NilFirstSeen(t *testing.T) {
 }
 
 func TestBuildThreadMessages_NothingOpen(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "clean:1"}}, analyze.Triage{}, genTime)
+	r := analyze.Build([]scanner.ImageScan{{Image: "clean:1"}}, nil, analyze.Triage{}, genTime)
 	if msgs := BuildThreadMessages(r, nil, 0); msgs != nil {
 		t.Errorf("no open findings must skip the thread (edge case 4), got %d message(s)", len(msgs))
 	}
@@ -158,7 +158,7 @@ func TestBuildThreadMessages_AlsoIDs(t *testing.T) {
 			{Image: "app:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-C"},
 		},
 	}}
-	r := analyze.Build(scans, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
+	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
 	out := strings.Join(BuildThreadMessages(r, nil, 0), "\n")
 	if !strings.Contains(out, "also: CVE-B, CVE-C") {
 		t.Errorf("secondary CVE ids must be listed:\n%s", out)
@@ -183,7 +183,7 @@ func wideReport(images int) analyze.Report {
 		}})
 		enrich[id] = analyze.Enrichment{KEV: true}
 	}
-	return analyze.Build(scans, triageRules(enrich), genTime)
+	return analyze.Build(scans, nil, triageRules(enrich), genTime)
 }
 
 func TestBuildThreadMessages_SplitsAtLimit(t *testing.T) {

@@ -60,8 +60,14 @@ type Runner struct {
 	ActNowEPSS      float64      // triage thresholds (config.Triage)
 	WatchEPSS       float64
 	DiscussionLinks bool // look up HN discussions for act-now CVEs
-	Now             func() time.Time
-	Log             *slog.Logger
+	// Environment identifies the runtime instance this Runner scans. It is
+	// stamped onto every Report (RunOnce) and, via cmd/kestrelynx wiring,
+	// shares its Name with the StateStore so state and notifications agree
+	// on which environment they describe. The zero value is the unnamed
+	// default environment.
+	Environment inventory.Environment
+	Now         func() time.Time
+	Log         *slog.Logger
 }
 
 // NoFullReport disables the weekly full report in diff mode.
@@ -95,7 +101,8 @@ func (r Runner) RunOnce(ctx context.Context) error {
 
 	scans := r.scanAll(ctx, images)
 
-	report := analyze.Build(scans, r.triage(ctx, scans), r.now())
+	report := analyze.Build(scans, containers, r.triage(ctx, scans), r.now())
+	report.Environment = r.Environment
 	if r.Store == nil {
 		return r.sendFull(ctx, report)
 	}

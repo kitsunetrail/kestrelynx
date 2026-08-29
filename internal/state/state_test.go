@@ -16,7 +16,7 @@ var (
 )
 
 func report(t time.Time, scans ...scanner.ImageScan) analyze.Report {
-	return analyze.Build(scans, analyze.Triage{}, t)
+	return analyze.Build(scans, nil, analyze.Triage{}, t)
 }
 
 func finding(image, pkg, vulnID string, status scanner.Status) scanner.Finding {
@@ -559,7 +559,7 @@ func triaged(t time.Time, enrich map[string]analyze.Enrichment, scans ...scanner
 		Enabled: true, ActNowEPSS: 0.10, WatchEPSS: 0.01,
 		Enrich: enrich, Intel: analyze.IntelStatus{KEVOK: true, EPSSOK: true},
 	}
-	return analyze.Build(scans, tr, t)
+	return analyze.Build(scans, nil, tr, t)
 }
 
 func TestCompute_EscalationWhenCVEEntersKEV(t *testing.T) {

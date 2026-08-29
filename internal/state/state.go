@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
@@ -62,6 +63,15 @@ type ImageMeta struct {
 	LastSeen        time.Time `json:"last_seen"`
 }
 
+// EnvironmentRecord is the persisted self-description of which environment a
+// state file belongs to. It is purely descriptive: Compute and the diff
+// rules never read it, so a rename never changes a key or an Entry value
+// (docs/development/environment-workload-model.md).
+type EnvironmentRecord struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
 // State is everything remembered between scan cycles.
 //
 // LastFullReport was added for the Slack thread report without a version
@@ -71,12 +81,22 @@ type ImageMeta struct {
 // Images was added for the Phase 2 identity model without a version bump:
 // older state decodes with a nil map, and the first cycle on the new binary
 // simply records the current identity information as a fresh baseline.
+//
+// Environment was added for the Environment/Workload model without a
+// version bump, for the same reason as Images: older state decodes with a
+// nil pointer, and Save simply starts recording the current value.
 type State struct {
 	Version        int                  `json:"version"`
 	Findings       map[string]Entry     `json:"findings"`         // keyed by image \t package
 	EOSL           map[string]time.Time `json:"eosl"`             // image -> first seen as EOL
 	Images         map[string]ImageMeta `json:"images,omitempty"` // keyed by reference
 	LastFullReport *ReportRef           `json:"last_full_report,omitempty"`
+	// Environment records which environment this file belongs to, for
+	// self-description and diagnostics only. It is nil for the unnamed
+	// default environment (FileStore.Env.Name == "") so that an unconfigured
+	// user's state file stays byte-for-byte identical to the pre-Environment
+	// format; a named environment gets it set on every Save.
+	Environment *EnvironmentRecord `json:"environment,omitempty"`
 }
 
 // ReportRef locates the Slack message whose thread carries the most recent
@@ -134,6 +154,11 @@ func (s State) FirstSeen(image, pkg string) (time.Time, bool) {
 // FileStore persists State as a single JSON file, written atomically.
 type FileStore struct {
 	Path string
+	// Env is the environment this store's state file belongs to. It is
+	// stamped onto State.Environment on every Save (see Save) but never read
+	// back by Load/Compute — the key space and diff rules do not depend on
+	// it (docs/development/environment-workload-model.md).
+	Env inventory.Environment
 }
 
 // Load reads the state file. A missing file or a version mismatch yields empty
@@ -168,8 +193,17 @@ func (s FileStore) Load() (State, error) {
 }
 
 // Save writes the state atomically (temp file + rename) so a crash mid-write
-// never leaves a truncated file behind.
+// never leaves a truncated file behind. The unnamed default environment
+// (s.Env.Name == "") leaves st.Environment nil, so an unconfigured user's
+// state file is written byte-for-byte identical to the pre-Environment
+// format — omitempty then drops the field entirely rather than emitting it
+// with an empty name.
 func (s FileStore) Save(st State) error {
+	if s.Env.Name != "" {
+		st.Environment = &EnvironmentRecord{Name: s.Env.Name, Kind: string(s.Env.Kind)}
+	} else {
+		st.Environment = nil
+	}
 	if err := os.MkdirAll(filepath.Dir(s.Path), 0o755); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/config"
 	"github.com/kitsunetrail/kestrelynx/internal/docker"
 	"github.com/kitsunetrail/kestrelynx/internal/intel"
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/notify"
 	"github.com/kitsunetrail/kestrelynx/internal/runner"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
@@ -44,17 +45,23 @@ func main() {
 	dockerClient := docker.New(cfg.Docker.Socket)
 	dockerClient.Log = log
 
+	// Kind identifies the Runtime Adapter this composition root wired up; it
+	// is never config-driven (only Name is), since Docker is the only
+	// adapter selected above.
+	env := inventory.Environment{Name: cfg.Environment.Name, Kind: inventory.KindDocker}
+
 	r := runner.Runner{
 		Lister:        dockerClient,
 		Scanner:       scanner.Trivy{Severity: cfg.Scan.Severity},
 		Notifier:      notifier,
 		NotifyOnClean: cfg.Notify.NotifyOnClean,
 		FullReportDay: runner.NoFullReport,
+		Environment:   env,
 		Now:           time.Now,
 		Log:           log,
 	}
 	if cfg.Notify.Mode == "diff" {
-		r.Store = state.FileStore{Path: cfg.State.Path}
+		r.Store = state.FileStore{Path: cfg.State.Path, Env: env}
 		if day, ok := cfg.Notify.FullReportWeekday(); ok {
 			r.FullReportDay = day
 		}

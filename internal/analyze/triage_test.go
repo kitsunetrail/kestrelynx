@@ -3,6 +3,7 @@ package analyze
 import (
 	"testing"
 
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
@@ -79,7 +80,7 @@ func TestBuild_AssignsGroupPriorityAndEvidence(t *testing.T) {
 		"CVE-KEV":   {KEV: true, Ransomware: true, EPSS: 0.94, EPSSKnown: true},
 		"CVE-QUIET": {EPSS: 0.003, EPSSKnown: true},
 	}
-	r := Build(scans, tr(enrich), fixedTime)
+	r := Build(scans, nil, tr(enrich), fixedTime)
 	if !r.Triage {
 		t.Fatal("Report.Triage = false, want true")
 	}
@@ -118,7 +119,7 @@ func TestByPriority_RegroupsAcrossStatusSections(t *testing.T) {
 		},
 	}
 	enrich := map[string]Enrichment{"CVE-KEV": {KEV: true}}
-	r := Build(scans, tr(enrich), fixedTime)
+	r := Build(scans, nil, tr(enrich), fixedTime)
 	pv := r.ByPriority()
 
 	if GroupCount(pv.ActNow) != 1 || pv.ActNow[0].Image != "app:1" || pv.ActNow[0].Packages[0].Package != "openssl" {
@@ -149,7 +150,7 @@ func TestByPriority_PreservesContentIDForSingleEntity(t *testing.T) {
 			f("app:1", scanner.ClassOS, "openssl", "3.0.7", "3.0.11", scanner.StatusFixed, scanner.SeverityCritical, "CVE-KEV")),
 	}
 	enrich := map[string]Enrichment{"CVE-KEV": {KEV: true}}
-	r := Build(scans, tr(enrich), fixedTime)
+	r := Build(scans, nil, tr(enrich), fixedTime)
 	pv := r.ByPriority()
 
 	if len(pv.ActNow) != 1 || pv.ActNow[0].ContentID != contentA {
@@ -169,7 +170,7 @@ func TestByPriority_AmbiguousReferenceStaysSplit(t *testing.T) {
 			f("app:1", scanner.ClassOS, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityCritical, "CVE-B")),
 	}
 	enrich := map[string]Enrichment{"CVE-A": {KEV: true}, "CVE-B": {KEV: true}}
-	r := Build(scans, tr(enrich), fixedTime)
+	r := Build(scans, nil, tr(enrich), fixedTime)
 	pv := r.ByPriority()
 
 	if len(pv.ActNow) != 2 {
@@ -187,6 +188,43 @@ func TestByPriority_AmbiguousReferenceStaysSplit(t *testing.T) {
 	}
 }
 
+// TestByPriority_AmbiguousReferencePreservesOwnContainers guards the same
+// regrouping join ByPriority does for ContentID (see
+// TestByPriority_AmbiguousReferenceStaysSplit) but for Containers: each of
+// the two entities under the Ambiguous ref must keep only the containers
+// running its own ContentID, not the sibling entity's.
+func TestByPriority_AmbiguousReferencePreservesOwnContainers(t *testing.T) {
+	scans := []scanner.ImageScan{
+		resolvedScan("app:1", contentA, nil,
+			f("app:1", scanner.ClassOS, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityCritical, "CVE-A")),
+		resolvedScan("app:1", contentB, nil,
+			f("app:1", scanner.ClassOS, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityCritical, "CVE-B")),
+	}
+	containers := []inventory.Container{
+		{Name: "app-a", Image: inventory.RunningImage{Ref: "app:1", ContentID: contentA}},
+		{Name: "app-b", Image: inventory.RunningImage{Ref: "app:1", ContentID: contentB}},
+	}
+	enrich := map[string]Enrichment{"CVE-A": {KEV: true}, "CVE-B": {KEV: true}}
+	r := Build(scans, containers, tr(enrich), fixedTime)
+	pv := r.ByPriority()
+
+	if len(pv.ActNow) != 2 {
+		t.Fatalf("ActNow = %+v, want two separate entries (one per ContentID)", pv.ActNow)
+	}
+	byContentID := map[string]ImageFindings{}
+	for _, img := range pv.ActNow {
+		byContentID[img.ContentID] = img
+	}
+	entA, ok := byContentID[contentA]
+	if !ok || len(entA.Containers) != 1 || entA.Containers[0].Name != "app-a" {
+		t.Errorf("contentA entry Containers = %+v, want exactly [app-a]", entA.Containers)
+	}
+	entB, ok := byContentID[contentB]
+	if !ok || len(entB.Containers) != 1 || entB.Containers[0].Name != "app-b" {
+		t.Errorf("contentB entry Containers = %+v, want exactly [app-b]", entB.Containers)
+	}
+}
+
 func TestBuild_TriageDisabledLeavesNoPriorities(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "app:1",
@@ -194,7 +232,7 @@ func TestBuild_TriageDisabledLeavesNoPriorities(t *testing.T) {
 			f("app:1", scanner.ClassOS, "openssl", "3.0.7", "3.0.11", scanner.StatusFixed, scanner.SeverityCritical, "CVE-X"),
 		},
 	}}
-	r := Build(scans, Triage{}, fixedTime)
+	r := Build(scans, nil, Triage{}, fixedTime)
 	if r.Triage {
 		t.Error("Report.Triage = true, want false")
 	}
@@ -219,7 +257,7 @@ func TestBuild_AttachesRefs(t *testing.T) {
 	rules.Refs = map[string][]Ref{
 		"CVE-KEV": {{Kind: "discussion", Label: "HN (166 pts)", URL: "https://news.ycombinator.com/item?id=1"}},
 	}
-	r := Build(scans, rules, fixedTime)
+	r := Build(scans, nil, rules, fixedTime)
 	top := pkgGroup(t, r.Actionable, "nginx:1", "libh2").TopVuln()
 
 	if top.URL != "https://avd.aquasec.com/nvd/cve-kev" {

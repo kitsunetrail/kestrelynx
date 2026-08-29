@@ -7,6 +7,7 @@ package analyze
 import (
 	"sort"
 
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
@@ -204,9 +205,16 @@ func GroupCount(imgs []ImageFindings) int {
 // undoing the image-identity aggregation this view is built from.
 func (r Report) ByPriority() PriorityView {
 	buckets := map[Priority]map[imgKey][]PackageGroup{}
+	// Containers lives per entity (imgKey), not per package group, so it is
+	// captured once alongside the bucketing loop rather than threaded through
+	// PackageGroup. Every status section's ImageFindings for the same imgKey
+	// carries the same Containers value (they all came from the same
+	// analyze.Build call), so re-assigning it on each sighting is harmless.
+	containers := map[imgKey][]inventory.Container{}
 	for _, section := range [][]ImageFindings{r.Actionable, r.Watch, r.WontFix} {
 		for _, img := range section {
 			k := imgKey{ref: img.Image, contentID: img.ContentID}
+			containers[k] = img.Containers
 			for _, g := range img.Packages {
 				m := buckets[g.Priority]
 				if m == nil {
@@ -218,21 +226,21 @@ func (r Report) ByPriority() PriorityView {
 		}
 	}
 	return PriorityView{
-		ActNow: bucketSection(buckets[PriorityActNow]),
-		Watch:  bucketSection(buckets[PriorityWatch]),
-		Low:    bucketSection(buckets[PriorityLow]),
+		ActNow: bucketSection(buckets[PriorityActNow], containers),
+		Watch:  bucketSection(buckets[PriorityWatch], containers),
+		Low:    bucketSection(buckets[PriorityLow], containers),
 	}
 }
 
 // bucketSection finalizes one priority bucket into sorted ImageFindings.
-func bucketSection(images map[imgKey][]PackageGroup) []ImageFindings {
+func bucketSection(images map[imgKey][]PackageGroup, containers map[imgKey][]inventory.Container) []ImageFindings {
 	if len(images) == 0 {
 		return nil
 	}
 	out := make([]ImageFindings, 0, len(images))
 	for k, groups := range images {
 		sortPackages(groups)
-		out = append(out, ImageFindings{Image: k.ref, ContentID: k.contentID, Packages: groups})
+		out = append(out, ImageFindings{Image: k.ref, ContentID: k.contentID, Packages: groups, Containers: containers[k]})
 	}
 	sortImages(out)
 	return out

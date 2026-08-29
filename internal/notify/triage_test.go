@@ -43,7 +43,7 @@ func triageEnrich() map[string]analyze.Enrichment {
 }
 
 func triageReport() analyze.Report {
-	return analyze.Build(triageScans(), triageRules(triageEnrich()), genTime)
+	return analyze.Build(triageScans(), nil, triageRules(triageEnrich()), genTime)
 }
 
 func TestFormatSlackText_TriageLayout(t *testing.T) {
@@ -91,7 +91,7 @@ func TestFormatSlackText_TriageNoFixActNow(t *testing.T) {
 			{Image: "app:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "", Status: scanner.StatusAffected, Severity: scanner.SeverityHigh, VulnID: "CVE-K"},
 		},
 	}}
-	out := FormatSlackText(analyze.Build(scans, triageRules(map[string]analyze.Enrichment{"CVE-K": {KEV: true}}), genTime))
+	out := FormatSlackText(analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-K": {KEV: true}}), genTime))
 	if !strings.Contains(out, "*🚨 Act now (1) — exploited or likely to be*") {
 		t.Errorf("KEV without fix must stay act now:\n%s", out)
 	}
@@ -106,7 +106,7 @@ func TestFormatSlackText_TriageNoFixActNow(t *testing.T) {
 func TestFormatSlackText_TriageDegraded(t *testing.T) {
 	tr := triageRules(nil)
 	tr.Intel = analyze.IntelStatus{} // no usable intel
-	out := FormatSlackText(analyze.Build(triageScans(), tr, genTime))
+	out := FormatSlackText(analyze.Build(triageScans(), nil, tr, genTime))
 
 	if !strings.Contains(out, "⚠️ Vulnerability intel (KEV/EPSS) unavailable") {
 		t.Errorf("degraded mode must be announced:\n%s", out)
@@ -122,7 +122,7 @@ func TestFormatSlackText_TriageDegraded(t *testing.T) {
 func TestFormatSlackText_TriageStaleNote(t *testing.T) {
 	tr := triageRules(triageEnrich())
 	tr.Intel.StaleDays = 3
-	out := FormatSlackText(analyze.Build(triageScans(), tr, genTime))
+	out := FormatSlackText(analyze.Build(triageScans(), nil, tr, genTime))
 	if !strings.Contains(out, "Intel data is 3 day(s) old") {
 		t.Errorf("stale intel should be annotated:\n%s", out)
 	}
@@ -132,8 +132,8 @@ func TestFormatSlackDiffText_TriageEscalation(t *testing.T) {
 	scan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
 		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-1"},
 	}}
-	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{scan}, triageRules(nil), genTime))
-	r := analyze.Build([]scanner.ImageScan{scan}, triageRules(map[string]analyze.Enrichment{"CVE-1": {KEV: true}}), genTime.AddDate(0, 0, 1))
+	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(nil), genTime))
+	r := analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(map[string]analyze.Enrichment{"CVE-1": {KEV: true}}), genTime.AddDate(0, 0, 1))
 	d, _ := state.Compute(st, r)
 
 	out := FormatSlackDiffText(r, d, false)
@@ -152,9 +152,9 @@ func TestFormatSlackDiffText_TriageHeartbeatAgesUrgentOnly(t *testing.T) {
 	lowScan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
 		{Image: "web:1", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-L"},
 	}}
-	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{lowScan}, triageRules(nil), genTime))
+	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{lowScan}, nil, triageRules(nil), genTime))
 	// 30 days later, still open, still low: no red aging in the heartbeat.
-	r := analyze.Build([]scanner.ImageScan{lowScan}, triageRules(nil), genTime.AddDate(0, 0, 30))
+	r := analyze.Build([]scanner.ImageScan{lowScan}, nil, triageRules(nil), genTime.AddDate(0, 0, 30))
 	d, _ := state.Compute(st, r)
 
 	out := FormatSlackDiffText(r, d, false)
@@ -174,9 +174,9 @@ func TestFormatSlackDiffText_TriageHeartbeatAgeWording(t *testing.T) {
 		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-W"},
 	}}
 	enrich := map[string]analyze.Enrichment{"CVE-W": {EPSS: 0.03, EPSSKnown: true}}
-	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{watchScan}, triageRules(enrich), genTime))
+	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{watchScan}, nil, triageRules(enrich), genTime))
 	// 20 days later, still open, still watch: aged past staleDays, red.
-	r := analyze.Build([]scanner.ImageScan{watchScan}, triageRules(enrich), genTime.AddDate(0, 0, 20))
+	r := analyze.Build([]scanner.ImageScan{watchScan}, nil, triageRules(enrich), genTime.AddDate(0, 0, 20))
 	d, _ := state.Compute(st, r)
 
 	out := FormatSlackDiffText(r, d, false)
@@ -263,7 +263,7 @@ func TestFormatSlackText_TriageRefsLine(t *testing.T) {
 	rules.Refs = map[string][]analyze.Ref{
 		"CVE-KEV": {{Kind: "discussion", Label: "HN (166 pts)", URL: "https://news.ycombinator.com/item?id=1"}},
 	}
-	out := FormatSlackText(analyze.Build(scans, rules, genTime))
+	out := FormatSlackText(analyze.Build(scans, nil, rules, genTime))
 
 	if !strings.Contains(out, "📎 <https://avd.aquasec.com/nvd/cve-kev|advisory> · <https://vendor.test/advisory|vendor advisory> · <https://news.ycombinator.com/item?id=1|💬 HN (166 pts)>") {
 		t.Errorf("expected the refs line with Slack link syntax:\n%s", out)
@@ -280,7 +280,7 @@ func TestBuildWebhookPayload_Refs(t *testing.T) {
 		},
 	}}
 	rules := triageRules(map[string]analyze.Enrichment{"CVE-KEV": {KEV: true, KEVNoteURL: "https://vendor.test/advisory"}})
-	r := analyze.Build(scans, rules, genTime)
+	r := analyze.Build(scans, nil, rules, genTime)
 	data, err := json.Marshal(BuildWebhookPayload(r, nil))
 	if err != nil {
 		t.Fatal(err)

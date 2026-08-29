@@ -106,6 +106,38 @@ func TestRunOnce_NotifiesWhenIssuesFound(t *testing.T) {
 	}
 }
 
+// TestRunOnce_SetsReportEnvironmentAndAttachesContainers guards the
+// Environment/Workload model's runner wiring: Runner.Environment must land
+// on Report.Environment untouched, and the containers RunningContainers
+// returns must reach analyze.Build so findings carry their observed
+// container back to the caller.
+func TestRunOnce_SetsReportEnvironmentAndAttachesContainers(t *testing.T) {
+	notif := &fakeNotifier{}
+	env := inventory.Environment{Name: "prod", Kind: inventory.KindDocker}
+	r := Runner{
+		Lister: fakeLister{containers: []inventory.Container{
+			{Name: "web-1", Image: inventory.RunningImage{Ref: "vuln:1"}},
+		}},
+		Scanner: &fakeScanner{byImage: map[string]scanner.ImageScan{
+			"vuln:1": {Image: "vuln:1", Findings: []scanner.Finding{
+				{Image: "vuln:1", Class: scanner.ClassOS, Package: "libc", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
+			}},
+		}},
+		Notifier:    notif,
+		Environment: env,
+		Now:         clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if notif.msg.Report.Environment != env {
+		t.Errorf("Report.Environment = %+v, want %+v", notif.msg.Report.Environment, env)
+	}
+	if len(notif.msg.Report.Actionable) != 1 || len(notif.msg.Report.Actionable[0].Containers) != 1 || notif.msg.Report.Actionable[0].Containers[0].Name != "web-1" {
+		t.Errorf("Actionable[0].Containers = %+v, want [web-1] threaded through from Lister", notif.msg.Report.Actionable)
+	}
+}
+
 func TestRunOnce_SkipsNotificationWhenCleanByDefault(t *testing.T) {
 	notif := &fakeNotifier{}
 	r := Runner{

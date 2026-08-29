@@ -41,8 +41,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	dockerClient := docker.New(cfg.Docker.Socket)
+	dockerClient.Log = log
+
 	r := runner.Runner{
-		Lister:        docker.New(cfg.Docker.Socket),
+		Lister:        dockerClient,
 		Scanner:       scanner.Trivy{Severity: cfg.Scan.Severity},
 		Notifier:      notifier,
 		NotifyOnClean: cfg.Notify.NotifyOnClean,

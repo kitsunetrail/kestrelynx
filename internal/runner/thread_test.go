@@ -27,7 +27,7 @@ func (f *threadNotifier) Send(ctx context.Context, m notify.Message) error {
 
 func diffRunner(notif Notifier, store StateStore) Runner {
 	return Runner{
-		Lister:        fakeLister{images: refs("vuln:1")},
+		Lister:        fakeLister{containers: refs("vuln:1")},
 		Scanner:       vulnScan(),
 		Notifier:      notif,
 		Store:         store,
@@ -96,7 +96,7 @@ func TestRunOnce_DiffMode_SkippedNotificationPreservesRef(t *testing.T) {
 	notif := &fakeNotifier{}
 	store := &fakeStore{st: state.State{Version: 1, LastFullReport: &ref}}
 	r := Runner{
-		Lister:        fakeLister{images: refs("clean:1")},
+		Lister:        fakeLister{containers: refs("clean:1")},
 		Scanner:       &fakeScanner{},
 		Notifier:      notif,
 		Store:         store,

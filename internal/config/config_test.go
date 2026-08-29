@@ -58,6 +58,44 @@ state:
 	}
 }
 
+func TestParse_EnvironmentName(t *testing.T) {
+	c, err := Parse([]byte(minimal + "\nenvironment:\n  name: \"prod-vps\"\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if c.Environment.Name != "prod-vps" {
+		t.Errorf("Environment.Name = %q, want prod-vps", c.Environment.Name)
+	}
+}
+
+func TestParse_EnvironmentNameEmptyByDefault(t *testing.T) {
+	c, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if c.Environment.Name != "" {
+		t.Errorf("default Environment.Name = %q, want empty (unnamed default environment)", c.Environment.Name)
+	}
+}
+
+func TestParse_InvalidEnvironmentNameRejected(t *testing.T) {
+	invalid := []string{
+		"Prod",                  // uppercase
+		"prod.vps",              // dot
+		"prod_vps",              // underscore
+		"prod\x1fvps",           // US control character
+		strings.Repeat("a", 64), // over 63 bytes
+	}
+	for _, name := range invalid {
+		t.Run(name, func(t *testing.T) {
+			_, err := Parse([]byte(minimal + "\nenvironment:\n  name: \"" + name + "\"\n"))
+			if err == nil {
+				t.Fatalf("Parse: expected error for invalid environment.name %q", name)
+			}
+		})
+	}
+}
+
 func TestParse_FullReportDayNever(t *testing.T) {
 	c, err := Parse([]byte(`
 notify:

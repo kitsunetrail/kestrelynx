@@ -39,6 +39,15 @@ docker:
   # Path to docker.sock. KestreLynx only performs GET /containers/json.
   socket: "/var/run/docker.sock"
 
+environment:
+  # Stable, human-chosen name for the environment this instance watches
+  # (e.g. "prod", "prod-vps"). Shown in the Slack header and included in the
+  # generic webhook payload, so multiple KestreLynx instances (or channels)
+  # can be told apart. Lowercase alphanumerics and hyphens only, 1-63 bytes,
+  # must start and end with an alphanumeric. Leave empty to use the unnamed
+  # default environment (current single-host behavior, unchanged).
+  name: ""
+
 state:
   # Where diff mode remembers previous scans (JSON, one small file). Mount a
   # volume here so first-seen dates survive container recreation.

@@ -2,9 +2,13 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 )
 
 func newTestClient(srv *httptest.Server) *Client {
@@ -12,158 +16,89 @@ func newTestClient(srv *httptest.Server) *Client {
 }
 
 // validID1 / validID2 are two distinct, well-formed OCI image config digests
-// used across the identity tests below.
+// used across the tests below.
 const (
 	validID1 = "sha256:0000000000000000000000000000000000000000000000000000000000000001"
 	validID2 = "sha256:0000000000000000000000000000000000000000000000000000000000000002"
 )
 
-func TestRunningImages_DedupesAndSorts(t *testing.T) {
+// rawContainer mirrors the wire shape of one /containers/json entry, for
+// building test fixtures.
+type rawContainer struct {
+	Id      string            `json:"Id"`
+	Image   string            `json:"Image"`
+	ImageID string            `json:"ImageID"`
+	Names   []string          `json:"Names"`
+	Labels  map[string]string `json:"Labels"`
+}
+
+func composeLabels(project, service string) map[string]string {
+	return map[string]string{
+		composeProjectLabel: project,
+		composeServiceLabel: service,
+	}
+}
+
+// serveContainers starts an httptest server that returns raw as the
+// /containers/json response body, and fails the test if any other path is
+// requested.
+func serveContainers(t *testing.T, raw []rawContainer) *httptest.Server {
+	t.Helper()
+	body, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("marshal fixture: %v", err)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/containers/json" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`[
-			{"Id":"a","Image":"nginx:1.25","ImageID":"` + validID1 + `","Names":["/web1"]},
-			{"Id":"b","Image":"nginx:1.25","ImageID":"` + validID1 + `","Names":["/web2"]},
-			{"Id":"c","Image":"redis:7.0","ImageID":"` + validID2 + `","Names":["/cache"]},
-			{"Id":"d","Image":"postgres:16","ImageID":"` + validID2 + `","Names":["/db"]}
-		]`))
+		w.Write(body)
 	}))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
+	return srv
+}
 
-	imgs, err := newTestClient(srv).RunningImages(context.Background())
+func TestRunningContainers_Empty(t *testing.T) {
+	srv := serveContainers(t, nil)
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
 	if err != nil {
-		t.Fatalf("RunningImages: %v", err)
+		t.Fatalf("RunningContainers: %v", err)
 	}
-	want := []RunningImage{
-		{Ref: "nginx:1.25", ContentID: validID1},
-		{Ref: "postgres:16", ContentID: validID2},
-		{Ref: "redis:7.0", ContentID: validID2},
-	}
-	if len(imgs) != len(want) {
-		t.Fatalf("got %+v, want %+v", imgs, want)
-	}
-	for i := range want {
-		if imgs[i] != want[i] {
-			t.Errorf("imgs[%d] = %+v, want %+v (sorted unique by Ref then ContentID)", i, imgs[i], want[i])
-		}
+	if len(cs) != 0 {
+		t.Errorf("got %v, want empty", cs)
 	}
 }
 
-func TestRunningImages_Empty(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
-
-	imgs, err := newTestClient(srv).RunningImages(context.Background())
-	if err != nil {
-		t.Fatalf("RunningImages: %v", err)
-	}
-	if len(imgs) != 0 {
-		t.Errorf("got %v, want empty", imgs)
-	}
-}
-
-func TestRunningImages_SkipsBlankImage(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`[{"Id":"a","Image":""},{"Id":"b","Image":"alpine:3.20","ImageID":"` + validID1 + `"}]`))
-	}))
-	defer srv.Close()
-
-	imgs, err := newTestClient(srv).RunningImages(context.Background())
-	if err != nil {
-		t.Fatalf("RunningImages: %v", err)
-	}
-	want := RunningImage{Ref: "alpine:3.20", ContentID: validID1}
-	if len(imgs) != 1 || imgs[0] != want {
-		t.Errorf("got %+v, want [%+v]", imgs, want)
-	}
-}
-
-func TestRunningImages_APIError(t *testing.T) {
+func TestRunningContainers_APIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("boom"))
 	}))
 	defer srv.Close()
 
-	if _, err := newTestClient(srv).RunningImages(context.Background()); err == nil {
+	if _, err := newTestClient(srv).RunningContainers(context.Background()); err == nil {
 		t.Fatal("expected error on 500")
 	}
 }
 
-// --- identity boundary validation ---
+// --- ContentID boundary validation (unchanged behavior, ported from RunningImages) ---
 
-func TestRunningImages_SameRefSameContentID_OneEntry(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`[
-			{"Id":"a","Image":"nginx:1.25","ImageID":"` + validID1 + `"},
-			{"Id":"b","Image":"nginx:1.25","ImageID":"` + validID1 + `"}
-		]`))
-	}))
-	defer srv.Close()
-
-	imgs, err := newTestClient(srv).RunningImages(context.Background())
+func TestRunningContainers_MissingImageID_ContentIDEmpty(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{{Id: "a", Image: "alpine:3.20", Names: []string{"/app"}}})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
 	if err != nil {
-		t.Fatalf("RunningImages: %v", err)
+		t.Fatalf("RunningContainers: %v", err)
 	}
-	if len(imgs) != 1 {
-		t.Fatalf("got %+v, want 1 entry (same ref, same content)", imgs)
+	if len(cs) != 1 {
+		t.Fatalf("got %+v, want 1 entry", cs)
 	}
-	if imgs[0].ContentID != validID1 {
-		t.Errorf("ContentID = %q, want %q", imgs[0].ContentID, validID1)
+	if cs[0].Image.ContentID != "" {
+		t.Errorf("ContentID = %q, want empty (ImageID missing)", cs[0].Image.ContentID)
 	}
 }
 
-func TestRunningImages_SameRefDifferentContentID_TwoEntries(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`[
-			{"Id":"a","Image":"nginx:1.25","ImageID":"` + validID1 + `"},
-			{"Id":"b","Image":"nginx:1.25","ImageID":"` + validID2 + `"}
-		]`))
-	}))
-	defer srv.Close()
-
-	imgs, err := newTestClient(srv).RunningImages(context.Background())
-	if err != nil {
-		t.Fatalf("RunningImages: %v", err)
-	}
-	if len(imgs) != 2 {
-		t.Fatalf("got %+v, want 2 entries (same ref, distinct content, not merged)", imgs)
-	}
-	if imgs[0].Ref != "nginx:1.25" || imgs[1].Ref != "nginx:1.25" {
-		t.Errorf("both entries should keep Ref %q, got %+v", "nginx:1.25", imgs)
-	}
-	if imgs[0].ContentID == imgs[1].ContentID {
-		t.Errorf("ContentIDs must differ, got %+v", imgs)
-	}
-}
-
-func TestRunningImages_MissingImageID_Unresolved(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`[{"Id":"a","Image":"alpine:3.20"}]`))
-	}))
-	defer srv.Close()
-
-	imgs, err := newTestClient(srv).RunningImages(context.Background())
-	if err != nil {
-		t.Fatalf("RunningImages: %v", err)
-	}
-	if len(imgs) != 1 {
-		t.Fatalf("got %+v, want 1 entry", imgs)
-	}
-	if imgs[0].ContentID != "" {
-		t.Errorf("ContentID = %q, want empty (ImageID missing)", imgs[0].ContentID)
-	}
-	if imgs[0].RawImageID != "" {
-		t.Errorf("RawImageID = %q, want empty (nothing to hold when ImageID is empty)", imgs[0].RawImageID)
-	}
-}
-
-func TestRunningImages_MalformedImageID_UnresolvedButRawKept(t *testing.T) {
+func TestRunningContainers_MalformedImageID_ContentIDEmpty(t *testing.T) {
 	cases := []struct {
 		name    string
 		imageID string
@@ -175,24 +110,218 @@ func TestRunningImages_MalformedImageID_UnresolvedButRawKept(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte(`[{"Id":"a","Image":"alpine:3.20","ImageID":"` + tc.imageID + `"}]`))
-			}))
-			defer srv.Close()
-
-			imgs, err := newTestClient(srv).RunningImages(context.Background())
+			srv := serveContainers(t, []rawContainer{{Id: "a", Image: "alpine:3.20", ImageID: tc.imageID}})
+			cs, err := newTestClient(srv).RunningContainers(context.Background())
 			if err != nil {
-				t.Fatalf("RunningImages: %v", err)
+				t.Fatalf("RunningContainers: %v", err)
 			}
-			if len(imgs) != 1 {
-				t.Fatalf("got %+v, want 1 entry", imgs)
+			if len(cs) != 1 {
+				t.Fatalf("got %+v, want 1 entry", cs)
 			}
-			if imgs[0].ContentID != "" {
-				t.Errorf("ContentID = %q, want empty (malformed ImageID must not be normalized or guessed)", imgs[0].ContentID)
-			}
-			if imgs[0].RawImageID != tc.imageID {
-				t.Errorf("RawImageID = %q, want raw value %q kept for diagnostics", imgs[0].RawImageID, tc.imageID)
+			if cs[0].Image.ContentID != "" {
+				t.Errorf("ContentID = %q, want empty (malformed ImageID must not be normalized or guessed)", cs[0].Image.ContentID)
 			}
 		})
+	}
+}
+
+// --- Compose workload resolution ---
+
+func TestRunningContainers_ComposeBothLabels_WorkloadKnown(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{
+		{Id: "a", Image: "web:1", ImageID: validID1, Names: []string{"/proj-web-1"}, Labels: composeLabels("proj", "web")},
+	})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
+	if err != nil {
+		t.Fatalf("RunningContainers: %v", err)
+	}
+	if len(cs) != 1 {
+		t.Fatalf("got %+v, want 1 entry", cs)
+	}
+	want := inventory.Workload{Kind: inventory.WorkloadCompose, Group: "proj", Name: "web"}
+	if cs[0].Workload != want {
+		t.Errorf("Workload = %+v, want %+v", cs[0].Workload, want)
+	}
+	if !cs[0].Workload.Known() {
+		t.Error("Workload.Known() = false, want true")
+	}
+}
+
+func TestRunningContainers_ComposeOneLabelMissing_WorkloadUnknown(t *testing.T) {
+	cases := []struct {
+		name   string
+		labels map[string]string
+	}{
+		{"service missing", map[string]string{composeProjectLabel: "proj"}},
+		{"project missing", map[string]string{composeServiceLabel: "web"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := serveContainers(t, []rawContainer{{Id: "a", Image: "web:1", Labels: tc.labels}})
+			cs, err := newTestClient(srv).RunningContainers(context.Background())
+			if err != nil {
+				t.Fatalf("RunningContainers: %v", err)
+			}
+			if len(cs) != 1 {
+				t.Fatalf("got %+v, want 1 entry", cs)
+			}
+			if cs[0].Workload.Known() {
+				t.Errorf("Workload = %+v, want unknown (only one label present)", cs[0].Workload)
+			}
+		})
+	}
+}
+
+func TestRunningContainers_ComposeLabelEmpty_WorkloadUnknown(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{
+		{Id: "a", Image: "web:1", Labels: composeLabels("", "web")},
+	})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
+	if err != nil {
+		t.Fatalf("RunningContainers: %v", err)
+	}
+	if cs[0].Workload.Known() {
+		t.Errorf("Workload = %+v, want unknown (empty project label)", cs[0].Workload)
+	}
+}
+
+func TestRunningContainers_ComposeLabelControlChar_WorkloadUnknown(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{"tab", "pr\toj"},
+		{"unit separator", "pr\x1foj"},
+		{"newline", "pr\noj"},
+		{"delete", "pr\x7foj"},
+		{"c1 next line", "pr\u0085oj"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := serveContainers(t, []rawContainer{
+				{Id: "a", Image: "web:1", Labels: composeLabels(tc.value, "web")},
+			})
+			cs, err := newTestClient(srv).RunningContainers(context.Background())
+			if err != nil {
+				t.Fatalf("RunningContainers: %v", err)
+			}
+			if cs[0].Workload.Known() {
+				t.Errorf("Workload = %+v, want unknown (control character in project label)", cs[0].Workload)
+			}
+		})
+	}
+}
+
+func TestRunningContainers_ComposeLabelOver253Bytes_WorkloadUnknown(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{
+		{Id: "a", Image: "web:1", Labels: composeLabels(strings.Repeat("p", 254), "web")},
+	})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
+	if err != nil {
+		t.Fatalf("RunningContainers: %v", err)
+	}
+	if cs[0].Workload.Known() {
+		t.Errorf("Workload = %+v, want unknown (project label over 253 bytes)", cs[0].Workload)
+	}
+}
+
+func TestRunningContainers_NonCompose_WorkloadUnknown(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{{Id: "a", Image: "standalone:1"}})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
+	if err != nil {
+		t.Fatalf("RunningContainers: %v", err)
+	}
+	if cs[0].Workload.Known() {
+		t.Errorf("Workload = %+v, want unknown (no compose labels)", cs[0].Workload)
+	}
+}
+
+// --- container name normalization ---
+
+func TestRunningContainers_NamesEmpty_NameBlank(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{{Id: "a", Image: "web:1"}})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
+	if err != nil {
+		t.Fatalf("RunningContainers: %v", err)
+	}
+	if cs[0].Name != "" {
+		t.Errorf("Name = %q, want empty (no Names)", cs[0].Name)
+	}
+}
+
+func TestRunningContainers_LinkAliasOnly_NameBlank(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{
+		{Id: "a", Image: "web:1", Names: []string{"/parent/alias"}},
+	})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
+	if err != nil {
+		t.Fatalf("RunningContainers: %v", err)
+	}
+	if cs[0].Name != "" {
+		t.Errorf("Name = %q, want empty (only a link alias present)", cs[0].Name)
+	}
+}
+
+func TestRunningContainers_NameNormalization_PicksLexicographicallySmallest(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{
+		{Id: "a", Image: "web:1", Names: []string{"/zebra", "/parent/alias", "/apple"}},
+	})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
+	if err != nil {
+		t.Fatalf("RunningContainers: %v", err)
+	}
+	if cs[0].Name != "apple" {
+		t.Errorf("Name = %q, want %q (link alias excluded, smallest of the rest picked)", cs[0].Name, "apple")
+	}
+}
+
+// --- container-level observation, no image-level de-duplication ---
+
+func TestRunningContainers_SameImageTwoContainers_TwoEntries(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{
+		{Id: "a", Image: "nginx:1.25", ImageID: validID1, Names: []string{"/web1"}},
+		{Id: "b", Image: "nginx:1.25", ImageID: validID1, Names: []string{"/web2"}},
+	})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
+	if err != nil {
+		t.Fatalf("RunningContainers: %v", err)
+	}
+	if len(cs) != 2 {
+		t.Fatalf("got %+v, want 2 entries (running the same image is not de-duplicated at container level)", cs)
+	}
+	if cs[0].Name != "web1" || cs[1].Name != "web2" {
+		t.Errorf("Names = [%q %q], want [web1 web2] (sorted deterministically)", cs[0].Name, cs[1].Name)
+	}
+	for _, c := range cs {
+		if c.Image.Ref != "nginx:1.25" || c.Image.ContentID != validID1 {
+			t.Errorf("Image = %+v, want Ref=nginx:1.25 ContentID=%s", c.Image, validID1)
+		}
+	}
+}
+
+// --- deterministic ordering ---
+
+func TestRunningContainers_DeterministicSortOrder(t *testing.T) {
+	srv := serveContainers(t, []rawContainer{
+		{Id: "a", Image: "redis:7.0", ImageID: validID2, Names: []string{"/cache"}},
+		{Id: "b", Image: "nginx:1.25", ImageID: validID2, Names: []string{"/web-b"}},
+		{Id: "c", Image: "nginx:1.25", ImageID: validID1, Names: []string{"/web-a"}},
+		{Id: "d", Image: "nginx:1.25", ImageID: validID1, Names: []string{"/web-c"}, Labels: composeLabels("proj", "web")},
+	})
+	cs, err := newTestClient(srv).RunningContainers(context.Background())
+	if err != nil {
+		t.Fatalf("RunningContainers: %v", err)
+	}
+	// Order: (Image.Ref, Image.ContentID, Workload.Group, Workload.Name, Name).
+	// Within Ref=nginx:1.25/ContentID=validID1, the unknown-workload entry
+	// (Group="") sorts before the compose entry (Group="proj").
+	wantNames := []string{"web-a", "web-c", "web-b", "cache"}
+	if len(cs) != len(wantNames) {
+		t.Fatalf("got %d entries, want %d: %+v", len(cs), len(wantNames), cs)
+	}
+	for i, want := range wantNames {
+		if cs[i].Name != want {
+			t.Errorf("cs[%d].Name = %q, want %q (full order: %+v)", i, cs[i].Name, want, cs)
+		}
 	}
 }

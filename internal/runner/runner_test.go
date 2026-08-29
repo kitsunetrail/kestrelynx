@@ -9,30 +9,31 @@ import (
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
 	"github.com/kitsunetrail/kestrelynx/internal/config"
-	"github.com/kitsunetrail/kestrelynx/internal/docker"
 	"github.com/kitsunetrail/kestrelynx/internal/intel"
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/notify"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
-// refs builds unresolved (ContentID-less) RunningImage entries for tests that
-// don't exercise identity resolution.
-func refs(names ...string) []docker.RunningImage {
-	out := make([]docker.RunningImage, len(names))
+// refs builds bare container observations (unresolved, ContentID-less
+// RunningImage, no name/workload) for tests that don't exercise identity
+// resolution or container-level detail.
+func refs(names ...string) []inventory.Container {
+	out := make([]inventory.Container, len(names))
 	for i, n := range names {
-		out[i] = docker.RunningImage{Ref: n}
+		out[i] = inventory.Container{Image: inventory.RunningImage{Ref: n}}
 	}
 	return out
 }
 
 type fakeLister struct {
-	images []docker.RunningImage
-	err    error
+	containers []inventory.Container
+	err        error
 }
 
-func (f fakeLister) RunningImages(context.Context) ([]docker.RunningImage, error) {
-	return f.images, f.err
+func (f fakeLister) RunningContainers(context.Context) ([]inventory.Container, error) {
+	return f.containers, f.err
 }
 
 // fakeScanner is a pointer receiver so calls can be recorded across
@@ -82,7 +83,7 @@ var clock = func() time.Time { return time.Date(2026, 6, 24, 9, 0, 0, 0, time.UT
 func TestRunOnce_NotifiesWhenIssuesFound(t *testing.T) {
 	notif := &fakeNotifier{}
 	r := Runner{
-		Lister: fakeLister{images: refs("vuln:1")},
+		Lister: fakeLister{containers: refs("vuln:1")},
 		Scanner: &fakeScanner{byImage: map[string]scanner.ImageScan{
 			"vuln:1": {Image: "vuln:1", Findings: []scanner.Finding{
 				{Image: "vuln:1", Class: scanner.ClassOS, Package: "libc", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
@@ -108,7 +109,7 @@ func TestRunOnce_NotifiesWhenIssuesFound(t *testing.T) {
 func TestRunOnce_SkipsNotificationWhenCleanByDefault(t *testing.T) {
 	notif := &fakeNotifier{}
 	r := Runner{
-		Lister:   fakeLister{images: refs("clean:1")},
+		Lister:   fakeLister{containers: refs("clean:1")},
 		Scanner:  &fakeScanner{},
 		Notifier: notif,
 		Now:      clock,
@@ -124,7 +125,7 @@ func TestRunOnce_SkipsNotificationWhenCleanByDefault(t *testing.T) {
 func TestRunOnce_NotifiesWhenCleanIfConfigured(t *testing.T) {
 	notif := &fakeNotifier{}
 	r := Runner{
-		Lister:        fakeLister{images: refs("clean:1")},
+		Lister:        fakeLister{containers: refs("clean:1")},
 		Scanner:       &fakeScanner{},
 		Notifier:      notif,
 		NotifyOnClean: true,
@@ -157,7 +158,7 @@ func TestRunOnce_ListErrorAborts(t *testing.T) {
 func TestRunOnce_ScanErrorStillNotifies(t *testing.T) {
 	notif := &fakeNotifier{}
 	r := Runner{
-		Lister: fakeLister{images: refs("broken:1")},
+		Lister: fakeLister{containers: refs("broken:1")},
 		Scanner: &fakeScanner{byImage: map[string]scanner.ImageScan{
 			"broken:1": {Image: "broken:1", Err: errors.New("pull failed")},
 		}},
@@ -190,7 +191,7 @@ func TestScanAll_ContentIDDedup_ScansOnceReplicatesToAllRefs(t *testing.T) {
 		},
 	}}
 	r := Runner{Scanner: sc, Now: clock}
-	images := []docker.RunningImage{
+	images := []inventory.RunningImage{
 		{Ref: "app:v1", ContentID: cid},
 		{Ref: "app:v2", ContentID: cid},
 	}
@@ -247,7 +248,7 @@ func TestScanAll_UnresolvedContentID_ScannedIndividually(t *testing.T) {
 		"b:1": {Image: "b:1"},
 	}}
 	r := Runner{Scanner: sc, Now: clock}
-	images := []docker.RunningImage{{Ref: "a:1"}, {Ref: "b:1"}}
+	images := []inventory.RunningImage{{Ref: "a:1"}, {Ref: "b:1"}}
 
 	scans := r.scanAll(context.Background(), images)
 
@@ -272,9 +273,9 @@ func TestRunOnce_ContentIDDedup_ReportCoversBothAliases(t *testing.T) {
 		},
 	}}
 	r := Runner{
-		Lister: fakeLister{images: []docker.RunningImage{
-			{Ref: "app:v1", ContentID: cid},
-			{Ref: "app:v2", ContentID: cid},
+		Lister: fakeLister{containers: []inventory.Container{
+			{Image: inventory.RunningImage{Ref: "app:v1", ContentID: cid}},
+			{Image: inventory.RunningImage{Ref: "app:v2", ContentID: cid}},
 		}},
 		Scanner:  sc,
 		Notifier: notif,
@@ -312,7 +313,7 @@ func TestRunOnce_DiffMode_FirstRunReportsNewAndSaves(t *testing.T) {
 	notif := &fakeNotifier{}
 	store := &fakeStore{}
 	r := Runner{
-		Lister:        fakeLister{images: refs("vuln:1")},
+		Lister:        fakeLister{containers: refs("vuln:1")},
 		Scanner:       vulnScan(),
 		Notifier:      notif,
 		Store:         store,
@@ -340,7 +341,7 @@ func TestRunOnce_DiffMode_UnchangedSendsHeartbeat(t *testing.T) {
 	notif := &fakeNotifier{}
 	store := &fakeStore{}
 	r := Runner{
-		Lister:        fakeLister{images: refs("vuln:1")},
+		Lister:        fakeLister{containers: refs("vuln:1")},
 		Scanner:       vulnScan(),
 		Notifier:      notif,
 		Store:         store,
@@ -368,7 +369,7 @@ func TestRunOnce_DiffMode_SendFailureSkipsSave(t *testing.T) {
 	notif := &fakeNotifier{err: errors.New("slack down")}
 	store := &fakeStore{}
 	r := Runner{
-		Lister:        fakeLister{images: refs("vuln:1")},
+		Lister:        fakeLister{containers: refs("vuln:1")},
 		Scanner:       vulnScan(),
 		Notifier:      notif,
 		Store:         store,
@@ -387,7 +388,7 @@ func TestRunOnce_DiffMode_CleanAndUnchangedSkipsButSaves(t *testing.T) {
 	notif := &fakeNotifier{}
 	store := &fakeStore{}
 	r := Runner{
-		Lister:        fakeLister{images: refs("clean:1")},
+		Lister:        fakeLister{containers: refs("clean:1")},
 		Scanner:       &fakeScanner{},
 		Notifier:      notif,
 		Store:         store,
@@ -413,7 +414,7 @@ func TestRunOnce_DiffMode_ResolvedNotifiesEvenWhenClean(t *testing.T) {
 		EOSL:     map[string]time.Time{},
 	}}
 	r := Runner{
-		Lister:        fakeLister{images: refs("vuln:1")},
+		Lister:        fakeLister{containers: refs("vuln:1")},
 		Scanner:       &fakeScanner{}, // scan now comes back clean
 		Notifier:      notif,
 		Store:         store,
@@ -435,7 +436,7 @@ func TestRunOnce_DiffMode_FullReportDay(t *testing.T) {
 	notif := &fakeNotifier{}
 	store := &fakeStore{}
 	r := Runner{
-		Lister:        fakeLister{images: refs("vuln:1")},
+		Lister:        fakeLister{containers: refs("vuln:1")},
 		Scanner:       vulnScan(),
 		Notifier:      notif,
 		Store:         store,
@@ -460,7 +461,7 @@ func TestRunOnce_DiffMode_FullReportDay(t *testing.T) {
 // it because state had already "moved past" it.
 //
 // The lister and scanner must agree on which content is running each cycle
-// (docker.RunningImage.ContentID feeds scanner.ScanTarget.ContentID, which
+// (inventory.RunningImage.ContentID feeds scanner.ScanTarget.ContentID, which
 // the real scanner.Trivy.Scan echoes back as ExpectedContentID,
 // internal/scanner/exec.go:reconcileTarget) — a lister reporting no
 // ContentID while the fake scanner claims a resolved identity is an
@@ -469,8 +470,8 @@ func TestRunOnce_DiffMode_SendFailure_ReplacedPersistsToNextCycle(t *testing.T) 
 	cidA := "sha256:" + strings.Repeat("a", 64)
 	cidB := "sha256:" + strings.Repeat("b", 64)
 
-	imagesWith := func(cid string) []docker.RunningImage {
-		return []docker.RunningImage{{Ref: "app:1", ContentID: cid}}
+	imagesWith := func(cid string) []inventory.Container {
+		return []inventory.Container{{Image: inventory.RunningImage{Ref: "app:1", ContentID: cid}}}
 	}
 	scanWith := func(cid string) *fakeScanner {
 		return &fakeScanner{byImage: map[string]scanner.ImageScan{
@@ -490,7 +491,7 @@ func TestRunOnce_DiffMode_SendFailure_ReplacedPersistsToNextCycle(t *testing.T) 
 
 	store := &fakeStore{}
 	r := Runner{
-		Lister:        fakeLister{images: imagesWith(cidA)},
+		Lister:        fakeLister{containers: imagesWith(cidA)},
 		Scanner:       scanWith(cidA),
 		Notifier:      &fakeNotifier{},
 		Store:         store,
@@ -508,7 +509,7 @@ func TestRunOnce_DiffMode_SendFailure_ReplacedPersistsToNextCycle(t *testing.T) 
 	// still computed before the (failed) send attempt, so its actual
 	// Replaced content is verified here too, not just its presence later.
 	failNotif := &fakeNotifier{err: errors.New("slack down")}
-	r.Lister = fakeLister{images: imagesWith(cidB)}
+	r.Lister = fakeLister{containers: imagesWith(cidB)}
 	r.Scanner = scanWith(cidB)
 	r.Notifier = failNotif
 	if err := r.RunOnce(context.Background()); err == nil {
@@ -582,7 +583,7 @@ func TestRunOnce_TriageWiring(t *testing.T) {
 		fresh:  intel.Freshness{KEVOK: true, EPSSOK: true},
 	}
 	r := Runner{
-		Lister:     fakeLister{images: refs("vuln:1")},
+		Lister:     fakeLister{containers: refs("vuln:1")},
 		Scanner:    vulnScan(),
 		Notifier:   notif,
 		Intel:      src,
@@ -609,7 +610,7 @@ func TestRunOnce_TriageIntelFailureStillNotifies(t *testing.T) {
 	notif := &fakeNotifier{}
 	src := &fakeIntel{err: errors.New("feeds down"), fresh: intel.Freshness{}}
 	r := Runner{
-		Lister:     fakeLister{images: refs("vuln:1")},
+		Lister:     fakeLister{containers: refs("vuln:1")},
 		Scanner:    vulnScan(),
 		Notifier:   notif,
 		Intel:      src,
@@ -631,7 +632,7 @@ func TestRunOnce_TriageIntelFailureStillNotifies(t *testing.T) {
 func TestRunOnce_NoIntelMeansNoTriage(t *testing.T) {
 	notif := &fakeNotifier{}
 	r := Runner{
-		Lister:   fakeLister{images: refs("vuln:1")},
+		Lister:   fakeLister{containers: refs("vuln:1")},
 		Scanner:  vulnScan(),
 		Notifier: notif,
 		Now:      clock,
@@ -663,7 +664,7 @@ func TestRunOnce_DiscussionLinksOnlyForActNowIDs(t *testing.T) {
 		}},
 	}}
 	r := Runner{
-		Lister:          fakeLister{images: refs("vuln:1")},
+		Lister:          fakeLister{containers: refs("vuln:1")},
 		Scanner:         scanTwo,
 		Notifier:        notif,
 		Intel:           src,
@@ -693,7 +694,7 @@ func TestRunOnce_DiscussionLinksOffQueriesNothing(t *testing.T) {
 		fresh:  intel.Freshness{KEVOK: true, EPSSOK: true},
 	}
 	r := Runner{
-		Lister:          fakeLister{images: refs("vuln:1")},
+		Lister:          fakeLister{containers: refs("vuln:1")},
 		Scanner:         vulnScan(),
 		Notifier:        notif,
 		Intel:           src,
@@ -714,7 +715,7 @@ func TestRunOnce_DegradedIntelSkipsDiscussions(t *testing.T) {
 	notif := &fakeNotifier{}
 	src := &fakeIntel{err: errors.New("down"), fresh: intel.Freshness{}}
 	r := Runner{
-		Lister:          fakeLister{images: refs("vuln:1")},
+		Lister:          fakeLister{containers: refs("vuln:1")},
 		Scanner:         vulnScan(),
 		Notifier:        notif,
 		Intel:           src,

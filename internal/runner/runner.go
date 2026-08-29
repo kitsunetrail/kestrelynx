@@ -12,16 +12,16 @@ import (
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
 	"github.com/kitsunetrail/kestrelynx/internal/config"
-	"github.com/kitsunetrail/kestrelynx/internal/docker"
 	"github.com/kitsunetrail/kestrelynx/internal/intel"
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/notify"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
-// ImageLister enumerates running container images (implemented by docker.Client).
-type ImageLister interface {
-	RunningImages(ctx context.Context) ([]docker.RunningImage, error)
+// ContainerLister enumerates running containers (implemented by docker.Client).
+type ContainerLister interface {
+	RunningContainers(ctx context.Context) ([]inventory.Container, error)
 }
 
 // ImageScanner scans one image target (implemented by scanner.Trivy).
@@ -50,7 +50,7 @@ type IntelSource interface {
 
 // Runner holds the collaborators for one scan cycle.
 type Runner struct {
-	Lister          ImageLister
+	Lister          ContainerLister
 	Scanner         ImageScanner
 	Notifier        Notifier
 	NotifyOnClean   bool
@@ -86,10 +86,11 @@ func (r Runner) log() *slog.Logger {
 // one bad image never sinks the run) and surfaced to the user.
 func (r Runner) RunOnce(ctx context.Context) error {
 	log := r.log()
-	images, err := r.Lister.RunningImages(ctx)
+	containers, err := r.Lister.RunningContainers(ctx)
 	if err != nil {
-		return fmt.Errorf("list running images: %w", err)
+		return fmt.Errorf("list running containers: %w", err)
 	}
+	images := inventory.DistinctImages(containers)
 	log.Info("scanning images", "count", len(images))
 
 	scans := r.scanAll(ctx, images)
@@ -106,8 +107,8 @@ func (r Runner) RunOnce(ctx context.Context) error {
 // once and the result is replicated to each alias reference. Images whose
 // ContentID did not resolve are scanned individually by reference and never
 // join the ContentID de-duplication (they already can't collide there, since
-// docker.RunningImages itself de-duplicates on (Ref, ContentID)).
-func (r Runner) scanAll(ctx context.Context, images []docker.RunningImage) []scanner.ImageScan {
+// inventory.DistinctImages itself de-duplicates on (Ref, ContentID)).
+func (r Runner) scanAll(ctx context.Context, images []inventory.RunningImage) []scanner.ImageScan {
 	log := r.log()
 	scans := make([]scanner.ImageScan, 0, len(images))
 	byContentID := map[string]scanner.ImageScan{}

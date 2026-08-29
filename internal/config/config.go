@@ -9,17 +9,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"gopkg.in/yaml.v3"
 )
 
 // Config is the validated runtime configuration.
 type Config struct {
-	Schedule ScheduleConfig
-	Scan     ScanConfig
-	Notify   NotifyConfig
-	Docker   DockerConfig
-	State    StateConfig
-	Triage   TriageConfig
+	Schedule    ScheduleConfig
+	Scan        ScanConfig
+	Notify      NotifyConfig
+	Docker      DockerConfig
+	State       StateConfig
+	Triage      TriageConfig
+	Environment EnvironmentConfig
+}
+
+// EnvironmentConfig names the environment this instance is watching
+// (docs/development/environment-workload-model.md). Name is the only
+// user-facing key; Kind is not configurable — it's set by the composition
+// root to match whichever Runtime Adapter it wired up.
+type EnvironmentConfig struct {
+	Name string // "" = the unnamed default environment; current single-host behavior, unchanged.
 }
 
 type ScheduleConfig struct {
@@ -120,6 +130,9 @@ type rawConfig struct {
 		EPSSURL         string   `yaml:"epss_url"`
 		DiscussionLinks *bool    `yaml:"discussion_links"`
 	} `yaml:"triage"`
+	Environment struct {
+		Name string `yaml:"name"`
+	} `yaml:"environment"`
 }
 
 const (
@@ -177,6 +190,7 @@ func Parse(data []byte) (Config, error) {
 			EPSSURL:         raw.Triage.EPSSURL,
 			DiscussionLinks: boolOr(raw.Triage.DiscussionLinks, true),
 		},
+		Environment: EnvironmentConfig{Name: raw.Environment.Name},
 	}
 
 	applyDefaults(&c)
@@ -242,6 +256,9 @@ func validate(c *Config) error {
 		if c.Triage.WatchEPSS <= 0 || c.Triage.WatchEPSS > c.Triage.ActNowEPSS || c.Triage.ActNowEPSS > 1 {
 			return fmt.Errorf("config: triage thresholds must satisfy 0 < watch_epss (%v) <= act_now_epss (%v) <= 1", c.Triage.WatchEPSS, c.Triage.ActNowEPSS)
 		}
+	}
+	if err := inventory.ValidateEnvironmentName(c.Environment.Name); err != nil {
+		return fmt.Errorf("config: environment.name: %w", err)
 	}
 	return nil
 }

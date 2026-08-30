@@ -5,12 +5,9 @@
 開発ログは検討・実装の過程の記録です。
 現在利用できる機能の導入・運用方法は[ドキュメント](../documentation/index.md)を参照してください。
 
-## 進行中
-
-- [Environment / Workloadモデルの開発](environment-workload-model.md) — 複数の実行環境と
-  サービスを識別し、脆弱性の記録へ結び付けるモデルの設計(検討中)
-
 ## 完了
 
+- [Environment / Workloadモデルの開発](environment-workload-model.md) — 実行環境の識別と、
+  containerとサービスの対応付けを脆弱性の記録へ結び付けるモデルの実装(実装済み)
 - [イメージ識別モデルの開発](image-identity-model.md) — イメージ名を中心とした処理から、実際の内容を
   特定できる不変なimage digestでイメージ実体を識別する処理への移行(実装済み)

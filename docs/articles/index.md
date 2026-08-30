@@ -6,3 +6,5 @@ This section covers foundational knowledge, operational practices, and related s
   how the CVE Program is organized, and the process from vulnerability reporting to publication
 - August 27, 2026 — [KEV Catalog Basics and Usage](kev-known-exploited-vulnerabilities.md) — what the KEV Catalog is,
   what qualifies a vulnerability for inclusion, what data the catalog provides, and how to use it to prioritize remediation
+- August 30, 2026 — [EPSS Basics and How to Check Scores](epss-exploit-prediction-scoring-system.md) — what EPSS measures,
+  how to interpret and retrieve scores, how the model works, and how to use EPSS in vulnerability management

@@ -29,3 +29,4 @@ nav:
       - 概要: articles/index.md
       - CVEの基礎と公開の流れ: articles/cve-basics-and-publication-flow-ja.md
       - KEV Catalogの基礎と使い方: articles/kev-known-exploited-vulnerabilities-ja.md
+      - EPSSの基礎とスコアの確認方法: articles/epss-exploit-prediction-scoring-system-ja.md

@@ -6,6 +6,7 @@ on:
     paths:
       - "docs/**"
       - "docs-ja/**"
+      - "overrides/**"
       - "mkdocs.yml"
       - "mkdocs.ja.yml"
       - "requirements-docs.txt"
@@ -14,6 +15,7 @@ on:
     paths:
       - "docs/**"
       - "docs-ja/**"
+      - "overrides/**"
       - "mkdocs.yml"
       - "mkdocs.ja.yml"
       - "requirements-docs.txt"

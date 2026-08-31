@@ -131,3 +131,7 @@ Note that both scanning and history remain keyed by the image entity (the [Conte
 ### August 25, 2026
 
 - Organized the implementation scope of the environment and workload model
+
+---
+
+This article is part of the KestreLynx development log. [Learn more about KestreLynx](../index.md)

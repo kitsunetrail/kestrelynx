@@ -86,3 +86,7 @@ Docker連携を最初のRuntime Adapterとして実装し、Adapterは稼働中�
 - `RepoDigests`はローカルイメージに存在せず複数の値を持つ場合もあるため、実体の識別には`ImageID`を採用し、スキャンもdigestで実行する方針とした。
 - 履歴のキーをdigestへ変えると不要な再通知が発生するため、履歴と通知はイメージ名を維持し、digestは実体の変更を示す追加情報とした。
 - 最初の対象は単一のDockerホストとし、複数ホストやKubernetesにはRuntime Adapterの追加で対応する方針とした。
+
+---
+
+この記事は、KestreLynxの開発記録です。[KestreLynxについて](../index.md)

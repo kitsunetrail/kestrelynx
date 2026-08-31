@@ -131,3 +131,7 @@ Containerは、**実際に動いている個体**の観測事実である。同�
 ### 2026-08-25
 
 - Environment/Workload モデルの実装内容を整理した
+
+---
+
+この記事は、KestreLynxの開発記録です。[KestreLynxについて](../index.md)

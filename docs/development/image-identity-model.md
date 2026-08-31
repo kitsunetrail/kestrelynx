@@ -86,3 +86,7 @@ The two questions previously under consideration were settled by fixing the scop
 - Because `RepoDigests` can be absent from local images or contain multiple values, we selected `ImageID` to identify image content and run scans by digest.
 - Using the digest as the history key would cause unnecessary re-notifications, so image names remain the history and notification keys while the digest records changes to the underlying image.
 - The first phase targets a single Docker host. Multiple hosts and Kubernetes will be supported by adding runtime adapters.
+
+---
+
+This article is part of the KestreLynx development log. [Learn more about KestreLynx](../index.md)

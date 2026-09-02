@@ -50,6 +50,7 @@ nav:
       - How it works: documentation/how-it-works.md
   - Development:
       - Overview: development/index.md
+      - Remediation relations model: development/remediation-relations-model.md
       - Environment and workload model: development/environment-workload-model.md
       - Image identity model: development/image-identity-model.md
   - Articles:

@@ -5,6 +5,8 @@ This section covers the problems being addressed, approaches tried, lessons lear
 Development logs record how features were explored and implemented.
 For instructions on currently available features, see [Documentation](../documentation/index.md).
 
+- [The Kubernetes vulnerability scanning landscape](kubernetes-scanning-landscape.md) — what existing tools already
+  cover and what we found missing, ahead of Kubernetes support (research note)
 - [Designing the remediation relations model](remediation-relations-model.md) — the relation models that connect
   a detected vulnerability to a proposal for where to fix it (models defined)
 - [Developing the environment and workload model](environment-workload-model.md) — identifying environments and

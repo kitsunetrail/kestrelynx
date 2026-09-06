@@ -4,6 +4,8 @@
 
 開発ログは検討・実装の過程の記録です。現在利用できる機能の導入・運用方法は[ドキュメント](../documentation/index.md)を参照してください。
 
+- [Kubernetes向け脆弱性スキャンツールの調査](kubernetes-scanning-landscape.md) — Kubernetes対応に着手する前に、
+  既存ツールの機能と追加実装が必要な点を整理した記録(調査ノート)
 - [修正関係モデルの設計](remediation-relations-model.md) — 検出した脆弱性を「どこを直せば消えるか」の
   提案につなげるための関係モデル(モデル定義済み)
 - [Environment / Workloadモデルの開発](environment-workload-model.md) — 実行環境の識別と、

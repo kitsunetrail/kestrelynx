@@ -121,14 +121,14 @@ In this research, we could not confirm a tool that provides KEV/EPSS-based prior
 Trivy Operator's per-vulnerability (per-CVE) metrics can be combined with Prometheus and Alertmanager to send a notification when a vulnerability is detected and another when the alert resolves.
 
 - A metric disappearing does not by itself establish that a vulnerability was fixed.
-  - Metrics can also disappear when a workload is scaled down or stopped, a report expires, or metric collection is interrupted.
-  - Reporting this as a resolution without additional handling may tell users that a vulnerability was fixed when it was not.
+    - Metrics can also disappear when a workload is scaled down or stopped, a report expires, or metric collection is interrupted.
+    - Reporting this as a resolution without additional handling may tell users that a vulnerability was fixed when it was not.
 - Severity changes also need care when metrics are distinguished by severity.
-  - When severity changes, the monitoring system sees the old item disappear and a new item appear.
-  - Without additional handling, a worsening of the same vulnerability may be reported as “the previous vulnerability was resolved” and “a different vulnerability was newly detected.”
+    - When severity changes, the monitoring system sees the old item disappear and a new item appear.
+    - Without additional handling, a worsening of the same vulnerability may be reported as “the previous vulnerability was resolved” and “a different vulnerability was newly detected.”
 - To determine this correctly, users need to design and implement two kinds of processing:
-  - Check that the target's state can still be observed successfully to distinguish a fix from an interruption in observation.
-  - Match the same vulnerability before and after a change to determine whether it is new, worsened, or resolved.
+    - Check that the target's state can still be observed successfully to distinguish a fix from an interruption in observation.
+    - Match the same vulnerability before and after a change to determine whether it is new, worsened, or resolved.
 - This processing can be implemented within Prometheus or handled in a separate application.
 
 ### Identifying images by digest
@@ -136,12 +136,12 @@ Trivy Operator's per-vulnerability (per-CVE) metrics can be combined with Promet
 When identifying images, we need to distinguish a tag from the content it points to.
 
 - An image's content can change after an update even when its tag stays the same.
-  - For example, the name `example/api:latest` may remain unchanged while pointing to different content after an update.
-  - Recording the digest that identifies the content makes it possible to track this change.
+    - For example, the name `example/api:latest` may remain unchanged while pointing to different content after an update.
+    - Recording the digest that identifies the content makes it possible to track this change.
 - The SBOM generation tool `sbom-operator` that we examined uses the tag to identify the record when sending results to Dependency-Track, if a tag is present.
-  - Even when the tag points to different content and the digest changes, the same record is overwritten.
-  - It uses the digest to identify the record only when no tag is present.
-  - In this configuration, a change in the content a tag points to is not tracked as a distinct image.
+    - Even when the tag points to different content and the digest changes, the same record is overwritten.
+    - It uses the digest to identify the record only when no tag is present.
+    - In this configuration, a change in the content a tag points to is not tracked as a distinct image.
 - With this behavior in mind, we examined the following three uses of digests separately:
 
 | Area checked | Purpose |
@@ -151,9 +151,9 @@ When identifying images, we need to distinguish a tag from the content it points
 | Notification deduplication | Avoid duplicate notifications for the same digest |
 
 - We found partial support for each, but could not confirm a configuration that meets all three together.
-  - To meet the requirements by combining the existing tools we checked, users need to confirm what those tools support for each use and implement the missing processing.
+    - To meet the requirements by combining the existing tools we checked, users need to confirm what those tools support for each use and implement the missing processing.
 - In particular, the ability to correlate multiple workloads using an image with the same digest may also exist in other tools.
-  - We will continue comparing and verifying this capability against existing tools.
+    - We will continue comparing and verifying this capability against existing tools.
 
 These findings are based on the versions and documentation we checked as of September 5, 2026. They do not establish that capabilities we could not confirm are absent from other tools or configurations, or that they will remain unavailable in the future.
 

@@ -23,6 +23,8 @@ nav:
       - 仕組み: documentation/how-it-works.md
   - 開発ログ:
       - 概要: development/index.md
+      - Kubernetes対応の開発: development/kubernetes-support.md
+      - Kubernetesスキャンツール調査: development/kubernetes-scanning-landscape.md
       - 修正関係モデル: development/remediation-relations-model.md
       - Environment / Workloadモデル: development/environment-workload-model.md
       - イメージ識別モデル: development/image-identity-model.md

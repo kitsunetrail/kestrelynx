@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ type Config struct {
 	Scan        ScanConfig
 	Notify      NotifyConfig
 	Docker      DockerConfig
+	Kubernetes  KubernetesConfig
 	State       StateConfig
 	Triage      TriageConfig
 	Environment EnvironmentConfig
@@ -78,6 +80,20 @@ type DockerConfig struct {
 	Socket string
 }
 
+// KubernetesConfig selects and configures the Kubernetes Runtime Adapter,
+// mutually exclusive with Docker (validate rejects enabling this alongside an
+// explicitly set docker.socket). The field shapes mirror kubernetes.Options
+// (internal/kubernetes/kubernetes.go): every field left empty falls back to
+// that package's in-cluster default.
+type KubernetesConfig struct {
+	Enabled       bool
+	APIServer     string   // "" = build from KUBERNETES_SERVICE_HOST/PORT
+	TokenFile     string   // "" = the projected ServiceAccount token's default path
+	CAFile        string   // "" = the projected cluster CA's default path
+	TLSServerName string   // "" = don't override; validate against APIServer as-is
+	Namespaces    []string // empty = every namespace
+}
+
 type StateConfig struct {
 	Path string // where diff-mode scan state is persisted
 }
@@ -117,8 +133,21 @@ type rawConfig struct {
 		FullReportDay     string `yaml:"full_report_day"`
 	} `yaml:"notify"`
 	Docker struct {
-		Socket string `yaml:"socket"`
+		// Socket is a pointer so validate can tell "explicitly set" (including
+		// an explicit empty string) apart from "omitted" — the mutual
+		// exclusion check with kubernetes.enabled needs that distinction,
+		// since Config.Docker.Socket itself always ends up non-empty (the
+		// default fills in either way).
+		Socket *string `yaml:"socket"`
 	} `yaml:"docker"`
+	Kubernetes struct {
+		Enabled       *bool    `yaml:"enabled"`
+		APIServer     string   `yaml:"api_server"`
+		TokenFile     string   `yaml:"token_file"`
+		CAFile        string   `yaml:"ca_file"`
+		TLSServerName string   `yaml:"tls_server_name"`
+		Namespaces    []string `yaml:"namespaces"`
+	} `yaml:"kubernetes"`
 	State struct {
 		Path string `yaml:"path"`
 	} `yaml:"state"`
@@ -180,8 +209,16 @@ func Parse(data []byte) (Config, error) {
 		},
 		Scan:   ScanConfig{Severity: raw.Scan.Severity},
 		Notify: NotifyConfig(raw.Notify),
-		Docker: DockerConfig{Socket: raw.Docker.Socket},
-		State:  StateConfig{Path: raw.State.Path},
+		Docker: DockerConfig{Socket: stringOr(raw.Docker.Socket, "")},
+		Kubernetes: KubernetesConfig{
+			Enabled:       boolOr(raw.Kubernetes.Enabled, false),
+			APIServer:     raw.Kubernetes.APIServer,
+			TokenFile:     raw.Kubernetes.TokenFile,
+			CAFile:        raw.Kubernetes.CAFile,
+			TLSServerName: raw.Kubernetes.TLSServerName,
+			Namespaces:    raw.Kubernetes.Namespaces,
+		},
+		State: StateConfig{Path: raw.State.Path},
 		Triage: TriageConfig{
 			Enabled:         boolOr(raw.Triage.Enabled, true),
 			ActNowEPSS:      floatOr(raw.Triage.ActNowEPSS, defaultActNowEPSS),
@@ -194,7 +231,7 @@ func Parse(data []byte) (Config, error) {
 	}
 
 	applyDefaults(&c)
-	if err := validate(&c); err != nil {
+	if err := validate(&c, raw.Docker.Socket != nil); err != nil {
 		return Config{}, err
 	}
 	return c, nil
@@ -220,7 +257,24 @@ func applyDefaults(c *Config) {
 	}
 }
 
-func validate(c *Config) error {
+// namespacePattern matches a DNS-1123 label, the syntax Kubernetes namespace
+// names use. It mirrors inventory.environmentNamePattern's rule (lowercase
+// alphanumerics and hyphens, 1-63 bytes, alphanumeric ends) but is kept as its
+// own regexp since it validates an unrelated config key.
+var namespacePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+
+func validate(c *Config, dockerSocketExplicit bool) error {
+	if c.Kubernetes.Enabled && dockerSocketExplicit {
+		return fmt.Errorf("config: configure either docker.socket or kubernetes.enabled, not both")
+	}
+	for _, ns := range c.Kubernetes.Namespaces {
+		if !namespacePattern.MatchString(ns) {
+			return fmt.Errorf("config: invalid kubernetes.namespaces entry %q: must be 1-63 bytes of lowercase alphanumerics and hyphens, starting and ending with an alphanumeric", ns)
+		}
+	}
+	if c.Kubernetes.APIServer != "" && !strings.HasPrefix(c.Kubernetes.APIServer, "https://") {
+		return fmt.Errorf("config: kubernetes.api_server must use https, got %q", c.Kubernetes.APIServer)
+	}
 	if (c.Notify.SlackBotToken == "") != (c.Notify.SlackChannel == "") {
 		return fmt.Errorf("config: slack_bot_token and slack_channel must be set together")
 	}
@@ -264,6 +318,13 @@ func validate(c *Config) error {
 }
 
 func boolOr(p *bool, def bool) bool {
+	if p != nil {
+		return *p
+	}
+	return def
+}
+
+func stringOr(p *string, def string) string {
 	if p != nil {
 		return *p
 	}

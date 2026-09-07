@@ -290,6 +290,128 @@ func TestParse_TriageInvalidThresholds(t *testing.T) {
 	}
 }
 
+func TestParse_KubernetesDefaults(t *testing.T) {
+	// A config file predating the kubernetes: section (the whole existing
+	// corpus) must still parse under KnownFields(true) and get an adapter
+	// that stays off.
+	c, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if c.Kubernetes.Enabled {
+		t.Error("default Kubernetes.Enabled = true, want false")
+	}
+	if c.Kubernetes.APIServer != "" || c.Kubernetes.TokenFile != "" || c.Kubernetes.CAFile != "" || c.Kubernetes.TLSServerName != "" {
+		t.Errorf("default Kubernetes fields should be empty, got %+v", c.Kubernetes)
+	}
+	if len(c.Kubernetes.Namespaces) != 0 {
+		t.Errorf("default Kubernetes.Namespaces = %v, want empty", c.Kubernetes.Namespaces)
+	}
+	// docker.socket keeps applying its usual default, unaffected by the
+	// rawConfig.Docker.Socket pointer change.
+	if c.Docker.Socket != "/var/run/docker.sock" {
+		t.Errorf("default Socket = %q", c.Docker.Socket)
+	}
+}
+
+func TestParse_KubernetesAllKeys(t *testing.T) {
+	c, err := Parse([]byte(minimal + `
+kubernetes:
+  enabled: true
+  api_server: "https://10.0.0.1:443"
+  token_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+  ca_file: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+  tls_server_name: "kubernetes.default.svc"
+  namespaces: ["default", "kube-system"]
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want := KubernetesConfig{
+		Enabled:       true,
+		APIServer:     "https://10.0.0.1:443",
+		TokenFile:     "/var/run/secrets/kubernetes.io/serviceaccount/token",
+		CAFile:        "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+		TLSServerName: "kubernetes.default.svc",
+		Namespaces:    []string{"default", "kube-system"},
+	}
+	if c.Kubernetes.Enabled != want.Enabled ||
+		c.Kubernetes.APIServer != want.APIServer ||
+		c.Kubernetes.TokenFile != want.TokenFile ||
+		c.Kubernetes.CAFile != want.CAFile ||
+		c.Kubernetes.TLSServerName != want.TLSServerName ||
+		len(c.Kubernetes.Namespaces) != 2 || c.Kubernetes.Namespaces[0] != "default" || c.Kubernetes.Namespaces[1] != "kube-system" {
+		t.Errorf("Kubernetes = %+v, want %+v", c.Kubernetes, want)
+	}
+}
+
+func TestParse_KubernetesEnabledWithoutExplicitDockerSocket(t *testing.T) {
+	// docker.socket left out entirely (not even the docker: section) must not
+	// trip the mutual-exclusion check: Config.Docker.Socket still ends up
+	// non-empty (the default fills in), but that's not "explicitly set".
+	c, err := Parse([]byte(minimal + "\nkubernetes:\n  enabled: true\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v, want kubernetes.enabled alone to succeed", err)
+	}
+	if !c.Kubernetes.Enabled {
+		t.Error("Kubernetes.Enabled = false, want true")
+	}
+	if c.Docker.Socket != "/var/run/docker.sock" {
+		t.Errorf("Docker.Socket = %q, want default to still apply", c.Docker.Socket)
+	}
+}
+
+func TestParse_KubernetesEnabledWithExplicitDockerSocketRejected(t *testing.T) {
+	for _, body := range []string{
+		`docker:
+  socket: "/var/run/docker.sock"`, // explicit, even matching the default value
+		`docker:
+  socket: "/custom/docker.sock"`,
+		`docker:
+  socket: ""`, // explicit empty string still counts as "set"
+	} {
+		_, err := Parse([]byte(minimal + "\nkubernetes:\n  enabled: true\n" + body + "\n"))
+		if err == nil {
+			t.Errorf("body %q: expected mutual-exclusion error", body)
+			continue
+		}
+		if !strings.Contains(err.Error(), "docker.socket") || !strings.Contains(err.Error(), "kubernetes.enabled") {
+			t.Errorf("body %q: err = %v, want it to name both docker.socket and kubernetes.enabled", body, err)
+		}
+	}
+}
+
+func TestParse_KubernetesInvalidNamespaceRejected(t *testing.T) {
+	invalid := []string{
+		"Default",               // uppercase
+		"kube_system",           // underscore
+		"kube.system",           // dot
+		"",                      // empty entry
+		strings.Repeat("a", 64), // over 63 bytes
+	}
+	for _, ns := range invalid {
+		t.Run(ns, func(t *testing.T) {
+			_, err := Parse([]byte(minimal + "\nkubernetes:\n  namespaces: [\"" + ns + "\"]\n"))
+			if err == nil {
+				t.Fatalf("Parse: expected error for invalid namespace %q", ns)
+			}
+			if !strings.Contains(err.Error(), "namespaces") {
+				t.Errorf("err = %v, want it to mention namespaces", err)
+			}
+		})
+	}
+}
+
+func TestParse_KubernetesAPIServerRequiresHTTPS(t *testing.T) {
+	_, err := Parse([]byte(minimal + "\nkubernetes:\n  api_server: \"http://10.0.0.1:443\"\n"))
+	if err == nil {
+		t.Fatal("Parse: expected error for http:// api_server")
+	}
+	if !strings.Contains(err.Error(), "api_server") {
+		t.Errorf("err = %v, want it to mention api_server", err)
+	}
+}
+
 func TestParse_TriageDisabledSkipsThresholdValidation(t *testing.T) {
 	// A nonsensical threshold must not block someone turning the feature off.
 	_, err := Parse([]byte(`

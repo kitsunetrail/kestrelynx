@@ -1,0 +1,13 @@
+# Binds the read-only ClusterRole to the ServiceAccount the Deployment runs as.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kestrelynx
+subjects:
+  - kind: ServiceAccount
+    name: kestrelynx
+    namespace: kestrelynx
+roleRef:
+  kind: ClusterRole
+  name: kestrelynx
+  apiGroup: rbac.authorization.k8s.io

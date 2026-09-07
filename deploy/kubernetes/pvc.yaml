@@ -1,0 +1,16 @@
+# Diff-mode scan state must survive Pod recreation and never be written by
+# two Pods at once. ReadWriteOnce restricts attachment to one node (Pods on
+# that same node could still share it), and the Deployment's replicas: 1 +
+# Recreate strategy avoids overlapping Pods during rollouts; neither is a
+# universal mutual-exclusion guarantee on its own.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kestrelynx-state
+  namespace: kestrelynx
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

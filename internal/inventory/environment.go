@@ -26,7 +26,10 @@ type Environment struct {
 type EnvironmentKind string
 
 // KindDocker is a single Docker Engine host reached over docker.sock.
-const KindDocker EnvironmentKind = "docker" // future: KindKubernetes
+const KindDocker EnvironmentKind = "docker"
+
+// KindKubernetes is a Kubernetes cluster reached over the kube-apiserver REST API.
+const KindKubernetes EnvironmentKind = "kubernetes"
 
 // environmentNamePattern is a DNS-1123 label: lowercase alphanumerics and
 // hyphens, 1-63 bytes, starting and ending with an alphanumeric. This is

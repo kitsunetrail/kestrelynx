@@ -39,6 +39,30 @@ docker:
   # Path to docker.sock. KestreLynx only performs GET /containers/json.
   socket: "/var/run/docker.sock"
 
+# Kubernetes adapter (alternative to docker: above, not both). See
+# deploy/kubernetes/ for the manifests this is meant to run under.
+# kubernetes:
+#   # Set true to scan a Kubernetes cluster instead of a single Docker host.
+#   # Mutually exclusive with docker.socket (leave that section out entirely).
+#   enabled: false
+#   # kube-apiserver base URL, e.g. "https://10.0.0.1:443". Leave empty inside
+#   # a cluster: it's built from the KUBERNETES_SERVICE_HOST/PORT environment
+#   # variables Kubernetes injects into every Pod.
+#   api_server: ""
+#   # ServiceAccount token path. Leave empty to use the projected token every
+#   # Pod gets by default.
+#   token_file: ""
+#   # Cluster CA bundle path. Leave empty to use the default projected CA.
+#   ca_file: ""
+#   # Overrides the TLS server name used to validate the apiserver's
+#   # certificate. Leave empty unless api_server names an address the
+#   # certificate doesn't carry as a SAN.
+#   tls_server_name: ""
+#   # Restrict scanning to these namespaces. Empty (or omitted) scans every
+#   # namespace. Each entry must be a valid namespace name (lowercase
+#   # alphanumerics and hyphens, 1-63 bytes, alphanumeric ends).
+#   namespaces: []
+
 environment:
   # Optional name for this instance's scan history (e.g. "prod-vps"). This
   # names the history, not the machine: it is not derived from hostname/IP

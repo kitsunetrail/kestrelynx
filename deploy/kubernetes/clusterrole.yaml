@@ -1,0 +1,19 @@
+# Read-only get/list on the resources the adapter polls on a schedule (no
+# watch verb — it never watches). Cluster-scoped because Nodes aren't
+# namespaced; if kubernetes.namespaces restricts scanning to specific
+# namespaces, replace the namespaced rules below with a Role+RoleBinding per
+# namespace and keep only the Node rule as a ClusterRole.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kestrelynx
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list"]

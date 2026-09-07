@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -18,6 +19,7 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/docker"
 	"github.com/kitsunetrail/kestrelynx/internal/intel"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
+	"github.com/kitsunetrail/kestrelynx/internal/kubernetes"
 	"github.com/kitsunetrail/kestrelynx/internal/notify"
 	"github.com/kitsunetrail/kestrelynx/internal/runner"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
@@ -42,16 +44,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	dockerClient := docker.New(cfg.Docker.Socket)
-	dockerClient.Log = log
+	lister, envKind, err := buildLister(cfg, log)
+	if err != nil {
+		log.Error("configure runtime adapter", "err", err)
+		os.Exit(1)
+	}
 
 	// Kind identifies the Runtime Adapter this composition root wired up; it
-	// is never config-driven (only Name is), since Docker is the only
-	// adapter selected above.
-	env := inventory.Environment{Name: cfg.Environment.Name, Kind: inventory.KindDocker}
+	// is never config-driven (only Name is) — buildLister derives it
+	// mechanically from whichever adapter cfg.Kubernetes.Enabled selected.
+	env := inventory.Environment{Name: cfg.Environment.Name, Kind: envKind}
 
 	r := runner.Runner{
-		Lister:        dockerClient,
+		Lister:        lister,
 		Scanner:       scanner.Trivy{Severity: cfg.Scan.Severity},
 		Notifier:      notifier,
 		NotifyOnClean: cfg.Notify.NotifyOnClean,
@@ -96,6 +101,31 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("kestrelynx stopped")
+}
+
+// buildLister constructs the Runtime Adapter cfg.Kubernetes.Enabled selects
+// and reports which inventory.EnvironmentKind it wired up. Docker is the
+// default path and behaves exactly as it did before this adapter existed;
+// config validation already guarantees the two are mutually exclusive.
+func buildLister(cfg config.Config, log *slog.Logger) (runner.ContainerLister, inventory.EnvironmentKind, error) {
+	if cfg.Kubernetes.Enabled {
+		client, err := kubernetes.New(kubernetes.Options{
+			APIServer:     cfg.Kubernetes.APIServer,
+			TokenFile:     cfg.Kubernetes.TokenFile,
+			CAFile:        cfg.Kubernetes.CAFile,
+			TLSServerName: cfg.Kubernetes.TLSServerName,
+			Namespaces:    cfg.Kubernetes.Namespaces,
+			Log:           log,
+		})
+		if err != nil {
+			return nil, "", fmt.Errorf("kubernetes: %w", err)
+		}
+		return client, inventory.KindKubernetes, nil
+	}
+
+	dockerClient := docker.New(cfg.Docker.Socket)
+	dockerClient.Log = log
+	return dockerClient, inventory.KindDocker, nil
 }
 
 // buildNotifier assembles the configured notify targets into one Notifier.

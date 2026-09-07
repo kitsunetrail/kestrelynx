@@ -1,0 +1,61 @@
+# replicas: 1 and strategy.type: Recreate are load-bearing: diff-mode state
+# writes (plain tmp-file-then-rename, no cross-process locking) would
+# silently corrupt or overwrite each other's history if two Pods wrote
+# state.json at once. Recreate makes a rollout terminate the old Pod fully
+# before starting the new one, so Deployment updates never overlap; other
+# duplication (e.g. running a second copy by hand) is still on the operator.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kestrelynx
+  namespace: kestrelynx
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kestrelynx
+  template:
+    metadata:
+      labels:
+        app: kestrelynx
+    spec:
+      serviceAccountName: kestrelynx
+      containers:
+        - name: kestrelynx
+          image: ghcr.io/kitsunetrail/kestrelynx:latest
+          args: ["--config", "/etc/kestrelynx/config.yml"]
+          env:
+            - name: TZ
+              value: "UTC"
+            # Uncomment together with the registry-auth volume below to give
+            # Trivy credentials for private-registry images.
+            # - name: DOCKER_CONFIG
+            #   value: "/etc/kestrelynx/docker"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/kestrelynx
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/kestrelynx
+            # - name: registry-auth
+            #   mountPath: /etc/kestrelynx/docker
+            #   readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: kestrelynx-config
+        - name: state
+          persistentVolumeClaim:
+            claimName: kestrelynx-state
+        # registry-auth projects a kubernetes.io/dockerconfigjson Secret's
+        # .dockerconfigjson key as config.json under the DOCKER_CONFIG
+        # directory Trivy reads for registry auth. Secret updates propagate
+        # to the mounted file automatically, but not immediately.
+        # - name: registry-auth
+        #   secret:
+        #     secretName: kestrelynx-registry-auth
+        #     items:
+        #       - key: .dockerconfigjson
+        #         path: config.json

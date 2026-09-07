@@ -66,8 +66,14 @@ type Runner struct {
 	// on which environment they describe. The zero value is the unnamed
 	// default environment.
 	Environment inventory.Environment
-	Now         func() time.Time
-	Log         *slog.Logger
+	// Source is the ScanSource this Runner's ContainerLister observes
+	// images from, stamped onto every ScanTarget scanAll builds. The zero
+	// value is treated as scanner.SourceLocal (see source()) so existing
+	// Docker callers that never set this field keep their exact prior
+	// behavior; cmd/kestrelynx wiring sets it explicitly per adapter.
+	Source scanner.ScanSource
+	Now    func() time.Time
+	Log    *slog.Logger
 }
 
 // NoFullReport disables the weekly full report in diff mode.
@@ -85,6 +91,16 @@ func (r Runner) log() *slog.Logger {
 		return r.Log
 	}
 	return slog.Default()
+}
+
+// source normalizes r.Source: the zero value (an unset field) is
+// scanner.SourceLocal, so a Runner built without a Source behaves exactly
+// as it did before this field existed.
+func (r Runner) source() scanner.ScanSource {
+	if r.Source == "" {
+		return scanner.SourceLocal
+	}
+	return r.Source
 }
 
 // RunOnce executes a single scan cycle. A failure to list images aborts the
@@ -122,6 +138,7 @@ func (r Runner) RunOnce(ctx context.Context) error {
 // (Ref, EntityKey)).
 func (r Runner) scanAll(ctx context.Context, images []inventory.RunningImage) []scanner.ImageScan {
 	log := r.log()
+	source := r.source()
 	scans := make([]scanner.ImageScan, 0, len(images))
 	byKey := map[inventory.EntityKey]scanner.ImageScan{}
 
@@ -130,7 +147,7 @@ func (r Runner) scanAll(ctx context.Context, images []inventory.RunningImage) []
 		subject := inventory.ImageSubject{Ref: img.Ref, Key: key, Resolved: resolved}
 
 		if !resolved {
-			result := r.Scanner.Scan(ctx, scanner.ScanTarget{Subject: subject, Source: scanner.SourceLocal})
+			result := r.Scanner.Scan(ctx, scanner.ScanTarget{Subject: subject, Registry: img.Registry, Source: source})
 			if result.Err != nil {
 				log.Warn("image scan failed", "image", img.Ref, "resolved", false, "err", result.Err)
 			}
@@ -141,7 +158,7 @@ func (r Runner) scanAll(ctx context.Context, images []inventory.RunningImage) []
 
 		result, ok := byKey[key]
 		if !ok || !result.Pinned {
-			result = r.Scanner.Scan(ctx, scanner.ScanTarget{Subject: subject, Source: scanner.SourceLocal})
+			result = r.Scanner.Scan(ctx, scanner.ScanTarget{Subject: subject, Registry: img.Registry, Source: source})
 			if result.Err != nil {
 				log.Warn("image scan failed", "image", img.Ref, "content_id", key.Digest.String(), "resolved", true, "err", result.Err)
 			}

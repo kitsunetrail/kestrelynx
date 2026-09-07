@@ -44,7 +44,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	lister, envKind, err := buildLister(cfg, log)
+	lister, envKind, scanSource, err := buildLister(cfg, log)
 	if err != nil {
 		log.Error("configure runtime adapter", "err", err)
 		os.Exit(1)
@@ -62,6 +62,7 @@ func main() {
 		NotifyOnClean: cfg.Notify.NotifyOnClean,
 		FullReportDay: runner.NoFullReport,
 		Environment:   env,
+		Source:        scanSource,
 		Now:           time.Now,
 		Log:           log,
 	}
@@ -104,10 +105,13 @@ func main() {
 }
 
 // buildLister constructs the Runtime Adapter cfg.Kubernetes.Enabled selects
-// and reports which inventory.EnvironmentKind it wired up. Docker is the
-// default path and behaves exactly as it did before this adapter existed;
-// config validation already guarantees the two are mutually exclusive.
-func buildLister(cfg config.Config, log *slog.Logger) (runner.ContainerLister, inventory.EnvironmentKind, error) {
+// and reports which inventory.EnvironmentKind it wired up, along with the
+// scanner.ScanSource that adapter's images must be scanned as (a registry
+// digest reached over the network for Kubernetes, the runtime's own image
+// store for Docker). Docker is the default path and behaves exactly as it
+// did before this adapter existed; config validation already guarantees the
+// two are mutually exclusive.
+func buildLister(cfg config.Config, log *slog.Logger) (runner.ContainerLister, inventory.EnvironmentKind, scanner.ScanSource, error) {
 	if cfg.Kubernetes.Enabled {
 		client, err := kubernetes.New(kubernetes.Options{
 			APIServer:     cfg.Kubernetes.APIServer,
@@ -118,14 +122,14 @@ func buildLister(cfg config.Config, log *slog.Logger) (runner.ContainerLister, i
 			Log:           log,
 		})
 		if err != nil {
-			return nil, "", fmt.Errorf("kubernetes: %w", err)
+			return nil, "", "", fmt.Errorf("kubernetes: %w", err)
 		}
-		return client, inventory.KindKubernetes, nil
+		return client, inventory.KindKubernetes, scanner.SourceRemote, nil
 	}
 
 	dockerClient := docker.New(cfg.Docker.Socket)
 	dockerClient.Log = log
-	return dockerClient, inventory.KindDocker, nil
+	return dockerClient, inventory.KindDocker, scanner.SourceLocal, nil
 }
 
 // buildNotifier assembles the configured notify targets into one Notifier.

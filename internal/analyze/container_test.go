@@ -48,10 +48,10 @@ func TestBuild_ContainersAttachByEntityAndByRef(t *testing.T) {
 		resolvedScan("web:1", contentA, nil, pipA),
 		resolvedScan("web:1", contentB, nil, pipB),
 	}
-	ctrA := inventory.Container{Name: "web-a", Image: inventory.RunningImage{Ref: "web:1", ContentID: contentA}}
-	ctrB1 := inventory.Container{Name: "web-b1", Image: inventory.RunningImage{Ref: "web:1", ContentID: contentB}}
-	ctrB2 := inventory.Container{Name: "web-b2", Image: inventory.RunningImage{Ref: "web:1", ContentID: contentB}}
-	other := inventory.Container{Name: "other", Image: inventory.RunningImage{Ref: "other:1", ContentID: contentA}}
+	ctrA := inventory.Container{Name: "web-a", Image: inventory.RunningImage{Ref: "web:1", Config: configDigest(t, contentA)}}
+	ctrB1 := inventory.Container{Name: "web-b1", Image: inventory.RunningImage{Ref: "web:1", Config: configDigest(t, contentB)}}
+	ctrB2 := inventory.Container{Name: "web-b2", Image: inventory.RunningImage{Ref: "web:1", Config: configDigest(t, contentB)}}
+	other := inventory.Container{Name: "other", Image: inventory.RunningImage{Ref: "other:1", Config: configDigest(t, contentA)}}
 	containers := []inventory.Container{ctrA, ctrB1, ctrB2, other}
 
 	r := Build(scans, containers, Triage{}, fixedTime)
@@ -121,7 +121,7 @@ func TestBuild_ContainersUnresolvedEntityMatchesByRefOnly(t *testing.T) {
 			},
 		},
 	}
-	resolved := inventory.Container{Name: "legacy-resolved", Image: inventory.RunningImage{Ref: "legacy:1", ContentID: contentA}}
+	resolved := inventory.Container{Name: "legacy-resolved", Image: inventory.RunningImage{Ref: "legacy:1", Config: configDigest(t, contentA)}}
 	unresolved := inventory.Container{Name: "legacy-unresolved", Image: inventory.RunningImage{Ref: "legacy:1"}}
 	containers := []inventory.Container{resolved, unresolved}
 

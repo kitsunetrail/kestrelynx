@@ -223,9 +223,13 @@ func TestScanAll_ContentIDDedup_ScansOnceReplicatesToAllRefs(t *testing.T) {
 		},
 	}}
 	r := Runner{Scanner: sc, Now: clock}
+	cfg, ok := inventory.ParseDigest(inventory.DigestConfig, cid)
+	if !ok {
+		t.Fatalf("test fixture: invalid digest %q", cid)
+	}
 	images := []inventory.RunningImage{
-		{Ref: "app:v1", ContentID: cid},
-		{Ref: "app:v2", ContentID: cid},
+		{Ref: "app:v1", Config: cfg},
+		{Ref: "app:v2", Config: cfg},
 	}
 
 	scans := r.scanAll(context.Background(), images)
@@ -304,10 +308,14 @@ func TestRunOnce_ContentIDDedup_ReportCoversBothAliases(t *testing.T) {
 			},
 		},
 	}}
+	cfg, ok := inventory.ParseDigest(inventory.DigestConfig, cid)
+	if !ok {
+		t.Fatalf("test fixture: invalid digest %q", cid)
+	}
 	r := Runner{
 		Lister: fakeLister{containers: []inventory.Container{
-			{Image: inventory.RunningImage{Ref: "app:v1", ContentID: cid}},
-			{Image: inventory.RunningImage{Ref: "app:v2", ContentID: cid}},
+			{Image: inventory.RunningImage{Ref: "app:v1", Config: cfg}},
+			{Image: inventory.RunningImage{Ref: "app:v2", Config: cfg}},
 		}},
 		Scanner:  sc,
 		Notifier: notif,
@@ -493,8 +501,8 @@ func TestRunOnce_DiffMode_FullReportDay(t *testing.T) {
 // it because state had already "moved past" it.
 //
 // The lister and scanner must agree on which content is running each cycle
-// (inventory.RunningImage.ContentID feeds scanner.ScanTarget.ContentID, which
-// the real scanner.Trivy.Scan echoes back as ExpectedContentID,
+// (inventory.RunningImage.ContentID() feeds scanner.ScanTarget.ContentID,
+// which the real scanner.Trivy.Scan echoes back as ExpectedContentID,
 // internal/scanner/exec.go:reconcileTarget) — a lister reporting no
 // ContentID while the fake scanner claims a resolved identity is an
 // unrealistic combination that no real pipeline would produce.
@@ -503,7 +511,11 @@ func TestRunOnce_DiffMode_SendFailure_ReplacedPersistsToNextCycle(t *testing.T) 
 	cidB := "sha256:" + strings.Repeat("b", 64)
 
 	imagesWith := func(cid string) []inventory.Container {
-		return []inventory.Container{{Image: inventory.RunningImage{Ref: "app:1", ContentID: cid}}}
+		cfg, ok := inventory.ParseDigest(inventory.DigestConfig, cid)
+		if !ok {
+			t.Fatalf("test fixture: invalid digest %q", cid)
+		}
+		return []inventory.Container{{Image: inventory.RunningImage{Ref: "app:1", Config: cfg}}}
 	}
 	scanWith := func(cid string) *fakeScanner {
 		return &fakeScanner{byImage: map[string]scanner.ImageScan{

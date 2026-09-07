@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
@@ -209,6 +210,18 @@ func resolvedScan(ref, contentID string, digests []string, finds ...scanner.Find
 		Image: ref, ContentID: contentID, ExpectedContentID: contentID,
 		RegistryDigests: digests, IdentityResolved: true, Findings: finds,
 	}
+}
+
+// configDigest parses s (expected to be a well-formed sha256 fixture like
+// contentA/contentB) into the inventory.Digest an inventory.RunningImage
+// carries as Config.
+func configDigest(t *testing.T, s string) inventory.Digest {
+	t.Helper()
+	d, ok := inventory.ParseDigest(inventory.DigestConfig, s)
+	if !ok {
+		t.Fatalf("test fixture: invalid digest %q", s)
+	}
+	return d
 }
 
 func imgObs(t *testing.T, images []ImageObservation, ref string) ImageObservation {

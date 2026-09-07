@@ -158,6 +158,10 @@ func TestBuildWebhookPayload_EnvironmentNamed(t *testing.T) {
 // shapes and the per-status-section duplication rule together.
 func containersReport() analyze.Report {
 	const contentID = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	configDigest, ok := inventory.ParseDigest(inventory.DigestConfig, contentID)
+	if !ok {
+		panic("test fixture: invalid digest " + contentID)
+	}
 	scans := []scanner.ImageScan{
 		{
 			Image:             "web:1.0",
@@ -173,12 +177,12 @@ func containersReport() analyze.Report {
 		{
 			Name:     "proj-web-1",
 			Workload: inventory.Workload{Kind: inventory.WorkloadCompose, Group: "proj", Name: "web"},
-			Image:    inventory.RunningImage{Ref: "web:1.0", ContentID: contentID},
+			Image:    inventory.RunningImage{Ref: "web:1.0", Config: configDigest},
 		},
 		{
 			Name:     "stray",
 			Workload: inventory.Workload{Kind: inventory.WorkloadUnknown},
-			Image:    inventory.RunningImage{Ref: "web:1.0", ContentID: contentID},
+			Image:    inventory.RunningImage{Ref: "web:1.0", Config: configDigest},
 		},
 	}
 	return analyze.Build(scans, containers, analyze.Triage{}, genTime)

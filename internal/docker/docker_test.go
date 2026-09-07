@@ -93,8 +93,8 @@ func TestRunningContainers_MissingImageID_ContentIDEmpty(t *testing.T) {
 	if len(cs) != 1 {
 		t.Fatalf("got %+v, want 1 entry", cs)
 	}
-	if cs[0].Image.ContentID != "" {
-		t.Errorf("ContentID = %q, want empty (ImageID missing)", cs[0].Image.ContentID)
+	if cs[0].Image.ContentID() != "" {
+		t.Errorf("ContentID = %q, want empty (ImageID missing)", cs[0].Image.ContentID())
 	}
 }
 
@@ -118,8 +118,8 @@ func TestRunningContainers_MalformedImageID_ContentIDEmpty(t *testing.T) {
 			if len(cs) != 1 {
 				t.Fatalf("got %+v, want 1 entry", cs)
 			}
-			if cs[0].Image.ContentID != "" {
-				t.Errorf("ContentID = %q, want empty (malformed ImageID must not be normalized or guessed)", cs[0].Image.ContentID)
+			if cs[0].Image.ContentID() != "" {
+				t.Errorf("ContentID = %q, want empty (malformed ImageID must not be normalized or guessed)", cs[0].Image.ContentID())
 			}
 		})
 	}
@@ -293,7 +293,7 @@ func TestRunningContainers_SameImageTwoContainers_TwoEntries(t *testing.T) {
 		t.Errorf("Names = [%q %q], want [web1 web2] (sorted deterministically)", cs[0].Name, cs[1].Name)
 	}
 	for _, c := range cs {
-		if c.Image.Ref != "nginx:1.25" || c.Image.ContentID != validID1 {
+		if c.Image.Ref != "nginx:1.25" || c.Image.ContentID() != validID1 {
 			t.Errorf("Image = %+v, want Ref=nginx:1.25 ContentID=%s", c.Image, validID1)
 		}
 	}

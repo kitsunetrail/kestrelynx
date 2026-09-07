@@ -121,7 +121,8 @@ func (r Runner) scanAll(ctx context.Context, images []inventory.RunningImage) []
 	byContentID := map[string]scanner.ImageScan{}
 
 	for _, img := range images {
-		if img.ContentID == "" {
+		contentID := img.ContentID()
+		if contentID == "" {
 			result := r.Scanner.Scan(ctx, scanner.ScanTarget{Ref: img.Ref})
 			if result.Err != nil {
 				log.Warn("image scan failed", "image", img.Ref, "resolved", false, "err", result.Err)
@@ -131,15 +132,15 @@ func (r Runner) scanAll(ctx context.Context, images []inventory.RunningImage) []
 			continue
 		}
 
-		result, ok := byContentID[img.ContentID]
+		result, ok := byContentID[contentID]
 		if !ok {
-			result = r.Scanner.Scan(ctx, scanner.ScanTarget{Ref: img.Ref, ContentID: img.ContentID})
+			result = r.Scanner.Scan(ctx, scanner.ScanTarget{Ref: img.Ref, ContentID: contentID})
 			if result.Err != nil {
-				log.Warn("image scan failed", "image", img.Ref, "content_id", img.ContentID, "resolved", true, "err", result.Err)
+				log.Warn("image scan failed", "image", img.Ref, "content_id", contentID, "resolved", true, "err", result.Err)
 			}
-			byContentID[img.ContentID] = result
+			byContentID[contentID] = result
 		}
-		log.Info("scanned image", "ref", img.Ref, "content_id", img.ContentID, "resolved", true)
+		log.Info("scanned image", "ref", img.Ref, "content_id", contentID, "resolved", true)
 		scans = append(scans, retarget(result, img.Ref))
 	}
 	return scans

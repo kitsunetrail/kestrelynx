@@ -201,8 +201,8 @@ func TestByPriority_AmbiguousReferencePreservesOwnContainers(t *testing.T) {
 			f("app:1", scanner.ClassOS, "pip", "1.0.0", "1.0.1", scanner.StatusFixed, scanner.SeverityCritical, "CVE-B")),
 	}
 	containers := []inventory.Container{
-		{Name: "app-a", Image: inventory.RunningImage{Ref: "app:1", ContentID: contentA}},
-		{Name: "app-b", Image: inventory.RunningImage{Ref: "app:1", ContentID: contentB}},
+		{Name: "app-a", Image: inventory.RunningImage{Ref: "app:1", Config: configDigest(t, contentA)}},
+		{Name: "app-b", Image: inventory.RunningImage{Ref: "app:1", Config: configDigest(t, contentB)}},
 	}
 	enrich := map[string]Enrichment{"CVE-A": {KEV: true}, "CVE-B": {KEV: true}}
 	r := Build(scans, containers, tr(enrich), fixedTime)

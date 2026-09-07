@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -68,12 +67,6 @@ type container struct {
 	Names   []string          `json:"Names"`
 	Labels  map[string]string `json:"Labels"`
 }
-
-// contentIDPattern is the boundary check for the OCI image config digest: an
-// exact "sha256:" followed by 64 lowercase hex characters. Anything else
-// (wrong length, uppercase, a different algorithm) fails validation outright
-// — no normalization or guessing.
-var contentIDPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 // Docker Compose labels that, together, resolve a container's Workload.
 const (
@@ -145,7 +138,7 @@ func containerName(names []string) string {
 // entries, since that multiplicity is itself an observation (needed
 // downstream to associate a workload with each). Callers that want the
 // distinct set of images to scan use inventory.DistinctImages on the result.
-// The return order is deterministic: (Image.Ref, Image.ContentID,
+// The return order is deterministic: (Image.Ref, Image.ContentID(),
 // Workload.Group, Workload.Name, Container.Name), lexicographically.
 func (c *Client) RunningContainers(ctx context.Context) ([]inventory.Container, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/containers/json", nil)
@@ -172,10 +165,9 @@ func (c *Client) RunningContainers(ctx context.Context) ([]inventory.Container, 
 	containers := make([]inventory.Container, 0, len(raw))
 	for _, ct := range raw {
 		img := inventory.RunningImage{Ref: ct.Image}
-		switch {
-		case contentIDPattern.MatchString(ct.ImageID):
-			img.ContentID = ct.ImageID
-		case ct.ImageID != "":
+		if d, ok := inventory.ParseDigest(inventory.DigestConfig, ct.ImageID); ok {
+			img.Config = d
+		} else if ct.ImageID != "" {
 			// A non-empty ImageID that fails the boundary check is never
 			// normalized or guessed at — the common model has no place for
 			// an unresolved raw value, so it stays a log-only diagnostic
@@ -195,8 +187,8 @@ func (c *Client) RunningContainers(ctx context.Context) ([]inventory.Container, 
 		if a.Image.Ref != b.Image.Ref {
 			return a.Image.Ref < b.Image.Ref
 		}
-		if a.Image.ContentID != b.Image.ContentID {
-			return a.Image.ContentID < b.Image.ContentID
+		if a.Image.ContentID() != b.Image.ContentID() {
+			return a.Image.ContentID() < b.Image.ContentID()
 		}
 		if a.Workload.Group != b.Workload.Group {
 			return a.Workload.Group < b.Workload.Group

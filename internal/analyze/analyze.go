@@ -358,7 +358,7 @@ func indexContainers(containers []inventory.Container) (byKey map[imgKey][]inven
 		if c.Image.Ref == "" {
 			continue
 		}
-		k := imgKey{ref: c.Image.Ref, contentID: c.Image.ContentID}
+		k := imgKey{ref: c.Image.Ref, contentID: c.Image.ContentID()}
 		byKey[k] = append(byKey[k], c)
 		byRef[c.Image.Ref] = append(byRef[c.Image.Ref], c)
 	}

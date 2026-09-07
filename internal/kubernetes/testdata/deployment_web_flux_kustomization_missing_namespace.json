@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web",
+    "uid": "deploy-uid-1",
+    "labels": {
+      "kustomize.toolkit.fluxcd.io/name": "web-ks"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web",
+    "uid": "deploy-uid-1",
+    "labels": {
+      "app.kubernetes.io/managed-by": "Helm",
+      "kustomize.toolkit.fluxcd.io/name": "web-ks",
+      "kustomize.toolkit.fluxcd.io/namespace": "flux-system"
+    },
+    "annotations": {
+      "meta.helm.sh/release-name": "my-release",
+      "meta.helm.sh/release-namespace": "default",
+      "argocd.argoproj.io/tracking-id": "myapp:apps/Deployment:default/web"
+    }
+  }
+}

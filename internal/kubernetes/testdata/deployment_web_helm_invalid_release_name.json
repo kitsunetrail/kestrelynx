@@ -1,0 +1,14 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web",
+    "uid": "deploy-uid-1",
+    "labels": {
+      "app.kubernetes.io/managed-by": "Helm"
+    },
+    "annotations": {
+      "meta.helm.sh/release-name": "bad\nname",
+      "meta.helm.sh/release-namespace": "default"
+    }
+  }
+}

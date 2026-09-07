@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web",
+    "uid": "deploy-uid-1",
+    "labels": {
+      "app.kubernetes.io/instance": "label-app"
+    },
+    "annotations": {
+      "argocd.argoproj.io/tracking-id": "annotation-app:apps/Deployment:default/web"
+    }
+  }
+}

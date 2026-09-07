@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web",
+    "uid": "deploy-uid-1",
+    "annotations": {
+      "argocd.argoproj.io/tracking-id": "myapp:batch/Deployment:default/web"
+    }
+  }
+}

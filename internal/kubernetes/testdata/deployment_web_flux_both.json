@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web",
+    "uid": "deploy-uid-1",
+    "labels": {
+      "kustomize.toolkit.fluxcd.io/name": "web-ks",
+      "kustomize.toolkit.fluxcd.io/namespace": "flux-system",
+      "helm.toolkit.fluxcd.io/name": "web-hr",
+      "helm.toolkit.fluxcd.io/namespace": "flux-system"
+    }
+  }
+}

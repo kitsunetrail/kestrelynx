@@ -91,6 +91,11 @@ type ImageScan struct {
 	Subject         inventory.ImageSubject // the identity this scan was asked to confirm (ScanTarget.Subject)
 	ScannedKey      inventory.EntityKey    // the entity Trivy's own metadata resolved to scanning, zero value if it didn't resolve one
 	RegistryDigests []string               // Metadata.RepoDigests, sorted; a display/correlation attribute, never an identity
+	// Platform is Metadata.ImageConfig.{os,architecture,variant}, copied
+	// through without validation or normalization (empty stays empty; never
+	// guessed). For a registry-kind pin it is the evidence reconcileTarget
+	// checks against the requested Subject.Key.Platform.
+	Platform inventory.Platform
 	// Pinned is true only when Subject.Resolved, the scan itself succeeded
 	// (Err == nil), and ScannedKey equals Subject.Key — it is derived from
 	// those three facts alone and never set independently of them.
@@ -121,6 +126,11 @@ type trivyReport struct {
 		} `json:"OS"`
 		ImageID     string   `json:"ImageID"`
 		RepoDigests []string `json:"RepoDigests"`
+		ImageConfig struct {
+			OS           string `json:"os"`
+			Architecture string `json:"architecture"`
+			Variant      string `json:"variant"`
+		} `json:"ImageConfig"`
 	} `json:"Metadata"`
 	Results []struct {
 		Class           string `json:"Class"`
@@ -157,6 +167,11 @@ func ParseReport(data []byte) (ImageScan, error) {
 		OSFamily:        r.Metadata.OS.Family,
 		OSEOSL:          r.Metadata.OS.EOSL,
 		RegistryDigests: registryDigests,
+		Platform: inventory.Platform{
+			OS:           r.Metadata.ImageConfig.OS,
+			Architecture: r.Metadata.ImageConfig.Architecture,
+			Variant:      r.Metadata.ImageConfig.Variant,
+		},
 	}
 	// A Metadata.ImageID that fails the boundary check is never normalized
 	// or guessed at: ScannedKey simply stays the zero value, same as an

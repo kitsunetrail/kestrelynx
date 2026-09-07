@@ -47,12 +47,40 @@ func pinnedByConfig(target ScanTarget) bool {
 	return target.Subject.Resolved && target.Subject.Key.Digest.Kind == inventory.DigestConfig
 }
 
+// pinnedByRegistry reports whether target asks for the registry-kind
+// invocation: a resolved Subject whose entity key is a registry digest,
+// fetched from a registry over the network (Kubernetes) via a validated
+// repository and a registry-kind digest to request, with a known platform
+// to ask for. This is the sole gate for both the trivyArgs registry branch
+// and the reconcileTarget registry pin check, so the two can never disagree
+// about whether a given target was scanned as a registry pin.
+//
+// This gate does not by itself guarantee Subject.Key.Digest and
+// Registry.Digest name the same content: Registry says where to fetch from
+// and Subject.Key says what identity the scan is meant to confirm, and the
+// two are populated independently by the caller. reconcileTarget checks
+// that consistency separately (registryTargetConsistent) before trusting a
+// scan against this target as a pin.
+func pinnedByRegistry(target ScanTarget) bool {
+	return target.Subject.Resolved &&
+		target.Subject.Key.Digest.Kind == inventory.DigestRegistry &&
+		target.Source == SourceRemote &&
+		target.Registry.Digest.Kind == inventory.DigestRegistry &&
+		target.Registry.Digest.Valid() &&
+		target.Registry.Repository != "" &&
+		target.Subject.Key.Platform.Known()
+}
+
 // trivyArgs builds the CLI arguments for scanning target. When the target is
 // pinned to a config digest, the scan is restricted to the local Docker
 // image store (--image-src docker) so Trivy can never resolve a different
-// image than the one Docker reported running. The Ref-only fallback path
-// keeps its arguments exactly as before (existing behavior; no
-// --image-src is added).
+// image than the one Docker reported running. When the target is pinned to a
+// registry digest, the scan fetches straight from the registry
+// (--image-src remote), pinned to the requested platform, so Trivy resolves
+// the same platform-specific manifest the caller observed running rather
+// than whatever the multi-platform index would resolve to locally. The
+// Ref-only fallback path keeps its arguments exactly as before (existing
+// behavior; no --image-src is added).
 func (t Trivy) trivyArgs(target ScanTarget) []string {
 	args := []string{
 		"image",
@@ -60,10 +88,16 @@ func (t Trivy) trivyArgs(target ScanTarget) []string {
 		"--format", "json",
 		"--severity", t.severity(),
 	}
-	if pinnedByConfig(target) {
+	switch {
+	case pinnedByConfig(target):
 		return append(args, "--image-src", "docker", target.Subject.Key.Digest.String())
+	case pinnedByRegistry(target):
+		platform := target.Subject.Key.Platform.OS + "/" + target.Subject.Key.Platform.Architecture
+		ref := target.Registry.Repository + "@" + target.Registry.Digest.String()
+		return append(args, "--image-src", "remote", "--platform", platform, ref)
+	default:
+		return append(args, target.Subject.Ref)
 	}
-	return append(args, target.Subject.Ref)
 }
 
 // pinnedOf derives ImageScan.Pinned: Subject.Resolved, the scan succeeded,
@@ -73,10 +107,52 @@ func pinnedOf(scan ImageScan, target ScanTarget) bool {
 	return target.Subject.Resolved && scan.Err == nil && scan.ScannedKey == target.Subject.Key
 }
 
+// registryTargetConsistent reports whether target's two identity fields
+// agree: the digest Registry says to fetch from must be the exact digest
+// Subject.Key claims the scan is meant to confirm. inventory.RegistryRef and
+// inventory.EntityKey are populated independently by target's caller and
+// have no structural link to each other, so scanner must check this itself
+// rather than assume a caller wired the two consistently — a target built
+// with Subject.Key naming one digest and Registry naming another must never
+// read back as a confirmed pin just because the mismatched one it actually
+// fetched happens to check out.
+func registryTargetConsistent(target ScanTarget) bool {
+	return target.Subject.Key.Digest == target.Registry.Digest
+}
+
+// registryDigestConfirmed reports whether scan's own metadata confirms the
+// registry digest target requested: the requested digest must appear among
+// Metadata.RepoDigests, and Metadata.ImageConfig.{os,architecture} must
+// match the requested platform's OS/Architecture. Variants are outside what
+// this comparison can confirm (the platform observed at discovery does not
+// report one), so a non-empty Variant on either side — the requested
+// platform or the scanned ImageConfig — is rejected rather than silently
+// accepted as a match: accepting it would guess that the variant named on
+// one side is the one actually running, which nothing available here can
+// confirm.
+func registryDigestConfirmed(scan ImageScan, target ScanTarget) bool {
+	want := "@" + target.Registry.Digest.String()
+	found := false
+	for _, rd := range scan.RegistryDigests {
+		if strings.HasSuffix(rd, want) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return false
+	}
+	if scan.Platform.Variant != "" || target.Subject.Key.Platform.Variant != "" {
+		return false
+	}
+	wantPlatform := target.Subject.Key.Platform
+	return scan.Platform.OS == wantPlatform.OS && scan.Platform.Architecture == wantPlatform.Architecture
+}
+
 // reconcileTarget applies the pin check to a freshly parsed report for a
-// config-digest-pinned scan target: a mismatch is an environment anomaly,
-// not a finding, so it is surfaced as a scan error rather than attributed to
-// the running content.
+// pinned scan target (config digest or registry digest): a mismatch is an
+// environment anomaly, not a finding, so it is surfaced as a scan error
+// rather than attributed to the running content.
 // scan.Image is always pinned to target.Subject.Ref (ArtifactName is the
 // sha256 string for a pinned scan, confirmed in production).
 func reconcileTarget(scan ImageScan, target ScanTarget) ImageScan {
@@ -92,6 +168,33 @@ func reconcileTarget(scan ImageScan, target ScanTarget) ImageScan {
 			Err: fmt.Errorf("trivy scan %s: scanned content %q does not match expected %q",
 				target.Subject.Ref, scan.ScannedKey.Digest.String(), target.Subject.Key.Digest.String()),
 		}
+	}
+	if pinnedByRegistry(target) {
+		if !registryTargetConsistent(target) {
+			return ImageScan{
+				Image:   target.Subject.Ref,
+				Subject: target.Subject,
+				Source:  target.Source,
+				Err: fmt.Errorf("trivy scan %s: registry target inconsistent: Subject.Key.Digest %q does not match Registry.Digest %q it was fetched from",
+					target.Subject.Ref, target.Subject.Key.Digest.String(), target.Registry.Digest.String()),
+			}
+		}
+		if !registryDigestConfirmed(scan, target) {
+			return ImageScan{
+				Image:      target.Subject.Ref,
+				Subject:    target.Subject,
+				Source:     target.Source,
+				ScannedKey: scan.ScannedKey,
+				Err: fmt.Errorf("trivy scan %s: registry digest %s not confirmed by scan metadata (repoDigests=%v, imageConfig platform=%q/%q, want platform %s/%s)",
+					target.Subject.Ref, target.Registry.Digest.String(), scan.RegistryDigests,
+					scan.Platform.OS, scan.Platform.Architecture,
+					target.Subject.Key.Platform.OS, target.Subject.Key.Platform.Architecture),
+			}
+		}
+		// The requested registry digest and platform are both confirmed:
+		// this is the entity Trivy actually scanned, even though nothing in
+		// Metadata.ImageID (a config digest) says so directly.
+		scan.ScannedKey = target.Subject.Key
 	}
 	scan.Pinned = pinnedOf(scan, target)
 	return scan

@@ -177,11 +177,48 @@ func TestParseReport_RealOutput_Identity(t *testing.T) {
 	}
 }
 
+// The real Trivy output's Metadata.ImageConfig.{os,architecture} must parse
+// into Platform. Guards against schema drift in the platform fields the
+// registry-kind pin check depends on.
+func TestParseReport_RealOutput_Platform(t *testing.T) {
+	scan, err := ParseReport(loadFixture(t, "real_python_3.9.1-slim.json"))
+	if err != nil {
+		t.Fatalf("ParseReport(real): %v", err)
+	}
+	want := inventory.Platform{OS: "linux", Architecture: "amd64"}
+	if scan.Platform != want {
+		t.Errorf("Platform = %+v, want %+v", scan.Platform, want)
+	}
+}
+
+// A report with no Metadata.ImageConfig at all (sample.json predates that
+// field in our fixtures) must parse to the zero Platform, not a guessed one.
+func TestParseReport_MissingImageConfigIsEmptyPlatform(t *testing.T) {
+	scan, err := ParseReport(loadFixture(t, "sample.json"))
+	if err != nil {
+		t.Fatalf("ParseReport: %v", err)
+	}
+	if scan.Platform != (inventory.Platform{}) {
+		t.Errorf("Platform = %+v, want the zero value", scan.Platform)
+	}
+}
+
 // mustParseDigest parses s as a config digest or fails the test immediately
 // — only ever used to build well-formed test fixtures.
 func mustParseDigest(t *testing.T, s string) inventory.Digest {
 	t.Helper()
 	d, ok := inventory.ParseDigest(inventory.DigestConfig, s)
+	if !ok {
+		t.Fatalf("test fixture: invalid digest %q", s)
+	}
+	return d
+}
+
+// mustParseRegistryDigest parses s as a registry digest or fails the test
+// immediately — only ever used to build well-formed test fixtures.
+func mustParseRegistryDigest(t *testing.T, s string) inventory.Digest {
+	t.Helper()
+	d, ok := inventory.ParseDigest(inventory.DigestRegistry, s)
 	if !ok {
 		t.Fatalf("test fixture: invalid digest %q", s)
 	}

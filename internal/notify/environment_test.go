@@ -21,7 +21,7 @@ const wantSlackTextUnnamed = "🛡️ *KestreLynx* — scan results for 2026-06-
 
 // wantSlackDiffTextUnnamed is the diff-mode counterpart of
 // wantSlackTextUnnamed: the frozen full-text output of
-// FormatSlackDiffText(r, d, false) for diffFixture()'s unnamed-environment
+// FormatSlackDiffText(r, d, false, false) for diffFixture()'s unnamed-environment
 // report.
 const wantSlackDiffTextUnnamed = "🛡️ *KestreLynx* — scan results for 2026-06-24 09:00\n2 images scanned, 1 affected\n\n*⛔ New: base OS end-of-life (top priority)*\n• web:1.0 — identity unconfirmed: scanned by reference — base OS is EOL (no more security updates coming)\n\n*🆕 New since last scan (4)*\n🔴 web:1.0 — identity unconfirmed: scanned by reference\n   • libc-bin 2.28-10 → 2.28-10+deb10u2 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch\n   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [lang]\n   • e2fsprogs 1.44 (no fix available) (CRITICAL 0 / HIGH 1)\n   • gcc-8-base 8.3 (no fix available) (CRITICAL 0 / HIGH 1)\n\n*⚠️ Scan failures*\n• broken:1 — identity unconfirmed: scanned by reference — pull failed\n\n📌 Open now: CRITICAL 1 / HIGH 3 across 1 image(s)\n_Details in the generic webhook payload, or in the weekly full report._\n\n⚠️ identity unconfirmed: scanned by reference — broken:1, web:1.0\n"
 
@@ -40,7 +40,7 @@ func TestFormatSlackText_UnnamedEnvironmentUnchanged(t *testing.T) {
 // counterpart of TestFormatSlackText_UnnamedEnvironmentUnchanged.
 func TestFormatSlackDiffText_UnnamedEnvironmentUnchanged(t *testing.T) {
 	r, d := diffFixture()
-	if out := FormatSlackDiffText(r, d, false); out != wantSlackDiffTextUnnamed {
+	if out := FormatSlackDiffText(r, d, false, false); out != wantSlackDiffTextUnnamed {
 		t.Errorf("output changed for the unnamed environment:\ngot:  %q\nwant: %q", out, wantSlackDiffTextUnnamed)
 	}
 }
@@ -66,7 +66,7 @@ func TestFormatSlackText_NamedEnvironment(t *testing.T) {
 func TestFormatSlackDiffText_NamedEnvironment(t *testing.T) {
 	r, d := diffFixture()
 	r.Environment = inventory.Environment{Name: "prod-vps", Kind: inventory.KindDocker}
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 
 	want := "🛡️ *KestreLynx* [prod-vps] — scan results for 2026-06-24 09:00\n"
 	if !strings.HasPrefix(out, want) {
@@ -162,11 +162,14 @@ func containersReport() analyze.Report {
 	if !ok {
 		panic("test fixture: invalid digest " + contentID)
 	}
+	key := inventory.EntityKey{Digest: configDigest}
 	scans := []scanner.ImageScan{
 		{
-			Image:             "web:1.0",
-			ExpectedContentID: contentID,
-			IdentityResolved:  true,
+			Image:      "web:1.0",
+			Subject:    inventory.ImageSubject{Ref: "web:1.0", Key: key, Resolved: true},
+			ScannedKey: key,
+			Pinned:     true,
+			Source:     scanner.SourceLocal,
 			Findings: []scanner.Finding{
 				{Image: "web:1.0", Class: scanner.ClassOS, Package: "libc-bin", InstalledVer: "2.28-10", FixedVer: "2.28-10+deb10u2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
 				{Image: "web:1.0", Class: scanner.ClassOS, Package: "e2fsprogs", InstalledVer: "1.44", Status: scanner.StatusAffected, Severity: scanner.SeverityHigh, VulnID: "CVE-3"},

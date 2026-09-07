@@ -204,11 +204,41 @@ const (
 	contentB = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
-// resolvedScan builds an IdentityResolved ImageScan pinned to contentID.
-func resolvedScan(ref, contentID string, digests []string, finds ...scanner.Finding) scanner.ImageScan {
+// mustConfigKey parses s as a config digest EntityKey or panics — only ever
+// used to build well-formed test fixtures, never production data.
+func mustConfigKey(s string) inventory.EntityKey {
+	d, ok := inventory.ParseDigest(inventory.DigestConfig, s)
+	if !ok {
+		panic("test fixture: invalid digest " + s)
+	}
+	return inventory.EntityKey{Digest: d}
+}
+
+// failedResolvedScan builds a scan whose Subject resolved to contentID (the
+// caller had a Docker-observed identity to pin to) but whose Trivy scan
+// itself failed — Subject.Resolved survives the failure unchanged, while
+// Pinned stays false (Err != nil fails the pin check regardless).
+func failedResolvedScan(ref, contentID string, err error) scanner.ImageScan {
 	return scanner.ImageScan{
-		Image: ref, ContentID: contentID, ExpectedContentID: contentID,
-		RegistryDigests: digests, IdentityResolved: true, Findings: finds,
+		Image:   ref,
+		Subject: inventory.ImageSubject{Ref: ref, Key: mustConfigKey(contentID), Resolved: true},
+		Err:     err,
+	}
+}
+
+// resolvedScan builds a Pinned ImageScan confirmed against contentID, the
+// shape runner.scanAll produces for a running entity whose EntityKey
+// resolved and was confirmed.
+func resolvedScan(ref, contentID string, digests []string, finds ...scanner.Finding) scanner.ImageScan {
+	key := mustConfigKey(contentID)
+	return scanner.ImageScan{
+		Image:           ref,
+		Subject:         inventory.ImageSubject{Ref: ref, Key: key, Resolved: true},
+		ScannedKey:      key,
+		Pinned:          true,
+		Source:          scanner.SourceLocal,
+		RegistryDigests: digests,
+		Findings:        finds,
 	}
 }
 
@@ -258,8 +288,8 @@ func TestBuild_InventoryUnresolvedReferenceExcludesFallbackAttributes(t *testing
 	// a specific running entity and must not enter the inventory's verified
 	// sets.
 	r := Build([]scanner.ImageScan{{
-		Image: "web:1", ContentID: contentA, ExpectedContentID: "",
-		RegistryDigests: []string{"web@sha256:whatever"}, IdentityResolved: false,
+		Image: "web:1", ScannedKey: mustConfigKey(contentA),
+		RegistryDigests: []string{"web@sha256:whatever"},
 	}}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
@@ -309,17 +339,16 @@ func TestBuild_InventoryFullFailure(t *testing.T) {
 func TestBuild_InventoryPartialFailure(t *testing.T) {
 	r := Build([]scanner.ImageScan{
 		resolvedScan("web:1", contentA, nil),
-		{Image: "web:1", ExpectedContentID: contentB, IdentityResolved: true, Err: errString("pull failed")},
+		failedResolvedScan("web:1", contentB, errString("pull failed")),
 	}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
 	if !o.PartialFailure || o.ScanFailed {
 		t.Errorf("flags = %+v, want PartialFailure only (one of two entities failed)", o)
 	}
-	// ContentIDs is Docker-observed, not Trivy-scan-observed: the failed
-	// entity's ExpectedContentID survives the scan failure (chunk1,
-	// scanner/exec.go), so it still belongs in the set even though Trivy
-	// never actually scanned it.
+	// ContentIDs is caller-observed, not Trivy-scan-observed: the failed
+	// entity's Subject survives the scan failure (scanner/exec.go), so it
+	// still belongs in the set even though Trivy never actually scanned it.
 	if len(o.ContentIDs) != 2 || o.ContentIDs[0] != contentA || o.ContentIDs[1] != contentB {
 		t.Errorf("ContentIDs = %v, want both Docker-observed entities [%s %s]", o.ContentIDs, contentA, contentB)
 	}
@@ -336,11 +365,11 @@ func TestBuild_InventoryPartialFailure(t *testing.T) {
 
 // TestBuild_InventoryFailedResolvedEntityStillContributesIdentity is the
 // single-entity case of the same principle: a Trivy scan failure must not
-// demote a Docker-observed, boundary-validated ContentID to "unresolved" —
-// those are independent facts (chunk1, scanner/exec.go).
+// demote a caller-observed, boundary-validated ContentID to "unresolved" —
+// those are independent facts (scanner/exec.go).
 func TestBuild_InventoryFailedResolvedEntityStillContributesIdentity(t *testing.T) {
 	r := Build([]scanner.ImageScan{
-		{Image: "web:1", ExpectedContentID: contentA, IdentityResolved: true, Err: errString("pull failed")},
+		failedResolvedScan("web:1", contentA, errString("pull failed")),
 	}, nil, Triage{}, fixedTime)
 
 	o := imgObs(t, r.Images, "web:1")
@@ -392,7 +421,7 @@ func TestBuild_AmbiguousRefSplitsIntoSeparateSections(t *testing.T) {
 		if img.Image != "web:1" {
 			t.Errorf("unexpected Image %q", img.Image)
 		}
-		seen[img.ContentID] = true
+		seen[img.ContentID()] = true
 		if len(img.Packages) != 1 || img.Packages[0].VulnIDs()[0] == "" {
 			t.Errorf("packages = %+v", img.Packages)
 		}
@@ -410,7 +439,7 @@ func TestBuild_SingleEntityContentIDIsEmpty(t *testing.T) {
 		Findings: []scanner.Finding{f("demo:1.0", scanner.ClassOS, "libc-bin", "1", "2", scanner.StatusFixed, scanner.SeverityCritical, "CVE-1")},
 	}}
 	r := Build(scans, nil, Triage{}, fixedTime)
-	if len(r.Actionable) != 1 || r.Actionable[0].ContentID != "" {
+	if len(r.Actionable) != 1 || r.Actionable[0].ContentID() != "" {
 		t.Errorf("Actionable = %+v, want single entry with empty ContentID", r.Actionable)
 	}
 }

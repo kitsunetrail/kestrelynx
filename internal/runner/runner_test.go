@@ -37,18 +37,45 @@ func (f fakeLister) RunningContainers(context.Context) ([]inventory.Container, e
 }
 
 // fakeScanner is a pointer receiver so calls can be recorded across
-// invocations (the ContentID de-duplication tests assert on call count).
+// invocations (the EntityKey de-duplication tests assert on call count).
 type fakeScanner struct {
-	byImage map[string]scanner.ImageScan // keyed by ScanTarget.Ref
+	byImage map[string]scanner.ImageScan // keyed by ScanTarget.Subject.Ref
 	calls   []scanner.ScanTarget
 }
 
 func (f *fakeScanner) Scan(_ context.Context, target scanner.ScanTarget) scanner.ImageScan {
 	f.calls = append(f.calls, target)
-	if s, ok := f.byImage[target.Ref]; ok {
+	if s, ok := f.byImage[target.Subject.Ref]; ok {
 		return s
 	}
-	return scanner.ImageScan{Image: target.Ref}
+	return scanner.ImageScan{Image: target.Subject.Ref}
+}
+
+// mustConfigKey parses s as a config digest EntityKey or panics — only ever
+// used to build well-formed test fixtures, never production data.
+func mustConfigKey(s string) inventory.EntityKey {
+	d, ok := inventory.ParseDigest(inventory.DigestConfig, s)
+	if !ok {
+		panic("test fixture: invalid digest " + s)
+	}
+	return inventory.EntityKey{Digest: d}
+}
+
+// pinnedScan builds the ImageScan a fakeScanner returns for a
+// successfully-confirmed entity: Subject resolved to contentID, ScannedKey
+// matching it, Pinned true — the shape scanAll's dedup cache requires before
+// it will store or reuse a result.
+func pinnedScan(ref, contentID string, findings []scanner.Finding, registryDigests []string) scanner.ImageScan {
+	key := mustConfigKey(contentID)
+	return scanner.ImageScan{
+		Image:           ref,
+		Subject:         inventory.ImageSubject{Ref: ref, Key: key, Resolved: true},
+		ScannedKey:      key,
+		Pinned:          true,
+		Source:          scanner.SourceLocal,
+		Findings:        findings,
+		RegistryDigests: registryDigests,
+	}
 }
 
 type fakeNotifier struct {
@@ -208,19 +235,17 @@ func TestRunOnce_ScanErrorStillNotifies(t *testing.T) {
 	}
 }
 
-// --- ContentID de-duplication ---
+// --- EntityKey de-duplication ---
 
 func TestScanAll_ContentIDDedup_ScansOnceReplicatesToAllRefs(t *testing.T) {
 	cid := "sha256:" + strings.Repeat("a", 64)
 	sc := &fakeScanner{byImage: map[string]scanner.ImageScan{
-		"app:v1": {
-			Image:     "app:v1",
-			ContentID: cid,
-			Findings: []scanner.Finding{
+		"app:v1": pinnedScan("app:v1", cid,
+			[]scanner.Finding{
 				{Image: "app:v1", Class: scanner.ClassOS, Package: "libc", VulnID: "CVE-1", Severity: scanner.SeverityCritical, Status: scanner.StatusFixed},
 			},
-			RegistryDigests: []string{"app@sha256:" + strings.Repeat("d", 64)},
-		},
+			[]string{"app@sha256:" + strings.Repeat("d", 64)},
+		),
 	}}
 	r := Runner{Scanner: sc, Now: clock}
 	cfg, ok := inventory.ParseDigest(inventory.DigestConfig, cid)
@@ -235,10 +260,10 @@ func TestScanAll_ContentIDDedup_ScansOnceReplicatesToAllRefs(t *testing.T) {
 	scans := r.scanAll(context.Background(), images)
 
 	if len(sc.calls) != 1 {
-		t.Fatalf("Scan called %d times, want 1 (same ContentID scanned once)", len(sc.calls))
+		t.Fatalf("Scan called %d times, want 1 (same EntityKey scanned once)", len(sc.calls))
 	}
-	if sc.calls[0].ContentID != cid {
-		t.Errorf("scan target ContentID = %q, want %q", sc.calls[0].ContentID, cid)
+	if sc.calls[0].Subject.Key.Digest.String() != cid {
+		t.Errorf("scan target key = %q, want %q", sc.calls[0].Subject.Key.Digest.String(), cid)
 	}
 	if len(scans) != 2 {
 		t.Fatalf("scans = %d, want 2 (one per alias ref)", len(scans))
@@ -296,17 +321,94 @@ func TestScanAll_UnresolvedContentID_ScannedIndividually(t *testing.T) {
 	}
 }
 
+// TestScanAll_UnpinnedResult_NeverCachedOrReplicated guards the dedup cache's
+// gate: a result that came back unpinned (whether from a scan error or an
+// unconfirmed fallback) must never be stored for reuse, and must never be
+// silently reused for a sibling reference sharing the same EntityKey — each
+// alias re-scans until one actually pins.
+func TestScanAll_UnpinnedResult_NeverCachedOrReplicated(t *testing.T) {
+	cid := "sha256:" + strings.Repeat("f", 64)
+	unpinned := scanner.ImageScan{Err: errors.New("scan failed")}
+	sc := &fakeScanner{byImage: map[string]scanner.ImageScan{
+		"app:v1": unpinned,
+		"app:v2": unpinned,
+	}}
+	r := Runner{Scanner: sc, Now: clock}
+	cfg, ok := inventory.ParseDigest(inventory.DigestConfig, cid)
+	if !ok {
+		t.Fatalf("test fixture: invalid digest %q", cid)
+	}
+	images := []inventory.RunningImage{
+		{Ref: "app:v1", Config: cfg},
+		{Ref: "app:v2", Config: cfg},
+	}
+
+	scans := r.scanAll(context.Background(), images)
+
+	if len(sc.calls) != 2 {
+		t.Fatalf("Scan called %d times, want 2 (an unpinned result must never be cached or reused)", len(sc.calls))
+	}
+	for _, s := range scans {
+		if s.Pinned {
+			t.Errorf("scan %+v unexpectedly Pinned", s)
+		}
+	}
+}
+
+// TestScanAll_UnpinnedSuccess_NeverCachedOrReplicated covers the other
+// unpinned shape: a scan that succeeded (Err == nil) but could not be
+// confirmed against the requested entity. Success alone must not qualify a
+// result for the dedup cache — only a pinned one does — so each alias is
+// scanned individually and keeps its own result.
+func TestScanAll_UnpinnedSuccess_NeverCachedOrReplicated(t *testing.T) {
+	cid := "sha256:" + strings.Repeat("e", 64)
+	sc := &fakeScanner{byImage: map[string]scanner.ImageScan{
+		"app:v1": {Image: "app:v1", Pinned: false, Source: scanner.SourceRemote},
+		"app:v2": {Image: "app:v2", Pinned: false, Source: scanner.SourceRemote},
+	}}
+	r := Runner{Scanner: sc, Now: clock}
+	cfg, ok := inventory.ParseDigest(inventory.DigestConfig, cid)
+	if !ok {
+		t.Fatalf("test fixture: invalid digest %q", cid)
+	}
+	images := []inventory.RunningImage{
+		{Ref: "app:v1", Config: cfg},
+		{Ref: "app:v2", Config: cfg},
+	}
+
+	scans := r.scanAll(context.Background(), images)
+
+	if len(sc.calls) != 2 {
+		t.Fatalf("Scan called %d times, want 2 (an unpinned success must never be cached or reused)", len(sc.calls))
+	}
+	byRef := map[string]scanner.ImageScan{}
+	for _, s := range scans {
+		if s.Pinned {
+			t.Errorf("scan %+v unexpectedly Pinned", s)
+		}
+		if s.Err != nil {
+			t.Errorf("scan %+v unexpectedly has Err", s)
+		}
+		byRef[s.Image] = s
+	}
+	if _, ok := byRef["app:v1"]; !ok {
+		t.Error("missing individually kept result for app:v1")
+	}
+	if _, ok := byRef["app:v2"]; !ok {
+		t.Error("missing individually kept result for app:v2")
+	}
+}
+
 func TestRunOnce_ContentIDDedup_ReportCoversBothAliases(t *testing.T) {
 	notif := &fakeNotifier{}
 	cid := "sha256:" + strings.Repeat("a", 64)
 	sc := &fakeScanner{byImage: map[string]scanner.ImageScan{
-		"app:v1": {
-			Image:     "app:v1",
-			ContentID: cid,
-			Findings: []scanner.Finding{
+		"app:v1": pinnedScan("app:v1", cid,
+			[]scanner.Finding{
 				{Image: "app:v1", Class: scanner.ClassOS, Package: "libc", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
 			},
-		},
+			nil,
+		),
 	}}
 	cfg, ok := inventory.ParseDigest(inventory.DigestConfig, cid)
 	if !ok {
@@ -446,6 +548,112 @@ func TestRunOnce_DiffMode_CleanAndUnchangedSkipsButSaves(t *testing.T) {
 	}
 }
 
+// --- holding: unconfirmed refs must not go silent over a held-over finding ---
+
+// TestRunOnce_DiffMode_HoldingUnconfirmedForcesNotification is scenario 2's
+// (h): an unconfirmed scan that turns up nothing this cycle must still
+// notify — silently, this cycle's own report looks empty, but state is
+// conservatively holding a prior finding rather than resolving it, and a
+// quiet cycle here would misreport "nothing to see."
+func TestRunOnce_DiffMode_HoldingUnconfirmedForcesNotification(t *testing.T) {
+	notif := &fakeNotifier{}
+	store := &fakeStore{st: state.State{
+		Version:  1,
+		Findings: map[string]state.Entry{"web:1\topenssl": {FirstSeen: clock().AddDate(0, 0, -3), Fixable: true, VulnIDs: []string{"CVE-1"}}},
+		EOSL:     map[string]time.Time{},
+	}}
+	r := Runner{
+		Lister: fakeLister{containers: refs("web:1")},
+		Scanner: &fakeScanner{byImage: map[string]scanner.ImageScan{
+			"web:1": {Image: "web:1", Pinned: false, Source: scanner.SourceRemote}, // unconfirmed, no findings this cycle
+		}},
+		Notifier:      notif,
+		Store:         store,
+		FullReportDay: NoFullReport,
+		Now:           clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if !notif.called {
+		t.Fatal("a held-over unconfirmed finding must still trigger a notification even though nothing changed this cycle")
+	}
+	if !notif.msg.Holding {
+		t.Error("Message.Holding should be true")
+	}
+	out := notify.FormatSlackDiffText(notif.msg.Report, *notif.msg.Diff, notif.msg.FullReport, notif.msg.Holding)
+	if strings.Contains(out, "all clear") {
+		t.Errorf("holding must not assert all clear:\n%s", out)
+	}
+	if !strings.Contains(out, "holding previous findings") {
+		t.Errorf("expected the holding line:\n%s", out)
+	}
+}
+
+// TestRunOnce_DiffMode_HoldingUnconfirmedTriageForcesNotification is the
+// triage-mode counterpart: writeTriageOpenNow must honor holding too.
+func TestRunOnce_DiffMode_HoldingUnconfirmedTriageForcesNotification(t *testing.T) {
+	notif := &fakeNotifier{}
+	store := &fakeStore{st: state.State{
+		Version:  1,
+		Findings: map[string]state.Entry{"web:1\topenssl": {FirstSeen: clock().AddDate(0, 0, -3), Fixable: true, VulnIDs: []string{"CVE-1"}, Priority: string(analyze.PriorityLow)}},
+		EOSL:     map[string]time.Time{},
+	}}
+	r := Runner{
+		Lister: fakeLister{containers: refs("web:1")},
+		Scanner: &fakeScanner{byImage: map[string]scanner.ImageScan{
+			"web:1": {Image: "web:1", Pinned: false, Source: scanner.SourceRemote},
+		}},
+		Notifier:      notif,
+		Store:         store,
+		FullReportDay: NoFullReport,
+		Intel:         &fakeIntel{fresh: intel.Freshness{KEVOK: true, EPSSOK: true}},
+		ActNowEPSS:    0.10,
+		WatchEPSS:     0.01,
+		Now:           clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if !notif.called {
+		t.Fatal("expected a notification despite an empty-looking current report")
+	}
+	if !notif.msg.Report.Triage {
+		t.Fatal("test premise broken: expected a triaged report")
+	}
+	out := notify.FormatSlackDiffText(notif.msg.Report, *notif.msg.Diff, notif.msg.FullReport, notif.msg.Holding)
+	if strings.Contains(out, "all clear") {
+		t.Errorf("triage mode holding must not assert all clear:\n%s", out)
+	}
+	if !strings.Contains(out, "holding previous findings") {
+		t.Errorf("expected the holding line in triage mode:\n%s", out)
+	}
+}
+
+// TestRunOnce_DiffMode_UnconfirmedWithNoPriorFindingSkipsNotification is the
+// negative case: an unconfirmed ref that never had anything on record has
+// nothing to hold, so it must not force a notification on its own.
+func TestRunOnce_DiffMode_UnconfirmedWithNoPriorFindingSkipsNotification(t *testing.T) {
+	notif := &fakeNotifier{}
+	store := &fakeStore{}
+	r := Runner{
+		Lister: fakeLister{containers: refs("web:1")},
+		Scanner: &fakeScanner{byImage: map[string]scanner.ImageScan{
+			"web:1": {Image: "web:1", Pinned: false, Source: scanner.SourceRemote},
+		}},
+		Notifier:      notif,
+		Store:         store,
+		FullReportDay: NoFullReport,
+		Now:           clock,
+	}
+	if err := r.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if notif.called {
+		t.Error("an unconfirmed ref with no prior finding on record must not force a notification")
+	}
+}
+
 func TestRunOnce_DiffMode_ResolvedNotifiesEvenWhenClean(t *testing.T) {
 	notif := &fakeNotifier{}
 	store := &fakeStore{st: state.State{
@@ -501,11 +709,11 @@ func TestRunOnce_DiffMode_FullReportDay(t *testing.T) {
 // it because state had already "moved past" it.
 //
 // The lister and scanner must agree on which content is running each cycle
-// (inventory.RunningImage.ContentID() feeds scanner.ScanTarget.ContentID,
-// which the real scanner.Trivy.Scan echoes back as ExpectedContentID,
-// internal/scanner/exec.go:reconcileTarget) — a lister reporting no
-// ContentID while the fake scanner claims a resolved identity is an
-// unrealistic combination that no real pipeline would produce.
+// (inventory.RunningImage.ContentID() feeds scanner.ScanTarget.Subject.Key,
+// which the real scanner.Trivy.Scan echoes back as Subject/Pinned,
+// internal/scanner/exec.go:reconcileTarget) — a lister reporting no resolved
+// entity while the fake scanner claims a resolved identity is an unrealistic
+// combination that no real pipeline would produce.
 func TestRunOnce_DiffMode_SendFailure_ReplacedPersistsToNextCycle(t *testing.T) {
 	cidA := "sha256:" + strings.Repeat("a", 64)
 	cidB := "sha256:" + strings.Repeat("b", 64)
@@ -519,7 +727,7 @@ func TestRunOnce_DiffMode_SendFailure_ReplacedPersistsToNextCycle(t *testing.T) 
 	}
 	scanWith := func(cid string) *fakeScanner {
 		return &fakeScanner{byImage: map[string]scanner.ImageScan{
-			"app:1": {Image: "app:1", ExpectedContentID: cid, IdentityResolved: true},
+			"app:1": pinnedScan("app:1", cid, nil, nil),
 		}}
 	}
 	wantReplaced := func(t *testing.T, got []state.ImageReplacement) {

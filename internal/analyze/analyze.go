@@ -64,23 +64,36 @@ func (g PackageGroup) TopVuln() VulnRef {
 }
 
 // ImageFindings is one running entity's package groups within a single status
-// section. The aggregation unit is (Image, ContentID) rather than Image alone:
-// when the same reference runs more than one distinct, verified content at
-// once, each content gets its own section entry instead of being merged
-// silently. ContentID mirrors ExpectedContentID (the Docker-observed entity),
-// so it is non-empty for the ordinary, single-resolved-entity case too —
-// existing renderers only see it change shape when a reference is genuinely
-// ambiguous. It is empty only when identity is unresolved (reference-fallback
-// scans never had a Docker-observed ContentID to pin to).
+// section. The aggregation unit is (Image, EntityKey) rather than Image
+// alone: when the same reference runs more than one distinct entity at once,
+// each entity gets its own section entry instead of being merged silently.
+// Subject carries that entity's identity (and Ref, mirroring Image), and
+// Pinned records whether this cycle's scan actually confirmed it. The
+// ordinary, single-resolved-entity case renders exactly as before; it is
+// only when a reference is genuinely ambiguous that more than one entry
+// shares the same Image.
 type ImageFindings struct {
-	Image     string
-	ContentID string // ExpectedContentID (Docker-observed); empty only when unresolved
-	Packages  []PackageGroup
+	Image    string
+	Subject  inventory.ImageSubject // this entity's identity; zero value (Resolved == false) when unresolved
+	Pinned   bool                   // true when this cycle's scan confirmed Subject.Key was what actually ran
+	Packages []PackageGroup
 	// Containers is the entity-level observation backing this section entry:
-	// every container whose (Ref, ContentID) matches (Image, ContentID)
+	// every container whose (Ref, EntityKey) matches (Image, Subject.Key)
 	// exactly, in the order containers was passed to Build. Nil when Build
 	// received no containers, or none matched this entity.
 	Containers []inventory.Container
+}
+
+// ContentID projects Subject onto the boundary-validated OCI image config
+// digest string (the pre-generalization "ContentID") when this entity
+// resolved to a config-kind identity; "" otherwise (unresolved, or resolved
+// to a non-config identity kind). Renderers that only ever dealt with
+// Docker's config digests keep working against this exact same string.
+func (f ImageFindings) ContentID() string {
+	if f.Subject.Resolved && f.Subject.Key.Digest.Kind == inventory.DigestConfig {
+		return f.Subject.Key.Digest.String()
+	}
+	return ""
 }
 
 // CriticalCount sums CRITICAL CVEs across the image's packages.
@@ -122,37 +135,47 @@ type ScanError struct {
 type ImageObservation struct {
 	Ref string
 
-	// ContentIDs is the sorted set of boundary-validated ContentIDs (Docker's
-	// ExpectedContentID) observed running under Ref this cycle. This is
-	// Docker-observed data, independent of whether the Trivy scan itself
-	// succeeded (chunk1, scanner/exec.go: ExpectedContentID/IdentityResolved
-	// survive a scan failure) — a failed scan whose entity Docker still
-	// resolved a ContentID for still contributes to this set. What never
-	// contributes is a reference-fallback scan's ScannedContentID: that
-	// describes whatever Trivy happened to resolve on its own, not a
-	// specific running entity Docker told us about.
+	// ContentIDs is the sorted set of boundary-validated, config-kind
+	// ContentIDs (a projection of Subject) observed running under Ref this
+	// cycle. This is identity data reported by the caller, independent of
+	// whether the Trivy scan itself succeeded (scanner/exec.go: Subject
+	// survives a scan failure unchanged) — a failed scan whose entity was
+	// still resolved still contributes to this set. What never contributes
+	// is a reference-fallback scan's ScannedKey: that describes whatever
+	// Trivy happened to resolve on its own, not a specific running entity
+	// the caller told us about.
 	ContentIDs []string
 	// RegistryDigests is the sorted union of RegistryDigests across every
 	// entity that both resolved a ContentID and scanned successfully under
 	// Ref (Trivy's Metadata.RepoDigests isn't available otherwise).
 	RegistryDigests []string
-	// Ambiguous is true when more than one distinct verified ContentID is
-	// running under Ref at once.
+	// Ambiguous is true when more than one distinct resolved entity (any
+	// identity kind) is running under Ref at once — the cardinality of the
+	// set of EntityKeys observed, not just the config-digest subset ContentIDs
+	// projects.
 	Ambiguous bool
 	// IdentityResolved is true when every entity running under Ref had a
 	// Docker-observed ContentID this cycle (false if any entity used the
-	// reference-fallback path). This is independent of scan success: it
-	// reflects what Docker reported, not what Trivy managed to scan.
+	// reference-fallback path, or resolved to a non-config-digest identity).
+	// This is independent of scan success: it reflects what was reported,
+	// not what Trivy managed to scan.
 	IdentityResolved bool
 	// ScanFailed is true when every entity running under Ref failed to scan
 	// this cycle (the existing full-failure case: state carries findings over
 	// untouched).
 	ScanFailed bool
-	// PartialFailure is true when some, but not all, entities running under
-	// Ref failed to scan this cycle. This is a distinct case from ScanFailed —
-	// state must not silently drop the failed entity's findings just because
-	// a sibling entity under the same Ref succeeded.
+	// PartialFailure is true when at least one entity running under Ref is
+	// missing trustworthy evidence this cycle: either it failed to scan while
+	// a sibling succeeded, or it scanned successfully but could not be
+	// pinned (Unconfirmed). Either way state must not silently drop or
+	// resolve findings just because some other entity under the same Ref
+	// looked fine.
 	PartialFailure bool
+	// Unconfirmed is true when at least one entity running under Ref scanned
+	// without error but could not be confirmed as the entity actually
+	// requested (Pinned == false, Source == remote). Always false for
+	// Docker, which never falls back this way.
+	Unconfirmed bool
 	// Containers is the union of every container observed running Ref this
 	// cycle, across all of its entities (ContentIDs). Nil when Build received
 	// no containers, or none matched this reference.
@@ -171,10 +194,14 @@ type Report struct {
 	ScanErrors  []ScanError
 	// Images is the per-reference identity inventory, covering every scanned
 	// reference regardless of findings. Sorted by Ref.
-	Images      []ImageObservation
-	Triage      bool        // priorities were assigned (renderers use ByPriority)
-	Intel       IntelStatus // freshness of the intel behind the priorities
-	GeneratedAt time.Time
+	Images []ImageObservation
+	// UnconfirmedRefs is the sorted set of references with at least one
+	// Unconfirmed entity this cycle (a projection of Images, kept as its own
+	// field so notify doesn't have to re-derive it). Always nil for Docker.
+	UnconfirmedRefs []string
+	Triage          bool        // priorities were assigned (renderers use ByPriority)
+	Intel           IntelStatus // freshness of the intel behind the priorities
+	GeneratedAt     time.Time
 	// Environment identifies the runtime instance this cycle observed. Build
 	// never sets it (it has no scan-derived meaning to interpret); the caller
 	// copies it in from config/composition-root state.
@@ -221,24 +248,41 @@ type pkgAcc struct {
 }
 
 // imgKey is the aggregation unit for findings: a running entity, identified
-// by its display reference plus the ContentID the caller expected to be
-// running there. ExpectedContentID is used rather than the scanned
-// ContentID: for a reference-fallback scan ExpectedContentID is empty, which
-// is exactly "unresolved" and must not be confused with a verified entity's
-// content.
+// by its display reference plus the EntityKey the scan's Subject carried.
+// Subject.Key is used rather than the scanned entity: for an unresolved scan
+// Subject.Key is the zero value, which is exactly "unresolved" and must not
+// be confused with a resolved entity's key.
 type imgKey struct {
-	ref       string
-	contentID string
+	ref string
+	key inventory.EntityKey
+}
+
+// entityMeta carries the per-entity identity fields (Subject, Pinned) that
+// ImageFindings needs but that a package-group accumulator has no natural
+// home for: they describe the scan, not any one finding within it.
+type entityMeta struct {
+	subject inventory.ImageSubject
+	pinned  bool
 }
 
 // obsAcc accumulates one reference's identity inventory across every scan
 // target observed under it this cycle: possibly several distinct entities
-// when the reference is ambiguous, possibly a mix of successes and failures.
+// when the reference is ambiguous, possibly a mix of successes, failures,
+// and unconfirmed results.
 type obsAcc struct {
-	total, failed   int
-	contentIDs      map[string]bool
+	total, failed, unconfirmed int
+	// contentIDs projects only the config-kind subset of resolved entities
+	// (the pre-generalization "ContentIDs" set): the persisted state format
+	// and the diff rules built on it are config-digest-specific and frozen.
+	contentIDs map[string]bool
+	// entityKeys is every resolved entity (any identity kind) observed under
+	// this ref, used for Ambiguous: a cardinality question that must not be
+	// narrowed to the config-digest subset contentIDs tracks. For Docker,
+	// every resolved entity is config-kind, so the two sets are in bijection
+	// and Ambiguous is unchanged.
+	entityKeys      map[inventory.EntityKey]bool
 	registryDigests map[string]bool
-	anyUnresolved   bool // some scan target under this ref had no ExpectedContentID (Docker-observed, tallied regardless of scan success/failure)
+	anyUnresolved   bool // some scan target under this ref did not resolve a config-kind entity (tallied regardless of scan success/failure)
 	seenEOSL        bool
 }
 
@@ -248,26 +292,33 @@ type obsAcc struct {
 func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triage, now time.Time) Report {
 	r := Report{GeneratedAt: now, ImagesTotal: len(scans), Triage: tr.Enabled, Intel: tr.Intel}
 
-	// status -> (ref, contentID) -> package -> accumulator
+	// status -> (ref, entity key) -> package -> accumulator
 	byStatus := map[scanner.Status]map[imgKey]map[string]*pkgAcc{}
-	obs := map[string]*obsAcc{} // by ref, the inventory backing Report.Images
+	obs := map[string]*obsAcc{}     // by ref, the inventory backing Report.Images
+	meta := map[imgKey]entityMeta{} // per-entity Subject/Pinned, for buildSection
 
 	for _, s := range scans {
 		a := obs[s.Image]
 		if a == nil {
-			a = &obsAcc{contentIDs: map[string]bool{}, registryDigests: map[string]bool{}}
+			a = &obsAcc{contentIDs: map[string]bool{}, entityKeys: map[inventory.EntityKey]bool{}, registryDigests: map[string]bool{}}
 			obs[s.Image] = a
 		}
 		a.total++
 
-		// Identity (ExpectedContentID/IdentityResolved) is Docker-observed
-		// data that survives a Trivy scan failure unchanged (chunk1,
-		// scanner/exec.go): every error path still returns the
-		// ExpectedContentID/IdentityResolved the caller asked Trivy to pin
-		// to. So this must be recorded regardless of s.Err — only the
-		// scan-derived RegistryDigests genuinely require a successful scan.
-		if s.ExpectedContentID != "" {
-			a.contentIDs[s.ExpectedContentID] = true
+		// Identity (Subject) is Docker-observed data that survives a Trivy
+		// scan failure unchanged (scanner/exec.go): every error path still
+		// returns the Subject the caller asked Trivy to pin to. So this must
+		// be recorded regardless of s.Err — only the scan-derived
+		// RegistryDigests genuinely require a successful, pinned scan.
+		if s.Subject.Resolved {
+			a.entityKeys[s.Subject.Key] = true
+			if s.Subject.Key.Digest.Kind == inventory.DigestConfig {
+				a.contentIDs[s.Subject.Key.Digest.String()] = true
+			} else {
+				// A resolved-but-non-config-digest entity is not the
+				// pre-generalization "ContentID" set's business.
+				a.anyUnresolved = true
+			}
 		} else {
 			// Reference-fallback identity data describes whatever Trivy
 			// happened to resolve, not a specific running entity, so it never
@@ -280,7 +331,10 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 			r.ScanErrors = append(r.ScanErrors, ScanError{Image: s.Image, Err: s.Err.Error()})
 			continue
 		}
-		if s.ExpectedContentID != "" {
+		if !s.Pinned && s.Source == scanner.SourceRemote {
+			a.unconfirmed++
+		}
+		if s.Pinned {
 			for _, d := range s.RegistryDigests {
 				a.registryDigests[d] = true
 			}
@@ -290,7 +344,8 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 			r.EOSLImages = append(r.EOSLImages, s.Image)
 		}
 
-		k := imgKey{ref: s.Image, contentID: s.ExpectedContentID}
+		k := imgKey{ref: s.Image, key: s.Subject.Key}
+		meta[k] = entityMeta{subject: s.Subject, pinned: s.Pinned}
 		for _, find := range s.Findings {
 			images := byStatus[find.Status]
 			if images == nil {
@@ -330,24 +385,30 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 
 	sort.Strings(r.EOSLImages)
 	byKey, byRef := indexContainers(containers)
-	r.Actionable = buildSection(byStatus[scanner.StatusFixed], tr, byKey)
-	r.Watch = buildSection(byStatus[scanner.StatusAffected], tr, byKey)
-	r.WontFix = buildSection(byStatus[scanner.StatusWontFix], tr, byKey)
+	r.Actionable = buildSection(byStatus[scanner.StatusFixed], tr, byKey, meta)
+	r.Watch = buildSection(byStatus[scanner.StatusAffected], tr, byKey, meta)
+	r.WontFix = buildSection(byStatus[scanner.StatusWontFix], tr, byKey, meta)
 	r.Images = buildInventory(obs, byRef)
+	for _, o := range r.Images {
+		if o.Unconfirmed {
+			r.UnconfirmedRefs = append(r.UnconfirmedRefs, o.Ref)
+		}
+	}
 	return r
 }
 
 // indexContainers groups containers for attachment to the report: byKey for
-// the entity-level join (an ImageFindings entry's exact (Image, ContentID)),
+// the entity-level join (an ImageFindings entry's exact (Image, EntityKey)),
 // byRef for the reference-level union (every ImageObservation entity under
 // Ref). imgKey doubles as the entity join key here because a container whose
-// identity did not resolve has ContentID == "", which collapses the join to
-// ref-only for exactly those containers — matching the unresolved
-// ImageFindings entries (ContentID == "") they correspond to, and no others.
-// A container with an empty Ref is never scanned (DistinctImages excludes
-// it) and so never joins anything here either. Containers is nil when the
-// caller passed none, and lookups on a nil map simply return nil, so every
-// attached field stays nil and existing output is unaffected.
+// identity did not resolve gets the zero-value EntityKey, which collapses
+// the join to ref-only for exactly those containers — matching the
+// unresolved ImageFindings entries (Subject.Resolved == false) they
+// correspond to, and no others. A container with an empty Ref is never
+// scanned (DistinctImages excludes it) and so never joins anything here
+// either. Containers is nil when the caller passed none, and lookups on a
+// nil map simply return nil, so every attached field stays nil and existing
+// output is unaffected.
 func indexContainers(containers []inventory.Container) (byKey map[imgKey][]inventory.Container, byRef map[string][]inventory.Container) {
 	if len(containers) == 0 {
 		return nil, nil
@@ -358,7 +419,8 @@ func indexContainers(containers []inventory.Container) (byKey map[imgKey][]inven
 		if c.Image.Ref == "" {
 			continue
 		}
-		k := imgKey{ref: c.Image.Ref, contentID: c.Image.ContentID()}
+		key, _ := inventory.EntityKeyOf(c.Image)
+		k := imgKey{ref: c.Image.Ref, key: key}
 		byKey[k] = append(byKey[k], c)
 		byRef[c.Image.Ref] = append(byRef[c.Image.Ref], c)
 	}
@@ -389,12 +451,13 @@ func buildInventory(obs map[string]*obsAcc, byRef map[string][]inventory.Contain
 			Ref:             ref,
 			ContentIDs:      contentIDs,
 			RegistryDigests: registryDigests,
-			Ambiguous:       len(contentIDs) > 1,
+			Ambiguous:       len(a.entityKeys) > 1,
 			// Docker-observed, independent of scan success (see the
 			// accumulation loop above) — a scan failure never demotes this.
 			IdentityResolved: a.total > 0 && !a.anyUnresolved,
 			ScanFailed:       a.total > 0 && a.failed == a.total,
-			PartialFailure:   a.failed > 0 && a.failed < a.total,
+			PartialFailure:   (a.failed > 0 && a.failed < a.total) || a.unconfirmed > 0,
+			Unconfirmed:      a.unconfirmed > 0,
 			Containers:       byRef[ref],
 		})
 	}
@@ -403,7 +466,7 @@ func buildInventory(obs map[string]*obsAcc, byRef map[string][]inventory.Contain
 }
 
 // buildSection finalizes one status bucket into sorted ImageFindings.
-func buildSection(images map[imgKey]map[string]*pkgAcc, tr Triage, byKey map[imgKey][]inventory.Container) []ImageFindings {
+func buildSection(images map[imgKey]map[string]*pkgAcc, tr Triage, byKey map[imgKey][]inventory.Container, meta map[imgKey]entityMeta) []ImageFindings {
 	if len(images) == 0 {
 		return nil
 	}
@@ -414,7 +477,8 @@ func buildSection(images map[imgKey]map[string]*pkgAcc, tr Triage, byKey map[img
 			groups = append(groups, finalize(acc, tr))
 		}
 		sortPackages(groups)
-		out = append(out, ImageFindings{Image: k.ref, ContentID: k.contentID, Packages: groups, Containers: byKey[k]})
+		m := meta[k]
+		out = append(out, ImageFindings{Image: k.ref, Subject: m.subject, Pinned: m.pinned, Packages: groups, Containers: byKey[k]})
 	}
 	sortImages(out)
 	return out
@@ -516,8 +580,11 @@ func sortPackages(g []PackageGroup) {
 }
 
 // sortImages orders images within a section by worst-first severity, then
-// total count, then image name, then ContentID for stability (an Ambiguous
-// reference can contribute more than one entry with the same Image).
+// total count, then image name, then EntityKey for stability (an Ambiguous
+// reference can contribute more than one entry with the same Image). For
+// Docker (config-kind digests only, Platform always zero) comparing EntityKey
+// reduces to comparing digest hex, the same order comparing the old
+// ContentID wire string produced (both share the constant "sha256:" prefix).
 func sortImages(f []ImageFindings) {
 	sort.Slice(f, func(i, j int) bool {
 		ci, cj := f[i].CriticalCount(), f[j].CriticalCount()
@@ -531,6 +598,25 @@ func sortImages(f []ImageFindings) {
 		if f[i].Image != f[j].Image {
 			return f[i].Image < f[j].Image
 		}
-		return f[i].ContentID < f[j].ContentID
+		return lessEntityKey(f[i].Subject.Key, f[j].Subject.Key)
 	})
+}
+
+// lessEntityKey orders two EntityKeys deterministically: Digest.Kind first
+// (the zero value "" for an unresolved entity sorts before either resolved
+// kind), then Hex, then Platform field by field.
+func lessEntityKey(a, b inventory.EntityKey) bool {
+	if a.Digest.Kind != b.Digest.Kind {
+		return a.Digest.Kind < b.Digest.Kind
+	}
+	if a.Digest.Hex != b.Digest.Hex {
+		return a.Digest.Hex < b.Digest.Hex
+	}
+	if a.Platform.OS != b.Platform.OS {
+		return a.Platform.OS < b.Platform.OS
+	}
+	if a.Platform.Architecture != b.Platform.Architecture {
+		return a.Platform.Architecture < b.Platform.Architecture
+	}
+	return a.Platform.Variant < b.Platform.Variant
 }

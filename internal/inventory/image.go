@@ -29,14 +29,21 @@ func (r RunningImage) ContentID() string {
 }
 
 // DistinctImages reduces a container observation list to the set of
-// distinct running images: de-duplicated on (Ref, ContentID()) and sorted by
-// Ref then ContentID(). The same image name running the same validated
-// content yields one entry; the same name running distinct content is kept
-// as separate entries so scanning and identity never silently merge them
-// (docs/REQUIREMENTS.md F-2). Containers with an empty Ref are excluded —
-// there is nothing to scan.
+// distinct running images: de-duplicated on (Ref, EntityKey) and sorted by
+// Ref then EntityKey. The same image name running the same resolved entity
+// yields one entry; the same name running a distinct entity is kept as a
+// separate entry so scanning and identity never silently merge them
+// (docs/REQUIREMENTS.md F-2). Two unresolved observations under the same Ref
+// still collapse to one entry (an EntityKey cannot be derived from a
+// reference, so they'd share the same zero-value key regardless); unresolved
+// observations under different Refs never collide, since Ref is always part
+// of the key. Containers with an empty Ref are excluded — there is nothing
+// to scan.
 func DistinctImages(containers []Container) []RunningImage {
-	type dedupKey struct{ ref, contentID string }
+	type dedupKey struct {
+		ref string
+		key EntityKey
+	}
 	seen := map[dedupKey]bool{}
 	images := make([]RunningImage, 0, len(containers))
 	for _, ct := range containers {
@@ -44,7 +51,8 @@ func DistinctImages(containers []Container) []RunningImage {
 		if img.Ref == "" {
 			continue
 		}
-		k := dedupKey{img.Ref, img.ContentID()}
+		key, _ := EntityKeyOf(img) // zero value when unresolved, same as every other unresolved image under this Ref
+		k := dedupKey{img.Ref, key}
 		if seen[k] {
 			continue
 		}
@@ -55,7 +63,31 @@ func DistinctImages(containers []Container) []RunningImage {
 		if images[i].Ref != images[j].Ref {
 			return images[i].Ref < images[j].Ref
 		}
-		return images[i].ContentID() < images[j].ContentID()
+		ki, _ := EntityKeyOf(images[i])
+		kj, _ := EntityKeyOf(images[j])
+		return lessEntityKey(ki, kj)
 	})
 	return images
+}
+
+// lessEntityKey orders two EntityKeys deterministically: Digest.Kind first
+// (the zero value "" for an unresolved entity sorts before either resolved
+// kind), then Hex, then Platform field by field. For Docker (Config-kind
+// digests only, Platform always zero) this reduces to comparing Hex alone —
+// the same order comparing the old ContentID() wire string produced, since
+// both digests share the constant "sha256:" prefix.
+func lessEntityKey(a, b EntityKey) bool {
+	if a.Digest.Kind != b.Digest.Kind {
+		return a.Digest.Kind < b.Digest.Kind
+	}
+	if a.Digest.Hex != b.Digest.Hex {
+		return a.Digest.Hex < b.Digest.Hex
+	}
+	if a.Platform.OS != b.Platform.OS {
+		return a.Platform.OS < b.Platform.OS
+	}
+	if a.Platform.Architecture != b.Platform.Architecture {
+		return a.Platform.Architecture < b.Platform.Architecture
+	}
+	return a.Platform.Variant < b.Platform.Variant
 }

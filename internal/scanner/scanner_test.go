@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 )
 
 func loadFixture(t *testing.T, name string) []byte {
@@ -157,7 +159,7 @@ func TestParseReport_RealOutput(t *testing.T) {
 }
 
 // The real Trivy output's Metadata.ImageID / RepoDigests must parse into
-// ContentID / RegistryDigests. Guards against schema drift in the identity
+// ScannedKey / RegistryDigests. Guards against schema drift in the identity
 // fields we depend on.
 func TestParseReport_RealOutput_Identity(t *testing.T) {
 	scan, err := ParseReport(loadFixture(t, "real_python_3.9.1-slim.json"))
@@ -165,8 +167,9 @@ func TestParseReport_RealOutput_Identity(t *testing.T) {
 		t.Fatalf("ParseReport(real): %v", err)
 	}
 	wantContentID := "sha256:8c84baace4b3b0763ef5cfbe5b5518e5f23aa53adb92f22e6ba74aad40b98e13"
-	if scan.ContentID != wantContentID {
-		t.Errorf("ContentID = %q, want %q", scan.ContentID, wantContentID)
+	wantKey := inventory.EntityKey{Digest: mustParseDigest(t, wantContentID)}
+	if scan.ScannedKey != wantKey {
+		t.Errorf("ScannedKey = %+v, want %+v", scan.ScannedKey, wantKey)
 	}
 	wantDigests := []string{"python@sha256:bf3ec573c0ae0d0c619c3f3e0e9490878432bf7a5c63a643b6c39c9878b51191"}
 	if len(scan.RegistryDigests) != len(wantDigests) || scan.RegistryDigests[0] != wantDigests[0] {
@@ -174,8 +177,19 @@ func TestParseReport_RealOutput_Identity(t *testing.T) {
 	}
 }
 
+// mustParseDigest parses s as a config digest or fails the test immediately
+// — only ever used to build well-formed test fixtures.
+func mustParseDigest(t *testing.T, s string) inventory.Digest {
+	t.Helper()
+	d, ok := inventory.ParseDigest(inventory.DigestConfig, s)
+	if !ok {
+		t.Fatalf("test fixture: invalid digest %q", s)
+	}
+	return d
+}
+
 // A Metadata.ImageID that doesn't validate must fall back to an unresolved
-// ContentID rather than being normalized or guessed at.
+// ScannedKey rather than being normalized or guessed at.
 func TestParseReport_MalformedImageIDIsUnresolved(t *testing.T) {
 	data := []byte(`{
 		"ArtifactName": "demo:1.0",
@@ -185,8 +199,8 @@ func TestParseReport_MalformedImageIDIsUnresolved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseReport: %v", err)
 	}
-	if scan.ContentID != "" {
-		t.Errorf("ContentID = %q, want empty for a malformed Metadata.ImageID", scan.ContentID)
+	if scan.ScannedKey != (inventory.EntityKey{}) {
+		t.Errorf("ScannedKey = %+v, want the zero value for a malformed Metadata.ImageID", scan.ScannedKey)
 	}
 }
 

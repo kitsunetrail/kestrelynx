@@ -151,6 +151,20 @@ func (s State) FirstSeen(image, pkg string) (time.Time, bool) {
 	return e.FirstSeen, ok
 }
 
+// HasFindingsFor reports whether s has at least one recorded finding for
+// ref. Read-only: it does not touch Compute, the key space, or the
+// persisted format — a lookup helper for callers (the diff-mode send
+// decision) that need to ask "did we have anything on record for this
+// reference" without hand-rolling the key format themselves.
+func (s State) HasFindingsFor(ref string) bool {
+	for k := range s.Findings {
+		if keyImage(k) == ref {
+			return true
+		}
+	}
+	return false
+}
+
 // FileStore persists State as a single JSON file, written atomically.
 type FileStore struct {
 	Path string

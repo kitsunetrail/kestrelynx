@@ -109,21 +109,28 @@ func (r Runner) RunOnce(ctx context.Context) error {
 	return r.sendDiff(ctx, report)
 }
 
-// scanAll scans every running image, de-duplicating on the boundary-validated
-// ContentID: the same content running under several references is scanned
-// once and the result is replicated to each alias reference. Images whose
-// ContentID did not resolve are scanned individually by reference and never
-// join the ContentID de-duplication (they already can't collide there, since
-// inventory.DistinctImages itself de-duplicates on (Ref, ContentID)).
+// scanAll scans every running image, de-duplicating on the resolved
+// EntityKey: the same entity running under several references is scanned
+// once and the result is replicated to each alias reference. A cached result
+// is only stored, and only reused, when it came back Pinned — an unpinned
+// (unconfirmed or failed) result describes a scan that never actually
+// confirmed it saw the requested entity, so nothing about it is safe to
+// share with a sibling reference; each alias re-scans until one succeeds.
+// Images whose identity did not resolve are scanned individually by
+// reference and never join the EntityKey de-duplication (they already can't
+// collide there, since inventory.DistinctImages itself de-duplicates on
+// (Ref, EntityKey)).
 func (r Runner) scanAll(ctx context.Context, images []inventory.RunningImage) []scanner.ImageScan {
 	log := r.log()
 	scans := make([]scanner.ImageScan, 0, len(images))
-	byContentID := map[string]scanner.ImageScan{}
+	byKey := map[inventory.EntityKey]scanner.ImageScan{}
 
 	for _, img := range images {
-		contentID := img.ContentID()
-		if contentID == "" {
-			result := r.Scanner.Scan(ctx, scanner.ScanTarget{Ref: img.Ref})
+		key, resolved := inventory.EntityKeyOf(img)
+		subject := inventory.ImageSubject{Ref: img.Ref, Key: key, Resolved: resolved}
+
+		if !resolved {
+			result := r.Scanner.Scan(ctx, scanner.ScanTarget{Subject: subject, Source: scanner.SourceLocal})
 			if result.Err != nil {
 				log.Warn("image scan failed", "image", img.Ref, "resolved", false, "err", result.Err)
 			}
@@ -132,27 +139,30 @@ func (r Runner) scanAll(ctx context.Context, images []inventory.RunningImage) []
 			continue
 		}
 
-		result, ok := byContentID[contentID]
-		if !ok {
-			result = r.Scanner.Scan(ctx, scanner.ScanTarget{Ref: img.Ref, ContentID: contentID})
+		result, ok := byKey[key]
+		if !ok || !result.Pinned {
+			result = r.Scanner.Scan(ctx, scanner.ScanTarget{Subject: subject, Source: scanner.SourceLocal})
 			if result.Err != nil {
-				log.Warn("image scan failed", "image", img.Ref, "content_id", contentID, "resolved", true, "err", result.Err)
+				log.Warn("image scan failed", "image", img.Ref, "content_id", key.Digest.String(), "resolved", true, "err", result.Err)
 			}
-			byContentID[contentID] = result
+			if result.Pinned {
+				byKey[key] = result
+			}
 		}
-		log.Info("scanned image", "ref", img.Ref, "content_id", contentID, "resolved", true)
+		log.Info("scanned image", "ref", img.Ref, "content_id", key.Digest.String(), "resolved", true)
 		scans = append(scans, retarget(result, img.Ref))
 	}
 	return scans
 }
 
-// retarget deep-copies scan and relabels it for ref. A ContentID-pinned scan
-// result is shared across every alias reference running the same content, so
+// retarget deep-copies scan and relabels it for ref. A de-duplicated scan
+// result is shared across every alias reference running the same entity, so
 // each alias must get its own Findings slice — mutating one ref's copy must
 // never reach another's.
 func retarget(scan scanner.ImageScan, ref string) scanner.ImageScan {
 	out := scan
 	out.Image = ref
+	out.Subject.Ref = ref
 	if scan.Findings != nil {
 		out.Findings = make([]scanner.Finding, len(scan.Findings))
 		for i, f := range scan.Findings {
@@ -278,7 +288,13 @@ func (r Runner) sendDiff(ctx context.Context, report analyze.Report) error {
 	next.LastFullReport = prev.LastFullReport
 
 	fullToday := r.FullReportDay != NoFullReport && r.now().Weekday() == r.FullReportDay
-	send := report.HasIssues() || diff.HasChanges() || r.NotifyOnClean
+	// holding is true when a reference this cycle failed to pin still has a
+	// finding on record from before: state's conservative carry-over means
+	// the cycle isn't really silent even if this report alone looks clean,
+	// so a quiet cycle must not skip the notification just because nothing
+	// newly changed.
+	holding := holdingUnconfirmed(prev, report)
+	send := report.HasIssues() || diff.HasChanges() || r.NotifyOnClean || holding
 	if !send {
 		log.Info("no issues and no changes; skipping notification")
 		return r.saveState(next)
@@ -289,6 +305,7 @@ func (r Runner) sendDiff(ctx context.Context, report analyze.Report) error {
 		Report:     report,
 		Diff:       &diff,
 		FullReport: fullToday,
+		Holding:    holding,
 		// The thread mirrors the channel: post the full state when something
 		// changed (or on the weekly digest day); on quiet days the summary
 		// links to the previous thread instead.
@@ -313,6 +330,21 @@ func (r Runner) sendDiff(ctx context.Context, report analyze.Report) error {
 		"thread_report", res.Ref.TS != "",
 		"scan_errors", len(report.ScanErrors))
 	return r.saveState(next)
+}
+
+// holdingUnconfirmed reports whether any reference this cycle could not pin
+// (report.UnconfirmedRefs) still has a finding on record from prev: state's
+// conservative carry-over (analyze's unconfirmed accounting feeding
+// PartialFailure) keeps such findings rather than marking them resolved, so
+// a notification must not stay quiet — or claim "all clear" — just because
+// this cycle's own report looks empty for that reference.
+func holdingUnconfirmed(prev state.State, report analyze.Report) bool {
+	for _, ref := range report.UnconfirmedRefs {
+		if prev.HasFindingsFor(ref) {
+			return true
+		}
+	}
+	return false
 }
 
 // saveState persists the next state. Failure is surfaced (some changes may be

@@ -166,8 +166,8 @@ func TestBuildThreadMessages_AlsoIDs(t *testing.T) {
 }
 
 // wideReport builds many single-package images so the packer has plenty of
-// image-sized blocks to distribute. Each scan carries its own resolved
-// ExpectedContentID so the images are not "unresolved": this test is about
+// image-sized blocks to distribute. Each scan is pinned to its own resolved
+// entity so the images are not "unresolved": this test is about
 // message-splitting mechanics, and an unresolved image would additionally be
 // listed in the cross-cutting "identity unconfirmed" summary section, making
 // every image name appear twice and breaking the "exactly once" assertions
@@ -178,9 +178,9 @@ func wideReport(images int) analyze.Report {
 	for i := 0; i < images; i++ {
 		img := fmt.Sprintf("svc-%02d:1.0", i)
 		id := fmt.Sprintf("CVE-%04d", i)
-		scans = append(scans, scanner.ImageScan{Image: img, ExpectedContentID: fmt.Sprintf("sha256:%064x", i), Findings: []scanner.Finding{
+		scans = append(scans, pinned(scanner.ImageScan{Image: img, Findings: []scanner.Finding{
 			{Image: img, Class: scanner.ClassOS, Package: "libfoo", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: id, Title: fmt.Sprintf("libfoo: crafted input flaw %04d", i)},
-		}})
+		}}, fmt.Sprintf("sha256:%064x", i)))
 		enrich[id] = analyze.Enrichment{KEV: true}
 	}
 	return analyze.Build(scans, nil, triageRules(enrich), genTime)

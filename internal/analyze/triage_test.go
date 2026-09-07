@@ -153,7 +153,7 @@ func TestByPriority_PreservesContentIDForSingleEntity(t *testing.T) {
 	r := Build(scans, nil, tr(enrich), fixedTime)
 	pv := r.ByPriority()
 
-	if len(pv.ActNow) != 1 || pv.ActNow[0].ContentID != contentA {
+	if len(pv.ActNow) != 1 || pv.ActNow[0].ContentID() != contentA {
 		t.Fatalf("ActNow = %+v, want one entry with ContentID %s", pv.ActNow, contentA)
 	}
 }
@@ -181,7 +181,7 @@ func TestByPriority_AmbiguousReferenceStaysSplit(t *testing.T) {
 		if img.Image != "app:1" {
 			t.Errorf("unexpected Image %q", img.Image)
 		}
-		seen[img.ContentID] = true
+		seen[img.ContentID()] = true
 	}
 	if !seen[contentA] || !seen[contentB] {
 		t.Errorf("ContentIDs seen = %v, want both %s and %s", seen, contentA, contentB)
@@ -213,7 +213,7 @@ func TestByPriority_AmbiguousReferencePreservesOwnContainers(t *testing.T) {
 	}
 	byContentID := map[string]ImageFindings{}
 	for _, img := range pv.ActNow {
-		byContentID[img.ContentID] = img
+		byContentID[img.ContentID()] = img
 	}
 	entA, ok := byContentID[contentA]
 	if !ok || len(entA.Containers) != 1 || entA.Containers[0].Name != "app-a" {

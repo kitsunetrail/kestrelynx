@@ -11,7 +11,28 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 )
+
+// pinnedTarget builds a ScanTarget pinned to a config digest, the shape
+// runner.scanAll produces for a Docker-observed running entity.
+func pinnedTarget(t *testing.T, ref, contentID string) ScanTarget {
+	t.Helper()
+	return ScanTarget{
+		Subject: inventory.ImageSubject{
+			Ref:      ref,
+			Key:      inventory.EntityKey{Digest: mustParseDigest(t, contentID)},
+			Resolved: true,
+		},
+		Source: SourceLocal,
+	}
+}
+
+// refTarget builds an unresolved (reference-fallback) ScanTarget.
+func refTarget(ref string) ScanTarget {
+	return ScanTarget{Subject: inventory.ImageSubject{Ref: ref}, Source: SourceLocal}
+}
 
 // TestScan_Integration runs the real trivy binary against a tiny image.
 // Skipped in -short mode or when trivy is not installed, so unit runs stay fast
@@ -27,7 +48,7 @@ func TestScan_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	scan := New().Scan(ctx, ScanTarget{Ref: "alpine:3.12"})
+	scan := New().Scan(ctx, refTarget("alpine:3.12"))
 	if scan.Err != nil {
 		t.Fatalf("Scan: %v", scan.Err)
 	}
@@ -56,7 +77,7 @@ func TestScan_BadImage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	scan := New().Scan(ctx, ScanTarget{Ref: "kestrelynx.invalid/does-not-exist:0"})
+	scan := New().Scan(ctx, refTarget("kestrelynx.invalid/does-not-exist:0"))
 	if scan.Err == nil {
 		t.Fatal("expected Err for unresolvable image, got nil")
 	}
@@ -69,7 +90,7 @@ func TestScan_BadImage(t *testing.T) {
 
 func TestTrivyArgs_ContentIDPinned(t *testing.T) {
 	id := "sha256:" + strings.Repeat("a", 64)
-	got := New().trivyArgs(ScanTarget{Ref: "nginx:1.25", ContentID: id})
+	got := New().trivyArgs(pinnedTarget(t, "nginx:1.25", id))
 	want := []string{"image", "--quiet", "--format", "json", "--severity", "HIGH,CRITICAL", "--image-src", "docker", id}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("args = %v, want %v", got, want)
@@ -77,7 +98,7 @@ func TestTrivyArgs_ContentIDPinned(t *testing.T) {
 }
 
 func TestTrivyArgs_RefFallbackUnchanged(t *testing.T) {
-	got := New().trivyArgs(ScanTarget{Ref: "nginx:1.25"})
+	got := New().trivyArgs(refTarget("nginx:1.25"))
 	want := []string{"image", "--quiet", "--format", "json", "--severity", "HIGH,CRITICAL", "nginx:1.25"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("args = %v, want %v (Ref fallback must not change existing behavior)", got, want)
@@ -87,41 +108,46 @@ func TestTrivyArgs_RefFallbackUnchanged(t *testing.T) {
 // --- reconcileTarget: Expected/Scanned identity check ---
 
 func TestReconcileTarget_ContentIDMismatchIsErr(t *testing.T) {
-	scan := ImageScan{Image: "ignored-artifact-name", ContentID: "sha256:" + strings.Repeat("a", 64)}
-	target := ScanTarget{Ref: "nginx:1.25", ContentID: "sha256:" + strings.Repeat("b", 64)}
+	expected := "sha256:" + strings.Repeat("a", 64)
+	scanned := "sha256:" + strings.Repeat("b", 64)
+	scan := ImageScan{Image: "ignored-artifact-name", ScannedKey: inventory.EntityKey{Digest: mustParseDigest(t, scanned)}}
+	target := pinnedTarget(t, "nginx:1.25", expected)
 
 	got := reconcileTarget(scan, target)
 	if got.Err == nil {
 		t.Fatal("expected Err on ContentID mismatch")
 	}
-	if !strings.Contains(got.Err.Error(), target.ContentID) || !strings.Contains(got.Err.Error(), scan.ContentID) {
+	if !strings.Contains(got.Err.Error(), expected) || !strings.Contains(got.Err.Error(), scanned) {
 		t.Errorf("Err should mention both expected and scanned content ids, got: %v", got.Err)
 	}
-	if got.Image != target.Ref {
-		t.Errorf("Image = %q, want %q even on mismatch", got.Image, target.Ref)
+	if got.Image != target.Subject.Ref {
+		t.Errorf("Image = %q, want %q even on mismatch", got.Image, target.Subject.Ref)
 	}
-	if !got.IdentityResolved {
-		t.Error("IdentityResolved should be true: the scan was pinned, even though it mismatched")
+	if !got.Subject.Resolved {
+		t.Error("Subject.Resolved should be true: the scan was pinned, even though it mismatched")
+	}
+	if got.Pinned {
+		t.Error("Pinned should be false on a mismatch")
 	}
 }
 
 func TestReconcileTarget_ContentIDMatchOK(t *testing.T) {
 	id := "sha256:" + strings.Repeat("a", 64)
-	scan := ImageScan{Image: "ignored-artifact-name", ContentID: id, Findings: []Finding{{VulnID: "CVE-1"}}}
-	target := ScanTarget{Ref: "nginx:1.25", ContentID: id}
+	target := pinnedTarget(t, "nginx:1.25", id)
+	scan := ImageScan{Image: "ignored-artifact-name", ScannedKey: target.Subject.Key, Findings: []Finding{{VulnID: "CVE-1"}}}
 
 	got := reconcileTarget(scan, target)
 	if got.Err != nil {
 		t.Fatalf("unexpected Err: %v", got.Err)
 	}
-	if !got.IdentityResolved {
-		t.Error("IdentityResolved should be true for a ContentID-pinned scan")
+	if !got.Pinned {
+		t.Error("Pinned should be true for a matching config-digest-pinned scan")
 	}
-	if got.ExpectedContentID != id {
-		t.Errorf("ExpectedContentID = %q, want %q", got.ExpectedContentID, id)
+	if got.Subject != target.Subject {
+		t.Errorf("Subject = %+v, want %+v", got.Subject, target.Subject)
 	}
-	if got.Image != target.Ref {
-		t.Errorf("Image = %q, want %q (display name pinned to the reference)", got.Image, target.Ref)
+	if got.Image != target.Subject.Ref {
+		t.Errorf("Image = %q, want %q (display name pinned to the reference)", got.Image, target.Subject.Ref)
 	}
 	if len(got.Findings) != 1 {
 		t.Error("findings must be preserved on a match")
@@ -130,17 +156,20 @@ func TestReconcileTarget_ContentIDMatchOK(t *testing.T) {
 
 func TestReconcileTarget_RefFallbackNotResolved(t *testing.T) {
 	scan := ImageScan{Image: "ignored-artifact-name"}
-	target := ScanTarget{Ref: "nginx:1.25"}
+	target := refTarget("nginx:1.25")
 
 	got := reconcileTarget(scan, target)
-	if got.IdentityResolved {
-		t.Error("Ref fallback scan must not report IdentityResolved")
+	if got.Subject.Resolved {
+		t.Error("Ref fallback scan must not report Subject.Resolved")
+	}
+	if got.Pinned {
+		t.Error("Ref fallback scan must not report Pinned")
 	}
 	if got.Err != nil {
 		t.Errorf("unexpected Err: %v", got.Err)
 	}
-	if got.Image != target.Ref {
-		t.Errorf("Image = %q, want %q", got.Image, target.Ref)
+	if got.Image != target.Subject.Ref {
+		t.Errorf("Image = %q, want %q", got.Image, target.Subject.Ref)
 	}
 }
 
@@ -208,7 +237,7 @@ func trivyJSON(imageID string, repoDigests ...string) string {
 
 func TestScan_FakeBinary_ContentIDPinned_ArgsAndMatch(t *testing.T) {
 	id := "sha256:" + strings.Repeat("c", 64)
-	target := ScanTarget{Ref: "nginx:1.25", ContentID: id}
+	target := pinnedTarget(t, "nginx:1.25", id)
 
 	argsFile := filepath.Join(t.TempDir(), "args.txt")
 	bin := writeFakeTrivy(t, argsFile, trivyJSON(id, "nginx@sha256:"+strings.Repeat("e", 64)), false)
@@ -219,17 +248,14 @@ func TestScan_FakeBinary_ContentIDPinned_ArgsAndMatch(t *testing.T) {
 	if scan.Err != nil {
 		t.Fatalf("Scan: %v", scan.Err)
 	}
-	if scan.Image != target.Ref {
-		t.Errorf("Image = %q, want %q", scan.Image, target.Ref)
+	if scan.Image != target.Subject.Ref {
+		t.Errorf("Image = %q, want %q", scan.Image, target.Subject.Ref)
 	}
-	if scan.ContentID != id {
-		t.Errorf("ContentID = %q, want %q", scan.ContentID, id)
+	if scan.ScannedKey != target.Subject.Key {
+		t.Errorf("ScannedKey = %+v, want %+v", scan.ScannedKey, target.Subject.Key)
 	}
-	if scan.ExpectedContentID != id {
-		t.Errorf("ExpectedContentID = %q, want %q", scan.ExpectedContentID, id)
-	}
-	if !scan.IdentityResolved {
-		t.Error("IdentityResolved should be true for a ContentID-pinned scan")
+	if !scan.Pinned {
+		t.Error("Pinned should be true for a matching config-digest-pinned scan")
 	}
 
 	gotArgs := readArgs(t, argsFile)
@@ -242,7 +268,7 @@ func TestScan_FakeBinary_ContentIDPinned_ArgsAndMatch(t *testing.T) {
 func TestScan_FakeBinary_ContentIDPinned_Mismatch(t *testing.T) {
 	expected := "sha256:" + strings.Repeat("c", 64)
 	scanned := "sha256:" + strings.Repeat("d", 64)
-	target := ScanTarget{Ref: "nginx:1.25", ContentID: expected}
+	target := pinnedTarget(t, "nginx:1.25", expected)
 
 	argsFile := filepath.Join(t.TempDir(), "args.txt")
 	bin := writeFakeTrivy(t, argsFile, trivyJSON(scanned), false)
@@ -256,24 +282,24 @@ func TestScan_FakeBinary_ContentIDPinned_Mismatch(t *testing.T) {
 	if !strings.Contains(scan.Err.Error(), expected) || !strings.Contains(scan.Err.Error(), scanned) {
 		t.Errorf("Err should mention both expected and scanned content ids, got: %v", scan.Err)
 	}
-	if scan.ExpectedContentID != expected {
-		t.Errorf("ExpectedContentID = %q, want %q", scan.ExpectedContentID, expected)
+	if scan.Pinned {
+		t.Error("Pinned should be false on a mismatch")
 	}
-	if !scan.IdentityResolved {
-		t.Error("IdentityResolved should be true: the scan was pinned, even though it mismatched")
+	if !scan.Subject.Resolved {
+		t.Error("Subject.Resolved should be true: the scan was pinned, even though it mismatched")
 	}
-	if scan.Image != target.Ref {
-		t.Errorf("Image = %q, want %q even on mismatch", scan.Image, target.Ref)
+	if scan.Image != target.Subject.Ref {
+		t.Errorf("Image = %q, want %q even on mismatch", scan.Image, target.Subject.Ref)
 	}
 }
 
-// Regression: a ContentID-pinned scan whose trivy process exits non-zero
-// must still carry ExpectedContentID and IdentityResolved on the returned
-// ImageScan, since downstream inventory / partial-failure / scan_target_kind
-// logic (later chunks) reads them even on failure.
+// Regression: a config-digest-pinned scan whose trivy process exits non-zero
+// must still carry Subject on the returned ImageScan (with Pinned false),
+// since downstream inventory / partial-failure / scan_target_kind logic
+// reads them even on failure.
 func TestScan_FakeBinary_ContentIDPinned_ExecFailure_PreservesIdentity(t *testing.T) {
 	id := "sha256:" + strings.Repeat("c", 64)
-	target := ScanTarget{Ref: "nginx:1.25", ContentID: id}
+	target := pinnedTarget(t, "nginx:1.25", id)
 
 	argsFile := filepath.Join(t.TempDir(), "args.txt")
 	bin := writeFakeTrivy(t, argsFile, "", true)
@@ -284,21 +310,21 @@ func TestScan_FakeBinary_ContentIDPinned_ExecFailure_PreservesIdentity(t *testin
 	if scan.Err == nil {
 		t.Fatal("expected Err when the trivy process fails")
 	}
-	if scan.Image != target.Ref {
-		t.Errorf("Image = %q, want %q", scan.Image, target.Ref)
+	if scan.Image != target.Subject.Ref {
+		t.Errorf("Image = %q, want %q", scan.Image, target.Subject.Ref)
 	}
-	if scan.ExpectedContentID != id {
-		t.Errorf("ExpectedContentID = %q, want %q (must survive exec failure)", scan.ExpectedContentID, id)
+	if scan.Subject != target.Subject {
+		t.Errorf("Subject = %+v, want %+v (must survive exec failure)", scan.Subject, target.Subject)
 	}
-	if !scan.IdentityResolved {
-		t.Error("IdentityResolved should be true: the scan was pinned, even though the process failed")
+	if scan.Pinned {
+		t.Error("Pinned should be false: the process failed")
 	}
 }
 
 // Same regression, but for the JSON-parse-failure early return.
 func TestScan_FakeBinary_ContentIDPinned_ParseFailure_PreservesIdentity(t *testing.T) {
 	id := "sha256:" + strings.Repeat("c", 64)
-	target := ScanTarget{Ref: "nginx:1.25", ContentID: id}
+	target := pinnedTarget(t, "nginx:1.25", id)
 
 	argsFile := filepath.Join(t.TempDir(), "args.txt")
 	bin := writeFakeTrivy(t, argsFile, "not valid json", false)
@@ -309,13 +335,13 @@ func TestScan_FakeBinary_ContentIDPinned_ParseFailure_PreservesIdentity(t *testi
 	if scan.Err == nil {
 		t.Fatal("expected Err when trivy's output doesn't parse")
 	}
-	if scan.Image != target.Ref {
-		t.Errorf("Image = %q, want %q", scan.Image, target.Ref)
+	if scan.Image != target.Subject.Ref {
+		t.Errorf("Image = %q, want %q", scan.Image, target.Subject.Ref)
 	}
-	if scan.ExpectedContentID != id {
-		t.Errorf("ExpectedContentID = %q, want %q (must survive parse failure)", scan.ExpectedContentID, id)
+	if scan.Subject != target.Subject {
+		t.Errorf("Subject = %+v, want %+v (must survive parse failure)", scan.Subject, target.Subject)
 	}
-	if !scan.IdentityResolved {
-		t.Error("IdentityResolved should be true: the scan was pinned, even though parsing failed")
+	if scan.Pinned {
+		t.Error("Pinned should be false: parsing failed")
 	}
 }

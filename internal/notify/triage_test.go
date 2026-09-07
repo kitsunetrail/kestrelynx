@@ -136,7 +136,7 @@ func TestFormatSlackDiffText_TriageEscalation(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(map[string]analyze.Enrichment{"CVE-1": {KEV: true}}), genTime.AddDate(0, 0, 1))
 	d, _ := state.Compute(st, r)
 
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 	if !strings.Contains(out, "⬆️ escalated to ACT NOW") {
 		t.Errorf("escalation must be called out:\n%s", out)
 	}
@@ -157,7 +157,7 @@ func TestFormatSlackDiffText_TriageHeartbeatAgesUrgentOnly(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{lowScan}, nil, triageRules(nil), genTime.AddDate(0, 0, 30))
 	d, _ := state.Compute(st, r)
 
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 	if !strings.Contains(out, "🔕 1 low") {
 		t.Errorf("heartbeat should show the open low count:\n%s", out)
 	}
@@ -179,7 +179,7 @@ func TestFormatSlackDiffText_TriageHeartbeatAgeWording(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{watchScan}, nil, triageRules(enrich), genTime.AddDate(0, 0, 20))
 	d, _ := state.Compute(st, r)
 
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 	if !strings.Contains(out, "⏰ oldest act-now/watch unresolved 20 day(s)") {
 		t.Errorf("aged watch finding must age the heartbeat under its own name:\n%s", out)
 	}

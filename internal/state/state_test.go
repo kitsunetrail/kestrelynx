@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
@@ -231,13 +232,40 @@ const (
 	contentB = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
-// resolvedScan builds an IdentityResolved ImageScan pinned to contentID, the
-// shape runner.scanAll produces for a running entity whose ContentID
-// resolved.
+// mustConfigKey parses s as a config digest EntityKey or panics — only ever
+// used to build well-formed test fixtures, never production data.
+func mustConfigKey(s string) inventory.EntityKey {
+	d, ok := inventory.ParseDigest(inventory.DigestConfig, s)
+	if !ok {
+		panic("test fixture: invalid digest " + s)
+	}
+	return inventory.EntityKey{Digest: d}
+}
+
+// resolvedScan builds a Pinned ImageScan confirmed against contentID, the
+// shape runner.scanAll produces for a running entity whose EntityKey
+// resolved and was confirmed.
 func resolvedScan(ref, contentID string, finds ...scanner.Finding) scanner.ImageScan {
+	key := mustConfigKey(contentID)
 	return scanner.ImageScan{
-		Image: ref, ContentID: contentID, ExpectedContentID: contentID,
-		IdentityResolved: true, Findings: finds,
+		Image:      ref,
+		Subject:    inventory.ImageSubject{Ref: ref, Key: key, Resolved: true},
+		ScannedKey: key,
+		Pinned:     true,
+		Source:     scanner.SourceLocal,
+		Findings:   finds,
+	}
+}
+
+// failedResolvedScan builds a scan whose Subject resolved to contentID but
+// whose Trivy scan itself failed — Subject.Resolved survives the failure
+// unchanged, while Pinned stays false (Err != nil fails the pin check
+// regardless).
+func failedResolvedScan(ref, contentID string, err error) scanner.ImageScan {
+	return scanner.ImageScan{
+		Image:   ref,
+		Subject: inventory.ImageSubject{Ref: ref, Key: mustConfigKey(contentID), Resolved: true},
+		Err:     err,
 	}
 }
 
@@ -380,7 +408,7 @@ func TestCompute_PartialFailureCarriesOverTheFailedEntityOnlyPackage(t *testing.
 	}
 
 	// Cycle 2: B fails to scan (partial failure: A still succeeds).
-	scanBFailed := scanner.ImageScan{Image: "web:1", ExpectedContentID: contentB, IdentityResolved: true, Err: errString("pull failed")}
+	scanBFailed := failedResolvedScan("web:1", contentB, errString("pull failed"))
 	d2, st2 := Compute(st1, report(day2, resolvedScan("web:1", contentA, cveA), scanBFailed))
 
 	for _, c := range d2.Changes {
@@ -445,7 +473,7 @@ func TestCompute_PartialFailureMergeAcrossThreeCycles(t *testing.T) {
 	// Cycle 2: B (the KEV/fixable entity) fails. A alone contributes only its
 	// unfixed, non-KEV CVE this cycle; the merge must keep CVE-B, act_now,
 	// and Fixable=true alive so cycle 3 doesn't see any of them as new.
-	scanBFailed := scanner.ImageScan{Image: "web:1", ExpectedContentID: contentB, IdentityResolved: true, Err: errString("pull failed")}
+	scanBFailed := failedResolvedScan("web:1", contentB, errString("pull failed"))
 	d2, st2 := Compute(st1, triaged(day2, enrich, resolvedScan("web:1", contentA, cveA), scanBFailed))
 	if d2.HasChanges() {
 		t.Errorf("cycle2: partial failure must not report any change, got %+v", d2)
@@ -486,7 +514,7 @@ func TestCompute_PartialFailureMergeAcrossThreeCycles(t *testing.T) {
 
 func TestCompute_FullFailureCarriesOverFindingsAndContentIDButNotLastSeen(t *testing.T) {
 	_, st := Compute(empty(), report(day1, resolvedScan("web:1", contentA, finding("web:1", "openssl", "CVE-1", scanner.StatusFixed))))
-	d, next := Compute(st, report(day2, scanner.ImageScan{Image: "web:1", ExpectedContentID: contentA, IdentityResolved: true, Err: errString("pull failed")}))
+	d, next := Compute(st, report(day2, failedResolvedScan("web:1", contentA, errString("pull failed"))))
 
 	if len(d.Resolved) != 0 {
 		t.Errorf("full failure must not resolve findings: %+v", d.Resolved)
@@ -524,7 +552,7 @@ func TestCompute_FullFailureCarriesOverFindingsAndContentIDButNotLastSeen(t *tes
 // detected even though the new content's scan itself failed.
 func TestCompute_ImageReplacementFiresEvenOnScanFailure(t *testing.T) {
 	_, st := Compute(empty(), report(day1, resolvedScan("web:1", contentA, finding("web:1", "openssl", "CVE-1", scanner.StatusFixed))))
-	d, next := Compute(st, report(day2, scanner.ImageScan{Image: "web:1", ExpectedContentID: contentB, IdentityResolved: true, Err: errString("pull failed")}))
+	d, next := Compute(st, report(day2, failedResolvedScan("web:1", contentB, errString("pull failed"))))
 
 	if len(d.Replaced) != 1 {
 		t.Fatalf("Replaced = %+v, want one entry even though the new content's scan failed", d.Replaced)

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 )
 
 // Trivy runs the Trivy CLI. The binary is shelled out to (ADR-002) rather than
@@ -36,8 +38,17 @@ func (t Trivy) severity() string {
 	return strings.Join(t.Severity, ",")
 }
 
-// trivyArgs builds the CLI arguments for scanning target. When ContentID is
-// set, the scan is pinned to that content and restricted to the local Docker
+// pinnedByConfig reports whether target asks for the Docker-style pinned
+// invocation: a resolved Subject whose entity key is a config digest. This
+// is the sole gate for both the trivyArgs pinned branch and the
+// reconcileTarget mismatch check, so the two can never disagree about
+// whether a given target was pinned.
+func pinnedByConfig(target ScanTarget) bool {
+	return target.Subject.Resolved && target.Subject.Key.Digest.Kind == inventory.DigestConfig
+}
+
+// trivyArgs builds the CLI arguments for scanning target. When the target is
+// pinned to a config digest, the scan is restricted to the local Docker
 // image store (--image-src docker) so Trivy can never resolve a different
 // image than the one Docker reported running. The Ref-only fallback path
 // keeps its arguments exactly as before (existing behavior; no
@@ -49,32 +60,40 @@ func (t Trivy) trivyArgs(target ScanTarget) []string {
 		"--format", "json",
 		"--severity", t.severity(),
 	}
-	if target.ContentID != "" {
-		return append(args, "--image-src", "docker", target.ContentID)
+	if pinnedByConfig(target) {
+		return append(args, "--image-src", "docker", target.Subject.Key.Digest.String())
 	}
-	return append(args, target.Ref)
+	return append(args, target.Subject.Ref)
 }
 
-// reconcileTarget applies the Expected/Scanned identity check to a freshly
-// parsed report for a ContentID-pinned scan: a mismatch is an environment
-// anomaly, not a finding, so it is surfaced as a scan error rather than
-// attributed to the running content.
-// scan.Image is always pinned to target.Ref (ArtifactName is the sha256
-// string for ContentID-pinned scans, confirmed in production).
+// pinnedOf derives ImageScan.Pinned: Subject.Resolved, the scan succeeded,
+// and the entity Trivy actually scanned matches the one requested. It is the
+// only place Pinned is computed.
+func pinnedOf(scan ImageScan, target ScanTarget) bool {
+	return target.Subject.Resolved && scan.Err == nil && scan.ScannedKey == target.Subject.Key
+}
+
+// reconcileTarget applies the pin check to a freshly parsed report for a
+// config-digest-pinned scan target: a mismatch is an environment anomaly,
+// not a finding, so it is surfaced as a scan error rather than attributed to
+// the running content.
+// scan.Image is always pinned to target.Subject.Ref (ArtifactName is the
+// sha256 string for a pinned scan, confirmed in production).
 func reconcileTarget(scan ImageScan, target ScanTarget) ImageScan {
-	scan.Image = target.Ref
-	scan.ExpectedContentID = target.ContentID
-	scan.IdentityResolved = target.ContentID != ""
-	if target.ContentID != "" && scan.ContentID != target.ContentID {
+	scan.Image = target.Subject.Ref
+	scan.Subject = target.Subject
+	scan.Source = target.Source
+	if pinnedByConfig(target) && scan.ScannedKey != target.Subject.Key {
 		return ImageScan{
-			Image:             target.Ref,
-			ExpectedContentID: target.ContentID,
-			ContentID:         scan.ContentID,
-			IdentityResolved:  true,
+			Image:      target.Subject.Ref,
+			Subject:    target.Subject,
+			Source:     target.Source,
+			ScannedKey: scan.ScannedKey,
 			Err: fmt.Errorf("trivy scan %s: scanned content %q does not match expected %q",
-				target.Ref, scan.ContentID, target.ContentID),
+				target.Subject.Ref, scan.ScannedKey.Digest.String(), target.Subject.Key.Digest.String()),
 		}
 	}
+	scan.Pinned = pinnedOf(scan, target)
 	return scan
 }
 
@@ -92,20 +111,20 @@ func (t Trivy) Scan(ctx context.Context, target ScanTarget) ImageScan {
 
 	if err := cmd.Run(); err != nil {
 		return ImageScan{
-			Image:             target.Ref,
-			ExpectedContentID: target.ContentID,
-			IdentityResolved:  target.ContentID != "",
-			Err:               fmt.Errorf("trivy scan %s: %w: %s", scanArg, err, strings.TrimSpace(stderr.String())),
+			Image:   target.Subject.Ref,
+			Subject: target.Subject,
+			Source:  target.Source,
+			Err:     fmt.Errorf("trivy scan %s: %w: %s", scanArg, err, strings.TrimSpace(stderr.String())),
 		}
 	}
 
 	scan, err := ParseReport(stdout.Bytes())
 	if err != nil {
 		return ImageScan{
-			Image:             target.Ref,
-			ExpectedContentID: target.ContentID,
-			IdentityResolved:  target.ContentID != "",
-			Err:               fmt.Errorf("trivy scan %s: %w", scanArg, err),
+			Image:   target.Subject.Ref,
+			Subject: target.Subject,
+			Source:  target.Source,
+			Err:     fmt.Errorf("trivy scan %s: %w", scanArg, err),
 		}
 	}
 	return reconcileTarget(scan, target)

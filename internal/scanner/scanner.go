@@ -10,8 +10,9 @@ package scanner
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
+
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 )
 
 // PkgClass distinguishes OS packages (distro versioning, not semver) from
@@ -57,6 +58,23 @@ type Finding struct {
 	Title        string // short human-readable summary of the vulnerability, if Trivy supplied one
 }
 
+// ScanSource distinguishes where a scan target's bytes are fetched from: it
+// determines both the trivy invocation shape and how analyze treats a scan
+// that could not be pinned (see docs/development/image-identity-model.md).
+type ScanSource string
+
+const (
+	// SourceLocal is the runtime's own image store (Docker): a scan that
+	// fell back to scanning by reference there had no better option, and a
+	// clean result is trusted the same way it always has been.
+	SourceLocal ScanSource = "local"
+	// SourceRemote is a registry (Kubernetes, reached over the network): a
+	// scan that could not be pinned there is scanning whatever a mutable tag
+	// currently resolves to, so a clean result must not be trusted the same
+	// way — see analyze's unconfirmed accounting.
+	SourceRemote ScanSource = "remote"
+)
+
 // ImageScan is the result of scanning a single image. Err is non-nil when the
 // scan itself failed (e.g. image could not be pulled); callers should surface
 // it rather than dropping it.
@@ -70,34 +88,26 @@ type ImageScan struct {
 	// Identity fields. They describe what was actually scanned, separately
 	// from Image (the display name pinned to the caller's reference). See
 	// docs/development/image-identity-model.md.
-	ContentID         string   // Trivy's Metadata.ImageID, boundary-validated (the "ScannedContentID")
-	ExpectedContentID string   // the ContentID the caller asked Trivy to scan (ScanTarget.ContentID)
-	RegistryDigests   []string // Metadata.RepoDigests, sorted; a display/correlation attribute, never an identity
-	IdentityResolved  bool     // true when this scan was pinned to ExpectedContentID rather than falling back to Image
+	Subject         inventory.ImageSubject // the identity this scan was asked to confirm (ScanTarget.Subject)
+	ScannedKey      inventory.EntityKey    // the entity Trivy's own metadata resolved to scanning, zero value if it didn't resolve one
+	RegistryDigests []string               // Metadata.RepoDigests, sorted; a display/correlation attribute, never an identity
+	// Pinned is true only when Subject.Resolved, the scan itself succeeded
+	// (Err == nil), and ScannedKey equals Subject.Key — it is derived from
+	// those three facts alone and never set independently of them.
+	Pinned bool
+	Source ScanSource // where this scan's bytes came from
 }
 
-// ScanTarget names the image to scan. Ref is always the display name pinned
-// to the result; ContentID, when set, is the boundary-validated OCI image
-// config digest that pins the scan to a specific running image instead of a
-// reference that could move between enumeration and scan.
+// ScanTarget names the image to scan. Subject carries the identity to pin
+// to: Subject.Ref is always the display name pinned to the result;
+// Subject.Key, when Subject.Resolved, is the entity the caller wants Trivy
+// to confirm instead of a reference that could move between enumeration and
+// scan. Registry is where to fetch from when Source is SourceRemote (zero
+// value for Docker).
 type ScanTarget struct {
-	Ref       string
-	ContentID string
-}
-
-// contentIDPattern mirrors the Docker adapter's boundary validation for the
-// OCI image config digest. Kept as a small local check rather than a shared
-// package: the scanner and docker packages must not couple over this
-// internal detail for a single call site.
-var contentIDPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-
-// validContentID returns imageID if it validates, "" otherwise. No
-// normalization or guessing.
-func validContentID(imageID string) string {
-	if contentIDPattern.MatchString(imageID) {
-		return imageID
-	}
-	return ""
+	Subject  inventory.ImageSubject
+	Registry inventory.RegistryRef
+	Source   ScanSource
 }
 
 // trivyReport is the subset of Trivy's JSON schema (SchemaVersion 2) that
@@ -146,8 +156,13 @@ func ParseReport(data []byte) (ImageScan, error) {
 		Image:           r.ArtifactName,
 		OSFamily:        r.Metadata.OS.Family,
 		OSEOSL:          r.Metadata.OS.EOSL,
-		ContentID:       validContentID(r.Metadata.ImageID),
 		RegistryDigests: registryDigests,
+	}
+	// A Metadata.ImageID that fails the boundary check is never normalized
+	// or guessed at: ScannedKey simply stays the zero value, same as an
+	// entity that never resolved one.
+	if d, ok := inventory.ParseDigest(inventory.DigestConfig, r.Metadata.ImageID); ok {
+		scan.ScannedKey = inventory.EntityKey{Digest: d}
 	}
 
 	for _, res := range r.Results {

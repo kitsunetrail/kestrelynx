@@ -279,8 +279,15 @@ func triageChangeSuffix(c state.Change) string {
 
 // writeTriageOpenNow is the heartbeat line with the priority breakdown. Only
 // urgent findings age it: an old "low" is the triage doing its job, not debt.
-func writeTriageOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
+// holding is the same signal writeOpenNow honors: it must not assert "all
+// clear" when the current cycle looks clean only because an unpinned scan is
+// having a previous finding held rather than resolved.
+func writeTriageOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool) {
 	if !r.HasFindings() {
+		if holding {
+			b.WriteString("\n📌 Open now: unconfirmed — holding previous findings until re-confirmed\n")
+			return
+		}
 		b.WriteString("\n🎉 Open now: none — all clear\n")
 		return
 	}

@@ -10,9 +10,34 @@ import (
 	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
+
+// mustConfigKey parses s as a config digest EntityKey or panics — only ever
+// used to build well-formed test fixtures, never production data.
+func mustConfigKey(s string) inventory.EntityKey {
+	d, ok := inventory.ParseDigest(inventory.DigestConfig, s)
+	if !ok {
+		panic("test fixture: invalid digest " + s)
+	}
+	return inventory.EntityKey{Digest: d}
+}
+
+// pinned returns scan with its identity fields set as if a real scan
+// confirmed contentID against a Docker-observed EntityKey — the shape
+// runner.scanAll plus a matching Trivy scan produce. scan.Image supplies the
+// ref, so call sites only need to add the one new fact (contentID) to an
+// otherwise ordinary ImageScan literal.
+func pinned(scan scanner.ImageScan, contentID string) scanner.ImageScan {
+	key := mustConfigKey(contentID)
+	scan.Subject = inventory.ImageSubject{Ref: scan.Image, Key: key, Resolved: true}
+	scan.ScannedKey = key
+	scan.Pinned = scan.Err == nil
+	scan.Source = scanner.SourceLocal
+	return scan
+}
 
 // --- Replaced on the Slack diff ---
 
@@ -36,7 +61,7 @@ func TestFormatSlackDiffText_Replaced(t *testing.T) {
 	// Both images are clean (no findings): a replacement on a clean image must
 	// still be reported.
 	r := analyze.Build([]scanner.ImageScan{{Image: "nginx:latest"}, {Image: "redis:7"}}, nil, analyze.Triage{}, genTime)
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 
 	if !strings.Contains(out, "Image content changed (2)") {
 		t.Errorf("expected a Replaced header with count 2:\n%s", out)
@@ -56,7 +81,7 @@ func TestFormatSlackDiffText_Replaced(t *testing.T) {
 // appearing when there is nothing to report.
 func TestFormatSlackDiffText_ReplacedAbsentWhenEmpty(t *testing.T) {
 	r, d := diffFixture()
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 	if strings.Contains(out, "Image content changed") {
 		t.Errorf("no Replaced header expected when d.Replaced is empty:\n%s", out)
 	}
@@ -134,16 +159,15 @@ func TestBuildWebhookPayload_ImageIdentityFields(t *testing.T) {
 	cid := "sha256:" + strings.Repeat("c", 64)
 	regDigest := "app@sha256:" + strings.Repeat("d", 64)
 	scans := []scanner.ImageScan{
-		{
-			Image:             "app:1",
-			ExpectedContentID: cid,
-			RegistryDigests:   []string{regDigest},
+		pinned(scanner.ImageScan{
+			Image:           "app:1",
+			RegistryDigests: []string{regDigest},
 			Findings: []scanner.Finding{
 				{Image: "app:1", Class: scanner.ClassOS, Package: "libc", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
 			},
-		},
+		}, cid),
 		{
-			Image: "legacy:1", // no ExpectedContentID: reference-fallback scan
+			Image: "legacy:1", // not pinned: reference-fallback scan
 			Findings: []scanner.Finding{
 				{Image: "legacy:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-2"},
 			},
@@ -204,25 +228,24 @@ func TestBuildWebhookPayload_ImageIdentityFields(t *testing.T) {
 // --- Slack: unresolved-identity warning ---
 
 // TestIdentity_ReferenceFallback is the "reference fallback" test: a scan
-// that never had a Docker-observed ContentID to pin to (ExpectedContentID
-// empty, so ImageFindings.ContentID is empty too) must surface that on both
-// delivery paths — an explicit warning on the Slack heading, and
+// whose Subject never resolved (so it can't be Pinned, and
+// ImageFindings.ContentID() is empty too) must surface that on both delivery
+// paths — an explicit warning on the Slack heading, and
 // scan_target_kind="reference" (identity_resolved=false, content_id omitted)
 // in the webhook payload.
 //
-// The fallback scan still returns real-looking ScannedContentID
-// (scanner.ImageScan.ContentID) / RegistryDigests values: whatever Trivy
-// happened to resolve on its own when there was no Docker-observed identity
-// to pin to. These describe a *different* entity than the one Docker
-// reported (or none at all), so they must never leak into the
-// identity-resolved payload fields just because ExpectedContentID was never
-// set.
+// The fallback scan still returns a real-looking ScannedKey / RegistryDigests:
+// whatever Trivy happened to resolve on its own when there was no
+// Docker-observed identity to pin to. These describe a *different* entity
+// than the one Docker reported (or none at all), so they must never leak
+// into the identity-resolved payload fields just because Subject was never
+// resolved.
 func TestIdentity_ReferenceFallback(t *testing.T) {
 	otherEntityCID := "sha256:" + strings.Repeat("f", 64)
 	otherEntityDigest := "openssl@sha256:" + strings.Repeat("9", 64)
 	scans := []scanner.ImageScan{{
 		Image:           "legacy:1",
-		ContentID:       otherEntityCID, // ScannedContentID: not Docker-observed
+		ScannedKey:      mustConfigKey(otherEntityCID), // Trivy's own resolution: not Docker-observed
 		RegistryDigests: []string{otherEntityDigest},
 		Findings: []scanner.Finding{
 			{Image: "legacy:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
@@ -271,10 +294,10 @@ func TestIdentity_ReferenceFallback(t *testing.T) {
 func TestIdentity_MixedResolvedAndFallbackUnderSameRef(t *testing.T) {
 	cid := "sha256:" + strings.Repeat("e", 64)
 	scans := []scanner.ImageScan{
-		{Image: "mixed:1", ExpectedContentID: cid, Findings: []scanner.Finding{
+		pinned(scanner.ImageScan{Image: "mixed:1", Findings: []scanner.Finding{
 			{Image: "mixed:1", Class: scanner.ClassOS, Package: "libssl", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-RESOLVED"},
-		}},
-		{Image: "mixed:1", Findings: []scanner.Finding{ // no ExpectedContentID: reference-fallback sibling
+		}}, cid),
+		{Image: "mixed:1", Findings: []scanner.Finding{ // not pinned: reference-fallback sibling
 			{Image: "mixed:1", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-FALLBACK"},
 		}},
 	}
@@ -395,12 +418,12 @@ func TestFormatSlackText_AmbiguousDigest(t *testing.T) {
 	cidA := "sha256:" + strings.Repeat("a", 64)
 	cidB := "sha256:" + strings.Repeat("b", 64)
 	scans := []scanner.ImageScan{
-		{Image: "nginx:latest", ExpectedContentID: cidA, Findings: []scanner.Finding{
+		pinned(scanner.ImageScan{Image: "nginx:latest", Findings: []scanner.Finding{
 			{Image: "nginx:latest", Class: scanner.ClassOS, Package: "libssl", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-A"},
-		}},
-		{Image: "nginx:latest", ExpectedContentID: cidB, Findings: []scanner.Finding{
+		}}, cidA),
+		pinned(scanner.ImageScan{Image: "nginx:latest", Findings: []scanner.Finding{
 			{Image: "nginx:latest", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-B"},
-		}},
+		}}, cidB),
 	}
 	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	out := FormatSlackText(r)
@@ -420,11 +443,11 @@ func TestFormatSlackText_AmbiguousDigest(t *testing.T) {
 // even though its ContentID is resolved and non-empty.
 func TestFormatSlackText_SingleEntityNoDigestSuffix(t *testing.T) {
 	cid := "sha256:" + strings.Repeat("c", 64)
-	scans := []scanner.ImageScan{{
-		Image: "app:1", ExpectedContentID: cid, Findings: []scanner.Finding{
+	scans := []scanner.ImageScan{pinned(scanner.ImageScan{
+		Image: "app:1", Findings: []scanner.Finding{
 			{Image: "app:1", Class: scanner.ClassOS, Package: "libc", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
 		},
-	}}
+	}, cid)}
 	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	out := FormatSlackText(r)
 	if strings.Contains(out, strings.Repeat("c", 12)) {
@@ -452,7 +475,7 @@ func TestFormatSlackDiffText_UnresolvedRefAnnotation_Changes(t *testing.T) {
 	}}
 	r := analyze.Build([]scanner.ImageScan{scan}, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(state.State{}, r)
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 
 	if !strings.Contains(out, "New since last scan") {
 		t.Fatalf("expected a Changes section:\n%s", out)
@@ -473,7 +496,7 @@ func TestFormatSlackDiffText_UnresolvedRefAnnotation_Resolved(t *testing.T) {
 	// the package resolved, but its identity is still never confirmed.
 	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(prevState, r)
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 
 	if !strings.Contains(out, "Resolved since last scan") {
 		t.Fatalf("expected a Resolved section:\n%s", out)
@@ -491,16 +514,16 @@ func TestFormatSlackDiffText_AmbiguousRefNoDigest(t *testing.T) {
 	cidA := "sha256:" + strings.Repeat("a", 64)
 	cidB := "sha256:" + strings.Repeat("b", 64)
 	scans := []scanner.ImageScan{
-		{Image: "nginx:latest", ExpectedContentID: cidA, Findings: []scanner.Finding{
+		pinned(scanner.ImageScan{Image: "nginx:latest", Findings: []scanner.Finding{
 			{Image: "nginx:latest", Class: scanner.ClassOS, Package: "libssl", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-A"},
-		}},
-		{Image: "nginx:latest", ExpectedContentID: cidB, Findings: []scanner.Finding{
+		}}, cidA),
+		pinned(scanner.ImageScan{Image: "nginx:latest", Findings: []scanner.Finding{
 			{Image: "nginx:latest", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-B"},
-		}},
+		}}, cidB),
 	}
 	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(state.State{}, r)
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 
 	if !strings.Contains(out, "New since last scan") {
 		t.Fatalf("expected a Changes section:\n%s", out)
@@ -551,7 +574,7 @@ func TestFormatSlackText_TriageCleanUnresolvedStillWarns(t *testing.T) {
 func TestFormatSlackDiffText_CleanUnresolvedStillWarns(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(state.State{}, r)
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — legacy:1") {
 		t.Errorf("expected the unresolved-refs summary on the diff heartbeat:\n%s", out)
 	}

@@ -27,10 +27,18 @@ import (
 // lines. LastReport is the most recent successfully posted thread (nil when
 // none). Result, when non-nil, receives the ref of a thread posted by this
 // send, so the caller can persist it only after delivery succeeded.
+//
+// Holding is diff mode's "we are silently carrying over unconfirmed findings"
+// signal: true when at least one reference this cycle failed to pin
+// (Report.UnconfirmedRefs) still has a finding on record from the previous
+// state. The runner computes it (it alone loads the previous state) and
+// passes it through here so the pure formatting layer never needs its own
+// copy of state; it only ever affects diff-mode "open now" rendering.
 type Message struct {
 	Report     analyze.Report
 	Diff       *state.Diff
 	FullReport bool
+	Holding    bool
 
 	Thread     bool
 	FirstSeen  func(image, pkg string) (time.Time, bool)
@@ -66,7 +74,7 @@ func (n SlackNotifier) Send(ctx context.Context, m Message) error {
 // summaryText renders the channel message body for the message's mode.
 func summaryText(m Message) string {
 	if m.Diff != nil {
-		return FormatSlackDiffText(m.Report, *m.Diff, m.FullReport)
+		return FormatSlackDiffText(m.Report, *m.Diff, m.FullReport, m.Holding)
 	}
 	return FormatSlackText(m.Report)
 }

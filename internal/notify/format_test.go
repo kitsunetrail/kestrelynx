@@ -140,7 +140,7 @@ func diffFixture() (analyze.Report, state.Diff) {
 
 func TestFormatSlackDiffText_NewFindings(t *testing.T) {
 	r, d := diffFixture()
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 
 	mustContain := []string{
 		"New since last scan",
@@ -167,7 +167,7 @@ func TestFormatSlackDiffText_Heartbeat(t *testing.T) {
 	_, st := state.Compute(state.State{}, r)
 	// Second scan, same findings: no changes.
 	d, _ := state.Compute(st, r)
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 
 	if !strings.Contains(out, "No changes since last scan") {
 		t.Errorf("expected heartbeat line:\n%s", out)
@@ -187,7 +187,7 @@ func TestFormatSlackDiffText_AgeAndEscalation(t *testing.T) {
 		"web:1.0\tlibc-bin": {FirstSeen: old, Fixable: true, VulnIDs: []string{"CVE-1"}},
 	}, EOSL: map[string]time.Time{}}
 	d, _ := state.Compute(st, r)
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 
 	if !strings.Contains(out, "⏰ oldest unresolved 20 day(s)") {
 		t.Errorf("expected escalated age marker for a 20-day-old finding:\n%s", out)
@@ -201,7 +201,7 @@ func TestFormatSlackDiffText_Resolved(t *testing.T) {
 		"gone:1\told-pkg":   {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-9"}},
 	}, EOSL: map[string]time.Time{}}
 	d, _ := state.Compute(st, r)
-	out := FormatSlackDiffText(r, d, false)
+	out := FormatSlackDiffText(r, d, false, false)
 
 	if !strings.Contains(out, "Resolved since last scan") || !strings.Contains(out, "gone:1: old-pkg") {
 		t.Errorf("expected resolved section for gone:1 old-pkg:\n%s", out)
@@ -212,7 +212,7 @@ func TestFormatSlackDiffText_WeeklyFullReport(t *testing.T) {
 	r := sampleReport()
 	_, st := state.Compute(state.State{}, r)
 	d, _ := state.Compute(st, r) // unchanged day
-	out := FormatSlackDiffText(r, d, true)
+	out := FormatSlackDiffText(r, d, true, false)
 
 	if !strings.Contains(out, "Weekly full report") {
 		t.Errorf("expected weekly full report heading:\n%s", out)
@@ -231,7 +231,7 @@ func TestFormatSlackDiffText_AllResolvedCelebrates(t *testing.T) {
 		"ok:1\topenssl": {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-1"}},
 	}, EOSL: map[string]time.Time{}}
 	d, _ := state.Compute(st, clean)
-	out := FormatSlackDiffText(clean, d, false)
+	out := FormatSlackDiffText(clean, d, false, false)
 
 	if !strings.Contains(out, "Resolved since last scan") {
 		t.Errorf("expected resolved section:\n%s", out)

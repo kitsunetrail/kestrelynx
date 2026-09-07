@@ -61,7 +61,7 @@ func TestBuild_ContainersAttachByEntityAndByRef(t *testing.T) {
 	}
 	var byContentID = map[string]ImageFindings{}
 	for _, e := range r.Actionable {
-		byContentID[e.ContentID] = e
+		byContentID[e.ContentID()] = e
 	}
 	entA, ok := byContentID[contentA]
 	if !ok {
@@ -132,7 +132,7 @@ func TestBuild_ContainersUnresolvedEntityMatchesByRefOnly(t *testing.T) {
 	}
 	byContentID := map[string]ImageFindings{}
 	for _, e := range r.Actionable {
-		byContentID[e.ContentID] = e
+		byContentID[e.ContentID()] = e
 	}
 	resolvedEnt, ok := byContentID[contentA]
 	if !ok {

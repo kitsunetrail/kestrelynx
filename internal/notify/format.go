@@ -101,7 +101,13 @@ func writeFullBody(b *strings.Builder, r analyze.Report) {
 // the same list daily trains the reader to ignore it; age does the reminding
 // instead. When fullReport is true (weekly digest day) the one-liner is replaced
 // by the complete open-findings view.
-func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string {
+//
+// holding tells the "open now" heartbeat not to assert "all clear" when the
+// current cycle looks clean only because a reference that could not be
+// pinned this cycle (Report.UnconfirmedRefs) is having a previous finding
+// held rather than resolved (runner computes this against the previous
+// state, which this pure formatting layer never sees).
+func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holding bool) string {
 	var b strings.Builder
 	writeHeader(&b, r)
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
@@ -117,7 +123,7 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string
 	if !d.HasChanges() && !fullReport {
 		b.WriteString("\nNo changes since last scan.\n")
 		writeScanErrors(&b, r.ScanErrors, byRef)
-		writeAnyOpenNow(&b, r, d)
+		writeAnyOpenNow(&b, r, d, holding)
 		// A clean, unresolved (reference-fallback) image must not go
 		// unmentioned just because it has no changes/findings to report —
 		// silence here would read as "confirmed clean".
@@ -147,7 +153,7 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool) string
 		writeFullBody(&b, r)
 	} else {
 		writeScanErrors(&b, r.ScanErrors, byRef)
-		writeAnyOpenNow(&b, r, d)
+		writeAnyOpenNow(&b, r, d, holding)
 		writeUnresolvedRefs(&b, r)
 	}
 	return b.String()
@@ -197,9 +203,9 @@ func shortDigest(contentID string) string {
 //   - Per-entity renderers with an analyze.ImageFindings in hand (imageLabel,
 //     imagePayloads) use it only for the reference's aggregate Ambiguous
 //     status and RegistryDigests — never for IdentityResolved, since that
-//     aggregate would misreport a resolved entity as unresolved whenever a
+//     aggregate would misreport a pinned entity as unresolved whenever a
 //     sibling under the same reference fell back to scanning by reference.
-//     Per-entity resolution is ImageFindings.ContentID's own job.
+//     Per-entity resolution is ImageFindings.Pinned's own job.
 //   - Reference-only renderers with nothing but a bare ref string (refLabel:
 //     diff/EOSL/scan-error lines that are reference-keyed by design) have no
 //     per-entity ContentID to fall back on, so the reference's aggregate
@@ -226,21 +232,38 @@ func imagesByRef(r analyze.Report) map[string]analyze.ImageObservation {
 const identityUnconfirmedText = "identity unconfirmed: scanned by reference"
 
 // imageLabel is the display name for one ImageFindings entry, annotated per
-// the identity model: unresolved (ContentID empty — a reference-fallback
-// scan) gets an explicit warning that the entity actually running there was
-// never confirmed; resolved-but-ambiguous (more than one distinct entity
-// currently running under the same reference) gets the short content digest
-// appended so the per-entity sections can be told apart. The ordinary
-// single-entity case (the vast majority) renders exactly as before.
+// the identity model: not pinned this cycle (a reference-fallback scan, or a
+// resolved entity this cycle failed to confirm) gets an explicit warning
+// that the entity actually running there was never confirmed;
+// pinned-but-ambiguous (more than one distinct entity currently running
+// under the same reference) gets the short digest appended so the
+// per-entity sections can be told apart — a registry-kind digest also
+// carries its platform, since unlike a config digest it doesn't pin one on
+// its own. The ordinary single-entity case (the vast majority) renders
+// exactly as before.
 func imageLabel(img analyze.ImageFindings, byRef map[string]analyze.ImageObservation) string {
 	switch {
-	case img.ContentID == "":
+	case !img.Pinned:
 		return img.Image + " — " + identityUnconfirmedText
 	case byRef[img.Image].Ambiguous:
-		return img.Image + " (" + shortDigest(img.ContentID) + ")"
+		digest := shortDigest(img.Subject.Key.Digest.String())
+		if img.Subject.Key.Digest.Kind == inventory.DigestRegistry {
+			digest += " " + platformString(img.Subject.Key.Platform)
+		}
+		return img.Image + " (" + digest + ")"
 	default:
 		return img.Image
 	}
+}
+
+// platformString renders an inventory.Platform for display, e.g.
+// "linux/amd64" or "linux/arm/v7" when Variant is set.
+func platformString(p inventory.Platform) string {
+	s := p.OS + "/" + p.Architecture
+	if p.Variant != "" {
+		s += "/" + p.Variant
+	}
+	return s
 }
 
 // refLabel is the reference-level counterpart of imageLabel, for renderers
@@ -287,24 +310,41 @@ func unresolvedRefsLine(r analyze.Report) string {
 	return fmt.Sprintf("⚠️ %s — %s\n", identityUnconfirmedText, strings.Join(refs, ", "))
 }
 
-// writeUnresolvedRefs appends unresolvedRefsLine to a Slack message body, if
-// non-empty. Fires independently of findings/EOSL/scan errors. Doubling up
-// with a heading-level annotation (imageLabel/refLabel) elsewhere in the same
-// message is expected and fine — both draw from identityUnconfirmedText, so
-// the wording never drifts between the two.
+// unconfirmedRefsLine renders the cross-cutting summary of every reference
+// with at least one Unconfirmed entity this cycle (Report.UnconfirmedRefs):
+// its previous findings are being held rather than treated as resolved,
+// since a clean-looking result from a scan that couldn't be pinned is not
+// distinguishable from one that quietly stopped matching what's actually
+// running. "" when nothing is unconfirmed — always the case for Docker,
+// which never falls back this way, so this line never appears for it.
+func unconfirmedRefsLine(r analyze.Report) string {
+	if len(r.UnconfirmedRefs) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("⏳ unconfirmed this cycle, holding previous findings — %s\n", strings.Join(r.UnconfirmedRefs, ", "))
+}
+
+// writeUnresolvedRefs appends unresolvedRefsLine and unconfirmedRefsLine to a
+// Slack message body, if non-empty. Fires independently of findings/EOSL/scan
+// errors. Doubling up with a heading-level annotation (imageLabel/refLabel)
+// elsewhere in the same message is expected and fine — both draw from
+// identityUnconfirmedText, so the wording never drifts between the two.
 func writeUnresolvedRefs(b *strings.Builder, r analyze.Report) {
 	if line := unresolvedRefsLine(r); line != "" {
+		b.WriteString("\n" + line)
+	}
+	if line := unconfirmedRefsLine(r); line != "" {
 		b.WriteString("\n" + line)
 	}
 }
 
 // writeAnyOpenNow picks the heartbeat style for the report's mode.
-func writeAnyOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
+func writeAnyOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool) {
 	if r.Triage {
-		writeTriageOpenNow(b, r, d)
+		writeTriageOpenNow(b, r, d, holding)
 		return
 	}
-	writeOpenNow(b, r, d)
+	writeOpenNow(b, r, d, holding)
 }
 
 // writeChanges renders the new/changed findings grouped per image, in report
@@ -372,9 +412,16 @@ func writeResolved(b *strings.Builder, d state.Diff, byRef map[string]analyze.Im
 }
 
 // writeOpenNow renders the one-line ambient summary that keeps unresolved
-// findings from being forgotten between changes.
-func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff) {
+// findings from being forgotten between changes. When the current cycle has
+// no findings only because an unpinned scan is having a previous finding
+// held (holding), it must not assert "all clear" — that would flatly
+// contradict the fact that state is still carrying something over.
+func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool) {
 	if !r.HasFindings() {
+		if holding {
+			b.WriteString("\n📌 Open now: unconfirmed — holding previous findings until re-confirmed\n")
+			return
+		}
 		b.WriteString("\n🎉 Open now: none — all clear\n")
 		return
 	}
@@ -646,27 +693,28 @@ type imagePayload struct {
 
 	// Containers is the entity-level observation backing this section entry
 	// (analyze.ImageFindings.Containers): every running container matching
-	// this (Image, ContentID) exactly. Unlike RegistryDigests below this is
+	// this (Image, Subject.Key) exactly. Unlike RegistryDigests below this is
 	// per-entity, not a Ref-level union — a reference running two distinct
-	// verified contents lists each content's own containers under its own
+	// verified entities lists each entity's own containers under its own
 	// section entry, not a merged set.
 	Containers []containerPayload `json:"containers"`
 
-	// Identity fields. ContentID mirrors analyze.ImageFindings.ContentID:
-	// non-empty only when this entity's identity was resolved (single
-	// confirmed entity — the ordinary case, or one entry of an Ambiguous
-	// reference). IdentityResolved and ScanTargetKind are both entity-level,
-	// derived from that same ContentID (non-empty => resolved / "content_id";
-	// empty => unresolved / "reference") — never the reference's aggregate
-	// IdentityResolved (analyze.Report.Images), so a resolved entity is never
-	// reported as unresolved just because a sibling under the same reference
-	// fell back to scanning by reference. RegistryDigests alone is the
-	// reference's identity inventory, looked up by Image (ImageFindings
-	// carries no per-entity RegistryDigests of its own).
+	// Identity fields. ContentID mirrors analyze.ImageFindings.ContentID():
+	// non-empty only when this entity resolved to a config-digest identity
+	// (single confirmed entity — the ordinary case, or one entry of an
+	// Ambiguous reference); a registry-digest entity never populates it.
+	// IdentityResolved mirrors this entity's own Pinned — never the
+	// reference's aggregate IdentityResolved (analyze.Report.Images), so a
+	// pinned entity is never reported as unresolved just because a sibling
+	// under the same reference wasn't. ScanTargetKind names which identity
+	// kind was pinned ("content_id" | "registry_digest"), or "reference" when
+	// not pinned at all. RegistryDigests alone is the reference's identity
+	// inventory, looked up by Image (ImageFindings carries no per-entity
+	// RegistryDigests of its own).
 	ContentID        string   `json:"content_id,omitempty"`
 	RegistryDigests  []string `json:"registry_digests"`
 	IdentityResolved bool     `json:"identity_resolved"`
-	ScanTargetKind   string   `json:"scan_target_kind"` // content_id | reference
+	ScanTargetKind   string   `json:"scan_target_kind"` // content_id | registry_digest | reference
 }
 
 // containerPayload mirrors inventory.Container: the container's own display
@@ -854,25 +902,27 @@ func imagePayloads(imgs []analyze.ImageFindings, byRef map[string]analyze.ImageO
 			})
 		}
 		// scan_target_kind and identity_resolved are both entity-level (this
-		// ImageFindings' own ContentID), not the reference's aggregate
-		// IdentityResolved: a mixed reference (one entity pinned by ContentID,
-		// a sibling on reference-fallback) must not report a resolved entity
-		// as identity_resolved=false just because a sibling wasn't.
+		// ImageFindings' own Pinned/Subject), not the reference's aggregate
+		// IdentityResolved: a mixed reference (one entity pinned, a sibling on
+		// reference-fallback) must not report a resolved entity as
+		// identity_resolved=false just because a sibling wasn't.
 		// RegistryDigests alone stays a Ref-level lookup (analyze.ImageFindings
 		// carries no per-entity RegistryDigests of its own).
-		resolved := img.ContentID != ""
 		scanTargetKind := "reference"
-		if resolved {
+		switch {
+		case img.Pinned && img.Subject.Key.Digest.Kind == inventory.DigestConfig:
 			scanTargetKind = "content_id"
+		case img.Pinned && img.Subject.Key.Digest.Kind == inventory.DigestRegistry:
+			scanTargetKind = "registry_digest"
 		}
 		out = append(out, imagePayload{
 			Image:            img.Image,
 			SeverityCounts:   map[string]int{"CRITICAL": img.CriticalCount(), "HIGH": img.TotalCount() - img.CriticalCount()},
 			Findings:         findings,
 			Containers:       containerPayloads(img.Containers),
-			ContentID:        img.ContentID,
+			ContentID:        img.ContentID(),
 			RegistryDigests:  emptyIfNil(byRef[img.Image].RegistryDigests),
-			IdentityResolved: resolved,
+			IdentityResolved: img.Pinned,
 			ScanTargetKind:   scanTargetKind,
 		})
 	}

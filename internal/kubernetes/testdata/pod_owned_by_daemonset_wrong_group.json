@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "log-agent-wronggroup-abcde",
+    "uid": "pod-uid-dswronggroup-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "custom.io/v1",
+        "kind": "DaemonSet",
+        "name": "log-agent-wronggroup",
+        "uid": "ds-uid-wronggroup-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "agent",
+        "image": "docker.io/library/fluentd:1.16",
+        "imageID": "docker.io/library/fluentd@sha256:0000000000000000000000000000000000000000000000000000000000000048",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

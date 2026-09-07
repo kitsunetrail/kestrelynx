@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "shared-ns",
+    "name": "zzz-pod-a",
+    "uid": "pod-uid-sort-a-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "StatefulSet",
+        "name": "aaa-sts",
+        "uid": "sts-uid-sort-a-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "web",
+        "image": "docker.io/library/shared:1.0",
+        "imageID": "docker.io/library/shared@sha256:0000000000000000000000000000000000000000000000000000000000000040",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "db-wronggroup-0",
+    "uid": "pod-uid-stswronggroup-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "custom.io/v1",
+        "kind": "StatefulSet",
+        "name": "db-wronggroup",
+        "uid": "sts-uid-wronggroup-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "db",
+        "image": "docker.io/library/postgres:16",
+        "imageID": "docker.io/library/postgres@sha256:0000000000000000000000000000000000000000000000000000000000000047",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

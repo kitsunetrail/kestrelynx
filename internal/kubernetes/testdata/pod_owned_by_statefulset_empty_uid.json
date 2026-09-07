@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "db-emptyuid-0",
+    "uid": "pod-uid-stsemptyuid-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "StatefulSet",
+        "name": "db-emptyuid",
+        "uid": "",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "db",
+        "image": "docker.io/library/postgres:16",
+        "imageID": "docker.io/library/postgres@sha256:000000000000000000000000000000000000000000000000000000000000004b",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

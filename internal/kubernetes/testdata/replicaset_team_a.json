@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "namespace": "team-a",
+    "name": "web-a",
+    "uid": "rs-uid-team-a-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "web-a-deploy",
+        "uid": "deploy-uid-team-a-1",
+        "controller": true
+      }
+    ]
+  }
+}

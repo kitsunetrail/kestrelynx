@@ -1,0 +1,40 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web-ctrlmulti-abcde",
+    "uid": "pod-uid-ctrlmulti-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "StatefulSet",
+        "name": "db",
+        "uid": "sts-uid-ctrlmulti-1",
+        "controller": true
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "DaemonSet",
+        "name": "log-agent",
+        "uid": "ds-uid-ctrlmulti-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "web",
+        "image": "docker.io/library/nginx:1.25",
+        "imageID": "docker.io/library/nginx@sha256:0000000000000000000000000000000000000000000000000000000000000043",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

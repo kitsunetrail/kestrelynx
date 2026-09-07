@@ -14,14 +14,31 @@ const (
 	// WorkloadCompose means Group/Name came from a Docker Compose project and
 	// service pair.
 	WorkloadCompose WorkloadKind = "compose"
+	// WorkloadDeployment means Group/Name came from a Kubernetes Deployment
+	// (resolved through its ReplicaSet).
+	WorkloadDeployment WorkloadKind = "deployment"
+	// WorkloadStatefulSet means Group/Name came from a Kubernetes StatefulSet.
+	WorkloadStatefulSet WorkloadKind = "statefulset"
+	// WorkloadDaemonSet means Group/Name came from a Kubernetes DaemonSet.
+	WorkloadDaemonSet WorkloadKind = "daemonset"
+	// WorkloadJob means Group/Name came from a Kubernetes Job that is not
+	// itself owned by a CronJob.
+	WorkloadJob WorkloadKind = "job"
+	// WorkloadCronJob means Group/Name came from a Kubernetes CronJob
+	// (resolved through its Job).
+	WorkloadCronJob WorkloadKind = "cronjob"
+	// WorkloadPod means the container's Pod has no controller owner
+	// reference at all; Group/Name name the Pod itself, not guessed at as
+	// some higher-level workload.
+	WorkloadPod WorkloadKind = "pod"
 )
 
 // Workload is the higher-level grouping a Container observably belongs to.
 // Group and Name are only meaningful when Kind != WorkloadUnknown.
 type Workload struct {
 	Kind  WorkloadKind
-	Group string // compose: project. "" when unknown.
-	Name  string // compose: service. "" when unknown.
+	Group string // compose: project. kubernetes: namespace. "" when unknown.
+	Name  string // compose: service. kubernetes: top-level owner's name (or the Pod's own name for WorkloadPod). "" when unknown.
 }
 
 // Known reports whether w carries an actual workload association.

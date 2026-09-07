@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web-deployemptyuid",
+    "uid": "rs-uid-deployemptyuid-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "web-deployemptyuid-owner",
+        "uid": "",
+        "controller": true
+      }
+    ]
+  }
+}

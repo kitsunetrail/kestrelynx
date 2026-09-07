@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web-7f8c9d",
+    "uid": "rs-uid-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "web",
+        "uid": "deploy-uid-1",
+        "controller": true
+      }
+    ]
+  }
+}

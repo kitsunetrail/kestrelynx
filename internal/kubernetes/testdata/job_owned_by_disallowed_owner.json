@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "workflow-step",
+    "uid": "job-uid-disallowed-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "argoproj.io/v1alpha1",
+        "kind": "Workflow",
+        "name": "ci-pipeline",
+        "uid": "workflow-uid-1",
+        "controller": true
+      }
+    ]
+  }
+}

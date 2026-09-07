@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "backup-cronjobemptyuid-abcde",
+    "uid": "pod-uid-cronjobemptyuid-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "name": "backup-cronjobemptyuid",
+        "uid": "job-uid-cronjobemptyuid-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "backup",
+        "image": "docker.io/library/backup-tool:2.0",
+        "imageID": "docker.io/library/backup-tool@sha256:000000000000000000000000000000000000000000000000000000000000004c",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

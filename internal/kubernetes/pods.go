@@ -30,13 +30,12 @@ type containerStatus struct {
 	State   containerState `json:"state"`
 }
 
-// podRaw is the subset of a Pod object this package reads.
+// podRaw is the subset of a Pod object this package reads. Metadata is
+// shared with replicaSetRaw/jobRaw: OwnerReferences is what resolveWorkload
+// walks to find the Pod's controller owner.
 type podRaw struct {
-	Metadata struct {
-		Namespace string `json:"namespace"`
-		Name      string `json:"name"`
-	} `json:"metadata"`
-	Spec struct {
+	Metadata ownedMetadata `json:"metadata"`
+	Spec     struct {
 		NodeName       string          `json:"nodeName"`
 		InitContainers []specContainer `json:"initContainers"`
 	} `json:"spec"`
@@ -81,12 +80,16 @@ func indexPlatforms(nodes []nodeRaw) map[string]inventory.Platform {
 // contain, per RunningContainers' contract (main containers with
 // state.running, plus native sidecars). platformByNode resolves each pod's
 // Platform via its spec.nodeName; a pod on a node absent from the index (or
-// with no nodeName) gets the zero Platform, not a guess.
-func (c *Client) mapContainers(pods []podRaw, platformByNode map[string]inventory.Platform) []inventory.Container {
+// with no nodeName) gets the zero Platform, not a guess. rsByKey/jobByKey are
+// the relay indexes resolveWorkload walks a pod's owner-reference chain
+// through; a pod's Workload is resolved once and shared by every container
+// it contains, since they all belong to the same Pod.
+func (c *Client) mapContainers(pods []podRaw, platformByNode map[string]inventory.Platform, rsByKey map[string]replicaSetRaw, jobByKey map[string]jobRaw) []inventory.Container {
 	var out []inventory.Container
 	for _, pod := range pods {
 		namespace, name := pod.Metadata.Namespace, pod.Metadata.Name
 		platform := platformByNode[pod.Spec.NodeName]
+		workload := resolveWorkload(pod, rsByKey, jobByKey)
 
 		// Native sidecars are matched by name, not array position: spec and
 		// status arrays aren't guaranteed to share index order.
@@ -99,7 +102,7 @@ func (c *Client) mapContainers(pods []podRaw, platformByNode map[string]inventor
 			if cs.State.Running == nil {
 				continue
 			}
-			out = append(out, c.buildContainer(namespace, name, cs, platform))
+			out = append(out, c.buildContainer(namespace, name, cs, platform, workload))
 		}
 		for _, cs := range pod.Status.InitContainerStatuses {
 			if cs.State.Running == nil {
@@ -113,7 +116,7 @@ func (c *Client) mapContainers(pods []podRaw, platformByNode map[string]inventor
 				// is excluded.
 				continue
 			}
-			out = append(out, c.buildContainer(namespace, name, cs, platform))
+			out = append(out, c.buildContainer(namespace, name, cs, platform, workload))
 		}
 	}
 	return out
@@ -122,7 +125,7 @@ func (c *Client) mapContainers(pods []podRaw, platformByNode map[string]inventor
 // buildContainer converts one running container status into the common
 // inventory vocabulary. cs.Image (spec intent) is never used as Ref — only
 // the status-reported image is an actual observation.
-func (c *Client) buildContainer(namespace, pod string, cs containerStatus, platform inventory.Platform) inventory.Container {
+func (c *Client) buildContainer(namespace, pod string, cs containerStatus, platform inventory.Platform, workload inventory.Workload) inventory.Container {
 	img := inventory.RunningImage{Ref: cs.Image, Platform: platform}
 	if cs.ImageID != "" {
 		if ref, ok := parseImageID(cs.ImageID); ok {
@@ -137,7 +140,7 @@ func (c *Client) buildContainer(namespace, pod string, cs containerStatus, platf
 	}
 	return inventory.Container{
 		Name:     namespace + "/" + pod + "/" + cs.Name,
-		Workload: inventory.Workload{},
+		Workload: workload,
 		Image:    img,
 	}
 }

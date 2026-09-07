@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "job-stale-abcde",
+    "uid": "pod-uid-jobstale-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "name": "one-off-job",
+        "uid": "job-uid-STALE",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "runner",
+        "image": "docker.io/library/runner:1.0",
+        "imageID": "docker.io/library/runner@sha256:0000000000000000000000000000000000000000000000000000000000000046",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

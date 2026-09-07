@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "canary-abcde",
+    "uid": "pod-uid-crd-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "argoproj.io/v1alpha1",
+        "kind": "Rollout",
+        "name": "canary",
+        "uid": "rollout-uid-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "app",
+        "image": "docker.io/library/app:2.0",
+        "imageID": "docker.io/library/app@sha256:0000000000000000000000000000000000000000000000000000000000000035",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

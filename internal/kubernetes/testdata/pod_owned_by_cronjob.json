@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "backup-28912345-abcde",
+    "uid": "pod-uid-cj-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "name": "backup-28912345",
+        "uid": "job-uid-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "backup",
+        "image": "docker.io/library/backup-tool:2.0",
+        "imageID": "docker.io/library/backup-tool@sha256:0000000000000000000000000000000000000000000000000000000000000033",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

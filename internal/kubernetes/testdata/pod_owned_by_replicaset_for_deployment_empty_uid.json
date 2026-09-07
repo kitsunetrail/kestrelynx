@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web-deployemptyuid-abcde",
+    "uid": "pod-uid-deployemptyuid-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "name": "web-deployemptyuid",
+        "uid": "rs-uid-deployemptyuid-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "web",
+        "image": "docker.io/library/nginx:1.25",
+        "imageID": "docker.io/library/nginx@sha256:000000000000000000000000000000000000000000000000000000000000004a",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

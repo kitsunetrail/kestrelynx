@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "backup-28912345",
+    "uid": "job-uid-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "batch/v1",
+        "kind": "CronJob",
+        "name": "backup",
+        "uid": "cronjob-uid-1",
+        "controller": true
+      }
+    ]
+  }
+}

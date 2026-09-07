@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "web2-xyz",
+    "uid": "rs-uid-wronggroup-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "example.com/v1",
+        "kind": "Deployment",
+        "name": "web2",
+        "uid": "deploy-uid-fake-1",
+        "controller": true
+      }
+    ]
+  }
+}

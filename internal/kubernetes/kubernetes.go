@@ -10,7 +10,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -198,9 +197,10 @@ func (c *Client) readToken() (string, error) {
 // spec.initContainers entry (matched by name) has restartPolicy "Always" (a
 // native sidecar) — an ordinary init container has already exited by the
 // time anything else is running and is not a running-container observation.
-// Every Container.Workload is inventory.Workload{} (unknown): resolving the
-// owner-reference chain to a Deployment/StatefulSet/DaemonSet/CronJob is a
-// later stage. If any one of the LIST calls this needs ultimately fails
+// Each Container.Workload is resolved by resolveWorkload from the Pod's
+// owner-reference chain (relayed through the ReplicaSets and Jobs listed
+// here); anything outside its allow-list is inventory.Workload{} (unknown),
+// never guessed at. If any one of the LIST calls this needs ultimately fails
 // (after its own retries), the whole cycle fails — a partial listing must
 // never be mistaken for a complete one, since a container that silently
 // dropped out of view is indistinguishable from one that stopped running.
@@ -236,19 +236,21 @@ func (c *Client) RunningContainers(ctx context.Context) ([]inventory.Container, 
 		return nil, fmt.Errorf("list pods: %w", err)
 	}
 
-	// ReplicaSets and Jobs are the relays a later stage's owner-reference
+	// ReplicaSets and Jobs are the relays resolveWorkload's owner-reference
 	// chain (Pod -> ReplicaSet -> Deployment, Pod -> Job -> CronJob) walks
-	// through. Fetching them here exercises their pagination and namespace
-	// scoping now; nothing reads their contents yet, since every
-	// Container.Workload stays unknown until that resolution exists.
-	if _, err := listNamespaced[json.RawMessage](ctx, c, hc, &token, "/apis/apps/v1", "replicasets"); err != nil {
+	// through.
+	replicaSets, err := listNamespaced[replicaSetRaw](ctx, c, hc, &token, "/apis/apps/v1", "replicasets")
+	if err != nil {
 		return nil, fmt.Errorf("list replicasets: %w", err)
 	}
-	if _, err := listNamespaced[json.RawMessage](ctx, c, hc, &token, "/apis/batch/v1", "jobs"); err != nil {
+	jobs, err := listNamespaced[jobRaw](ctx, c, hc, &token, "/apis/batch/v1", "jobs")
+	if err != nil {
 		return nil, fmt.Errorf("list jobs: %w", err)
 	}
+	rsByKey := indexReplicaSets(replicaSets)
+	jobByKey := indexJobs(jobs)
 
-	containers := c.mapContainers(pods, platformByNode)
+	containers := c.mapContainers(pods, platformByNode, rsByKey, jobByKey)
 	sortContainers(containers)
 	return containers, nil
 }

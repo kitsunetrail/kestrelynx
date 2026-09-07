@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "workflow-step-abcde",
+    "uid": "pod-uid-jobdisallowed-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "name": "workflow-step",
+        "uid": "job-uid-disallowed-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "step",
+        "image": "docker.io/library/step:1.0",
+        "imageID": "docker.io/library/step@sha256:0000000000000000000000000000000000000000000000000000000000000044",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

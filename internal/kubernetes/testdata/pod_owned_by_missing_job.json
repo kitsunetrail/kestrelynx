@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "job-missing-abcde",
+    "uid": "pod-uid-jobmissing-1",
+    "ownerReferences": [
+      {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "name": "job-missing",
+        "uid": "job-uid-missing-1",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "nodeName": "node-amd64-1"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "runner",
+        "image": "docker.io/library/runner:1.0",
+        "imageID": "docker.io/library/runner@sha256:0000000000000000000000000000000000000000000000000000000000000045",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

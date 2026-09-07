@@ -1,0 +1,55 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "app-with-sidecar-1"
+  },
+  "spec": {
+    "nodeName": "node-amd64-1",
+    "initContainers": [
+      {
+        "name": "wait-for-db",
+        "restartPolicy": ""
+      },
+      {
+        "name": "envoy-proxy",
+        "restartPolicy": "Always"
+      }
+    ]
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "app",
+        "image": "docker.io/library/app:1.0",
+        "imageID": "docker.io/library/app@sha256:0000000000000000000000000000000000000000000000000000000000000004",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ],
+    "initContainerStatuses": [
+      {
+        "name": "envoy-proxy",
+        "image": "docker.io/library/envoy:1.29",
+        "imageID": "docker.io/library/envoy@sha256:0000000000000000000000000000000000000000000000000000000000000006",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      },
+      {
+        "name": "wait-for-db",
+        "image": "docker.io/library/busybox:1.36",
+        "imageID": "docker.io/library/busybox@sha256:0000000000000000000000000000000000000000000000000000000000000005",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

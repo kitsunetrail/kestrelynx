@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "namespace": "default",
+    "name": "orphan-1"
+  },
+  "spec": {
+    "nodeName": "node-does-not-exist"
+  },
+  "status": {
+    "containerStatuses": [
+      {
+        "name": "app",
+        "image": "docker.io/library/app:1.0",
+        "imageID": "docker.io/library/app@sha256:0000000000000000000000000000000000000000000000000000000000000007",
+        "state": {
+          "running": {
+            "startedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  }
+}

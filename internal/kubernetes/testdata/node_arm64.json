@@ -1,0 +1,11 @@
+{
+  "metadata": {
+    "name": "node-arm64-1"
+  },
+  "status": {
+    "nodeInfo": {
+      "operatingSystem": "linux",
+      "architecture": "arm64"
+    }
+  }
+}

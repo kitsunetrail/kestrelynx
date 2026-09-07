@@ -5,7 +5,7 @@
 開発ログは検討・実装の過程の記録です。現在利用できる機能の導入・運用方法は[ドキュメント](../documentation/index.md)を参照してください。
 
 - [Kubernetes対応の開発](kubernetes-support.md) — K3s + containerdを出発点に、KubernetesのWorkloadを
-  スキャン・優先順位付け・差分通知へつなぐ実装(開発中)
+  スキャン・優先順位付け・差分通知へつなぐ実装(開発中・K3s実環境でエンドツーエンド検証済み)
 - [Kubernetes向け脆弱性スキャンツールの調査](kubernetes-scanning-landscape.md) — Kubernetes対応に着手する前に、
   既存ツールの機能と追加実装が必要な点を整理した記録(調査ノート)
 - [修正関係モデルの設計](remediation-relations-model.md) — 検出した脆弱性を「どこを直せば消えるか」の

@@ -6,7 +6,7 @@ Development logs record how features were explored and implemented.
 For instructions on currently available features, see [Documentation](../documentation/index.md).
 
 - [Developing Kubernetes support](kubernetes-support.md) — connecting Kubernetes workloads to scanning, prioritization,
-  and diff notifications, starting with K3s + containerd (in development)
+  and diff notifications, starting with K3s + containerd (in development; verified end to end on a real K3s cluster)
 - [The Kubernetes vulnerability scanning landscape](kubernetes-scanning-landscape.md) — what existing tools already
   cover and what we found missing, ahead of Kubernetes support (research note)
 - [Designing the remediation relations model](remediation-relations-model.md) — the relation models that connect

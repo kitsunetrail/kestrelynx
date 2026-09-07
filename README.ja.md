@@ -5,20 +5,45 @@
 [![CI](https://github.com/kitsunetrail/kestrelynx/actions/workflows/ci.yml/badge.svg)](https://github.com/kitsunetrail/kestrelynx/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-[ドキュメント](https://kestrelynx.dev/) ·
-[日本語ドキュメント](https://kestrelynx.dev/ja/) ·
-[設定リファレンス](https://kestrelynx.dev/documentation/configuration/)
+[ドキュメント](https://kestrelynx.dev/ja/) ·
+[セットアップ手順](docs-ja/documentation/getting-started.md) ·
+[設定リファレンス](docs-ja/documentation/configuration.md)
 
-> 稼働中のDockerコンテナを毎日スキャンし、**対処可能な脆弱性**だけを優先順位付きでSlackまたはWebhookへ通知するエージェントです。
+> 稼働中のDocker・Kubernetesコンテナのイメージを定期的にスキャンし、**脆弱性の優先度と前回からの変化**をSlackまたはWebhookへ通知するエージェントです。
 
-セルフホスティングやホームラボでの利用を想定しています。Trivyの生の出力を読み解く面倒な作業を代行し、*今すぐ修正できるもの*を明確にします。
+## 主な機能
 
-> ⚠️ **ステータス：MVP / 開発中。** 現在はDockerのみを対象としたCVE通知に注力しています。
+- **イメージスキャン**：[Trivy](https://github.com/aquasecurity/trivy)によるHIGH／CRITICALの検出（既定）
+- **重複スキャンの抑制**：同一と確認できたイメージの結果共有
+- **優先順位付け**：深刻度・CISA KEV・EPSSに基づく今すぐ対応／要監視／低優先度の分類
+- **パッケージ単位の集約**：修正版の有無・バージョン・アップグレード時の注意度
+- **未修正の脆弱性**：修正版がない項目も通知対象
+- **ベースOSのEOL**：サポート終了イメージの優先表示
+- **差分通知**：新規検出・CVE追加・修正版公開・優先度上昇・解消
+- **環境の識別**：Slack見出しへの任意の環境名の表示
+- **対象コンテナの識別**：汎用Webhookへのコンテナ名・Composeプロジェクト／サービス・Kubernetes Workload情報の付加
+- **稼働イメージの検証**：digestなどによるスキャン対象の固定と実体の一致確認
+
+## 対応環境
+
+| 対象 | 動作と範囲 |
+| --- | --- |
+| Docker | ホストごとに1インスタンス、全Composeプロジェクト・単独コンテナの稼働イメージ |
+| Kubernetes | クラスタ内配置、読み取り専用ServiceAccount、全namespaceまたは指定namespace |
+
+- **Kubernetesの所属取得**：Deployment・StatefulSet・DaemonSet・Job・CronJob（管理元不明は`unknown`）
+- **スキャン対象**：取得時点で稼働中のコンテナ、Kubernetesのnative sidecar
+- **対象外**：通常のinit container・ephemeral container
+- **Kubernetesの検証済み構成**：Ubuntu／linux/amd64、単一ノードK3s 1.36＋containerd 2.3
+- **Kubernetesの未検証構成**：複数ノード・混在アーキテクチャ・arm64・EKS／GKE／AKS・CRI-O・認証付き非公開レジストリ
+- **詳細**：[検証記録と制約](docs-ja/development/kubernetes-support.md)
 
 ## 通知の例
 
-```
-🛡️ KestreLynx — scan results for 2026-06-28 09:00
+以下は既定の`diff`モードの例です。
+
+```text
+🛡️ KestreLynx [prod-vps] — scan results for 2026-06-28 09:00
 12 images scanned, 3 affected
 
 🆕 New since last scan (2)
@@ -35,65 +60,135 @@
 📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 4 low — oldest act-now/watch unresolved 12 day(s)
 ```
 
-毎日すべてのCVEを羅列するのではなく、**何が変わったか**、そしてそのうち本当に重要なものはどれかを通知します。各検出結果は、深刻度と実際の悪用状況を示すシグナルを組み合わせ、**今すぐ対応（act now）／要監視（watch）／低優先度（low）**に分類されます。利用するシグナルは、実際の悪用が確認された脆弱性を収録する[CISA KEVカタログ](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)と、悪用される確率を予測する[EPSS](https://www.first.org/epss/)です。誰にも悪用されていないCRITICALは通知の邪魔にならない位置に置かれ、ランサムウェア攻撃者が実際に利用しているHIGHは、その根拠とともに通知の先頭に表示されます。既知のCVEが一晩のうちにKEVへ追加された場合、次回のダイジェストで**⬆️ 優先度上昇（escalated）**として通知されます。これこそ、実際に必要な通知です。変更がない日は大量の文章ではなく、1行だけを通知します。完全なレポートは週に1回送信され（設定変更可能）、すべてのデータは汎用Webhookからいつでも取得できます。
+- **変更あり**：変化した項目と未解決件数（KEV追加などによる優先度上昇も対象）
+- **未解決項目あり・変更なし**：短い概要
+- **問題なし・変更なし**：既定では通知なし（`notify.notify_on_clean`で変更可能）
+- **週次レポート**：全体レポート（既定：月曜日、曜日変更・無効化も可能）
+- **参考リンク**：アドバイザリ・KEVのベンダーガイダンス・関連するHacker Newsの議論
 
-「今すぐ対応」に分類された項目には、対応担当者が通常検索することになるリンクも付属します。アドバイザリ、KEVエントリーに掲載されたベンダーのガイダンス、活発な議論がある場合はHacker Newsのスレッドです。AIによる要約ではなくリンクを提示するため、メッセージ内のすべての情報を検証できます。
+### 通知先の選択
 
-**プライバシーに関する注意**：脅威情報フィードは一括ダウンロードしてローカルで照合するため、CVEリストがホスト外へ送信されることはありません。ただし、1つだけ明記された例外があります。議論リンクの検索では、**今すぐ対応に分類されたCVEのみ**（広く知られ、実際に悪用されている少数のCVE）について `hn.algolia.com` へ問い合わせます。CVE情報を一切外部送信したくない場合は、`triage.discussion_links: false` を設定してください。
+| 通知先 | 内容 | 必要な設定 |
+| --- | --- | --- |
+| Slack Incoming Webhook | チャンネルに概要を投稿 | `notify.slack_webhook_url` |
+| Slack Bot | 概要に加え、diffモードではスレッドに未解決項目の詳細を投稿 | `notify.slack_bot_token`と`notify.slack_channel` |
+| 汎用Webhook | 現在のスキャン結果と、diffモードでの差分を構造化JSONとしてPOST | `notify.generic_webhook_url` |
 
-## 主な機能
+- **Slack Botの詳細**：今すぐ対応／要監視の根拠・参照情報・未解決期間、低優先度の件数
+- **詳細レポートの更新**：変更時・週次レポートの日
+- **変更のない日のSlack Bot通知**：直近の詳細レポートへのリンク
+- **Slack Botの必要条件**：`chat:write`スコープ、通知先チャンネルへの招待
+- **併用可能**：Slack Incoming WebhookまたはSlack Botと、汎用Webhook
+- **併用不可**：Slack Incoming WebhookとSlack Bot
 
-1. `docker.sock` から稼働中コンテナの一意なイメージを取得します（`GET /containers/json` を1回実行するだけで、コンテナを操作することはありません）
-2. 各イメージを[Trivy](https://github.com/aquasecurity/trivy)でスキャンします（CVEデータベースはTrivyが管理します）
-3. **HIGH / CRITICAL**の検出結果だけを残します
-4. CISA KEVとEPSSを使って、各CVEを**今すぐ対応／要監視／低優先度**に分類します（毎日一括取得してローカルで照合。`triage.enabled: false` で無効化できます）。今すぐ対応に分類された項目には、アドバイザリ、ベンダーガイダンス、Hacker Newsの議論へのリンクも追加します
-5. パッケージ単位で集約し、アップグレードのリスクを注記します（言語パッケージでは、セマンティックバージョニングを使って安全な更新か注意を要する更新かを判定します）
-6. ベースOSのサポート終了（EOL）を最優先として通知します
-7. 前回のスキャン結果との差分を取り、既知のCVEの**優先度上昇**（KEVへの追加やEPSSの急上昇）を含む**変更**だけを通知します。すでに把握している内容を繰り返し通知しません
-8. 1日1回、SlackまたはWebhookへ通知します。ただし、対応する価値のある項目が存在する場合に限ります
+## クイックスタート：Docker
 
-## クイックスタート
+Dockerが動作するホストと、少なくとも1つの通知先が必要です。配布イメージにはTrivyを同梱しています。
 
 ```sh
-# 1. 設定ファイルを作成（まずはSlack Incoming Webhook URLを追加するだけで開始できます）
+# 1. リポジトリの設定例をコピーし、通知先を設定
 cp config.example.yml config.yml
 $EDITOR config.yml
 
-# 2. 起動
+# 2. 起動（TZは利用するタイムゾーンに合わせて変更）
 docker run -d --name kestrelynx \
+  --restart unless-stopped \
+  -e TZ=Asia/Tokyo \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -v "$PWD/config.yml:/etc/kestrelynx/config.yml:ro" \
   -v kestrelynx-state:/var/lib/kestrelynx \
   ghcr.io/kitsunetrail/kestrelynx:latest
+
+# 3. 起動・スキャン結果を確認
+docker logs -f kestrelynx
 ```
 
-（`kestrelynx-state` ボリュームには、差分通知に必要なスキャン履歴が保存されます。このボリュームがない場合、コンテナを再作成するたびに、すべての検出結果が新規項目として再通知されます。）
-
-**Dockerソケットに関する注意**：KestreLynxが行うのは、稼働中コンテナを一覧表示するGETリクエスト（`GET /containers/json`）だけです。コンテナを起動、停止、変更することはありません。ただし、`docker.sock` をマウントすると、そのコンテナにはDocker APIへの特権的なアクセス権が与えられます。`:ro` はファイルシステム上のマウントを読み取り専用にしますが、Docker APIの操作を制限するものではありません。Dockerソケットをマウントするのは、信頼できるイメージだけにしてください。
-
-設定はこれだけです。ホスト上のすべてのコンテナが、どのComposeプロジェクトや単発の `docker run` で起動されたかに関係なく、毎日スキャンされます。コンテナごと、またはComposeプロジェクトごとに起動する必要はありません。**1ホストにつき1インスタンス**で十分です。
+- **実行タイミング**：起動直後と毎日09:00（設定例）
+- **タイムゾーン**：コンテナの`TZ`
+- **永続化先**：`kestrelynx-state`ボリューム
+- **保存内容**：差分通知の履歴・初回検出日・脅威情報キャッシュ
+- **再作成・更新時**：既存ボリュームの引き継ぎ
+- **配置単位**：ホストごとに1インスタンス（コンテナ・Composeプロジェクトごとの配置は不要）
 
 ### Docker Composeでの実行
 
-すぐに利用できる[docker-compose.yml](docker-compose.yml)が含まれています。
-
 ```sh
-cp config.example.yml config.yml   # 続いてSlack Webhookをconfig.ymlへ追加
+cp config.example.yml config.yml
+$EDITOR config.yml
 docker compose up -d
 docker compose logs -f
 ```
 
-## 設定
+- **使用ファイル**：同梱の[docker-compose.yml](docker-compose.yml)
+- **`TZ`の既定値**：`UTC`（日本時間は`Asia/Tokyo`）
 
-[config.example.yml](config.example.yml)を参照してください。最低限、`notify.slack_webhook_url` または `notify.generic_webhook_url` のいずれかを設定すれば利用を開始できます。
+### Dockerソケットへのアクセス
 
-主な設定項目：
+- **対象取得**：`GET /containers/json`による稼働中コンテナの一覧取得
+- **イメージ読み取り**：TrivyからDocker APIへのアクセス
+- **コンテナ操作**：起動・停止・変更機能なし
+- **`:ro`の制約**：Docker APIの操作権限は制限対象外
+- **マウント先**：信頼できるイメージのみ
 
-- `notify.slack_bot_token` + `notify.slack_channel` — Webhookの代わりにSlack Web API経由で通知します（いずれか一方を使用してください）。チャンネルには同じ概要が投稿され、さらにそのスレッドへ**未解決項目の完全なレポート**が投稿されます。緊急／要監視の項目は、根拠、参照情報、未解決の期間とともに詳しく表示され、低優先度の項目は件数だけにまとめられます。変更がない日はレポートを再投稿せず、概要から直近の完全なレポートへリンクします。`chat:write` スコープを持ち、対象チャンネルへ招待されたBotトークンが必要です。
-- `notify.mode` — `diff`（デフォルト）では、前回のスキャンから変化した内容と、現在未解決の項目を示す1行の概要だけを通知します。`full` では、スキャンのたびに完全なレポートを再送します。
-- `notify.full_report_day` — diffモードで完全なレポートも送信する曜日です（デフォルトは `monday`。`never` で無効化）。
-- `state.path` — diffモードで前回のスキャン結果を保存する場所です（デフォルトは `/var/lib/kestrelynx/state.json`）。
-- `triage.enabled` — KEV/EPSSに基づく優先順位付けです（デフォルトは `true`）。`www.cisa.gov` と `epss.empiricalsecurity.com` への外向きHTTPS通信が追加されます（1日2回の一括ダウンロードで、stateファイルと同じ場所にキャッシュされます）。追加の外部通信を行わず、深刻度だけに基づいて通知するには `false` に設定してください。しきい値（`act_now_epss`、`watch_epss`）とミラーURLは変更できます。
+## Kubernetesでの実行
+
+1. [配置用マニフェスト](deploy/kubernetes/)の準備
+2. [ConfigMap](deploy/kubernetes/configmap.yaml)の通知先設定、必要に応じた`kubernetes.namespaces`・`environment.name`の設定
+3. [Deployment](deploy/kubernetes/deployment.yaml)の`TZ`と[PVC](deploy/kubernetes/pvc.yaml)のストレージ設定
+4. namespaceの作成と編集済みマニフェストの適用
+
+```sh
+kubectl create namespace kestrelynx
+kubectl apply -f deploy/kubernetes/
+kubectl logs -n kestrelynx deployment/kestrelynx -f
+```
+
+- **有効化**：`kubernetes.enabled: true`
+- **設定例からの切り替え**：`config.example.yml`の`docker`セクションを削除（`docker.socket`との同時設定は起動エラー）
+- **不要な構成要素**：Dockerソケット・ノードごとのエージェント
+- **接続要件**：スキャナPodから対象レジストリへのアクセス（Trivyによるイメージ取得）
+- **非公開レジストリの認証**：Deployment内の認証情報マウント例を参照（実環境では未検証）
+- **認証情報の引き継ぎ**：アプリ側の`imagePullSecrets`からの自動引き継ぎなし
+- **対応範囲外**：ノード上にしか存在しないイメージ・削除済みdigest・K3sの`registries.yaml`によるミラー／書き換え・エアギャップ環境
+- **履歴の保存先**：PVC（同じstateファイルへの複数インスタンスからの同時書き込み不可）
+- **同梱Deploymentの構成**：1レプリカ・`Recreate`方式
+
+## 主な設定
+
+全設定の例は[config.example.yml](config.example.yml)、通知やスケジュールの詳細は[設定リファレンス](docs-ja/documentation/configuration.md)を参照してください。
+
+| 設定 | 内容 |
+| --- | --- |
+| `schedule.daily_at` | 毎日の実行時刻（設定例：`09:00`、省略・空文字列：24時間間隔） |
+| `schedule.run_on_start` | 起動直後のスキャン（既定：`true`） |
+| `scan.severity` | 対象の深刻度（既定：`[HIGH, CRITICAL]`） |
+| `notify.mode` | `diff`：差分通知（既定）、`full`：毎回全体レポート |
+| `notify.full_report_day` | diffモードの週次レポートの曜日（既定：`monday`、無効化：`never`） |
+| `notify.notify_on_clean` | 問題・変更のない場合の通知（既定：`false`） |
+| `environment.name` | 通知元を見分ける任意の環境名（例：`prod-vps`） |
+| `state.path` | 履歴ファイル（既定：`/var/lib/kestrelynx/state.json`） |
+| `triage.enabled` | `true`：KEV／EPSSによる優先順位付け（既定）、`false`：深刻度に基づく通知 |
+| `triage.act_now_epss` / `triage.watch_epss` | EPSSの判定しきい値（既定：`0.10`／`0.01`） |
+| `triage.discussion_links` | Hacker Newsの議論リンク検索（既定：`true`） |
+
+- **環境名の文字種**：小文字英数字・ハイフン、先頭と末尾は英数字
+- **環境名の長さ**：1〜63文字、未設定も可
+- **複数環境への配置**：インスタンスごとに異なる環境名・履歴保存先
+- **再構築・移行時の履歴継続**：環境名とstateの引き継ぎ
+
+## 通信と結果の見方
+
+- **脅威情報の照合**：KEV／EPSSの一括取得とローカル照合（検出CVE一覧の送信なし）
+- **脅威情報の取得先**：`www.cisa.gov`・`epss.empiricalsecurity.com`（既定）
+- **議論リンクの検索先**：`hn.algolia.com`
+- **検索時の送信内容**：悪用情報に基づき「今すぐ対応」となるCVEのID
+- **検索の無効化**：`triage.discussion_links: false`（通知先へのCVE情報の送信は継続）
+- **その他の通信**：Trivyによる脆弱性DB・イメージの取得、設定した通知先への結果送信
+- **スキャン失敗・実体未確認**：過去の検出結果の保持、その回の結果による解消判定の保留
+- **「解消」の意味**：現在の監視対象からの検出項目の消失（コンテナ停止・対象変更を含む）
+- **アップグレード時の注意度**：バージョン変更の大きさなどの目安（互換性・安全性の保証なし）
+
+「解消」はパッチ適用の証明ではありません。通知の判定と出力の詳細は[KestreLynxの仕組み](docs-ja/documentation/how-it-works.md)を参照してください。
 
 ## 開発
 
@@ -120,10 +215,6 @@ mkdocs serve --config-file mkdocs.ja.yml
 
 `main` へプッシュされたドキュメントの変更は、[`docs.yml`](.github/workflows/docs.yml)によってビルドおよびデプロイされます。初回デプロイ前に、**Settings → Pages → Build and deployment → Source** で **GitHub Actions** を選択してください。
 
-パイプラインは小さなパッケージに分割されています。`docker`（列挙）→ `scanner`（Trivyの実行と解析）→ `intel`（KEV/EPSSの取得とキャッシュ）→ `analyze`（トリアージ、集約、評価）→ `state`（保存と前回スキャンとの差分取得）→ `notify`（整形と送信）を `runner` が結び付けます。
-
 ## ライセンス
 
 [GNU AGPL-3.0](LICENSE)。Copyright (c) 2026 Kitsune Trail.
-
-要約すると、自由に使用、変更、セルフホストできます。変更したバージョンをネットワークサービスとして運用する場合は、その利用者が変更後のソースコードを入手できるようにする必要があります。

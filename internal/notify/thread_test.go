@@ -31,7 +31,7 @@ func TestBuildThreadMessages_TriageLayout(t *testing.T) {
 		"*🚨 ACT NOW (1) — exploited or likely to be*",
 		"• web:1.0", // image lines are plain bullets in triage mode
 		"openssl 3.0.7 → 3.0.11",
-		"CVE-KEV CRITICAL · CISA KEV (exploited in the wild) · EPSS 94%",
+		"<https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> CRITICAL · CISA KEV (exploited in the wild) · EPSS 94%",
 		"⏱ open 3 day(s) — first seen 2026-06-21",
 		"*👀 WATCH (1) — not urgent, keep an eye on*",
 		"e2fsprogs 1.44 (no fix available)",
@@ -119,7 +119,7 @@ func TestWriteThreadDetail_NoTitleLineWhenEmpty(t *testing.T) {
 	writeThreadDetail(&b, r, "app:1", g, nil)
 	out := b.String()
 
-	wantEvidence := "     ↳ CVE-A CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a\n"
+	wantEvidence := "     ↳ <https://nvd.nist.gov/vuln/detail/CVE-A|CVE-A> CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a\n"
 	if out != wantEvidence {
 		t.Errorf("expected only the evidence line (no title line to follow):\nout  = %q\nwant = %q", out, wantEvidence)
 	}
@@ -160,7 +160,7 @@ func TestBuildThreadMessages_AlsoIDs(t *testing.T) {
 	}}
 	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
 	out := strings.Join(BuildThreadMessages(r, nil, 0), "\n")
-	if !strings.Contains(out, "also: CVE-B, CVE-C") {
+	if !strings.Contains(out, "also: <https://nvd.nist.gov/vuln/detail/CVE-B|CVE-B>, <https://nvd.nist.gov/vuln/detail/CVE-C|CVE-C>") {
 		t.Errorf("secondary CVE ids must be listed:\n%s", out)
 	}
 }

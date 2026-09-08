@@ -172,11 +172,31 @@ func writeRefs(b *strings.Builder, v analyze.VulnRef) {
 	fmt.Fprintf(b, "       📎 %s\n", strings.Join(parts, " · "))
 }
 
-// evidence states the facts behind a verdict: ID, severity, then exploitation
-// intel. In degraded mode there is no intel to cite and the header warning
-// already explains why.
+// vulnIDLink renders a vulnerability ID as a Slack link to its official
+// record. Only CVE ids have an NVD page; ids from other schemes (GHSA-,
+// DLA-, ...) are returned as plain text.
+func vulnIDLink(id string) string {
+	if strings.HasPrefix(id, "CVE-") {
+		return fmt.Sprintf("<https://nvd.nist.gov/vuln/detail/%s|%s>", id, id)
+	}
+	return id
+}
+
+// evidence states the facts behind a verdict for Slack rendering: linked ID,
+// severity, then exploitation intel. In degraded mode there is no intel to
+// cite and the header warning already explains why.
 func evidence(r analyze.Report, v analyze.VulnRef) string {
-	parts := []string{v.ID + " " + string(v.Severity)}
+	return evidenceLine(r, v, vulnIDLink(v.ID))
+}
+
+// plainEvidence is the mrkdwn-free variant for the webhook payload, which is
+// consumed outside Slack and must not carry <url|label> markup.
+func plainEvidence(r analyze.Report, v analyze.VulnRef) string {
+	return evidenceLine(r, v, v.ID)
+}
+
+func evidenceLine(r analyze.Report, v analyze.VulnRef, id string) string {
+	parts := []string{id + " " + string(v.Severity)}
 	if r.Intel.Degraded() {
 		parts = append(parts, "severity only (intel unavailable)")
 		return strings.Join(parts, " · ")
@@ -197,9 +217,9 @@ func shortEvidence(r analyze.Report, v analyze.VulnRef) string {
 		return ""
 	}
 	if v.KEV {
-		return v.ID + " · CISA KEV"
+		return vulnIDLink(v.ID) + " · CISA KEV"
 	}
-	return v.ID + " · EPSS " + epssString(v)
+	return vulnIDLink(v.ID) + " · EPSS " + epssString(v)
 }
 
 // epssString formats a probability for reading in a chat message: whole
@@ -352,5 +372,5 @@ func changeEvidence(r analyze.Report, c state.Change) string {
 	if best.TopVuln().ID == "" {
 		return ""
 	}
-	return evidence(r, best.TopVuln())
+	return plainEvidence(r, best.TopVuln())
 }

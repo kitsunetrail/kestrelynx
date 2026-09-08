@@ -54,10 +54,10 @@ func TestFormatSlackText_TriageLayout(t *testing.T) {
 		"*🚨 Act now (1) — exploited or likely to be*",
 		"• web:1.0", // image lines are plain bullets in triage mode
 		"openssl 3.0.7 → 3.0.11",
-		"CVE-KEV CRITICAL · CISA KEV (exploited in the wild) · EPSS 94% · 🧨 ransomware campaign",
+		"<https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> CRITICAL · CISA KEV (exploited in the wild) · EPSS 94% · 🧨 ransomware campaign",
 		"*👀 Watch (1) — not urgent, keep an eye on*",
 		"e2fsprogs 1.44 (no fix available)",
-		"CVE-WAIT · EPSS 3%",
+		"<https://nvd.nist.gov/vuln/detail/CVE-WAIT|CVE-WAIT> · EPSS 3%",
 		"*🔕 Low priority (1)*",
 		"end-of-life", // EOSL warning stays top-priority
 		"broken:1",    // scan errors always shown
@@ -145,6 +145,39 @@ func TestFormatSlackDiffText_TriageEscalation(t *testing.T) {
 	}
 	if !strings.Contains(out, "🚨 1 act-now") {
 		t.Errorf("heartbeat should break down by priority:\n%s", out)
+	}
+}
+
+// Vulnerability ids in Slack output link to their NVD record; ids from other
+// schemes (GHSA-, DLA-, ...) have no NVD page and stay plain.
+func TestVulnIDLink(t *testing.T) {
+	if got, want := vulnIDLink("CVE-2026-1234"), "<https://nvd.nist.gov/vuln/detail/CVE-2026-1234|CVE-2026-1234>"; got != want {
+		t.Errorf("vulnIDLink(CVE) = %q, want %q", got, want)
+	}
+	if got := vulnIDLink("GHSA-xxxx-yyyy-zzzz"); got != "GHSA-xxxx-yyyy-zzzz" {
+		t.Errorf("non-CVE id must stay plain, got %q", got)
+	}
+}
+
+// The webhook "reason" is consumed outside Slack, so the CVE id must appear
+// without mrkdwn link markup.
+func TestBuildWebhookPayload_EscalationReasonIsPlain(t *testing.T) {
+	scan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-1"},
+	}}
+	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(nil), genTime))
+	r := analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(map[string]analyze.Enrichment{"CVE-1": {KEV: true}}), genTime.AddDate(0, 0, 1))
+	d, _ := state.Compute(st, r)
+
+	data, err := json.Marshal(BuildWebhookPayload(r, &d))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"reason":"CVE-1 HIGH · CISA KEV (exploited in the wild) · EPSS n/a"`) {
+		t.Errorf("escalation reason must carry the plain CVE id:\n%s", data)
+	}
+	if strings.Contains(string(data), "nvd.nist.gov") {
+		t.Errorf("webhook payload must not carry Slack link markup:\n%s", data)
 	}
 }
 

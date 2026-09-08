@@ -141,7 +141,7 @@ func writeThreadDetail(b *strings.Builder, r analyze.Report, image string, g ana
 	if top := g.TopVuln(); top.ID != "" {
 		// With triage off there is no intel to cite (and evidence() would
 		// misreport that as an outage), so the line is just id + severity.
-		line := top.ID + " " + string(top.Severity)
+		line := vulnIDLink(top.ID) + " " + string(top.Severity)
 		if r.Triage {
 			line = evidence(r, top)
 		}
@@ -178,7 +178,7 @@ func writeAlsoIDs(b *strings.Builder, g analyze.PackageGroup) {
 	}
 	ids := make([]string, 0, len(g.Vulns)-1)
 	for _, v := range g.Vulns[1:] {
-		ids = append(ids, v.ID)
+		ids = append(ids, vulnIDLink(v.ID))
 	}
 	extra := 0
 	if len(ids) > alsoIDsMax {

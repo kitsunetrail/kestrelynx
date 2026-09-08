@@ -8,3 +8,5 @@
   公開されているデータ、脆弱性管理での使い方を記載
 - 2026年8月30日 — [EPSSの基礎とスコアの確認方法](epss-exploit-prediction-scoring-system-ja.md) — EPSSの意味、スコアの確認方法、
   計算モデル、脆弱性管理での使い方を記載
+- 2026年9月8日 — [CVSSの基礎と評価・公開の流れ](cvss-basics-scoring-and-publication-ja.md) — CVSSの意味、評価から公開までの流れ、
+  NVDでのスコアとベクター文字列の確認方法を記載

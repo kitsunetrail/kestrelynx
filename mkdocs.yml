@@ -60,6 +60,7 @@ nav:
       - CVE Basics and the Publication Process: articles/cve-basics-and-publication-flow.md
       - KEV Catalog Basics and Usage: articles/kev-known-exploited-vulnerabilities.md
       - EPSS Basics and How to Check Scores: articles/epss-exploit-prediction-scoring-system.md
+      - CVSS Basics and the Scoring and Publication Process: articles/cvss-basics-scoring-and-publication.md
 
 plugins:
   - search

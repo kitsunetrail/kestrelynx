@@ -8,3 +8,5 @@ This section covers foundational knowledge, operational practices, and related s
   what qualifies a vulnerability for inclusion, what data the catalog provides, and how to use it to prioritize remediation
 - August 30, 2026 — [EPSS Basics and How to Check Scores](epss-exploit-prediction-scoring-system.md) — what EPSS measures,
   how to interpret and retrieve scores, how the model works, and how to use EPSS in vulnerability management
+- September 8, 2026 — [CVSS Basics and the Scoring and Publication Process](cvss-basics-scoring-and-publication.md) — what CVSS measures,
+  how assessments are scored and published, and how to check scores and vector strings in NVD

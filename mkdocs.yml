@@ -50,6 +50,7 @@ nav:
       - How it works: documentation/how-it-works.md
   - Development:
       - Overview: development/index.md
+      - Runtime evidence prioritization: development/runtime-prioritization.md
       - Kubernetes support: development/kubernetes-support.md
       - Kubernetes scanning landscape: development/kubernetes-scanning-landscape.md
       - Remediation relations model: development/remediation-relations-model.md

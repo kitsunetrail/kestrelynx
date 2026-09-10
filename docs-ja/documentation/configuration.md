@@ -61,7 +61,55 @@ diffモードでは、新規検出、解消、修正可能化、緊急度上昇�
 | `docker.socket` | `/var/run/docker.sock` | Dockerソケットのパスです。 |
 | `state.path` | `/var/lib/kestrelynx/state.json` | スキャン履歴と差分計算に使用するファイルです。 |
 
-`state.path`を含むディレクトリをDockerボリュームで永続化してください。
+`state.path`を含むディレクトリをDockerボリューム、またはKubernetesの永続ボリュームで
+永続化してください。脅威情報フィードのキャッシュは、`state.path`と同じディレクトリ内の
+`intel`ディレクトリに保存します。既定のパスは`/var/lib/kestrelynx/intel`です。
+
+## Kubernetes
+
+| 設定項目 | 既定値 | 説明 |
+| --- | --- | --- |
+| `kubernetes.enabled` | `false` | Dockerホストの代わりにKubernetesクラスタをスキャンします。 |
+| `kubernetes.api_server` | 空 | Kubernetes APIサーバのURLです。空の場合は`KUBERNETES_SERVICE_HOST`と`KUBERNETES_SERVICE_PORT`を使用します。空でない値は`https://`で始まる必要があります。 |
+| `kubernetes.token_file` | 空 | ServiceAccountのトークンファイルです。空の場合は`/var/run/secrets/kubernetes.io/serviceaccount/token`を使用します。 |
+| `kubernetes.ca_file` | 空 | PEM形式のクラスタCAバンドルです。空の場合は`/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`を使用します。 |
+| `kubernetes.tls_server_name` | 空 | APIサーバのTLS証明書の検証に使用するサーバ名を上書きします。空の場合は上書きしません。 |
+| `kubernetes.namespaces` | `[]` | スキャン対象のnamespaceです。空または省略した場合は、すべてのnamespaceを対象にします。 |
+
+`docker.socket`に値（空文字列`""`を含みます）を設定した状態で`kubernetes.enabled: true`を設定すると、
+起動に失敗します。キーを省略するか値を`null`にした場合は、この排他条件に該当しません。
+空の`docker:`セクションは受け付けます。Kubernetesを有効にする場合は、`docker:`セクション全体を削除してください。
+
+クラスタ内では、`api_server`、`token_file`、`ca_file`を空のままにすると、
+Podに注入されたAPIサーバのアドレスと、マウントされたServiceAccountのトークンおよび
+CAを使用できます。Kubernetesが有効な場合、`api_server`が空で、APIサーバの環境変数の
+いずれかが欠けていると起動に失敗します。CAバンドルは実行時に読み取り可能で、
+有効なPEM証明書を含む必要があります。安全でない接続へのフォールバックはありません。
+
+各namespaceはDNS-1123ラベルである必要があります。使用できる文字は小文字の英数字と
+ハイフンで、長さは1〜63バイト、先頭と末尾は英数字にします。namespaceを指定した場合、
+Pod、ReplicaSet、Jobの一覧はnamespaceごとに個別に取得します。Nodeの一覧は
+引き続きクラスタ全体から取得します。
+
+## 環境
+
+| 設定項目 | 既定値 | 説明 |
+| --- | --- | --- |
+| `environment.name` | 空 | このインスタンスのスキャン履歴に付ける任意の名前です。空の場合は、名前のない既定の環境になります。 |
+
+空でない名前はDNS-1123ラベルである必要があります。使用できる文字は小文字の英数字と
+ハイフンで、長さは1〜63バイト、先頭と末尾は英数字にします。値は正規化しません。
+大文字、ドット、アンダースコア、空白文字は受け付けません。
+
+名前を設定すると、Slackのヘッダーには`[name]`として、汎用Webhookのペイロードでは
+`environment`オブジェクトの`name`として表示します。このオブジェクトには、
+有効なadapterに基づく`kind`が常に含まれ、値は`docker`または`kubernetes`です。
+環境種別は設定できません。名前が空の場合、Webhookでは`name`を省略します。
+
+この名前はスキャン履歴に付けるラベルであり、ホストを識別するものではありません。
+ホスト名やIPアドレスから生成することもありません。状態ファイルを保持していれば、
+ホストの再構築や移行の前後で同じ名前を使い続けても問題ありません。名前を追加、変更、
+削除しても、履歴のリセット、初回検出日の変更、既存の検出項目の再通知は行いません。
 
 ## 悪用情報に基づく優先順位付け
 

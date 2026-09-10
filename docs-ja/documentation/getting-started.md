@@ -1,13 +1,14 @@
 # セットアップ手順
 
-KestreLynxはDockerホストごとに1つのコンテナとして動作します。  
+KestreLynxはDockerホストごとに1つのコンテナとして、またはKubernetesクラスタ内で
+レプリカ数1のDeploymentとして動作します。  
 実行中のコンテナが使用しているイメージを特定してスキャンし、その結果をSlackまたは
 Webhookへ送信します。
 
 ## 必要なもの
 
-- Dockerホスト
-- Docker ComposeまたはDocker CLI
+- Docker ComposeまたはDocker CLIを利用できるDockerホスト、または`kubectl`で
+  アクセスでき、永続ストレージを利用できるKubernetesクラスタ
 - 次のうち1つ以上の通知先
     - Slack Incoming Webhook
     - Slack Bot Tokenとチャンネル
@@ -50,6 +51,55 @@ docker run -d --name kestrelynx \
   ghcr.io/kitsunetrail/kestrelynx:latest
 ```
 
+## Kubernetesで実行
+
+リポジトリをダウンロードまたはcloneしてください。`deploy/kubernetes/`ディレクトリには、
+次のマニフェストが含まれています。
+
+| ファイル | リソース |
+| --- | --- |
+| `serviceaccount.yaml` | `kestrelynx`名前空間のServiceAccount `kestrelynx`です。 |
+| `clusterrole.yaml` | Pod、Node、ReplicaSet、Deployment、StatefulSet、DaemonSet、Job、CronJobへの読み取り専用の`get`と`list`アクセスを許可するClusterRoleです。 |
+| `clusterrolebinding.yaml` | そのロールをServiceAccountに割り当てるClusterRoleBindingです。 |
+| `configmap.yaml` | `config.yml`を含むConfigMap `kestrelynx-config`です。 |
+| `pvc.yaml` | アクセスモード`ReadWriteOnce`で1 GiBを要求するPersistentVolumeClaim `kestrelynx-state`です。 |
+| `deployment.yaml` | `Recreate`戦略を使用するレプリカ数1のDeploymentです。設定を`/etc/kestrelynx`に、状態データを`/var/lib/kestrelynx`にマウントします。 |
+
+`deploy/kubernetes/configmap.yaml`に少なくとも1つの通知先を設定してください。
+その中の`config.yml`には`kubernetes.enabled: true`を設定し、`docker.socket`には
+空文字列`""`を含む値を設定しないでください。キーの省略または値の`null`指定は受け付けます。
+空の`docker:`セクションは受け付けます。`config.example.yml`を基に設定する場合は、
+`docker:`セクション全体を削除してください。
+
+1つのインスタンスが1つのクラスタを対象とします。既定ではすべての名前空間を
+スキャンします。`kubernetes.namespaces`を設定すると、スキャン対象を指定した
+名前空間に制限できます。複数のインスタンスから1つのSlackチャンネルへ投稿する場合は、
+インスタンスを区別するために`environment.name`を設定してください。
+設定項目については[設定項目](configuration.md)を参照してください。
+
+Trivyはレジストリからイメージを取得するため、スキャナPodからレジストリへ
+アクセスできる必要があります。非公開レジストリのイメージを使用する場合は、
+`kestrelynx`名前空間に、型が`kubernetes.io/dockerconfigjson`の
+`kestrelynx-registry-auth`という名前のSecretを作成してください。
+`deploy/kubernetes/deployment.yaml`内の`DOCKER_CONFIG`環境変数、
+`registry-auth`ボリュームマウント、Secretボリュームのコメントを解除してください。
+これにより、Secretの`.dockerconfigjson`キーを、`DOCKER_CONFIG`で指定した
+ディレクトリ`/etc/kestrelynx/docker`の下に`config.json`としてマウントします。
+スキャン対象のWorkloadの`imagePullSecrets`は再利用しません。
+
+クラスタに合わせてPVCのストレージ設定を調整し、名前空間を作成して、
+準備したマニフェストを適用してください。
+
+```bash
+kubectl create namespace kestrelynx
+kubectl apply -f deploy/kubernetes/
+kubectl logs -n kestrelynx deployment/kestrelynx -f
+```
+
+PVCは、Podを再作成した後もスキャン履歴、初回検出日、脅威情報フィードのキャッシュを
+保持します。更新中にPodが重複して稼働しないよう、レプリカ数1と`Recreate`戦略を
+維持してください。2つのインスタンスで1つの状態データ用ボリュームを共有しないでください。
+
 ## タイムゾーンを設定
 
 `schedule.daily_at`は、`TZ`で指定したタイムゾーンとして解釈されます。  
@@ -60,6 +110,9 @@ Composeの例ではUTCが既定値です。必要に応じて、運用するホ�
 environment:
   - TZ=Asia/Tokyo
 ```
+
+同じ設定は、`deploy/kubernetes/deployment.yaml`内の`TZ`環境変数にも適用されます。
+こちらも既定値はUTCです。
 
 ## 参考ページ
 

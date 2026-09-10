@@ -4,9 +4,9 @@
 
 ## KestreLynxについて
 
-- [セットアップ手順](getting-started.md) — Docker Composeまたは`docker run`で
+- [セットアップ手順](getting-started.md) — Docker Compose、`docker run`、またはKubernetesで
   KestreLynxを導入します。
-- [設定](configuration.md) — 実行スケジュール、通知先、状態管理、
+- [設定](configuration.md) — 実行スケジュール、通知先、Kubernetes、環境名、状態管理、
   脆弱性の優先順位付けを設定します。
 - [KestreLynxの仕組み](how-it-works.md) — スキャン、優先順位付け、差分検出、通知までの処理を説明します。
 

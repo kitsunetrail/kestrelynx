@@ -10,3 +10,5 @@ This section covers foundational knowledge, operational practices, and related s
   how to interpret and retrieve scores, how the model works, and how to use EPSS in vulnerability management
 - September 8, 2026 — [CVSS Basics and the Scoring and Publication Process](cvss-basics-scoring-and-publication.md) — what CVSS measures,
   how assessments are scored and published, and how to check scores and vector strings in NVD
+- September 10, 2026 — [Trivy Basics and How to Read Scan Results](trivy-basics-scan-results.md) — what Trivy scans,
+  how to read its JSON output, and considerations when using scan results for vulnerability management

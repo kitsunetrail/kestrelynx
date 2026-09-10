@@ -35,3 +35,4 @@ nav:
       - KEV Catalogの基礎と使い方: articles/kev-known-exploited-vulnerabilities-ja.md
       - EPSSの基礎とスコアの確認方法: articles/epss-exploit-prediction-scoring-system-ja.md
       - CVSSの基礎と評価・公開の流れ: articles/cvss-basics-scoring-and-publication-ja.md
+      - Trivyの基礎とスキャン結果の読み方: articles/trivy-basics-scan-results-ja.md

@@ -29,13 +29,15 @@ This page records the initial plan. Experiments, results, limitations, and decis
     - Observation gaps caused by short-lived processes, restarts, or insufficient permissions must never be interpreted as safety.
 - **Observation classifications**
     - Classify observations as `confirmed`, `inferred`, `unknown`, or `unobserved`.
+    - Treat executables and loaded OS shared libraries mapped to packages as `confirmed`, and short-lived processes missed by sampling and language packages as `unobserved` unless their use can be directly linked to packages through event evidence.
     - Never treat a listening port alone as proof of internet reachability.
 - **Opt-in runtime observer**
-    - The runtime observer is a component that, when explicitly enabled, runs on the Docker host and reads procfs and the Docker API to determine which vulnerable package binaries are running as processes, which ports they listen on, and what effective privileges they have.
+    - When explicitly enabled, the runtime observer runs on the Docker host and samples procfs and the Docker API to link executables and loaded shared libraries to vulnerable packages and collect listening ports and effective privileges.
+    - Sampling and eBPF event observation require separate opt-ins, so sampling remains available on hosts that do not meet the eBPF kernel requirements.
     - With the runtime observer disabled, every existing feature must keep working unchanged, including the standard image scan, which requires no extra privileges.
 - **Initial observation target**
-    - Start with Docker Engine only, using procfs and the Docker API.
-    - Do not use eBPF, kernel modules, or privileged in-container agents.
+    - Start with state sampling on Docker Engine using procfs and the Docker API to map executables and loaded shared libraries to OS packages, requiring access to the host PID namespace and root-equivalent permissions to read other processes' `/proc` entries.
+    - Treat eBPF event observation as a later stage if measurements show insufficient confirmation of findings equivalent to “act now” or “watch” in real deployments and users can accept its kernel and permission requirements, with attack detection outside scope.
     - Leave Kubernetes-side evidence collection for a later stage.
 
 ## Validation items
@@ -56,26 +58,32 @@ All five questions are conditions for proceeding. If they cannot be satisfied, t
 
 ## Non-goals of this investigation
 
+- **Event observation of short-lived processes and language packages**
+    - Keep event observation of short-lived processes and language packages outside the initial investigation and consider it in a later stage based on measured observation gaps.
+    - Keep attack detection and attack timelines outside scope.
+
 - **Kubernetes evidence collection**
     - Kubernetes-side evidence collection begins after this investigation establishes feasibility on Docker Engine.
     - First, use containerPort and Service declarations to infer expected listening ports and securityContext to infer expected effective privileges, treating information available through the existing read-only Kubernetes adapter as `inferred` evidence without the runtime observer or additional permissions.
     - Then, follow the initial Docker implementation with opt-in DaemonSet observation for `confirmed` evidence, subject to confirmed demand from Kubernetes users.
+    - Apply the same sampling and conditional event observation stages, with separate opt-ins, to DaemonSet observation.
 
 ## Verification method (initial plan)
 
 - **Processes and package ownership**
     - Verify on real containers running on a Docker host.
-    - Enumerate processes through procfs and map their executables back to installed packages.
+    - Use the Docker API's `top` endpoint to map PIDs to containers and procfs to map executables and loaded shared libraries to installed OS packages.
     - Start with OS packages, for example using dpkg ownership information.
 - **Ports and privileges**
     - Collect listening ports and effective privileges through procfs and the Docker API.
     - Keep listening-port observations distinct from conclusions about internet reachability.
 - **Accuracy and operational cost**
     - Measure mapping accuracy, failure modes, and collection overhead.
+    - Measure the share of Trivy findings in the test containers confirmed through procfs and the share left `unobserved` because of short-lived processes or language packages, both overall and by existing priority groups equivalent to “act now” and “watch”.
     - Record the installation steps and permissions required for observation.
 - **Unmapped cases**
-    - Examine binaries deleted during upgrades, language-runtime dependencies loaded as libraries, and distroless images.
-    - Record cases that cannot be mapped as explicit `unknown` results rather than guesses.
+    - Examine binaries deleted during upgrades, language packages absent from maps, short-lived processes and temporary dlopen activity missed between samples, connection history unavailable from snapshots, and distroless images.
+    - Record observed files with unresolved package ownership as `unknown` and missing observations as `unobserved`, without filling gaps with guesses.
 - **Prioritization and compatibility**
     - Assess whether positive evidence provides useful narrowing beyond KEV and EPSS.
     - Verify that unknown or unobserved information never lowers priority.
@@ -88,7 +96,7 @@ All five questions are conditions for proceeding. If they cannot be satisfied, t
 - **Define a shared evidence model**
     - Define observation classifications (`confirmed`, `inferred`, `unknown`, and `unobserved`) and evidence types so they can be associated with either Docker container IDs or Kubernetes namespace/pod/container identifiers.
 - **Run the initial observations**
-    - Check executable-to-package mapping, listening ports, and effective privileges on the Docker host.
+    - Check executable and loaded shared-library mappings to OS packages, listening ports, and effective privileges on the Docker host.
     - Record mapping failures, observation gaps, required permissions, and collection overhead.
 - **Assess feasibility**
     - Evaluate the results against the five questions above.
@@ -101,6 +109,9 @@ All five questions are conditions for proceeding. If they cannot be satisfied, t
 - **Kubernetes stage defined**
     - Keep the initial investigation limited to Docker Engine while defining observation classifications and evidence types for both Docker and Kubernetes identifiers.
     - Define the Kubernetes sequence as inferred evidence without the runtime observer, followed by opt-in DaemonSet observation, starting after Docker feasibility is established and requiring confirmed user demand for DaemonSet observation.
+- **eBPF approach defined**
+    - Start with procfs and Docker API state sampling that includes loaded shared libraries and requires access to the host PID namespace and root-equivalent permissions.
+    - Make eBPF event evidence a separate opt-in for a later stage, conditional on measured confirmation gaps and users accepting its kernel and permission requirements, while keeping attack detection outside scope.
 
 ### 2026-09-09
 

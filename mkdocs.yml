@@ -62,6 +62,7 @@ nav:
       - KEV Catalog Basics and Usage: articles/kev-known-exploited-vulnerabilities.md
       - EPSS Basics and How to Check Scores: articles/epss-exploit-prediction-scoring-system.md
       - CVSS Basics and the Scoring and Publication Process: articles/cvss-basics-scoring-and-publication.md
+      - Trivy Basics and How to Read Scan Results: articles/trivy-basics-scan-results.md
 
 plugins:
   - search
@@ -69,6 +70,7 @@ plugins:
 markdown_extensions:
   - admonition
   - attr_list
+  - footnotes
   - md_in_html
   - pymdownx.details
   - pymdownx.emoji:

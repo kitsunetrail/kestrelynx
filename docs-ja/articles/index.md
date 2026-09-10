@@ -10,3 +10,5 @@
   計算モデル、脆弱性管理での使い方を記載
 - 2026年9月8日 — [CVSSの基礎と評価・公開の流れ](cvss-basics-scoring-and-publication-ja.md) — CVSSの意味、評価から公開までの流れ、
   NVDでのスコアとベクター文字列の確認方法を記載
+- 2026年9月10日 — [Trivyの基礎とスキャン結果の読み方](trivy-basics-scan-results-ja.md) — Trivyのスキャン対象、
+  JSON出力の読み方、脆弱性管理で利用する際の注意点を記載

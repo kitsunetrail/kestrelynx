@@ -3,6 +3,7 @@ package state
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -143,6 +144,33 @@ func TestCompute_NewCVEOnKnownPackage(t *testing.T) {
 
 	if len(d.Changes) != 1 || d.Changes[0].Kind != KindNewCVEs || d.Changes[0].NewCVEs != 1 {
 		t.Fatalf("Changes = %+v, want one KindNewCVEs with 1 new", d.Changes)
+	}
+}
+
+// TestCompute_NewCVEsCarriesTheNewIDs checks NewIDs itself, not just the
+// count: only ids absent from the previous scan, sorted the same way
+// analyze.PackageGroup.VulnIDs is.
+func TestCompute_NewCVEsCarriesTheNewIDs(t *testing.T) {
+	_, st := Compute(empty(), report(day1, scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		finding("web:1", "openssl", "CVE-2", scanner.StatusFixed),
+		finding("web:1", "openssl", "CVE-4", scanner.StatusFixed),
+	}}))
+	d, _ := Compute(st, report(day2, scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		finding("web:1", "openssl", "CVE-1", scanner.StatusFixed),
+		finding("web:1", "openssl", "CVE-2", scanner.StatusFixed),
+		finding("web:1", "openssl", "CVE-3", scanner.StatusFixed),
+		finding("web:1", "openssl", "CVE-4", scanner.StatusFixed),
+	}}))
+
+	if len(d.Changes) != 1 || d.Changes[0].Kind != KindNewCVEs {
+		t.Fatalf("Changes = %+v, want one KindNewCVEs", d.Changes)
+	}
+	want := []string{"CVE-1", "CVE-3"}
+	if got := d.Changes[0].NewIDs; !reflect.DeepEqual(got, want) {
+		t.Errorf("NewIDs = %v, want %v (sorted, only ids absent from the previous scan)", got, want)
+	}
+	if got := d.Changes[0].NewCVEs; got != len(want) {
+		t.Errorf("NewCVEs = %d, want %d (len(NewIDs), kept for webhook compatibility)", got, len(want))
 	}
 }
 

@@ -52,7 +52,7 @@
      ↳ CVE-2023-44487 HIGH · CISA KEV (exploited in the wild) · EPSS >99%
        📎 advisory · vendor advisory · 💬 HN (166 pts)
 🔕 myapp:latest
-   • webpack 4.46.0 → 5.89.0 (HIGH 1)  🟠 upgrade: major version bump — needs care [lang]
+   • webpack 4.46.0 → 5.89.0 (HIGH 1)  🟠 upgrade: major version bump — needs care [lang] — CVE-2024-37890 · EPSS 0.1%
 
 ✅ Resolved since last scan (1)
 • myapp:latest: postcss

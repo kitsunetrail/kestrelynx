@@ -142,7 +142,7 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holdin
 		writeIntelWarning(&b, r)
 		writeTriageChanges(&b, r, d.Changes)
 	} else {
-		writeChanges(&b, d.Changes, byRef)
+		writeChanges(&b, r, d.Changes, byRef)
 	}
 	writeResolved(&b, d, byRef)
 
@@ -349,7 +349,7 @@ func writeAnyOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding
 
 // writeChanges renders the new/changed findings grouped per image, in report
 // priority order, each package line in full detail.
-func writeChanges(b *strings.Builder, changes []state.Change, byRef map[string]analyze.ImageObservation) {
+func writeChanges(b *strings.Builder, r analyze.Report, changes []state.Change, byRef map[string]analyze.ImageObservation) {
 	if len(changes) == 0 {
 		return
 	}
@@ -361,21 +361,106 @@ func writeChanges(b *strings.Builder, changes []state.Change, byRef map[string]a
 			lastImage = c.Image
 		}
 		for _, g := range c.Groups {
-			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(c))
+			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, c, g))
 		}
 	}
 }
 
-// changeSuffix annotates why a known package reappears in the new section.
-func changeSuffix(c state.Change) string {
-	switch c.Kind {
-	case state.KindNewCVEs:
-		return fmt.Sprintf(" — %d new CVE(s)", c.NewCVEs)
-	case state.KindNowFixable:
-		return " — fix now available"
-	default:
+// changeSuffix annotates why a known package reappears in the new section:
+// the group's headline CVE (compactEvidence), then the kind-specific label.
+// Shared with writeTriageChanges (triage.go) so the two never drift apart —
+// see changeSuffixParts for the rule each kind follows.
+func changeSuffix(r analyze.Report, c state.Change, g analyze.PackageGroup) string {
+	parts := changeSuffixParts(r, c, g)
+	if len(parts) == 0 {
 		return ""
 	}
+	return " — " + strings.Join(parts, " — ")
+}
+
+// changeSuffixParts builds the ordered list of text pieces changeSuffix joins.
+// A group that carries new CVE ids lists them (that listing is its headline);
+// otherwise the headline CVE is shown unless the group is act-now, where
+// writeEvidence already renders it right below. The kind's own label follows.
+func changeSuffixParts(r analyze.Report, c state.Change, g analyze.PackageGroup) []string {
+	var parts []string
+	switch {
+	case len(groupNewIDs(c, g)) > 0:
+		parts = append(parts, newCVEsSuffix(groupNewIDs(c, g)))
+	case g.Priority != analyze.PriorityActNow:
+		if ev := compactEvidence(r, g.TopVuln()); ev != "" {
+			parts = append(parts, ev)
+		}
+	}
+	switch c.Kind {
+	case state.KindEscalated:
+		parts = append(parts, "⬆️ escalated to "+priorityLabel(analyze.MaxPriority(c.Groups)))
+	case state.KindNowFixable:
+		parts = append(parts, "fix now available")
+	}
+	return parts
+}
+
+// groupNewIDs narrows a change's new CVE ids to the ones this group carries.
+// A package can render as two groups (fixed and unfixed CVEs), and a new id
+// belongs to exactly one of them: listing it under the other would claim a
+// fix version covers a CVE it does not.
+func groupNewIDs(c state.Change, g analyze.PackageGroup) []string {
+	if len(c.NewIDs) == 0 {
+		return nil
+	}
+	in := make(map[string]bool, len(g.Vulns))
+	for _, v := range g.Vulns {
+		in[v.ID] = true
+	}
+	var ids []string
+	for _, id := range c.NewIDs {
+		if in[id] {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// newIDsMax caps how many new CVE ids are listed in a new_cves change suffix
+// before falling back to a "(+N more)" count (the full list is always in the
+// webhook payload).
+const newIDsMax = 3
+
+// newCVEsSuffix renders the linked list of CVE ids new to a known package —
+// the id-bearing replacement for the previous bare added-CVE count.
+func newCVEsSuffix(ids []string) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	shown, extra := ids, 0
+	if len(ids) > newIDsMax {
+		shown, extra = ids[:newIDsMax], len(ids)-newIDsMax
+	}
+	linked := make([]string, len(shown))
+	for i, id := range shown {
+		linked[i] = vulnIDLink(id)
+	}
+	s := "new: " + strings.Join(linked, ", ")
+	if extra > 0 {
+		s += fmt.Sprintf(" (+%d more)", extra)
+	}
+	return s
+}
+
+// compactEvidence is the one-line headline CVE shown after a non-act-now
+// change item: the group's strongest CVE with its triage evidence when
+// triage is on and the intel behind it is trustworthy, or plain id+severity
+// otherwise (triage off, or degraded intel where the KEV/EPSS parts of
+// shortEvidence would misreport a data outage as a verdict).
+func compactEvidence(r analyze.Report, v analyze.VulnRef) string {
+	if v.ID == "" {
+		return ""
+	}
+	if r.Triage && !r.Intel.Degraded() {
+		return shortEvidence(r, v)
+	}
+	return vulnIDLink(v.ID) + " " + string(v.Severity)
 }
 
 func changesEmoji(c state.Change) string {
@@ -655,14 +740,15 @@ type replacedPayload struct {
 }
 
 type changePayload struct {
-	Image    string `json:"image"`
-	Package  string `json:"package"`
-	Kind     string `json:"kind"` // new | escalated | new_cves | now_fixable
-	NewCVEs  int    `json:"new_cve_count,omitempty"`
-	Critical int    `json:"critical"`
-	High     int    `json:"high"`
-	Priority string `json:"priority,omitempty"` // triage: act_now | watch | low
-	Reason   string `json:"reason,omitempty"`   // escalated: evidence for the new verdict
+	Image    string   `json:"image"`
+	Package  string   `json:"package"`
+	Kind     string   `json:"kind"` // new | escalated | new_cves | now_fixable
+	NewCVEs  int      `json:"new_cve_count,omitempty"`
+	NewIDs   []string `json:"new_cve_ids,omitempty"` // plain CVE ids added, same set as new_cve_count
+	Critical int      `json:"critical"`
+	High     int      `json:"high"`
+	Priority string   `json:"priority,omitempty"` // triage: act_now | watch | low
+	Reason   string   `json:"reason,omitempty"`   // escalated: evidence for the new verdict
 }
 
 type resolvedPayload struct {
@@ -835,6 +921,7 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			Package:  c.Package,
 			Kind:     string(c.Kind),
 			NewCVEs:  c.NewCVEs,
+			NewIDs:   c.NewIDs,
 			Critical: crit,
 			High:     high,
 			Priority: string(analyze.MaxPriority(c.Groups)),

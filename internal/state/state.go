@@ -252,7 +252,8 @@ type Change struct {
 	Image   string
 	Package string
 	Kind    ChangeKind
-	NewCVEs int // for KindNewCVEs: how many CVE IDs are new
+	NewCVEs int      // for KindNewCVEs: how many CVE IDs are new (len(NewIDs); kept for webhook compatibility)
+	NewIDs  []string // for KindNewCVEs: the new CVE IDs themselves, sorted (same order as analyze.PackageGroup.VulnIDs)
 	Groups  []analyze.PackageGroup
 }
 
@@ -433,6 +434,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		}
 
 		change := Change{Image: ref, Package: keyPackage(k), Groups: c.groups}
+		added := newIDs(ids, prevE.VulnIDs)
 		switch {
 		case !known:
 			change.Kind = KindNew
@@ -445,9 +447,10 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		// storm (the header warning carries the news instead).
 		case !r.Intel.Degraded() && prevE.Priority != "" && prio.Rank() > analyze.Priority(prevE.Priority).Rank():
 			change.Kind = KindEscalated
-		case countNew(ids, prevE.VulnIDs) > 0:
+		case len(added) > 0:
 			change.Kind = KindNewCVEs
-			change.NewCVEs = countNew(ids, prevE.VulnIDs)
+			change.NewIDs = added
+			change.NewCVEs = len(added)
 		case c.fixable && !prevE.Fixable:
 			change.Kind = KindNowFixable
 		default:
@@ -630,17 +633,18 @@ func urgent(p string) bool {
 	return pr == analyze.PriorityActNow || pr == analyze.PriorityWatch
 }
 
-// countNew counts ids not present in prev (both sorted or not; prev is small).
-func countNew(ids, prev []string) int {
+// newIDs returns the ids not present in prev, in ids' own order (the caller
+// passes ids already sorted, so the result comes back sorted too).
+func newIDs(ids, prev []string) []string {
 	seen := map[string]bool{}
 	for _, id := range prev {
 		seen[id] = true
 	}
-	n := 0
+	var out []string
 	for _, id := range ids {
 		if !seen[id] {
-			n++
+			out = append(out, id)
 		}
 	}
-	return n
+	return out
 }

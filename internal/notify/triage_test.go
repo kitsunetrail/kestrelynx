@@ -148,6 +148,59 @@ func TestFormatSlackDiffText_TriageEscalation(t *testing.T) {
 	}
 }
 
+// A triage-mode change item other than act-now carries a compact evidence
+// suffix naming its headline CVE, so "New since last scan" says which CVE is
+// behind the line instead of leaving the reader to open the webhook payload.
+// Act-now already gets its evidence from the writeEvidence line below the
+// package, so the change suffix must not repeat it.
+func TestFormatSlackDiffText_TriageChangeCompactEvidence(t *testing.T) {
+	r := triageReport()
+	d, _ := state.Compute(state.State{}, r)
+	out := FormatSlackDiffText(r, d, false, false)
+
+	if !strings.Contains(out, "e2fsprogs 1.44 (no fix available) (CRITICAL 1 / HIGH 0) — <https://nvd.nist.gov/vuln/detail/CVE-WAIT|CVE-WAIT> · EPSS 3%\n") {
+		t.Errorf("expected compact evidence on the watch change line:\n%s", out)
+	}
+	if strings.Contains(out, "openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — ") {
+		t.Errorf("act-now change line must not duplicate the evidence inline (writeEvidence already covers it):\n%s", out)
+	}
+}
+
+// A known package escalated to WATCH keeps both parts in order: the compact
+// evidence first (the CVE the verdict rests on), then the escalation label.
+func TestFormatSlackDiffText_TriageEscalationToWatchSuffixOrder(t *testing.T) {
+	scan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-1"},
+	}}
+	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(nil), genTime))
+	r := analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(map[string]analyze.Enrichment{"CVE-1": {EPSS: 0.03, EPSSKnown: true}}), genTime.AddDate(0, 0, 1))
+	d, _ := state.Compute(st, r)
+
+	out := FormatSlackDiffText(r, d, false, false)
+	want := "   • openssl 1.0 → 1.1 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> · EPSS 3% — ⬆️ escalated to WATCH\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("expected evidence then escalation label:\n%s\nin:\n%s", want, out)
+	}
+}
+
+// With intel degraded the compact evidence must not cite KEV/EPSS (there is
+// none to cite); it falls back to the plain id + severity form.
+func TestFormatSlackDiffText_TriageDegradedCompactEvidence(t *testing.T) {
+	scan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
+		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-1"},
+	}}
+	rules := triageRules(nil)
+	rules.Intel = analyze.IntelStatus{}
+	r := analyze.Build([]scanner.ImageScan{scan}, nil, rules, genTime)
+	d, _ := state.Compute(state.State{}, r)
+
+	out := FormatSlackDiffText(r, d, false, false)
+	want := "   • openssl 1.0 → 1.1 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> HIGH\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("expected plain id+severity under degraded intel:\n%s\nin:\n%s", want, out)
+	}
+}
+
 // Vulnerability ids in Slack output link to their NVD record; ids from other
 // schemes (GHSA-, DLA-, ...) have no NVD page and stay plain.
 func TestVulnIDLink(t *testing.T) {

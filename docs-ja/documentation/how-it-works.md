@@ -557,11 +557,18 @@ OSパッケージです。
 | `⚪ upgrade: risk unknown` | バージョンを確実に解析できません。 |
 | `[lang]` | TrivyがOSパッケージではなく言語依存パッケージとして分類しています。 |
 | `⬆️ escalated to ACT NOW/WATCH` | 前回から、既知パッケージの最大優先度が上昇しました。 |
-| `N new CVE(s)` | 既知のイメージとパッケージに、新しいCVE IDが追加されました。 |
+| `new: CVE-…, CVE-… (+N more)` | 既知のイメージとパッケージに追加された新しいCVE IDのリンク付き一覧です。1行につき最大3件表示し、残りは件数のみ表示します。 |
 | `fix now available` | 前回は修正版がなく、今回は1つ以上の修正版があります。 |
 
 緑色の更新アイコンは、提示されたバージョン変更の種類を示します。イメージ、
 パッケージ、脆弱性が安全であるという意味ではありません。
+
+Act now以外の変化項目の末尾には、最も強いCVEを示す簡潔な判定根拠を付けます。
+トリアージが有効で判定に使える脅威情報がある場合は`CVE-ID · KEV/EPSS`、
+それ以外は`CVE-ID SEVERITY`です。新規IDを列挙する行は、その一覧自体が
+見出しを兼ねるため、この判定根拠を省略します。1つのパッケージが修正版あり
+と修正版なしの2行に分かれる場合、新規IDは属する行にだけ列挙し、もう一方の
+行は通常の規則に従います。
 
 ### 判定根拠と参照URLの行
 
@@ -816,6 +823,7 @@ diffモードの場合は、今回の差分も含みます。コンテナとWork
 | `package` | string | パッケージ名です。 |
 | `kind` | string | `new`、`escalated`、`new_cves`、`now_fixable`のいずれかです。 |
 | `new_cve_count` | integer | 追加されたCVE IDの件数です。`kind`が`new_cves`の場合だけ設定します。ほかの`kind`では、CVE IDが追加されていても省略します。 |
+| `new_cve_ids` | 文字列の配列 | 追加されたCVE ID自体です(Slackのリンク表記なし)。`kind`が`new_cves`の場合だけ設定し、件数は`new_cve_count`と同じです。 |
 | `critical` | integer | CRITICALの件数です。 |
 | `high` | integer | HIGHの件数です。 |
 | `priority` | string | `act_now`、`watch`、`low`のいずれかです。利用できない場合は省略します。 |

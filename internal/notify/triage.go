@@ -275,25 +275,11 @@ func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Ch
 			lastImage = c.Image
 		}
 		for _, g := range c.Groups {
-			writePackage(b, g, g.Status == scanner.StatusFixed, triageChangeSuffix(c))
+			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, c, g))
 			if g.Priority == analyze.PriorityActNow {
 				writeEvidence(b, r, g)
 			}
 		}
-	}
-}
-
-// triageChangeSuffix annotates why a known package reappears.
-func triageChangeSuffix(c state.Change) string {
-	switch c.Kind {
-	case state.KindEscalated:
-		return " — ⬆️ escalated to " + priorityLabel(analyze.MaxPriority(c.Groups))
-	case state.KindNewCVEs:
-		return fmt.Sprintf(" — %d new CVE(s)", c.NewCVEs)
-	case state.KindNowFixable:
-		return " — fix now available"
-	default:
-		return ""
 	}
 }
 

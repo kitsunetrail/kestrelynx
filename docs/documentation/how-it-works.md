@@ -578,11 +578,20 @@ The labels following a package have these meanings:
 | `⚪ upgrade: risk unknown` | The versions could not be parsed reliably. |
 | `[lang]` | Trivy classified the package as a language dependency rather than an OS package. |
 | `⬆️ escalated to ACT NOW/WATCH` | A known package's maximum priority rose since the previous scan. |
-| `N new CVE(s)` | New CVE IDs appeared under a known image and package. |
+| `new: CVE-…, CVE-… (+N more)` | New CVE IDs appeared under a known image and package, linked, up to 3 listed per line and the rest counted. |
 | `fix now available` | A known package changed from no available fix to at least one available fix. |
 
 The green upgrade icon describes the proposed version change. It does **not**
 mean that the image, package, or vulnerability is safe.
+
+Every changed entry other than Act now also carries a compact evidence suffix
+naming its strongest CVE — `CVE-ID · KEV/EPSS` when triage is on and the intel
+behind it is usable, or `CVE-ID SEVERITY` otherwise — so the entry says which
+CVE is behind it without a trip to the webhook payload. A line that lists new
+CVE IDs omits the compact evidence, since that list is already the headline;
+when a package renders as two lines (fixed and unfixed CVEs), each new ID is
+listed only under the line it belongs to, and the other line follows the
+normal rule.
 
 ### Evidence and reference lines
 
@@ -841,6 +850,7 @@ Each object in `new` has these fields:
 | `package` | string | Package name. |
 | `kind` | string | `new`, `escalated`, `new_cves`, or `now_fixable`. |
 | `new_cve_count` | integer | Number of added CVE IDs, populated only when `kind` is `new_cves`. Omitted for other kinds even if CVE IDs were added. |
+| `new_cve_ids` | array of strings | The added CVE IDs themselves, without Slack link markup. Populated only when `kind` is `new_cves`, same count as `new_cve_count`. |
 | `critical` | integer | CRITICAL count. |
 | `high` | integer | HIGH count. |
 | `priority` | string | `act_now`, `watch`, or `low`; omitted when unavailable. |

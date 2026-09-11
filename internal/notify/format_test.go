@@ -35,6 +35,17 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
+// opensslFinding builds a fixed, HIGH-severity openssl finding on web:1 for
+// the given CVE id — the minimal shape needed to drive state.Compute through
+// a KindNewCVEs change without triage enabled.
+func opensslFinding(id string) scanner.Finding {
+	return scanner.Finding{
+		Image: "web:1", Class: scanner.ClassOS, Package: "openssl",
+		InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed,
+		Severity: scanner.SeverityHigh, VulnID: id,
+	}
+}
+
 // riskLabel must name its subject ("upgrade:"): a green label next to a
 // CRITICAL count was misread as "this vulnerability is safe". Full-string
 // match so a wording regression cannot hide behind a substring.
@@ -241,6 +252,74 @@ func TestFormatSlackDiffText_AllResolvedCelebrates(t *testing.T) {
 	}
 }
 
+// A non-triage change line still names its headline CVE: plain "id severity"
+// (compactEvidence's non-triage form), since there is no KEV/EPSS evidence to
+// cite without triage enabled.
+func TestFormatSlackDiffText_ChangeCompactEvidence(t *testing.T) {
+	r, d := diffFixture()
+	out := FormatSlackDiffText(r, d, false, false)
+	if !strings.Contains(out, "libc-bin 2.28-10 → 2.28-10+deb10u2 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> CRITICAL\n") {
+		t.Errorf("expected a plain id+severity compact evidence suffix:\n%s", out)
+	}
+}
+
+// A KindNewCVEs change line lists the new CVE ids themselves (linked), capped
+// at newIDsMax with a "(+N more)" overflow, instead of the old bare count —
+// and does not also carry a compactEvidence suffix (the new-id list is
+// already the headline).
+func TestFormatSlackDiffText_NewCVEsSuffixLinksAndOverflows(t *testing.T) {
+	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{
+		{Image: "web:1", Findings: []scanner.Finding{opensslFinding("CVE-1")}},
+	}, nil, analyze.Triage{}, genTime))
+	r := analyze.Build([]scanner.ImageScan{
+		{Image: "web:1", Findings: []scanner.Finding{
+			opensslFinding("CVE-1"), opensslFinding("CVE-2"), opensslFinding("CVE-3"),
+			opensslFinding("CVE-4"), opensslFinding("CVE-5"),
+		}},
+	}, nil, analyze.Triage{}, genTime.AddDate(0, 0, 1))
+	d, _ := state.Compute(st, r)
+
+	out := FormatSlackDiffText(r, d, false, false)
+	// Whole line: the new-id listing is the only suffix, with no compact
+	// evidence in front of it.
+	want := "   • openssl 1.0 → 1.1 (CRITICAL 0 / HIGH 5)  🟢 upgrade: distro security patch — new: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>, <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3>, <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> (+1 more)\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("expected the linked new-CVE listing with overflow count:\n%s\nwant substring: %s", out, want)
+	}
+}
+
+// A package with both fixed and unfixed CVEs renders as two lines; a new CVE
+// is listed only under the line it belongs to. Putting it under the fix line
+// would read as "upgrading to 1.1 fixes CVE-2" when it does not, and the line
+// it does not belong to keeps the plain headline suffix instead.
+func TestFormatSlackDiffText_NewCVEsSuffixPerGroup(t *testing.T) {
+	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{
+		{Image: "web:1", Findings: []scanner.Finding{opensslFinding("CVE-1")}},
+	}, nil, analyze.Triage{}, genTime))
+	unfixed := opensslFinding("CVE-2")
+	unfixed.FixedVer, unfixed.Status = "", scanner.StatusAffected
+	r := analyze.Build([]scanner.ImageScan{
+		{Image: "web:1", Findings: []scanner.Finding{opensslFinding("CVE-1"), unfixed}},
+	}, nil, analyze.Triage{}, genTime.AddDate(0, 0, 1))
+	d, _ := state.Compute(st, r)
+	if len(d.Changes) != 1 || d.Changes[0].Kind != state.KindNewCVEs || len(d.Changes[0].Groups) != 2 {
+		t.Fatalf("fixture must yield one new_cves change with two groups: %+v", d.Changes)
+	}
+
+	out := FormatSlackDiffText(r, d, false, false)
+	for _, want := range []string{
+		"   • openssl 1.0 → 1.1 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> HIGH\n",
+		"   • openssl 1.0 (no fix available) (CRITICAL 0 / HIGH 1) — new: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing line:\n%s\nin output:\n%s", want, out)
+		}
+	}
+	if strings.Count(out, "new: ") != 1 {
+		t.Errorf("the new id must be listed exactly once:\n%s", out)
+	}
+}
+
 func TestBuildWebhookPayload_Diff(t *testing.T) {
 	r, d := diffFixture()
 	data, err := json.Marshal(BuildWebhookPayload(r, &d))
@@ -267,6 +346,29 @@ func TestBuildWebhookPayload_Diff(t *testing.T) {
 	// Full sections must still be present alongside the diff.
 	if _, ok := p["actionable"]; !ok {
 		t.Error("payload must keep full sections in diff mode")
+	}
+}
+
+// The webhook diff payload carries the new CVE ids themselves (plain, no
+// Slack link markup), alongside the pre-existing count.
+func TestBuildWebhookPayload_NewCVEIDs(t *testing.T) {
+	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{
+		{Image: "web:1", Findings: []scanner.Finding{opensslFinding("CVE-1")}},
+	}, nil, analyze.Triage{}, genTime))
+	r := analyze.Build([]scanner.ImageScan{
+		{Image: "web:1", Findings: []scanner.Finding{opensslFinding("CVE-1"), opensslFinding("CVE-2")}},
+	}, nil, analyze.Triage{}, genTime.AddDate(0, 0, 1))
+	d, _ := state.Compute(st, r)
+
+	data, err := json.Marshal(BuildWebhookPayload(r, &d))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"new_cve_ids":["CVE-2"]`) {
+		t.Errorf("expected new_cve_ids in the diff payload:\n%s", data)
+	}
+	if strings.Contains(string(data), "nvd.nist.gov") {
+		t.Errorf("new_cve_ids must be plain ids, no Slack link markup:\n%s", data)
 	}
 }
 

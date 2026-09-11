@@ -4,6 +4,9 @@
 /site/
 /.venv/
 
+# Python documentation hooks
+__pycache__/
+
 # Local config (never commit real webhook URLs)
 config.yml
 

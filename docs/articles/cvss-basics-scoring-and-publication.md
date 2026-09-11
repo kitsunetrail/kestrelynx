@@ -319,9 +319,9 @@ under FIRST's terms of use.
 
 ---
 
-KestreLynx is a lightweight, open-source agent that scans images running on a
-Docker host and reports vulnerability changes that require attention. It
-combines Trivy scan results with CISA KEV and EPSS data to classify findings
-into urgent issues and noise.
+KestreLynx is a lightweight, open-source agent that scans images used by
+running containers in Docker or Kubernetes and reports vulnerability changes
+that require attention. It combines Trivy scan results with CISA KEV and
+EPSS data to classify findings into urgent issues and noise.
 
 [Learn more about KestreLynx](../index.md) · [View the source on GitHub](https://github.com/kitsunetrail/kestrelynx)

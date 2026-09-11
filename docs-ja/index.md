@@ -1,6 +1,6 @@
-# Dockerイメージの脆弱性通知
+# Docker・Kubernetesのコンテナイメージの脆弱性通知
 
-KestreLynxは、Dockerホストで現在稼働しているイメージをスキャンし、
+KestreLynxは、DockerまたはKubernetesで稼働中のコンテナが使用するイメージをスキャンし、
 対応が必要な脆弱性の変化を通知する軽量なオープンソースエージェントです。
 
 毎日同じスキャン結果をすべて送るのではなく、**新規検出**、**解消**、
@@ -14,5 +14,7 @@ KestreLynxは、Dockerホストで現在稼働しているイメージをスキ�
 - :material-hammer-wrench: [開発ログ](development/index.md)
 - :material-book-open-page-variant-outline: [技術記事](articles/index.md)
 
-!!! warning "初期リリース"
-    KestreLynxは現在、DockerホストのCVE通知に重点を置いたMVPです。
+!!! info "Kubernetes対応の検証範囲"
+    Kubernetesでの発見・スキャン・通知は、
+    linux/amd64の単一ノードK3sとcontainerdで検証済みです。
+    未検証の構成を含む詳細は、[検証記録と制約](development/kubernetes-support.md)を参照してください。

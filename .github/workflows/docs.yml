@@ -12,6 +12,7 @@ on:
       - "requirements-docs.txt"
       - "scripts/docs_alternates.py"
       - "scripts/check_doc_alternates.py"
+      - "scripts/docs_indexnow.py"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
@@ -23,8 +24,14 @@ on:
       - "requirements-docs.txt"
       - "scripts/docs_alternates.py"
       - "scripts/check_doc_alternates.py"
+      - "scripts/docs_indexnow.py"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
+    inputs:
+      indexnow_resend_all:
+        description: "Submit every page to IndexNow instead of only the changed ones"
+        type: boolean
+        default: false
 
 concurrency:
   group: pages
@@ -49,6 +56,24 @@ jobs:
           mkdocs build --strict
           mkdocs build --strict --config-file mkdocs.ja.yml
           python scripts/check_doc_alternates.py site
+      - name: Compute IndexNow changes
+        # Writes site/indexnow-manifest.json for the next build and lists the
+        # URLs that changed since the manifest currently published. Without
+        # --previous every page is listed, which recovers from a failed submission.
+        env:
+          RESEND_ALL: ${{ inputs.indexnow_resend_all == true }}
+        run: |
+          previous=(--previous https://kestrelynx.dev/indexnow-manifest.json)
+          if [ "$RESEND_ALL" = "true" ]; then previous=(); fi
+          python scripts/docs_indexnow.py diff site "${previous[@]}" \
+            --output indexnow-changes.json
+      - name: Upload IndexNow changes
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: indexnow-changes
+          path: indexnow-changes.json
+          retention-days: 1
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
@@ -63,6 +88,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
@@ -72,24 +98,16 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/docs_indexnow.py
+          sparse-checkout-cone-mode: false
+      - name: Download IndexNow changes
+        uses: actions/download-artifact@v4
+        with:
+          name: indexnow-changes
       - name: Notify IndexNow
         continue-on-error: true
-        shell: bash
         run: |
-          en_sitemap=$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 https://kestrelynx.dev/sitemap.xml)
-          ja_sitemap=$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 https://kestrelynx.dev/ja/sitemap.xml)
-          urls=$(printf '%s\n%s\n' "$en_sitemap" "$ja_sitemap" \
-            | grep -o '<loc>[^<]*</loc>' | sed 's|</\?loc>||g' | jq -R . | jq -s .)
-          test "$(jq 'length' <<<"$urls")" -gt 0
-          payload=$(jq -n --argjson urls "$urls" '{
-            host: "kestrelynx.dev",
-            key: "c118876f78a02513746eb9fc5da2cf5c",
-            keyLocation: "https://kestrelynx.dev/c118876f78a02513746eb9fc5da2cf5c.txt",
-            urlList: $urls
-          }')
-          code=$(curl --silent --output /dev/null --write-out "%{http_code}" \
-            --connect-timeout 10 --max-time 30 \
-            -X POST "https://api.indexnow.org/indexnow" \
-            -H "Content-Type: application/json; charset=utf-8" -d "$payload")
-          echo "IndexNow response: HTTP $code"
-          test "$code" = "200" -o "$code" = "202"
+          python3 scripts/docs_indexnow.py submit indexnow-changes.json \
+            --host kestrelynx.dev --key c118876f78a02513746eb9fc5da2cf5c

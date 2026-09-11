@@ -1,3 +1,7 @@
+---
+description: "Understand Trivy scan coverage and read JSON findings, fix status, and severity sources. Combine results with KEV and EPSS to prioritize remediation."
+---
+
 # Trivy Basics and How to Read Scan Results
 
 Published: September 10, 2026

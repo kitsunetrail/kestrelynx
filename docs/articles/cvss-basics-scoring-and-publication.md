@@ -1,3 +1,7 @@
+---
+description: "Understand CVSS severity, scoring and publication, v4.0 metric groups, and how to check assessment sources, scores, and vector strings in NVD."
+---
+
 # CVSS Basics and the Scoring and Publication Process
 
 Published: September 8, 2026

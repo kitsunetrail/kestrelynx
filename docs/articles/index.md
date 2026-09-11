@@ -1,3 +1,7 @@
+---
+description: "Technical guides to CVE, KEV, EPSS, CVSS, and Trivy. Understand vulnerability data, read scan results, and prioritize remediation."
+---
+
 # Technical Articles
 
 This section covers foundational knowledge, operational practices, and related security technologies.

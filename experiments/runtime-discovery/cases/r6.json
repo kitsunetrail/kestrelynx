@@ -1,0 +1,13 @@
+{
+  "case_id": "R6",
+  "image": "kl-r6",
+  "expected": [
+    {
+      "package": "libc6",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the server binary is dynamically linked against glibc"
+    }
+  ]
+}

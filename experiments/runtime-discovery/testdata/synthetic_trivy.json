@@ -1,0 +1,65 @@
+{
+  "SchemaVersion": 2,
+  "ArtifactName": "kl-synthetic:1",
+  "Metadata": {
+    "OS": { "Family": "debian", "Name": "12.5", "EOSL": false },
+    "ImageID": "sha256:030688c3b2961c28a9acad68958fd13c8d81665458b8ab69fdc0a5d95ec8ade0",
+    "RepoDigests": ["kl-synthetic@sha256:57f3d77ca0abdf13cef1c849cc0bc3f8de9357b1c4876f8db76672d244c1065a"],
+    "ImageConfig": { "architecture": "amd64", "os": "linux" }
+  },
+  "Results": [
+    {
+      "Class": "os-pkgs",
+      "Type": "debian",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2024-0001",
+          "PkgName": "libssl3",
+          "InstalledVersion": "3.0.13-1~deb12u1",
+          "FixedVersion": "3.0.14-1~deb12u1",
+          "Status": "fixed",
+          "Severity": "CRITICAL",
+          "PrimaryURL": "https://example.invalid/CVE-2024-0001",
+          "Title": "synthetic critical libssl3 vulnerability"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-0002",
+          "PkgName": "libssl3",
+          "InstalledVersion": "3.0.13-1~deb12u1",
+          "FixedVersion": "3.0.14-1~deb12u1",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://example.invalid/CVE-2024-0002",
+          "Title": "synthetic high libssl3 vulnerability"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-0003",
+          "PkgName": "gzip",
+          "InstalledVersion": "1.12-1",
+          "FixedVersion": "1.12-1.1",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://example.invalid/CVE-2024-0003",
+          "Title": "synthetic high gzip vulnerability (never invoked by nginx)"
+        }
+      ]
+    },
+    {
+      "Class": "lang-pkgs",
+      "Type": "python-pkg",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2024-0004",
+          "PkgName": "cryptography",
+          "PkgPath": "usr/local/lib/python3.9/site-packages/cryptography-3.3.2.dist-info/METADATA",
+          "InstalledVersion": "3.3.2",
+          "FixedVersion": "39.0.1",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://example.invalid/CVE-2024-0004",
+          "Title": "synthetic lang-pkg vulnerability, unmatchable by path (PkgPath names a dist-info metadata file, not a mapped .so)"
+        }
+      ]
+    }
+  ]
+}

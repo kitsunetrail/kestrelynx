@@ -1,0 +1,327 @@
+{
+  "subject": {
+    "runtime": "docker",
+    "docker": {
+      "container_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "container_name": "r1-synthetic",
+      "image_ref": "kl-synthetic:1",
+      "image_id": "sha256:030688c3b2961c28a9acad68958fd13c8d81665458b8ab69fdc0a5d95ec8ade0"
+    },
+    "kubernetes": {
+      "namespace": "",
+      "pod": "",
+      "container": ""
+    },
+    "started_at": "2026-09-11T00:00:00Z"
+  },
+  "run_key": {
+    "case_variant": "SYNTH-1",
+    "permission": "root",
+    "interval_seconds": 30,
+    "window_seconds": 60,
+    "phase_seconds": 0,
+    "replicate": 1
+  },
+  "window": {
+    "id": "w-synthetic-1",
+    "scheduled_start": "2026-09-11T00:00:00Z",
+    "scheduled_end": "2026-09-11T00:01:00Z",
+    "host_arch": "amd64",
+    "samples": [
+      {
+        "sample_id": "s0",
+        "index": 0,
+        "scheduled_start": "2026-09-11T00:00:00Z",
+        "actual_start": "2026-09-11T00:00:00Z",
+        "delay_ms": 0,
+        "ended_at": "2026-09-11T00:00:01Z"
+      },
+      {
+        "sample_id": "s1",
+        "index": 1,
+        "scheduled_start": "2026-09-11T00:00:30Z",
+        "actual_start": "2026-09-11T00:00:30Z",
+        "delay_ms": 0,
+        "ended_at": "2026-09-11T00:00:31Z"
+      }
+    ],
+    "phase_base": "2026-09-11T00:00:00Z",
+    "phase_base_from": "flag"
+  },
+  "namespaces": [
+    {
+      "sample_id": "s0",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "net": "net:[4026531840]",
+      "mnt": "mnt:[4026531841]",
+      "user": "user:[4026531837]"
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "net": "net:[4026531840]",
+      "mnt": "mnt:[4026531841]",
+      "user": "user:[4026531837]"
+    }
+  ],
+  "processes": [
+    {
+      "sample_id": "s0",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "ppid": 1,
+      "user": "root",
+      "exe": "/usr/sbin/nginx",
+      "exe_deleted": false,
+      "effective_uid": "0",
+      "cap_eff": "0000003fffffffff",
+      "invalid": false
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "ppid": 1,
+      "user": "root",
+      "exe": "/usr/sbin/nginx",
+      "exe_deleted": false,
+      "maps": [
+        {
+          "path": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+          "dev": "08:01",
+          "inode": "131099",
+          "perms": "r-xp",
+          "deleted": false
+        },
+        {
+          "path": "/usr/lib/x86_64-linux-gnu/libpcre2-8.so.0",
+          "dev": "08:01",
+          "inode": "131100",
+          "perms": "r-xp",
+          "deleted": false
+        }
+      ],
+      "effective_uid": "0",
+      "cap_eff": "0000003fffffffff",
+      "invalid": false
+    }
+  ],
+  "path_resolution": [
+    {
+      "sample_id": "s0",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "path": "/usr/sbin/nginx",
+      "resolved": "/usr/sbin/nginx",
+      "maps_deleted": false,
+      "ownership": "owned",
+      "db_kind": "dpkg",
+      "package": "nginx",
+      "db_version": "1.27.0-1~bookworm",
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1"
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "path": "/usr/sbin/nginx",
+      "resolved": "/usr/sbin/nginx",
+      "maps_deleted": false,
+      "ownership": "owned",
+      "db_kind": "dpkg",
+      "package": "nginx",
+      "db_version": "1.27.0-1~bookworm",
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1"
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "path": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+      "resolved": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+      "dev": "08:01",
+      "inode": "131099",
+      "maps_deleted": false,
+      "ownership": "owned",
+      "db_kind": "dpkg",
+      "package": "libssl3",
+      "db_version": "3.0.13-1~deb12u1",
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1"
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "path": "/usr/lib/x86_64-linux-gnu/libpcre2-8.so.0",
+      "resolved": "/usr/lib/x86_64-linux-gnu/libpcre2-8.so.0",
+      "dev": "08:01",
+      "inode": "131100",
+      "maps_deleted": false,
+      "ownership": "unowned",
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1"
+    }
+  ],
+  "package_ledger": [
+    {
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "name": "nginx",
+      "version": "1.27.0-1~bookworm",
+      "arch": "amd64",
+      "file_list_present": true
+    },
+    {
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "name": "libssl3",
+      "version": "3.0.13-1~deb12u1",
+      "arch": "amd64",
+      "file_list_present": true
+    },
+    {
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "name": "gzip",
+      "version": "1.12-1",
+      "arch": "amd64",
+      "file_list_present": true
+    },
+    {
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "name": "pip",
+      "version": "21.0.1",
+      "arch": "amd64",
+      "file_list_present": true
+    }
+  ],
+  "pkgdb": [
+    {
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "db_kind": "dpkg",
+      "path": "/var/lib/dpkg/status",
+      "read_at": "2026-09-11T00:00:31Z",
+      "size_bytes": 4096,
+      "mod_time": "2026-09-10T00:00:00Z",
+      "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "file_list_complete": true
+    }
+  ],
+  "inode_calibration": {
+    "calibrated": false,
+    "error": "no unchanged-file candidate (e.g. libc) found among observed mappings"
+  },
+  "listeners": [
+    {
+      "sample_id": "s1",
+      "netns_id": "net:[4026531840]",
+      "protocol": "tcp",
+      "local_addr": "0.0.0.0",
+      "local_port": 80,
+      "inode": "500001",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "family": "ipv4",
+      "process_generations": [
+        {
+          "pid": 1001,
+          "starttime": "12345"
+        }
+      ]
+    }
+  ],
+  "docker": {
+    "network_mode": "bridge",
+    "port_bindings": {
+      "80/tcp": [
+        {
+          "host_ip": "0.0.0.0",
+          "host_port": "18080"
+        }
+      ]
+    },
+    "network_ports": {
+      "80/tcp": [
+        {
+          "host_ip": "0.0.0.0",
+          "host_port": "18080"
+        }
+      ]
+    },
+    "config_user": ""
+  },
+  "collection_results": [
+    {
+      "sample_id": "s0",
+      "proc_observe": "ok",
+      "pkgdb_read": "ok",
+      "valid": true,
+      "pkgdb_views": [
+        {
+          "mount_view_id": "mnt:[4026531841]",
+          "db_generation": "gen1",
+          "db_kind": "dpkg",
+          "pkgdb_read": "ok"
+        }
+      ]
+    },
+    {
+      "sample_id": "s1",
+      "proc_observe": "ok",
+      "pkgdb_read": "ok",
+      "valid": true,
+      "pkgdb_views": [
+        {
+          "mount_view_id": "mnt:[4026531841]",
+          "db_generation": "gen1",
+          "db_kind": "dpkg",
+          "pkgdb_read": "ok"
+        }
+      ]
+    }
+  ],
+  "load": {
+    "initial_db_read": {
+      "duration_ms": 12,
+      "bytes_read": 4096,
+      "file_count": 4,
+      "measured": true
+    },
+    "steady_state": {
+      "measured": false,
+      "error": "no cgroup v2 (0::) line in /proc/self/cgroup: not a unified hierarchy",
+      "memory_peak_measured": false,
+      "memory_error": "open /sys/fs/cgroup/memory.peak: no such file or directory"
+    },
+    "docker_daemon": {
+      "measured": false,
+      "error": "stat /sys/fs/cgroup/system.slice/docker.service/cpu.stat: no such file or directory",
+      "memory_peak_measured": false
+    }
+  }
+}

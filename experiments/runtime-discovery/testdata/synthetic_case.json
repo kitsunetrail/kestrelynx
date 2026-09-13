@@ -1,0 +1,32 @@
+{
+  "case_id": "SYNTH-1",
+  "image": "kl-synthetic:1",
+  "gt_b_scope": [
+    "libssl3",
+    "gzip"
+  ],
+  "expected": [
+    {
+      "package": "libssl3",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "nginx links libssl3; observed in sample 1's maps"
+    },
+    {
+      "package": "gzip",
+      "class": "os",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "rationale": "installed by the base image but never invoked by nginx"
+    },
+    {
+      "package": "cryptography",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "the extension module is loaded, but a lang-pkgs PkgPath names a dist-info metadata file that cannot be matched against an observed maps path, so the expected verdict differs from the declared usage"
+    }
+  ]
+}

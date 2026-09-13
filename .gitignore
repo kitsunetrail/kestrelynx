@@ -1,8 +1,14 @@
 # Built binary
 /kestrelynx
+# `go build ./experiments/runtime-discovery` (no -o given) drops its binary
+# here, named after its package directory.
+/runtime-discovery
 /out/
 /site/
 /.venv/
+
+# Runtime discovery measurement output (never commit collected observations)
+/experiments/runtime-discovery/out/
 
 # Python documentation hooks
 __pycache__/

@@ -1,0 +1,8 @@
+{
+  "case_id": "SYNTH-1",
+  "kind": "limited",
+  "resident_packages": [
+    { "package": "libssl3", "version": "3.0.13-1~deb12u1", "used": true },
+    { "package": "gzip", "version": "1.12-1", "used": false }
+  ]
+}

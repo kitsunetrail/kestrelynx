@@ -24,8 +24,8 @@ nav:
       - 仕組み: documentation/how-it-works.md
   - 開発ログ:
       - 概要: development/index.md
-      - 実行時証拠の優先順位付け調査: development/runtime-prioritization.md
       - eBPFによる実行時証拠の観測調査: development/runtime-event-evidence.md
+      - 実行時証拠の優先順位付け調査: development/runtime-prioritization.md
       - Kubernetes対応の開発: development/kubernetes-support.md
       - Kubernetesスキャンツール調査: development/kubernetes-scanning-landscape.md
       - 修正関係モデル: development/remediation-relations-model.md

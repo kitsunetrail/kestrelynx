@@ -4,9 +4,9 @@
 
 開発ログは検討・実装の過程の記録です。現在利用できる機能の導入・運用方法は[ドキュメント](../documentation/index.md)を参照してください。
 
+- [eBPFによる実行時証拠の観測調査](runtime-event-evidence.md) — サンプリングでは確認できなかった短命プロセスと言語パッケージを、eBPF による実行と読み込みのイベント観測で確認できるかの調査
 - [実行時証拠による優先順位付けの成立性調査](runtime-prioritization.md) — プロセス・待ち受けポート・権限を
   脆弱性の検出結果に紐づけ、優先順位付けの改善に使えるかを検証する調査(調査中)
-- [eBPFによる実行時証拠の観測調査](runtime-event-evidence.md) — サンプリングでは確認できなかった短命プロセスと言語パッケージを、eBPF による実行と読み込みのイベント観測で確認できるかの調査
 - [Kubernetes対応の開発](kubernetes-support.md) — K3s + containerdを出発点に、KubernetesのWorkloadを
   スキャン・優先順位付け・差分通知へつなぐ実装(実装済み・K3s実環境でエンドツーエンド検証済み)
 - [Kubernetes向け脆弱性スキャンツールの調査](kubernetes-scanning-landscape.md) — Kubernetes対応に着手する前に、

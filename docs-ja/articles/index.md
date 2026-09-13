@@ -16,3 +16,4 @@ description: "CVE・KEV・EPSS・CVSSの基礎からTrivyのスキャン結果�
   NVDでのスコアとベクター文字列の確認方法を記載
 - 2026年9月10日 — [Trivyの基礎とスキャン結果の読み方](trivy-basics-scan-results-ja.md) — Trivyのスキャン対象、
   JSON出力の読み方、脆弱性管理で利用する際の注意点を記載
+- 2026年9月13日 — [procfsで稼働中コンテナのプロセスをOSパッケージに紐づける方法](procfs-process-to-package-mapping-ja.md) — コンテナのホスト側PIDの取得、/proc配下のexe・maps・status・ソケットの読み方、dpkg・apk・distrolessへのパス解決、実イメージで見つかった注意点と権限の計測結果

@@ -16,3 +16,5 @@ This section covers foundational knowledge, operational practices, and related s
   how assessments are scored and published, and how to check scores and vector strings in NVD
 - September 10, 2026 — [Trivy Basics and How to Read Scan Results](trivy-basics-scan-results.md) — what Trivy scans,
   how to read its JSON output, and considerations when using scan results for vulnerability management
+- September 13, 2026 — [How to Map Running Container Processes to OS Packages with procfs](procfs-process-to-package-mapping.md) — how to find a container's host PIDs,
+  read exe, maps, status and sockets under /proc, resolve paths to dpkg, apk and distroless packages, and the pitfalls and permission checks measured on real images

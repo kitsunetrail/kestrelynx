@@ -63,6 +63,7 @@ nav:
       - EPSS Basics and How to Check Scores: articles/epss-exploit-prediction-scoring-system.md
       - CVSS Basics and the Scoring and Publication Process: articles/cvss-basics-scoring-and-publication.md
       - Trivy Basics and How to Read Scan Results: articles/trivy-basics-scan-results.md
+      - How to Map Running Container Processes to OS Packages with procfs: articles/procfs-process-to-package-mapping.md
 
 plugins:
   - search

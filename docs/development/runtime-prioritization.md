@@ -1,14 +1,12 @@
 # Runtime Evidence Prioritization: Feasibility Research
 
-- **Status:** Stage 1 measured, stage 2 investigation planned
+- **Status:** Verification complete
 - **Started:** 2026-09-09
 - **Last updated:** 2026-09-13
 
-## Purpose and motivation
+## Purpose
 
 Investigate whether runtime evidence can be linked to vulnerability findings accurately enough to improve prioritization.
-
-**This capability is not part of current KestreLynx.** This investigation does not promise a user-facing release. If the requirements below cannot be satisfied, the runtime feature will be dropped rather than shipped in a degraded form.
 
 This page records the initial plan. Experiments, results, limitations, and decisions will be appended as the investigation proceeds.
 
@@ -178,9 +176,9 @@ See the [harness README](https://github.com/kitsunetrail/kestrelynx/blob/main/ex
 
 ## Decision (2026-09-13)
 
-- **Proceed to stage 2 investigation**
+- **Proceed to [Runtime Evidence Observation with eBPF: Feasibility Research](runtime-event-evidence.md)**
     - Prioritization of HIGH/CRITICAL findings did not improve in this production sample, so investigate how to confirm use by short-lived processes and use of language packages.
-    - Begin the investigation while the stage 2 entry conditions remain unevaluated, retaining the principle that missing evidence never lowers priority.
+    - Begin the investigation while the entry conditions for eBPF-based event observation remain unevaluated, retaining the principle that missing evidence never lowers priority.
 - **Design leads**
     - For static Go, consider matching the binary detected by Trivy to the running file.
     - For JVM, consider confirming use through files kept open, and for Node.js, through records of when files were opened.
@@ -202,9 +200,9 @@ See the [harness README](https://github.com/kitsunetrail/kestrelynx/blob/main/ex
 
 ### 2026-09-13
 
-- **Recorded stage 1 results**
+- **Recorded results from the sampling investigation**
     - Added the verification method, results, required permissions, load, production sample, fixed defects, and remaining limitations.
-- **Defined the stage 2 investigation approach**
+- **Defined the approach for investigating eBPF-based event observation**
     - Begin investigating how to confirm use by short-lived processes and use of language packages while entry conditions remain unevaluated.
 
 ### 2026-09-10

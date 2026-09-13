@@ -7,6 +7,8 @@ For instructions on currently available features, see [Documentation](../documen
 
 - [Runtime evidence prioritization: feasibility research](runtime-prioritization.md) — investigating whether processes,
   listening ports, and privileges can be linked to vulnerability findings to improve prioritization (research in progress)
+- [Runtime evidence observation with eBPF: feasibility research](runtime-event-evidence.md) — whether eBPF-based execution and
+  file-loading events can confirm the short-lived programs and language packages that sampling could not
 - [Developing Kubernetes support](kubernetes-support.md) — connecting Kubernetes workloads to scanning, prioritization,
   and diff notifications, starting with K3s + containerd (implemented; verified end to end on a real K3s cluster)
 - [The Kubernetes vulnerability scanning landscape](kubernetes-scanning-landscape.md) — what existing tools already

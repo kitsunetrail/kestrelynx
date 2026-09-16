@@ -1,0 +1,13 @@
+{
+  "case_id": "11",
+  "image": "nginxinc/nginx-unprivileged:1.27-alpine",
+  "expected": [
+    {
+      "package": "musl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "every process in an Alpine-based nginx image links musl libc"
+    }
+  ]
+}

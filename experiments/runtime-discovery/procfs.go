@@ -241,36 +241,6 @@ func readNetTCPListens(path string) ([]netTCPListen, error) {
 // (man 5 proc_pid_fd: "socket:[<inode>]").
 var socketInodeRE = regexp.MustCompile(`^socket:\[(\d+)\]$`)
 
-// socketInodesForPID returns the set of socket inodes open in the given
-// PID's file descriptor table (man 5 proc_pid_fd), used to correlate a
-// listening socket back to the process that owns it. fdErrors carries one
-// message (including the underlying errno, e.g. "permission denied") per fd
-// whose readlink failed; a failure on one fd does not abort the rest of the
-// table, but it is never silently dropped either — the caller decides
-// whether an EACCES-heavy result should be treated with suspicion.
-func socketInodesForPID(pid int) (inodes map[string]bool, fdErrors []string, err error) {
-	dir := fmt.Sprintf("/proc/%d/fd", pid)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, nil, err
-	}
-	inodes = map[string]bool{}
-	for _, e := range entries {
-		target, lerr := os.Readlink(dir + "/" + e.Name())
-		if lerr != nil {
-			// Includes the ordinary race of a fd closing between ReadDir
-			// and Readlink (ENOENT) as well as genuine access failures
-			// (EACCES); both are recorded rather than silently dropped.
-			fdErrors = append(fdErrors, fmt.Sprintf("fd %s: %v", e.Name(), lerr))
-			continue
-		}
-		if m := socketInodeRE.FindStringSubmatch(target); m != nil {
-			inodes[m[1]] = true
-		}
-	}
-	return inodes, fdErrors, nil
-}
-
 // cgroupContainsID reports whether /proc/<pid>/cgroup's contents mention the
 // given container ID (or its short 12-character form) — corroboration that
 // a Docker-API-reported PID actually belongs to that container. It is

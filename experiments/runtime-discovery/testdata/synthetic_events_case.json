@@ -1,0 +1,75 @@
+{
+  "case_id": "SYNTH-EV",
+  "image": "kl-synthetic-events:1",
+  "gt_b_scope": [
+    "libssl3",
+    "gzip",
+    "lodash",
+    "cryptography",
+    "org.apache.logging.log4j:log4j-core",
+    "golang.org/x/text",
+    "stdlib",
+    "curl"
+  ],
+  "expected": [
+    {
+      "package": "libssl3",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "mapped by the running process and resolvable through the container's own package database"
+    },
+    {
+      "package": "gzip",
+      "class": "os",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "rationale": "installed by the base image and never touched"
+    },
+    {
+      "package": "golang.org/x/text",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "compiled into the binary that runs, so it really is in use; the expected verdict is what the first stage's rules alone produce"
+    },
+    {
+      "package": "cryptography",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "its compiled extension is mapped, so the read-only mapping is expected to reach it without any event collection"
+    },
+    {
+      "package": "org.apache.logging.log4j:log4j-core",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "held open by the running process, so an open descriptor is expected to reach it without any event collection"
+    },
+    {
+      "package": "lodash",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "read and closed, so it appears in neither the descriptors nor the mappings and only an event reaches it"
+    },
+    {
+      "package": "curl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "no_observation",
+      "factor_hint": "short_lived",
+      "rationale": "run briefly between two samples, so no sample catches it. The scan report carries no path for an operating-system package, so reaching it needs the container's own package path index as it was saved \u2014 which is what the execution record is matched through"
+    }
+  ],
+  "fixture_notes": {
+    "purpose": "a written-by-hand window used to check the whole pipeline end to end: one package per mapping rule, one package that is used and reachable only through an event, and one that is installed and never touched",
+    "system_call_level_truth": "none; the system-call capture rate is reported as unavailable"
+  }
+}

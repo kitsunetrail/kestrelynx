@@ -1,8 +1,8 @@
 # Runtime Evidence Observation with eBPF: Feasibility Research
 
-- **Status:** Investigating
+- **Status:** Verification complete
 - **Started:** 2026-09-13
-- **Last updated:** 2026-09-13
+- **Last updated:** 2026-09-16
 
 ## Purpose
 
@@ -148,14 +148,117 @@ Extend the tooling described in the [harness README for the sampling investigati
     - Document Docker access and sampling privileges alongside event-observation privileges to show the combined requirements.
     - Record tested kernel features, active security restrictions, and resource limits without treating root access as a guarantee of success.
 
+## Results (2026-09-16)
+
+Event evidence linked findings for short-lived curl and git processes and Node.js dependencies to observed use where the previous methods could not, but coverage depends on when observation starts and whether records are lost.
+
+Tests ran on a development machine using WSL2, Linux 6.6, bpftrace 0.25, and root privileges, with five-minute observation windows and one to three runs per case.
+
+**Findings linked to evidence of use**
+
+- **Total findings**: All HIGH/CRITICAL findings from Trivy's scan of the image for that case.
+- **Packages used**: Packages independently established as used from the independent log (the record the program inside the container keeps, separately from the observation tools, of what it executed or loaded and when), with their names.
+- **Their findings**: HIGH/CRITICAL findings belonging to the packages used, which is the upper bound linkable in that case.
+- **Confirmations by each method**: Findings linked by each method to evidence that a file belonging to the package was executed or loaded during the observation window.
+
+“Confirmations / findings in used packages” measures how completely findings were linked, while “confirmations / total findings” measures the share of all findings that gained evidence.
+
+Programs inside the container independently logged executed files, loaded libraries, imported or required modules, and opened jars. These records were matched to package ownership information from the OS package database, Python's RECORD, Node.js's package.json, jar pom.properties, and metadata embedded in Go binaries to independently establish which packages were used.
+
+git was also used, but it contributed no HIGH/CRITICAL findings to the counts.
+
+The comparison uses three methods, with each column adding evidence to the methods on its left.
+
+- **Previous rules**: The method used in [Runtime Evidence Prioritization: Feasibility Research](runtime-prioritization.md) periodically inspects processes through procfs and links executables and loaded libraries to OS packages.
+- **Read-only additions**: Without eBPF, this method expands mapping through information readable from procfs, covering module information embedded in Go binaries, jars held open by the JVM, and Python extension mappings.
+- **Event evidence**: This method uses eBPF to record execution and file-opening events and link them to findings.
+
+This table compares total findings, findings in used packages, and confirmations by each method when observation started before the workload.
+
+| Container behavior | Total findings | Packages used | Their findings | Previous rules | Additions | Event evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| Runs curl and git every five seconds, with each process lasting a few milliseconds | 101 | 5 (curl, libcurl4, and 3 dependency libraries) | 14 | 0 | 0 | 14 |
+| Repeatedly loads and unloads a shared library | 61 | 1 (libsqlite3) | 3 | 3 | 3 | 3 |
+| Python imports cryptography, with and without a cache | 61 | 1 (cryptography) | 5 | 0 | 5 | 5 |
+| Node.js requires lodash, using npm | 17 | 1 (lodash) | 4 | 0 | 0 | 4 |
+| Node.js requires lodash, using pnpm | 47 | 1 (lodash) | 4 | 0 | 0 | 4 |
+| Java loads a log4j-core jar, using ordinary jar, fat jar, and delayed-loading setups | 11 | 1 (log4j-core) | 3 | 0 | 3 | 3 |
+| Runs a static Go binary | 62 | 1 (golang.org/x/text) | 4 | 0 | 4 | 4 |
+
+- Including event evidence linked every finding in used packages in every case.
+- Only event evidence linked the 14 findings in the short-lived curl and git case and the 4 findings in each Node.js setup.
+- When observation starts after the workload, Node.js's one-time require has already finished. Confirmations fall to 0 of the 4 findings in used packages for both npm and pnpm, even with event evidence. All other confirmation counts, including Python's, remain unchanged.
+
+**Capture of individual executions and loads**
+
+In the table, occurrences are the eligible executions or loads recorded in an independent log, and captured counts those matched one-to-one with eBPF records.
+
+This table shows how many individual executions and loads were captured when observation started before the workload.
+
+| Activity inside the container | Captured / occurrences |
+| --- | --- |
+| Runs curl and git every five seconds, with each process lasting a few milliseconds | 116/116 |
+| Repeatedly loads and unloads a shared library | 22/22 |
+| Python imports cryptography, with and without a cache | 1/1 each |
+| Node.js requires lodash, using npm and pnpm | 1/1 each |
+| Runs a static Go binary with embedded dependency modules | 1/1 |
+
+- Short-lived curl and git executions also reached 116/116 when observation started after the workload.
+- Java jar loading is excluded because its independent logs lack thread identity.
+- Capturing every eligible occurrence does not establish loss-free collection, and this rate is separate from the share of findings linked to evidence of use.
+
+**Container attribution**
+
+Attribution determines which container a recorded execution belongs to; in the table, correctly attributed counts executions assigned to the right container, and executions counts those recorded in an independent log.
+
+This table shows attribution in runs without collection losses, using two containers from the same image separately or concurrently.
+
+| Execution setup | Correct / logged |
+| --- | --- |
+| Each container runs separately | 116/116 each |
+| Both containers run concurrently | 232/232, 236/236 |
+
+- All independently logged executions in these conditions were attributed correctly, with concurrent counts combining both containers without duplication.
+- In tests running the same program on the host, all 41 and 48 host executions remained unattributed to any container.
+- The matching method cannot evaluate the rate of confusion between containers, so these results do not establish that rate.
+
+**Recording buffers and losses**
+
+The memory area where the kernel-side observation program writes each event and holds it until the collection tool reads it is called the recording buffer. When events arrive faster than they are read, the area fills and the overflow is lost.
+
+This table shows how many events were lost to recording-buffer overflow at each buffer capacity.
+
+| Observed workload | Buffer pages | Lost events |
+| --- | --- | --- |
+| Repeated short-lived curl and git executions | 64 | 2763–2790 |
+| Repeated short-lived curl and git executions | 256 | 0–12 |
+| Repeated short-lived curl and git executions | 512 | 0 |
+| Two containers from the same image running concurrently | 256 | 1465 |
+| Two containers from the same image running concurrently | 512 | 0 |
+| Python importing cryptography without a cache | 256 | 66 |
+| Python importing cryptography without a cache | 512 | 0 |
+| All other cases | 256 | 0 |
+
+- Increasing the buffer to 512 pages produced zero losses in the measured runs for short-lived curl and git, concurrent containers, and Python without a cache.
+- Only measurements with zero losses are treated as complete observation windows.
+- Each case had only one to three runs, so a capacity that produced zero losses here may behave differently under other environments or loads.
+
+**Lessons from the test environment**
+
+- Kernel-side path filters exceeded verifier limits and could not load, so paths were filtered after recording.
+- Nested PID namespaces gave the observer and workload different process numbers, so matching used process numbers within the namespace together with the namespace identity.
+- Alpine with musl uses a legacy file-opening mechanism, making its activity invisible when only newer mechanisms are observed.
+- Buffer capacity affects losses, so capture rates must be read alongside loss records.
+
 ## Next steps
 
 - **Prepare and measure**
-    - Extend saved-data collection and independent application logs, then measure the additions that require no event tracing.
-    - Run the existing tracing tool and assess both finding confirmation and occurrence capture.
+    - Done: Read-only additions were measured.
+    - Done: Existing tracing tools measured finding confirmation and capture of individual executions and loads.
+    - Pending: Verification in a production-equivalent environment remains.
 - **Evaluate the next implementation step**
-    - Build the minimal observer only after event-derived results support proceeding, then measure privileges and overhead.
-    - Publish results, limitations, and remaining user-acceptance questions before deciding whether to integrate, narrow, or stop the investigation.
+    - Pending: A minimal dedicated CO-RE program remains to be built and used to measure minimum privileges and overhead.
+    - Pending: Results, limitations, and questions about what users will accept remain to be published before deciding whether to proceed with implementation.
 
 ## Change log
 
@@ -163,6 +266,16 @@ Extend the tooling described in the [harness README for the sampling investigati
 
 - **Investigation planned**
     - Recorded the staged approach, validation questions, scope, and verification plan before starting measurements for this investigation.
+
+### 2026-09-16
+
+- **Recorded development-environment measurements**
+    - Added finding confirmations, occurrence capture, attribution, collection losses, and lessons from the development environment.
+- **Recorded work status**
+    - Recorded completed preparation and measurements.
+    - Recorded pending minimum-privilege, overhead, production-equivalent environment, and production-sample observation and reporting work.
+    - Recorded conditional CO-RE implementation and measurement work.
+    - Recorded pending publication of unresolved questions before a decision.
 
 ---
 

@@ -17,3 +17,5 @@ description: "CVE・KEV・EPSS・CVSSの基礎からTrivyのスキャン結果�
 - 2026年9月10日 — [Trivyの基礎とスキャン結果の読み方](trivy-basics-scan-results-ja.md) — Trivyのスキャン対象、
   JSON出力の読み方、脆弱性管理で利用する際の注意点を記載
 - 2026年9月13日 — [procfsで稼働中コンテナのプロセスをOSパッケージに紐づける方法](procfs-process-to-package-mapping-ja.md) — コンテナのホスト側PIDの取得、/proc配下のexe・maps・status・ソケットの読み方、dpkg・apk・distrolessへのパス解決、実イメージで見つかった注意点と権限の計測結果
+- 2026年9月16日 — [コンテナの脆弱性スキャン結果のうち実際に動いているパッケージの見分け方](which-container-scan-findings-are-actually-running-ja.md) — スキャン結果と読み込み済みOSパッケージの対応を調べた計測結果、
+  サンプリングの限界、実行時証拠をKEV・EPSSと組み合わせて優先順位を判断する方法

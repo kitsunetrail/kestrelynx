@@ -391,6 +391,136 @@ func TestBuildGTBTruthExitStatusDoesNotDiscardEndpoint(t *testing.T) {
 	}
 }
 
+// TestBuildGTBTruthUnownedPathDoesNotBlockCompleteness covers the
+// distinction between a path the independent resolution could not map and
+// one it confirmed belongs to no package at all (the workload's own
+// binary, say): only the first should withdraw the completeness guarantee
+// from every package in the case's scope.
+func TestBuildGTBTruthUnownedPathDoesNotBlockCompleteness(t *testing.T) {
+	windowStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	windowEnd := windowStart.Add(300 * time.Second)
+	gtb := &GroundTruthB{
+		Kind: "usage_log",
+		PathPackages: []PathPackage{
+			{Path: "/dlopen_loop", Unowned: true},
+			{Path: "/usr/lib/x86_64-linux-gnu/libsqlite3.so.0", Package: "libsqlite3-0"},
+		},
+		UsageLog: []UsageEvent{
+			{Timestamp: windowStart.Add(-60 * time.Second), PID: 1, Starttime: 5, Path: "/dlopen_loop", Event: "exec", OK: true},
+			// libsqlite3-0 is never opened anywhere in this log.
+		},
+	}
+	truth := buildGTBTruth(gtb, scopeSet([]string{"libsqlite3-0"}), windowStart, windowEnd)
+	if !truth.Covered["libsqlite3-0"] || truth.Used["libsqlite3-0"] {
+		t.Fatalf("libsqlite3-0: covered=%v used=%v, want covered=true used=false: the unowned exec path must not make this undetermined",
+			truth.Covered["libsqlite3-0"], truth.Used["libsqlite3-0"])
+	}
+	if why := truth.UndeterminedWhy["libsqlite3-0"]; why != "" {
+		t.Errorf("libsqlite3-0: undetermined why=%q, want none", why)
+	}
+}
+
+// TestBuildGTBTruthEmptyPathPackageRecordDoesNotResolve covers a
+// PathPackages entry that names neither a package nor Unowned — an empty
+// {"path": "/x"} a bug elsewhere could produce. It must answer nothing,
+// not be mistaken for a confirmed absence of an owner.
+func TestBuildGTBTruthEmptyPathPackageRecordDoesNotResolve(t *testing.T) {
+	windowStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	windowEnd := windowStart.Add(300 * time.Second)
+	gtb := &GroundTruthB{
+		Kind: "usage_log",
+		PathPackages: []PathPackage{
+			{Path: "/x"}, // neither Package/Packages nor Unowned set
+			{Path: "/usr/lib/x86_64-linux-gnu/libsqlite3.so.0", Package: "libsqlite3-0"},
+		},
+		UsageLog: []UsageEvent{
+			{Timestamp: windowStart.Add(-60 * time.Second), PID: 1, Starttime: 5, Path: "/x", Event: "exec", OK: true},
+		},
+	}
+	truth := buildGTBTruth(gtb, scopeSet([]string{"libsqlite3-0"}), windowStart, windowEnd)
+	if truth.Covered["libsqlite3-0"] {
+		t.Error("libsqlite3-0: covered=true, want false: an empty PathPackages record must not certify completeness")
+	}
+	if truth.UndeterminedWhy["libsqlite3-0"] == "" {
+		t.Error("an undetermined package must record why it could not be decided")
+	}
+}
+
+// TestBuildGTBTruthEmptyPackagesListDoesNotResolve covers the same gap as
+// above, reached through an explicit but empty "packages" list instead of
+// an entirely empty record.
+func TestBuildGTBTruthEmptyPackagesListDoesNotResolve(t *testing.T) {
+	windowStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	windowEnd := windowStart.Add(300 * time.Second)
+	gtb := &GroundTruthB{
+		Kind: "usage_log",
+		PathPackages: []PathPackage{
+			{Path: "/x", Packages: []PackageRef{}},
+			{Path: "/usr/lib/x86_64-linux-gnu/libsqlite3.so.0", Package: "libsqlite3-0"},
+		},
+		UsageLog: []UsageEvent{
+			{Timestamp: windowStart.Add(-60 * time.Second), PID: 1, Starttime: 5, Path: "/x", Event: "exec", OK: true},
+		},
+	}
+	truth := buildGTBTruth(gtb, scopeSet([]string{"libsqlite3-0"}), windowStart, windowEnd)
+	if truth.Covered["libsqlite3-0"] {
+		t.Error("libsqlite3-0: covered=true, want false: an empty packages list must not certify completeness")
+	}
+}
+
+// TestBuildGTBTruthPackageAndUnownedTogetherIsUnsupported covers a record
+// that contradicts itself: a path cannot both belong to a named package
+// and be confirmed to belong to none. Neither claim is believed.
+func TestBuildGTBTruthPackageAndUnownedTogetherIsUnsupported(t *testing.T) {
+	windowStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	windowEnd := windowStart.Add(300 * time.Second)
+	gtb := &GroundTruthB{
+		Kind: "usage_log",
+		PathPackages: []PathPackage{
+			{Path: "/x", Package: "some-pkg", Unowned: true},
+			{Path: "/usr/lib/x86_64-linux-gnu/libsqlite3.so.0", Package: "libsqlite3-0"},
+		},
+		UsageLog: []UsageEvent{
+			{Timestamp: windowStart.Add(-60 * time.Second), PID: 1, Starttime: 5, Path: "/x", Event: "exec", OK: true},
+			{Timestamp: windowStart.Add(10 * time.Second), PID: 2, Path: "/x", Event: "open", OK: true},
+		},
+	}
+	truth := buildGTBTruth(gtb, scopeSet([]string{"libsqlite3-0", "some-pkg"}), windowStart, windowEnd)
+	if truth.Covered["libsqlite3-0"] {
+		t.Error("libsqlite3-0: covered=true, want false: the contradictory record must not certify completeness")
+	}
+	if truth.Used["some-pkg"] {
+		t.Error("some-pkg: used=true, want false: a contradictory record must not credit the package it names either")
+	}
+}
+
+// TestBuildGTBTruthMultiplePackagesOnOnePathBothCredited covers a fat
+// archive that packs more than one package's files into a single file: the
+// package the case's scope actually cares about is not necessarily the
+// one a plain single-package record would have named, so every package
+// listed on the path must be credited, not only the first.
+func TestBuildGTBTruthMultiplePackagesOnOnePathBothCredited(t *testing.T) {
+	windowStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	windowEnd := windowStart.Add(300 * time.Second)
+	gtb := &GroundTruthB{
+		Kind: "usage_log",
+		PathPackages: []PathPackage{
+			{Path: "/app/fat.jar", Packages: []PackageRef{
+				{Package: "org.apache.logging.log4j:log4j-api"},
+				{Package: "org.apache.logging.log4j:log4j-core"},
+			}},
+		},
+		UsageLog: []UsageEvent{
+			{Timestamp: windowStart.Add(10 * time.Second), PID: 1, Path: "/app/fat.jar", Event: "open", OK: true},
+		},
+	}
+	scope := scopeSet([]string{"org.apache.logging.log4j:log4j-core"})
+	truth := buildGTBTruth(gtb, scope, windowStart, windowEnd)
+	if !truth.Used["org.apache.logging.log4j:log4j-core"] {
+		t.Error("log4j-core: used=false, want true: it is one of the packages this path lists, not only the first")
+	}
+}
+
 func TestBuildGTBTruthOutOfScopeIsUndetermined(t *testing.T) {
 	// required test: a package outside gt_b_scope is always undetermined,
 	// even if the usage log happens to mention its path.
@@ -420,7 +550,7 @@ func TestInodeCalibrationNotEvaluated(t *testing.T) {
 	// values are observed.
 	rec := &PathResolutionRecord{}
 	cache := &containerPkgCache{calibration: InodeCalibration{Calibrated: false}}
-	got := resolvePathRecord("s0", ProcessGeneration{PID: 1}, t.TempDir(), "/usr/sbin/nginx", "08:01", "12345", false, cache)
+	got := resolvePathRecord("s0", ProcessGeneration{PID: 1}, t.TempDir(), "maps", "/usr/sbin/nginx", "08:01", "12345", false, cache)
 	if got.PathInodeChanged != nil {
 		t.Errorf("PathInodeChanged = %v, want nil (uncalibrated container must never evaluate it)", *got.PathInodeChanged)
 	}
@@ -675,7 +805,7 @@ func TestAggregatePathTallyDistinguishesInodes(t *testing.T) {
 // statusMixTrivyReport mirrors what a real Debian scan contains: Trivy
 // reports a vulnerability status per finding, and only three of the values
 // it emits (fixed, affected, will_not_fix) are ones the product's triage
-// sorts into a section. curl in a real R9 scan carried four fix_deferred
+// sorts into a section. curl in a real case 9 scan carried four fix_deferred
 // findings and one affected one, and the four were the ones that came back
 // with no priority at all.
 const statusMixTrivyReport = `{
@@ -744,7 +874,7 @@ const statusMixTrivyReport = `{
   ]
 }`
 
-// TestPrioritiesCoverEveryStatus is the R9 defect: findings whose status the
+// TestPrioritiesCoverEveryStatus is the case 9 defect: findings whose status the
 // product does not sort into a section produced an empty priority key, so
 // they fell out of the per-priority tables while staying in the overall
 // denominator, and the two stopped adding up. Every finding must now carry

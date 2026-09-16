@@ -1,0 +1,25 @@
+{
+  "case_id": "20",
+  "image": "kl-case20",
+  "gt_b_scope": [
+    "org.apache.logging.log4j:log4j-core"
+  ],
+  "expected": [
+    {
+      "package": "org.apache.logging.log4j:log4j-core",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "the library lives inside the program's own archive, so the only file the system ever opens is the outer one. An observation of that file supports saying the outer archive was read, and does not support saying the inner archive was loaded on its own. The case exists to measure exactly that gap between what is observable and what a naive reading would claim"
+    }
+  ],
+  "fixture_notes": {
+    "vulnerable_package_selection": "log4j-core 2.14.1, the same version as the separate-archives condition so the two differ only in packaging",
+    "layout": "the library's classes are unpacked into the program's archive and the library archives are packed into it as well, which is what makes a scan report describe an archive inside an archive",
+    "observed_scan_paths": "measured against this image with the scanner used here: the scan report attributes findings both to the outer file app/fat.jar and, separately, to app/fat.jar/BOOT-INF/lib/log4j-core-2.14.1.jar — the outer path, a separator, and the inner path. The second is not a file anything can open, so it is reachable only through the first",
+    "system_call_level_truth": "none; the system-call capture rate is reported as unavailable",
+    "open_condition": "startup_open: the runtime opens the outer archive to start this program at all, so the outer file is already open before any load happens. What a load adds here is a read from an existing descriptor, not a new opening of the file",
+    "thread_granularity": "none, and the consequence is recorded rather than worked around. This runtime's own thread identifier is unrelated to the operating system's, so the occurrence log names no thread number — and a pairing whose thread condition cannot be checked is counted as undecidable, not as a capture. Both per-occurrence rates for this case are therefore over whatever remains decidable, and are reported alongside the undecidable count rather than as if the whole denominator had been judged"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "case_id": "7b",
+  "image": "kl-case7b",
+  "gap_class_hint": "E4",
+  "gap_class_rationale": "the same statically linked binary on a base that carries essentially no package metadata: neither a mapped file nor a file-to-package record exists to recover a confirmation from",
+  "expected": []
+}

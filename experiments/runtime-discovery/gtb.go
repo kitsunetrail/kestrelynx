@@ -106,9 +106,43 @@ func buildGTBTruth(gtb *GroundTruthB, scope map[string]bool, windowStart, window
 }
 
 func buildFromUsageLog(gtb *GroundTruthB, scope map[string]bool, windowStart, windowEnd time.Time, out *gtbTruth) {
-	pathPkg := map[string]string{}
+	// One path can belong to several packages, so the independent
+	// resolution maps to a list. Proving that path used proves every
+	// package on it used, which is the same one-file-many-packages
+	// relation the matching side has to represent.
+	//
+	// resolved tracks every path the independent resolution has an answer
+	// for, including one it confirmed belongs to no package (Unowned).
+	// pathPkg alone cannot carry that: a path with zero packages and a path
+	// never looked up both leave it with no entry, and only the second is
+	// really a gap in the log.
+	//
+	// A record only counts as an answer when it actually says one thing:
+	// at least one named package, or Unowned with none. One with neither
+	// (an empty {"path":...} left by a bug in whatever built this file, or
+	// an empty "packages" list) answers nothing and must not be mistaken
+	// for a confirmed absence of an owner. One with both is a
+	// contradiction — a path cannot be a package's file and also be
+	// confirmed to belong to no package — and is treated the same way:
+	// unsupported, resolving nothing and crediting nothing.
+	pathPkg := map[string][]string{}
+	resolved := map[string]bool{}
 	for _, pp := range gtb.PathPackages {
-		pathPkg[pp.Path] = pp.Package
+		var names []string
+		for _, ref := range pp.all() {
+			if ref.Package != "" {
+				names = append(names, ref.Package)
+			}
+		}
+		switch {
+		case len(names) > 0 && pp.Unowned:
+			continue
+		case len(names) > 0:
+			resolved[pp.Path] = true
+			pathPkg[pp.Path] = append(pathPkg[pp.Path], names...)
+		case pp.Unowned:
+			resolved[pp.Path] = true
+		}
 	}
 
 	// Intervals, keyed by (pid, starttime, path) — one process generation's
@@ -127,7 +161,7 @@ func buildFromUsageLog(gtb *GroundTruthB, scope map[string]bool, windowStart, wi
 		default:
 			continue // "meta"/"stage" bookkeeping lines are not usage events
 		}
-		if _, known := pathPkg[ev.Path]; !known && ev.Path != "" {
+		if !resolved[ev.Path] && ev.Path != "" {
 			unmapped[ev.Path] = true
 		}
 		if !ev.OK {
@@ -174,7 +208,7 @@ func buildFromUsageLog(gtb *GroundTruthB, scope map[string]bool, windowStart, wi
 
 	usedPositive := map[string]bool{}
 	markUsed := func(path string) {
-		if pkg, ok := pathPkg[path]; ok {
+		for _, pkg := range pathPkg[path] {
 			usedPositive[pkg] = true
 		}
 	}
@@ -246,7 +280,7 @@ func buildFromUsageLog(gtb *GroundTruthB, scope map[string]bool, windowStart, wi
 
 	incompletePkgs := map[string]string{}
 	for path, why := range incompletePaths {
-		if pkg, ok := pathPkg[path]; ok {
+		for _, pkg := range pathPkg[path] {
 			incompletePkgs[pkg] = why
 		}
 	}

@@ -1,0 +1,473 @@
+{
+  "subject": {
+    "runtime": "docker",
+    "docker": {
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001",
+      "container_name": "synthetic-events",
+      "image_ref": "kl-synthetic-events:1",
+      "image_id": "sha256:030688c3b2961c28a9acad68958fd13c8d81665458b8ab69fdc0a5d95ec8ade0"
+    },
+    "kubernetes": {
+      "namespace": "",
+      "pod": "",
+      "container": ""
+    },
+    "started_at": "2026-09-12T23:59:00Z"
+  },
+  "run_key": {
+    "case_variant": "SYNTH-EV",
+    "permission": "root",
+    "interval_seconds": 150,
+    "window_seconds": 300,
+    "phase_seconds": 0,
+    "replicate": 1,
+    "sync": "startup",
+    "config_id": "bpftrace-v2-filtered-64p"
+  },
+  "window": {
+    "id": "w-synthetic-events",
+    "phase_base": "2026-09-13T00:00:00Z",
+    "phase_base_from": "targets_accepted",
+    "scheduled_start": "2026-09-13T00:00:00Z",
+    "scheduled_end": "2026-09-13T00:05:00Z",
+    "host_arch": "amd64",
+    "samples": [
+      {
+        "sample_id": "s0",
+        "index": 0,
+        "scheduled_start": "2026-09-13T00:00:00Z",
+        "actual_start": "2026-09-13T00:00:00Z",
+        "delay_ms": 0,
+        "ended_at": "2026-09-13T00:00:01Z"
+      },
+      {
+        "sample_id": "s1",
+        "index": 1,
+        "scheduled_start": "2026-09-13T00:02:30Z",
+        "actual_start": "2026-09-13T00:02:30Z",
+        "delay_ms": 0,
+        "ended_at": "2026-09-13T00:02:31Z"
+      }
+    ]
+  },
+  "target_registrations": [
+    {
+      "wanted": "synthetic-events",
+      "state": "accepted",
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001",
+      "registered_at": "2026-09-12T23:58:50Z",
+      "start_detected_at": "2026-09-12T23:59:00Z",
+      "inspected_at": "2026-09-12T23:59:01Z",
+      "aux_collected_at": "2026-09-12T23:59:04Z",
+      "accepted_at": "2026-09-12T23:59:04Z"
+    }
+  ],
+  "namespaces": [
+    {
+      "sample_id": "s0",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "net": "net:[4026531840]",
+      "mnt": "mnt:[4026531841]",
+      "user": "user:[4026531837]"
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "net": "net:[4026531840]",
+      "mnt": "mnt:[4026531841]",
+      "user": "user:[4026531837]"
+    }
+  ],
+  "processes": [
+    {
+      "sample_id": "s0",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "ppid": 0,
+      "user": "root",
+      "exe": "/server",
+      "exe_deleted": false,
+      "maps": [
+        {
+          "path": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+          "dev": "08:01",
+          "inode": "131099",
+          "perms": "r-xp",
+          "deleted": false
+        },
+        {
+          "path": "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so",
+          "dev": "08:01",
+          "inode": "131101",
+          "perms": "r-xp",
+          "deleted": false
+        }
+      ],
+      "file_descriptors": [
+        {
+          "fd": 5,
+          "path": "/app/log4j-core-2.14.1.jar",
+          "deleted": false,
+          "resolved": "/app/log4j-core-2.14.1.jar"
+        }
+      ],
+      "effective_uid": "0",
+      "cap_eff": "00000000a80425fb",
+      "invalid": false
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "ppid": 0,
+      "user": "root",
+      "exe": "/server",
+      "exe_deleted": false,
+      "maps": [
+        {
+          "path": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+          "dev": "08:01",
+          "inode": "131099",
+          "perms": "r-xp",
+          "deleted": false
+        },
+        {
+          "path": "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so",
+          "dev": "08:01",
+          "inode": "131101",
+          "perms": "r-xp",
+          "deleted": false
+        }
+      ],
+      "file_descriptors": [
+        {
+          "fd": 5,
+          "path": "/app/log4j-core-2.14.1.jar",
+          "deleted": false,
+          "resolved": "/app/log4j-core-2.14.1.jar"
+        }
+      ],
+      "effective_uid": "0",
+      "cap_eff": "00000000a80425fb",
+      "invalid": false
+    }
+  ],
+  "path_resolution": [
+    {
+      "sample_id": "s0",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "source": "exe",
+      "path": "/server",
+      "resolved": "/server",
+      "maps_deleted": false,
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "ownership": "unowned"
+    },
+    {
+      "sample_id": "s0",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "source": "maps",
+      "path": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+      "resolved": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+      "maps_deleted": false,
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "dev": "08:01",
+      "inode": "131099",
+      "ownership": "owned",
+      "db_kind": "dpkg",
+      "package": "libssl3",
+      "db_version": "3.0.13-1~deb12u1"
+    },
+    {
+      "sample_id": "s0",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "source": "maps",
+      "path": "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so",
+      "resolved": "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so",
+      "maps_deleted": false,
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "dev": "08:01",
+      "inode": "131101",
+      "ownership": "unowned"
+    },
+    {
+      "sample_id": "s0",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "source": "fd",
+      "path": "/app/log4j-core-2.14.1.jar",
+      "resolved": "/app/log4j-core-2.14.1.jar",
+      "maps_deleted": false,
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "ownership": "unowned"
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "source": "exe",
+      "path": "/server",
+      "resolved": "/server",
+      "maps_deleted": false,
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "ownership": "unowned"
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "source": "maps",
+      "path": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+      "resolved": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+      "maps_deleted": false,
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "dev": "08:01",
+      "inode": "131099",
+      "ownership": "owned",
+      "db_kind": "dpkg",
+      "package": "libssl3",
+      "db_version": "3.0.13-1~deb12u1"
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "source": "maps",
+      "path": "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so",
+      "resolved": "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so",
+      "maps_deleted": false,
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "dev": "08:01",
+      "inode": "131101",
+      "ownership": "unowned"
+    },
+    {
+      "sample_id": "s1",
+      "process_generation": {
+        "pid": 1001,
+        "starttime": "12345"
+      },
+      "source": "fd",
+      "path": "/app/log4j-core-2.14.1.jar",
+      "resolved": "/app/log4j-core-2.14.1.jar",
+      "maps_deleted": false,
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "ownership": "unowned"
+    }
+  ],
+  "package_ledger": [
+    {
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "name": "libssl3",
+      "version": "3.0.13-1~deb12u1",
+      "arch": "amd64",
+      "file_list_present": true,
+      "file_count": 12
+    },
+    {
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "name": "gzip",
+      "version": "1.12-1",
+      "arch": "amd64",
+      "file_list_present": true,
+      "file_count": 8
+    }
+  ],
+  "pkgdb": [
+    {
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "db_kind": "dpkg",
+      "path": "/var/lib/dpkg/status",
+      "read_at": "2026-09-12T23:59:02Z",
+      "size_bytes": 400000,
+      "mod_time": "2026-09-01T00:00:00Z",
+      "content_hash": "a3f1c0de5b9e4d2f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f",
+      "file_list_complete": true
+    }
+  ],
+  "auxiliary_inputs": [
+    {
+      "mount_view_id": "mnt:[4026531841]",
+      "db_generation": "gen1",
+      "collected_at": "2026-09-12T23:59:03Z",
+      "read_through_pid": 1001,
+      "python_search_dirs": [
+        {
+          "path": "/usr/local/lib/python3.12/site-packages",
+          "derivation": "filesystem_scan"
+        }
+      ],
+      "dist_info_records": [
+        {
+          "dist_info_dir": "/usr/local/lib/python3.12/site-packages/cryptography-41.0.0.dist-info",
+          "metadata_path": "/usr/local/lib/python3.12/site-packages/cryptography-41.0.0.dist-info/METADATA",
+          "record_path": "/usr/local/lib/python3.12/site-packages/cryptography-41.0.0.dist-info/RECORD",
+          "search_dir": "/usr/local/lib/python3.12/site-packages",
+          "files": [
+            "cryptography/__init__.py",
+            "cryptography/fernet.py",
+            "cryptography/hazmat/bindings/_rust.abi3.so"
+          ]
+        }
+      ],
+      "module_dirs": [
+        {
+          "kind": "node_modules",
+          "root": "/app/node_modules",
+          "entries": [
+            "/app/node_modules/lodash/",
+            "/app/node_modules/lodash/package.json",
+            "/app/node_modules/lodash/lodash.js"
+          ]
+        },
+        {
+          "kind": "python_search_dir",
+          "root": "/usr/local/lib/python3.12/site-packages",
+          "entries": [
+            "/usr/local/lib/python3.12/site-packages/cryptography/"
+          ]
+        }
+      ],
+      "usr_merge": [
+        {
+          "path": "/lib",
+          "target": "usr/lib",
+          "resolved": "/usr/lib"
+        }
+      ],
+      "mountinfo": "22 1 0:20 / / rw,relatime - overlay overlay rw\n",
+      "owned_paths": [
+        {
+          "path": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+          "db_kind": "dpkg",
+          "package": "libssl3",
+          "version": "3.0.13-1~deb12u1"
+        },
+        {
+          "path": "/usr/bin/gzip",
+          "db_kind": "dpkg",
+          "package": "gzip",
+          "version": "1.12-1"
+        },
+        {
+          "path": "/usr/bin/curl",
+          "db_kind": "dpkg",
+          "package": "curl",
+          "version": "7.88.1-10+deb12u5"
+        }
+      ],
+      "aux_generation": "aux-gen-1",
+      "first_seen": "2026-09-12T23:59:03Z",
+      "last_seen": "2026-09-13T00:02:31Z",
+      "sample_ids": [
+        "s0",
+        "s1"
+      ]
+    }
+  ],
+  "inode_calibration": {
+    "calibrated": true,
+    "calibration_path": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+    "maps_dev": "08:01",
+    "maps_inode": "131000",
+    "stat_dev": "08:01",
+    "stat_inode": "131000"
+  },
+  "listeners": [],
+  "docker": {
+    "network_mode": "bridge",
+    "config_user": "",
+    "privileged": false,
+    "started_at": "2026-09-12T23:59:00Z"
+  },
+  "collection_results": [
+    {
+      "sample_id": "s0",
+      "proc_observe": "ok",
+      "pkgdb_read": "ok",
+      "valid": true,
+      "pkgdb_views": [
+        {
+          "mount_view_id": "mnt:[4026531841]",
+          "db_generation": "gen1",
+          "db_kind": "dpkg",
+          "pkgdb_read": "ok"
+        }
+      ]
+    },
+    {
+      "sample_id": "s1",
+      "proc_observe": "ok",
+      "pkgdb_read": "ok",
+      "valid": true,
+      "pkgdb_views": [
+        {
+          "mount_view_id": "mnt:[4026531841]",
+          "db_generation": "gen1",
+          "db_kind": "dpkg",
+          "pkgdb_read": "ok"
+        }
+      ]
+    }
+  ],
+  "load": {
+    "initial_db_read": {
+      "duration_ms": 120,
+      "bytes_read": 400000,
+      "file_count": 700,
+      "measured": true
+    },
+    "steady_state": {
+      "cgroup_path": "/sys/fs/cgroup/x",
+      "measured": true,
+      "cpu_usage_delta_us": 900000,
+      "memory_peak_measured": true,
+      "memory_peak_bytes": 30000000
+    },
+    "docker_daemon": {
+      "cgroup_path": "/sys/fs/cgroup/y",
+      "measured": true,
+      "cpu_usage_delta_us": 400000,
+      "memory_peak_measured": false,
+      "memory_error": "not requested for this tier"
+    }
+  }
+}

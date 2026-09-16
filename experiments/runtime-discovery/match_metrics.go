@@ -253,15 +253,36 @@ func classOf(class string) scanner.PkgClass {
 // lang_pkg_unmappable.
 func pathRecordClass(PathResolutionRecord) scanner.PkgClass { return scanner.ClassOS }
 
-// searchOwned scans rec.PathResolution (restricted to valid samples) for
-// "owned" hits naming pkgName, splitting them into confirming paths, paths
-// whose database version disagrees with Trivy's, and paths whose database
+// samplingReadKinds are the two reads the first stage's rule is defined
+// over: a process's executable link and its file-backed memory mappings.
+//
+// A file merely held open is not one of them. Adding open descriptors to
+// the observation was a later change, and letting them into this rule
+// would move the baseline the later series are measured against — a file
+// that only ever appeared in a descriptor table would start counting as a
+// first-stage confirmation, and the increment attributed to the added
+// mapping would shrink by exactly that much. A record written before the
+// three reads were told apart carries no source, and is read as these two,
+// which is what such a record actually held.
+func samplingReadKinds(pr PathResolutionRecord) bool {
+	switch pr.Source {
+	case "", "exe", "maps":
+		return true
+	default:
+		return false
+	}
+}
+
+// searchOwned scans rec.PathResolution (restricted to valid samples, and
+// to the reads the first stage's rule is defined over) for "owned" hits
+// naming pkgName, splitting them into confirming paths, paths whose
+// database version disagrees with Trivy's, and paths whose database
 // version could not be read at all. Only the first group confirms.
 func searchOwned(rec *ContainerRecord, validSamples map[string]bool, key pkgGroupKey) (confirmedSamples map[string]bool, confirmedPaths, mismatchPaths, unknownVersionPaths []string) {
 	confirmedSamples = map[string]bool{}
 	seen, mismatchSeen, unknownSeen := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, pr := range rec.PathResolution {
-		if !validSamples[pr.SampleID] {
+		if !validSamples[pr.SampleID] || !samplingReadKinds(pr) {
 			continue
 		}
 		if pr.Ownership != OwnershipOwned || pr.Package != key.Package || pathRecordClass(pr) != key.Class {

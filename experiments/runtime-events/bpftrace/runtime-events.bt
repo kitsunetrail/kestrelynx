@@ -1,0 +1,377 @@
+#!/usr/bin/env bpftrace
+/*
+ * Records program executions and file opens, with enough on each record to
+ * say which container the work belongs to and which process generation did
+ * it.
+ *
+ * Output is one line per record, fields separated by "|", with the path
+ * last so a path containing the separator is still read whole. The
+ * companion converter turns this into the event log the matching tool
+ * reads; nothing here formats JSON, because a formatter on the per-event
+ * path is cost paid on every event.
+ *
+ *   V|<format version>|<string buffer length>|<buffer pages>|<script variant>
+ *   E|<monotonic ns>|<pid>|<tid>|<nspid>|<nstid>|<pid ns inum>|<cgroup id>|<leader start, ns>|<comm>|<path as passed>
+ *   O|<monotonic ns>|<pid>|<tid>|<nspid>|<nstid>|<pid ns inum>|<cgroup id>|<leader start, ns>|<dirfd>|<path as passed>
+ *   X|<monotonic ns>|<pid>|<tid>|<nspid>|<nstid>|<pid ns inum>|<return value>|<entry's monotonic ns>
+ *
+ * plus the counter maps, which this tracer prints itself on exit as
+ * "@<name>: <value>" and the converter reads back.
+ *
+ * The clock: every stamp here is the monotonic clock, named explicitly
+ * rather than left to the default, because the companion tool's clock
+ * reading is taken from that same clock and the two must be the one clock.
+ * The boot clock differs from it by however long the machine was
+ * suspended, which would silently shift every event.
+ *
+ * No clock record is written here: this tracer cannot read a wall clock,
+ * and a pair that does not include one cannot relate an event to anything
+ * else. The wrapper takes that pair instead — the companion tool's clock
+ * subcommand prints it with the error of the reading — and passes it to
+ * the converter.
+ *
+ * Why these attachment points:
+ *
+ *   The execution point fires after the program has been accepted, so a
+ *   failed attempt never appears. Watching the system call's entry instead
+ *   would report attempts, including the ones that went nowhere, and
+ *   "tried to run" is not use.
+ *
+ *   The open is watched at both ends because the two halves carry
+ *   different things: the entry has the path, the exit has the outcome. A
+ *   failed open is not use, so neither half alone is enough, and the
+ *   converter pairs them by thread — one thread makes one system call at a
+ *   time, which is what makes them pairable at all.
+ *
+ *   The open is watched through the legacy open syscall as well as openat
+ *   and openat2, because a libc's own open() does not always lower to the
+ *   same syscall. musl's open() on x86_64 emits the legacy open syscall
+ *   directly rather than calling openat(AT_FDCWD, ...) the way glibc's
+ *   does, so a tracer that watches only the openat family sees no open()
+ *   call any musl-linked process makes — every process built on Alpine's
+ *   libc, on this architecture. The open probe's own directory-descriptor
+ *   column is always -100 (AT_FDCWD): open() takes no directory
+ *   descriptor, so nothing else could belong there. creat() can lower to
+ *   its own legacy syscall the same way; it is not watched here, because
+ *   it opens a file for writing rather than for use.
+ *
+ * What the path is and is not: it is the string the program passed. It can
+ * be relative, relative to a directory descriptor, or lead through a
+ * symbolic link, and it is cut off at the string length below. Making
+ * sense of it is the converter's job, and where it cannot be resolved it
+ * stays unresolved rather than being guessed at.
+ *
+ * The process and thread numbers are read with pid(init) and tid(init),
+ * which return the numbers as the initial PID namespace sees them.
+ *
+ * The bare pid and tid builtins can instead come back zero for a task in
+ * a different pid namespace, and a zero used as the pending map's key
+ * collides across every task that hits it, overwriting entries and
+ * pairing an outcome with the wrong call.
+ *
+ * nspid and nstid are a third number, read directly from the task's own
+ * struct pid rather than from either builtin: the number that task's own
+ * PID namespace assigns it — the group leader's for nspid, the running
+ * thread's for nstid. Neither existing builtin can name that number. The
+ * bare builtins answer from the tracer's own namespace, and pid(init) and
+ * tid(init) answer from the namespace the kernel calls initial, which is
+ * not necessarily the host's own: on a host whose own PID namespace is
+ * itself a child of the initial one — a WSL2 distribution is such a host,
+ * whose /proc/self/ns/pid names a namespace below the kernel's initial one
+ * — pid(init) and tid(init) report numbers that agree with neither the
+ * tracer's namespace nor a container's, and comparing them against an
+ * independent log recorded inside a container never agrees. nspid and
+ * nstid are what let such a log be compared against an event with no
+ * process-number correspondence table standing between them. pid(init)
+ * and tid(init) are kept alongside them: they are still what the pending
+ * map is keyed on and what identifies a task the same way host-wide,
+ * which a number scoped to the task's own namespace does not.
+ *
+ * nsinum is the identifier of the PID namespace nspid and nstid are
+ * numbered in, read off the same struct pid entry nstid comes from.
+ * A number alone is not an identity: two tasks in two different PID
+ * namespaces can carry the same nspid and the same nstid, and can even
+ * collide on starttime, so nspid/nstid only mean something once the
+ * namespace they were read in is recorded alongside them and compared
+ * too.
+ *
+ * The process generation is the leading thread's start time, not the
+ * running thread's. A workload's own log reads its process's start time,
+ * which is the leader's whatever thread does the reading, so recording the
+ * running thread's would make the two disagree for every threaded program.
+ *
+ * The container is identified by the control group, taken here rather than
+ * looked up afterwards. A process that runs for a hundredth of a second is
+ * gone before anything in user space could read its attributes, and those
+ * are exactly the processes this exists to catch.
+ *
+ * The filter matches on directory markers first and file endings second.
+ * A path cut off at the string length loses its ending but keeps its
+ * leading directories, so matching on the ending alone would silently drop
+ * exactly the long paths a module tree produces. A path cut off before any
+ * marker is still lost; the unfiltered companion script is what measures
+ * how much that is.
+ *
+ * Counting is done with the tracer's own counting maps rather than by
+ * adding to a scalar, which loses increments when two processors do it at
+ * once. They are printed on exit and read back by the converter. A failed
+ * insertion into the pending map has no return value to check either —
+ * the assignment is not an expression that reports success — so the
+ * entry probe checks for its own key immediately afterward and counts a
+ * miss in @map_insert_failed. The converter reads that counter back and
+ * treats it as the number of insertions the pending map lost, rather
+ * than leaving the loss unmeasured.
+ *
+ * Starting is not attaching. The first line below says this program began;
+ * it does not say every attachment point is live. Confirm that separately,
+ * by causing a known event and seeing it come out.
+ *
+ * Requires privileges to load and attach.
+ *
+ * The string length is not passed to str() here. Giving it the same value
+ * the configuration already sets draws a warning on every call site, and
+ * the configured length is what applies either way.
+ */
+
+config = {
+	/* Long enough for a module tree's paths. A shorter buffer cuts them
+	 * off, and a path whose ending is gone cannot be compared against
+	 * anything. If this version does not accept a config block, set
+	 * BPFTRACE_MAX_STRLEN and BPFTRACE_PERF_RB_PAGES to the same values
+	 * in the environment instead. */
+	max_strlen = 256;
+	/* Per-processor output buffer. It is set here rather than left to the
+	 * default so that the size recorded alongside the run is the size that
+	 * was actually used; it belongs in the collection's own identifier. */
+	perf_rb_pages = 64;
+}
+
+BEGIN
+{
+	printf("V|3|256|64|filtered\n");
+}
+
+tracepoint:sched:sched_process_exec
+{
+	$p = str(args->filename);
+	@events_exec = count();
+	if ($p == "") {
+		@path_read_failed = count();
+	}
+	$gp = curtask->group_leader->thread_pid;
+	$glvl = $gp->level;
+	$gu = (struct upid *)((uint64)$gp + offsetof(struct pid, numbers) + (uint64)$glvl * sizeof(struct upid));
+	$nspid = $gu->nr;
+	$tp = curtask->thread_pid;
+	$tlvl = $tp->level;
+	$tu = (struct upid *)((uint64)$tp + offsetof(struct pid, numbers) + (uint64)$tlvl * sizeof(struct upid));
+	$nstid = $tu->nr;
+	$nsinum = $tu->ns->ns.inum;
+	printf("E|%lld|%d|%d|%d|%d|%u|%llu|%lld|%s|%s\n",
+	    nsecs(monotonic), pid(init), tid(init), $nspid, $nstid, $nsinum, cgroup,
+	    curtask->group_leader->start_boottime, comm, $p);
+}
+
+tracepoint:syscalls:sys_enter_open
+{
+	$p = str(args->filename);
+	@events_before_filter = count();
+	if ($p == "") {
+		@path_read_failed = count();
+	}
+	if (strcontains($p, "/node_modules") || strcontains($p, "site-packages") ||
+	    strcontains($p, "dist-packages") || strcontains($p, "/lib") ||
+	    strcontains($p, "/app") || strcontains($p, ".so") ||
+	    strcontains($p, ".jar") || strcontains($p, ".py") ||
+	    strcontains($p, ".js") || strcontains($p, ".mjs") ||
+	    strcontains($p, ".cjs") || strcontains($p, "package.json")) {
+		@events_after_filter = count();
+		/* One reading of the clock, used both as the entry's own time and
+		 * as the identifier the outcome carries back. Reading it twice
+		 * gives two different values, and the outcome would then name an
+		 * entry that never existed — leaving every open unpaired. */
+		$at = nsecs(monotonic);
+		$htid = tid(init);
+		@open_start[$htid] = $at;
+		/* The insertion itself has no return value to check; checking
+		 * that the key is there right after it substitutes for one. */
+		if (!has_key(@open_start, $htid)) {
+			@map_insert_failed = count();
+		}
+		$gp = curtask->group_leader->thread_pid;
+		$glvl = $gp->level;
+		$gu = (struct upid *)((uint64)$gp + offsetof(struct pid, numbers) + (uint64)$glvl * sizeof(struct upid));
+		$nspid = $gu->nr;
+		$tp = curtask->thread_pid;
+		$tlvl = $tp->level;
+		$tu = (struct upid *)((uint64)$tp + offsetof(struct pid, numbers) + (uint64)$tlvl * sizeof(struct upid));
+		$nstid = $tu->nr;
+	$nsinum = $tu->ns->ns.inum;
+		/* open() takes no directory descriptor, so the column that holds
+		 * one for openat and openat2 is always -100 (AT_FDCWD) here. */
+		printf("O|%lld|%d|%d|%d|%d|%u|%llu|%lld|%d|%s\n",
+		    $at, pid(init), $htid, $nspid, $nstid, $nsinum, cgroup,
+		    curtask->group_leader->start_boottime, -100, $p);
+	}
+}
+
+tracepoint:syscalls:sys_exit_open
+/@open_start[tid(init)]/
+{
+	/* The entry's own time is sent back with the outcome. Pairing on the
+	 * thread number alone is not enough: if an entry is lost, the outcome
+	 * that follows it would be joined to the next entry and report that
+	 * call's success or failure as belonging to a different file. */
+	$htid = tid(init);
+	$gp = curtask->group_leader->thread_pid;
+	$glvl = $gp->level;
+	$gu = (struct upid *)((uint64)$gp + offsetof(struct pid, numbers) + (uint64)$glvl * sizeof(struct upid));
+	$nspid = $gu->nr;
+	$tp = curtask->thread_pid;
+	$tlvl = $tp->level;
+	$tu = (struct upid *)((uint64)$tp + offsetof(struct pid, numbers) + (uint64)$tlvl * sizeof(struct upid));
+	$nstid = $tu->nr;
+	$nsinum = $tu->ns->ns.inum;
+	printf("X|%lld|%d|%d|%d|%d|%u|%d|%lld\n",
+	    nsecs(monotonic), pid(init), $htid, $nspid, $nstid, $nsinum, args->ret, @open_start[$htid]);
+	delete(@open_start, $htid);
+}
+
+tracepoint:syscalls:sys_enter_openat
+{
+	$p = str(args->filename);
+	@events_before_filter = count();
+	if ($p == "") {
+		@path_read_failed = count();
+	}
+	if (strcontains($p, "/node_modules") || strcontains($p, "site-packages") ||
+	    strcontains($p, "dist-packages") || strcontains($p, "/lib") ||
+	    strcontains($p, "/app") || strcontains($p, ".so") ||
+	    strcontains($p, ".jar") || strcontains($p, ".py") ||
+	    strcontains($p, ".js") || strcontains($p, ".mjs") ||
+	    strcontains($p, ".cjs") || strcontains($p, "package.json")) {
+		@events_after_filter = count();
+		/* One reading of the clock, used both as the entry's own time and
+		 * as the identifier the outcome carries back. Reading it twice
+		 * gives two different values, and the outcome would then name an
+		 * entry that never existed — leaving every open unpaired. */
+		$at = nsecs(monotonic);
+		$htid = tid(init);
+		@open_start[$htid] = $at;
+		/* The insertion itself has no return value to check; checking
+		 * that the key is there right after it substitutes for one. */
+		if (!has_key(@open_start, $htid)) {
+			@map_insert_failed = count();
+		}
+		$gp = curtask->group_leader->thread_pid;
+		$glvl = $gp->level;
+		$gu = (struct upid *)((uint64)$gp + offsetof(struct pid, numbers) + (uint64)$glvl * sizeof(struct upid));
+		$nspid = $gu->nr;
+		$tp = curtask->thread_pid;
+		$tlvl = $tp->level;
+		$tu = (struct upid *)((uint64)$tp + offsetof(struct pid, numbers) + (uint64)$tlvl * sizeof(struct upid));
+		$nstid = $tu->nr;
+	$nsinum = $tu->ns->ns.inum;
+		printf("O|%lld|%d|%d|%d|%d|%u|%llu|%lld|%d|%s\n",
+		    $at, pid(init), $htid, $nspid, $nstid, $nsinum, cgroup,
+		    curtask->group_leader->start_boottime, args->dfd, $p);
+	}
+}
+
+tracepoint:syscalls:sys_exit_openat
+/@open_start[tid(init)]/
+{
+	/* The entry's own time is sent back with the outcome. Pairing on the
+	 * thread number alone is not enough: if an entry is lost, the outcome
+	 * that follows it would be joined to the next entry and report that
+	 * call's success or failure as belonging to a different file. */
+	$htid = tid(init);
+	$gp = curtask->group_leader->thread_pid;
+	$glvl = $gp->level;
+	$gu = (struct upid *)((uint64)$gp + offsetof(struct pid, numbers) + (uint64)$glvl * sizeof(struct upid));
+	$nspid = $gu->nr;
+	$tp = curtask->thread_pid;
+	$tlvl = $tp->level;
+	$tu = (struct upid *)((uint64)$tp + offsetof(struct pid, numbers) + (uint64)$tlvl * sizeof(struct upid));
+	$nstid = $tu->nr;
+	$nsinum = $tu->ns->ns.inum;
+	printf("X|%lld|%d|%d|%d|%d|%u|%d|%lld\n",
+	    nsecs(monotonic), pid(init), $htid, $nspid, $nstid, $nsinum, args->ret, @open_start[$htid]);
+	delete(@open_start, $htid);
+}
+
+tracepoint:syscalls:sys_enter_openat2
+{
+	$p = str(args->filename);
+	@events_before_filter = count();
+	if ($p == "") {
+		@path_read_failed = count();
+	}
+	if (strcontains($p, "/node_modules") || strcontains($p, "site-packages") ||
+	    strcontains($p, "dist-packages") || strcontains($p, "/lib") ||
+	    strcontains($p, "/app") || strcontains($p, ".so") ||
+	    strcontains($p, ".jar") || strcontains($p, ".py") ||
+	    strcontains($p, ".js") || strcontains($p, ".mjs") ||
+	    strcontains($p, ".cjs") || strcontains($p, "package.json")) {
+		@events_after_filter = count();
+		/* One reading of the clock, used both as the entry's own time and
+		 * as the identifier the outcome carries back. Reading it twice
+		 * gives two different values, and the outcome would then name an
+		 * entry that never existed — leaving every open unpaired. */
+		$at = nsecs(monotonic);
+		$htid = tid(init);
+		@open_start[$htid] = $at;
+		/* The insertion itself has no return value to check; checking
+		 * that the key is there right after it substitutes for one. */
+		if (!has_key(@open_start, $htid)) {
+			@map_insert_failed = count();
+		}
+		$gp = curtask->group_leader->thread_pid;
+		$glvl = $gp->level;
+		$gu = (struct upid *)((uint64)$gp + offsetof(struct pid, numbers) + (uint64)$glvl * sizeof(struct upid));
+		$nspid = $gu->nr;
+		$tp = curtask->thread_pid;
+		$tlvl = $tp->level;
+		$tu = (struct upid *)((uint64)$tp + offsetof(struct pid, numbers) + (uint64)$tlvl * sizeof(struct upid));
+		$nstid = $tu->nr;
+	$nsinum = $tu->ns->ns.inum;
+		printf("O|%lld|%d|%d|%d|%d|%u|%llu|%lld|%d|%s\n",
+		    $at, pid(init), $htid, $nspid, $nstid, $nsinum, cgroup,
+		    curtask->group_leader->start_boottime, args->dfd, $p);
+	}
+}
+
+tracepoint:syscalls:sys_exit_openat2
+/@open_start[tid(init)]/
+{
+	$htid = tid(init);
+	$gp = curtask->group_leader->thread_pid;
+	$glvl = $gp->level;
+	$gu = (struct upid *)((uint64)$gp + offsetof(struct pid, numbers) + (uint64)$glvl * sizeof(struct upid));
+	$nspid = $gu->nr;
+	$tp = curtask->thread_pid;
+	$tlvl = $tp->level;
+	$tu = (struct upid *)((uint64)$tp + offsetof(struct pid, numbers) + (uint64)$tlvl * sizeof(struct upid));
+	$nstid = $tu->nr;
+	$nsinum = $tu->ns->ns.inum;
+	printf("X|%lld|%d|%d|%d|%d|%u|%d|%lld\n",
+	    nsecs(monotonic), pid(init), $htid, $nspid, $nstid, $nsinum, args->ret, @open_start[$htid]);
+	delete(@open_start, $htid);
+}
+
+END
+{
+	/* Whatever is still in the pending map is an entry whose outcome never
+	 * arrived; the converter counts those. Clearing it keeps the tracer
+	 * from printing it as a block the converter would have to skip. The
+	 * counting maps are deliberately left to print — except one:
+	 * bpftrace does not print an empty map, and @map_insert_failed stays
+	 * empty whenever no insertion ever failed, which is the ordinary
+	 * case. Printing it here explicitly, and clearing it right after,
+	 * is what keeps a healthy run's own zero from being read as a count
+	 * nothing was able to take, without this line being counted a
+	 * second time alongside bpftrace's own end-of-run dump. */
+	clear(@open_start);
+	printf("@map_insert_failed: %llu\n", (uint64)@map_insert_failed);
+	clear(@map_insert_failed);
+}

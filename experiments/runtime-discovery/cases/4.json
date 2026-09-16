@@ -1,0 +1,20 @@
+{
+  "case_id": "4",
+  "image": "postgres:16",
+  "expected": [
+    {
+      "package": "postgresql-16",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the postmaster and its child processes all run this package's binaries"
+    },
+    {
+      "package": "libc6",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "linked by every process in the image"
+    }
+  ]
+}

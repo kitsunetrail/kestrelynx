@@ -1,0 +1,24 @@
+{
+  "case_id": "10",
+  "image": "kl-case10",
+  "gt_b_scope": [
+    "libsqlite3-0"
+  ],
+  "expected": [
+    {
+      "package": "libc6",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "linked by the dlopen/dlclose loop program itself"
+    },
+    {
+      "package": "libsqlite3-0",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "only mapped for the load half of each 7s-load/7s-unload cycle",
+      "factor_hint": "transient_dlopen"
+    }
+  ]
+}

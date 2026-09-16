@@ -1,0 +1,30 @@
+{
+  "case_id": "15",
+  "image": "kl-case15",
+  "gt_b_scope": [
+    "cryptography"
+  ],
+  "expected": [
+    {
+      "package": "libc6",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "linked by the interpreter and mapped for its whole life"
+    },
+    {
+      "package": "cryptography",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "the import loads this distribution's compiled extension, so the package really is in use. The expected verdict is what the first stage's rules alone produce, which is why it differs from the declared usage: recording this as unused would turn a limitation of those rules into a claim about the workload. The added mapping is expected to reach it through the installed-file manifest, and the event evidence through the pure-Python files the mapping alone cannot see"
+    }
+  ],
+  "fixture_notes": {
+    "vulnerable_package_selection": "cryptography 41.0.0, verified against this image with the scanner used here: five HIGH findings (CVE-2023-38325, CVE-2023-50782, CVE-2024-26130, CVE-2026-26007, GHSA-537c-gmf6-5ccf), all attributed to usr/local/lib/python3.12/site-packages/cryptography-41.0.0.dist-info/METADATA. Chosen because it installs a compiled extension that appears in a process's mapped files and imports without network access or a service, so the import is the only thing the run does",
+    "conditions": "two conditions differ only in whether the compiled-module cache exists: with it, an import reads the cached files; without it, the source files are read and compiled in memory. Which files an import reads therefore differs between the two, which is what the condition measures",
+    "system_call_level_truth": "none. Nothing in this fixture can record the file-open calls themselves independently of the collection being measured, so the system-call capture rate is reported as unavailable rather than substituted for by the per-load rate",
+    "resolved_file_caveat": "the files an import records are the ones the interpreter reports for each module that appeared, which is the source file even where a compiled one was the file actually read. Matching an event against this list therefore has to accept either spelling, and the mapping rule does: a compiled module is reduced to the source it was compiled from before it is looked up. What the list cannot establish is which of the two was opened, so this case measures whether the load was seen at all and not which file carried it"
+  }
+}

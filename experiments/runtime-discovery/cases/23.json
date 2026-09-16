@@ -1,0 +1,39 @@
+{
+  "case_id": "23",
+  "image": "kl-case13",
+  "gt_b_scope": [
+    "curl",
+    "git"
+  ],
+  "expected": [
+    {
+      "package": "curl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "factor_hint": "short_lived",
+      "rationale": "the same short-lived runs as case 13, here run in two containers at once and on the host as well, so that an attribution claim can be checked against where the run really happened"
+    },
+    {
+      "package": "git",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "factor_hint": "short_lived",
+      "rationale": "as above"
+    }
+  ],
+  "fixture_notes": {
+    "purpose": "the control for attribution. Both directions have to be reported: a collector that discards every event attributes nothing wrongly, so the share of wrong attributions cannot on its own show that attribution works, and the share of real runs attributed correctly must be reported beside it",
+    "conditions": [
+      "23: case 23 alone",
+      "24: case 24 alone",
+      "23+24: both containers at once",
+      "23+host: case 23 alongside the host running a program of the same name at the same path, outside any container"
+    ],
+    "attribution_truth": "each container's own log and the host script's log declare where the run really happened, and the host script declares the host. An event claiming a container for a host run, or one container for the other's run, is a wrong attribution",
+    "image": "the same image as case 13, so the programs, paths and timing are identical across the containers and only the attribution differs",
+    "occurrence_identifiers": "each container runs with its own case identifier (23 and 24), so an occurrence identifier names one run in one container. Sharing one identifier across both would make two different runs indistinguishable, and the attribution check rests on telling them apart",
+    "process_number_correspondence": "the case runner has to record, per container and per generation, which host process number each container process number is. Every pairing rests on it; without it an occurrence and an event cannot be shown to be the same process and the pairing is counted as undecidable. For a freshly started process the leading thread's number equals its process number on both sides, so an entry naming the process covers its thread as well"
+  }
+}

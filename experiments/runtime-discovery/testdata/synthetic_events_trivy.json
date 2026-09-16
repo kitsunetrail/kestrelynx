@@ -1,0 +1,139 @@
+{
+  "SchemaVersion": 2,
+  "ArtifactName": "kl-synthetic-events:1",
+  "Metadata": {
+    "OS": {
+      "Family": "debian",
+      "Name": "12.5",
+      "EOSL": false
+    },
+    "ImageID": "sha256:030688c3b2961c28a9acad68958fd13c8d81665458b8ab69fdc0a5d95ec8ade0",
+    "RepoDigests": [
+      "kl-synthetic-events@sha256:57f3d77ca0abdf13cef1c849cc0bc3f8de9357b1c4876f8db76672d244c1065a"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "Results": [
+    {
+      "Class": "os-pkgs",
+      "Type": "debian",
+      "Target": "kl-synthetic-events:1 (debian 12.5)",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2024-0001",
+          "PkgName": "libssl3",
+          "InstalledVersion": "3.0.13-1~deb12u1",
+          "FixedVersion": "3.0.14-1~deb12u1",
+          "Status": "fixed",
+          "Severity": "CRITICAL",
+          "PrimaryURL": "https://example.invalid/CVE-2024-0001",
+          "Title": "synthetic critical, resolvable through the container's own package database"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-0002",
+          "PkgName": "gzip",
+          "InstalledVersion": "1.12-1",
+          "FixedVersion": "1.12-1.1",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://example.invalid/CVE-2024-0002",
+          "Title": "synthetic high, installed but never touched"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-0005",
+          "PkgName": "curl",
+          "InstalledVersion": "7.88.1-10+deb12u5",
+          "FixedVersion": "7.88.1-10+deb12u6",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://example.invalid/CVE-2024-0005",
+          "Title": "run briefly and gone; no sample catches it, and only an execution record reaches it"
+        }
+      ]
+    },
+    {
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Target": "server",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2020-14040",
+          "PkgName": "golang.org/x/text",
+          "InstalledVersion": "v0.3.0",
+          "FixedVersion": "v0.3.3",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://example.invalid/CVE-2020-14040",
+          "Title": "a module compiled into the binary; the report names the binary, not the module"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-0003",
+          "PkgName": "stdlib",
+          "InstalledVersion": "1.22.0",
+          "FixedVersion": "1.22.1",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://example.invalid/CVE-2024-0003",
+          "Title": "also compiled into the same binary, so one execution reports both"
+        }
+      ]
+    },
+    {
+      "Class": "lang-pkgs",
+      "Type": "jar",
+      "Target": "Java",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2021-44228",
+          "PkgName": "org.apache.logging.log4j:log4j-core",
+          "PkgPath": "app/log4j-core-2.14.1.jar",
+          "InstalledVersion": "2.14.1",
+          "FixedVersion": "2.15.0",
+          "Status": "fixed",
+          "Severity": "CRITICAL",
+          "PrimaryURL": "https://example.invalid/CVE-2021-44228",
+          "Title": "an archive the runtime keeps open, so an open descriptor reaches it"
+        }
+      ]
+    },
+    {
+      "Class": "lang-pkgs",
+      "Type": "node-pkg",
+      "Target": "Node.js",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2021-23337",
+          "PkgName": "lodash",
+          "PkgPath": "app/node_modules/lodash/package.json",
+          "InstalledVersion": "4.17.15",
+          "FixedVersion": "4.17.21",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://example.invalid/CVE-2021-23337",
+          "Title": "read and closed, so only an event reaches it"
+        }
+      ]
+    },
+    {
+      "Class": "lang-pkgs",
+      "Type": "python-pkg",
+      "Target": "Python",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2023-38325",
+          "PkgName": "cryptography",
+          "PkgPath": "usr/local/lib/python3.12/site-packages/cryptography-41.0.0.dist-info/METADATA",
+          "InstalledVersion": "41.0.0",
+          "FixedVersion": "41.0.3",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://example.invalid/CVE-2023-38325",
+          "Title": "its compiled extension is mapped, so the read-only mapping reaches it"
+        }
+      ]
+    }
+  ]
+}

@@ -113,7 +113,7 @@ func sampleStartTimes(rec *ContainerRecord) map[string]time.Time {
 func findConfirmingGeneration(rec *ContainerRecord, wv windowValidity, pv PackageVerdict) (sampleID string, gen ProcessGeneration, ok bool) {
 	key := pkgGroupKey{Class: classOf(pv.Class), Package: pv.Package, InstalledVer: pv.InstalledVer}
 	for _, pr := range rec.PathResolution {
-		if !wv.ValidSampleIDs[pr.SampleID] {
+		if !wv.ValidSampleIDs[pr.SampleID] || !samplingReadKinds(pr) {
 			continue
 		}
 		if ownedPathConfirms(pr, key) {

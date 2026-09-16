@@ -3,7 +3,7 @@
     "runtime": "docker",
     "docker": {
       "container_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "container_name": "r1-synthetic",
+      "container_name": "case1-synthetic",
       "image_ref": "kl-synthetic:1",
       "image_id": "sha256:030688c3b2961c28a9acad68958fd13c8d81665458b8ab69fdc0a5d95ec8ade0"
     },

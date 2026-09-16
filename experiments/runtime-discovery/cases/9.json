@@ -1,0 +1,26 @@
+{
+  "case_id": "9",
+  "image": "kl-case9",
+  "gt_b_scope": [
+    "curl",
+    "git"
+  ],
+  "expected": [
+    {
+      "package": "curl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "invoked once per loop iteration; may or may not be running at any given sample",
+      "factor_hint": "short_lived"
+    },
+    {
+      "package": "git",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "invoked once per loop iteration, the same way curl is",
+      "factor_hint": "short_lived"
+    }
+  ]
+}

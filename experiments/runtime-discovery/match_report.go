@@ -6,15 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
-// runKeyColumns returns the six run_key dimensions as strings, in the fixed
-// order every CSV table uses so columns line up across cases.
+// runKeyColumns returns the run_key dimensions as strings, in the fixed
+// order every CSV table uses so columns line up across cases. The ordering
+// condition and the event-collection configuration are part of the key:
+// two runs that differ in either are not the same condition, and adding
+// them together would combine measurements of different things.
 func runKeyColumns(k RunKey) []string {
-	return []string{k.CaseVariant, k.Permission, itoa(k.Interval), itoa(k.Window), itoa(k.Phase), itoa(k.Replicate)}
+	return []string{k.CaseVariant, k.Permission, itoa(k.Interval), itoa(k.Window), itoa(k.Phase), itoa(k.Replicate), k.Sync, k.ConfigID}
 }
 
-var runKeyHeader = []string{"case_variant", "permission", "interval", "window", "phase", "replicate"}
+var runKeyHeader = []string{"case_variant", "permission", "interval", "window", "phase", "replicate", "sync", "config_id"}
 
 // writeMatchCSVs renders one MatchResult as the full set of summary tables:
 // concatenating each table across every run's match invocation reproduces
@@ -29,6 +33,8 @@ func writeMatchCSVs(dir string, r MatchResult) error {
 		writeCaseSummaryCSV, writeClassificationCSV, writeFactorCSV,
 		writeGapClassCSV, writePathResolutionCSV, writePermissionsCSV,
 		writeGTBCSV, writeG4CSV,
+		writeSeriesCSV, writeSourceInputCSV, writeMappingCSV,
+		writeOccurrenceCSV, writeEventDropsCSV, writeAttributionCSV,
 	}
 	for _, w := range writers {
 		if err := w(dir, r); err != nil {
@@ -278,13 +284,13 @@ func writeG4CSV(dir string, r MatchResult) error {
 		return err
 	}
 	defer f.Close()
-	header := append(append([]string{}, runKeyHeader...), "case_id", "priority", "na", "total_findings", "rank_changed_top20", "labeled_count", "exposure_stages_in_top20", "example_labeled", "example_not_labeled")
+	header := append(append([]string{}, runKeyHeader...), "case_id", "series", "priority", "na", "total_findings", "rank_changed_top20", "labeled_count", "exposure_stages_in_top20", "example_labeled", "example_not_labeled")
 	if err := w.Write(header); err != nil {
 		return err
 	}
 	var rows [][]string
 	for _, g := range r.G4 {
-		rows = append(rows, append(append([]string{}, runKeyColumns(r.RunKey)...), r.CaseID, g.Priority, boolStr(g.NA), itoa(g.TotalFindings), itoa(g.RankChangedCount), itoa(g.LabeledCount), exposureStages(g.Top20), g.ExampleLabeled, g.ExampleNotLabeled))
+		rows = append(rows, append(append([]string{}, runKeyColumns(r.RunKey)...), r.CaseID, g.Series, g.Priority, boolStr(g.NA), itoa(g.TotalFindings), itoa(g.RankChangedCount), itoa(g.LabeledCount), exposureStages(g.Top20), g.ExampleLabeled, g.ExampleNotLabeled))
 	}
 	return writeRows(w, rows)
 }
@@ -324,4 +330,237 @@ func boolStr(b bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+// writeSeriesCSV is the series comparison: every classification's
+// confirmation count under each of the three rule sets, the two increments
+// kept apart, and the number of distinct files the positives rest on.
+//
+// The increments are separate columns because the combined figure does not
+// say which layer produced it, and the two layers cost entirely different
+// things to deploy. An increment that could not be computed is written as
+// unavailable rather than as zero.
+func writeSeriesCSV(dir string, r MatchResult) error {
+	w, f, err := create(dir, "series.csv")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	header := append(append([]string{}, runKeyHeader...),
+		"case_id", "series", "classification", "target_finding", "state_observation_failed", "confirmed",
+		"unconditional_rate", "conditional_rate", "target_pkg", "confirmed_pkg",
+		"observed_binaries", "observed_files", "event_state", "collection_complete",
+		"tp", "fp", "tn", "fn", "fpr", "fnr", "gt_coverage")
+	if err := w.Write(header); err != nil {
+		return err
+	}
+	var rows [][]string
+	row := func(sm SeriesMetrics, label string, m Metrics, binaries, files int, withGTB bool) []string {
+		tp, fp, tn, fn, fpr, fnr, coverage := "", "", "", "", "", "", ""
+		if withGTB {
+			tp, fp = itoa(sm.GTB.TP), itoa(sm.GTB.FP)
+			tn, fn = itoa(sm.GTB.TN), itoa(sm.GTB.FN)
+			fpr, fnr = rateStr(sm.GTB.FPR), rateStr(sm.GTB.FNR)
+			coverage = rateStr(sm.GTB.Coverage)
+		}
+		return append(append([]string{}, runKeyColumns(r.RunKey)...),
+			r.CaseID, sm.Series, label,
+			itoa(m.FindingDenominator), itoa(m.FindingObservationFailed), itoa(m.FindingConfirmed),
+			rateStr(m.UnconditionalRate), rateStr(m.ConditionalRate),
+			itoa(m.PkgDenominator), itoa(m.PkgConfirmed),
+			itoa(binaries), itoa(files), r.EventState, boolStr(sm.CollectionComplete),
+			tp, fp, tn, fn, fpr, fnr, coverage)
+	}
+	for _, sm := range r.Series {
+		rows = append(rows, row(sm, "overall", sm.Overall, sm.ObservedBinaries, sm.ObservedFiles, true))
+		for _, key := range []string{"act_now", "watch", "low", priorityUnclassified} {
+			if m, ok := sm.ByPrio[key]; ok {
+				rows = append(rows, row(sm, key, m, 0, 0, false))
+			}
+		}
+		for _, key := range sortedClassKeys(sm.ByClass) {
+			rows = append(rows, row(sm, "class:"+key, sm.ByClass[key], 0, 0, false))
+		}
+		for _, key := range sortedClassKeys(sm.ByEco) {
+			rows = append(rows, row(sm, "ecosystem:"+key, sm.ByEco[key], 0, 0, false))
+		}
+		for _, key := range sortedClassKeys(sm.ByGrain) {
+			rows = append(rows, row(sm, "grain:"+key, sm.ByGrain[key], 0, 0, false))
+		}
+	}
+	for _, d := range r.SeriesDeltas {
+		findings, packages := "N/A", "N/A"
+		if d.Available {
+			findings, packages = itoa(d.Findings), itoa(d.Packages)
+		}
+		rows = append(rows, append(append([]string{}, runKeyColumns(r.RunKey)...),
+			r.CaseID, d.From+"->"+d.To, "delta", "", "", findings, "", "", "", packages, "", "", d.Reason, "",
+			"", "", "", "", "", "", ""))
+	}
+	return writeRows(w, rows)
+}
+
+// writeSourceInputCSV is the per-evidence-source input availability table.
+// It exists so a source that contributed nothing can be told apart from
+// one that was never able to contribute.
+func writeSourceInputCSV(dir string, r MatchResult) error {
+	w, f, err := create(dir, "source_inputs.csv")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	header := append(append([]string{}, runKeyHeader...), "case_id", "source", "input_state", "positives", "reason")
+	if err := w.Write(header); err != nil {
+		return err
+	}
+	var rows [][]string
+	for _, st := range r.SourceInputStates {
+		rows = append(rows, append(append([]string{}, runKeyColumns(r.RunKey)...),
+			r.CaseID, st.Source, st.State, itoa(st.Positives), st.Reason))
+	}
+	return writeRows(w, rows)
+}
+
+// writeMappingCSV is the per-ecosystem file-to-package mapping outcome:
+// how many files stage one identified, how many packages stage two spread
+// the evidence over, and why the rest could not be reached.
+func writeMappingCSV(dir string, r MatchResult) error {
+	w, f, err := create(dir, "mapping.csv")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	header := append(append([]string{}, runKeyHeader...),
+		"case_id", "ecosystem", "scan_report_files", "stage1_files", "stage2_packages",
+		"observed_binaries", "observed_files", "unmappable_reasons",
+		"candidate_conflicts", "unresolved_paths", "unresolved_events",
+		"unmappable_paths", "unmappable_events", "outside_scan_paths", "outside_scan_events")
+	if err := w.Write(header); err != nil {
+		return err
+	}
+	var rows [][]string
+	for _, row := range r.Mapping.Rows {
+		reasons := make([]string, 0, len(row.UnmappableBy))
+		for k := range row.UnmappableBy {
+			reasons = append(reasons, k)
+		}
+		sort.Strings(reasons)
+		text := ""
+		for _, k := range reasons {
+			if text != "" {
+				text += " "
+			}
+			text += fmt.Sprintf("%s:%d", k, row.UnmappableBy[k])
+		}
+		rows = append(rows, append(append([]string{}, runKeyColumns(r.RunKey)...),
+			r.CaseID, row.Ecosystem, itoa(row.ScanReportFiles), itoa(row.Stage1Files), itoa(row.Stage2Packages),
+			itoa(row.ObservedBinary), itoa(row.ObservedFile), text,
+			itoa(r.Mapping.CandidateConflicts), itoa(r.Mapping.UnresolvedPaths), itoa(r.Mapping.UnresolvedEvents),
+			itoa(r.Mapping.UnmappablePaths), itoa(r.Mapping.UnmappableEvents),
+			itoa(r.Mapping.OutsideScanPaths), itoa(r.Mapping.OutsideScanEvents)))
+	}
+	return writeRows(w, rows)
+}
+
+// writeOccurrenceCSV is the per-occurrence capture table: how many of the
+// things the workload recorded itself doing were seen, at each of the
+// three units those things are counted in, plus what was excluded from
+// each denominator and why nothing was captured where nothing was.
+func writeOccurrenceCSV(dir string, r MatchResult) error {
+	w, f, err := create(dir, "occurrence_capture.csv")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	header := append(append([]string{}, runKeyHeader...),
+		"case_id", "available", "match_rule", "tolerance_ms", "clock_basis",
+		"exec_eligible", "exec_decidable", "exec_one_to_one", "exec_rate", "exec_unmatchable", "exec_one_to_many", "exec_many_to_one", "exec_undecidable",
+		"load_eligible", "load_decidable", "load_with_evidence", "load_rate", "load_attribution_conflicts", "load_undecidable",
+		"real_open_occurrences", "real_open_decidable", "real_open_captured", "real_open_rate",
+		"excluded_cache_hit", "excluded_failed", "excluded_outside_window",
+		"uncaptured_outside_window", "uncaptured_in_window_missed", "uncaptured_reason_unknown")
+	if err := w.Write(header); err != nil {
+		return err
+	}
+	o := r.Occurrence
+	realRate := rateStr(o.RealOpen.Rate)
+	if o.RealOpen.NA {
+		realRate = "N/A"
+	}
+	row := append(append([]string{}, runKeyColumns(r.RunKey)...),
+		r.CaseID, boolStr(o.Available), o.MatchRule, fmt.Sprintf("%d", o.ToleranceMS), o.ClockBasis,
+		itoa(o.Exec.Eligible), itoa(o.Exec.Decidable), itoa(o.Exec.OneToOne), rateStr(o.Exec.Rate), itoa(o.Exec.Unmatchable), itoa(o.Exec.OneToMany), itoa(o.Exec.ManyToOne), itoa(o.Exec.Undecidable),
+		itoa(o.Load.Eligible), itoa(o.Load.Decidable), itoa(o.Load.WithEvidence), rateStr(o.Load.Rate), itoa(o.Load.AttributionConflicts), itoa(o.Load.Undecidable),
+		itoa(o.RealOpen.Occurrences), itoa(o.RealOpen.Decidable), itoa(o.RealOpen.Captured), realRate,
+		itoa(o.Excluded.CacheHit), itoa(o.Excluded.Failed), itoa(o.Excluded.OutsideWindow),
+		itoa(o.Uncaptured.OutsideWindow), itoa(o.Uncaptured.InWindowMissed), itoa(o.Uncaptured.ReasonUnknown))
+	return writeRows(w, [][]string{row})
+}
+
+// writeEventDropsCSV is the event-loss table. The number of overflow
+// notifications and the number of events those notifications stand for are
+// separate columns: one notification can represent many lost events, so
+// the notification count is not a count of what was lost.
+func writeEventDropsCSV(dir string, r MatchResult) error {
+	w, f, err := create(dir, "event_drops.csv")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	header := append(append([]string{}, runKeyHeader...),
+		"case_id", "event_state", "method", "filter", "buffer_pages",
+		"events_total", "events_attributed", "events_in_window",
+		"events_before_filter", "events_after_filter",
+		"lost_events", "lost_notifications", "enter_exit_unmatched", "enter_exit_unmatched_boundary", "unmatched_identity_unavailable",
+		"identity_unavailable", "map_overflow",
+		"path_read_failures", "path_truncations", "convert_failures", "partial_events",
+		"stopped_early", "stopped_at", "gap_seconds", "stop_reason")
+	if err := w.Write(header); err != nil {
+		return err
+	}
+	d := r.EventDrops
+	stoppedAt := ""
+	if !d.StoppedAt.IsZero() {
+		stoppedAt = d.StoppedAt.UTC().Format(time.RFC3339)
+	}
+	row := append(append([]string{}, runKeyColumns(r.RunKey)...),
+		r.CaseID, r.EventState, r.EventHead.Method, r.EventHead.Filter, itoa(r.EventHead.BufferPages),
+		itoa(r.EventsTotal), itoa(r.EventsAttributed), itoa(r.EventsInWindow),
+		itoa(d.EventsBeforeFilter), itoa(d.EventsAfterFilter),
+		itoa(d.LostEvents), itoa(d.LostNotifications), itoa(d.EnterExitUnmatched), itoa(d.EnterExitUnmatchedBoundary), itoa(d.UnmatchedIdentityUnavailable),
+		itoa(d.IdentityUnavailable), itoa(d.MapOverflow),
+		itoa(d.PathReadFailures), itoa(d.PathTruncations), itoa(d.ConvertFailures), itoa(d.PartialEvents),
+		boolStr(d.StoppedEarly), stoppedAt, fmt.Sprintf("%.3f", d.GapSeconds), d.StopReason)
+	return writeRows(w, [][]string{row})
+}
+
+// writeAttributionCSV is the container-attribution table. Both rates are
+// always written: a collection that discarded every event would attribute
+// nothing wrongly, so the wrong-attribution rate alone cannot show that
+// attribution works.
+func writeAttributionCSV(dir string, r MatchResult) error {
+	w, f, err := create(dir, "attribution.csv")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	header := append(append([]string{}, runKeyHeader...),
+		"case_id", "match_rule", "cross_container_evaluable",
+		"attributed_events", "misattributed", "misattribution_rate",
+		"logged_occurrences", "correctly_attributed", "correct_attribution_rate",
+		"host_occurrences", "host_misattributed_occurrences", "host_left_unattributed", "host_unobserved", "host_correct_rate",
+		"from_other_container", "from_host", "unattributed_events", "undecidable",
+		"excluded_cache_hit", "excluded_failed", "excluded_outside_window")
+	if err := w.Write(header); err != nil {
+		return err
+	}
+	a := r.Attribution
+	row := append(append([]string{}, runKeyColumns(r.RunKey)...),
+		r.CaseID, a.MatchRule, boolStr(a.CrossContainerEvaluable),
+		itoa(a.AttributedEvents), itoa(a.Misattributed), rateStr(a.MisattributionRate),
+		itoa(a.LoggedOccurrences), itoa(a.CorrectlyAttributed), rateStr(a.CorrectAttributionRate),
+		itoa(a.HostOccurrences), itoa(a.HostMisattributedOccurrences), itoa(a.HostLeftUnattributed), itoa(a.HostUnobserved), rateStr(a.HostCorrectRate),
+		itoa(a.FromOtherContainer), itoa(a.FromHost), itoa(a.Unattributed), itoa(a.Undecidable),
+		itoa(a.Excluded.CacheHit), itoa(a.Excluded.Failed), itoa(a.Excluded.OutsideWindow))
+	return writeRows(w, [][]string{row})
 }

@@ -1,0 +1,24 @@
+{
+  "case_id": "17",
+  "image": "kl-case17",
+  "gt_b_scope": [
+    "lodash"
+  ],
+  "expected": [
+    {
+      "package": "lodash",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "the application loads this package on the firing signal, so it really is in use. The expected verdict is what the first stage's rules alone produce. A module loaded this way is read and closed, so it appears neither in the process's open descriptors nor in its mapped files: this package is expected to be reachable only through an event record, which is the point of the case"
+    }
+  ],
+  "fixture_notes": {
+    "vulnerable_package_selection": "lodash 4.17.15, verified against this image with the scanner used here: four HIGH findings (CVE-2020-8203, CVE-2021-23337, CVE-2026-4800, NSWG-ECO-516), all attributed to app/node_modules/lodash/package.json. Chosen because it is a plain library with no service or network requirement, so loading it is the only thing the run does",
+    "layout": "the standard package manager's layout, with the real package directly under the application's module directory",
+    "other_packages_present": "the runtime image also carries the package manager's own dependencies under a separate module directory. Those are not loaded by this application, and whether an observation distinguishes them from the application's own dependency is part of what the case measures",
+    "system_call_level_truth": "none; the system-call capture rate is reported as unavailable",
+    "timestamp_precision": "the timestamps are a wall-clock reading to the millisecond with a sub-millisecond part taken from a different clock. The two are not the same clock, so the digits below a millisecond are not a measurement of anything: treat the resolution as one millisecond, and keep the pairing tolerance well above it"
+  }
+}

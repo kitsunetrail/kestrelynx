@@ -1,0 +1,23 @@
+{
+  "case_id": "18",
+  "image": "kl-case18",
+  "gt_b_scope": [
+    "lodash"
+  ],
+  "expected": [
+    {
+      "package": "lodash",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "as in the standard-layout condition, with one difference that is the reason this condition exists: the package is stored once in a content-addressed directory and linked into place, so an observed path may be either the link's or the real directory's. A mapping rule has to reach the same package from either"
+    }
+  ],
+  "fixture_notes": {
+    "vulnerable_package_selection": "lodash 4.17.15, the same version as the standard-layout condition so the two differ only in layout. Verified against this image with the scanner used here: the same four HIGH findings, attributed to app/node_modules/.pnpm/lodash@4.17.15/node_modules/lodash/package.json",
+    "layout": "produced by the package manager itself rather than assembled by hand, so the link structure is the real one. The application-side path app/node_modules/lodash is a link to .pnpm/lodash@4.17.15/node_modules/lodash, and the scan report names the second",
+    "system_call_level_truth": "none; the system-call capture rate is reported as unavailable",
+    "timestamp_precision": "the timestamps are a wall-clock reading to the millisecond with a sub-millisecond part taken from a different clock. The two are not the same clock, so the digits below a millisecond are not a measurement of anything: treat the resolution as one millisecond, and keep the pairing tolerance well above it"
+  }
+}

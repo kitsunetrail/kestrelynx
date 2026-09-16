@@ -517,7 +517,7 @@ func TestResolvePathRecordMergedUsrLoaderIsOwned(t *testing.T) {
 	}
 	cache := &containerPkgCache{idx: idx, info: info}
 
-	got := resolvePathRecord("s0", ProcessGeneration{PID: 1, Starttime: "1"}, root,
+	got := resolvePathRecord("s0", ProcessGeneration{PID: 1, Starttime: "1"}, root, "maps",
 		"/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", "08:01", "131099", false, cache)
 	if got.Ownership != OwnershipOwned {
 		t.Fatalf("ownership = %q, want owned", got.Ownership)
@@ -591,7 +591,7 @@ D:so:libc.musl-x86_64.so.1 so:libssl.so.3
 	return root
 }
 
-// TestBuildPkgIndexApkVirtualPackageKeepsFileListComplete is the R2 case: a
+// TestBuildPkgIndexApkVirtualPackageKeepsFileListComplete is case 2: a
 // virtual package has no files, and that must not be read as "this
 // database cannot report file lists". Treating it as a missing list made
 // the whole database incomplete, and every unowned path in the image —
@@ -659,7 +659,7 @@ func TestResolvePathRecordRedisServerIsUnowned(t *testing.T) {
 		{"/usr/local/bin/redis-server", OwnershipUnowned, "", ""},
 	}
 	for _, tt := range want {
-		got := resolvePathRecord("s0", gen, root, tt.path, "08:01", "131099", false, cache)
+		got := resolvePathRecord("s0", gen, root, "maps", tt.path, "08:01", "131099", false, cache)
 		if got.Ownership != tt.ownership || got.Package != tt.pkg || got.DBVersion != tt.version {
 			t.Errorf("%s = (%q, %q, %q), want (%q, %q, %q)",
 				tt.path, got.Ownership, got.Package, got.DBVersion, tt.ownership, tt.pkg, tt.version)

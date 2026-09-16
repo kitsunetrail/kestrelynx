@@ -1,0 +1,29 @@
+{
+  "case_id": "14",
+  "image": "kl-case14",
+  "gt_b_scope": [
+    "libsqlite3-0"
+  ],
+  "expected": [
+    {
+      "package": "libc6",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "linked by the load/unload program itself and mapped for its whole life"
+    },
+    {
+      "package": "libsqlite3-0",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "factor_hint": "transient_dlopen",
+      "rationale": "mapped only for the loaded half of each seven-second cycle; each load is recorded individually with the span it covered, so a sampling collector and an event collector can be compared over the same loads rather than over sample counts"
+    }
+  ],
+  "fixture_notes": {
+    "unload_verification": "each load records whether it read the file, and that is decided by whether the previous cycle's unload was confirmed to have removed the mapping. After a confirmed unload nothing was held over and the file is read again; without that confirmation the load may have been satisfied from what was still mapped, and it is recorded as a cached load so it stays out of the denominator of expected reads",
+    "precondition": "the unload has to actually happen on the machine under test. Confirm it before measuring — the fixture check requires a load log with both a read and a cached repeat — and if the mapping never disappears, this condition measures nothing and is dropped rather than reported",
+    "system_call_level_truth": "none; the system-call capture rate is reported as unavailable"
+  }
+}

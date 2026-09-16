@@ -1,0 +1,25 @@
+# A hand-assembled fixture for script format version 2. No live capture in
+# this format exists yet, so this is not a verbatim trace the way
+# trace-real-excerpt.txt is: it is built from two real records of the same
+# run, joined on the one number that reads the same in both of them.
+#
+# The monotonic time, pid, tid, cgroup, generation-start and path columns,
+# and every value on them, are copied verbatim from a real host trace
+# (bpftrace v0.25.0, kernel 6.6, script format version 1, 2026-09-13). That
+# trace predates the ns_pid/ns_tid columns, so they are not in it; the
+# values used for them here are the container-side process numbers the
+# same run's own independent occurrence log recorded for the same process
+# generation, identified by the generation start time in clock ticks —
+# 29256421 for curl (host pid 3013915, container pid 3010380) and
+# 29256441 for git (host pid 3013995, container pid 3010460).
+V|2|256|64|nofilter
+E|292564219003563|3013915|3013915|3010380|3010380|56581|292564211516946|curl|/usr/bin/curl
+O|292564219243548|3013915|3013915|3010380|3010380|56581|292564211516946|-100|/etc/ld.so.cache
+X|292564219259367|3013915|3013915|3010380|3010380|3|292564219243548
+O|292564219273825|3013915|3013915|3010380|3010380|56581|292564211516946|-100|/lib/x86_64-linux-gnu/libcurl.so.4
+X|292564219374879|3013915|3013915|3010380|3010380|3|292564219273825
+E|292564420440005|3013995|3013995|3010460|3010460|56581|292564413835782|git|/usr/bin/git
+O|292564421319968|3013995|3013995|3010460|3010460|56581|292564413835782|-100|/etc/ld.so.cache
+X|292564421365843|3013995|3013995|3010460|3010460|3|292564421319968
+O|292564421386351|3013995|3013995|3010460|3010460|56581|292564413835782|-100|/lib/x86_64-linux-gnu/libpcre2-8.so.0
+X|292564421400463|3013995|3013995|3010460|3010460|3|292564421386351

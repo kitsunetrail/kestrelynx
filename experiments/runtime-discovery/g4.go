@@ -262,7 +262,7 @@ func joinPackageEvidence(rec *ContainerRecord, groups []pkgGroup, wv windowValid
 		// one wins, ranked by exposure first and privilege second.
 		bestRank := -1
 		for _, pr := range rec.PathResolution {
-			if !wv.ValidSampleIDs[pr.SampleID] || !ownedPathConfirms(pr, g.key) {
+			if !wv.ValidSampleIDs[pr.SampleID] || !samplingReadKinds(pr) || !ownedPathConfirms(pr, g.key) {
 				continue
 			}
 			ev.Confirmed = true

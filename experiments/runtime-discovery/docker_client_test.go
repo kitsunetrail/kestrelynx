@@ -24,7 +24,7 @@ import (
 const containersJSONFixture = `[
   {
     "Id": "8dfafdbc3a40e2c1a1d09c9a5e3f0b8e4a6c2d1f0e9b8a7c6d5e4f3a2b1c0d9e",
-    "Names": ["/r1"],
+    "Names": ["/case1"],
     "Image": "nginx:1.27",
     "ImageID": "sha256:1e60f61e927ad57a35d95a00a5c8f740915938c2fc0295482cdae2288ef54732",
     "Command": "/docker-entrypoint.sh nginx -g 'daemon off;'",
@@ -41,7 +41,7 @@ const containersJSONFixture = `[
 const containerInspectFixture = `{
   "Id": "8dfafdbc3a40e2c1a1d09c9a5e3f0b8e4a6c2d1f0e9b8a7c6d5e4f3a2b1c0d9e",
   "Created": "2026-01-01T00:00:00.000000000Z",
-  "Name": "/r1",
+  "Name": "/case1",
   "Image": "sha256:1e60f61e927ad57a35d95a00a5c8f740915938c2fc0295482cdae2288ef54732",
   "State": {
     "Status": "running",
@@ -110,11 +110,11 @@ func TestDecodeContainersJSON(t *testing.T) {
 	if s.Image != "nginx:1.27" {
 		t.Errorf("Image = %q, want the requested reference nginx:1.27", s.Image)
 	}
-	if len(s.Names) != 1 || s.Names[0] != "/r1" {
-		t.Fatalf("Names = %v, want [/r1] (the API's names are slash-prefixed)", s.Names)
+	if len(s.Names) != 1 || s.Names[0] != "/case1" {
+		t.Fatalf("Names = %v, want [/case1] (the API's names are slash-prefixed)", s.Names)
 	}
-	if got := primaryName(s.Names); got != "r1" {
-		t.Errorf("primaryName = %q, want r1", got)
+	if got := primaryName(s.Names); got != "case1" {
+		t.Errorf("primaryName = %q, want case1", got)
 	}
 }
 

@@ -1,7 +1,0 @@
-{
-  "case_id": "R7a",
-  "image": "kl-r7a",
-  "gap_class_hint": "E4",
-  "gap_class_rationale": "the only running binary is statically linked and maps no shared library at all, so there is no file for an ownership lookup to resolve. The package database is intact and readable here: the shortfall is the absence of anything to observe, not an inability to resolve what was observed",
-  "expected": []
-}

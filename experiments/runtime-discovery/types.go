@@ -37,11 +37,25 @@ type Subject struct {
 // actually achieved.
 type RunKey struct {
 	CaseVariant string `json:"case_variant"`
-	Permission  string `json:"permission"` // "root" | "ptrace" | "ptrace_dac" | "none"
+	Permission  string `json:"permission"` // "root" | "ptrace" | "ptrace_dac" | "none" | "bpf_perfmon" | "bpf_perfmon_dac" | "sysadmin"
 	Interval    int    `json:"interval_seconds"`
 	Window      int    `json:"window_seconds"`
 	Phase       int    `json:"phase_seconds"`
 	Replicate   int    `json:"replicate"`
+	// Sync says how the observation and the workload were ordered:
+	// "startup" starts the observation first and only then lets the
+	// workload begin, "attach_running" joins a container that is already
+	// working. The two capture structurally different things — a load that
+	// happens once at startup exists only in the first — so results from
+	// them are never merged, and the dimension belongs in the key that
+	// keeps them apart.
+	Sync string `json:"sync,omitempty"`
+	// ConfigID encodes the event-collection configuration: the collection
+	// method and its version, the kernel-side filter, and the buffer size.
+	// A run that collected no events at all and one that collected them
+	// under a different filter are not the same condition, and without
+	// this they would write to the same place and be added up together.
+	ConfigID string `json:"config_id,omitempty"`
 }
 
 // ProcessGeneration identifies one process instance: a PID is only unique
@@ -152,6 +166,14 @@ type ProcessRecord struct {
 	CgroupContainerID string `json:"cgroup_container_id,omitempty"`
 	CgroupMatches     bool   `json:"cgroup_matches"`
 	CgroupError       string `json:"cgroup_error,omitempty"`
+
+	// FileDescriptors are the ordinary files this process had open, from
+	// the readlink targets of its descriptor table. Sockets are not here:
+	// they are resolved to inodes and reported as listeners. A file kept
+	// open for the life of a process — a runtime holding its archives, for
+	// instance — is visible here without any event collection.
+	FileDescriptors []FDRecord `json:"file_descriptors,omitempty"`
+	FDError         string     `json:"fd_error,omitempty"`
 }
 
 // Ownership is collect's own path-to-package resolution verdict, decided
@@ -181,10 +203,16 @@ type PathResolutionRecord struct {
 	// replayed against the matching package_ledger rows.
 	MountViewID  string `json:"mount_view_id,omitempty"`
 	DBGeneration string `json:"db_generation,omitempty"`
-	Path         string `json:"path"`               // as observed (pre-resolution)
-	Resolved     string `json:"resolved,omitempty"` // resolveInRoot's output, "" if Ownership == unresolvable
-	Dev          string `json:"dev,omitempty"`      // as recorded by /proc/<pid>/maps at observation time
-	Inode        string `json:"inode,omitempty"`
+	// Source says which read produced this path: the process's executable
+	// link, its memory mappings, or its open file descriptors. The three
+	// support different claims — an executable was run, a mapping was
+	// loaded, a descriptor is merely open — and collapsing them would let
+	// a description say more than the observation does.
+	Source   string `json:"source,omitempty"`   // "exe" | "maps" | "fd"
+	Path     string `json:"path"`               // as observed (pre-resolution)
+	Resolved string `json:"resolved,omitempty"` // resolveInRoot's output, "" if Ownership == unresolvable
+	Dev      string `json:"dev,omitempty"`      // as recorded by /proc/<pid>/maps at observation time
+	Inode    string `json:"inode,omitempty"`
 
 	MapsDeleted bool `json:"maps_deleted"`
 	// PathInodeChanged is a pointer so "not evaluated" (inode calibration
@@ -369,6 +397,17 @@ type ContainerRecord struct {
 	Subject Subject `json:"subject"`
 	RunKey  RunKey  `json:"run_key"`
 	Window  Window  `json:"window"`
+
+	// TargetRegistrations records the pre-registration state machine for a
+	// target named before it existed: when it was registered, when it was
+	// seen to start, when its auxiliary inputs were read, and when it
+	// became an observation target.
+	TargetRegistrations []TargetRegistration `json:"target_registrations,omitempty"`
+	// AuxiliaryInputs holds, per package-database generation, the
+	// file-to-package mapping information the sampling itself does not
+	// produce. It is saved so a later match reads it instead of the
+	// container's filesystem, which by then may be gone.
+	AuxiliaryInputs []AuxiliaryInputs `json:"auxiliary_inputs,omitempty"`
 
 	Namespaces        []NamespaceRecord      `json:"namespaces,omitempty"`
 	Processes         []ProcessRecord        `json:"processes,omitempty"`

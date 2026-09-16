@@ -1,0 +1,32 @@
+{
+  "case_id": "13",
+  "image": "kl-case13",
+  "gt_b_scope": [
+    "curl",
+    "git"
+  ],
+  "expected": [
+    {
+      "package": "curl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "expected_factor": "",
+      "factor_hint": "short_lived",
+      "rationale": "run once per loop iteration and gone in milliseconds; whether a sample falls while it is running is chance, which is what this case measures against an event record of every run"
+    },
+    {
+      "package": "git",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "factor_hint": "short_lived",
+      "rationale": "run once per loop iteration, the same way curl is"
+    }
+  ],
+  "fixture_notes": {
+    "execution_success": "an execution is recorded as successful only after the run is confirmed to have reached the program: the executable link is checked while it runs, and an exit status of 126 or 127 marks one that never did. A start that failed is recorded as a failed execution and stays out of the denominator, so the collection is not charged with missing something that did not happen",
+    "system_call_level_truth": "none; the system-call capture rate is reported as unavailable",
+    "process_number_correspondence": "where the case runner can record, per container and per generation, which host process number each container process number is, an occurrence and an event are identified as the same process independently of which container the event was credited to, and a misattribution to another container can be confirmed rather than merely suspected. Without that correspondence, matching falls back to the numbers the container's own PID namespace assigns, which the event collector records alongside the host number and which are compared directly against the occurrence's own; that needs no correspondence table, but such a number is unique only within its own container, so this weaker rule can confirm a match only against the container an event was actually credited to and cannot tell a genuine cross-container misattribution from a coincidental number collision. A pairing neither rule can decide is counted as undecidable. For a freshly started process the leading thread's number equals its process number on both sides, so an entry naming the process covers its thread as well"
+  }
+}

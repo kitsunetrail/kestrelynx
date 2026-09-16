@@ -30,6 +30,8 @@ func runMatch(args []string) error {
 	trivyPath := fs.String("trivy", "", "path to the Trivy JSON report for this case (required)")
 	casePath := fs.String("case", "", "path to the case definition JSON, GT-A and gt_b_scope included (required)")
 	gtbPath := fs.String("gtb", "", "path to the ground-truth-B JSON for this case (optional; omit to leave FP/FN undetermined)")
+	eventsPath := fs.String("events", "", "path to the event log JSONL for this window (optional; omit for a run that collected no events). This reader takes event logs only: a ground-truth usage log passed here is refused rather than read as an observation")
+	toleranceMS := fs.Int64("occurrence-tolerance-ms", defaultOccurrenceToleranceMS, "milliseconds of difference allowed between an occurrence the workload recorded and the event reported for it. Fix this before measuring; widening it afterwards until the numbers improve is choosing the answer")
 	intelCache := fs.String("intel-cache", "./out/intel-cache", "cache directory for the KEV/EPSS datasets, used only when -intel-snapshot is not given")
 	intelSnapshot := fs.String("intel-snapshot", "", "path to a saved intel snapshot JSON (the \"intel\" object of an earlier match result). When given, no KEV/EPSS lookup is performed and the saved enrichment is used verbatim, which is what makes a re-run reproduce an earlier classification")
 	outIntelSnapshot := fs.String("out-intel-snapshot", "", "path to write the intel snapshot this run used, for feeding back as -intel-snapshot later (optional)")
@@ -73,6 +75,14 @@ func runMatch(args []string) error {
 		}
 	}
 
+	var events *EventLog
+	if *eventsPath != "" {
+		events, err = readEventLog(*eventsPath)
+		if err != nil {
+			return err
+		}
+	}
+
 	var snapshot *IntelSnapshot
 	if *intelSnapshot != "" {
 		snapshot, err = readIntelSnapshot(*intelSnapshot)
@@ -81,7 +91,12 @@ func runMatch(args []string) error {
 		}
 	}
 
-	result, err := runMatchPipeline(context.Background(), rec, scan, def, gtb, snapshot, *intelCache, *actNowEPSS, *watchEPSS)
+	fileIdx, err := buildScanFileIndex(trivyData)
+	if err != nil {
+		return err
+	}
+
+	result, err := runMatchPipeline(context.Background(), rec, scan, fileIdx, def, gtb, events, snapshot, *intelCache, *actNowEPSS, *watchEPSS, *toleranceMS)
 	if err != nil {
 		return err
 	}
@@ -118,7 +133,7 @@ func readIntelSnapshot(path string) (*IntelSnapshot, error) {
 // makes no call depending on any live container: everything it touches is
 // either an argument or the intel cache on disk, so it is safe to call
 // twice on the same saved inputs and expect the same result.
-func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.ImageScan, def Case, gtb *GroundTruthB, savedIntel *IntelSnapshot, intelCacheDir string, actNowEPSS, watchEPSS float64) (MatchResult, error) {
+func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.ImageScan, fileIdx *scanFileIndex, def Case, gtb *GroundTruthB, events *EventLog, savedIntel *IntelSnapshot, intelCacheDir string, actNowEPSS, watchEPSS float64, toleranceMS int64) (MatchResult, error) {
 	result := MatchResult{CaseID: def.CaseID, Image: def.Image, GeneratedAt: time.Now().UTC(), Subject: rec.Subject, RunKey: rec.RunKey}
 	result.ContainerID = rec.Subject.Docker.ContainerID
 	result.ObservedImageID = rec.Subject.Docker.ImageID
@@ -128,6 +143,18 @@ func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.Ima
 		// samples. It stays in the population as a fully not_determined
 		// result rather than disappearing from the denominator.
 		result.Errors = append(result.Errors, "observation: container inspect failed: "+rec.InspectError)
+	}
+
+	if events != nil {
+		// The observation and the events have to describe the same
+		// condition. A window sampled while the workload was already
+		// running, matched against events collected from its startup,
+		// would combine two measurements of different things — and so
+		// would a window matched against events collected under another
+		// filter or buffer size.
+		if err := verifyRunConditions(rec.RunKey, events.Header); err != nil {
+			return MatchResult{}, err
+		}
 	}
 
 	verified, scanDigest, identityErr := verifyImageIdentity(rec, scan)
@@ -184,15 +211,86 @@ func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.Ima
 
 	gapEv := computeGapEvidence(&rec, wv)
 	groups := groupFindings(scan.Findings)
+
+	// The auxiliary mapping inputs are restricted to the database
+	// generations this window's valid samples actually read. One recorded
+	// for another generation describes a layout these samples never looked
+	// at, and answering from it would describe a different container state
+	// than the one being matched.
+	resolvers := newResolverSet(fileIdx, auxForWindow(&rec, wv))
+	evidence := buildEvidenceSet(&rec, wv, groups, resolvers, fileIdx, events, verified)
+	result.EventState, result.EventNotes = evidence.eventState, evidence.eventNotes
+	if events != nil {
+		result.EventDrops, result.EventHead = events.Trailer.Drops, events.Header
+		result.EventsTotal = len(events.Events)
+		for _, ev := range events.Events {
+			if ev.ContainerID == rec.Subject.Docker.ContainerID {
+				result.EventsAttributed++
+				if inWindow(ev.Timestamp, rec.Window.ScheduledStart, rec.Window.ScheduledEnd) {
+					result.EventsInWindow++
+				}
+			}
+		}
+	}
+
 	packages := make([]PackageVerdict, 0, len(groups))
 	for _, g := range groups {
 		pv := assignVerdict(g, &rec, def, obsState, wv)
 		applyPriorities(&pv, g, priorityByIndex)
 		labelGTBTruth(&pv, truth)
 		pv.GapClass, pv.GapRecoverability = classifyGap(pv, declaresE4(def, g.key.Package), gapEv)
+
+		pv.Ecosystem, pv.MappingInput = fileIdx.ecosystem[g.key], fileIdx.mappingInput[g.key]
+		if pv.Ecosystem == "" && g.key.Class == scanner.ClassOS {
+			pv.Ecosystem = ecoOS
+		}
+		if pv.MappingInput == "" {
+			pv.MappingInput = mappingInputNone
+		}
+		s1 := decideSeries(seriesS1, g, &rec, def, obsState, wv, evidence, resolvers, fileIdx)
+		s2 := decideSeries(seriesS2, g, &rec, def, obsState, wv, evidence, resolvers, fileIdx)
+		pv.S1Verdict, pv.S1Factor, pv.S1Sources = s1.Verdict, s1.Factor, s1.Sources
+		pv.S2Verdict, pv.S2Factor, pv.S2Sources = s2.Verdict, s2.Factor, s2.Sources
+		pv.EvidenceFiles, pv.EvidenceGrain = s2.Files, s2.Grain
+		pv.EvidenceNotes = append(pv.EvidenceNotes, s2.Notes...)
+		pv.Confirmations = evidence.confirmationsFor(g.key, allowS2)
+		noteGapRecovery(&pv, evidence)
 		packages = append(packages, pv)
 	}
 	result.Packages = packages
+
+	// Whether a window's collection ran to completion is asked per series,
+	// over the collections that series actually uses. A degraded event
+	// collection says nothing about the two series that do not read
+	// events, and letting it withdraw their conditional rate would report
+	// them as incomplete for a reason that had no bearing on them.
+	samplingComplete := obsState == "observed"
+	eventsComplete := evidence.eventState == eventStateObserved || evidence.eventState == eventStateNotAttempted
+	// The read-only mapping rests on the saved layout, so its own
+	// completeness is whether that layout was read whole: a reading that
+	// was cut short at a limit, or one whose source did not hold still,
+	// leaves a gap that has nothing to do with the sampling or the events.
+	mappingComplete := auxComplete(auxForWindow(&rec, wv))
+	for _, series := range []string{seriesS0, seriesS1, seriesS2} {
+		complete := samplingComplete
+		if series != seriesS0 {
+			complete = complete && mappingComplete
+		}
+		if series == seriesS2 {
+			complete = complete && eventsComplete
+		}
+		sm := aggregateSeries(series, packages, complete)
+		sm.GTB = computeSeriesGTB(series, packages)
+		sm.CollectionComplete = complete
+		result.Series = append(result.Series, sm)
+	}
+	result.SeriesDeltas = computeSeriesDeltas(packages, evidence.eventState)
+	for _, source := range evidence.order {
+		result.SourceInputStates = append(result.SourceInputStates, *evidence.inputStates[source])
+	}
+	result.Mapping = buildMappingReport(fileIdx, packages, evidence)
+	result.Occurrence = computeOccurrenceMetrics(gtb, events, rec.Subject.Docker.ContainerID, rec.Window.ScheduledStart, rec.Window.ScheduledEnd, toleranceMS)
+	result.Attribution = computeAttributionMetrics(gtb, events, rec.Subject.Docker.ContainerID, rec.Window.ScheduledStart, rec.Window.ScheduledEnd, toleranceMS)
 
 	result.Overall, result.ByClass, result.ByPrio,
 		result.UnresolvedFactors, result.UnobservedFactors, result.NotDeterminedFactors,
@@ -205,9 +303,34 @@ func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.Ima
 	result.GuessDependency = guessDependencyRate(packages, result.Overall)
 	result.Exposure = computeExposure(&rec, result.PathMatches)
 
-	evidence := joinPackageEvidence(&rec, groups, wv)
+	// The ranking is produced twice: once from the first stage's own
+	// evidence and once from everything the added layers established. The
+	// pair is what shows whether the extra evidence moves anything — which
+	// is the question the additional rule exists to answer, and which a
+	// confirmation rate on its own does not.
+	//
+	// The exposure and privilege axes still come only from observations
+	// that shared a process generation with a confirming one. A package
+	// confirmed by an event has no sample behind it, so those axes stay
+	// unknown for it rather than being borrowed from some other process.
+	joined := joinPackageEvidence(&rec, groups, wv)
+	withSeries := make(map[pkgGroupKey]packageEvidence, len(joined))
+	confirmedS2 := map[pkgGroupKey]bool{}
+	for _, pv := range packages {
+		if pv.S2Verdict == VerdictConfirmed {
+			confirmedS2[pkgGroupKey{Class: classOf(pv.Class), Package: pv.Package, InstalledVer: pv.InstalledVer}] = true
+		}
+	}
+	for key, ev := range joined {
+		ev.Confirmed = confirmedS2[key]
+		withSeries[key] = ev
+	}
 	for _, prio := range []string{"act_now", "watch"} {
-		result.G4 = append(result.G4, computeG4(prio, groups, scan.Findings, priorityByIndex, evidence))
+		g0 := computeG4(prio, groups, scan.Findings, priorityByIndex, joined)
+		g0.Series = seriesS0
+		g2 := computeG4(prio, groups, scan.Findings, priorityByIndex, withSeries)
+		g2.Series = seriesS2
+		result.G4 = append(result.G4, g0, g2)
 	}
 
 	result.Evidence = buildEvidence(packages, result.Exposure, &rec, wv, rec.Window.ID)
@@ -277,6 +400,29 @@ func conditionLabel(degraded bool) string {
 	return "normal"
 }
 
+// verifyRunConditions checks that an event log belongs to the same run
+// condition as the observation it is being matched against.
+//
+// An empty value on either side is not a disagreement: a log produced
+// before a dimension existed simply does not carry it, and refusing those
+// would reject valid saved inputs. Two values that are both present and
+// differ are a disagreement, and combining them would add up measurements
+// of different conditions.
+func verifyRunConditions(key RunKey, header EventHeader) error {
+	if key.ConfigID != "" && header.ConfigID != "" && key.ConfigID != header.ConfigID {
+		return fmt.Errorf("condition mismatch: the observation belongs to collection configuration %q and the event log to %q, so they are measurements of different conditions",
+			key.ConfigID, header.ConfigID)
+	}
+	if key.Sync != "" && header.Sync != "" && key.Sync != header.Sync {
+		return fmt.Errorf("condition mismatch: the observation was taken under the %q ordering condition and the event log under %q; one of them can see a load that happens once at startup and the other cannot",
+			key.Sync, header.Sync)
+	}
+	if key.ConfigID != "" && key.ConfigID != "none" && header.ConfigID == "" {
+		return fmt.Errorf("the event log does not say which collection configuration it belongs to, so it cannot be shown to be this run's (%q)", key.ConfigID)
+	}
+	return nil
+}
+
 // verifyImageIdentity checks that the container the observation describes
 // is the same image Trivy actually scanned.
 func verifyImageIdentity(rec ContainerRecord, scan scanner.ImageScan) (verified bool, scanDigest string, err error) {
@@ -332,10 +478,38 @@ func readCase(path string) (Case, error) {
 	return def, nil
 }
 
+// firstRecordKind reads the "record" discriminator of the first JSON
+// object in a file, which is what an event log's every line carries and a
+// ground-truth record never does.
+func firstRecordKind(data []byte) string {
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var probe struct {
+			Record string `json:"record"`
+		}
+		if err := json.Unmarshal([]byte(line), &probe); err != nil {
+			return ""
+		}
+		return probe.Record
+	}
+	return ""
+}
+
 func readGTB(path string) (*GroundTruthB, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read ground truth B: %w", err)
+	}
+	// An event log is refused here rather than parsed leniently. The two
+	// formats describe the same kind of fact and look alike, and ground
+	// truth built from the observation it is meant to judge makes every
+	// capture rate and every false-positive count meaningless — so the
+	// mistake is made impossible rather than merely unlikely.
+	if kind := firstRecordKind(data); kind == eventRecordKind || kind == eventsHeaderKind {
+		return nil, fmt.Errorf("%s is an event log, not ground truth: the events an observation produced cannot be the truth that observation is judged against. Pass it with -events", path)
 	}
 	var gtb GroundTruthB
 	if err := json.Unmarshal(data, &gtb); err != nil {

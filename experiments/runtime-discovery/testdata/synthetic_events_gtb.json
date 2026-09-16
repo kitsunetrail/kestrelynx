@@ -1,0 +1,225 @@
+{
+  "case_id": "SYNTH-EV",
+  "kind": "usage_log",
+  "clock_base": "wall clock on both sides; the tracer's stamps are converted through the paired reading in the event log's header",
+  "pid_map": [
+    {
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001",
+      "container_pid": 1,
+      "host_pid": 4242,
+      "container_tid": 1,
+      "host_tid": 4242,
+      "starttime": 12345
+    },
+    {
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001",
+      "container_pid": 31,
+      "host_pid": 4300,
+      "container_tid": 31,
+      "host_tid": 4300,
+      "starttime": 20000
+    }
+  ],
+  "usage_log": [
+    {
+      "ts": "2026-09-13T00:00:30.090000000Z",
+      "pid": 1,
+      "starttime": 12345,
+      "event": "exec",
+      "path": "/server",
+      "ok": true
+    },
+    {
+      "ts": "2026-09-13T00:01:00.190000000Z",
+      "pid": 1,
+      "starttime": 12345,
+      "event": "open",
+      "path": "/app/node_modules/lodash/lodash.js",
+      "ok": true
+    },
+    {
+      "ts": "2026-09-13T00:01:00.195000000Z",
+      "pid": 1,
+      "starttime": 12345,
+      "event": "open",
+      "path": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+      "ok": true
+    },
+    {
+      "ts": "2026-09-13T00:01:00.196000000Z",
+      "pid": 1,
+      "starttime": 12345,
+      "event": "open",
+      "path": "/app/log4j-core-2.14.1.jar",
+      "ok": true
+    },
+    {
+      "ts": "2026-09-13T00:01:00.197000000Z",
+      "pid": 1,
+      "starttime": 12345,
+      "event": "open",
+      "path": "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so",
+      "ok": true
+    },
+    {
+      "ts": "2026-09-13T00:01:40.000000000Z",
+      "pid": 31,
+      "starttime": 20000,
+      "event": "exec",
+      "path": "/usr/bin/curl",
+      "ok": true
+    }
+  ],
+  "path_packages": [
+    {
+      "path": "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+      "packages": [
+        {
+          "package": "libssl3",
+          "version": "3.0.13-1~deb12u1",
+          "class": "os"
+        }
+      ]
+    },
+    {
+      "path": "/app/node_modules/lodash/lodash.js",
+      "packages": [
+        {
+          "package": "lodash",
+          "version": "4.17.15",
+          "class": "lang"
+        }
+      ]
+    },
+    {
+      "path": "/app/log4j-core-2.14.1.jar",
+      "packages": [
+        {
+          "package": "org.apache.logging.log4j:log4j-core",
+          "version": "2.14.1",
+          "class": "lang"
+        }
+      ]
+    },
+    {
+      "path": "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so",
+      "packages": [
+        {
+          "package": "cryptography",
+          "version": "41.0.0",
+          "class": "lang"
+        }
+      ]
+    },
+    {
+      "path": "/server",
+      "packages": [
+        {
+          "package": "golang.org/x/text",
+          "version": "v0.3.0",
+          "class": "lang"
+        },
+        {
+          "package": "stdlib",
+          "version": "1.22.0",
+          "class": "lang"
+        }
+      ]
+    },
+    {
+      "path": "/usr/bin/curl",
+      "packages": [
+        {
+          "package": "curl",
+          "version": "7.88.1-10+deb12u5",
+          "class": "os"
+        }
+      ]
+    }
+  ],
+  "occurrences": [
+    {
+      "id": "synth-exec-000001",
+      "kind": "exec",
+      "pid": 1,
+      "tid": 1,
+      "starttime": 12345,
+      "ts": "2026-09-13T00:00:30.090000000Z",
+      "ok": true,
+      "path": "/server",
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "id": "synth-load-000001",
+      "kind": "load",
+      "pid": 1,
+      "tid": 1,
+      "starttime": 12345,
+      "start": "2026-09-13T00:01:00.150000000Z",
+      "end": "2026-09-13T00:01:00.250000000Z",
+      "ok": true,
+      "cache_hit": false,
+      "files": [
+        "/app/node_modules/lodash/lodash.js",
+        "/app/node_modules/lodash/package.json"
+      ],
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "id": "synth-load-000002",
+      "kind": "load",
+      "pid": 1,
+      "tid": 1,
+      "starttime": 12345,
+      "start": "2026-09-13T00:01:00.260000000Z",
+      "end": "2026-09-13T00:01:00.261000000Z",
+      "ok": true,
+      "cache_hit": true,
+      "files": [
+        "/app/node_modules/lodash/lodash.js"
+      ],
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "id": "synth-load-000003",
+      "kind": "load",
+      "pid": 1,
+      "tid": 1,
+      "starttime": 12345,
+      "start": "2026-09-13T00:02:00.000000000Z",
+      "end": "2026-09-13T00:02:00.100000000Z",
+      "ok": true,
+      "cache_hit": false,
+      "files": [
+        "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so"
+      ],
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "id": "synth-load-000004",
+      "kind": "load",
+      "pid": 1,
+      "tid": 1,
+      "starttime": 12345,
+      "start": "2026-09-13T00:03:00.000000000Z",
+      "end": "2026-09-13T00:03:00.010000000Z",
+      "ok": false,
+      "cache_hit": false,
+      "files": [
+        "/app/node_modules/absent/index.js"
+      ],
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "id": "synth-exec-000002",
+      "kind": "exec",
+      "pid": 31,
+      "tid": 31,
+      "starttime": 20000,
+      "ts": "2026-09-13T00:01:40.000000000Z",
+      "ok": true,
+      "path": "/usr/bin/curl",
+      "container_id": "c0ffee0000000000000000000000000000000000000000000000000000000001"
+    }
+  ]
+}

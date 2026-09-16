@@ -1,0 +1,24 @@
+Attaching 6 probes...
+V|1|256|64
+E|1000000000|4242|4242|52161|400000000|curl|/usr/bin/curl
+O|1000500000|4242|4242|52161|400000000|-100|/usr/lib/x86_64-linux-gnu/libcurl.so.4
+X|1000600000|4242|4242|3|1000500000
+O|1001000000|4242|4242|52161|400000000|-100|/usr/lib/x86_64-linux-gnu/libnghttp2.so.14
+X|1001100000|4242|4242|-2|1001000000
+O|1002000000|4242|4251|52161|400000000|-100|/app/node_modules/lodash/lodash.js
+X|1002100000|4242|4251|5|1002000000
+X|1002600000|4242|4252|6|1002500000
+O|1002500000|4242|4252|52161|400000000|-100|/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so
+O|1003000000|4242|4253|52161|400000000|7|relative/config.json
+X|1003100000|4242|4253|4|1003000000
+O|1003500000|4242|4242|52161|400000000|-100|cwd-relative/thing.js
+X|1003600000|4242|4242|8|1003500000
+E|1100000000|4300|4300|999999|1050000000|git|/usr/bin/git
+O|1200000000|4400|4400|52161|1150000000|-100|/app/node_modules/.pnpm/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/node_modules/x/index.js
+X|1400000000|4400|4400|6|1200000000
+X|1500000000|4242|4999|3
+@events_before_filter: 4821
+@events_after_filter: 7
+@events_exec: 2
+@path_read_failed: 3
+Lost 17 events

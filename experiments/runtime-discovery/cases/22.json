@@ -1,0 +1,21 @@
+{
+  "case_id": "22",
+  "image": "kl-case22",
+  "gt_b_scope": ["golang.org/x/text"],
+  "expected": [
+    {
+      "package": "golang.org/x/text",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "the module is compiled into the binary and called by it, so it really is part of what runs. The expected verdict is what the first stage's rules alone produce. The added mapping is expected to reach it from the binary's own path, which the scan report names, without any event record; the event record is expected to reach it as well, from the execution"
+    }
+  ],
+  "fixture_notes": {
+    "vulnerable_package_selection": "golang.org/x/text v0.3.0, verified against this image with the scanner used here: four HIGH findings (CVE-2020-14040, CVE-2021-38561, CVE-2022-32149, CVE-2026-56852), all attributed to the binary's own path. Chosen because it is a small library with no service or network requirement and the program can call into it in one line, so the module is genuinely built in rather than an unused import",
+    "granularity": "the scan report hangs every module built into the binary off that one path. Executing the binary therefore confirms the file and nothing finer: it does not show that any particular module ran. Results for this case must carry that qualification",
+    "linkage": "built without the C toolchain, so the program links no shared library at run time and nothing but the binary itself appears in its mapped files",
+    "system_call_level_truth": "none; the system-call capture rate is reported as unavailable"
+  }
+}

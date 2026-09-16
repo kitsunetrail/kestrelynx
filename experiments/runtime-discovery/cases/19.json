@@ -1,0 +1,24 @@
+{
+  "case_id": "19",
+  "image": "kl-case19",
+  "gt_b_scope": [
+    "org.apache.logging.log4j:log4j-core"
+  ],
+  "expected": [
+    {
+      "package": "org.apache.logging.log4j:log4j-core",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "the program loads a class out of this archive on the firing signal, so it really is in use. The expected verdict is what the first stage's rules alone produce. Whether the runtime keeps the archive open for its whole life, and so whether it can be seen without any event record, is one of the things this case measures"
+    }
+  ],
+  "fixture_notes": {
+    "vulnerable_package_selection": "log4j-core 2.14.1, verified against this image with the scanner used here: three findings including CVE-2021-44228 at CRITICAL, attributed to app/log4j-core-2.14.1.jar. Chosen because it is reported at the highest severity, is a library rather than a service, and its archive is named directly by the scan report",
+    "layout": "each library is a file of its own on the class path, which is the layout a scan report names directly",
+    "system_call_level_truth": "none; the system-call capture rate is reported as unavailable",
+    "open_condition": "startup_open: the archive is on the class path, so the runtime opens it before this program runs and holds it open. A load then reads from a descriptor that already exists and opens nothing, which is what an event collection can and cannot see here. The companion late-open condition is where the load itself opens the file",
+    "thread_granularity": "none, and the consequence is recorded rather than worked around. This runtime's own thread identifier is unrelated to the operating system's, so the occurrence log names no thread number — and a pairing whose thread condition cannot be checked is counted as undecidable, not as a capture. Both per-occurrence rates for this case are therefore over whatever remains decidable, and are reported alongside the undecidable count rather than as if the whole denominator had been judged"
+  }
+}

@@ -1,0 +1,25 @@
+# An excerpt of a trace taken on a real host (bpftrace v0.25.0,
+# kernel 6.6, 2026-09-13). Every line below is copied verbatim from
+# that run; only the selection is this file's own.
+# The version line here is the four-field form this run produced, before
+# the scripts began naming their own variant. It is kept as it was: a
+# saved trace has to keep converting.
+V|1|256|64
+E|288964983178493|2988932|2988932|21|288964977576175|sh|/bin/sh
+O|288963833046305|2988923|2988923|21|288963416104745|-100|/sys/kernel/debug/tracing/events/syscalls/sys_enter_openat2/id
+X|288963833071023|2988923|2988923|32|288963833046305
+O|288964986807552|2988933|2988933|21|288964985733295|-100|/proc/1/fd/
+X|288964986822449|2988933|2988933|-13|288964986807552
+O|288966879849375|0|0|56241|288966879457756|-100|/proc/self/maps
+X|288966879911143|0|0|8|288966879849375
+O|288966880121198|0|0|56241|288966879457756|-100|
+@events_after_filter: 10391
+@events_before_filter: 10391
+@events_exec: 49
+@path_read_failed: 28
+experiments/runtime-events/bpftrace/runtime-events-nofilter.bt:127:14-17: WARNING: Invalid argument
+    @open_start[tid] = $at;
+                ~~~
+stdlib/base.bt:273:29-32: WARNING: expanded from
+Lost 1714 events
+Additional Info - helper: get_ns_current_pid_tgid, retcode: -22

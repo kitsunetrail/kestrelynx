@@ -1,0 +1,64 @@
+{
+  "case_id": "1",
+  "image": "nginx:1.27",
+  "gt_b_scope": [
+    "nginx",
+    "libc6",
+    "libssl3",
+    "libpcre2-8-0",
+    "zlib1g",
+    "libcrypt1"
+  ],
+  "gt_b_scope_rationale": "Limited resident-process check: the executables and shared libraries mapped by the nginx master and workers can be independently attributed to these packages through the dpkg file lists, which certifies use only; non-use of any package is never certified by this method.",
+  "expected": [
+    {
+      "package": "nginx",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the running server binary itself"
+    },
+    {
+      "package": "libc6",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "linked by every process in the image"
+    },
+    {
+      "package": "libssl3",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "nginx's TLS support links libssl3"
+    },
+    {
+      "package": "libpcre2-8-0",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "nginx's regex-based rewrite/location matching links libpcre2"
+    },
+    {
+      "package": "zlib1g",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "nginx's gzip module links zlib1g"
+    },
+    {
+      "package": "dpkg",
+      "class": "os",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "rationale": "installed by the base image; never invoked once the container is running"
+    },
+    {
+      "package": "gzip",
+      "class": "os",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "rationale": "the gzip(1) tool is unrelated to nginx's built-in gzip module and is never invoked"
+    }
+  ]
+}

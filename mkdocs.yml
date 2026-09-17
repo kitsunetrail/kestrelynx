@@ -65,7 +65,7 @@ nav:
       - CVSS Basics and the Scoring and Publication Process: articles/cvss-basics-scoring-and-publication.md
       - Trivy Basics and How to Read Scan Results: articles/trivy-basics-scan-results.md
       - How to Map Running Container Processes to OS Packages with procfs: articles/procfs-process-to-package-mapping.md
-      - How to Tell Which Container Scan Findings Are Actually Running: articles/which-container-scan-findings-are-actually-running.md
+      - How to Check Runtime Usage of Packages Reported by Container Vulnerability Scans: articles/which-container-scan-findings-are-actually-running.md
 
 plugins:
   - search

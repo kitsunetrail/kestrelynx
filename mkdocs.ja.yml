@@ -39,4 +39,4 @@ nav:
       - CVSSの基礎と評価・公開の流れ: articles/cvss-basics-scoring-and-publication-ja.md
       - Trivyの基礎とスキャン結果の読み方: articles/trivy-basics-scan-results-ja.md
       - procfsで稼働中コンテナのプロセスをOSパッケージに紐づける方法: articles/procfs-process-to-package-mapping-ja.md
-      - コンテナの脆弱性スキャン結果のうち実際に動いているパッケージの見分け方: articles/which-container-scan-findings-are-actually-running-ja.md
+      - コンテナの脆弱性スキャンで検出されたパッケージの実行時利用状況を確認する方法: articles/which-container-scan-findings-are-actually-running-ja.md

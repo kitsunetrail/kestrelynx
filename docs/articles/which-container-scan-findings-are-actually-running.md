@@ -1,8 +1,8 @@
 ---
-description: "See which container scan findings map to loaded packages, what runtime evidence misses, and how to combine it with KEV and EPSS to prioritize fixes."
+description: "Check runtime usage of packages reported by container vulnerability scans using procfs, understand sampling limits, and combine runtime evidence with KEV and EPSS to prioritize fixes."
 ---
 
-# How to Tell Which Container Scan Findings Are Actually Running
+# How to Check Runtime Usage of Packages Reported by Container Vulnerability Scans
 
 Published: September 16, 2026
 
@@ -10,8 +10,8 @@ Published: September 16, 2026
 
 Trivy reports many vulnerability findings, including findings for packages
 that are not actually used in the container. Prioritizing findings for
-packages in use requires identifying which packages are used.
-Trivy findings alone cannot make that distinction, so runtime information
+packages in use requires checking each package's usage.
+Trivy findings alone cannot establish usage, so runtime information
 is needed.
 
 For example, a scan of `nginx:1.27` reported 616 vulnerability findings
@@ -44,15 +44,15 @@ Findings have the following limitations:
     - CISA KEV identifies CVEs with evidence of exploitation in the wild; see [KEV Catalog Basics and Usage](kev-known-exploited-vulnerabilities.md).[^kev]
     - FIRST EPSS estimates exploitation likelihood over the next 30 days; see [EPSS Basics and How to Check Scores](epss-exploit-prediction-scoring-system.md).[^epss]
 
-Identifying packages that are actually running therefore requires runtime
-evidence connecting an observed process to a package and version in this
-container. Use that evidence to raise the priority of the associated
-findings. Keep runtime evidence separate from KEV and EPSS so that the
-reason for raising a finding's priority remains visible.
+Checking a package's runtime usage therefore requires information (runtime
+evidence) connecting an observed process to a package and version in this
+container. Confirmed package use supports raising the remediation priority
+of the associated vulnerabilities. Record usage separately from KEV and
+EPSS assessments so that the reason for raising priority remains clear.
 
-## Meaning of “actually running”
+## Meaning of “used at runtime”
 
-Here, “actually running” means that a running process has loaded an executable
+Here, “used at runtime” means that a running process has loaded an executable
 or shared library from the package. Loading is observed through procfs using
 `/proc/<pid>/exe` and `/proc/<pid>/maps`.[^proc][^exe][^maps]
 
@@ -68,9 +68,10 @@ It does not establish the following:
 - That an unobserved package is unused.
     - It may load during another request, in a different worker, or between samples.
 
-Runtime evidence therefore serves only as positive evidence of use, supporting
-higher priority for the corresponding findings. Lack of observation does not
-justify lowering priority.[^harness]
+Confirmed package use therefore supports raising the remediation priority
+of the associated vulnerabilities. If use cannot be confirmed, that does
+not establish that the package is unused, so it is not a reason to lower
+priority.[^harness]
 
 For details on handling observed paths, ownership, and versions, see the
 [procfs process-to-package mapping article](procfs-process-to-package-mapping.md).
@@ -232,9 +233,12 @@ relationship separately from a failed process read.
 
 ## Use of runtime evidence in remediation prioritization
 
-Use runtime evidence only to raise a finding's priority, never to lower
-it because use was unobserved.
-Keep it separate from KEV and EPSS as a distinct input to the decision.
+When package use is confirmed at runtime, use that information to support
+raising the remediation priority of its vulnerabilities. If use is not
+confirmed during the observation period, that does not establish that the
+package is unused, so do not lower priority on that basis.
+Record usage separately from KEV and EPSS assessments and use it to inform
+remediation decisions.
 
 | Layer | What it answers | What it cannot answer |
 | --- | --- | --- |
@@ -270,11 +274,11 @@ by this process at this time” to the existing finding.
 
 This procedure manually checks whether running processes in one container
 load packages reported by the scan.
+It assumes a Debian-based container with `dpkg-query`, Trivy, and `jq`
+available on the host.
 
-Run these commands on the Linux Docker Engine host. Replace angle-bracketed
-placeholders before execution. The ownership example assumes a Debian-based
-container and host access to `dpkg-query`; the final command uses Trivy and
-`jq`.
+Run these commands on the Linux Docker Engine host.
+Replace placeholders with actual values before execution.
 
 List the container's processes, then select a returned host PID.[^docker-top]
 
@@ -330,7 +334,7 @@ matching, follow the [full procfs procedure](procfs-process-to-package-mapping.m
 
 ## References
 
-Document reviewed: September 16, 2026.
+This article is based on information verified as of September 16, 2026.
 
 - The [public development log](../development/runtime-prioritization.md#results-2026-09-12) records the measurement results and their limits.
 - These results describe specific hosts and workloads, not a general confirmation rate or proof that unobserved packages are unused.

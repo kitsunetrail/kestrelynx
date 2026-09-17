@@ -40,3 +40,4 @@ nav:
       - Trivyの基礎とスキャン結果の読み方: articles/trivy-basics-scan-results-ja.md
       - procfsで稼働中コンテナのプロセスをOSパッケージに紐づける方法: articles/procfs-process-to-package-mapping-ja.md
       - コンテナの脆弱性スキャンで検出されたパッケージの実行時利用状況を確認する方法: articles/which-container-scan-findings-are-actually-running-ja.md
+      - Linux capabilityでrootを使わずにプロセス情報を読む: articles/linux-capabilities-read-process-info-ja.md

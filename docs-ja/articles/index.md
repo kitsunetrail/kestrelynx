@@ -19,3 +19,4 @@ description: "CVE・KEV・EPSS・CVSSの基礎からTrivyのスキャン結果�
 - 2026年9月13日 — [procfsで稼働中コンテナのプロセスをOSパッケージに紐づける方法](procfs-process-to-package-mapping-ja.md) — コンテナのホスト側PIDの取得、/proc配下のexe・maps・status・ソケットの読み方、dpkg・apk・distrolessへのパス解決、実イメージで見つかった注意点と権限の計測結果
 - 2026年9月16日 — [コンテナの脆弱性スキャンで検出されたパッケージの実行時利用状況を確認する方法](which-container-scan-findings-are-actually-running-ja.md) — スキャン結果と読み込み済みOSパッケージの対応を調べた計測結果、
   サンプリングの限界、実行時証拠をKEV・EPSSと組み合わせて優先順位を判断する方法
+- 2026年9月17日 — [Linux capabilityでrootを使わずにプロセス情報を読む](linux-capabilities-read-process-info-ja.md) — CAP_SYS_PTRACEとCAP_DAC_READ_SEARCHの役割、ptraceアクセスチェックとファイルのアクセス権の関係、権限4条件の計測結果と実際に使用した収集プログラム

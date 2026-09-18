@@ -21,3 +21,4 @@ This section covers foundational knowledge, operational practices, and related s
 - September 16, 2026 — [How to Check Runtime Usage of Packages Reported by Container Vulnerability Scans](which-container-scan-findings-are-actually-running.md) — validation of matching observed files to scan findings,
   limited ground-truth comparisons, detection and mapping limitations, and unevaluated coverage
 - September 17, 2026 — [Reading Process Information Without Root Using Linux Capabilities](linux-capabilities-read-process-info.md) — the roles of CAP_SYS_PTRACE and CAP_DAC_READ_SEARCH, ptrace access checks and file permissions, measured permission conditions, and the collector used for the measurements
+- September 18, 2026 — [Understanding and Checking Trivy Status Values](trivy-vulnerability-status.md) — Status versus FixedVersion, actual scan records, data-source differences, filtering, and remediation decisions

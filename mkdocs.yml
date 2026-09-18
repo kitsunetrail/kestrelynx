@@ -67,6 +67,7 @@ nav:
       - How to Map Running Container Processes to OS Packages with procfs: articles/procfs-process-to-package-mapping.md
       - How to Check Runtime Usage of Packages Reported by Container Vulnerability Scans: articles/which-container-scan-findings-are-actually-running.md
       - Reading Process Information Without Root Using Linux Capabilities: articles/linux-capabilities-read-process-info.md
+      - Understanding and Checking Trivy Status Values: articles/trivy-vulnerability-status.md
 
 plugins:
   - search

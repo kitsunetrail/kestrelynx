@@ -20,3 +20,4 @@ description: "CVE・KEV・EPSS・CVSSの基礎からTrivyのスキャン結果�
 - 2026年9月16日 — [コンテナの脆弱性スキャンで検出されたパッケージの実行時利用状況を確認する方法](which-container-scan-findings-are-actually-running-ja.md) — 観測したファイルとスキャン結果の照合を検証した内容、
   限定した正解データとの比較、見逃しと対応付けの限界、網羅性について未評価の範囲
 - 2026年9月17日 — [Linux capabilityでrootを使わずにプロセス情報を読む](linux-capabilities-read-process-info-ja.md) — CAP_SYS_PTRACEとCAP_DAC_READ_SEARCHの役割、ptraceアクセスチェックとファイルのアクセス権の関係、権限4条件の計測結果と実際に使用した収集プログラム
+- 2026年9月18日 — [TrivyのStatusの意味と確認方法](trivy-vulnerability-status-ja.md) — StatusとFixedVersionの違い、実際のスキャン結果の読み方、情報源による違い、フィルタリングと修正対応

@@ -9,10 +9,19 @@ description: "Linux capabilityを使い、非rootで/procからプロセス情�
 ## はじめに
 
 稼働中のプロセスがどの実行ファイルや共有ライブラリを使っているかは、Linuxの`/proc`から確認できます。
+この情報は、コンテナの脆弱性スキャンで検出されたパッケージの利用状況を調べるために使います。
 ただし、別のユーザーが動かしているプロセスの情報は、通常のユーザー権限では読み取れない場合があります。
 
 Linux capability（ケーパビリティ）を使うと、収集プログラムを非rootで動かしながら、必要な権限を付与できます。
-実際の計測では、`CAP_SYS_PTRACE`で実行ファイルやメモリマッピングを読めましたが、ファイル記述子の一覧を取得するには`CAP_DAC_READ_SEARCH`も必要でした。[^measurements][^procfs-article]
+収集プログラムに与える権限を絞るため、rootで取得していた情報を、どのcapabilityの組み合わせで取得できるかを検証しました。
+rootでの収集を基準に、非rootでcapabilityを付与しない場合、`CAP_SYS_PTRACE`だけを付与する場合、`CAP_DAC_READ_SEARCH`も付与する場合を比較しました。
+
+計測環境で確認できた組み合わせは次のとおりです。[^measurements][^procfs-article]
+
+| 収集する情報 | 非rootでの収集に必要だったcapability |
+| --- | --- |
+| パッケージの利用確認に使う実行ファイル・読み込み済みライブラリ（`exe`・`maps`） | `CAP_SYS_PTRACE` |
+| 上記に加え、待ち受けソケットをプロセスに紐づける情報（`fd/`） | `CAP_SYS_PTRACE`と`CAP_DAC_READ_SEARCH` |
 
 この記事では、次のことを記載します。
 
@@ -67,11 +76,6 @@ Linuxのマニュアルでは、`exe`と`maps`に使われる読み取り用の�
 
 `CAP_DAC_READ_SEARCH`を追加すると、ディレクトリのアクセス権による制限を回避でき、一覧を取得できました。
 一覧取得後のリンク先の読み取りには、`exe`と同じくptraceアクセスチェックが関係します。[^capabilities][^fd]
-
-| 計測で行った操作 | 読み取りに必要だったcapability |
-| --- | --- |
-| `exe`と`maps`を読む | `CAP_SYS_PTRACE` |
-| `fd/`の一覧を取得し、リンク先を読む | `CAP_SYS_PTRACE`と`CAP_DAC_READ_SEARCH` |
 
 このため、`CAP_SYS_PTRACE`だけの条件では、読み込み済みファイルからパッケージの利用を確認できても、`fd/`を使って待ち受けソケットをプロセスに紐づけることはできませんでした。[^procfs-article]
 

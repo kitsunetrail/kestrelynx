@@ -9,13 +9,24 @@ Published: September 17, 2026
 ## Introduction
 
 Linux exposes a running process's executable and mapped libraries through
-`/proc`. Reading another user's process information, however, may require
-additional permissions.
+`/proc`. This information helps check runtime usage of packages reported
+by container vulnerability scans. Reading another user's process
+information, however, may require additional permissions.
 
 Linux capabilities let a collector run as a non-root user with selected
-privileges. In an existing measurement, `CAP_SYS_PTRACE` allowed executable
-and memory-map inspection, while listing file descriptors also required
-`CAP_DAC_READ_SEARCH`.[^measurements][^procfs-article]
+privileges. To narrow the privileges granted to the collector, the
+validation checked which capability combinations could retrieve the
+information collected as root. Using root collection as the baseline,
+it compared three non-root conditions: no capabilities, `CAP_SYS_PTRACE`
+alone, and `CAP_SYS_PTRACE` with `CAP_DAC_READ_SEARCH`.
+
+The following combinations worked in the measurement
+environment.[^measurements][^procfs-article]
+
+| Information collected | Capabilities required for non-root collection in the measurement |
+| --- | --- |
+| Executables and loaded libraries used to check package usage (`exe` and `maps`) | `CAP_SYS_PTRACE` |
+| The above plus information linking listening sockets to processes (`fd/`) | `CAP_SYS_PTRACE` and `CAP_DAC_READ_SEARCH` |
 
 This article covers the following:
 
@@ -83,11 +94,6 @@ did not bypass that restriction, so enumeration failed with `EACCES`
 Adding `CAP_DAC_READ_SEARCH` bypassed the directory-permission restriction
 and allowed enumeration. Reading the links afterward also involves a
 ptrace access check, as with `exe`.[^capabilities][^fd]
-
-| Measured operation | Capabilities needed in the measurement |
-| --- | --- |
-| Read `exe` and `maps` | `CAP_SYS_PTRACE` |
-| List `fd/` and read its links | `CAP_SYS_PTRACE` and `CAP_DAC_READ_SEARCH` |
 
 With only `CAP_SYS_PTRACE`, the collector could therefore confirm package
 use through loaded files, but could not use `fd/` to attribute listening

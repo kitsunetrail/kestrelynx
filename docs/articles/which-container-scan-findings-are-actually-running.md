@@ -1,5 +1,5 @@
 ---
-description: "Check runtime usage of packages reported by container vulnerability scans using procfs, understand sampling limits, and combine runtime evidence with KEV and EPSS to prioritize fixes."
+description: "A validation of matching procfs observations to OS packages and Trivy findings: limited ground-truth comparisons, missed short-lived processes, unsupported language packages, and unevaluated coverage."
 ---
 
 # How to Check Runtime Usage of Packages Reported by Container Vulnerability Scans
@@ -14,22 +14,26 @@ packages in use requires checking each package's usage.
 Trivy findings alone cannot establish usage, so runtime information
 is needed.
 
-For example, a scan of `nginx:1.27` reported 616 vulnerability findings
-across 72 packages, including 153 rated HIGH or CRITICAL.
-Runtime sampling confirmed loaded files from packages associated with
-9 of those 153 findings.[^measurements][^harness]
+This article examines whether files observed through procfs can be mapped
+to OS packages and matched to Trivy findings. Matching worked for some
+packages used by resident processes, while short-lived processes were
+missed and language packages could not be mapped through OS ownership
+information.[^measurements] The complete set of packages actually used
+was not established, so the completeness of runtime-use detection remains
+unevaluated.
 
 This article covers the following:
 
 - What Trivy findings alone cannot show.
 - What loaded-package evidence proves, and what it leaves unanswered.
-- Measured results from stock images, self-built images, and an operational host.
+- What was tested and established with stock images, self-built images, and an operational host.
+- The scope of ground-truth comparisons and the coverage that remains unevaluated.
 - How to combine runtime evidence with KEV and EPSS.
 - A compact way to inspect the same relationship on a Docker host.
 
 ## What Trivy findings alone cannot show
 
-For this comparison, a finding is a package, installed version, and CVE
+In this article, a finding is a package, installed version, and CVE
 tuple produced by matching detected software against vulnerability
 information. Counts are CVE × package, so multiple findings can refer to
 the same package.[^trivy]
@@ -76,11 +80,16 @@ priority.[^harness]
 For details on handling observed paths, ownership, and versions, see the
 [procfs process-to-package mapping article](procfs-process-to-package-mapping.md).
 
-## Measurement method
+## Validation details
 
-For each Trivy finding, the measurement checked whether running processes
-loaded files from the corresponding package.
-The confirmation rate was confirmed findings / total findings, primarily for HIGH/CRITICAL, with all severities as a secondary view.
+The validation followed the process of reading files used by running
+processes, identifying their owning OS packages and versions, and matching
+them to Trivy findings for the same image. For a limited set of packages
+whose use was established separately, it also checked whether the
+collector detected them.
+
+The results below separate successful mapping from detection within the
+available ground-truth scope.
 
 - **Targets**
     - Stock images: `nginx:1.27`, `postgres:16`, and `nginx-unprivileged:1.27-alpine`.
@@ -102,71 +111,76 @@ The confirmation rate was confirmed findings / total findings, primarily for HIG
 
 The [public measurement results](../development/runtime-prioritization.md#results-2026-09-12)
 describe the runs, and the measurement harness contains the collection
-procedure.[^measurements][^harness] The results below describe those measurements, not a
-guaranteed confirmation rate for another workload.
+procedure.[^measurements][^harness] The results describe these environments
+and targets. Misses and false usage classifications were not evaluated
+for targets whose actual use or non-use was not established.
 
-## Measurement results for stock and self-built images
+## Validation results for stock and self-built images
 
-For Debian-based stock images, running processes had loaded files from the
-affected package for 9 of the 153 HIGH or CRITICAL vulnerabilities Trivy
-reported in nginx, and for 5 of 113 in PostgreSQL.
-The table below shows, for the stock images and the self-built images
-(Python with cryptography, static Go), how many vulnerabilities reported by
-Trivy had confirmed package loading.
+The first check was whether observed files could be assigned to packages
+and matched to scan findings. This table describes that process; it does
+not establish that every package in use was detected.[^measurements][^harness]
 
-| Image | HIGH/CRITICAL vulnerabilities reported by Trivy (confirmed / total) | Packages with findings (confirmed / total) | All-severity vulnerabilities (confirmed / total) |
-| --- | ---: | ---: | ---: |
-| `nginx:1.27`, Debian | 9/153 (5.9%) | 2/43 | 66/616 |
-| `postgres:16` | 5/113 (4.4%) | 3/34 | 71/409 |
-| `nginx-unprivileged:1.27-alpine` | 16/34 (47%) | 4/10 | 42/109 |
-| `python:3.12-slim` with the cryptography wheel | 0/54 | 0/19 | 22/180 |
-| `debian:12-slim` with a static Go server | 0/56 | 0/17 | 0/222 |
+| Target | What was tested | What was established or remained unresolved |
+| --- | --- | --- |
+| Debian-based nginx and PostgreSQL | Match loaded files to scan findings through dpkg ownership information | Observed executables and shared libraries could be assigned to packages and linked to corresponding findings |
+| Alpine-based nginx | Perform the same matching through apk ownership information | Observed files could be mapped to apk packages and matched to corresponding findings |
+| Python with a cryptography wheel | Map Python and its extensions through OS ownership information | Some observed OS libraries could be matched, but Python and its extensions had no OS-package owner; pip-package findings could not be matched |
+| A statically linked Go server | Identify embedded dependencies from the executable | The executable was observed, but it had no OS-package owner and its embedded Go modules could not be identified by this method |
 
-The results show the following:
+For nginx, loaded shared-library paths were mapped to packages such as
+`libssl3` and `zlib1g`, then matched to Trivy findings for the same package
+names and versions. This demonstrated the path from an observed file to
+a finding. It did not determine whether an unobserved package was unused
+or had been missed.
 
-- For Debian-based nginx and postgres, loading was confirmed for only 9 of 153 and 5 of 113 HIGH/CRITICAL vulnerabilities reported by Trivy.
-    - The 9 confirmed nginx findings came from 2 of 43 packages carrying HIGH/CRITICAL findings: `libssl3` and `zlib1g`, providing the OpenSSL and zlib shared libraries loaded by the server.
-    - Across all severities, confirmation covered 4 of 72 packages with findings: `libc6`, `libssl3`, `zlib1g`, and `libcrypt1`.
-    - The mapped `nginx` and `libpcre2-8-0` packages carried no findings, so they did not add to the confirmed count.[^harness]
-- Alpine nginx had fewer packages with findings and a confirmed fraction of 47%; this difference describes overlap between findings and observed package use, not relative risk.
-- In Python, the 54 HIGH/CRITICAL vulnerabilities reported by Trivy involved OS packages, none of which corresponded to OS libraries loaded by the running Python process, leaving 0 confirmed findings.
-    - Across all severities, 22 findings were confirmed, while pip-package findings appeared only in the all-severity results and were outside OS ownership mapping, as described under “Limits of this measurement method.”
-- In static Go, the 56 HIGH/CRITICAL vulnerabilities reported by Trivy remained unobserved, with 0 confirmed, because the statically linked executable did not load shared libraries, as described under “Limits of this measurement method.”
-- Across all synthetic cases, counting nginx once despite measurements under three conditions, 33 of 627 HIGH/CRITICAL findings were confirmed, or 5.3%; the remaining 594 were unobserved, not unused.[^measurements]
+## The scope of ground-truth comparisons
 
-The package column counts confirmed / total packages carrying HIGH/CRITICAL
-findings; the public development log records finding counts, while package
-counts come from the same runs.[^measurements][^harness]
-Usage-log comparisons found 0 false positives but covered only 1–2 packages
-per case, leaving accuracy across all scanned packages undetermined.[^measurements]
-The synthetic aggregate also describes selected cases, not an estimate of
-vulnerable software use across container deployments.
+For packages whose use was established separately from the collector,
+the comparison counted detections and misses. Nginx used manual checks of
+resident-process files; the self-built cases used their programs' own
+usage logs.
 
-## Measurement results on an operational host
+The table uses the baseline condition: root collection, every 30 seconds
+for 300 seconds. It counts packages, not CVEs or vulnerability findings.
+It includes packages with Trivy findings of any severity whose use was
+established separately.[^ground-truth]
 
-Across four containers on an operational host, none of the 103 HIGH or
-CRITICAL vulnerabilities reported by Trivy had confirmed package loading.
-OS-package runtime evidence added nothing to HIGH/CRITICAL prioritization
-in this measurement.
+| Target | Packages independently established as used and included in the comparison | Detected by the collector | Missed |
+| --- | --- | ---: | ---: |
+| Resident nginx processes | 4 packages: `libc6`, `libssl3`, `zlib1g`, and `libcrypt1` | 4 | 0 |
+| Self-built short-lived process case | 2 packages: `curl` and `git` | 0 | 2 |
+| Self-built temporary library-loading case | 1 package: `libsqlite3-0` | 1 | 0 |
 
-The containers ran a static Go service, a JVM with a bundled JDK, and two
-Node.js services on a separate Ubuntu host; collection ran once as root
-with AppArmor enabled, sampling every 30 seconds for 300 seconds.[^measurements]
+The nginx manual check covered six packages, but `nginx` and
+`libpcre2-8-0` had no vulnerability findings in this scan, leaving four
+packages in the comparison. Those four were detected; use outside that
+comparison set was not established.
 
-| HIGH/CRITICAL vulnerabilities reported by Trivy | Confirmed / total | Interpretation |
-| --- | ---: | --- |
-| Language packages | 0/84 | Outside OS ownership mapping |
-| OS packages | 0/19 | No confirming use observed |
-| Total | 0/103 | No HIGH/CRITICAL runtime confirmation |
+In the short-lived process case, the baseline missed both `curl` and
+`git`, even though their execution was recorded in the usage logs. The
+temporary-loading case detected `libsqlite3-0`, without establishing that
+other loading durations would also be captured. Results under different
+conditions are described below.
 
-The results show the following:
+## Limitations observed on an operational host
 
-- Of the 103 findings, 84 involved language packages—Go modules, JARs, and npm packages—which OS ownership information could not map.
-- The remaining 19 involved OS packages whose loading was not observed, without establishing that they were unused.[^measurements]
-- On a host dominated by language runtimes, more frequent sampling alone is insufficient; a separate method is needed to connect files or executables to language packages.
+The same mapping process was tried on an Ubuntu host running a static Go
+service, a JVM with a bundled JDK, and two Node.js services. Collection ran
+once as root with AppArmor enabled, sampling every 30 seconds for
+300 seconds.[^measurements]
 
-This was one run on one host, so it does not establish that OS-package
-evidence is unhelpful across operational environments.
+| Target examined | Limitation observed |
+| --- | --- |
+| Language packages such as Go modules, JARs, and npm packages | Could not be mapped through OS-package ownership information |
+| OS packages with HIGH/CRITICAL findings | No loading of their files was observed; actual use or non-use was not established |
+| `/usr/local/bin/node`, the bundled JDK, and the static Go executable | Had no ownership information in the OS package database |
+
+The observations on this host could not be matched to HIGH/CRITICAL
+findings. The check established the need for other mapping methods for
+language packages and executables outside the OS package database.[^measurements][^harness]
+The complete set of packages actually used was not known, so these results
+do not yield recall for operational workloads.
 
 ## Limits of this measurement method
 
@@ -203,9 +217,7 @@ language package and version reported by the scanner.
 Observing Python or Node.js alone also does not confirm use of its
 dependencies.[^harness]
 
-- In Python with a cryptography wheel, pip-package findings could not be mapped through OS ownership information, and neither the Python executable nor its extensions had an OS-package owner.
-    - The 54 HIGH/CRITICAL vulnerabilities reported by Trivy involved OS packages whose loading was not observed.
-    - Across all severities, 22 of 180 findings were linked to loaded OS packages.[^measurements]
+- In Python with a cryptography wheel, pip-package findings could not be mapped through OS ownership information, and neither the Python executable nor its extensions had an OS-package owner.[^measurements]
 
 For language software packaged by a distribution, ownership identifies
 only the distribution package; a separate language-package finding still
@@ -217,9 +229,9 @@ A statically linked executable has no shared-library mappings, leaving
 no separate library paths and ownership information to connect its
 embedded dependencies to findings.
 
-- In the Debian-based static Go test, the executable was observed but had no owner in the OS package database, leaving 0 of 56 HIGH/CRITICAL findings confirmed.[^harness]
+- In the Debian-based static Go test, the executable was observed but had no owner in the OS package database, so it could not be matched to findings.[^harness]
 
-A confirmation count of 0 does not mean the process has no vulnerabilities.
+Failure to match the executable does not mean that it has no vulnerabilities.
 
 ### Executables outside the package database
 
@@ -334,14 +346,16 @@ matching, follow the [full procfs procedure](procfs-process-to-package-mapping.m
 
 ## References
 
-This article is based on information verified as of September 16, 2026.
+The measurements in this article were made on September 12, 2026.
 
 - The [public development log](../development/runtime-prioritization.md#results-2026-09-12) records the measurement results and their limits.
-- These results describe specific hosts and workloads, not a general confirmation rate or proof that unobserved packages are unused.
+- These results describe specific hosts and workloads, not overall recall or proof that unobserved packages are unused.
 
 ///Footnotes Go Here///
 
 [^measurements]: [Runtime Evidence Prioritization: Feasibility Research, Results (2026-09-12)](https://kestrelynx.dev/development/runtime-prioritization/#results-2026-09-12)
+
+[^ground-truth]: Based on the saved `gtb.json` and `csv_all/gt_b.csv` records for `1-root-30-300-p0-r2`, `9-root-30-300-p0-r1`, and `10-root-30-300-p0-r1`. Comparison-set size, detections, and misses correspond to `population`, `tp`, and `fn`. See the [published sampling collector README](https://github.com/kitsunetrail/kestrelynx/blob/ed7813edc159f5ea0b6a747bfebf78e45fa2ba23/experiments/runtime-discovery/README.md) for ground-truth scope and aggregation definitions.
 
 [^trivy]: [Trivy: Vulnerability scanning](https://trivy.dev/docs/latest/guide/scanner/vulnerability/)
 

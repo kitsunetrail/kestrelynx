@@ -18,6 +18,6 @@ This section covers foundational knowledge, operational practices, and related s
   how to read its JSON output, and considerations when using scan results for vulnerability management
 - September 13, 2026 — [How to Map Running Container Processes to OS Packages with procfs](procfs-process-to-package-mapping.md) — how to find a container's host PIDs,
   read exe, maps, status and sockets under /proc, resolve paths to dpkg, apk and distroless packages, and the pitfalls and permission checks measured on real images
-- September 16, 2026 — [How to Check Runtime Usage of Packages Reported by Container Vulnerability Scans](which-container-scan-findings-are-actually-running.md) — measured overlap between scan findings and loaded OS packages,
-  runtime sampling limits, and how to combine runtime evidence with KEV and EPSS
+- September 16, 2026 — [How to Check Runtime Usage of Packages Reported by Container Vulnerability Scans](which-container-scan-findings-are-actually-running.md) — validation of matching observed files to scan findings,
+  limited ground-truth comparisons, detection and mapping limitations, and unevaluated coverage
 - September 17, 2026 — [Reading Process Information Without Root Using Linux Capabilities](linux-capabilities-read-process-info.md) — the roles of CAP_SYS_PTRACE and CAP_DAC_READ_SEARCH, ptrace access checks and file permissions, measured permission conditions, and the collector used for the measurements

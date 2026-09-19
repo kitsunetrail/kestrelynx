@@ -1,0 +1,172 @@
+{
+  "case_id": "28",
+  "image": "kl-case28",
+  "gt_b_scope": [
+    "org.apache.commons:commons-lang3",
+    "org.apache.commons:commons-text",
+    "com.google.code.gson:gson",
+    "org.slf4j:slf4j-api",
+    "org.slf4j:slf4j-simple",
+    "com.fasterxml.jackson.core:jackson-databind",
+    "com.fasterxml.jackson.core:jackson-core",
+    "com.fasterxml.jackson.core:jackson-annotations",
+    "commons-io:commons-io",
+    "com.google.guava:guava",
+    "commons-codec:commons-codec",
+    "org.apache.commons:commons-collections4"
+  ],
+  "coverage_plan": {
+    "used_at_startup": [
+      "org.apache.commons:commons-lang3",
+      "org.apache.commons:commons-text",
+      "com.google.code.gson:gson",
+      "org.slf4j:slf4j-api",
+      "org.slf4j:slf4j-simple"
+    ],
+    "used_lazily": [
+      "com.fasterxml.jackson.core:jackson-databind",
+      "com.fasterxml.jackson.core:jackson-core",
+      "com.fasterxml.jackson.core:jackson-annotations",
+      "commons-io:commons-io"
+    ],
+    "unused": [
+      "com.google.guava:guava",
+      "commons-codec:commons-codec",
+      "org.apache.commons:commons-collections4"
+    ]
+  },
+  "expected": [
+    {
+      "package": "libc6",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "linked by the JVM and mapped for its whole life"
+    },
+    {
+      "package": "curl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the operational loop execs /usr/bin/curl every five seconds once fired"
+    },
+    {
+      "package": "git",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the operational loop execs /usr/bin/git every five seconds once fired"
+    },
+    {
+      "package": "openssl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the operational loop execs /usr/bin/openssl every five seconds once fired"
+    },
+    {
+      "package": "org.apache.commons:commons-lang3",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (its jar is on the class path at launch, so the JVM opens it before this program runs, whether or not a class from it is ever loaded — and this fixture also loads a class from each one)"
+    },
+    {
+      "package": "org.apache.commons:commons-text",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (its jar is on the class path at launch, so the JVM opens it before this program runs, whether or not a class from it is ever loaded — and this fixture also loads a class from each one)"
+    },
+    {
+      "package": "com.google.code.gson:gson",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (its jar is on the class path at launch, so the JVM opens it before this program runs, whether or not a class from it is ever loaded — and this fixture also loads a class from each one)"
+    },
+    {
+      "package": "org.slf4j:slf4j-api",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (its jar is on the class path at launch, so the JVM opens it before this program runs, whether or not a class from it is ever loaded — and this fixture also loads a class from each one)"
+    },
+    {
+      "package": "org.slf4j:slf4j-simple",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (its jar is on the class path at launch, so the JVM opens it before this program runs, whether or not a class from it is ever loaded — and this fixture also loads a class from each one)"
+    },
+    {
+      "package": "com.fasterxml.jackson.core:jackson-databind",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (its jar is deliberately kept off the launch class path and is opened only by a class loader this program builds after firing)"
+    },
+    {
+      "package": "com.fasterxml.jackson.core:jackson-core",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (its jar is deliberately kept off the launch class path and is opened only by a class loader this program builds after firing)"
+    },
+    {
+      "package": "com.fasterxml.jackson.core:jackson-annotations",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (its jar is deliberately kept off the launch class path and is opened only by a class loader this program builds after firing)"
+    },
+    {
+      "package": "commons-io:commons-io",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (its jar is deliberately kept off the launch class path and is opened only by a class loader this program builds after firing)"
+    },
+    {
+      "package": "com.google.guava:guava",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises (its jar is placed in the image but never added to any class loader's search path, so it is never opened, let alone read from)"
+    },
+    {
+      "package": "commons-codec:commons-codec",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises (its jar is placed in the image but never added to any class loader's search path, so it is never opened, let alone read from)"
+    },
+    {
+      "package": "org.apache.commons:commons-collections4",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises (its jar is placed in the image but never added to any class loader's search path, so it is never opened, let alone read from)"
+    }
+  ],
+  "fixture_notes": {
+    "purpose": "coverage-validation case: a small HTTP application whose class path and lazily-loaded archives span 12 independent jars across three groups (coverage_plan), used to measure recall and false-positive rates against an independently obtained ground truth",
+    "package_selection": "12 well-known Maven Central artifacts with no interdependency across groups, chosen so each jar's use or non-use is a fact about this fixture's own code rather than a side effect of another jar's own dependencies. jackson-databind's own runtime dependency on jackson-core and jackson-annotations is kept intentional: the three are loaded together as one lazy group",
+    "startup_vs_lazy_vs_unused": "the startup group's jars are named directly on the JVM's -cp at launch, so the JVM opens each one's central directory before this program runs, independent of whether a class inside it is ever loaded — and this fixture also loads one class from each to leave nothing on the boundary. The lazy group's jars are never on the launch class path; a class from each is loaded, once fired, through a URLClassLoader this program builds only at that point, which is what first opens those files. The unused group's jars are copied into the image but are never named on any class loader's path at all, so they are neither opened nor read",
+    "operational_processing": "a background shell loop execs curl, git and openssl every five seconds once the container starts, independently of the firing signal, as this case's short-lived OS-package activity",
+    "runtime_introspection": "at startup, after the lazy loads, and again before exiting, the program invokes a small script that reads the new tail of the JVM's own -Xlog:class+load=info output and appends one JSON Lines record per class loaded from a jar file to /var/log/runtime-modules.jsonl — the ground-truth tool's own independent source, distinct from this harness's own event or sampling evidence",
+    "coverage_plan_caveat": "the three groups are the fixture's design intent (GT-A), not the measured ground truth"
+  }
+}

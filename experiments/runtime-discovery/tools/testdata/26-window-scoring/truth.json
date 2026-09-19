@@ -1,0 +1,145 @@
+{
+ "case_id": "26",
+ "image_id": "sha256:fixtureimage26",
+ "used": [
+  {
+   "ecosystem": "python",
+   "name": "flask",
+   "version": "3.0.3",
+   "subjects": [
+    "resident"
+   ],
+   "first_seen_s": -12.0,
+   "last_seen_s": -9.5,
+   "evidence_types": [
+    "open"
+   ],
+   "paths": [
+    "/usr/local/lib/python3.12/site-packages/flask/__init__.py"
+   ],
+   "used_at_startup": true,
+   "used_during_operations": []
+  },
+  {
+   "ecosystem": "python",
+   "name": "requests",
+   "version": "2.32.3",
+   "subjects": [
+    "resident"
+   ],
+   "first_seen_s": 20.5,
+   "last_seen_s": 21.0,
+   "evidence_types": [
+    "open"
+   ],
+   "paths": [
+    "/usr/local/lib/python3.12/site-packages/requests/__init__.py"
+   ],
+   "used_at_startup": false,
+   "used_during_operations": [
+    "request_lazy_requests"
+   ]
+  },
+  {
+   "ecosystem": "python",
+   "name": "sqlalchemy",
+   "version": "2.0.30",
+   "subjects": [
+    "resident"
+   ],
+   "first_seen_s": 305.0,
+   "last_seen_s": 320.0,
+   "evidence_types": [
+    "open"
+   ],
+   "paths": [
+    "/usr/local/lib/python3.12/site-packages/sqlalchemy/__init__.py"
+   ],
+   "used_at_startup": false,
+   "used_during_operations": [
+    "request_lazy_sqlalchemy"
+   ]
+  },
+  {
+   "ecosystem": "python",
+   "name": "cryptography",
+   "version": "42.0.5",
+   "subjects": [
+    "resident"
+   ],
+   "first_seen_s": 7.0,
+   "last_seen_s": 7.0,
+   "evidence_types": [
+    "open"
+   ],
+   "paths": [
+    "/usr/local/lib/python3.12/site-packages/cryptography/__init__.py"
+   ],
+   "used_at_startup": false,
+   "used_during_operations": [
+    "request_lazy_cryptography"
+   ]
+  },
+  {
+   "ecosystem": "python",
+   "name": "pyyaml",
+   "version": "6.0.1",
+   "subjects": [
+    "resident"
+   ],
+   "first_seen_s": 400.0,
+   "last_seen_s": 400.0,
+   "evidence_types": [
+    "open"
+   ],
+   "paths": [
+    "/usr/local/lib/python3.12/site-packages/yaml/__init__.py"
+   ],
+   "used_at_startup": false,
+   "used_during_operations": [
+    "request_lazy_yaml"
+   ]
+  },
+  {
+   "ecosystem": "os",
+   "name": "curl",
+   "version": "8.14.1",
+   "subjects": [
+    "short_lived"
+   ],
+   "first_seen_s": 30.0,
+   "last_seen_s": 30.05,
+   "evidence_types": [
+    "exec"
+   ],
+   "paths": [
+    "/usr/bin/curl"
+   ],
+   "used_at_startup": false,
+   "used_during_operations": [
+    "osops_curl"
+   ]
+  }
+ ],
+ "unused": [
+  {
+   "ecosystem": "python",
+   "name": "six",
+   "version": "1.16.0"
+  }
+ ],
+ "unknown": [
+  {
+   "ecosystem": "python",
+   "name": "pytz",
+   "version": "2024.1"
+  }
+ ],
+ "inventory_size": 8,
+ "operation_consistency": {
+  "checked": false
+ },
+ "completeness": {
+  "operations": "consistent"
+ }
+}

@@ -28,7 +28,7 @@ func loadSyntheticEventRun(t *testing.T) (ContainerRecord, scanner.ImageScan, *s
 	if err != nil {
 		t.Fatalf("parse scan report: %v", err)
 	}
-	idx, err := buildScanFileIndex(trivyData)
+	idx, _, err := buildScanFileIndex(trivyData, false)
 	if err != nil {
 		t.Fatalf("index the scan report's paths: %v", err)
 	}
@@ -65,7 +65,7 @@ func syntheticIntel() *IntelSnapshot {
 func runSyntheticEventPipeline(t *testing.T) MatchResult {
 	t.Helper()
 	rec, scan, idx, def, gtb, events := loadSyntheticEventRun(t)
-	result, err := runMatchPipeline(context.Background(), rec, scan, idx, def, gtb, events,
+	result, err := runMatchPipeline(context.Background(), rec, scan, idx, nil, def, gtb, events,
 		syntheticIntel(), t.TempDir(), defaultActNowEPSS, defaultWatchEPSS, defaultOccurrenceToleranceMS)
 	if err != nil {
 		t.Fatalf("match: %v", err)
@@ -346,7 +346,7 @@ func TestMatchReadsNoLiveState(t *testing.T) {
 func TestImageIdentityMismatchIsRefused(t *testing.T) {
 	rec, scan, idx, def, gtb, events := loadSyntheticEventRun(t)
 	rec.Subject.Docker.ImageID = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
-	_, err := runMatchPipeline(context.Background(), rec, scan, idx, def, gtb, events,
+	_, err := runMatchPipeline(context.Background(), rec, scan, idx, nil, def, gtb, events,
 		syntheticIntel(), t.TempDir(), defaultActNowEPSS, defaultWatchEPSS, defaultOccurrenceToleranceMS)
 	if err == nil {
 		t.Fatal("a window was matched against a scan of a different image")

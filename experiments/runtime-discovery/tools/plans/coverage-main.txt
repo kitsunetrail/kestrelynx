@@ -1,0 +1,13 @@
+# coverage validation, main conditions: window 900 s, interval 30 s, both start conditions, 2 runs each (12 runs)
+26 1 startup 512 30 900
+26 2 startup 512 30 900
+26 1 attach_running 512 30 900
+26 2 attach_running 512 30 900
+27 1 startup 512 30 900
+27 2 startup 512 30 900
+27 1 attach_running 512 30 900
+27 2 attach_running 512 30 900
+28 1 startup 512 30 900
+28 2 startup 512 30 900
+28 1 attach_running 512 30 900
+28 2 attach_running 512 30 900

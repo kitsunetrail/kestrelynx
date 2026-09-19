@@ -1,0 +1,5 @@
+{"id":"26-load-000001","kind":"load","pid":100,"tid":100,"starttime":50,"start":"2026-09-19T03:59:50.100000Z","end":"2026-09-19T03:59:50.500000Z","ok":true,"cache_hit":false,"files":[],"container_id":"cid-fixture-26"}
+{"id":"26-load-000002","kind":"load","pid":100,"tid":100,"starttime":50,"start":"2026-09-19T04:00:10.000000Z","end":"2026-09-19T04:00:11.000000Z","ok":true,"cache_hit":false,"files":[],"container_id":"cid-fixture-26"}
+{"id":"26-load-000003","kind":"load","pid":100,"tid":100,"starttime":50,"start":"2026-09-19T04:04:55.000000Z","end":"2026-09-19T04:05:10.000000Z","ok":true,"cache_hit":false,"files":[],"container_id":"cid-fixture-26"}
+{"id":"26-load-000004","kind":"load","pid":100,"tid":100,"starttime":50,"start":"2026-09-19T03:59:55.000000Z","end":"2026-09-19T03:59:57.000000Z","ok":true,"cache_hit":false,"files":[],"container_id":"cid-fixture-26"}
+{"id":"26-exec-osops-000001","kind":"exec","pid":501,"tid":501,"starttime":99,"pid_ns":1,"ts":"2026-09-19T04:00:20.000000Z","ok":true,"path":"/usr/bin/curl","container_id":"cid-fixture-26"}

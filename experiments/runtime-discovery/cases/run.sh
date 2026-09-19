@@ -8,6 +8,7 @@
 #
 # Usage:
 #   run.sh up <case>       # e.g. run.sh up 1 (builds first if the case needs a local image)
+#   run.sh build <case>    # builds only (cases 26/27/28); up_case_N's own build then hits cache
 #   run.sh down <case>
 #   run.sh up-all
 #   run.sh down-all
@@ -19,6 +20,7 @@
 #   run.sh register-cgroups <table>  # refresh the control group table, after the container starts and before firing
 #   run.sh attach-check <trace>      # confirm the tracer's probes are live by causing a known event
 #   run.sh fire <case>     # tell a waiting container to start working
+#   run.sh fire-when-ready <case> [timeout]  # retry the same signal until the workload is ready to receive it, and record that as the fire
 #   run.sh dump-logs <case> <directory>       # copy a container's own logs out of it
 #   run.sh host-run <log> [iterations] [interval]  # run the same program on the host, for the attribution control
 #
@@ -269,6 +271,70 @@ fire_case() {
 	echo "fired $1 at $(date -u +%Y-%m-%dT%H:%M:%S.%NZ)"
 }
 
+# fire_when_ready fires a waiting container the moment it becomes ready to
+# receive the signal, rather than assuming it already is. A workload
+# waiting on this pipe reaches its own blocking open of it at a time this
+# script cannot otherwise observe — ordinarily within a second or so, but
+# under tools/truth-run.sh's strace-wrapped launch that open can be
+# minutes away — and a plain write attempted too early blocks this whole
+# script until the workload does get there anyway, with no record of how
+# long that took or whether it was ever going to.
+#
+# There is no separate probe here distinct from the real signal: opening
+# the pipe for writing at all is itself irreversible use of the one-shot
+# rendezvous the workload is waiting on, so a liveness check would have to
+# send something, and sending anything at all is the fire. This retries
+# the real write itself, bounded by a short per-attempt timeout, until one
+# succeeds — the first success is simultaneously the earliest point the
+# workload could have been fired and the actual firing.
+#
+# Usage: fire_when_ready <case> [timeout seconds]
+fire_when_ready() {
+	local case_id="$1" timeout_s="${2:-900}" dir waited=0 attempt=2
+	dir="$(fire_dir "case$case_id")"
+	if [ ! -p "$dir/fire" ]; then
+		echo "fire-when-ready: no signalling pipe for $case_id (was it started with run.sh up?)" >&2
+		return 1
+	fi
+	while [ "$waited" -lt "$timeout_s" ]; do
+		if timeout "$attempt" bash -c "printf 'go\n' >'$dir/fire'" 2>/dev/null; then
+			echo "fired $case_id at $(date -u +%Y-%m-%dT%H:%M:%S.%NZ) (ready after ${waited}s)"
+			return 0
+		fi
+		waited=$((waited + attempt))
+	done
+	echo "fire-when-ready FAILED: $case_id never opened its signalling pipe for reading within ${timeout_s}s" >&2
+	return 1
+}
+
+# wait_after_lazy_phase blocks until a coverage-validation case's own
+# runtime-modules.jsonl carries an "after_lazy" snapshot: the point at
+# which that program's own post-fire lazy imports/requires/loads have all
+# finished and it has recorded so. attach_running is meant to observe a
+# workload that has already finished its own startup work by the time
+# observation begins, so joining it before that work is done would leave
+# the two sync conditions measuring different amounts of activity rather
+# than the same activity under two attachment timings.
+#
+# Usage: wait_after_lazy_phase <case> [timeout seconds]
+wait_after_lazy_phase() {
+	local case_id="$1" timeout_s="${2:-60}" waited=0 pid log
+	while [ "$waited" -lt "$timeout_s" ]; do
+		pid="$(container_main_pid "case$case_id" 2>/dev/null || true)"
+		if [ -n "$pid" ]; then
+			log="/proc/$pid/root/var/log/runtime-modules.jsonl"
+			if [ -r "$log" ] && grep -q '"phase":"after_lazy"' "$log" 2>/dev/null; then
+				echo "wait-after-lazy-phase: case $case_id finished its own lazy triggers after ${waited}s"
+				return 0
+			fi
+		fi
+		sleep 1
+		waited=$((waited + 1))
+	done
+	echo "wait-after-lazy-phase FAILED: case $case_id never recorded an after_lazy runtime-modules snapshot within ${timeout_s}s" >&2
+	return 1
+}
+
 # wait_ready blocks until the collector's readiness file says every target
 # it was told to expect has been accepted. This is the condition the firing
 # signal waits on; without it the ordering the V-series cases depend on is
@@ -464,7 +530,10 @@ dump_logs() {
 	pid="$(container_main_pid "case$case_id")" || return 1
 	mkdir -p "$dest"
 	local found=0
-	for name in usage.jsonl occurrences.jsonl; do
+	# operations.jsonl and runtime-modules.jsonl exist only for cases
+	# 26-28; their absence elsewhere is not a failure, since usage.jsonl
+	# and occurrences.jsonl alone remain a complete dump for those.
+	for name in usage.jsonl occurrences.jsonl operations.jsonl runtime-modules.jsonl; do
 		if [ -r "/proc/$pid/root/var/log/$name" ]; then
 			cp "/proc/$pid/root/var/log/$name" "$dest/$case_id.$name"
 			found=1
@@ -602,6 +671,53 @@ up_case_22() {
 	dir="$(prepare_fire case22)"
 	docker run -d --name case22 -p 127.0.0.1:18106:8080 -v "$dir:/run/fire" kl-case22
 	record_container_id case22
+}
+
+# Cases 26-28 are the coverage-validation cases: a Python, a Node.js, and
+# a Java web application, each bundling a larger package inventory across
+# declared used_at_startup/used_lazily/unused groups (see the case
+# definitions' coverage_plan) than any single-package case above.
+#
+# KL_TRACE_MODE=1 passes TRACE_MODE=1 into the container, which its own
+# entrypoint uses to run the same image's workload under strace instead of
+# plainly — see tools/truth-run.sh. It is unset for every ordinary
+# measurement run.
+# build_case_26/27/28 are the image-build half of up_case_26/27/28, split
+# out so a caller that needs the build finished (and the image ID settled)
+# before starting a timed measurement window can run it separately first.
+# up_case_26/27/28 still call these themselves, so `run.sh up <case>` alone
+# keeps building the image exactly as before; running `run.sh build <case>`
+# first only means that second call hits Docker's own build cache and
+# returns immediately instead of spending the window on an uncached build.
+build_case_26() { docker build -t kl-case26 -f "$here/26/Dockerfile" "$here/images/26-python-webapp"; }
+build_case_27() { docker build -t kl-case27 -f "$here/27/Dockerfile" "$here/images/27-node-webapp"; }
+build_case_28() { docker build -t kl-case28 -f "$here/28/Dockerfile" "$here/images/28-java-app"; }
+
+up_case_26() {
+	local dir extra_env=()
+	build_case_26
+	dir="$(prepare_fire case26)"
+	[ "${KL_TRACE_MODE:-0}" = "1" ] && extra_env=(-e TRACE_MODE=1)
+	docker run -d --name case26 -p 127.0.0.1:18110:8000 "${extra_env[@]}" -v "$dir:/run/fire" kl-case26
+	record_container_id case26
+}
+
+up_case_27() {
+	local dir extra_env=()
+	build_case_27
+	dir="$(prepare_fire case27)"
+	[ "${KL_TRACE_MODE:-0}" = "1" ] && extra_env=(-e TRACE_MODE=1)
+	docker run -d --name case27 -p 127.0.0.1:18111:8080 "${extra_env[@]}" -v "$dir:/run/fire" kl-case27
+	record_container_id case27
+}
+
+up_case_28() {
+	local dir extra_env=()
+	build_case_28
+	dir="$(prepare_fire case28)"
+	[ "${KL_TRACE_MODE:-0}" = "1" ] && extra_env=(-e TRACE_MODE=1)
+	docker run -d --name case28 -p 127.0.0.1:18112:8080 "${extra_env[@]}" -v "$dir:/run/fire" kl-case28
+	record_container_id case28
 }
 
 # The attribution control runs the first case's image twice, so the two
@@ -960,6 +1076,16 @@ fixture_check() {
 		fi
 		echo "22: execution recorded and no shared library mapped: OK"
 		;;
+	26 | 27 | 28)
+		log="$(container_occurrence_log "$cn")" || return 1
+		n="$(count_occurrences "$log" load)"
+		if [ "${n:-0}" -ge 1 ]; then
+			echo "$case_id: $n individually identified load(s) recorded: OK"
+		else
+			echo "$case_id: no individually identified load recorded; was the container fired?" >&2
+			return 1
+		fi
+		;;
 	*)
 		echo "fixture_check: no check defined for case $case_id" >&2
 		return 1
@@ -975,7 +1101,7 @@ all_cases() { echo 1 2 3 4 5 6 7a 7b 8 9 10 11 12; }
 # observation is already running and then fired by hand once the collector
 # reports itself ready, so starting them in a batch would defeat the
 # ordering they exist to establish.
-v_cases() { echo 13 14 15 16 17 18 19 20 21 22 23 24; }
+v_cases() { echo 13 14 15 16 17 18 19 20 21 22 23 24 26 27 28; }
 
 usage() {
 	cat >&2 <<'EOF'
@@ -986,11 +1112,13 @@ usage: run.sh up <case> | down <case> | up-all | down-all | preflight-8 | prefli
        run.sh register-cgroups <table path> [runtime-events binary]
        run.sh attach-check <trace file> [timeout seconds]
        run.sh fire <case>
+       run.sh fire-when-ready <case> [timeout seconds]
        run.sh dump-logs <case> <directory>
        run.sh host-run <log> [iterations] [interval seconds]
 
 cases: 1 2 3 4 5 6 7a 7b 8 9 10 11 12
        13 14 15 16 17 18 19 20 21 22 23 24
+       26 27 28 (coverage-validation: Python/Node.js/Java web apps)
 
 Cases 13-24 wait for a signal before doing anything, so each one is
 started, then fired once the collector reports every registered target
@@ -1025,6 +1153,27 @@ main() {
 		# function is prefixed with "case_" (e.g. case 13 is up_case_13).
 		"up_case_$2"
 		;;
+	build)
+		[ -n "${2:-}" ] || {
+			usage
+			exit 2
+		}
+		# Builds a case's own image without creating or starting its
+		# container - only defined for cases whose own up_case_N builds a
+		# local image at all (26/27/28 today). A caller that wants the
+		# build (and the image ID it settles) finished before starting a
+		# timed measurement window runs this first; up_case_N's own build
+		# call then hits Docker's build cache instead of spending the
+		# window on an uncached one. A case with no separate build step
+		# (an upstream image, or one this split has not been added for
+		# yet) is a deliberate no-op here, never an error, so a caller
+		# driving several cases can call this unconditionally.
+		if declare -F "build_case_$2" >/dev/null; then
+			"build_case_$2"
+		else
+			echo "run.sh build: case $2 has no separate build step (up <case> builds it directly, or it uses an upstream image)"
+		fi
+		;;
 	down)
 		[ -n "${2:-}" ] || {
 			usage
@@ -1057,6 +1206,20 @@ main() {
 			exit 2
 		}
 		fire_case "$2"
+		;;
+	fire-when-ready)
+		[ -n "${2:-}" ] || {
+			usage
+			exit 2
+		}
+		fire_when_ready "$2" "${3:-900}"
+		;;
+	wait-after-lazy-phase)
+		[ -n "${2:-}" ] || {
+			usage
+			exit 2
+		}
+		wait_after_lazy_phase "$2" "${3:-60}"
 		;;
 	wait-ready)
 		[ -n "${2:-}" ] && [ -n "${3:-}" ] || {

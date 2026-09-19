@@ -86,12 +86,12 @@ func TestMatchReproducibleFromSavedInputs(t *testing.T) {
 	cacheDir := t.TempDir()
 	seedIntelCache(t, cacheDir, "CVE-0000-0000,0.01,0.1\n")
 
-	fileIdx, err := buildScanFileIndex([]byte(syntheticTrivyReport))
+	fileIdx, _, err := buildScanFileIndex([]byte(syntheticTrivyReport), false)
 	if err != nil {
 		t.Fatalf("buildScanFileIndex: %v", err)
 	}
 
-	first, err := runMatchPipeline(context.Background(), rec, scan, fileIdx, def, gtb, nil, nil, cacheDir, defaultActNowEPSS, defaultWatchEPSS, defaultOccurrenceToleranceMS)
+	first, err := runMatchPipeline(context.Background(), rec, scan, fileIdx, nil, def, gtb, nil, nil, cacheDir, defaultActNowEPSS, defaultWatchEPSS, defaultOccurrenceToleranceMS)
 	if err != nil {
 		t.Fatalf("first runMatchPipeline: %v", err)
 	}
@@ -104,11 +104,11 @@ func TestMatchReproducibleFromSavedInputs(t *testing.T) {
 	snapshot := first.Intel
 	seedIntelCache(t, cacheDir, "CVE-2030-0001,0.99,0.99\nCVE-2030-0002,0.98,0.98\n")
 
-	second, err := runMatchPipeline(context.Background(), rec, scan, fileIdx, def, gtb, nil, &snapshot, cacheDir, defaultActNowEPSS, defaultWatchEPSS, defaultOccurrenceToleranceMS)
+	second, err := runMatchPipeline(context.Background(), rec, scan, fileIdx, nil, def, gtb, nil, &snapshot, cacheDir, defaultActNowEPSS, defaultWatchEPSS, defaultOccurrenceToleranceMS)
 	if err != nil {
 		t.Fatalf("second runMatchPipeline: %v", err)
 	}
-	third, err := runMatchPipeline(context.Background(), rec, scan, fileIdx, def, gtb, nil, &snapshot, cacheDir, defaultActNowEPSS, defaultWatchEPSS, defaultOccurrenceToleranceMS)
+	third, err := runMatchPipeline(context.Background(), rec, scan, fileIdx, nil, def, gtb, nil, &snapshot, cacheDir, defaultActNowEPSS, defaultWatchEPSS, defaultOccurrenceToleranceMS)
 	if err != nil {
 		t.Fatalf("third runMatchPipeline: %v", err)
 	}

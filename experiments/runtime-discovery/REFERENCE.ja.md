@@ -65,6 +65,12 @@
 | `record.md` | `tools/record.py` が作る個別の run 記録 |
 | `experiments/runtime-discovery/out/AGGREGATE-events.md` | `tools/aggregate.py` が作る run 横断の集計表 |
 
+| `<case>-truth-r<replicate>/image_id.txt`、`container_id.txt` | 正解 run のイメージとコンテナの識別情報 |
+| `<case>-truth-r<replicate>/ready_at.txt`、`fired_at.txt`、`stopped_at.txt` | 正解 run の準備完了、開始通知、停止通知の時刻 |
+| `<case>-truth-r<replicate>/varlog/` | 正常停止後にコピーした使用、発生、操作、内省、プロセス別 strace のログ |
+| `<case>-truth-r<replicate>/truth.json` | `truth.py` が作る独立した同梱一覧と使用の正解データ |
+| `<measurement-run>/coverage.json`、`coverage.md` | パッケージの網羅性指標、または理由付きの集計保留 |
+
 - 観測ファイル名の例は `case9__9_root_i30_w300_p0_r1_attach_running_none.json`
 - 実行キーは `case_variant`、`permission`、`interval`、`window`、`phase`、`replicate`、`sync`、`config_id` で構成する
 - `sync` はワークロードとの開始順序を区別する
@@ -152,6 +158,8 @@
 | `-case` | 期待値と GT-B の対象範囲を含む必須のケース定義 |
 | `-gtb` | 任意の独立した正解データ JSON |
 | `-events` | 任意の変換済みイベント JSONL |
+
+| `-all-packages` | Trivy の `Packages` から Finding 0 件のパッケージ判定を追加し、`--list-all-pkgs` のスキャン結果を必要とする既定値 `false` のフラグ |
 | `-occurrence-tolerance-ms` | 対応付けの許容誤差で、既定値は `500` ミリ秒 |
 | `-intel-cache` | KEV/EPSS のキャッシュディレクトリ |
 | `-intel-snapshot` | KEV/EPSS を再参照せずに使う保存済み脆弱性情報 JSON |
@@ -171,6 +179,34 @@
 - 分類を再現できるよう脆弱性情報を十分に固定できるのはスナップショットを使う run だけ
 - 自動実行ツールでは `KL_INTEL_SNAPSHOT` でスナップショットのパスを指定する
 - 対応付けの許容誤差は計測前に固定し、比較の間も維持する
+
+### 網羅性検証の実行・集計ツール
+
+| コマンド | 引数と既定値 |
+| --- | --- |
+| `tools/case-run.sh` | `<case> [replicate] [startup\|attach_running] [64\|256\|512\|none] [interval] [window]` で、既定値は反復 `1`、`startup`、`64`、`30`、`300` |
+| `tools/case-batch.sh` | `<plan file>` で、各行は `<case> <replicate> <sync> <pages> [interval] [window]` |
+| `tools/truth-run.sh` | `<case> [replicate] [window seconds]` で、対象はケース 26〜28、既定値は反復 `1` と窓 `900` |
+| `tools/truth.py` | `<truth run dir> <case json> [measurement run dir]` で、`<truth run dir>/truth.json` を出力 |
+| `tools/coverage.py` | `<measurement run dir> <truth.json>` で、計測ディレクトリに `coverage.json` と `coverage.md` を出力 |
+| `cases/run.sh build` | `<case>` で、独立したイメージビルド処理があるケースをコンテナ起動なしでビルド |
+| `cases/run.sh fire-when-ready` | `<case> [timeout seconds]` で、実際の開始通知を再試行し、既定のタイムアウトは `900` 秒 |
+| `cases/run.sh wait-after-lazy-phase` | `<case> [timeout seconds]` で、内省ログの `after_lazy` を待ち、既定のタイムアウトは `60` 秒 |
+
+- `case-run.sh` の第 5・6 引数はサンプル開始間隔と観測窓の長さを表す正の整数秒
+- 計画行の第 5・6 欄も同じ意味を持ち、省略時は `30` と `300`
+- ケース 23・24、`23+24`、`23+host` の計画行は帰属検証ランナーへ渡し、網羅性検証の間隔と窓は適用しない
+- `coverage-main.txt` はケース 26〜28 を 30 秒間隔・900 秒窓、両方の開始条件、各 2 反復で計 12 run 実行する
+- `coverage-rest.txt` は残りの間隔・窓の組 `(10, 900)`、`(30, 300)`、`(10, 300)` を両方の開始条件で各 1 反復、計 18 run 実行する
+- 両方の網羅性検証計画はイベントバッファに `512` ページを使う
+- `case-run.sh` はトレーサーとコレクターの開始前にイメージをビルドし、キャッシュのないビルドが観測窓を消費することを防ぐ
+- ケース 26〜28 の `startup` はコレクターの開始時刻を `-phase-base` に渡し、対象登録が完了する前のコンテナ起動も観測窓に含める
+- 同じケースの `attach_running` は `fire-when-ready` を 900 秒、`wait-after-lazy-phase` を 120 秒のタイムアウトで実行してから観測を始める
+- 同じケースは両方の重大度スキャンで Trivy の `--list-all-pkgs` を使い、両方の照合で `match -all-packages` を使う
+- `truth-run.sh` は新しいコンテナを strace 下で起動し、準備完了と開始通知、指定窓の待機、正常停止、`/var/log` のコピーを順に行う
+- 任意の計測ディレクトリを渡すと `truth.py` が正解作成時に同等性を確認し、`coverage.py` は集計する計測ごとに確認し直す
+- `truth.py` は保存済みイメージ ID を調べるため Docker へのアクセスを必要とし、`coverage.py` は `truth.json` が参照する正解 run のディレクトリとログを必要とする
+- `coverage.py` は解析と操作対応のヘルパーを共有するため、`truth.py` と同じチェックアウトから実行する
 
 ## 手動での計測手順
 
@@ -566,6 +602,73 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - 使用ログの `open` は maps スナップショットやランタイムのモジュール管理情報に由来する場合がある
 - そのようなエントリは独立したシステムコール単位の正解データではない
 
+### ケース 26〜28 の使用正解データ(truth.py)
+
+#### 同梱一覧 I
+
+- `truth.py` は保存済みイメージ ID からコンテナを作り、使用ログと独立して `docker export` した rootfs を列挙する
+- 探索対象は `/proc`、`/sys`、`/dev` を除くエクスポート済み rootfs 全域で、除外範囲も記録する
+- OS パッケージと版はコピーした OS パッケージ DB から取得し、そのメタデータでファイルの所有関係を解決する
+- Python はエクスポート済みファイルシステム全域で distribution を探し、インストールメタデータと `RECORD` から版とファイルの所有関係を得る
+- Node はイメージ全域にある名前と版を読める `package.json` を対象とし、`node_modules` 外のパッケージや同梱ツールも含める
+- Java はイメージ全域の jar を対象とし、パッケージ座標と読み取れる版のメタデータを使う
+- 同梱一覧は Finding のないパッケージも含む Trivy の `--list-all-pkgs` と同じ母集団を対象とする
+- 同梱一覧と正解のキーは `(ecosystem, name, version)` で、同名パッケージの異なるインストール済み版を区別する
+- `coverage_plan` は意図した群の宣言と宣言差分の確認に使い、実測の同梱一覧や使用判定を定義しない
+
+#### 使用 U・未使用 N・不明 X
+
+- strace の `-f -ff -tt` による成功した `execve`・`execveat` と `open`・`openat`・`openat2` を独立した使用証拠にする
+- `clone`・`clone3`・`fork`・`vfork` から親子関係を復元し、別プログラムを実行しない子にも生成時の主体を引き継ぐ
+- 運用処理の curl・git・openssl と主体を引き継いだヘルパーを短命主体とし、常駐プログラムと運用処理のスケジューラーを常駐主体とする
+- Python の `sys.modules`、Node.js の `require.cache`、Java のクラスロードログから解決したファイルを内省証拠として加える
+- 内省で同じパスを初めて見た記録だけを新たな使用証拠にし、後続の出現は `held_evidence` に分ける
+- 絶対・相対 symlink と途中のディレクトリリンクは、エクスポート済み rootfs 内で解決する
+- ディレクトリのオープンは `O_DIRECTORY` とエクスポート済み rootfs のディレクトリ判定の両方で除外する
+- 失敗した呼び出しは使用証拠にせず、解決できない相対パスは不足として明示する
+- `U` は版まで解決できた使用キーのうち `I` に含まれるものとし、`I` にない版付き使用証拠は `ledger_gaps` に分ける
+- 使用側または同梱一覧側で版を確定できないエントリは、版を推測せず `version_unknown` に記録する
+- `I` のうち正の使用証拠がないものは、完全性判定を通過した場合だけ `N` に入れ、それ以外は `X` に入れる
+- 完全性判定はトレースの存在、空でない記録、破損・解析不能なシステムコール記録の不在、復元できない中断呼び出しの不在、生成されたプロセスのトレース欠落の不在を必要とする
+- 完全性判定は strace と内省証拠のパス解決、所有関係を解決できない壊れた symlink 列の不在、操作の同等性確認の成功も必要とする
+- 計測ディレクトリを省略すると操作の整合性は `unchecked` となり、残りの同梱一覧は最初は `X` に入る
+- 完全性判定が失敗しても正の使用証拠は `U` に残し、版付き同梱一覧では互いに素な集合として `I = U ∪ N ∪ X` を保つ
+- `inventory_scan` はエクスポート、探索、メタデータ読み取りの診断を使用証拠の完全性判定とは別に記録する
+
+#### 証拠の帰属と run の同等性
+
+- 証拠は開始通知前の起動時、名前付き操作インスタンス、停止通知後、帰属不能の期間に分ける
+- 短命主体の証拠はトレースの PID と復元した親子関係をたどり、発生ログが識別する操作インスタンスへ帰属させる
+- 常駐主体の証拠は復元した操作区間と時刻で対応させ、近傍への帰属を `operations_nearest` に分けて残す
+- 対応する操作インスタンスがない短命主体の証拠は、近い時刻へ振り替えず帰属不能にする
+- 操作オフセットは対応する操作またはインスタンスの開始から最初の使用までの時間を記録する
+- 停止通知後の証拠と時間的に帰属できない証拠は、それだけでは起動時または操作範囲内の使用を確立しない
+- 同等性はイメージ ID、固定操作の名前と順序、成否、利用可能な `detail`、内省で解決したファイル集合を比較する
+- 周期的な `osops_` 操作は種類が一致し、両 run が到達した共通範囲で混在順序、成否、利用可能な `detail` が一致する必要がある
+- 周期処理の反復回数の違いは許容し、共通範囲を超えた末尾のインスタンスは未対応として明示する
+- 正解 run に利用可能な内省ログがある場合、計測側の内省ログの欠落や利用不能は同等性の不成立になる
+
+#### truth.json のフィールド
+
+| フィールド | 意味 |
+| --- | --- |
+| `image_id`、`truth_run_dir`、`fired_at`、`stopped_at` | イメージ識別情報、保持する入力ディレクトリ、正解 run の時刻 |
+| `used`、`unused`、`unknown` | 版付きの U・N・X と、不明エントリの理由 |
+| `inventory_size`、`inventory_scan` | 同梱数、探索範囲、除外、エクスポート状態、発見したメタデータ、読み取り失敗 |
+| `ledger_gaps`、`identification_gaps` | 同梱一覧にない版付きの正の証拠と、その識別情報だけの要約 |
+| `version_unknown` | 版を確定できない同梱一覧側または使用側のエントリ |
+| `completeness` | トレースの検査、操作整合性の状態、全体の判定、理由 |
+| `unresolved` | 未解決のトレースパス、内省モジュール、対応付け不能パス、所有関係の symlink 解決失敗 |
+| `declaration_gaps` | 宣言にあるが同梱一覧にないパッケージと、宣言した群にない同梱パッケージ |
+| `operation_consistency` | 比較した計測ディレクトリ、整合性の詳細、イメージと内省の確認、周期操作インスタンスの対応 |
+| `used[].evidence`、`evidence_types`、`subjects`、`paths` | 証拠源、使用の種類、主体区分、解決したパッケージのパス |
+| `used[].first_seen_s`、`last_seen_s`、`hold_seconds`、`exec_hold_seconds_min` | 正解 run の証拠時刻と記録された短命実行の長さ |
+| `used[].used_at_startup`、`used_during_operations` | 起動時使用のフラグと使用に対応する操作名 |
+| `used[].operation_instances` | 使用証拠を帰属させた具体的な操作 ID |
+| `used[].operation_offsets_s`、`operation_instance_offsets_s` | 操作名と具体的なインスタンス ID ごとの最初の使用のオフセット |
+| `used[].evidence_periods` | 起動時、操作、近傍操作、停止後、帰属不能の証拠数 |
+| `used[].held_evidence` | 継続して存在した証拠として保持する後続の内省記録 |
+
 ## 照合規則
 
 ### 検出結果の使用確認
@@ -620,6 +723,93 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - 分母がゼロの場合は N/A
 - 実オープンの記録がない場合も N/A
 - 検出結果の使用確認と発生の捕捉率は異なる問いに答える
+
+### 全パッケージの照合
+
+- `-all-packages` は Finding がないパッケージも Trivy の `Packages` から登録する
+- 追加グループは同じ S0・S1・S2 の評価処理を通り、`finding_count: 0` の `PackageVerdict` を出力する
+- OS の版は Trivy の分離されたフィールドから `epoch:version-release` に復元し、ゼロの epoch と空の release を省略する
+- Finding 0 件のグループは、追加のパッケージ名、ファイル、配置を含む独立した `widened` 索引を使う
+- Finding があるグループは元の索引と判定を維持し、Finding 数、順位、優先度区分を変えない
+- 追加の判定は既存の集計が完了した後に `packages` へ加える
+- `-all-packages` を指定しても `Packages` が 1 件もないスキャン結果はエラーにする
+- `gobinary` は追加パッケージの母集団と網羅性集計から除外する
+- match のグループキーは `(class, package, installed_version)` のままで、言語エコシステム間の同名同版を区別できない
+
+## 網羅性の集計(coverage.py)
+
+### 評価範囲と集合
+
+- 利用可能な `match_hc.json` と `match_all.json` を別々に集計し、確認済みの `(ecosystem, name, installed_version)` キーで S0・S1・S2 を評価する
+- 区分は `resident_os`、`short_lived_os` と、該当する言語区分の `python`・`node`・`java`
+- 使用済み OS パッケージは両方の主体区分に属する場合があり、未使用または不明の OS パッケージは両方の OS 区分に含める
+- `U_main` は起動時の使用と、計測窓終了までに完了した操作を通じて確立した使用を含める
+- `attach_running` でもアタッチ前を含む起動時の使用を主指標の分母に残す
+- 周期処理の使用は同名の別インスタンスではなく、対応を検証できた操作インスタンスに結び付ける
+- 窓終了をまたぐ操作は、保持される証拠があり、最初の使用のオフセットを対応する計測インスタンスへ移した時刻が窓終了以前になる場合に主指標へ含める
+- 未対応、未記録、終了後だけ、停止後だけ、帰属不足の正解使用は `N` ではなく `X_main` に入れる
+- `N` は確定した未使用を保ち、操作比較だけが障害だった `X` は新たな同等性確認の成功後に `N` へ戻す
+- `U_window` は補助指標で、窓内で完了した操作に対応する使用と、窓内へ保持され得る実行ファイル・共有ライブラリの起動時使用を含める
+- 窓境界をまたぐ操作や未記録の操作の使用は `X_window` に残し、窓外で完結したと記録された操作だけに結び付く使用は `N_window` に入れられる
+- 主指標の範囲設定には計測側の操作区間と窓終了が必要で、窓内集計には窓開始も必要になる
+- 主指標の範囲を設定できない場合は利用可能フラグを false にし、正解 run 全体の使用集合で集計する
+
+| 数量 | 集合式 |
+| --- | --- |
+| 同梱一覧 | `I = U ∪ N ∪ X` |
+| 系列 s の確認集合 | `C_s` |
+| 主指標の真陽性 | `TP_s = C_s ∩ U_main` |
+| 主指標の偽陰性 | `FN_s = U_main \ C_s` |
+| 主指標の偽陽性 | `FP_s = C_s ∩ N` |
+| 主指標の真陰性 | `TN_s = N \ C_s` |
+| 主指標の再現率 | `\|TP_s\| / \|U_main\|` |
+| 主指標の FPR | `\|FP_s\| / \|N\|` |
+| 窓内指標 | `U_window` と `N_window` を使った同じ式 |
+| 識別誤確認 | `C_s \ I` |
+| 正解不明の同梱パッケージへの確認 | `C_s ∩ X` |
+
+- 区分別の件数は各集合を対応する区分に限定して求める
+- 分母がゼロなら JSON では `null`、Markdown では N/A
+- `identification_misconfirmations` は同梱一覧外の確認キーを通常の TP・FP・FN と別に報告する
+- 誤った版への確認は、その版が `N` なら FP、`U_main` なら TP、`I` の外なら識別誤確認になる
+- 正しい版が `U_main` にあり未確認なら、その版の FN は独立して残る
+- `confirmed_in_x` は残った正解不明の同梱一覧への確認を示し、`x_main_confirmed` と `confirmed_in_x_window` は各評価範囲の不明分も含める
+
+### 見逃しの主因
+
+- 各 FN に次の優先順で主因を 1 つ割り当て、主因別件数の合計を FN と一致させる
+- 主因を確定できない場合の可能性は候補タグに残す
+
+| 主因 | 判定材料 |
+| --- | --- |
+| `used_before_window` | 正解の時刻付き証拠がすべて開始通知基準の窓開始より前にあり、窓内へ保持され得る実行ファイル・共有ライブラリの証拠がない |
+| `short_lived_use` | S0 で、計測側の全ての確認済み保持区間が実際の連続サンプル時刻の間に収まり、保持終了が未確認の使用がない |
+| `mapping_not_supported` | S2 で計測窓内のイベントにパッケージのパスがあるのに未確認、または任意の系列で判定自体がないか factor が対応付け不足を示す |
+| `insufficient_permission` | パッケージのパスを含む失敗の step が `proc_denied`、`rootfs_denied`、`prepare_proc_denied` |
+| `other` | パッケージのパスを含む失敗に、権限拒否でも `proc_gone` でもない識別可能な原因がある |
+| `lost_events` | S2 でイベント欠落が報告され、特定できたイベントの空白区間が計測側の該当パッケージの操作区間と重なる |
+| `unknown` | 先行する条件のいずれでも原因を確定できない |
+
+- 対応付け不足の factor は `lang_pkg_unmappable`、`no_file_list`、`db_absent`、`db_error`、`mapping_input_missing`、`event_path_unresolved`
+- `proc_gone` だけでは権限不足や `other` を確定しない
+- `unknown` には欠落報告に対する `lost_events_candidate` と、S0 の保持証拠不足に対する `short_lived_use_candidate` を付ける場合がある
+- 正解 run の保持時間を計測 run の保持区間の代わりに使わない
+
+### 短命主体の直接確認数と出力
+
+- `short_lived_direct_confirmations` は計測側の短命主体から独立に確認できた TP パッケージ数
+- S0 は確認のサンプル ID とパスから主体を調べ、追加の対応付けとイベント証拠は確認情報とプロセス情報を使う
+- 件数は S0 = P、S1 = P ∪ A、S2 = P ∪ A ∪ E と系列に沿って累積する
+- 主体を解決できない確認はこの補助件数に加えず、区分の TP 件数も置き換えない
+- `coverage.json` は区分×系列の TP・FN・FP・TN、再現率、FPR、窓内指標、不明への確認、識別誤確認、見逃しの詳細、直接確認数を保持する
+- `coverage.md` は両スキャンの区分×系列の指標、識別誤確認、S2 の見逃し表を示す
+
+### 集計保留の条件
+
+- 集計のたびに計測のイメージ ID と `truth.json` を照合し、保持された正解ログと当該計測のログを新たに比較する
+- イメージ ID の欠落・不一致、正解の入力ログの利用不能、操作・内省の同等性確認の失敗では `hold: true` と `hold_reason` を出力する
+- 保留時はコマンドが正常終了しても再現率と偽陽性の指標を算出せず、両方の出力ファイルに保留を記録する
+- トレースの不完全性は該当する未使用候補を `X` に残し、それだけでは同等性に関する集計保留を起こさない
 
 ## 観測状態
 
@@ -714,6 +904,15 @@ go run ./experiments/runtime-discovery match \
 - イベント捕捉率にはイベントログと独立した発生レコードが必要
 
 ## 詳細な制限と注意
+
+- 網羅性検証のフィクスチャは apt パッケージの版を固定せず、後日の再ビルドを正解取得時のイメージと同等とはみなさない
+- 集計は正解と計測の同一イメージ ID を必要とし、毎回新しいコンテナを作って以前の run の書き込み層を持ち越さない
+- 正解と網羅性集計はエコシステムを含む 3 要素のキーを使うが、match の `(class, package, installed_version)` によって異なる言語の同名同版が先に統合される場合がある
+- strace は時間とスケジューリングを変えるため、正解と計測は同じ経過時間ではなく操作列と検証済みインスタンスで対応させる
+- 操作名が同じだけでは未対応の周期操作インスタンスの同等性を確立できない
+- Go 静的バイナリと組み込みモジュールの使用は、この網羅性評価の母集団に含めない
+- `coverage_plan` の群は意図した動作であり、推移的なロードによって実測の使用と異なる場合がある
+- `completeness.ok` は実装された使用証拠の完全性判定であり、同梱一覧の全入力を正常に読めた保証ではないため、`inventory_scan`、`ledger_gaps`、`version_unknown` も確認する
 
 - このハーネスは製品のバイナリとコンテナイメージから独立している
 - デーモンモードと Kubernetes/containerd の観測には対応しない

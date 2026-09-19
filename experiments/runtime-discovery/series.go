@@ -277,7 +277,13 @@ func buildEvidenceSet(rec *ContainerRecord, wv windowValidity, groups []pkgGroup
 			continue
 		}
 		confirmedSamples, confirmedPaths, _, _ := searchOwned(rec, wv.ValidSampleIDs, g.key)
-		for sampleID := range confirmedSamples {
+		// The confirming samples are walked earliest first rather than in
+		// whatever order the map yields. Only one confirmation per source
+		// and path is kept, so an unordered walk records whichever sample
+		// happened to come out first — and the same saved inputs would
+		// then say the observation was made in a different sample, at a
+		// different instant, from one run to the next.
+		for _, sampleID := range orderedSamples(confirmedSamples, sampleTimes) {
 			for _, p := range confirmedPaths {
 				e.add(g.key, Confirmation{
 					Source: sourceSampling, Path: p, Verb: "loaded", Grain: grainFile,
@@ -471,6 +477,25 @@ func buildEvidenceSet(rec *ContainerRecord, wv windowValidity, groups []pkgGroup
 		st.Positives = count
 	}
 	return e
+}
+
+// orderedSamples puts a set of sample identifiers into the order the
+// samples were taken in, falling back to the identifier itself where a
+// sample has no recorded start time, so that the order is total and does
+// not depend on how a map was walked.
+func orderedSamples(ids map[string]bool, at map[string]time.Time) []string {
+	out := make([]string, 0, len(ids))
+	for id := range ids {
+		out = append(out, id)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		ti, tj := at[out[i]], at[out[j]]
+		if !ti.Equal(tj) {
+			return ti.Before(tj)
+		}
+		return out[i] < out[j]
+	})
+	return out
 }
 
 // readOutcomes says, per sample and per process generation, which of the

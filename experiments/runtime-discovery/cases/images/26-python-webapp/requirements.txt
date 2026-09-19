@@ -1,0 +1,52 @@
+# Coverage-validation case 26: ~28 pip distributions in three declared
+# groups (see ../../26.json's coverage_plan). Versions are pinned to
+# wheels known to install on python:3.12-slim without a C compiler.
+#
+# Every distribution pip actually installs is pinned here with ==,
+# direct and transitive alike (this file's own set matches `pip freeze`
+# taken from a built image exactly) - a transitive dependency left
+# unpinned would resolve to whatever pip considers current at build
+# time, so a rebuild with a cold cache could silently install a
+# different version than an earlier build did, without requirements.txt
+# itself ever changing.
+
+# used_at_startup: imported at process load, before the firing signal.
+Flask==3.0.3
+Werkzeug==3.0.3
+Jinja2==3.1.4
+MarkupSafe==2.1.5
+itsdangerous==2.2.0
+click==8.1.7
+blinker==1.8.2
+certifi==2024.7.4
+
+# used_lazily: imported only inside a request handler this program calls
+# against its own local server once fired, or otherwise not before the
+# firing signal (see ../../../26.json's own coverage_plan and truth.json's
+# own used_at_startup field for each one - a transitive import pulled in
+# by one of the used_at_startup packages above, or by one of these
+# packages themselves, can put a distribution here even when nothing in
+# this fixture's own code imports it directly).
+requests==2.32.3
+urllib3==2.2.2
+idna==3.7
+charset-normalizer==3.3.2
+SQLAlchemy==2.0.31
+greenlet==3.5.6
+cryptography==42.0.8
+cffi==1.16.0
+PyYAML==6.0.1
+typing_extensions==4.12.2
+colorama==0.4.6
+
+# unused: installed, never imported by any code path this fixture exercises.
+pycparser==2.22
+six==1.16.0
+packaging==24.1
+attrs==23.2.0
+pytz==2024.1
+tomli==2.0.1
+iniconfig==2.0.0
+pyparsing==3.1.2
+wcwidth==0.2.13
+platformdirs==4.2.2

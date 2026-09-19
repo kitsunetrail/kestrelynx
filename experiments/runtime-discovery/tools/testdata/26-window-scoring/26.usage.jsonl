@@ -1,0 +1,2 @@
+{"ts":"2026-09-19T04:00:20.000000Z","pid":501,"starttime":99,"event":"exec","path":"/usr/bin/curl","ok":true}
+{"ts":"2026-09-19T04:00:20.050000Z","pid":501,"starttime":99,"event":"exit","path":"/usr/bin/curl","ok":true,"status":0}

@@ -1,0 +1,19 @@
+# coverage validation, remaining conditions: 1 run each (18 runs)
+26 1 startup 512 10 900
+26 1 startup 512 30 300
+26 1 startup 512 10 300
+26 1 attach_running 512 10 900
+26 1 attach_running 512 30 300
+26 1 attach_running 512 10 300
+27 1 startup 512 10 900
+27 1 startup 512 30 300
+27 1 startup 512 10 300
+27 1 attach_running 512 10 900
+27 1 attach_running 512 30 300
+27 1 attach_running 512 10 300
+28 1 startup 512 10 900
+28 1 startup 512 30 300
+28 1 startup 512 10 300
+28 1 attach_running 512 10 900
+28 1 attach_running 512 30 300
+28 1 attach_running 512 10 300

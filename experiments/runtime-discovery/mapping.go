@@ -35,6 +35,14 @@ const (
 // file-to-package relation. The product's own parser deliberately drops it
 // — nothing downstream of the product needs a path — so the report is read
 // a second time here rather than that parser being widened.
+//
+// Packages is populated only when the report was produced with Trivy's
+// --list-all-pkgs flag: every package the scanner found, whether or not it
+// carries a Finding. It is read only when -all-packages asks for it (see
+// buildScanFileIndex); an ordinary scan without that flag simply has an
+// empty Packages on every result, which is indistinguishable at this type
+// from one that was never asked for it, so the flag's own caller is what
+// decides whether an empty Packages set here is an error.
 type rawTrivyReport struct {
 	Results []struct {
 		Target          string `json:"Target"`
@@ -46,6 +54,22 @@ type rawTrivyReport struct {
 			PkgPath          string `json:"PkgPath"`
 			InstalledVersion string `json:"InstalledVersion"`
 		} `json:"Vulnerabilities"`
+		Packages []struct {
+			Name     string `json:"Name"`
+			Version  string `json:"Version"`
+			FilePath string `json:"FilePath"`
+			// Epoch and Release are the dpkg (and rpm) version's own other
+			// two parts, reported separately from Version by
+			// --list-all-pkgs. A Finding's own InstalledVersion is the
+			// single combined string dpkg itself uses
+			// (epoch:version-release, with the epoch prefix and release
+			// suffix each dropped when absent), so an OS package read from
+			// Packages has to be recombined the same way before it can be
+			// compared against a Finding's own InstalledVersion at all -
+			// Version alone is not the same string.
+			Epoch   *int   `json:"Epoch"`
+			Release string `json:"Release"`
+		} `json:"Packages"`
 	} `json:"Results"`
 }
 
@@ -80,6 +104,19 @@ type scanFileIndex struct {
 	// index instead of through a path the report carries.
 	osByName map[string][]pkgGroupKey
 	order    []string
+	// widened is this same index with every package a --list-all-pkgs
+	// scan's own Packages lists name added to it, and is nil unless
+	// -all-packages asked for those. It is a separate copy rather than
+	// these maps grown in place, because everything a Finding-bearing
+	// package's own verdict rests on is read back out of them: the file a
+	// path resolves to, how many files answered to it, the placements a
+	// package is reachable through, and the operating-system names a
+	// path index can reach. A package carrying no Finding at all that
+	// added any of those would change the judgement passed on a package
+	// it has nothing to do with, purely because the flag was given — so
+	// the two populations are resolved against two indexes, and only the
+	// zero-Finding groups read the wider one.
+	widened *scanFileIndex
 }
 
 func newScanFileIndex() *scanFileIndex {
@@ -92,6 +129,34 @@ func newScanFileIndex() *scanFileIndex {
 	}
 }
 
+// clone copies the index deeply enough that widening the copy cannot be
+// seen through the original: every map is new, every slice is its own, and
+// so is every scanFile the copy's entries point at. A shallow copy would
+// share the scanFile values and the slice backing arrays, which is exactly
+// the sharing the copy exists to end.
+func (idx *scanFileIndex) clone() *scanFileIndex {
+	out := newScanFileIndex()
+	for file, sf := range idx.files {
+		cp := *sf
+		cp.Keys = append([]pkgGroupKey(nil), sf.Keys...)
+		out.files[file] = &cp
+	}
+	for k, v := range idx.mappingInput {
+		out.mappingInput[k] = v
+	}
+	for k, v := range idx.ecosystem {
+		out.ecosystem[k] = v
+	}
+	for k, paths := range idx.pathsOf {
+		out.pathsOf[k] = append([]string(nil), paths...)
+	}
+	for name, keys := range idx.osByName {
+		out.osByName[name] = append([]pkgGroupKey(nil), keys...)
+	}
+	out.order = append([]string(nil), idx.order...)
+	return out
+}
+
 // buildScanFileIndex reads the file-to-package relation out of a raw scan
 // report.
 //
@@ -99,10 +164,26 @@ func newScanFileIndex() *scanFileIndex {
 // on the packages; every other language result carries it on each package.
 // Operating-system packages carry neither, which is not a gap: their files
 // come from the container's own package database, not from the report.
-func buildScanFileIndex(data []byte) (*scanFileIndex, error) {
+//
+// includeAllPackages is false for every ordinary call: the loop below runs
+// exactly as it always has, from Vulnerabilities alone, the returned index
+// has no widened copy, and the returned []pkgGroup is always nil. When it
+// is true (the -all-packages flag), a second pass over each result's own
+// Packages list (populated only by a scan taken with Trivy's
+// --list-all-pkgs) registers every package that pass never saw — one with
+// no Finding at all — into a copy of the index, hung off it as widened,
+// and returns them as their own zero-Finding pkgGroups so the caller can
+// carry them through the identical per-package verdict computation
+// Finding-bearing groups get. The returned index itself is the
+// Vulnerabilities-only one either way, so the flag adds a population
+// without moving the measurement it is reported beside. A Go-binary
+// result's Packages are skipped: the design this call is part of keeps
+// embedded-module evidence out of this population, the same way it always
+// has for Go binaries with Findings.
+func buildScanFileIndex(data []byte, includeAllPackages bool) (*scanFileIndex, []pkgGroup, error) {
 	var raw rawTrivyReport
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("read the scan report's package paths: %w", err)
+		return nil, nil, fmt.Errorf("read the scan report's package paths: %w", err)
 	}
 	idx := newScanFileIndex()
 	for _, res := range raw.Results {
@@ -152,8 +233,158 @@ func buildScanFileIndex(data []byte) (*scanFileIndex, error) {
 			}
 		}
 	}
+
+	var extra []pkgGroup
+	if includeAllPackages {
+		idx.widened = idx.clone()
+		var err error
+		extra, err = registerAllPackages(idx.widened, raw)
+		if err != nil {
+			return nil, nil, err
+		}
+		sort.Strings(idx.widened.order)
+	}
+
 	sort.Strings(idx.order)
-	return idx, nil
+	sort.Slice(extra, func(i, j int) bool {
+		if extra[i].key.Package != extra[j].key.Package {
+			return extra[i].key.Package < extra[j].key.Package
+		}
+		if extra[i].key.InstalledVer != extra[j].key.InstalledVer {
+			return extra[i].key.InstalledVer < extra[j].key.InstalledVer
+		}
+		return extra[i].key.Class < extra[j].key.Class
+	})
+	return idx, extra, nil
+}
+
+// dpkgFullVersion recombines a --list-all-pkgs OS package's separately
+// reported Version/Epoch/Release into the single string dpkg (and a
+// Finding's own InstalledVersion) uses: epoch:version-release, with the
+// epoch prefix present only when the epoch is non-zero and the release
+// suffix present only when non-empty. A Finding for the identical
+// installed package always carries that combined form, never the bare
+// Version alone, so an OS package read from Packages has to be
+// recombined this way before it can be compared against one at all —
+// otherwise every OS package in the population would look distinct from
+// its own Finding-bearing self.
+func dpkgFullVersion(version string, epoch *int, release string) string {
+	v := version
+	if release != "" {
+		v = v + "-" + release
+	}
+	if epoch != nil && *epoch != 0 {
+		v = fmt.Sprintf("%d:%s", *epoch, v)
+	}
+	return v
+}
+
+// registerAllPackages adds every package a --list-all-pkgs scan's own
+// Packages lists name that groupFindings' Vulnerabilities-only pass above
+// never saw — a bundled package with no Finding at all — into idx (so the
+// same file/OS-name resolution Finding-bearing packages get also reaches
+// these), and returns them as zero-Finding pkgGroups.
+//
+// idx here is always the widened copy, never the index a Finding-bearing
+// package's own verdict is resolved against: this function overwrites a
+// mapping input, appends placements to a package that already has one,
+// and adds files and operating-system names that a path resolution can
+// then answer with, and every one of those would otherwise change a
+// Finding-bearing package's judgement as a side effect of the flag.
+//
+// A total absence of any Packages entry across the whole report, with the
+// flag asking for them, is treated as the scan simply not having been
+// taken with --list-all-pkgs: silently returning nothing would report a
+// population of only Finding-bearing packages while claiming to cover
+// every bundled one, so this is refused instead.
+//
+// pkgGroupKey has no ecosystem field (it is shared with the
+// Finding-grouping path, whose own input carries no ecosystem to put in
+// one), so a language package sharing an exact (class, name, version)
+// with a package from a different ecosystem — an unlikely but possible
+// coincidence this function cannot rule out — still collides into one
+// entry here exactly as it would for two same-shaped Findings; this is
+// an existing property of the key this function reuses rather than
+// something newly introduced by reading Packages.
+func registerAllPackages(idx *scanFileIndex, raw rawTrivyReport) ([]pkgGroup, error) {
+	totalSeen := 0
+	var extra []pkgGroup
+	isExtra := map[pkgGroupKey]bool{}
+	for _, res := range raw.Results {
+		class := scanner.ClassLang
+		if res.Class == "os-pkgs" {
+			class = scanner.ClassOS
+		}
+		eco := res.Type
+		if class == scanner.ClassOS {
+			eco = ecoOS
+		}
+		totalSeen += len(res.Packages)
+		if eco == ecoGoBinary {
+			// Go's embedded-module list is excluded from this population
+			// by design, the same way a Go binary's Findings already are
+			// nowhere else in this file's per-package accounting.
+			continue
+		}
+		for _, p := range res.Packages {
+			version := p.Version
+			if class == scanner.ClassOS {
+				version = dpkgFullVersion(p.Version, p.Epoch, p.Release)
+			}
+			key := pkgGroupKey{Class: class, Package: p.Name, InstalledVer: version}
+			_, hasFinding := idx.mappingInput[key]
+
+			// Group dedup (isExtra/the returned pkgGroup slice) and
+			// placement registration (the switch below) are deliberately
+			// separate: the same package, whether it already carries a
+			// Finding or not, can legitimately be bundled at more than
+			// one path at once (two copies of the identical jar, say),
+			// and every placement has to be reachable from an observed
+			// path even though it is evaluated as one package group. A
+			// key already registered from a Finding gets no new
+			// zero-Finding group here - it already has a real one - but
+			// an additional placement Packages names for it that the
+			// Finding-only pass above never saw is still registered.
+			if !hasFinding && !isExtra[key] {
+				isExtra[key] = true
+				idx.ecosystem[key] = eco
+				extra = append(extra, pkgGroup{key: key})
+			}
+
+			switch {
+			case class == scanner.ClassOS:
+				if !containsKey(idx.osByName[p.Name], key) {
+					idx.osByName[p.Name] = append(idx.osByName[p.Name], key)
+				}
+				if idx.mappingInput[key] == "" {
+					idx.mappingInput[key] = mappingInputNone
+				}
+			case p.FilePath != "":
+				file := strings.TrimPrefix(p.FilePath, "/")
+				idx.mappingInput[key] = mappingInputPkgPath
+				sf := idx.files[file]
+				if sf == nil {
+					sf = &scanFile{Path: file, Ecosystem: eco}
+					idx.files[file] = sf
+					idx.order = append(idx.order, file)
+				}
+				if !containsKey(sf.Keys, key) {
+					sf.Keys = append(sf.Keys, key)
+				}
+				if !containsString(idx.pathsOf[key], file) {
+					idx.pathsOf[key] = append(idx.pathsOf[key], file)
+				}
+			default:
+				if idx.mappingInput[key] == "" {
+					idx.mappingInput[key] = mappingInputNone
+				}
+			}
+		}
+	}
+	if totalSeen == 0 {
+		return nil, fmt.Errorf("-all-packages was given but the scan report carries no Packages entries at all; re-scan with trivy's --list-all-pkgs")
+	}
+	return extra, nil
 }
 
 func containsKey(keys []pkgGroupKey, k pkgGroupKey) bool {

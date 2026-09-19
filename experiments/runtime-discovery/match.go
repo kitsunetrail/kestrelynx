@@ -39,6 +39,7 @@ func runMatch(args []string) error {
 	watchEPSS := fs.Float64("watch-epss", defaultWatchEPSS, "EPSS threshold for watch")
 	outJSON := fs.String("out-json", "./out/match-result.json", "output path for the match result JSON")
 	outCSVDir := fs.String("out-csv-dir", "./out/match-csv", "output directory for the summary CSV tables")
+	allPackages := fs.Bool("all-packages", false, "also produce a zero-Finding PackageVerdict, evaluated through the same S0/S1/S2 code path, for every package the scan report's own Packages lists name that carries no Finding at all — requires a scan taken with trivy's --list-all-pkgs, and never changes any Finding-unit count, rank, or priority bucket. Off by default, matching every prior invocation")
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "usage: %s match [flags]\n\nMatches a collect container record against a Trivy scan, a case definition (GT-A + gt_b_scope), and optionally ground-truth-B, computing the observation-state/verdict decision table, confirmation rates, Exposure, G4 ranking, and false positive/negative counts.\n\nflags:\n", os.Args[0])
 		fs.PrintDefaults()
@@ -91,12 +92,12 @@ func runMatch(args []string) error {
 		}
 	}
 
-	fileIdx, err := buildScanFileIndex(trivyData)
+	fileIdx, extraGroups, err := buildScanFileIndex(trivyData, *allPackages)
 	if err != nil {
 		return err
 	}
 
-	result, err := runMatchPipeline(context.Background(), rec, scan, fileIdx, def, gtb, events, snapshot, *intelCache, *actNowEPSS, *watchEPSS, *toleranceMS)
+	result, err := runMatchPipeline(context.Background(), rec, scan, fileIdx, extraGroups, def, gtb, events, snapshot, *intelCache, *actNowEPSS, *watchEPSS, *toleranceMS)
 	if err != nil {
 		return err
 	}
@@ -133,7 +134,7 @@ func readIntelSnapshot(path string) (*IntelSnapshot, error) {
 // makes no call depending on any live container: everything it touches is
 // either an argument or the intel cache on disk, so it is safe to call
 // twice on the same saved inputs and expect the same result.
-func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.ImageScan, fileIdx *scanFileIndex, def Case, gtb *GroundTruthB, events *EventLog, savedIntel *IntelSnapshot, intelCacheDir string, actNowEPSS, watchEPSS float64, toleranceMS int64) (MatchResult, error) {
+func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.ImageScan, fileIdx *scanFileIndex, extraGroups []pkgGroup, def Case, gtb *GroundTruthB, events *EventLog, savedIntel *IntelSnapshot, intelCacheDir string, actNowEPSS, watchEPSS float64, toleranceMS int64) (MatchResult, error) {
 	result := MatchResult{CaseID: def.CaseID, Image: def.Image, GeneratedAt: time.Now().UTC(), Subject: rec.Subject, RunKey: rec.RunKey}
 	result.ContainerID = rec.Subject.Docker.ContainerID
 	result.ObservedImageID = rec.Subject.Docker.ImageID
@@ -217,7 +218,15 @@ func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.Ima
 	// for another generation describes a layout these samples never looked
 	// at, and answering from it would describe a different container state
 	// than the one being matched.
-	resolvers := newResolverSet(fileIdx, auxForWindow(&rec, wv))
+	auxes := auxForWindow(&rec, wv)
+	resolvers := newResolverSet(fileIdx, auxes)
+	// The Finding-bearing population is resolved against the
+	// Vulnerabilities-only index alone, whether or not -all-packages was
+	// given. The zero-Finding groups get their own resolver set and their
+	// own evidence further down, built from the widened index, so nothing
+	// a package carrying no Finding contributes — a file, a placement, an
+	// operating-system name — can reach the evidence a Finding-bearing
+	// package's own verdict is read out of.
 	evidence := buildEvidenceSet(&rec, wv, groups, resolvers, fileIdx, events, verified)
 	result.EventState, result.EventNotes = evidence.eventState, evidence.eventNotes
 	if events != nil {
@@ -235,27 +244,7 @@ func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.Ima
 
 	packages := make([]PackageVerdict, 0, len(groups))
 	for _, g := range groups {
-		pv := assignVerdict(g, &rec, def, obsState, wv)
-		applyPriorities(&pv, g, priorityByIndex)
-		labelGTBTruth(&pv, truth)
-		pv.GapClass, pv.GapRecoverability = classifyGap(pv, declaresE4(def, g.key.Package), gapEv)
-
-		pv.Ecosystem, pv.MappingInput = fileIdx.ecosystem[g.key], fileIdx.mappingInput[g.key]
-		if pv.Ecosystem == "" && g.key.Class == scanner.ClassOS {
-			pv.Ecosystem = ecoOS
-		}
-		if pv.MappingInput == "" {
-			pv.MappingInput = mappingInputNone
-		}
-		s1 := decideSeries(seriesS1, g, &rec, def, obsState, wv, evidence, resolvers, fileIdx)
-		s2 := decideSeries(seriesS2, g, &rec, def, obsState, wv, evidence, resolvers, fileIdx)
-		pv.S1Verdict, pv.S1Factor, pv.S1Sources = s1.Verdict, s1.Factor, s1.Sources
-		pv.S2Verdict, pv.S2Factor, pv.S2Sources = s2.Verdict, s2.Factor, s2.Sources
-		pv.EvidenceFiles, pv.EvidenceGrain = s2.Files, s2.Grain
-		pv.EvidenceNotes = append(pv.EvidenceNotes, s2.Notes...)
-		pv.Confirmations = evidence.confirmationsFor(g.key, allowS2)
-		noteGapRecovery(&pv, evidence)
-		packages = append(packages, pv)
+		packages = append(packages, buildPackageVerdict(g, &rec, def, obsState, wv, priorityByIndex, truth, gapEv, fileIdx, evidence, resolvers))
 	}
 	result.Packages = packages
 
@@ -270,7 +259,7 @@ func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.Ima
 	// completeness is whether that layout was read whole: a reading that
 	// was cut short at a limit, or one whose source did not hold still,
 	// leaves a gap that has nothing to do with the sampling or the events.
-	mappingComplete := auxComplete(auxForWindow(&rec, wv))
+	mappingComplete := auxComplete(auxes)
 	for _, series := range []string{seriesS0, seriesS1, seriesS2} {
 		complete := samplingComplete
 		if series != seriesS0 {
@@ -335,7 +324,77 @@ func runMatchPipeline(ctx context.Context, rec ContainerRecord, scan scanner.Ima
 
 	result.Evidence = buildEvidence(packages, result.Exposure, &rec, wv, rec.Window.ID)
 
+	// Zero-Finding packages are appended to result.Packages only, after
+	// every Finding-unit aggregate above has already been computed from
+	// the unmodified packages/groups: aggregate, aggregateSeries,
+	// computeGTBCounts, gtaDiscrepancies, guessDependencyRate, G4,
+	// result.Mapping and result.Evidence all read packages, groups or the
+	// Vulnerabilities-only index as they were before this point, so a
+	// zero-Finding package changes no Finding count, rank, or priority
+	// bucket anywhere in this result.
+	//
+	// They are evaluated against the widened index, and against a
+	// resolver set and an evidence set built from it rather than the ones
+	// the Finding-bearing verdicts above were read out of. That is the
+	// whole reason the widening is a separate index: these packages need
+	// their own files and placements to be reachable, and the packages
+	// already judged above must not see them. A zero-Finding package's
+	// own sampling confirmation (an operating-system package's mapped
+	// files or executable link, found through the container's package
+	// database rather than through anything the scan report carries) is
+	// recorded per package group at evidence-construction time rather
+	// than resolved on demand, which is why this second evidence set is
+	// built over the whole population and not over extraGroups alone.
+	if len(extraGroups) > 0 {
+		wideIdx := fileIdx.widened
+		if wideIdx == nil {
+			// Nothing widened the index, so the zero-Finding groups have
+			// nothing of their own to resolve against and read the same
+			// index the Finding-bearing ones did.
+			wideIdx = fileIdx
+		}
+		wideResolvers := newResolverSet(wideIdx, auxes)
+		wideGroups := append(append([]pkgGroup{}, groups...), extraGroups...)
+		wideEvidence := buildEvidenceSet(&rec, wv, wideGroups, wideResolvers, wideIdx, events, verified)
+		allPackages := make([]PackageVerdict, len(packages), len(packages)+len(extraGroups))
+		copy(allPackages, packages)
+		for _, g := range extraGroups {
+			allPackages = append(allPackages, buildPackageVerdict(g, &rec, def, obsState, wv, priorityByIndex, truth, gapEv, wideIdx, wideEvidence, wideResolvers))
+		}
+		result.Packages = allPackages
+	}
+
 	return result, nil
+}
+
+// buildPackageVerdict computes one package group's complete PackageVerdict
+// — the first stage's own rule, ecosystem/mapping-input labeling, GT-B
+// truth, gap classification, and the S1/S2 series — the identical
+// computation for a Finding-bearing group and for a zero-Finding one added
+// under -all-packages alike, so the two are evaluated through exactly the
+// same code rather than two versions of the same judgement drifting apart.
+func buildPackageVerdict(g pkgGroup, rec *ContainerRecord, def Case, obsState string, wv windowValidity, priorityByIndex []string, truth gtbTruth, gapEv gapEvidence, fileIdx *scanFileIndex, evidence *evidenceSet, resolvers *resolverSet) PackageVerdict {
+	pv := assignVerdict(g, rec, def, obsState, wv)
+	applyPriorities(&pv, g, priorityByIndex)
+	labelGTBTruth(&pv, truth)
+	pv.GapClass, pv.GapRecoverability = classifyGap(pv, declaresE4(def, g.key.Package), gapEv)
+
+	pv.Ecosystem, pv.MappingInput = fileIdx.ecosystem[g.key], fileIdx.mappingInput[g.key]
+	if pv.Ecosystem == "" && g.key.Class == scanner.ClassOS {
+		pv.Ecosystem = ecoOS
+	}
+	if pv.MappingInput == "" {
+		pv.MappingInput = mappingInputNone
+	}
+	s1 := decideSeries(seriesS1, g, rec, def, obsState, wv, evidence, resolvers, fileIdx)
+	s2 := decideSeries(seriesS2, g, rec, def, obsState, wv, evidence, resolvers, fileIdx)
+	pv.S1Verdict, pv.S1Factor, pv.S1Sources = s1.Verdict, s1.Factor, s1.Sources
+	pv.S2Verdict, pv.S2Factor, pv.S2Sources = s2.Verdict, s2.Factor, s2.Sources
+	pv.EvidenceFiles, pv.EvidenceGrain = s2.Files, s2.Grain
+	pv.EvidenceNotes = append(pv.EvidenceNotes, s2.Notes...)
+	pv.Confirmations = evidence.confirmationsFor(g.key, allowS2)
+	noteGapRecovery(&pv, evidence)
+	return pv
 }
 
 // resolveIntel supplies the KEV/EPSS enrichment the priority computation

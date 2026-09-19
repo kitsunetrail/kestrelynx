@@ -1,0 +1,7 @@
+{"record":"events_header","buffer_pages":512,"boot_epoch":0}
+{"record":"event","ts":"2026-09-19T03:59:40.000000Z","event":"open","pid":100,"tid":100,"starttime":50,"path":"/usr/local/lib/python3.12/site-packages/flask/__init__.py","path_resolved":true,"ok":true,"container_id":"cid-fixture-26"}
+{"record":"event","ts":"2026-09-19T04:00:10.500000Z","event":"open","pid":100,"tid":100,"starttime":50,"path":"/usr/local/lib/python3.12/site-packages/requests/__init__.py","path_resolved":true,"ok":true,"container_id":"cid-fixture-26"}
+{"record":"event","ts":"2026-09-19T04:00:20.000000Z","event":"exec","pid":501,"tid":501,"starttime":99,"path":"/usr/bin/curl","path_resolved":true,"ok":true,"container_id":"cid-fixture-26"}
+{"record":"event","ts":"2026-09-19T04:00:25.010000Z","event":"open","pid":502,"tid":502,"starttime":105,"path":"/usr/lib/x86_64-linux-gnu/libcrypto.so.3","path_resolved":true,"ok":true,"comm":"openssl","container_id":"cid-fixture-26"}
+{"record":"event","ts":"2026-09-19T04:00:25.000000Z","event":"exec","pid":502,"tid":502,"starttime":105,"path":"/usr/bin/openssl","path_resolved":true,"ok":true,"container_id":"cid-fixture-26"}
+{"record":"events_trailer","drops":{"lost_events":0}}

@@ -189,6 +189,13 @@ func computeSeriesDeltas(packages []PackageVerdict, eventState string) []SeriesD
 }
 
 // buildMappingReport summarizes the two-stage mapping per ecosystem.
+//
+// idx is the Vulnerabilities-only index, never its widened copy:
+// ScanReportFiles counts the files the report attributes a Finding-bearing
+// package to, and counting the packages that carry no Finding at all among
+// them would make the same scan report look like it named more files
+// whenever -all-packages happened to be passed, beside rates computed over
+// a population that did not change.
 func buildMappingReport(idx *scanFileIndex, packages []PackageVerdict, ev *evidenceSet) MappingReport {
 	rows := map[string]*MappingRow{}
 	row := func(eco string) *MappingRow {

@@ -65,6 +65,12 @@
 | `record.md` | Individual run record produced by `tools/record.py` |
 | `experiments/runtime-discovery/out/AGGREGATE-events.md` | Cross-run table produced by `tools/aggregate.py` |
 
+| `<case>-truth-r<replicate>/image_id.txt`, `container_id.txt` | Truth-run image and container identities |
+| `<case>-truth-r<replicate>/ready_at.txt`, `fired_at.txt`, `stopped_at.txt` | Truth-run readiness, firing, and stop-signal times |
+| `<case>-truth-r<replicate>/varlog/` | Logs copied after graceful stop, including usage, occurrences, operations, runtime introspection, and per-process strace files |
+| `<case>-truth-r<replicate>/truth.json` | Independent inventory and usage truth produced by `truth.py` |
+| `<measurement-run>/coverage.json`, `coverage.md` | Package coverage scores or a hold decision with reasons |
+
 - An observation filename is `case9__9_root_i30_w300_p0_r1_attach_running_none.json`.
 - The run key contains `case_variant`, `permission`, `interval`, `window`, `phase`, `replicate`, `sync`, and `config_id`.
 - `sync` distinguishes workload ordering.
@@ -152,6 +158,8 @@
 | `-case` | Required case definition containing expectations and any GT-B scope |
 | `-gtb` | Optional independent ground-truth JSON |
 | `-events` | Optional converted event JSONL |
+
+| `-all-packages` | Add zero-Finding package verdicts from Trivy `Packages` entries, requiring `--list-all-pkgs` scan output and defaulting to `false` |
 | `-occurrence-tolerance-ms` | Pairing tolerance, default `500` milliseconds |
 | `-intel-cache` | KEV/EPSS cache directory |
 | `-intel-snapshot` | Saved intelligence JSON used without KEV/EPSS lookup |
@@ -171,6 +179,34 @@
 - Only snapshot runs pin intelligence sufficiently for reproducible classification.
 - Automated tools accept the snapshot path through `KL_INTEL_SNAPSHOT`.
 - Pairing tolerance must be fixed before measurement and retained across comparisons.
+
+### Coverage runners and scoring tools
+
+| Command | Arguments and defaults |
+| --- | --- |
+| `tools/case-run.sh` | `<case> [replicate] [startup\|attach_running] [64\|256\|512\|none] [interval] [window]`, defaulting to replicate `1`, `startup`, `64`, `30`, and `300` |
+| `tools/case-batch.sh` | `<plan file>`, with each line containing `<case> <replicate> <sync> <pages> [interval] [window]` |
+| `tools/truth-run.sh` | `<case> [replicate] [window seconds]`, accepting case 26 through case 28 and defaulting to replicate `1` and window `900` |
+| `tools/truth.py` | `<truth run dir> <case json> [measurement run dir]`, writing `<truth run dir>/truth.json` |
+| `tools/coverage.py` | `<measurement run dir> <truth.json>`, writing `coverage.json` and `coverage.md` in the measurement directory |
+| `cases/run.sh build` | `<case>`, building the separate image-build step without starting a container where that step exists |
+| `cases/run.sh fire-when-ready` | `<case> [timeout seconds]`, retrying the actual firing signal with a default timeout of `900` seconds |
+| `cases/run.sh wait-after-lazy-phase` | `<case> [timeout seconds]`, waiting for an `after_lazy` introspection record with a default timeout of `60` seconds |
+
+- The fifth and sixth `case-run.sh` arguments are positive whole seconds for sample-start interval and observation-window duration.
+- The fifth and sixth plan fields have the same meanings and default to `30` and `300` when omitted.
+- Plan entries for case 23, case 24, `23+24`, and `23+host` route to the attribution runner rather than applying the coverage interval and window.
+- `coverage-main.txt` schedules case 26 through case 28 at a 30-second interval and a 900-second window under both startup conditions with two replicates, totaling 12 runs.
+- `coverage-rest.txt` schedules the remaining interval/window combinations `(10, 900)`, `(30, 300)`, and `(10, 300)` under both startup conditions with one replicate, totaling 18 runs.
+- Both coverage plans use `512` event-buffer pages.
+- `case-run.sh` builds the image before starting the tracer and collector so an uncached build does not consume the observation window.
+- For case 26 through case 28 under `startup`, `-phase-base` uses the collector's start instant so the window includes container startup before registration completes.
+- For these cases under `attach_running`, the runner uses `fire-when-ready` with a 900-second timeout and `wait-after-lazy-phase` with a 120-second timeout before starting observation.
+- These cases use Trivy `--list-all-pkgs` for both severity scans and `match -all-packages` for both matches.
+- `truth-run.sh` creates a fresh container, runs the workload under strace, waits for readiness and fires, waits the requested window, then stops gracefully and copies `/var/log`.
+- The optional measurement directory makes `truth.py` check equivalence during truth construction, while `coverage.py` repeats that check for every measurement it scores.
+- `truth.py` needs Docker access to inspect the saved image ID, while `coverage.py` needs the saved truth-run directory and logs referenced by `truth.json`.
+- Run `coverage.py` from the same checkout as `truth.py` so its imported parsing and operation helpers agree.
 
 ## Manual measurement
 
@@ -566,6 +602,73 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - Usage-log `open` entries can come from maps snapshots or runtime module bookkeeping.
 - Such entries are not independent syscall-level truth.
 
+### Usage truth for case 26 through case 28 (truth.py)
+
+#### Bundled inventory I
+
+- `truth.py` creates a container from the saved image ID and enumerates the rootfs exported by `docker export`, independently of usage logs.
+- Discovery covers the whole exported rootfs except `/proc`, `/sys`, and `/dev`, whose exclusions are recorded.
+- OS packages and versions come from the copied OS package database, with file ownership resolved through its metadata.
+- Python distributions are discovered across the exported filesystem, with installation metadata and `RECORD` used for versions and file ownership.
+- Node packages come from readable `package.json` files containing names and versions anywhere in the image, including packages outside `node_modules` and bundled tooling.
+- Java packages come from jars anywhere in the image, using their package coordinates and readable version metadata.
+- This inventory targets the same bundled-package population as Trivy `--list-all-pkgs`, including packages without Findings.
+- Inventory and truth keys are `(ecosystem, name, version)`, preserving different installed versions of the same package.
+- `coverage_plan` declares intended groups and supplies a declaration check rather than defining the measured inventory or usage labels.
+
+#### Used U, unused N, and unknown X
+
+- Successful `execve`/`execveat` and `open`/`openat`/`openat2` calls from strace `-f -ff -tt` provide independent usage evidence.
+- `clone`, `clone3`, `fork`, and `vfork` records reconstruct parent-child relationships and propagate the acting subject to children that do not execute another program.
+- The operational curl, git, and openssl processes and their inherited helpers are short-lived subjects, while the resident program and operational scheduler are resident subjects.
+- Runtime introspection adds resolved files from Python `sys.modules`, Node.js `require.cache`, and Java class-load logs.
+- Only the first introspection sighting of a path contributes a new usage-evidence record, while later sightings become `held_evidence`.
+- Absolute and relative symlink targets, including intermediate directory links, are resolved within the exported rootfs.
+- Directory opens are excluded using both `O_DIRECTORY` and directory checks against the exported rootfs.
+- Failed calls do not establish use, and unresolved relative paths remain explicit gaps.
+- `U` contains versioned usage keys also present in `I`, while versioned usage absent from `I` becomes `ledger_gaps`.
+- Usage or inventory entries whose versions cannot be established are reported in `version_unknown` rather than assigned a guessed version.
+- Packages in `I` without positive usage evidence enter `N` only when the completeness check passes, otherwise entering `X`.
+- Completeness requires nonempty trace coverage, no empty trace files, no corrupted or unparseable syscall records, no unreconstructed interrupted calls, and no missing traces for cloned processes.
+- Completeness also requires resolved strace and introspection evidence, no unresolved broken ownership symlink chains, and a successful operation-equivalence check.
+- An omitted measurement directory leaves operation consistency `unchecked`, so the remaining inventory is initially `X`.
+- Positive usage remains in `U` when completeness fails, and the versioned inventory satisfies `I = U ∪ N ∪ X` with disjoint sets.
+- `inventory_scan` records export, discovery, and metadata-read diagnostics separately from the usage completeness decision.
+
+#### Evidence attribution and run equivalence
+
+- Evidence is assigned to startup before firing, a named operation instance, activity after the stop signal, or an unattributed period.
+- Short-lived evidence follows the traced PID and reconstructed ancestry to the operation instance identified by the occurrence log.
+- Resident evidence uses timestamps against reconstructed operation intervals, with nearby assignments retained separately in `operations_nearest`.
+- Short-lived evidence without a matching operation instance remains unattributed rather than falling back to a nearby timestamp.
+- Operation offsets record the first usage instant relative to the corresponding operation or instance start.
+- Evidence after the stop signal and evidence without usable temporal attribution do not independently establish startup or operation-scoped use.
+- Equivalence compares image IDs, fixed-operation names and order, success, available `detail`, and the resolved-file sets from runtime introspection.
+- Periodic `osops_` operations must cover the same kinds and agree in interleaved order, success, and available `detail` across the range both runs reached.
+- Different periodic cycle counts are allowed, while trailing instances beyond the shared range remain explicitly unpaired.
+- Missing or unusable measurement introspection prevents equivalence when the truth run has usable introspection.
+
+#### truth.json fields
+
+| Field | Meaning |
+| --- | --- |
+| `image_id`, `truth_run_dir`, `fired_at`, `stopped_at` | Image identity, retained source directory, and truth-run timing |
+| `used`, `unused`, `unknown` | Versioned U, N, and X entries, with reasons on unknown entries |
+| `inventory_size`, `inventory_scan` | Inventory count, scan scope, exclusions, export status, discovered metadata, and read failures |
+| `ledger_gaps`, `identification_gaps` | Versioned positive evidence absent from the inventory and its identity-only summary |
+| `version_unknown` | Inventory-side or usage-side entries lacking an established version |
+| `completeness` | Trace checks, operation-consistency state, overall decision, and reasons |
+| `unresolved` | Unresolved trace paths, introspection modules, unmapped paths, and ownership symlink failures |
+| `declaration_gaps` | Declared packages missing from the inventory and inventoried packages absent from the declared groups |
+| `operation_consistency` | Compared measurement directory, agreement details, image and introspection checks, and periodic instance pairing |
+| `used[].evidence`, `evidence_types`, `subjects`, `paths` | Evidence sources, usage types, acting-subject categories, and resolved package paths |
+| `used[].first_seen_s`, `last_seen_s`, `hold_seconds`, `exec_hold_seconds_min` | Truth-run evidence timing and recorded short-lived execution duration |
+| `used[].used_at_startup`, `used_during_operations` | Startup-use flag and operation names associated with usage |
+| `used[].operation_instances` | Specific operation IDs associated with usage evidence |
+| `used[].operation_offsets_s`, `operation_instance_offsets_s` | First-use offsets keyed by operation name and specific instance ID |
+| `used[].evidence_periods` | Startup, operation, nearest-operation, post-stop, and unattributed evidence counts |
+| `used[].held_evidence` | Later introspection sightings retained as continued-presence evidence |
+
 ## Matching rules
 
 ### Finding confirmation
@@ -620,6 +723,93 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - A zero denominator produces N/A.
 - An unavailable actual-open record also produces N/A.
 - Finding confirmation and occurrence capture answer different questions.
+
+### All-package matching
+
+- `-all-packages` registers packages from Trivy `Packages` entries even when they have no Finding.
+- Added groups produce `PackageVerdict` entries with `finding_count: 0` through the same S0/S1/S2 evaluation path.
+- OS versions reconstruct `epoch:version-release` from Trivy's separate fields, omitting zero epochs and empty releases.
+- Zero-Finding groups use a separate `widened` index containing the additional package names, files, and placements.
+- Finding-bearing groups keep the original index and verdicts, preserving Finding counts, rankings, and priority buckets.
+- Added verdicts appear in `packages` after the existing aggregates have been computed.
+- A report with no `Packages` entries is rejected when `-all-packages` is requested.
+- `gobinary` entries are excluded from the added package population and from coverage scoring.
+- The match group key remains `(class, package, installed_version)` and cannot separate identical language-package names and versions across ecosystems.
+
+## Coverage scoring (coverage.py)
+
+### Scope and sets
+
+- Each available `match_hc.json` and `match_all.json` is scored separately for S0, S1, and S2 using confirmed `(ecosystem, name, installed_version)` keys.
+- Categories are `resident_os`, `short_lived_os`, and the applicable language categories `python`, `node`, and `java`.
+- A used OS package can belong to both subject categories, while an unused or unknown OS package is included in both OS categories.
+- `U_main` includes startup use and use established through operations completed by the measurement window's end.
+- Startup use remains in the main denominator under `attach_running`, including use before attachment.
+- Periodic usage must correspond to a verified operation instance rather than merely another instance with the same name.
+- For an operation crossing the window's end, main membership requires persistence evidence and a first-use offset that maps to or before the cutoff on the corresponding measurement instance.
+- Unpaired, unrecorded, later-only, post-stop-only, or insufficiently attributed truth usage enters `X_main` rather than `N`.
+- `N` retains established non-use, including entries restored from `X` after a fresh equivalence check when operation comparison was their only blocker.
+- `U_window` is supplementary and includes usage associated with operations completed inside the window or startup usage with executable/shared-library evidence that could persist into it.
+- Window scoring leaves boundary-crossing or unrecorded operation usage in `X_window`, while usage tied only to operations recorded entirely outside the window can enter `N_window`.
+- Main scoping requires measurement operation intervals and the window end, while window scoring also requires the window start.
+- When main scoping is unavailable, its availability flag is false and scoring falls back to the truth run's used set.
+
+| Quantity | Set expression |
+| --- | --- |
+| Inventory | `I = U ∪ N ∪ X` |
+| Confirmed set for series s | `C_s` |
+| Main true positives | `TP_s = C_s ∩ U_main` |
+| Main false negatives | `FN_s = U_main \ C_s` |
+| Main false positives | `FP_s = C_s ∩ N` |
+| Main true negatives | `TN_s = N \ C_s` |
+| Main recall | `\|TP_s\| / \|U_main\|` |
+| Main FPR | `\|FP_s\| / \|N\|` |
+| Window figures | The same expressions using `U_window` and `N_window` |
+| Identification misconfirmations | `C_s \ I` |
+| Confirmations in truth-unknown inventory | `C_s ∩ X` |
+
+- All category counts apply the corresponding category restriction to these sets.
+- Zero denominators produce JSON `null` and Markdown N/A.
+- `identification_misconfirmations` reports confirmed keys outside the inventory separately from ordinary TP/FP/FN.
+- A confirmed wrong version is FP when that exact version is in `N`, TP when it is in `U_main`, and an identification misconfirmation when it is outside `I`.
+- The correct version independently remains FN if it belongs to `U_main` and was not confirmed.
+- `confirmed_in_x` reports confirmations in the remaining truth-unknown inventory, while `x_main_confirmed` and `confirmed_in_x_window` include the respective scope's unknown entries.
+
+### Primary miss causes
+
+- Each FN receives one primary cause in the following priority order, with cause totals equal to FN.
+- Candidate tags preserve possible explanations when the evidence cannot establish a primary cause.
+
+| Cause | Evidence used |
+| --- | --- |
+| `used_before_window` | All timed truth evidence precedes the firing-relative window start and lacks executable/shared-library evidence that could persist into the window |
+| `short_lived_use` | For S0, every confirmed retention interval from the measurement fits between consecutive actual sample times, with no usage whose retention end remains unconfirmed |
+| `mapping_not_supported` | For S2, a package path was captured in the measurement's in-window events without confirmation, or for any series the package verdict is absent or its factor identifies a mapping gap |
+| `insufficient_permission` | A failure naming a package path has step `proc_denied`, `rootfs_denied`, or `prepare_proc_denied` |
+| `other` | A failure naming a package path has an identifiable cause other than permission denial or `proc_gone` |
+| `lost_events` | For S2, reported event loss accompanies an identifiable event gap overlapping the package's operation interval in the measurement |
+| `unknown` | No preceding condition establishes the cause |
+
+- Mapping-gap factors are `lang_pkg_unmappable`, `no_file_list`, `db_absent`, `db_error`, `mapping_input_missing`, and `event_path_unresolved`.
+- `proc_gone` alone does not establish permission denial or the `other` cause.
+- An `unknown` miss can carry `lost_events_candidate` for reported event loss and `short_lived_use_candidate` when S0 retention evidence is insufficient.
+- Truth-run retention durations are not substituted for measurement-run retention intervals.
+
+### Short-lived direct confirmations and output
+
+- `short_lived_direct_confirmations` counts TP packages independently confirmed through a short-lived acting process in the measurement.
+- S0 identifies that process through the confirmation's sample ID and path, while added mapping and event evidence use confirmation and process information.
+- The count accumulates as S0 = P, S1 = P ∪ A, and S2 = P ∪ A ∪ E.
+- An unknown acting subject contributes nothing to this auxiliary count, which does not replace the category's TP count.
+- `coverage.json` retains category-by-series TP/FN/FP/TN, recall, FPR, window figures, unknown confirmations, identification misconfirmations, miss details, and direct-confirmation counts.
+- `coverage.md` shows both scan variants, category-by-series metrics, identification misconfirmations, and the S2 miss table.
+
+### Hold conditions
+
+- Every scoring invocation checks the measurement image ID against `truth.json` and freshly compares the retained truth logs with that measurement's logs.
+- Missing or different image IDs, unavailable truth source logs, or failed operation/introspection equivalence produce `hold: true` with `hold_reason`.
+- A hold writes both output files without recall or false-positive figures, even though the command exits successfully.
+- Trace incompleteness keeps affected negative candidates in `X` and does not by itself trigger the equivalence hold.
 
 ## Observation states
 
@@ -714,6 +904,15 @@ go run ./experiments/runtime-discovery match \
 - Event capture rates require event logs and independent occurrence records.
 
 ## Detailed limitations and cautions
+
+- The coverage fixtures do not pin apt package versions, so an image rebuilt later is not assumed equivalent to the image used for truth.
+- Scoring requires the same image ID for truth and measurement, with fresh containers preventing reuse of a previous run's writable layer.
+- Truth and coverage use ecosystem-aware triples, but match's `(class, package, installed_version)` grouping can already merge same-name, same-version language packages from different ecosystems.
+- strace changes timing and scheduling, so truth and measurement correspond through operation sequences and verified instances rather than equal elapsed time.
+- A shared operation name does not establish correspondence for an unpaired periodic instance.
+- Static Go binaries and embedded-module usage are outside this coverage population.
+- `coverage_plan` groups express intended behavior and can differ from measured usage because of transitive loading.
+- `completeness.ok` is the implemented usage-completeness decision rather than a guarantee that every inventory source was read successfully, so `inventory_scan`, `ledger_gaps`, and `version_unknown` remain necessary diagnostics.
 
 - The harness is independent of the product binary and container image.
 - There is no daemon mode or support for Kubernetes/containerd observation.

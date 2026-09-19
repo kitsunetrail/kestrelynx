@@ -1,0 +1,334 @@
+{
+  "case_id": "26",
+  "image": "kl-case26",
+  "gt_b_scope": [
+    "flask",
+    "werkzeug",
+    "jinja2",
+    "markupsafe",
+    "itsdangerous",
+    "click",
+    "blinker",
+    "certifi",
+    "requests",
+    "urllib3",
+    "idna",
+    "charset-normalizer",
+    "sqlalchemy",
+    "cryptography",
+    "cffi",
+    "pyyaml",
+    "greenlet",
+    "pycparser",
+    "six",
+    "packaging",
+    "attrs",
+    "pytz",
+    "tomli",
+    "typing-extensions",
+    "colorama",
+    "iniconfig",
+    "pyparsing",
+    "wcwidth",
+    "platformdirs"
+  ],
+  "coverage_plan": {
+    "used_at_startup": [
+      "flask",
+      "werkzeug",
+      "jinja2",
+      "markupsafe",
+      "itsdangerous",
+      "click",
+      "blinker",
+      "certifi"
+    ],
+    "used_lazily": [
+      "requests",
+      "urllib3",
+      "idna",
+      "charset-normalizer",
+      "sqlalchemy",
+      "cryptography",
+      "cffi",
+      "pyyaml",
+      "greenlet",
+      "typing-extensions",
+      "colorama"
+    ],
+    "unused": [
+      "pycparser",
+      "six",
+      "packaging",
+      "attrs",
+      "pytz",
+      "tomli",
+      "iniconfig",
+      "pyparsing",
+      "wcwidth",
+      "platformdirs"
+    ]
+  },
+  "expected": [
+    {
+      "package": "libc6",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "linked by the interpreter and mapped for its whole life"
+    },
+    {
+      "package": "curl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the operational loop execs /usr/bin/curl every five seconds once fired"
+    },
+    {
+      "package": "git",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the operational loop execs /usr/bin/git every five seconds once fired"
+    },
+    {
+      "package": "openssl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the operational loop execs /usr/bin/openssl every five seconds once fired"
+    },
+    {
+      "package": "flask",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "werkzeug",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "jinja2",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "markupsafe",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "itsdangerous",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "click",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "blinker",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "certifi",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "requests",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "urllib3",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "idna",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "charset-normalizer",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "sqlalchemy",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "cryptography",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "cffi",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "pyyaml",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "pycparser",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "six",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "packaging",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "attrs",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "pytz",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "tomli",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "typing-extensions",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "colorama",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "iniconfig",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "pyparsing",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "wcwidth",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "platformdirs",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    }
+  ],
+  "fixture_notes": {
+    "purpose": "coverage-validation case: a small Flask web application bundling ~28 pip distributions across three declared groups (coverage_plan), used to measure recall and false-positive rates against an independently obtained ground truth rather than to exercise one specific mapping gap",
+    "package_selection": "versions are pinned to wheels known to install on python:3.12-slim without a compiler (manylinux wheels for cryptography/cffi/SQLAlchemy/PyYAML/MarkupSafe/charset-normalizer); they were not curated for known CVEs the way earlier single-package cases were, since this case measures usage confirmation rather than remediation ranking",
+    "startup_vs_lazy": "the startup group is imported at module load, before the firing signal, so it is in use for the whole of any observation window that includes container startup; the lazy group is imported only inside request handlers, which this program calls against its own local server once fired, so the read happens only after the signal",
+    "operational_processing": "a background shell loop execs curl (against this program's own /health endpoint), git (log -1 against a fixed local repository baked into the image) and openssl (a sha256 digest of a fixed local file) every five seconds once the container starts, independently of the firing signal, as this case's short-lived OS-package activity",
+    "runtime_introspection": "before exiting (or a fixed time after firing, whichever comes first) the process appends one JSON Lines record per sys.modules entry to /var/log/runtime-modules.jsonl, naming each module's resolved file (or its import spec's origin, when no __file__ exists) — the ground-truth tool's own independent source, never read by this harness's ordinary sampling or event collection",
+    "coverage_plan_caveat": "the three groups are the fixture's design intent (GT-A), not the measured ground truth; a package that turns out to load as a transitive dependency of another is corrected to used in the independently obtained truth rather than kept as designed"
+  }
+}

@@ -1,0 +1,303 @@
+{
+  "case_id": "27",
+  "image": "kl-case27",
+  "gt_b_scope": [
+    "express",
+    "cors",
+    "compression",
+    "morgan",
+    "helmet",
+    "cookie-parser",
+    "lodash",
+    "dayjs",
+    "js-yaml",
+    "uuid",
+    "csv-parse",
+    "mustache",
+    "ini",
+    "toml",
+    "chalk",
+    "figlet",
+    "left-pad",
+    "slugify",
+    "pluralize",
+    "camelcase",
+    "kleur",
+    "nanoid",
+    "ansi-colors",
+    "word-wrap",
+    "is-odd"
+  ],
+  "coverage_plan": {
+    "used_at_startup": [
+      "express",
+      "cors",
+      "compression",
+      "morgan",
+      "helmet",
+      "cookie-parser",
+      "lodash"
+    ],
+    "used_lazily": [
+      "dayjs",
+      "js-yaml",
+      "uuid",
+      "csv-parse",
+      "mustache",
+      "ini",
+      "toml"
+    ],
+    "unused": [
+      "chalk",
+      "figlet",
+      "left-pad",
+      "slugify",
+      "pluralize",
+      "camelcase",
+      "kleur",
+      "nanoid",
+      "ansi-colors",
+      "word-wrap",
+      "is-odd"
+    ]
+  },
+  "expected": [
+    {
+      "package": "libc6",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "linked by the Node.js interpreter and mapped for its whole life"
+    },
+    {
+      "package": "curl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the operational loop execs /usr/bin/curl every five seconds once fired"
+    },
+    {
+      "package": "git",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the operational loop execs /usr/bin/git every five seconds once fired"
+    },
+    {
+      "package": "openssl",
+      "class": "os",
+      "expected_usage": "used",
+      "expected_verdict": "confirmed",
+      "rationale": "the operational loop execs /usr/bin/openssl every five seconds once fired"
+    },
+    {
+      "package": "express",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "cors",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "compression",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "morgan",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "helmet",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "cookie-parser",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported at process startup, before the firing signal, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed"
+    },
+    {
+      "package": "lodash",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "dayjs",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "js-yaml",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "uuid",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "csv-parse",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "mustache",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "ini",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "toml",
+      "class": "lang",
+      "expected_usage": "used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "imported only inside a request handler the firing signal triggers, so it really is in use. The first stage's rules cannot relate a language-package Finding's install-metadata path to any mapped file, so its expected verdict is unobserved rather than confirmed (requested by this program itself once fired, against its own local server)"
+    },
+    {
+      "package": "chalk",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "figlet",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "left-pad",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "slugify",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "pluralize",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "camelcase",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "kleur",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "nanoid",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "ansi-colors",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "word-wrap",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    },
+    {
+      "package": "is-odd",
+      "class": "lang",
+      "expected_usage": "not_used",
+      "expected_verdict": "unobserved",
+      "expected_factor": "lang_pkg_unmappable",
+      "rationale": "bundled by the dependency installer but never imported or required by any code path this fixture exercises"
+    }
+  ],
+  "fixture_notes": {
+    "purpose": "coverage-validation case: a small Express web application whose package.json declares 25 directly classified npm packages (coverage_plan) across three groups, used to measure recall and false-positive rates against an independently obtained ground truth",
+    "package_selection": "express alone pulls roughly fifty of its own transitive dependencies on a standard npm install; those are additional, genuinely-used inventory this case does not itemize one by one, following the design note that express's own dependency tree is not trimmed to fit a round number. The 25 packages named in coverage_plan are each a direct package.json dependency chosen for its group, independent of express's own tree",
+    "base_image": "node:22-bookworm-slim (Debian-based, not Alpine), so the OS package family matches the Debian-based Python and Java cases",
+    "startup_vs_lazy": "the startup group is required at module load, before the firing signal; the lazy group is required only inside route handlers, which this program calls against its own local server once fired",
+    "operational_processing": "a background shell loop execs curl, git and openssl every five seconds once the container starts, independently of the firing signal, as this case's short-lived OS-package activity",
+    "runtime_introspection": "before exiting (or a fixed time after firing) the process appends one JSON Lines record per require.cache key to /var/log/runtime-modules.jsonl — the ground-truth tool's own independent source",
+    "coverage_plan_caveat": "the three groups are the fixture's design intent (GT-A), not the measured ground truth"
+  }
+}

@@ -41,14 +41,14 @@ sudo bash experiments/runtime-discovery/tools/case-run.sh 13 1 startup 512
 # Check: csv_hc/occurrence_capture.csv, csv_hc/attribution.csv, csv_hc/event_drops.csv
 ```
 
-- The arguments are `<case> [replicate] [startup|attach_running] [64|256|512|none]`.
-- Cases 13–22 use this command; `none` disables event collection.
+- The arguments are `<case> [replicate] [startup|attach_running] [64|256|512|none] [interval] [window]`, with interval and window defaulting to 30 and 300 seconds.
+- This command accepts case 13 through case 22 and case 26 through case 28, with `none` disabling event collection.
 - `startup` observes before the measured work; `attach_running` joins work already running.
 - Use a separate run directory for each condition and keep generated data out of commits.
 
 ### Run several cases
 
-- Each plan line contains `<case> <replicate> <sync> <pages>`.
+- Each plan line contains `<case> <replicate> <sync> <pages> [interval] [window]`, with the last two fields defaulting to 30 and 300 seconds.
 
 ```sh
 sudo bash experiments/runtime-discovery/tools/case-batch.sh experiments/runtime-discovery/tools/plans/example.txt
@@ -82,11 +82,52 @@ python3 experiments/runtime-discovery/tools/record.py "<run-dir>"
 # Run record: <run-dir>/record.md
 ```
 
+### Ground truth and coverage scoring for case 26 through case 28
+
+- Create a separate truth run for each case to record package use under strace using the same image as the measurement.
+
+```sh
+for c in 26 27 28; do
+  bash experiments/runtime-discovery/tools/truth-run.sh "$c" 1 900
+done
+```
+
+- Run a measurement with an explicit sampling interval and observation window, as in this example for case 26 with a 30-second interval and a 900-second window.
+
+```sh
+sudo bash experiments/runtime-discovery/tools/case-run.sh 26 1 startup 512 30 900
+```
+
+- Alternatively, run the supplied plans, which cover both startup conditions with intervals of 10 or 30 seconds and windows of 300 or 900 seconds.
+
+```sh
+sudo bash experiments/runtime-discovery/tools/case-batch.sh experiments/runtime-discovery/tools/plans/coverage-main.txt
+sudo bash experiments/runtime-discovery/tools/case-batch.sh experiments/runtime-discovery/tools/plans/coverage-rest.txt
+```
+
+- Build `truth.json` from the image inventory and independent logs, supplying a measurement directory to check that the two runs performed equivalent work.
+
+```sh
+python3 experiments/runtime-discovery/tools/truth.py \
+  experiments/runtime-discovery/out/26-truth-r1 \
+  experiments/runtime-discovery/cases/26.json \
+  experiments/runtime-discovery/out/26-root-30-900-p0-r1-startup-nofilter512p
+```
+
+- Score each measurement against its case's truth to write `coverage.json` and `coverage.md` in the measurement directory.
+- Change the case number and measurement directory for case 27, case 28, and the other measurement conditions.
+
+```sh
+python3 experiments/runtime-discovery/tools/coverage.py \
+  experiments/runtime-discovery/out/26-root-30-900-p0-r1-startup-nofilter512p \
+  experiments/runtime-discovery/out/26-truth-r1/truth.json
+```
+
 ## Cases
 
 - Cases 1–12 use the [manual sampling procedure](REFERENCE.md#manual-measurement).
 - Cases 13–24 investigate event evidence and added package mapping.
-- Pass 13–22 directly to `case-run.sh`; use the attribution command for 23/24.
+- Pass case 13 through case 22 or case 26 through case 28 directly to `case-run.sh`, and use the attribution command for case 23 and case 24.
 
 | No. | Container behavior | What it checks |
 | --- | --- | --- |
@@ -113,6 +154,12 @@ python3 experiments/runtime-discovery/tools/record.py "<run-dir>"
 | 21 | Java opening a jar through a delayed loader | Opens caused by the load |
 | 22 | Static Go server with an embedded dependency | Linking the binary path to scan findings |
 | 23 / 24 | Identical programs and paths in separate containers | Attribution with separate, concurrent, and host controls |
+| 26 | Python web application with periodic OS operations inside the container | Package coverage across startup, lazy, and unused groups |
+| 27 | Node.js web application with periodic OS operations inside the container | Package coverage across startup, lazy, and unused groups |
+| 28 | Java application with periodic OS operations inside the container | Package coverage across startup, lazy, and unused jar groups |
+
+- Each added case periodically runs curl, git, and openssl inside its container independently of the firing signal.
+- The groups in `coverage_plan` express fixture intent, while independent evidence determines actual use and non-use.
 
 ## Reading results
 
@@ -128,6 +175,11 @@ python3 experiments/runtime-discovery/tools/record.py "<run-dir>"
 - `event_state=observed` means startup and attachment were confirmed without reported window incompleteness; inspect `csv_hc/event_drops.csv`.
 - `event_state=degraded` means loss, interruption, or unmeasured loss categories limit the window; captured occurrences alone do not establish completeness.
 
+- For case 26 through case 28, read `coverage.md` for package recall and false-positive rate by category and evidence series.
+- Recall measures confirmed used packages, while FPR measures confirmations among packages whose non-use was established, with zero denominators shown as N/A.
+- The main figures include startup use through the measurement window's end, the `window` figures are supplementary, and the S2 miss table gives each miss's primary cause and any candidate tags.
+- `HOLD` means image identity or equivalent operations could not be established, so scoring is withheld and the reason must be checked.
+
 ## Limitations
 
 - Evidence can only raise priority; missing evidence never establishes safety or lowers priority.
@@ -136,6 +188,10 @@ python3 experiments/runtime-discovery/tools/record.py "<run-dir>"
 - Java cases are excluded from reported occurrence capture because their independent logs lack thread identity.
 - Cross-container misattribution cannot be evaluated without an independent process correspondence table.
 - Minimum tracing privileges, event-observation overhead, and operation in production-equivalent environments remain unverified.
+- The added cases do not pin apt package versions, so comparisons require the same image ID.
+- The match grouping key cannot distinguish language packages with identical names and versions across different language ecosystems.
+- strace slows the truth run, so correspondence uses operations and their instances rather than equal elapsed time across runs.
+- Static Go binaries and their embedded modules are outside this coverage evaluation.
 
 ## Details
 

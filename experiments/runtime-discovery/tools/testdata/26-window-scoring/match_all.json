@@ -1,0 +1,96 @@
+{
+ "run_key": {
+  "interval_seconds": 30
+ },
+ "event_state": "observed",
+ "event_drops": {
+  "lost_events": 0
+ },
+ "packages": [
+  {
+   "package": "flask",
+   "ecosystem": "python-pkg",
+   "class": "lang",
+   "verdict": "confirmed",
+   "s1_verdict": "confirmed",
+   "s2_verdict": "confirmed",
+   "factor": "",
+   "s1_factor": "",
+   "s2_factor": "",
+   "observation_state": "observed",
+   "installed_version": "3.0.3"
+  },
+  {
+   "package": "requests",
+   "ecosystem": "python-pkg",
+   "class": "lang",
+   "verdict": "unobserved",
+   "s1_verdict": "unobserved",
+   "s2_verdict": "confirmed",
+   "factor": "",
+   "s1_factor": "",
+   "s2_factor": "",
+   "observation_state": "observed",
+   "installed_version": "2.32.3",
+   "confirmations": [
+    {
+     "source": "event_open",
+     "path": "/usr/local/lib/python3.12/site-packages/requests/__init__.py",
+     "process_generation": {
+      "pid": 100,
+      "starttime": 50
+     }
+    }
+   ]
+  },
+  {
+   "package": "sqlalchemy",
+   "ecosystem": "python-pkg",
+   "class": "lang",
+   "verdict": "unobserved",
+   "s1_verdict": "unobserved",
+   "s2_verdict": "unobserved",
+   "factor": "",
+   "s1_factor": "",
+   "s2_factor": "",
+   "observation_state": "observed",
+   "installed_version": "2.0.30"
+  },
+  {
+   "package": "cryptography",
+   "ecosystem": "python-pkg",
+   "class": "lang",
+   "verdict": "confirmed",
+   "s1_verdict": "confirmed",
+   "s2_verdict": "confirmed",
+   "factor": "",
+   "s1_factor": "",
+   "s2_factor": "",
+   "observation_state": "observed",
+   "installed_version": "42.0.5"
+  },
+  {
+   "package": "curl",
+   "ecosystem": "os",
+   "class": "os",
+   "verdict": "unobserved",
+   "s1_verdict": "unobserved",
+   "s2_verdict": "confirmed",
+   "factor": "",
+   "s1_factor": "",
+   "s2_factor": "",
+   "observation_state": "observed",
+   "installed_version": "8.14.1",
+   "confirmations": [
+    {
+     "source": "event_exec",
+     "path": "/usr/bin/curl",
+     "process_generation": {
+      "pid": 501,
+      "starttime": 99
+     }
+    }
+   ]
+  }
+ ]
+}

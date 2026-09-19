@@ -41,14 +41,14 @@ sudo bash experiments/runtime-discovery/tools/case-run.sh 13 1 startup 512
 # 続けて確認: csv_hc/occurrence_capture.csv、csv_hc/attribution.csv、csv_hc/event_drops.csv
 ```
 
-- 引数は `<case> [replicate] [startup|attach_running] [64|256|512|none]`
-- このコマンドの対象はケース 13〜22 で、`none` はイベント収集なし
+- 引数は `<case> [replicate] [startup|attach_running] [64|256|512|none] [interval] [window]` で、間隔と観測窓の既定値は 30 秒と 300 秒
+- このコマンドの対象はケース 13〜22 とケース 26〜28 で、`none` はイベント収集なし
 - `startup` は計測対象の処理より先に観測を開始し、`attach_running` は動作中の処理に途中から参加する
 - 条件ごとに別の保存先を使い、生成データはコミットしない
 
 ### 複数ケースを流す
 
-- 計画ファイルの各行は `<case> <replicate> <sync> <pages>`
+- 計画ファイルの各行は `<case> <replicate> <sync> <pages> [interval] [window]` で、末尾 2 欄の既定値は 30 秒と 300 秒
 
 ```sh
 sudo bash experiments/runtime-discovery/tools/case-batch.sh experiments/runtime-discovery/tools/plans/example.txt
@@ -82,11 +82,52 @@ python3 experiments/runtime-discovery/tools/record.py "<run-dir>"
 # 個別記録: <run-dir>/record.md
 ```
 
+### 正解データと網羅性の集計(ケース 26〜28)
+
+- ケースごとに独立した正解 run を作り、計測と同じイメージを strace 下で動かしてパッケージの利用を記録する
+
+```sh
+for c in 26 27 28; do
+  bash experiments/runtime-discovery/tools/truth-run.sh "$c" 1 900
+done
+```
+
+- サンプリング間隔と観測窓を指定して計測し、この例ではケース 26 を 30 秒間隔・900 秒窓で動かす
+
+```sh
+sudo bash experiments/runtime-discovery/tools/case-run.sh 26 1 startup 512 30 900
+```
+
+- まとめて計測する場合は同梱の計画ファイルを使い、両方の開始条件で 10 秒・30 秒間隔と 300 秒・900 秒窓を組み合わせる
+
+```sh
+sudo bash experiments/runtime-discovery/tools/case-batch.sh experiments/runtime-discovery/tools/plans/coverage-main.txt
+sudo bash experiments/runtime-discovery/tools/case-batch.sh experiments/runtime-discovery/tools/plans/coverage-rest.txt
+```
+
+- イメージの同梱一覧と独立ログから `truth.json` を作り、計測ディレクトリも渡して両 run の処理の同等性を確認する
+
+```sh
+python3 experiments/runtime-discovery/tools/truth.py \
+  experiments/runtime-discovery/out/26-truth-r1 \
+  experiments/runtime-discovery/cases/26.json \
+  experiments/runtime-discovery/out/26-root-30-900-p0-r1-startup-nofilter512p
+```
+
+- 各計測を同じケースの正解データと照合し、計測ディレクトリに `coverage.json` と `coverage.md` を出力する
+- ケース 27・28 と他の計測条件では、ケース番号と計測ディレクトリを対応するものに置き換える
+
+```sh
+python3 experiments/runtime-discovery/tools/coverage.py \
+  experiments/runtime-discovery/out/26-root-30-900-p0-r1-startup-nofilter512p \
+  experiments/runtime-discovery/out/26-truth-r1/truth.json
+```
+
 ## ケース一覧
 
 - ケース 1〜12 は[手動のサンプリング手順](REFERENCE.ja.md#手動での計測手順)を使う
 - ケース 13〜24 はイベント証拠と追加のパッケージ対応付けを調べる
-- 13〜22 は `case-run.sh` に番号を渡し、23/24 は帰属検証コマンドを使う
+- ケース 13〜22 とケース 26〜28 は `case-run.sh` に番号を渡し、ケース 23・24 は帰属検証コマンドを使う
 
 | 番号 | どんなコンテナか | 何を確かめるか |
 | --- | --- | --- |
@@ -114,6 +155,13 @@ python3 experiments/runtime-discovery/tools/record.py "<run-dir>"
 | 22 | 依存を組み込んだ静的 Go サーバー | バイナリのパスとスキャン結果の対応付け |
 | 23 / 24 | 同じプログラムとパスを持つ別々のコンテナ | 単独、同時、ホストとの対照実験による帰属 |
 
+| 26 | コンテナ内で OS 運用処理を周期実行する Python Web アプリ | 起動時・遅延・未使用の群に対するパッケージ利用状況の網羅性 |
+| 27 | コンテナ内で OS 運用処理を周期実行する Node.js Web アプリ | 起動時・遅延・未使用の群に対するパッケージ利用状況の網羅性 |
+| 28 | コンテナ内で OS 運用処理を周期実行する Java アプリ | 起動時・遅延・未使用の jar 群に対するパッケージ利用状況の網羅性 |
+
+- 追加ケースはいずれも開始通知と独立して、コンテナ内で curl・git・openssl を周期実行する
+- `coverage_plan` の群はフィクスチャの意図を表し、実際の使用・未使用は独立した証拠で判定する
+
 ## 結果の読み方
 
 - 最初に各 run の `record.md` と、run を横断する `out/AGGREGATE-events.md` を読む
@@ -128,6 +176,11 @@ python3 experiments/runtime-discovery/tools/record.py "<run-dir>"
 - `event_state=observed` は起動とアタッチを確認でき、観測期間の不完全性が報告されていない状態で、詳細は `csv_hc/event_drops.csv` を確認する
 - `event_state=degraded` は欠落、中断、欠落項目の未計測によって観測期間に制限がある状態で、発生を捕捉できたことだけでは完全性を示せない
 
+- ケース 26〜28 では `coverage.md` を読み、区分と証拠系列ごとのパッケージ再現率と偽陽性率を確認する
+- 再現率は使用済みパッケージの確認割合、FPR は未使用を確定できたパッケージへの確認割合で、分母がゼロなら N/A
+- 主指標は起動から計測窓終了までの使用を含み、`window` は補助指標で、S2 の見逃し表は各見逃しの主因と候補タグを示す
+- `HOLD` はイメージの同一性または操作の同等性を確認できず集計を保留した状態で、記載された理由を確認する
+
 ## 制限
 
 - 証拠は優先順位を上げるためだけに使い、証拠がないことを安全性や優先順位を下げる根拠にしない
@@ -136,6 +189,10 @@ python3 experiments/runtime-discovery/tools/record.py "<run-dir>"
 - Java のケースは独立ログにスレッド識別情報がないため、報告する発生単位の捕捉率の対象外
 - 独立したプロセス対応表がなければ、コンテナ間誤帰属率は評価不能
 - トレーシングの最小権限、イベント観測の負荷、本番相当環境での動作は未検証
+- 追加ケースの apt パッケージの版は固定せず、比較は同一イメージ ID で担保する
+- match の評価グループのキーでは、異なる言語エコシステムに属する同名同版の言語パッケージを区別できない
+- 正解 run は strace 下で時間が伸びるため、run 間の経過時間を同一視せず操作とそのインスタンスを対応させる
+- Go 静的バイナリとその組み込みモジュールは、この網羅性評価の対象外
 
 ## 詳細
 

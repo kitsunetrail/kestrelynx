@@ -57,7 +57,7 @@ const mappingReport = `{
 
 func mappingIndex(t *testing.T) *scanFileIndex {
 	t.Helper()
-	idx, err := buildScanFileIndex([]byte(mappingReport))
+	idx, _, err := buildScanFileIndex([]byte(mappingReport), false)
 	if err != nil {
 		t.Fatalf("buildScanFileIndex: %v", err)
 	}

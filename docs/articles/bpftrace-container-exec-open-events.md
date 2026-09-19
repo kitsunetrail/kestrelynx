@@ -4,7 +4,7 @@ description: "Observe container executions and file opens with bpftrace using th
 
 # Observing Container Execution and File Opens with bpftrace
 
-Published: September 18, 2026
+Published: September 19, 2026
 
 ## Introduction
 

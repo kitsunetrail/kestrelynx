@@ -51,6 +51,7 @@ nav:
   - Development:
       - Overview: development/index.md
       - Runtime evidence observation with eBPF: development/runtime-event-evidence.md
+      - Runtime evidence coverage validation plan: development/runtime-coverage-validation.md
       - Runtime evidence prioritization: development/runtime-prioritization.md
       - Kubernetes support: development/kubernetes-support.md
       - Kubernetes scanning landscape: development/kubernetes-scanning-landscape.md
@@ -68,6 +69,7 @@ nav:
       - How to Check Runtime Usage of Packages Reported by Container Vulnerability Scans: articles/which-container-scan-findings-are-actually-running.md
       - Reading Process Information Without Root Using Linux Capabilities: articles/linux-capabilities-read-process-info.md
       - Understanding and Checking Trivy Status Values: articles/trivy-vulnerability-status.md
+      - Observing Container Execution and File Opens with bpftrace: articles/bpftrace-container-exec-open-events.md
 
 plugins:
   - search

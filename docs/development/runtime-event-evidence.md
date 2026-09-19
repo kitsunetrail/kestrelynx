@@ -1,6 +1,6 @@
 # Runtime Evidence Observation with eBPF: Feasibility Research
 
-- **Status:** Verification complete
+- **Status:** Development-machine measurements completed; minimum privileges, overhead, and production-environment validation remain untested
 - **Started:** 2026-09-13
 - **Last updated:** 2026-09-16
 
@@ -21,7 +21,7 @@ Extend the sampling approach validated in [Runtime Evidence Prioritization: Feas
     - These observations motivate further investigation but do not establish effectiveness across real deployments.
 
 - **Investigation status**
-    - Measurements for this investigation have not started.
+    - Development-machine measurements ran on September 13–16, 2026. See the [measurement results](#results-2026-09-16).
     - The significance of the production confirmation gap and users' acceptance of the required privileges remain unevaluated.
 
 ## Approach

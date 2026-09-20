@@ -70,6 +70,7 @@ nav:
       - Reading Process Information Without Root Using Linux Capabilities: articles/linux-capabilities-read-process-info.md
       - Understanding and Checking Trivy Status Values: articles/trivy-vulnerability-status.md
       - Observing Container Execution and File Opens with bpftrace: articles/bpftrace-container-exec-open-events.md
+      - Mapping Language Packages Detected by Trivy to Runtime Files: articles/trivy-language-packages-runtime-mapping.md
 
 plugins:
   - search

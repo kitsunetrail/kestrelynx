@@ -393,8 +393,15 @@ type containerCollectState struct {
 	// generation) pair, and ownedCache holds the operating-system path
 	// index per mount view so it is rebuilt only when its own database
 	// generation changes.
-	auxIndex   map[string]int
-	ownedCache map[string]*ownedPathCache
+	auxIndex map[string]int
+	// auxLastLayout is the layout generation most recently read per mount
+	// view. A reading is folded into an earlier entry only while no other
+	// layout was read in between: a layout that comes back after a
+	// different one is a new stretch of the window, and folding it into
+	// the old entry would make one entry span the other layout's whole
+	// stretch.
+	auxLastLayout map[string]string
+	ownedCache    map[string]*ownedPathCache
 }
 
 // generationHeld re-checks the identity of the process a reading was taken
@@ -431,13 +438,14 @@ func (s *containerCollectState) viewHasReading(rec *ContainerRecord, mv string) 
 
 func newContainerCollectState(auxEnabled bool, limits auxLimits) *containerCollectState {
 	return &containerCollectState{
-		caches:     map[string]*containerPkgCache{},
-		ledgerSeen: map[string]bool{},
-		nsLast:     map[genKey]NamespaceRecord{},
-		auxEnabled: auxEnabled,
-		auxLimits:  limits,
-		auxIndex:   map[string]int{},
-		ownedCache: map[string]*ownedPathCache{},
+		caches:        map[string]*containerPkgCache{},
+		ledgerSeen:    map[string]bool{},
+		nsLast:        map[genKey]NamespaceRecord{},
+		auxEnabled:    auxEnabled,
+		auxLimits:     limits,
+		auxIndex:      map[string]int{},
+		auxLastLayout: map[string]string{},
+		ownedCache:    map[string]*ownedPathCache{},
 	}
 }
 
@@ -519,13 +527,27 @@ func commitAux(rec *ContainerRecord, state *containerCollectState, aux Auxiliary
 	}
 	key := aux.MountViewID + "\x00" + aux.AuxGeneration + "\x00" + aux.ReadThroughStarttime
 	if i, seen := state.auxIndex[key]; seen && i < len(rec.AuxiliaryInputs) && !rec.AuxiliaryInputs[i].Invalid {
-		rec.AuxiliaryInputs[i].LastSeen = aux.CollectedAt
-		if sampleID != "" {
-			rec.AuxiliaryInputs[i].SampleIDs = append(rec.AuxiliaryInputs[i].SampleIDs, sampleID)
+		if state.auxLastLayout[aux.MountViewID] == aux.AuxGeneration {
+			rec.AuxiliaryInputs[i].LastSeen = aux.CollectedAt
+			if sampleID != "" {
+				rec.AuxiliaryInputs[i].SampleIDs = append(rec.AuxiliaryInputs[i].SampleIDs, sampleID)
+			}
+			return
 		}
-		return
+	}
+	if state.auxLastLayout[aux.MountViewID] != aux.AuxGeneration {
+		// A new layout stretch begins: every earlier entry of this mount
+		// view stops being a fold target, whichever process generation it
+		// was read through, so a later reading never reaches back across
+		// this stretch to an older entry.
+		for k := range state.auxIndex {
+			if strings.HasPrefix(k, aux.MountViewID+"\x00") {
+				delete(state.auxIndex, k)
+			}
+		}
 	}
 	state.auxIndex[key] = len(rec.AuxiliaryInputs)
+	state.auxLastLayout[aux.MountViewID] = aux.AuxGeneration
 	rec.AuxiliaryInputs = append(rec.AuxiliaryInputs, aux)
 }
 

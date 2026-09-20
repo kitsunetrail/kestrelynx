@@ -28,15 +28,20 @@ for R in "${DIRS[@]}"; do
   IMG=$(python3 -c "import json;print(json.load(open('$R/case.json'))['image'])"); case "$(basename "$R")" in 16-*) IMG=kl-case16;; esac
   # scan by image id when the run has none (cached per image id under out/scans)
   V=$(basename "$R" | sed 's/-root-.*//'); IID=$(cat "$R/image_id.txt" 2>/dev/null)
+  # the coverage-validation cases evaluate every bundled package, not only the ones with findings
+  ALLPKG=""; LISTALL=""; case "$V" in 26|27|28) ALLPKG="-all-packages"; LISTALL="--list-all-pkgs";; esac
+  # a coverage case whose saved report predates --list-all-pkgs is scanned again, so every bundled package is in it
+  if [ -n "$LISTALL" ] && [ -s "$R/trivy_all.json" ] && ! grep -q '"Packages"' "$R/trivy_all.json"; then rm -f "$R/trivy_hc.json" "$R/trivy_all.json" "$O/scans/$V.image_id.txt"; fi
   if [ ! -s "$R/trivy_hc.json" ] && [ -n "$IID" ]; then
     export DOCKER_CONFIG=$(mktemp -d)
     if command -v trivy >/dev/null 2>&1; then TRIVY=trivy
     elif [ -x "$HOME/.local/bin/trivy" ]; then TRIVY="$HOME/.local/bin/trivy"
     else TRIVY="/home/$OWNER/.local/bin/trivy"; fi
     mkdir -p $O/scans
+    if [ -n "$LISTALL" ] && [ -s "$O/scans/$V.trivy_all.json" ] && ! grep -q '"Packages"' "$O/scans/$V.trivy_all.json"; then rm -f "$O/scans/$V.image_id.txt"; fi
     if [ ! -s "$O/scans/$V.trivy_all.json" ] || [ "$(cat $O/scans/$V.image_id.txt 2>/dev/null)" != "$IID" ]; then
-      "$TRIVY" image --format json --scanners vuln -o "$O/scans/$V.trivy_all.json" "$IID" > "$R/scan.log" 2>&1 || { echo "   scan failed: $(tail -1 "$R/scan.log")"; continue; }
-      "$TRIVY" image --format json --scanners vuln --severity HIGH,CRITICAL -o "$O/scans/$V.trivy_hc.json" "$IID" >> "$R/scan.log" 2>&1 || { echo "   scan failed: $(tail -1 "$R/scan.log")"; continue; }
+      "$TRIVY" image --format json --scanners vuln $LISTALL -o "$O/scans/$V.trivy_all.json" "$IID" > "$R/scan.log" 2>&1 || { echo "   scan failed: $(tail -1 "$R/scan.log")"; continue; }
+      "$TRIVY" image --format json --scanners vuln $LISTALL --severity HIGH,CRITICAL -o "$O/scans/$V.trivy_hc.json" "$IID" >> "$R/scan.log" 2>&1 || { echo "   scan failed: $(tail -1 "$R/scan.log")"; continue; }
       echo "$IID" > $O/scans/$V.image_id.txt
     fi
     cp $O/scans/$V.trivy_all.json "$R/trivy_all.json"; cp $O/scans/$V.trivy_hc.json "$R/trivy_hc.json"; echo "   scanned $V"
@@ -60,8 +65,8 @@ for R in "${DIRS[@]}"; do
   for OBSF in "$R"/collect/*__*.json; do
     if [ "$NOBS" -gt 1 ]; then cn=$(basename "$OBSF" | cut -d_ -f1); SUF="-$cn"; else SUF=""; fi
     mkdir -p "$R/csv_hc$SUF" "$R/csv_all$SUF"
-    "$B" match -observation "$OBSF" -trivy "$R/trivy_hc.json" -case "$R/case.json" -gtb "$R/gtb.json" $EVENTS "${INTEL_ARGS[@]}" -out-json "$R/match_hc$SUF.json" -out-csv-dir "$R/csv_hc$SUF" 2>&1 | tail -1
-    "$B" match -observation "$OBSF" -trivy "$R/trivy_all.json" -case "$R/case.json" -gtb "$R/gtb.json" $EVENTS "${INTEL_ARGS[@]}" -out-json "$R/match_all$SUF.json" -out-csv-dir "$R/csv_all$SUF" 2>&1 | tail -1
+    "$B" match -observation "$OBSF" -trivy "$R/trivy_hc.json" -case "$R/case.json" -gtb "$R/gtb.json" $EVENTS "${INTEL_ARGS[@]}" $ALLPKG -out-json "$R/match_hc$SUF.json" -out-csv-dir "$R/csv_hc$SUF" 2>&1 | tail -1
+    "$B" match -observation "$OBSF" -trivy "$R/trivy_all.json" -case "$R/case.json" -gtb "$R/gtb.json" $EVENTS "${INTEL_ARGS[@]}" $ALLPKG -out-json "$R/match_all$SUF.json" -out-csv-dir "$R/csv_all$SUF" 2>&1 | tail -1
     python3 - "$R" "$SUF" <<'PY2'
 import csv,sys,json
 R,SUF=sys.argv[1],sys.argv[2]

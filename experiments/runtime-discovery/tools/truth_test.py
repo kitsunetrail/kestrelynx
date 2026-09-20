@@ -80,6 +80,16 @@ class TimeConversionTests(unittest.TestCase):
         dt = truth.parse_iso_utc('2026-09-19T03:11:52.357977123Z')
         self.assertEqual(dt, datetime(2026, 9, 19, 3, 11, 52, 357977, tzinfo=timezone.utc))
 
+    def test_numeric_offset_is_converted_to_utc_not_dropped(self):
+        dt = truth.parse_iso_utc('2026-09-19T23:41:11.119618493+09:00')
+        self.assertEqual(dt, datetime(2026, 9, 19, 14, 41, 11, 119618, tzinfo=timezone.utc))
+        dt = truth.parse_iso_utc('2026-09-19T14:41:11-00:30')
+        self.assertEqual(dt, datetime(2026, 9, 19, 15, 11, 11, tzinfo=timezone.utc))
+        dt = truth.parse_iso_utc('2026-09-19T14:41:11.5')
+        self.assertEqual(dt, datetime(2026, 9, 19, 14, 41, 11, 500000, tzinfo=timezone.utc))
+        with self.assertRaises(ValueError):
+            truth.parse_iso_utc('2026-09-19T23:41:11+0900')
+
     def test_strace_relative_seconds_same_day(self):
         fired_at = datetime(2026, 9, 19, 3, 11, 50, 0, tzinfo=timezone.utc)
         delta = truth.strace_relative_seconds('03:11:52.500000', fired_at)
@@ -179,14 +189,25 @@ class StraceCompletenessTests(unittest.TestCase):
             with open(os.path.join(tmp, 'trace.1'), 'w') as f:
                 f.write('execve("/usr/bin/curl", ["curl"], 0x0 /* 0 vars */) = 0\n')
             result = truth.check_strace_completeness(tmp)
-            self.assertEqual(result, {'empty_files': [], 'unparseable_lines': 0, 'total_files': 1,
-                                       'unreconstructed_lines': 0})
+            self.assertEqual(result, {'empty_files': [], 'empty_child_files': [], 'unparseable_lines': 0,
+                                       'total_files': 1, 'unreconstructed_lines': 0})
 
     def test_empty_trace_file_is_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             open(os.path.join(tmp, 'trace.1'), 'w').close()
             result = truth.check_strace_completeness(tmp)
             self.assertEqual(len(result['empty_files']), 1)
+            self.assertEqual(result['empty_child_files'], [])
+
+    def test_empty_trace_file_of_a_recorded_clone_child_is_not_a_gap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, 'trace.1'), 'w') as f:
+                f.write('11:39:20.734700 clone(child_stack=0x7120cda2ae30, flags=CLONE_VM|CLONE_THREAD) = 26\n')
+            open(os.path.join(tmp, 'trace.26'), 'w').close()
+            open(os.path.join(tmp, 'trace.99'), 'w').close()
+            result = truth.check_strace_completeness(tmp)
+            self.assertEqual([os.path.basename(p) for p in result['empty_child_files']], ['trace.26'])
+            self.assertEqual([os.path.basename(p) for p in result['empty_files']], ['trace.99'])
 
     def test_truncated_syscall_line_is_unparseable(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -481,12 +502,51 @@ class CompareOperationRecordsTests(unittest.TestCase):
     def _records(self, *ops_and_ok):
         return [{'op': op, 'ok': ok} for op, ok in ops_and_ok]
 
-    def test_osops_failure_in_one_run_only_is_inconsistent(self):
+    def test_a_single_mismatched_osops_instance_is_left_unpaired_not_a_hold(self):
+        # One periodic instance that succeeded in one run and not the
+        # other (the first curl racing the server's readiness, say) is a
+        # correspondence gap for that instance, not a different procedure:
+        # the runs stay comparable, and that instance is unpaired on both
+        # sides so nothing used only during it is certified through it.
         truth_records = self._records(('fired', True), ('osops_curl', True), ('osops_curl', True))
         measurement_records = self._records(('fired', True), ('osops_curl', True), ('osops_curl', False))
+        for prefix, records in (('t', truth_records), ('m', measurement_records)):
+            for i, r in enumerate(records):
+                r['id'] = f'{prefix}-op-{i}'
+        ok, detail = truth.compare_operation_records(truth_records, measurement_records)
+        self.assertTrue(ok)
+        self.assertIn('1 periodic instance(s) differ', detail)
+        pairing = truth.osops_pairing_info(truth_records, measurement_records)
+        self.assertEqual(pairing['paired_count'], 1)
+        self.assertEqual(pairing['mismatched_truth_osops_ids'], [truth_records[2]['id']])
+        self.assertIn(truth_records[2]['id'], pairing['unpaired_truth_osops_ids'])
+        self.assertIn(measurement_records[2]['id'], pairing['unpaired_measurement_osops_ids'])
+
+    def test_tolerance_counts_only_instances_that_did_pair(self):
+        # 100 instances reached, 2 mismatched: 98 paired allow only one
+        # mismatch (98 * 2 // 100 == 1), so two is over the line.
+        truth_records = self._records(('fired', True), *[('osops_curl', True)] * 100)
+        measurement_ok = [True] * 100
+        measurement_ok[0] = measurement_ok[50] = False
+        measurement_records = self._records(('fired', True), *[('osops_curl', ok) for ok in measurement_ok])
         ok, detail = truth.compare_operation_records(truth_records, measurement_records)
         self.assertFalse(ok)
-        self.assertIn('instance 1', detail)
+        self.assertIn('2 of 100', detail)
+        # 150 reached, 2 mismatched: 148 paired allow two.
+        truth_records = self._records(('fired', True), *[('osops_curl', True)] * 150)
+        measurement_ok = [True] * 150
+        measurement_ok[0] = measurement_ok[50] = False
+        measurement_records = self._records(('fired', True), *[('osops_curl', ok) for ok in measurement_ok])
+        ok, _detail = truth.compare_operation_records(truth_records, measurement_records)
+        self.assertTrue(ok)
+
+    def test_more_mismatched_osops_instances_than_tolerated_is_inconsistent(self):
+        truth_records = self._records(('fired', True), *[('osops_curl', True)] * 4)
+        measurement_records = self._records(('fired', True), ('osops_curl', False), ('osops_curl', True),
+                                             ('osops_curl', False), ('osops_curl', True))
+        ok, detail = truth.compare_operation_records(truth_records, measurement_records)
+        self.assertFalse(ok)
+        self.assertIn('2 of 4', detail)
 
     def test_osops_all_succeeding_in_both_runs_is_consistent(self):
         truth_records = self._records(('fired', True), ('osops_curl', True), ('osops_git', True))
@@ -513,7 +573,7 @@ class CompareOperationRecordsTests(unittest.TestCase):
         measurement_records = self._records(('fired', True), ('osops_curl', False), ('osops_curl', False))
         ok, detail = truth.compare_operation_records(truth_records, measurement_records)
         self.assertFalse(ok)
-        self.assertIn('instance 0', detail)
+        self.assertIn('position 0', detail)
         self.assertIn('osops_curl', detail)
 
     def test_success_then_failure_is_told_apart_from_failure_then_success(self):
@@ -525,7 +585,7 @@ class CompareOperationRecordsTests(unittest.TestCase):
         measurement_records = self._records(('fired', True), ('osops_curl', False), ('osops_curl', True))
         ok, detail = truth.compare_operation_records(truth_records, measurement_records)
         self.assertFalse(ok)
-        self.assertIn('instance 0', detail)
+        self.assertIn('2 of 2', detail)
 
     def test_same_ordered_pattern_in_both_runs_is_consistent(self):
         truth_records = self._records(('fired', True), ('osops_curl', True), ('osops_curl', False))
@@ -549,12 +609,13 @@ class CompareOperationRecordsTests(unittest.TestCase):
     def test_mismatch_within_the_pairable_range_is_inconsistent_even_with_unequal_counts(self):
         # Different total cycle counts on their own must not excuse a
         # mismatch that occurs within the range both runs did reach.
-        truth_records = self._records(('fired', True), ('osops_curl', True), ('osops_curl', True))
-        measurement_records = self._records(('fired', True), ('osops_curl', False), ('osops_curl', True),
-                                             ('osops_curl', True), ('osops_curl', True))
+        truth_records = self._records(('fired', True), ('osops_curl', True), ('osops_curl', True),
+                                       ('osops_curl', True))
+        measurement_records = self._records(('fired', True), ('osops_curl', False), ('osops_curl', False),
+                                             ('osops_curl', True), ('osops_curl', True), ('osops_curl', True))
         ok, detail = truth.compare_operation_records(truth_records, measurement_records)
         self.assertFalse(ok)
-        self.assertIn('instance 0', detail)
+        self.assertIn('2 of 3', detail)
 
     def test_same_per_kind_counts_in_a_different_relative_order_is_inconsistent(self):
         # Both runs execute exactly one curl and one git cycle each -

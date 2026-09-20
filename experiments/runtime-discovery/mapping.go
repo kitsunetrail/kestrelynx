@@ -475,12 +475,18 @@ type fileResolver struct {
 	// longest-prefix-first so a layout that links each dependency into
 	// place resolves to the one real directory.
 	//
-	// supersededAfterLastSeen is set when a later reading for the same
-	// mount view exists, which is what stops an earlier layout from
-	// answering about a stretch of the window it no longer described.
-	supersededAfterLastSeen bool
-	symlinks                []SymlinkEntry
-	pythonDirs              []string
+	// coversFrom and coversUntil widen a reading's stretch to the
+	// neighbouring readings of the same mount view: from the previous
+	// reading's last instant to the next reading's first. Between two
+	// readings the layout changed at some instant nobody observed, so
+	// both neighbours answer for that gap and resolveEvent turns their
+	// disagreement into a conflict rather than a guess. The first reading
+	// answers from its own first instant, and the last for the instants
+	// after it. A zero coversUntil means unbounded on that side.
+	coversFrom  time.Time
+	coversUntil time.Time
+	symlinks    []SymlinkEntry
+	pythonDirs  []string
 	// recordOwner maps one owned file to every distribution claiming it.
 	// Claims are kept rather than overwritten: two distributions claiming
 	// one file is a real ambiguity, and silently keeping the last one read
@@ -631,14 +637,11 @@ func (r *fileResolver) covers(mountViewID, sampleID string, at time.Time) bool {
 	if at.IsZero() || r.firstSeen.IsZero() {
 		return true
 	}
-	if at.Before(r.firstSeen) {
+	if !r.coversFrom.IsZero() && at.Before(r.coversFrom) {
 		return false
 	}
-	if !r.lastSeen.IsZero() && at.After(r.lastSeen) {
-		// A reading stops describing the layout once a later reading found
-		// a different one. The last reading of the window keeps answering
-		// past its own end, since nothing established that it changed.
-		return !r.supersededAfterLastSeen
+	if !r.coversUntil.IsZero() && at.After(r.coversUntil) {
+		return false
 	}
 	return true
 }
@@ -655,27 +658,55 @@ type resolverSet struct {
 // generation, and marks each reading superseded once a later one for the
 // same view exists.
 func newResolverSet(idx *scanFileIndex, auxes []AuxiliaryInputs) *resolverSet {
-	byKey := map[string][]AuxiliaryInputs{}
-	var order []string
-	for _, aux := range auxes {
-		key := aux.MountViewID + "\x00" + aux.AuxGeneration
-		if _, seen := byKey[key]; !seen {
-			order = append(order, key)
+	// Readings are grouped into stretches of one layout: consecutive
+	// readings, in time order within a mount view, that found the same
+	// generation. A generation that comes back after another one was
+	// found in between is a new stretch, not a continuation of the old
+	// one, so its bounds never swallow the other's.
+	sorted := append([]AuxiliaryInputs(nil), auxes...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].MountViewID != sorted[j].MountViewID {
+			return sorted[i].MountViewID < sorted[j].MountViewID
 		}
-		byKey[key] = append(byKey[key], aux)
+		return sorted[i].FirstSeen.Before(sorted[j].FirstSeen)
+	})
+	var groups [][]AuxiliaryInputs
+	for _, aux := range sorted {
+		n := len(groups)
+		if n > 0 && groups[n-1][0].MountViewID == aux.MountViewID && groups[n-1][0].AuxGeneration == aux.AuxGeneration {
+			groups[n-1] = append(groups[n-1], aux)
+			continue
+		}
+		groups = append(groups, []AuxiliaryInputs{aux})
 	}
 	set := &resolverSet{fallback: newFileResolver(idx, nil)}
-	for _, key := range order {
-		set.resolvers = append(set.resolvers, newFileResolver(idx, byKey[key]))
+	for _, g := range groups {
+		set.resolvers = append(set.resolvers, newFileResolver(idx, g))
 	}
-	latest := map[string]time.Time{}
+	// Each reading answers from the previous reading's last instant to the
+	// next reading's first, per mount view, so no instant of the window
+	// falls between two readings with nothing to resolve it. The first
+	// reading answers from its own first instant: what the layout was
+	// before anyone read it is not known, and a registered target is read
+	// before its workload begins, so nothing the run measures precedes it.
+	byView := map[string][]*fileResolver{}
 	for _, r := range set.resolvers {
-		if r.firstSeen.After(latest[r.mountViewID]) {
-			latest[r.mountViewID] = r.firstSeen
+		if r.firstSeen.IsZero() {
+			continue
 		}
+		byView[r.mountViewID] = append(byView[r.mountViewID], r)
 	}
-	for _, r := range set.resolvers {
-		r.supersededAfterLastSeen = r.firstSeen.Before(latest[r.mountViewID])
+	for _, rs := range byView {
+		sort.SliceStable(rs, func(i, j int) bool { return rs[i].firstSeen.Before(rs[j].firstSeen) })
+		for i, r := range rs {
+			r.coversFrom = r.firstSeen
+			if i > 0 && !rs[i-1].lastSeen.IsZero() {
+				r.coversFrom = rs[i-1].lastSeen
+			}
+			if i+1 < len(rs) {
+				r.coversUntil = rs[i+1].firstSeen
+			}
+		}
 	}
 	if len(set.resolvers) == 0 {
 		set.resolvers = []*fileResolver{set.fallback}
@@ -703,21 +734,23 @@ func (s *resolverSet) forObservation(mountViewID, sampleID string, at time.Time)
 // picking one would be a guess.
 func (s *resolverSet) resolveEvent(observed string, at time.Time) mappingOutcome {
 	var chosen mappingOutcome
-	seen := false
+	seen, resolvedSeen, unresolvedSeen := false, false, false
 	for _, r := range s.resolvers {
 		if !r.covers("", "", at) {
 			continue
 		}
 		out := r.resolve(observed)
 		if out.Unresolved {
+			unresolvedSeen = true
 			if !seen {
 				chosen = out
 			}
 			seen = true
 			continue
 		}
-		if !seen || chosen.Unresolved {
-			chosen, seen = out, true
+		if !resolvedSeen {
+			chosen, resolvedSeen = out, true
+			seen = true
 			continue
 		}
 		if !sameFiles(chosen, out) {
@@ -727,6 +760,14 @@ func (s *resolverSet) resolveEvent(observed string, at time.Time) mappingOutcome
 	}
 	if !seen {
 		return s.fallback.resolve(observed)
+	}
+	// A reading that attributes the file and a neighbouring reading that
+	// cannot disagree about the layout at this instant just as two
+	// attributions would: the file's owner changed, or the file stopped
+	// being one the report knows, somewhere in the stretch both answer
+	// for. Neither reading's answer is taken over the other's.
+	if resolvedSeen && unresolvedSeen {
+		chosen.Conflict = true
 	}
 	return chosen
 }
@@ -739,6 +780,29 @@ func sameFiles(a, b mappingOutcome) bool {
 		if a.Matches[i].File != b.Matches[i].File {
 			return false
 		}
+		if !sameKeys(a.Matches[i].Keys, b.Matches[i].Keys) {
+			return false
+		}
+	}
+	return true
+}
+
+// sameKeys reports whether two readings attribute a file to the same
+// packages. The same path owned by a different package in a later
+// reading is a change of layout, not an agreement about the file.
+func sameKeys(a, b []pkgGroupKey) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := map[pkgGroupKey]int{}
+	for _, k := range a {
+		seen[k]++
+	}
+	for _, k := range b {
+		if seen[k] == 0 {
+			return false
+		}
+		seen[k]--
 	}
 	return true
 }

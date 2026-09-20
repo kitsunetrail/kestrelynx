@@ -243,12 +243,48 @@ func mergeCgroupTable(existing, fresh CgroupTable) CgroupTable {
 // container the event belongs to.
 type cgroupLookup struct {
 	byID map[uint64][]CgroupEntry
+	// validFrom is the instant from which an entry answers for its
+	// identifier: the refresh before the one that first found it. A group
+	// first found by one refresh came into being after the previous
+	// refresh, and the events it produced in between carry its identifier
+	// and nobody else's, so they are its. An entry the very first snapshot
+	// already held answers from that snapshot, since nothing says when it
+	// began. Keyed by the entry's position in its identifier's list.
+	validFrom map[uint64][]time.Time
 }
 
 func newCgroupLookup(table CgroupTable) *cgroupLookup {
-	l := &cgroupLookup{byID: map[uint64][]CgroupEntry{}}
+	l := &cgroupLookup{byID: map[uint64][]CgroupEntry{}, validFrom: map[uint64][]time.Time{}}
+	refreshes := append([]time.Time{}, table.UpdatedAt...)
+	sort.Slice(refreshes, func(i, j int) bool { return refreshes[i].Before(refreshes[j]) })
 	for _, e := range table.Entries {
+		from := e.FirstSeen
+		// The refresh that first found the entry, and the one before it.
+		for i := range refreshes {
+			if refreshes[i].Equal(e.FirstSeen) && i > 0 {
+				from = refreshes[i-1]
+				break
+			}
+		}
+		// An identifier another group held during that stretch makes the
+		// stretch ambiguous: the events in it could be either group's, and
+		// the later one does not take them. It answers from its own first
+		// sighting only.
+		for _, other := range table.Entries {
+			if other.CgroupID != e.CgroupID || other.Path == e.Path && other.Generation == e.Generation {
+				continue
+			}
+			otherEnd := other.ExpiredAt
+			if otherEnd.IsZero() {
+				otherEnd = e.FirstSeen
+			}
+			if other.FirstSeen.Before(e.FirstSeen) && !otherEnd.Before(from) {
+				from = e.FirstSeen
+				break
+			}
+		}
 		l.byID[e.CgroupID] = append(l.byID[e.CgroupID], e)
+		l.validFrom[e.CgroupID] = append(l.validFrom[e.CgroupID], from)
 	}
 	return l
 }
@@ -264,7 +300,7 @@ func (l *cgroupLookup) lookup(id uint64, at time.Time) (containerID string, dept
 	var best *CgroupEntry
 	for i := range l.byID[id] {
 		e := l.byID[id][i]
-		if at.Before(e.FirstSeen) {
+		if at.Before(l.validFrom[id][i]) {
 			continue
 		}
 		if !e.ExpiredAt.IsZero() && at.After(e.ExpiredAt) {

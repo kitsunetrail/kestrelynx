@@ -163,3 +163,107 @@ func TestCgroupIdentifierMatchesTheDirectoryInode(t *testing.T) {
 	}
 	t.Logf("calibration over %d control group(s): %s", checked, table.Calibration)
 }
+
+// TestAGroupFoundByARefreshAnswersFromTheRefreshBefore checks that a
+// container whose group a refresh found for the first time is credited with
+// the events it produced between that refresh and the previous one: the
+// group came into being in that interval, and its identifier was nobody
+// else's then.
+func TestAGroupFoundByARefreshAnswersFromTheRefreshBefore(t *testing.T) {
+	t0 := time.Date(2026, 9, 19, 15, 30, 48, 0, time.UTC)
+	t1 := t0.Add(6 * time.Second)
+	first := CgroupTable{GeneratedAt: t0, Snapshots: 1, UpdatedAt: []time.Time{t0}, Entries: []CgroupEntry{
+		{CgroupID: 1, Path: "/cg/system.slice/docker-old.scope", ContainerID: "old", FirstSeen: t0, LastSeen: t0, Generation: 1},
+	}}
+	fresh := CgroupTable{GeneratedAt: t1, Snapshots: 1, UpdatedAt: []time.Time{t1}, Entries: []CgroupEntry{
+		{CgroupID: 1, Path: "/cg/system.slice/docker-old.scope", ContainerID: "old", FirstSeen: t1, LastSeen: t1, Generation: 1},
+		{CgroupID: 29567, Path: "/cg/system.slice/docker-abc.scope", ContainerID: "abc", FirstSeen: t1, LastSeen: t1, Generation: 1},
+	}}
+	lookup := newCgroupLookup(mergeCgroupTable(first, fresh))
+	if id, _, ok := lookup.lookup(29567, t1.Add(-300*time.Millisecond)); !ok || id != "abc" {
+		t.Errorf("an event from just before the refresh that found the container resolved to %q (ok=%v), want abc", id, ok)
+	}
+	if _, _, ok := lookup.lookup(29567, t0.Add(-time.Second)); ok {
+		t.Error("an event from before the previous refresh was attributed although the group cannot have existed then")
+	}
+	if id, _, ok := lookup.lookup(1, t0); !ok || id != "old" {
+		t.Errorf("an entry the first snapshot held did not answer at that snapshot: %q ok=%v", id, ok)
+	}
+	if _, _, ok := lookup.lookup(1, t0.Add(-time.Second)); ok {
+		t.Error("an entry the first snapshot already held answered for an instant before that snapshot")
+	}
+}
+
+// TestAReusedIdentifierDoesNotReachBackIntoItsPredecessorsStretch checks
+// that a group whose identifier another group held until the refresh that
+// found it answers only from that refresh: the stretch before it is the
+// predecessor's, and nothing in between is attributed to either by guess.
+func TestAReusedIdentifierDoesNotReachBackIntoItsPredecessorsStretch(t *testing.T) {
+	t0 := time.Date(2026, 9, 19, 15, 30, 48, 0, time.UTC)
+	t1 := t0.Add(6 * time.Second)
+	first := CgroupTable{GeneratedAt: t0, Snapshots: 1, UpdatedAt: []time.Time{t0}, Entries: []CgroupEntry{
+		{CgroupID: 7, Path: "/cg/system.slice/docker-aaa.scope", ContainerID: "aaa", FirstSeen: t0, LastSeen: t0, Generation: 1},
+	}}
+	fresh := CgroupTable{GeneratedAt: t1, Snapshots: 1, UpdatedAt: []time.Time{t1}, Entries: []CgroupEntry{
+		{CgroupID: 7, Path: "/cg/system.slice/docker-bbb.scope", ContainerID: "bbb", FirstSeen: t1, LastSeen: t1, Generation: 1},
+	}}
+	lookup := newCgroupLookup(mergeCgroupTable(first, fresh))
+	if id, _, ok := lookup.lookup(7, t0.Add(time.Second)); !ok || id != "aaa" {
+		t.Errorf("an event from while the first group held the identifier resolved to %q (ok=%v), want aaa", id, ok)
+	}
+	if id, _, ok := lookup.lookup(7, t1.Add(time.Second)); !ok || id != "bbb" {
+		t.Errorf("an event after the refresh that found the reuser resolved to %q (ok=%v), want bbb", id, ok)
+	}
+	if id, _, ok := lookup.lookup(7, t1.Add(-time.Second)); ok && id == "bbb" {
+		t.Error("the reuser was credited with an event from the stretch its predecessor still held the identifier in")
+	}
+}
+
+// TestARestartedPathsNewIdentifierAnswersFromTheRefreshBefore checks the
+// interaction with the generation split: the same path backed by a new
+// group has a new identifier, and that identifier answers back to the
+// previous refresh while the old identifier stays closed at the refresh.
+func TestARestartedPathsNewIdentifierAnswersFromTheRefreshBefore(t *testing.T) {
+	t0 := time.Date(2026, 9, 19, 15, 30, 48, 0, time.UTC)
+	t1 := t0.Add(6 * time.Second)
+	first := CgroupTable{GeneratedAt: t0, Snapshots: 1, UpdatedAt: []time.Time{t0}, Entries: []CgroupEntry{
+		{CgroupID: 100, Path: "/cg/system.slice/docker-same.scope", ContainerID: "aaa", FirstSeen: t0, LastSeen: t0, Generation: 1},
+	}}
+	fresh := CgroupTable{GeneratedAt: t1, Snapshots: 1, UpdatedAt: []time.Time{t1}, Entries: []CgroupEntry{
+		{CgroupID: 200, Path: "/cg/system.slice/docker-same.scope", ContainerID: "bbb", FirstSeen: t1, LastSeen: t1, Generation: 1},
+	}}
+	lookup := newCgroupLookup(mergeCgroupTable(first, fresh))
+	if id, _, ok := lookup.lookup(200, t1.Add(-time.Second)); !ok || id != "bbb" {
+		t.Errorf("the restarted path's new identifier did not answer for an event before the refresh that found it: %q ok=%v", id, ok)
+	}
+	if _, _, ok := lookup.lookup(100, t1.Add(time.Second)); ok {
+		t.Error("the old identifier still answered after the refresh that closed it")
+	}
+}
+
+// TestAnIdentifierReleasedAtTheRefreshBeforeStillBlocksReachingBack checks
+// the boundary: a group that held the identifier up to exactly the refresh
+// the reuser's stretch would start from still makes that stretch
+// ambiguous, so the reuser answers from its own first sighting only.
+func TestAnIdentifierReleasedAtTheRefreshBeforeStillBlocksReachingBack(t *testing.T) {
+	t0 := time.Date(2026, 9, 19, 15, 30, 48, 0, time.UTC)
+	t1 := t0.Add(6 * time.Second)
+	t2 := t1.Add(6 * time.Second)
+	table := CgroupTable{GeneratedAt: t0, Snapshots: 1, UpdatedAt: []time.Time{t0}, Entries: []CgroupEntry{
+		{CgroupID: 7, Path: "/cg/system.slice/docker-aaa.scope", ContainerID: "aaa", FirstSeen: t0, LastSeen: t0, Generation: 1},
+	}}
+	table = mergeCgroupTable(table, CgroupTable{GeneratedAt: t1, Snapshots: 1, UpdatedAt: []time.Time{t1}})
+	table = mergeCgroupTable(table, CgroupTable{GeneratedAt: t2, Snapshots: 1, UpdatedAt: []time.Time{t2}, Entries: []CgroupEntry{
+		{CgroupID: 7, Path: "/cg/system.slice/docker-bbb.scope", ContainerID: "bbb", FirstSeen: t2, LastSeen: t2, Generation: 1},
+	}})
+	lookup := newCgroupLookup(table)
+	if id, _, ok := lookup.lookup(7, t1); !ok || id != "aaa" {
+		t.Errorf("an event at the refresh that closed the first group resolved to %q (ok=%v), want aaa", id, ok)
+	}
+	if id, _, ok := lookup.lookup(7, t1.Add(time.Second)); ok && id == "bbb" {
+		t.Error("the reuser reached back into the stretch that starts at the refresh its predecessor was closed at")
+	}
+	if id, _, ok := lookup.lookup(7, t2.Add(time.Second)); !ok || id != "bbb" {
+		t.Errorf("an event after the refresh that found the reuser resolved to %q (ok=%v), want bbb", id, ok)
+	}
+}

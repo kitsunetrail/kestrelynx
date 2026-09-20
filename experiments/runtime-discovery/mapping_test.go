@@ -405,3 +405,120 @@ func TestTheReadingThatCoveredAnObservationIsTheOneUsed(t *testing.T) {
 		t.Errorf("resolved to %v, want cryptography", got)
 	}
 }
+
+// An instant between two readings of the same mount view is answered by
+// both neighbours, so an observation made while the layout was changing
+// (bytecode caches appearing under a distribution, say) still resolves
+// when the readings agree about the file, while an instant before the first
+// reading stays unresolved.
+func TestReadingsAnswerForTheGapBetweenThemAndBeforeTheFirst(t *testing.T) {
+	early := mappingAux()[0]
+	early.AuxGeneration, early.SampleIDs = "gen-early", []string{"s0"}
+	early.FirstSeen = time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC)
+	early.LastSeen = early.FirstSeen
+
+	late := mappingAux()[0]
+	late.AuxGeneration, late.SampleIDs = "gen-late", []string{"s1"}
+	late.FirstSeen = early.FirstSeen.Add(time.Minute)
+	late.LastSeen = late.FirstSeen
+
+	set := newResolverSet(mappingIndex(t), []AuxiliaryInputs{early, late})
+	const observed = "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so"
+
+	if out := set.resolveEvent(observed, early.FirstSeen.Add(-10*time.Second)); !out.Unresolved {
+		t.Errorf("an event before the first reading was resolved by a layout nobody had read yet: %v", packagesOf(out))
+	}
+	for name, at := range map[string]time.Time{
+		"between the readings": early.FirstSeen.Add(30 * time.Second),
+		"after the last":       late.FirstSeen.Add(time.Hour),
+	} {
+		out := set.resolveEvent(observed, at)
+		if out.Unresolved || out.Conflict {
+			t.Errorf("%s: an event was not resolved by the readings around it: %+v", name, out)
+			continue
+		}
+		if got := packagesOf(out); len(got) != 1 || got[0] != "cryptography" {
+			t.Errorf("%s: resolved to %v, want cryptography", name, got)
+		}
+	}
+}
+
+// A generation that returns after another one was found in between is two
+// stretches, and the reading in between still answers for its own instant.
+func TestAReturningGenerationDoesNotSwallowTheReadingBetween(t *testing.T) {
+	base := time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC)
+	a1 := mappingAux()[0]
+	a1.AuxGeneration, a1.SampleIDs, a1.FirstSeen, a1.LastSeen = "gen-a", []string{"s0"}, base, base
+	b := mappingAux()[0]
+	b.AuxGeneration, b.SampleIDs, b.FirstSeen, b.LastSeen = "gen-b", []string{"s1"}, base.Add(time.Minute), base.Add(time.Minute)
+	b.DistInfoRecords = nil // the distribution is absent in this reading
+	a2 := mappingAux()[0]
+	a2.AuxGeneration, a2.SampleIDs, a2.FirstSeen, a2.LastSeen = "gen-a", []string{"s2"}, base.Add(2*time.Minute), base.Add(2*time.Minute)
+
+	set := newResolverSet(mappingIndex(t), []AuxiliaryInputs{a1, b, a2})
+	if len(set.resolvers) != 3 {
+		t.Fatalf("got %d stretches, want 3 (a, b, a again)", len(set.resolvers))
+	}
+	const observed = "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so"
+	between := set.resolvers[1]
+	if between.generation != "gen-b" || !between.covers("mnt:[1]", "", b.FirstSeen) {
+		t.Fatalf("the reading in between is not its own stretch answering for its own instant: generation %q", between.generation)
+	}
+	if out := set.forObservation("mnt:[1]", "s1", b.FirstSeen).resolve(observed); !out.Unresolved {
+		t.Errorf("the sample taken in between resolved a distribution absent in its own reading: %v", packagesOf(out))
+	}
+	if set.resolvers[2].coversFrom.Before(b.LastSeen) {
+		t.Errorf("the returning generation's stretch starts at %v, before the reading in between ended at %v", set.resolvers[2].coversFrom, b.LastSeen)
+	}
+}
+
+// Two readings that both know a file but attribute it to different
+// packages disagree, and an instant they both answer for is a conflict.
+func TestReadingsAttributingAFileDifferentlyConflict(t *testing.T) {
+	early := mappingAux()[0]
+	early.AuxGeneration, early.SampleIDs = "gen-early", []string{"s0"}
+	early.FirstSeen = time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC)
+	early.LastSeen = early.FirstSeen
+	late := mappingAux()[0]
+	late.AuxGeneration, late.SampleIDs = "gen-late", []string{"s1"}
+	late.FirstSeen = early.FirstSeen.Add(time.Minute)
+	late.LastSeen = late.FirstSeen
+
+	set := newResolverSet(mappingIndex(t), []AuxiliaryInputs{early, late})
+	const observed = "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so"
+	a := set.resolvers[0].resolve(observed)
+	b := a
+	b.Matches = append([]fileMatch(nil), a.Matches...)
+	b.Matches[0].Keys = []pkgGroupKey{{Class: "lang", Package: "somethingelse", InstalledVer: "1"}}
+	if sameFiles(a, b) {
+		t.Errorf("the same file attributed to different packages was treated as agreement")
+	}
+	if !sameFiles(a, set.resolvers[1].resolve(observed)) {
+		t.Errorf("two identical readings were treated as disagreeing")
+	}
+}
+
+// Two neighbouring readings, one attributing a file and one unable to,
+// disagree about the stretch they both answer for: the event is a
+// conflict, not the attributing reading's answer.
+func TestAReadingThatResolvesAndANeighbourThatCannotConflict(t *testing.T) {
+	early := mappingAux()[0]
+	early.AuxGeneration, early.SampleIDs = "gen-early", []string{"s0"}
+	early.FirstSeen = time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC)
+	early.LastSeen = early.FirstSeen
+	late := mappingAux()[0]
+	late.AuxGeneration, late.SampleIDs = "gen-late", []string{"s1"}
+	late.FirstSeen = early.FirstSeen.Add(time.Minute)
+	late.LastSeen = late.FirstSeen
+	late.DistInfoRecords = nil // the distribution is gone in the later reading
+
+	set := newResolverSet(mappingIndex(t), []AuxiliaryInputs{early, late})
+	const observed = "/usr/local/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so"
+	out := set.resolveEvent(observed, early.FirstSeen.Add(30*time.Second))
+	if !out.Conflict {
+		t.Errorf("an event in the stretch between a reading that owns the file and one that does not was not a conflict: %+v", out)
+	}
+	if out := set.resolveEvent(observed, late.FirstSeen.Add(time.Hour)); !out.Unresolved || out.Conflict {
+		t.Errorf("an event only the later reading answers for was not simply unresolved: %+v", out)
+	}
+}

@@ -91,18 +91,35 @@ import gtb
 
 def parse_iso_utc(s):
     """Parses one of this harness's own RFC3339 timestamps (a fractional
-    part of any length, always UTC) into an aware UTC datetime. Python's
-    own fromisoformat only accepts a fractional part of up to six digits,
-    so a longer one (this harness usually writes nanoseconds) is trimmed
-    to microseconds rather than rejected."""
+    part of any length, in UTC or with a numeric offset) into an aware UTC
+    datetime. Python's own fromisoformat only accepts a fractional part of
+    up to six digits, so a longer one (this harness usually writes
+    nanoseconds) is trimmed to microseconds rather than rejected. A
+    numeric offset (an observation record written by a process whose local
+    zone was not UTC) is honoured, never dropped: the instant is converted
+    to UTC. A timestamp with no zone at all is taken as UTC."""
     s = s.strip()
+    offset = None
     if s.endswith('Z'):
         s = s[:-1]
+    else:
+        # Only the RFC3339 form "+HH:MM"/"-HH:MM" is a zone offset here.
+        # A trailing "+HHMM" is not accepted as one: the fractional part
+        # and a date-only stem could both end in digits, so it is refused
+        # outright rather than silently read as UTC.
+        m = re.search(r'([+-])(\d{2}):(\d{2})$', s)
+        if m and len(s) > 19 and 'T' in s:
+            sign = 1 if m.group(1) == '+' else -1
+            offset = timezone(sign * timedelta(hours=int(m.group(2)), minutes=int(m.group(3))))
+            s = s[:m.start()]
+        elif re.search(r'[+-]\d{4}$', s) and 'T' in s:
+            raise ValueError(f'unsupported zone offset form in timestamp {s!r}; use +HH:MM or Z')
     if '.' in s:
         head, frac = s.split('.', 1)
         frac = (frac + '000000')[:6]
         s = f'{head}.{frac}'
-    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+    dt = datetime.fromisoformat(s).replace(tzinfo=offset or timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def read_instant_file(path):
@@ -867,16 +884,29 @@ def compare_operation_records(truth_records, measurement_records):
     t_seq = osops_sequence(truth_records)
     m_seq = osops_sequence(measurement_records)
     for i in range(min(len(t_seq), len(m_seq))):
-        t_kind, t_ok, t_detail, _t_id = t_seq[i]
-        m_kind, m_ok, m_detail, _m_id = m_seq[i]
-        if t_kind != m_kind:
+        if t_seq[i][0] != m_seq[i][0]:
             return False, (f'periodic operation sequence differs in relative order at position {i}: '
-                            f'truth ran "{t_kind}", measurement ran "{m_kind}"')
-        if t_ok != m_ok:
-            return False, (f'periodic operation "{t_kind}" instance {i} succeeded in one run and not '
-                            f'the other (truth ok={t_ok}, measurement ok={m_ok})')
-        if t_detail and m_detail and t_detail != m_detail:
-            return False, f'periodic operation "{t_kind}" instance {i} recorded different detail in each run'
+                            f'truth ran "{t_seq[i][0]}", measurement ran "{m_seq[i][0]}"')
+    # A periodic instance whose outcome differs between the runs (the
+    # first curl of a run racing the server's own readiness, say) is not
+    # a correspondence: that instance is taken out of the pairing, so a
+    # package used only during it is never certified through it (see
+    # osops_pairing_info), and the run is otherwise comparable. Only when
+    # such instances stop being the exception does the comparison fail:
+    # more than one of them, or more than two in every hundred paired,
+    # means the two runs' loops did not behave the same way.
+    mismatched = osops_mismatched_positions(t_seq, m_seq)
+    reached = min(len(t_seq), len(m_seq))
+    paired = reached - len(mismatched)
+    if len(mismatched) > osops_mismatch_tolerance(paired):
+        i = mismatched[0]
+        return False, (f'{len(mismatched)} of {reached} periodic operation instances both runs reached differ '
+                        f'in outcome or detail between the runs (first at position {i}, "{t_seq[i][0]}": '
+                        f'truth ok={t_seq[i][1]}, measurement ok={m_seq[i][1]}), more than the '
+                        f'{osops_mismatch_tolerance(paired)} such instance(s) tolerated for {paired} paired')
+    if mismatched:
+        return True, (f'fixed sequence matches; periodic kinds match in order; {len(mismatched)} periodic '
+                       f'instance(s) differ in outcome and are left unpaired (positions {mismatched})')
     return True, detail
 
 
@@ -888,6 +918,26 @@ def osops_sequence(records):
     not a per-kind one, is what must be paired position by position)."""
     return [(str(r.get('op', '')), bool(r.get('ok', True)), r.get('detail'), r.get('id'))
             for r in records if str(r.get('op', '')).startswith('osops_')]
+
+
+def osops_mismatched_positions(t_seq, m_seq):
+    """Positions (in the interleaved periodic timeline both runs reached)
+    where the same kind of periodic operation succeeded in one run and
+    not the other, or recorded different detail."""
+    out = []
+    for i in range(min(len(t_seq), len(m_seq))):
+        _t_kind, t_ok, t_detail, _t_id = t_seq[i]
+        _m_kind, m_ok, m_detail, _m_id = m_seq[i]
+        if t_ok != m_ok or (t_detail and m_detail and t_detail != m_detail):
+            out.append(i)
+    return out
+
+
+def osops_mismatch_tolerance(paired):
+    """How many mismatched periodic instances still leave two runs
+    comparable: one, or two in every hundred instances that did pair
+    (the mismatched ones are not among them)."""
+    return max(1, paired * 2 // 100)
 
 
 def osops_pairing_info(truth_records, measurement_records):
@@ -906,13 +956,19 @@ def osops_pairing_info(truth_records, measurement_records):
     comparison at all."""
     t_seq = osops_sequence(truth_records or [])
     m_seq = osops_sequence(measurement_records or [])
-    paired = min(len(t_seq), len(m_seq))
+    reached = min(len(t_seq), len(m_seq))
+    mismatched = set(osops_mismatched_positions(t_seq, m_seq))
+    paired_positions = [i for i in range(reached) if i not in mismatched]
     return {
-        'paired_count': paired,
-        'paired_truth_osops_ids': [t_seq[i][3] for i in range(paired)],
-        'paired_measurement_osops_ids': [m_seq[i][3] for i in range(paired)],
-        'unpaired_truth_osops_ids': [t_seq[i][3] for i in range(paired, len(t_seq))],
-        'unpaired_measurement_osops_ids': [m_seq[i][3] for i in range(paired, len(m_seq))],
+        'paired_count': len(paired_positions),
+        'paired_truth_osops_ids': [t_seq[i][3] for i in paired_positions],
+        'paired_measurement_osops_ids': [m_seq[i][3] for i in paired_positions],
+        'mismatched_truth_osops_ids': [t_seq[i][3] for i in sorted(mismatched)],
+        'mismatched_measurement_osops_ids': [m_seq[i][3] for i in sorted(mismatched)],
+        # A mismatched instance is unpaired on both sides: nothing used
+        # only during it is certified through this comparison.
+        'unpaired_truth_osops_ids': [t_seq[i][3] for i in sorted(mismatched)] + [t_seq[i][3] for i in range(reached, len(t_seq))],
+        'unpaired_measurement_osops_ids': [m_seq[i][3] for i in sorted(mismatched)] + [m_seq[i][3] for i in range(reached, len(m_seq))],
     }
 
 
@@ -2184,13 +2240,25 @@ def check_strace_completeness(strace_dir):
     failed to parse, so counting them there would conflate two
     different kinds of gap.
 
-    Returns {'empty_files': [path,...], 'unparseable_lines': int,
-    'total_files': int, 'unreconstructed_lines': int}.
+    An empty file is a completeness gap only when nothing explains it.
+    A thread or child whose creation some other trace file records (a
+    clone/clone3/fork/vfork return naming its pid) and that then made
+    none of the traced calls before exiting leaves an empty file of its
+    own by construction: the tracer did follow it, and there was nothing
+    to write. Those files are listed separately as empty_child_files and
+    do not count against completeness.
+
+    Returns {'empty_files': [path,...], 'empty_child_files': [path,...],
+    'unparseable_lines': int, 'total_files': int,
+    'unreconstructed_lines': int}.
     """
     empty_files = []
+    empty_child_files = []
     unparseable = 0
     total_files = 0
     unreconstructed_total = 0
+    cloned_pids = set()
+    empty_candidates = []
     for path in sorted(glob.glob(os.path.join(strace_dir, 'trace.*'))):
         total_files += 1
         has_line = False
@@ -2200,6 +2268,9 @@ def check_strace_completeness(strace_dir):
             if not stripped:
                 continue
             has_line = True
+            child = parse_clone_line(stripped)
+            if child is not None:
+                cloned_pids.add(str(child))
             if any(marker in stripped for marker in _BENIGN_NON_MATCH_MARKERS):
                 continue
             if _LINE_RE.match(stripped) is not None:
@@ -2218,8 +2289,15 @@ def check_strace_completeness(strace_dir):
                 continue
             unparseable += 1
         if not has_line:
+            empty_candidates.append(path)
+    for path in empty_candidates:
+        pid = path.rsplit('.', 1)[-1]
+        if pid in cloned_pids:
+            empty_child_files.append(path)
+        else:
             empty_files.append(path)
-    return {'empty_files': empty_files, 'unparseable_lines': unparseable, 'total_files': total_files,
+    return {'empty_files': empty_files, 'empty_child_files': empty_child_files,
+            'unparseable_lines': unparseable, 'total_files': total_files,
             'unreconstructed_lines': unreconstructed_total}
 
 
@@ -2424,7 +2502,8 @@ def main():
             op_consistency_state = 'inconsistent'
         strace_completeness = (
             check_strace_completeness(strace_dir) if strace_available
-            else {'empty_files': [], 'unparseable_lines': 0, 'total_files': 0, 'unreconstructed_lines': 0})
+            else {'empty_files': [], 'empty_child_files': [], 'unparseable_lines': 0, 'total_files': 0,
+                  'unreconstructed_lines': 0})
         has_unresolved_evidence = bool(strace_unresolved) or bool(runtime_unresolved)
         os_symlink_resolution_failures = context['os_symlink_resolution_failures']
         completeness_ok = (
@@ -2522,6 +2601,7 @@ def main():
                 'strace_available': strace_available,
                 'strace_total_files': strace_completeness['total_files'],
                 'strace_empty_files': strace_completeness['empty_files'],
+                'strace_empty_child_files': strace_completeness['empty_child_files'],
                 'strace_unparseable_lines': strace_completeness['unparseable_lines'],
                 'strace_unreconstructed_lines': strace_completeness['unreconstructed_lines'],
                 'missing_trace_pids': missing_trace_pids,

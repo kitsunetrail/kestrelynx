@@ -136,3 +136,56 @@ func TestAnUnusableReadingIsNotOfferedToTheMatching(t *testing.T) {
 		t.Errorf("the reading offered is %q, want the one taken cleanly", offered[0].AuxGeneration)
 	}
 }
+
+// A layout that comes back after a different one was read in between is
+// saved as its own stretch: folding it into the earlier entry would make
+// that entry span the other layout's whole stretch.
+func TestAReturningLayoutIsANewStretchNotAFoldIntoTheOldOne(t *testing.T) {
+	rec := &ContainerRecord{}
+	state := newContainerCollectState(true, defaultAuxLimits())
+	t0 := time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC)
+
+	commitAux(rec, state, auxReading("layout-a", "555", t0), "s0", "")
+	commitAux(rec, state, auxReading("layout-b", "555", t0.Add(time.Minute)), "s1", "")
+	commitAux(rec, state, auxReading("layout-a", "555", t0.Add(2*time.Minute)), "s2", "")
+
+	usable := usableReadings(rec)
+	if len(usable) != 3 {
+		t.Fatalf("got %d usable readings, want 3 (a, b, a again): %+v", len(usable), usable)
+	}
+	if usable[0].AuxGeneration != "layout-a" || !usable[0].LastSeen.Equal(t0) {
+		t.Errorf("the first stretch of layout-a spans past its own reading: %+v", usable[0])
+	}
+	if usable[2].AuxGeneration != "layout-a" || !usable[2].FirstSeen.Equal(t0.Add(2*time.Minute)) {
+		t.Errorf("the returning layout-a is not its own stretch: %+v", usable[2])
+	}
+	// The same layout read again right after itself still folds.
+	commitAux(rec, state, auxReading("layout-a", "555", t0.Add(3*time.Minute)), "s3", "")
+	if usable = usableReadings(rec); len(usable) != 3 || !usable[2].LastSeen.Equal(t0.Add(3*time.Minute)) {
+		t.Errorf("a repeated reading of the current layout was not folded into it: %+v", usable)
+	}
+}
+
+// Once another layout was read, no earlier entry of the same layout is a
+// fold target any more, whichever process generation it was read through.
+func TestAnOlderEntryIsNotReachedAcrossAnotherLayoutsStretch(t *testing.T) {
+	rec := &ContainerRecord{}
+	state := newContainerCollectState(true, defaultAuxLimits())
+	t0 := time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC)
+
+	commitAux(rec, state, auxReading("layout-a", "555", t0), "s0", "")
+	commitAux(rec, state, auxReading("layout-b", "555", t0.Add(time.Minute)), "s1", "")
+	commitAux(rec, state, auxReading("layout-a", "999", t0.Add(2*time.Minute)), "s2", "")
+	commitAux(rec, state, auxReading("layout-a", "555", t0.Add(3*time.Minute)), "s3", "")
+
+	usable := usableReadings(rec)
+	if len(usable) != 4 {
+		t.Fatalf("got %d usable readings, want 4: %+v", len(usable), usable)
+	}
+	if !usable[0].LastSeen.Equal(t0) {
+		t.Errorf("the first layout-a entry was extended across layout-b's stretch: %+v", usable[0])
+	}
+	if usable[3].AuxGeneration != "layout-a" || !usable[3].FirstSeen.Equal(t0.Add(3*time.Minute)) {
+		t.Errorf("the last reading is not its own entry: %+v", usable[3])
+	}
+}

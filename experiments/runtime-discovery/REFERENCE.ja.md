@@ -1042,3 +1042,611 @@ go run ./experiments/runtime-discovery match \
 - 証拠は優先順位を上げるためだけに使う
 - 証拠がないことは安全性も優先順位を下げる根拠も示さない
 - リスナーの存在はインターネットからの到達可能性を証明しない
+
+## 負荷と権限の計測
+
+### supervise
+
+`supervise` は指定したコマンドを子プロセスとして直接起動し、専用の cgroup v2 への配置、実際の実行ファイルと権限の確認、停止要求への対応、終了時の計測を行う。
+
+```sh
+sudo experiments/runtime-discovery/out/runtime-discovery supervise \
+  -cgroup /sys/fs/cgroup/runtime-discovery-example \
+  -record experiments/runtime-discovery/out/supervise.json \
+  -stop-request experiments/runtime-discovery/out/supervise-stop.txt \
+  -grace 10 -deadline 30 -- /usr/bin/sleep 20
+```
+
+| フラグ | 意味 |
+| --- | --- |
+| `-cgroup` | 新しく作る cgroup v2 ディレクトリで、既存のディレクトリは使用不可 |
+| `-record` | 必須の監督記録 JSON の保存先 |
+| `-user` | exec 前に切り替える既存ユーザーの UID/GID で、UID 0 に解決される指定は拒否 |
+| `-expect-exe` | 起動後の `/proc/<pid>/exe` と完全一致を確認するパス |
+| `-expect-capeff` | 実プロセスの `CapEff` と比較する 16 進値で、英字の大小は区別しない |
+| `-unset-env` | 子プロセスの環境から除く変数名のカンマ区切り一覧 |
+| `-stop-request` | 1 秒ごとに読むファイルで、空でない内容を停止理由として使用 |
+| `-grace` | SIGINT 後と SIGTERM 後にそれぞれ待つ秒数で、既定値は `10` |
+| `-deadline` | 起動から停止を要求するまでの上限秒数で、既定値の `0` は期限なし |
+| `-allow-unmeasured` | memory コントローラーの利用可能性を確認できなくても続行し、メモリを理由付き未計測として記録 |
+| `-keep-cgroup` | 終了後も cgroup とカウンターを残し、呼び出し側による最終読み取りと削除を可能にする |
+| `-no-cgroup` | 専用 cgroup を作らずに監督し、cgroup 由来の項目を未計測にする指定で、`-cgroup` とは併用不可 |
+| `-- cmd [args...]` | 直接起動するコマンドとその引数 |
+
+- cgroup を使う場合は `/sys/fs/cgroup` 配下に新しいディレクトリを作り、祖先の階層で利用可能な cpu と memory コントローラーの有効化を試みる
+- `clone3` の `CLONE_INTO_CGROUP` が使える場合は最初の命令から cgroup 内で実行し、`cgroup_method=clone3_cgroup_fd` と `placement_atomic.value=true` を記録する
+- フォールバックでは起動直後に実 PID を `cgroup.procs` に書き、`cgroup_method=post_start_write_fallback` と `placement_atomic.value=false` を記録する
+- フォールバックのカウンターには起動直後の CPU と初期メモリの一部が含まれないため、負荷比較では不完全な計測として扱う
+- 停止ファイル、監督プロセスへの SIGINT/SIGTERM、実行期限のいずれからも SIGINT、SIGTERM、SIGKILL の順に停止を試みる
+- SIGKILL 後の最終待機は 5 秒で、子の終了を確認できない場合は `status=stop_unconfirmed` とし、終了時刻や終了コードを補わない
+- 子を回収できても cgroup に子孫タスクが残れば `status=exited_residual_tasks` になる
+- `-no-cgroup` では子孫タスクの不在を確認できず、子を回収できても `termination_confirmed` は未計測になる
+- `supervise` 自体の終了コードは監督処理の結果であり、子が失敗しても監督が完了すれば 0 になる場合がある
+
+#### supervise.json の主な項目
+
+記録は起動後の確認時に一度書き、停止処理後に最終状態で書き直す。個別に取得成否を持つ値は `measured`、`value`、必要に応じて `reason` を持つオブジェクトで表し、`measured=false` の `value` を計測値として扱わない。
+
+| 項目 | 意味 |
+| --- | --- |
+| `command`、`pid`、`actual_exe` | 起動したコマンド、実際の子 PID、procfs で読んだ実行ファイル |
+| `real_uid`、`effective_uid`、`saved_uid`、`filesystem_uid` | 実プロセスから読み取った 4 種類の UID |
+| `cap_eff`、`attr_current`、`limits` | 実プロセスの実効ケーパビリティ、LSM 属性、リソース制限 |
+| `exe_verified`、`uid_verified`、`capeff_verified`、`verification_error` | 実行ファイル、UID、CapEff の確認結果と確認不能の理由 |
+| `cgroup`、`cgroup_method`、`placement_atomic` | 配置先、配置方法、最初の命令から配置されたか |
+| `controllers_enabled`、`controller_warnings` | コントローラー有効化の記録と警告 |
+| `started_at_wall`、`started_at_monotonic_s` | 起動時刻と、その起動を 0 とする単調時計の基準 |
+| `exited_at_wall`、`exited_at_monotonic_s` | 子の終了を確認した時刻と起動からの経過秒数 |
+| `exit_code`、`exit_signal`、`wait_error` | 子の終了コード、終了シグナル、待機処理のエラー |
+| `status` | `setup_failed`、`running`、`exited`、`exited_residual_tasks`、`stop_unconfirmed` の状態 |
+| `stop_requested`、`stop_reason`、`deadline_exceeded` | 停止要求の有無、理由、実行期限への到達 |
+| `termination_confirmed`、`residual_tasks` | 子の回収と残存タスク不在の確認、および cgroup の残存タスク状態 |
+| `baseline_cpu_usage_usec`、`final_cpu_usage_usec` | 起動前と停止処理後の累積 CPU 使用量 |
+| `baseline_memory_peak_bytes`、`final_memory_peak_bytes` | 起動前と停止処理後の cgroup のメモリピーク |
+| `cgroup_removed` | cgroup の削除結果または保持・削除不能の理由 |
+
+`exit_code` は終了を観測していなければ `null` になり、シグナル終了では `-1` と `exit_signal` を記録する。`termination_confirmed` が計測済みの真になるのは、子を回収し、cgroup の `populated=0` も確認できた場合である。
+
+### cgroup-stat と cgroup-remove
+
+`cgroup-stat` は指定した cgroup の CPU、メモリピーク、残存タスク状態を JSON として標準出力へ書く。
+
+```sh
+experiments/runtime-discovery/out/runtime-discovery cgroup-stat "<cgroup v2 directory>"
+```
+
+- 必須の位置引数は読み取る cgroup v2 ディレクトリ 1 つ
+- 出力は `path`、`cpu_usage_usec`、`memory_peak_bytes`、`populated` を含む
+- CPU は `cpu.stat` の `usage_usec`、メモリは `memory.peak`、残存タスク状態は `cgroup.events` の `populated` から読む
+- 各項目の取得成否は独立しており、コマンドが正常終了してもすべてを計測できたとは限らない
+
+`cgroup-remove` は cgroup のタスクがなくなるのを待ち、ディレクトリを削除して結果を JSON として標準出力へ書く。
+
+```sh
+sudo experiments/runtime-discovery/out/runtime-discovery cgroup-remove \
+  -wait 30 "<cgroup v2 directory>"
+```
+
+- 必須の位置引数は削除する cgroup v2 ディレクトリ 1 つで、`-wait` の既定値は `30` 秒
+- 出力は `path`、`populated`、`removed`、`waited_s` を含む
+- 空であることは `cgroup.events` の `populated=0` で確認し、`cgroup.procs` のファイルサイズから推測しない
+- すでに存在しないディレクトリは理由付きの削除済みとして扱う
+- 読み取り不能、待機期限後もタスクが残る場合、削除に失敗した場合は理由を記録して非ゼロで終了する
+- `-keep-cgroup` で保持した階層は最終読み取り後に子 cgroup から削除し、最後に親を削除する
+
+### optime と運用処理の時間
+
+`optime -- cmd [args...]` はコマンドを子として起動し、起動処理から回収までの経過時間を `CLOCK_MONOTONIC` で測って JSON 1 行を標準出力へ書く。子コマンドの標準出力と標準エラーは破棄する。
+
+- `cases/run.sh` の `stage_optime` は `CGO_ENABLED=0 GOOS=linux GOARCH=amd64` で静的バイナリをビルドする
+- ビルド先は各ケースの `cases/images/*/optime` で、ケース 26〜28 の Dockerfile が `/usr/local/bin/optime` へコピーする
+- 配置済みの実行ファイルが `cmd/optime/main.go` より新しければ再ビルドを省略する
+- 各イメージの `os-ops.sh` は curl、git、openssl をこのヘルパー経由で実行する
+- `optime` の `pid` と `starttime` は実際に包んだ子コマンドの識別情報で、`starttime` を読めない場合は 0 を記録する
+- 所要時間は単調時計の差をマイクロ秒へ切り捨て、壁時計の開始・終了時刻とは別に保存する
+
+| 出力先 | 項目と意味 |
+| --- | --- |
+| `optime` の標準出力 | `pid`、`starttime`、`start_wall`、`end_wall`、`duration_us`、`exit_code`、`clock_source` |
+| `operations.jsonl` の既存項目 | `id`、`ts`、`op`、`ok` を維持し、`op` は `osops_curl`、`osops_git`、`osops_openssl` |
+| `operations.jsonl` の追加項目 | `end_ts`、`duration_ms`、`exit_code`、`clock_source`、`clock_resolution_ms` |
+| `duration_ms` | `optime` の `duration_us` を 1000 で割り、小数点以下 3 桁で記録したミリ秒値 |
+| `clock_source`、`clock_resolution_ms` | `CLOCK_MONOTONIC` と `0.001` |
+| `exit_code` | 子コマンドの終了コードで、`ok` はこの値が 0 かどうかを示す |
+
+`duration_us` は `optime` の出力項目であり、現在の `operations.jsonl` に直接保存する項目ではない。既存項目を置き換えずに追加するため、従来の操作列を読む処理は引き続き使える。時間項目を持たない古い `operations.jsonl` の所要時間は理由付き未計測になる。
+
+### load-run.sh と load.json
+
+`tools/load-run.sh <case> [replicate] [config] [interval] [window]` は root で実行し、ケース 26〜28 を `attach_running` で計測する。既定値は反復 `1`、設定 `procfs`、間隔 `30` 秒、窓 `300` 秒である。
+
+| 設定 | 実行する観測 |
+| --- | --- |
+| `none` | コレクターもトレーサーも起動せず、observation を生成しない |
+| `procfs` | コレクターを起動する |
+| `events` | コレクターと 512 ページの nofilter トレーサーを起動する |
+
+すべての設定で同じワークロードとホスト側 Web リクエストを動かす。ワークロードの開始通知と遅延処理の完了を待ち、監視を開始し、イベント設定ではアタッチ確認と cgroup 対応表の登録を行ってから窓開始時刻を決める。コレクターにはその時刻を `-phase-base` として渡す。
+
+保存先は `experiments/runtime-discovery/out/<case>-load-<config>-<interval>-<window>-r<replicate>-attach_running/` である。
+
+| ファイル | 内容 |
+| --- | --- |
+| `run.log`、`case.json`、`clock.json` | 実行ログ、ケース定義、時計変換 |
+| `container_id.txt`、`image_id.txt`、`fired_at.txt` | コンテナとイメージの識別情報、開始通知後の記録時刻 |
+| `collector_supervise.json`、`tracer_supervise.json` | 起動した各プロセスの監督記録 |
+| `cgroup-<target>-wstart.json`、`cgroup-<target>-wend.json` | `collector`、`tracer`、`docker` のうち該当する対象の窓開始・終了時の読み取り |
+| `cgroup-remove-<target>.json` | `collector`、`tracer`、`parent` の削除記録 |
+| `collect/` | コレクターを動かす設定の observation と manifest |
+| `trace.txt`、`trace.err`、`events.jsonl`、`cgroup-map.json` | イベント設定のトレース、時刻付き標準エラー、変換済みイベント、cgroup 対応表 |
+| `trace-stdout-wstart-bytes.txt`、`trace-stdout-wend-bytes.txt`、`trace-stderr-wstart-bytes.txt`、`trace-stderr-wend-bytes.txt` | 窓開始・終了時のトレース出力バイト数 |
+| `gtb-raw/` | `usage.jsonl`、`occurrences.jsonl`、`operations.jsonl`、`runtime-modules.jsonl`、`docker-top.txt` |
+| `web_timing.jsonl`、`web_timing.err` | ホスト側 Web リクエストの応答記録とエラー |
+| `watch_targets.txt`、`watch.jsonl`、`watch.log` | 監視対象、監視サンプル、監視プロセスのログ |
+| `stop_request.txt`、`termination_confirmed.txt`、`stop_failures.txt` | 該当する場合の停止要求、終了確認、停止確認失敗の理由 |
+| `load.json` | `load_run_assemble.py` が生の記録から作る run の負荷要約 |
+
+`stop_request.txt` は早期停止に加えて、監督対象がある run の通常の窓終了時にも停止処理のために作成される。早期停止の判定には `load.json` の `stopped_early` と `stop_reason` を使う。
+
+#### 4 つのチェックポイント
+
+| チェックポイント | 読み取り元と意味 |
+| --- | --- |
+| `before_start` | `supervise` の `baseline_*` で、子の起動前 |
+| `window_start` | ランナーの `cgroup-stat` で、共通の観測窓が開く時点 |
+| `window_end` | ランナーの `cgroup-stat` で、停止処理を要求する前に窓を閉じる時点 |
+| `process_exit` | `supervise` の `final_*` で、子の終了待機・停止処理後 |
+
+- コレクターとトレーサーの CPU は `prep`、`window`、`drain`、`total` に分ける
+- `prep` は起動前から窓開始、`window` は窓開始から終了、`drain` は窓終了から最終読み取り、`total` は起動前から最終読み取りの差分
+- JSON の項目名は `collector_cpu_usage_delta_<segment>_us` と `tracer_cpu_usage_delta_<segment>_us`
+- コレクターが全予定サンプルを取得して窓終了前に退出しても、`-keep-cgroup` により窓終了時のカウンターを読み取れる
+- `collector_memory_peak_bytes` と `tracer_memory_peak_bytes` は cgroup の存続期間全体のピークで、窓内だけのピークではない
+- `docker_daemon_cpu_usage_delta_window_us` は全設定で同じデーモン cgroup を窓開始・終了時に直接読み取った差分
+- 読めない値や減少したカウンターの差分は理由付き未計測とする
+
+#### 観測窓と計測完了
+
+| 項目 | 意味 |
+| --- | --- |
+| `run_id`、`case`、`config`、`interval`、`window`、`replicate`、`sync` | run の条件 |
+| `container_id`、`image_id`、`fired_at` | ワークロードの識別情報と開始通知後の記録時刻 |
+| `window_start_wall`、`window_end_wall`、`window_end_planned_wall` | 窓開始、実際に閉じた時刻、予定終了時刻 |
+| `tracer_exited_at_wall` | トレーサーの監督記録から得た終了時刻または未計測理由 |
+| `window_established`、`window_start_drift_s` | 予定どおりの窓開始が成立したかとランナーの開始ずれ |
+| `collector_first_sample_delay_s` | コレクターの最初のサンプルが予定時刻から遅れた秒数 |
+| `stopped_early`、`stop_reason` | 早期停止の有無と停止理由 |
+| `measurement_complete`、`measurement_incomplete_reasons` | 監督・観測の完了判定と不成立の理由 |
+| `collector_valid_samples`、`collector_invalid_samples` | コレクターの collection results にある有効・無効件数 |
+| `cgroup_cleanup`、`stop_failures`、`notes` | cgroup 削除結果、停止確認の失敗、解釈のための注記 |
+| `dump_logs_ok`、`watch_samples`、`watch_stop_reason` | ワークロードログ取得の成否、監視サンプル数、停止理由 |
+
+窓開始までの余裕は `KL_WINDOW_LEAD_S` の既定値で 5 秒、開始ずれの許容値は `KL_WINDOW_START_TOLERANCE_S` の既定値で 2 秒である。ランナーの開始ずれ、またはコレクターの最初のサンプルの遅れが許容値を超えると `window_established=false` になる。
+
+`measurement_complete=false` の理由には次のものがある。
+
+- 監督記録の欠落、cgroup 配置の非 atomic または確認不能、終了確認の不成立
+- 記録された cgroup 削除の失敗やランナーの停止確認失敗
+- コレクターの終了コードの欠落または非ゼロ終了
+- observation やサンプル時刻の欠落、予定サンプル数未満の試行、対象の inspect 失敗
+- collection results の欠落、または有効な観測が 1 件もない状態
+- トレーサーのアタッチ未確認、またはイベント収集が `failed` の状態
+- トレーサー終了時刻の欠落、または予定窓終了より前の退出
+
+予定サンプル数は `max(1, window // interval)` である。全サンプルを試行したコレクターが窓終了より前に退出すること自体は未完了の理由にならない。`measurement_complete`、`window_established`、`stopped_early` は独立した項目であり、個々の未計測値やイベントの劣化状態も別に確認する。
+
+`comparison_blocker` は `load.py` の比較判定関数で、`load.json` の項目名ではない。同じケース、間隔、窓、反復番号の `none` 対照を探し、次の理由があれば比較を止める。
+
+- 対応する `none` 対照がない
+- 比較するいずれかの run が早期停止した
+- いずれかの `window_established` が真と記録されていない
+- いずれかの `measurement_complete` が真と記録されていない
+- 予定した窓の長さが異なる
+- イメージ ID が欠落しているか一致しない
+
+判定は集計表の `comparable_to_none` と `not_comparable_because` に出力する。比較できない場合も取得済みの絶対値を残し、中央値の差分を理由付き未計測にする。`none` 行は自分自身を対照とするためこの比較判定を適用せず、取得済み中央値の自己差分は 0 になる。
+
+#### イベント、出力増分、ワークロード
+
+- `events_total` と `events_attributed` は実際に開いていた窓に `ts` が入るイベントの全件数と対象コンテナへの帰属件数
+- `events_total_per_second` と `events_attributed_per_second` はそれぞれの件数を実際の窓の秒数で割った値
+- `events_outside_window` は窓内として数えなかったイベント数
+- `drops` は変換トレーラー由来の欠落情報であり、窓内イベント件数と同じ方法で再抽出した値ではない
+- `drops` には `lost_events`、`lost_notifications`、`map_overflow`、`convert_failures`、`enter_exit_unmatched`、`enter_exit_unmatched_boundary`、`path_read_failures`、`path_truncations`、`identity_unavailable`、`unmatched_identity_unavailable`、`events_before_filter`、`events_after_filter` を保存する
+- `partial_events` は従来のルールと同じくパス読み取り失敗、パス切り詰め、境界の未対応片、識別情報不足を合計する
+- `malformed_lines` は変換済み JSONL の解析不能行数で、トレーラーがあればその `convert_failures` にも加える
+- トレーラーがない場合は欠落項目をゼロで補わず、解析不能行を実際に数えた場合の `convert_failures` を除いて未計測にする
+- `event_state` は `not_attempted`、`failed`、`observed`、`degraded` を使い、トレーラー欠落、解析不能行、早期停止、欠落や未計測項目を劣化判定に含める
+- `trace_stdout_bytes` と `trace_stderr_bytes` はトレース全体のサイズで、対応する `*_bytes_per_second` は窓開始・終了時のバイト数の増分を実際の窓の秒数で割る
+- `*_bytes_per_second_whole_lifetime` はトレーサーの存続期間全体を分母とする別項目
+- `run_dir_growth_bytes` は空の状態から開始した run ディレクトリにあるファイルサイズの合計
+
+`workload.curl`、`workload.git`、`workload.openssl` は `operations.jsonl` の開始・終了がともに窓内にある運用処理を集計する。境界をまたぐ処理と時刻不明の処理は `boundary_crossing`、完全に窓外の処理は `outside_window` に分ける。
+
+- 各統計は `n`、成功した処理の `median_ms`、`p95_ms`、`max_ms`、失敗数の `failures` を持つ
+- 中央値と p95 は nearest-rank で求め、値の補間は行わない
+- 該当処理がない場合は `state` に未計測理由を記録し、すべて失敗した場合は所要時間の統計を未計測にする
+- `workload.web` はホスト側の 5 秒ごとの予定に基づくリクエストを集計する
+- Web リクエストは接続タイムアウト 2 秒、全体の上限 4 秒で、curl が正常終了した HTTP 2xx/3xx を成功とする
+- `web_timing.jsonl` は `planned_ts`、`ts`、`seq`、`status`、`latency_ms`、`ok`、`curl_exit`、`timeout_type` を記録する
+- Web 統計には `success_count`、`timeout_count`、`failure_count` を加え、`operation_timeout` だけをタイムアウトに分類する
+- 接続失敗、名前解決失敗、空応答、HTTP の不成功などはタイムアウト以外の失敗に数える
+
+### watch-run.sh の停止条件と上限
+
+`tools/watch-run.sh <run dir> <out root dir> <targets file> <stop file>` は通常 `load-run.sh` が起動する。必須引数は run の保存先、共有出力先、監視対象ファイル、共有停止要求ファイルの順である。
+
+| 環境変数 | 既定値と停止条件 |
+| --- | --- |
+| `KL_WATCH_INTERVAL` | 監視間隔 `10` 秒 |
+| `KL_WATCH_CPU_CORES` | トレーサー CPU が `1` コア相当を超える状態が 3 サンプル連続 |
+| `KL_WATCH_RUN_BYTES` | run が `1073741824` バイトを超過 |
+| `KL_WATCH_ROOT_BYTES` | 共有出力先が `4294967296` バイトを超過 |
+| `KL_WATCH_FREE_BYTES` | 空き容量が `21474836480` バイト未満 |
+| `KL_WATCH_WEB_FAILURES` | 記録順に Web 応答が `3` 回連続で失敗 |
+
+- 欠落通知件数の 3 サンプル連続増加も停止条件で、この連続回数を変更する環境変数はない
+- CPU のコア相当値は cgroup CPU の差分を `/proc/uptime` の単調な経過時間で割り、固定の監視間隔を分母にしない
+- CPU の読み取りに失敗すると前回値を破棄し、次の正常な読み取りを新しい基準にする
+- Web の連続失敗は応答ごとに判定し、同じ監視サンプル内の後続成功で到達済みのしきい値を取り消さない
+- 監視スクリプトは対象へ直接シグナルを送らず、停止理由を共有ファイルへ書く
+- すでに空でない停止理由があれば上書きしない
+- 停止要求後も監視を続け、各読み取りを `watch.jsonl`、停止要求と監視上限到達を `run.log` に記録する
+
+#### targets ファイル
+
+| キー | 意味 |
+| --- | --- |
+| `tracer_pid`、`collector_pid` | ランナーが通知する監視用 PID で、現在のランナーでは各 `supervise` の PID |
+| `tracer_cgroup`、`trace_err`、`web_timing` | CPU、欠落通知、Web 応答の読み取り先 |
+| `expect_tracer`、`expect_collector` | 起動前も含め、その run が各監督対象を持つ予定かを表す `0` または `1` |
+| `min_until_epoch` | 監視を続ける観測窓の予定終了 epoch 秒 |
+| `termination_confirmed_file` | ランナーが全監督対象の終了を確認してから書くファイルのパス |
+| `residual_unconfirmed` | ランナーが終了確認不能と判定した場合の `1` |
+| `watch_until_epoch` | 監視プロセス自身が待つ絶対上限の epoch 秒 |
+
+targets ファイルは各サンプルで読み直す。通常終了には、予定した監視用 PID が通知されて退出したこと、窓の予定終了への到達、空でない `termination_confirmed_file` が必要になる。`residual_unconfirmed=1` の場合は終了確認済みと扱わない。`expect_*` のない従来形式では、通知された PID がすべて退出したかを使う。
+
+`watch_until_epoch` に到達すると終了確認不能として `WATCH_EXIT` を記録し、終了コード 3 で監視を終える。`load-run.sh` は窓終了予定時刻に `KL_RESIDUAL_WATCH_S` の既定値 1800 秒を加えてこの上限を設定し、準備中や終了確認失敗時にも有限の上限を通知する。全監督対象の終了を確認できた場合は確認ファイルを書いて監視を停止し、cgroup を削除する。確認できない場合は監視と cgroup を残して非ゼロで終了する。監督対象のない `none` も容量と Web を監視し、窓終了・停止処理後にランナーが監視を止める。
+
+監督対象の実行期限は `supervise -deadline` が別に管理する。`load-run.sh` はトレーサーに準備予算、窓開始までの余裕、窓長、期限猶予の合計を渡し、コレクターには準備予算を除く合計を渡す。準備予算は `KL_PREP_BUDGET_S=180`、期限猶予は `KL_WATCH_HARD_DEADLINE_GRACE_S=120` が既定値である。
+
+### privilege-run.sh の操作と判定
+
+`tools/privilege-run.sh <condition>` は root で実行する。非 root 条件の対象は `KL_PRIV_USER` が指定する既存ユーザーで、ユーザーの作成は行わない。
+
+| 条件 | 実行ユーザーとコピーに付けるケーパビリティ |
+| --- | --- |
+| `root` | root として実行し、コピーにはケーパビリティを付けない |
+| `bpf_perfmon` | 非 root で `cap_bpf,cap_perfmon=ep` |
+| `bpf_perfmon_dac` | 非 root で `cap_bpf,cap_perfmon,cap_dac_read_search=ep` |
+| `sysadmin` | 非 root で `cap_sys_admin=ep` |
+
+ケーパビリティは `/var/tmp` の専用ディレクトリに置いた bpftrace と `runtime-events` の両コピーへ付ける。システムの実行ファイルと sysctl は変更しない。結果は `out/privilege-<condition>.json` と `.md`、生の証拠は `out/privilege-<condition>-artifacts/` に保存する。ここでの `out/` は `experiments/runtime-discovery/out/` を指す。
+
+| 操作キー | 確認内容と判定 |
+| --- | --- |
+| `bpf_program_load` | nofilter スクリプトの `--dry-run -v` でロード段階を調べ、ロード完了を成功、ロード段階のエラーを失敗、段階不明を未到達とする |
+| `tracepoint_attach` | 通常起動したトレーサーに対する `attach-check` の既知イベント確認を成功とし、ロード未完了・段階不明を未到達、それ以外のアタッチ未確認を失敗とする |
+| `buffer_create_and_read` | アタッチ確認後に一時コンテナ内の固有マーカーを実行し、トレースに届けば成功、届かなければ失敗、アタッチ未確認なら未到達とする |
+| `cgroup_id_map` | `runtime-events cgroup-map` の子終了コード 0 に加え、空でない `entries`、空の `errors`、各 entry の `handle_error` 不在、当該操作の cgroup の存在を確認して成功とする |
+
+- `result=success` は当該操作の確認条件を満たしたことを示す
+- `result=failure` は権限条件が成立した上で当該操作の確認に失敗したことを示す
+- `result=unreached` は準備失敗、権限条件不成立、前段階未完了、到達段階不明などで当該操作を評価できないことを示す
+- 未実施の条件や記録のない実行に成功・失敗を補わず、現行ツールは未実施専用の第 4 の `result` 値を生成しない
+- 要約作成時に操作結果ファイルがない場合も、既定値は理由付きの `unreached`
+- 操作の `exit_code` と `exit_signal` は子の結果で、`supervisor_exit_code` は監督処理の結果
+
+#### 段階判定と condition_established
+
+bpftrace の段階判定は v0.25.0 の自由記述ログに対する発見的規則である。機械可読の段階報告ではないため、次の順序で判定する。
+
+1. `--dry-run` の子終了コードが 0 ならロード成功とする
+2. `Attached N probes` があればロード完了とする
+3. `cannot attach probe` などのアタッチ時エラーは `attach_failed` とし、ロード自体は完了したものとする
+4. コンパイル、verifier、プログラムロードのエラーは `load_failed` とする
+5. それ以外は `unknown` とし、終了コードだけで段階を推測しない
+
+各操作の `condition_established` は操作結果と別に記録する。実行ファイルの一致を確認し、非 root 条件では実 UID と実効 UID が指定ユーザーに一致して実効 UID が非ゼロであること、CapEff が要求したビット集合と一致することも確認する。`root` 条件は root として起動したランナーから実行し、条件判定では実行ファイルの一致を確認する。
+
+- 確認できれば `condition_established=true`、確認に失敗すれば `false` と理由を `condition_detail` に記録する
+- 条件確認まで到達しなければ `condition_established=null` になる
+- 条件不成立は `condition_not_established` の理由を持つ未到達とし、その条件での操作失敗と混同しない
+- `errno` はログに明示された数値だけを採用し、記述がなければ `unknown`
+- `denying_layer` はログの語句から `perf_bpf_check`、`tracefs_dac`、`lsm`、`unknown` に分類する発見的な情報
+- 要約には要求ケーパビリティ、バイナリの SHA-256、3 種類の sysctl、lockdown、取得できた操作の procfs 情報を残す
+- `log_excerpt` は末尾最大 4000 文字で、完全なログと監督記録は artifacts に保持する
+- 未到達操作の要約は理由と条件確認状態を中心に保存し、起動済み操作の詳細は artifacts の監督記録でも確認する
+
+作業ディレクトリの削除は、開始した全操作の監督記録で終了を確認し、証拠を保存できた後に行う。監督記録の欠落、残存タスク、監督プロセスの待機失敗、証拠の保存失敗があれば元の作業ディレクトリを残し、理由とパスを報告して非ゼロで終了する。
+
+### AGGREGATE-load の列
+
+`tools/load.py [out dir]` は対象ディレクトリ直下の負荷 run の `load.json` を読み、run ごとに 1 行を持つ `AGGREGATE-load.md` と `AGGREGATE-load.csv` を作る。省略時のディレクトリは `experiments/runtime-discovery/out` である。
+
+| 列 | 意味 |
+| --- | --- |
+| `run`、`case`、`config`、`interval`、`window`、`replicate` | run 名と計測条件 |
+| `stopped_early`、`stop_reason` | 早期停止とその理由 |
+| `window_established`、`measurement_complete` | 窓の成立と計測完了 |
+| `comparable_to_none`、`not_comparable_because` | 対応する対照との比較可否と理由 |
+| `collector_cpu_prep_s`、`collector_cpu_window_s`、`collector_cpu_drain_s`、`collector_cpu_total_s` | コレクターの区間別・全体 CPU 使用秒数 |
+| `collector_memory_peak_bytes` | コレクター cgroup のメモリピーク |
+| `tracer_cpu_prep_s`、`tracer_cpu_window_s`、`tracer_cpu_drain_s`、`tracer_cpu_total_s` | トレーサーの区間別・全体 CPU 使用秒数 |
+| `tracer_memory_peak_bytes` | トレーサー cgroup のメモリピーク |
+| `dockerd_cpu_window_s` | Docker デーモンの窓内 CPU 使用秒数 |
+| `events_total`、`events_total_per_second`、`events_attributed`、`events_attributed_per_second` | 窓内の全イベント・帰属イベントの件数と毎秒件数 |
+| `event_state`、`partial_events`、`malformed_lines` | イベント状態、不完全なイベント数、解析不能行数 |
+| `lost_events`、`lost_notifications`、`map_overflow`、`convert_failures`、`enter_exit_unmatched` | 集計表に載せる欠落・変換失敗・窓内未対応片 |
+| `trace_stdout_bytes`、`trace_stdout_bytes_per_second`、`trace_stderr_bytes`、`trace_stderr_bytes_per_second` | トレース全体のサイズと窓内の出力増加速度 |
+| `run_dir_growth_bytes` | run ディレクトリのファイルサイズ合計 |
+| `<kind>_n`、`<kind>_median_ms`、`<kind>_p95_ms`、`<kind>_max_ms`、`<kind>_failures` | `<kind>` が `curl`、`git`、`openssl`、`web` の各統計 |
+| `<kind>_median_delta_ms` | 各中央値から対応する `none` 対照の中央値を引いた値 |
+| `web_success_count`、`web_timeout_count`、`web_failure_count` | Web の成功、タイムアウト、それ以外の失敗件数 |
+
+CPU は `load.json` のマイクロ秒から秒へ変換し、小数点以下 3 桁に丸める。比較差分の列は運用処理と Web の中央値に限られる。未計測値は `n/a (<reason>)` と表示し、`load.json` の詳細な欠落項目、境界処理、監督記録も併せて読む。
+
+## 稼働中コンテナの観測
+
+`prod-precheck.sh` で観測先の要件を確認し、`prod-observe.sh` で稼働中コンテナを `attach_running` として観測する。観測結果は世代ごとに照合し、`prod_summary.py` で HIGH/CRITICAL Finding の証拠を 3 区分に集計する。
+
+### collect の再起動追跡
+
+| フラグ | 意味 |
+| --- | --- |
+| `-track-restarts` | 対象の再起動・再作成を検出し、世代ごとに記録を分割する指定で、既定値は `false` |
+| `-restarts-file` | 世代イベントを追記する JSONL のパスで、既定値は `<out-dir>/restarts.jsonl`、`-track-restarts` がない場合は未使用 |
+| `-load-unmeasured` | cgroup 由来の負荷を読み取らずに未計測とする理由文字列で、空でなければ有効 |
+
+再起動追跡はサンプルごとの Docker API 確認で行う。
+
+- 同一コンテナ ID の空でない `StartedAt` が以前の値から変わると `restart` を記録する
+- 旧 ID への `docker top` が失敗した場合は稼働中コンテナを再取得し、同じ名前の別 ID が見つかれば `recreate` を記録する
+- `StartedAt` の欠落だけを再起動とせず、一覧取得失敗や同名の置き換えが見つからない場合は次のサンプルで再確認する
+- 変更を検出したサンプルの失敗記録は旧世代に残し、新世代ではパッケージ索引のキャッシュ、証拠の重複管理、追加入力の索引を引き継がずにレイアウトを読み直す
+
+`restarts.jsonl` の各行は次の項目を持つ。
+
+| 項目 | 意味 |
+| --- | --- |
+| `kind` | `restart` または `recreate` |
+| `container_name` | 追跡対象の名前 |
+| `old_container_id`、`new_container_id` | 変更前後のコンテナ ID |
+| `image_id_before`、`image_id_after` | 変更前後のイメージ ID |
+| `started_at_before`、`started_at_after` | 変更前後の開始時刻 |
+| `detected_at` | 変更または補正を検出した時刻 |
+| `sample_id` | 変更を検出したサンプルの ID で、補正イベントでは省略される |
+
+#### 世代の観測窓と保留・補正
+
+旧世代の `window.scheduled_end` は、変更検出時に新世代の確定を待たずに閉じる。境界には解析可能な新世代の `StartedAt` を優先し、取得できなければ `detected_at` を使い、run 全体の予定窓の範囲内に収める。旧世代の終端がすでに狭められている場合は、再試行や保留中の追加変更で後ろへ延ばさない。
+
+新しい ID の一覧取得や inspect に失敗した場合は、新世代への切り替えを保留して次のサンプルで再試行する。保留中も旧世代の窓は閉じたままになる。新世代の開始は確定時の識別情報から計算し、その世代の `StartedAt`、または検出時刻を run 全体の窓に収めて `window.scheduled_start` とする。終端は run 全体の予定終了時刻になる。保留中にさらに変更が起きた場合、旧世代の終端と確定した新世代の開始が一致するとは限らない。
+
+確定時の inspect で検出時の情報との差が分かった場合は、元イベントを残して補正イベントを追記する。
+
+- 検出時の `started_at_after` が空で、確定時に取得できた場合は、元の `kind` と前後の ID を保ったまま開始時刻を補う
+- 検出時にも開始時刻があり、確定時に別の開始時刻になっていた場合は、さらに世代が変わったものとして検出時の新 ID から確定した ID へのイベントを追加する
+- 追加変更の `kind` は補正イベント自身の前後の ID で決まり、同じ ID なら `restart`、異なる ID なら `recreate` になる
+
+確定した新世代ではレイアウト取得を試み、失敗した場合は `generation_prepare_failed` をその記録に残す。観測できなかった中間世代の証拠を補って作ることはない。
+
+#### 世代ごとの記録ファイル
+
+世代が 1 つなら `<name>__<run-key>.json`、複数なら `<name>__<run-key>__gen1.json`、`__gen2.json` のように観測順の番号を付ける。`<name>` はファイル名用に整形したコンテナ名で、名前が空なら ID を使う。`<run-key>` にはケース種別、権限、間隔、窓長、位相、反復番号、同期条件、収集構成を含める。manifest には各世代のコンテナ ID・名前・ファイル名を記録する。
+
+過去の世代のサンプルや証拠を新世代へ混ぜない。初回パッケージ DB 読み取りの負荷は各世代に保持するが、定常観測と Docker デーモンの負荷はコレクターのサンプルループ全体を測った同じ値が各世代に入るため、世代間で加算しない。
+
+### 負荷の未計測と途中保存
+
+`-load-unmeasured "<reason>"` を指定すると、コレクター自身と Docker デーモンの cgroup 読み取りを省略し、定常観測と Docker デーモンの負荷を `measured=false` と理由付きで保存する。メモリピークも未計測になる。専用 cgroup のないプロセスが継承先の共有 cgroup を読み、他のプロセスの負荷を自身の負荷として扱うことを防ぐ。初回パッケージ DB 読み取りの計測は別に保持する。
+
+サンプルループで SIGTERM または SIGINT を受けると、次のサンプルを開始せず、取得済みの観測と負荷、世代ごとのファイル、manifest を保存する。これはサンプルループで受けた停止要求の処理であり、準備中の終了や SIGKILL による保存を保証するものではない。
+
+- manifest の `errors` に受信シグナルと実施済み・予定サンプル数を記録する
+- 各対象の最後の世代に `collector_stopped_early` の failure を追加する
+- 未実施の予定サンプルごとに `proc_observe=top_failed`、`pkgdb_read=error`、`valid=false` の collection result を追加する
+- すでに終了した旧世代には、その後のシグナルによる未実施サンプルを追加しない
+
+この無効な collection result により、`match` は短縮された記録を通常完了した小さな窓と区別できる。有効な観測が残っていれば `observation_state=partially_observed`、有効な観測がなければ `observation_failed` となり、未実施分を含む収集は `collection_complete=false` として扱われる。
+
+### prod-precheck.sh
+
+```sh
+sudo bash experiments/runtime-discovery/tools/prod-precheck.sh \
+  /var/tmp/runtime-discovery-prod/precheck 512
+```
+
+必須の `<out dir>` と、省略可能な `[64|256|512|none]` を受け取り、ページ数の既定値は `512` である。`precheck.json` と `precheck.md`、確認に使った生データを `raw/` に保存する。
+
+| precheck.json の項目 | 内容 |
+| --- | --- |
+| `generated_at`、`selected_pages` | 作成時刻と選択したページ数 |
+| `kernel`、`btf` | カーネル情報と BTF の存在・詳細 |
+| `tracepoints` | 各 tracepoint の `present` と `required` |
+| `bpftrace_version`、`bpftool_version` | ツールのバージョンまたは未導入の記録 |
+| `cgroup2`、`procfs_mount_options` | cgroup v2 の確認結果と procfs マウントオプション |
+| `sysctls` | `kernel/unprivileged_bpf_disabled`、`kernel/perf_event_paranoid`、`kernel/yama/ptrace_scope` |
+| `lockdown`、`apparmor` | lockdown、AppArmor の有効化状態と実行シェルのプロファイルなど |
+| `docker` | サーバーバージョン、OS、cgroup driver と version |
+| `running_containers` | 稼働中コンテナの `name`、`id`、`image_id`、`started_at` |
+| `free_bytes_on_output_filesystem` | 出力先の空きバイト数で、取得不能なら `null` |
+| `dry_run` | 64・256・512 ページの各スクリプトの dry-run 結果 |
+| `hard_failures`、`ok` | 必須要件の失敗一覧と総合判定 |
+
+BTF、cgroup v2、ネイティブ Docker Engine への到達性、`open`・`openat`・`openat2` の enter/exit と `sched_process_exec` の tracepoint を必須として扱う。`sys_enter_execve` は存在を記録するが必須ではない。
+
+bpftrace があれば全 3 スクリプトを確認するが、必須判定に使う dry-run は選択したページ数のものだけである。`none` は bpftrace の存在と選択スクリプトの成功を必須にしないが、BTF や必須 tracepoint など他の確認を解除する指定ではない。bpftool、空き容量、sysctl や AppArmor の記録自体には、追加のしきい値判定を設けていない。`hard_failures` が空でなければ終了コード 1、引数や実行ユーザーなどのエラーは終了コード 2 になる。
+
+コンテナ操作と sysctl の変更は行わない。
+
+### prod-observe.sh の run
+
+```sh
+sudo KL_PROD_PAGES=512 bash experiments/runtime-discovery/tools/prod-observe.sh \
+  /var/tmp/runtime-discovery-prod/run-001 300 api worker
+```
+
+引数は `<out dir> <window seconds> [container names...]` で、root と到達可能なネイティブ Docker Engine を必要とする。省略したコンテナ名は開始時の稼働中一覧から決める。新しく別名で現れたコンテナを継続的に対象へ追加する指定ではない。
+
+| 環境変数 | 既定値と用途 |
+| --- | --- |
+| `KL_RD_BIN`、`KL_RE_BIN` | `experiments/runtime-discovery/out/runtime-discovery` と `experiments/runtime-discovery/out/runtime-events` |
+| `KL_PROD_PAGES` | `512` で、`64`・`256`・`512`・`none` から選択 |
+| `KL_PROD_INTERVAL`、`KL_PROD_MAX_SECONDS` | サンプル開始間隔 `30` 秒と観測窓の上限 `1800` 秒 |
+| `KL_PROD_ALLOW_UNMEASURED_LOAD` | `0` で、`1` にすると両観測プロセスで専用 cgroup を使わない |
+| `KL_TRIVY_CMD` | `trivy` で、空白で引数に分割したコマンドからスキャン結果を標準出力で取得 |
+| `KL_INTEL_SNAPSHOT` | 指定すると保存済み KEV/EPSS スナップショットを使用 |
+| `KL_PROD_CGROUP_REFRESH_SECONDS` | cgroup 表の定期更新間隔 `60` 秒 |
+| `KL_PROD_RESTART_POLL_SECONDS` | 世代イベントの追記を確認する間隔 `5` 秒 |
+| `KL_WINDOW_LEAD_S`、`KL_WINDOW_START_TOLERANCE_S` | 窓開始までの余裕 `5` 秒と開始遅延の許容値 `2` 秒 |
+| `KL_STOP_TIMEOUT_S`、`KL_SUPERVISE_WAIT_S` | 各停止シグナル段階の猶予 `15` 秒と監督プロセスの待機時間 `90` 秒 |
+| `KL_PREP_BUDGET_S`、`KL_WATCH_HARD_DEADLINE_GRACE_S` | 準備予算 `180` 秒と実行期限の猶予 `120` 秒 |
+| `KL_CGROUP_REMOVE_WAIT_S` | 各 cgroup の削除待機 `30` 秒 |
+| `KL_PROD_LOG_BYTES` | `run.log` の末尾保持に使う上限 `52428800` バイト |
+| `KL_ROOT` | 配置を変更した場合のリポジトリルートで、既定値はスクリプトから 3 階層上 |
+
+観測窓は上限を適用した後もサンプル開始間隔以上である必要がある。トレーサーのアタッチ確認と初回 cgroup 登録後に run 全体の予定窓を決め、コレクターに同じ開始時刻を `-phase-base` として渡す。`run_window.json` の `scheduled_start` と `scheduled_end` は世代分割で変更せず、イベント変換もこの窓を使う。
+
+イベント収集時は cgroup 表を定期更新し、`restarts.jsonl` の行数増加を検出した際にも更新する。各世代は自身のイメージ ID をスキャンし、同じ ID のスキャン結果は再利用する。`match` は HIGH/CRITICAL Finding を対象とし、正解データは宣言しない。
+
+#### ディレクトリ構成
+
+| ファイル・ディレクトリ | 内容 |
+| --- | --- |
+| `run.log`、`collect.log` | ランナーとコレクターのログ |
+| `targets_initial.json` | 開始時の対象名、コンテナ ID、イメージ ID・参照名、開始時刻 |
+| `clock.json`、`cgroup-map.json` | 時計換算情報と cgroup 表 |
+| `run_window.json` | run 全体の予定観測窓 |
+| `timeline.jsonl`、`restarts.jsonl` | 処理の経過と、検出時に追記する世代イベント |
+| `collect/` | 世代ごとの観測、manifest、登録状態の `ready.json` |
+| `collector_supervise.json`、`tracer_supervise.json` | 起動した観測プロセスの監督記録 |
+| `cgroup-<target>-wstart.json`、`cgroup-<target>-wend.json` | 専用 cgroup 使用時の `collector`・`tracer` の窓開始・終了時点の読み取り |
+| `cgroup-remove-<target>.json` | `collector`・`tracer`・`parent` の削除記録 |
+| `watch_targets.txt`、`watch.jsonl`、`watch.log` | 監視対象、サンプル、監視ログ |
+| `stop_request.txt`、`termination_confirmed.txt` | 停止要求と、条件を満たした後の終了確認 |
+| `trace.txt`、`trace.err`、`convert.log`、`events.jsonl` | イベント収集時のトレース、時刻付き stderr、変換ログ、変換結果 |
+| `scans/<image-key>.json`、`scans/<image-key>.err` | イメージ ID から `:` を除いたキーごとの Trivy 結果と stderr |
+| `case/<base>.json` | 世代ごとの照合用ケース定義 |
+| `match/<base>.match_hc.json`、`match/<base>.log` | 世代ごとの照合結果とログ |
+| `csv_hc/<base>/` | 世代ごとの照合 CSV |
+| `intel.json` | 保存済みスナップショットを指定しない場合の補足情報スナップショット |
+
+該当する段階に到達していないファイルや、無効にした機能のファイルは生成されない。世代イベントがなければ `restarts.jsonl` も生成されない。`prod_summary.md` と `prod_summary.csv` は、別途 `prod_summary.py` を実行して作る。
+
+#### timeline.jsonl の項目
+
+各行は `ts` と `event` を持つ JSON で、イベントごとの追加項目を持つ。ランナーが書く追加値は通常文字列であり、世代イベントなどの転記行とは型が異なる場合がある。
+
+| `event` | 主な追加項目 |
+| --- | --- |
+| `run_start`、`window_clamped` | 要求・実効窓長、ページ数、間隔、上限 |
+| `target_snapshot` | `container`、`container_id`、`image_id`、`started_at` |
+| `monitor_started` | `pid` |
+| `attach_check` | `attached`、アタッチ確認時刻の `at` |
+| `collector_start` | 監督プロセスの `pid` とコレクター開始時刻の `at` |
+| `effective_observation_start` | `mode` と集計に使う `at` |
+| `target_registration_result` | `ready.json` 由来の `attached` と `at` |
+| `run_window_decided`、`window_established` | 予定 `start`・`end`、成立を表す `value`、`drift_s` |
+| `cgroup_refresh` | `reason` と `result` |
+| `stop_reason`、`tracer_stop`、`run_actual_end` | 停止理由、`stopped_early`、終了時刻、監督記録のパスなど |
+| `convert_done`、`scan_done`、`match_done` | 成否と対象ファイル、イメージ、コンテナ、世代の識別情報 |
+| `first_evidence_summary` | `container`、`record`、`first_layout_reading`、`first_language_package_evidence` |
+| `generation_change` | `restarts.jsonl` の世代イベントの項目 |
+| `run_end` | 観測記録数と失敗・警告数、または空の対象集合を示す `population=empty` |
+
+`first_evidence_summary` は有効な追加入力の最初の取得時刻と、言語パッケージの confirmations にある最初の証拠時刻をまとめる。取得できない値は `null` になる。この行の `ts` は世代の予定終了時刻である。`generation_change` は照合処理後にまとめて転記するため、timeline の行順は時刻順とは限らない。
+
+#### 停止条件と終了確認
+
+監視はトレーサー起動前から始まり、`KL_WATCH_INTERVAL` の既定値 10 秒ごとに確認する。
+
+| 条件 | 設定と既定値 |
+| --- | --- |
+| トレーサー CPU がしきい値を 3 回連続で超過 | `KL_WATCH_CPU_CORES=1` |
+| `Lost N events` 通知件数が 3 回連続で増加 | 連続回数は 3 |
+| run ディレクトリの容量超過 | `KL_WATCH_RUN_BYTES=1073741824` |
+| run の親ディレクトリ全体の容量超過 | `KL_WATCH_ROOT_BYTES=4294967296` |
+| 出力先ファイルシステムの空き容量不足 | `KL_WATCH_FREE_BYTES=21474836480` |
+
+開始時点の空き容量が下限を下回る場合も観測を開始しない。Web 計測はなく、`KL_WATCH_WEB_FAILURES` は適用されない。トレーサーなしでは CPU と欠落通知の条件は適用されず、専用 cgroup なしでは CPU の条件を評価できない。
+
+予定窓の終了、SIGINT/SIGTERM、監視からの要求、観測プロセスが動いている間の監視プロセス消失は共通の停止経路に入る。監督対象の実行期限は `supervise -deadline` が別に管理し、トレーサーには準備予算・開始余裕・窓長・期限猶予の合計、コレクターには準備予算を除く合計を渡す。
+
+停止理由を `stop_request.txt` に保存し、`supervise` の SIGINT、SIGTERM、SIGKILL の順の停止処理を待つ。監督プロセスの待機が時間切れになった場合はその監督プロセスへ TERM を送り、再度待機する。監督プロセス自体へ SIGKILL は送らない。
+
+| 実行方法 | 終了確認 |
+| --- | --- |
+| 専用 cgroup | 監督記録が `status=exited` で、`termination_confirmed.measured=true` かつ `value=true` であることを要求 |
+| `-no-cgroup` | `status=exited` により直接の子の回収だけを確認し、子孫タスクの不在は未計測として理由を残す |
+
+監督プロセス自身の退出だけを子の終了証拠にしない。終了の事実とは別に、トレーサーには停止要求に応じた正常終了を要求し、自発終了、シグナル終了、非ゼロ終了を失敗として記録する。コレクターは予定サンプルを終えて窓終了前に正常終了しても、それだけでは失敗にしない。
+
+全対象の終了を確認して `termination_confirmed.txt` を書けた後に監視を止め、最終読み取り済みの専用 cgroup を削除する。終了確認不能なら監視と cgroup を残し、非ゼロで終了する。終了確認または後始末が完了しなければ、変換と照合を行わない。監視自身にも有限の待機上限を設け、上限到達は終了確認として扱わない。
+
+コレクター、トレーサー、cgroup 登録・更新、イベント変換、イメージスキャン、世代の照合などの必要な処理が失敗した場合は非ゼロで終了し、完了済みの結果は残す。開始時の対象集合が空で観測記録がない場合は、空であることを記録して正常終了する。
+
+### prod_summary.py の分類と出力
+
+```sh
+sudo python3 experiments/runtime-discovery/tools/prod_summary.py \
+  /var/tmp/runtime-discovery-prod/run-001 \
+  --container api
+```
+
+引数は `<run dir> [--before <RFC3339 ts>] [--after <RFC3339 ts>] [--container <name>]` である。`match/*.match_hc.json` と同じ基底ファイル名の `collect/*.json` を組にして読み、JSON 内のコンテナ名と開始時刻から世代を整理する。世代の並びは開始時刻順であり、ファイル名や `restarts.jsonl` から推測しない。
+
+#### 判定系列と有効な観測開始
+
+分類にはイベント証拠込みの判定を優先し、その判定欄が空の場合だけ読み取り専用の追加手法込み、さらに従来のルールへ戻る。`unobserved`、`unresolved`、`not_determined` は空ではないため、これらを理由に別の系列へ戻らない。下位理由には選んだ系列自身の factor を使う。
+
+有効な観測開始は、timeline の最初の `effective_observation_start` の `at` を読む。
+
+- トレーサーのアタッチを確認できた run は、その確認時刻を `mode=events` で記録する
+- アタッチ未確認またはイベント収集なしの run は、コレクターの監督記録の `started_at_wall` を `mode=procfs` で記録する
+- ランナーがコレクター開始時刻を取得できなかった場合は、予定窓開始を代用して timeline に記録する
+- 集計時にこのイベントまたは時刻がなければ開始は不明とし、別の時刻から補わない
+
+| 優先順 | 区分 | 条件 |
+| --- | --- | --- |
+| 1 | 確認済み `confirmed` | 選んだ系列が `confirmed` |
+| 2 | 判定不能（観測開始前に起動） `undeterminable_started_before_observation` | 未確認の `class=lang` で、世代開始と有効な観測開始が分かり、前者が厳密に早い |
+| 3 | 証拠なし `no_evidence` | 上記以外 |
+
+開始時刻が不明な場合に「観測開始前に起動」とは判定しない。確認済みの言語パッケージは、起動が観測開始より前でも確認済みのままである。
+
+#### 証拠なしの下位理由
+
+次の順序で最初に該当した理由を使う。
+
+| 下位理由 | 条件 |
+| --- | --- |
+| `permission_failure` | factor が `proc_denied` または `rootfs_denied` |
+| `no_observation` | factor が `no_observation`、`top_failed`、`proc_gone`、`event_no_observation`、または `observation_state=observation_failed` |
+| `mapping_unsupported` | factor が `no_file_list`、`lang_pkg_unmappable`、`db_absent`、`db_error`、`mapping_input_missing`、`event_path_unresolved` |
+| `mapping_unsupported` | 従来のルールを選んだ場合に限り、`confirmation_gap_class=E2` |
+| `drops` | 上記に該当しない言語パッケージで、その世代の `event_state` が `degraded` または `failed`、かつ所定の欠落カウンターが正 |
+| `drops_candidate` | 同じ言語パッケージの条件で、所定の欠落カウンターに正の値がない |
+| `unclassified` | どれにも該当しない |
+
+欠落の判定に使う `event_drops` の項目は `lost_events`、`lost_notifications`、`map_overflow`、`path_read_failures`、`path_truncations`、`convert_failures`、`enter_exit_unmatched`、`identity_unavailable`、`unmatched_identity_unavailable` である。境界の未対応片とフィルター前後の件数は欠落の証拠に使わず、自由記述の `event_notes` も使わない。イベント状態の劣化だけでは実測された欠落とせず、`drops_candidate` にとどめる。対応付け不能が判明している場合は、欠落よりもその理由を優先する。
+
+#### 集計表と CSV の列
+
+`prod_summary.md` は世代ごとの件数、証拠なしの下位理由別件数、複数世代がある場合の前後比較を出力する。Finding 数は各パッケージの `finding_count` を加算し、3 区分の合計が HIGH/CRITICAL Finding 数になる。パッケージ数は別に数え、Finding 数へ加算しない。
+
+| 出力 | 列 |
+| --- | --- |
+| 世代別件数表 | コンテナ名、世代番号、イメージ ID、開始時刻、HIGH/CRITICAL Finding 総数、3 区分の Finding 数、3 区分のパッケージ数 |
+| 下位理由表 | 下位理由、HIGH/CRITICAL Finding 数 |
+| 前後比較表 | コンテナ名、分類、パッケージ名、前後のバージョン、共通・追加・削除、前後の世代番号と状態、後の世代の最初の証拠時刻・種類、残る理由 |
+| `prod_summary.csv` の識別列 | `container`、`generation`、`image_id`、`container_started_at`、`package`、`version`、`class` |
+| `prod_summary.csv` の判定列 | `finding_count`、従来のルール・読み取り専用の追加手法込み・イベント証拠込みの各判定、`verdict_tier_used` |
+| `prod_summary.csv` の状態列 | `event_state`、`observation_state`、`state`、`subreason` |
+
+CSV は Finding を持つパッケージごとに 1 行で、元の各系列の判定を分類結果で上書きしない。前後比較表は Markdown に出力し、CSV は世代ごとの行を保持する。
+
+前後比較は既定で最初と最後の世代を使う。`--before` と `--after` は、それぞれ指定時刻までに開始した最新の世代を選び、候補がなければ既定の選択を保持する。同じ世代が選ばれた場合や世代が 1 つの場合は比較表の行を作らない。
+
+比較キーは分類・名前・インストール済みバージョンの組で、両側にあれば `common`、後だけなら `added`、前だけなら `removed` になる。この所属は HIGH/CRITICAL Finding を持つパッケージ集合に対するもので、Finding がなくなっただけでも比較上の削除になり得る。片側にない状態は `not_present` と表示する。最初の証拠は後の世代の同じ比較キーの confirmations から時刻が最も早いものを選び、`observed_at` と `source` を表示する。

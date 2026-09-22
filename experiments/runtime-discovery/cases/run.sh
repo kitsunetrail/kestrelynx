@@ -682,6 +682,30 @@ up_case_22() {
 # entrypoint uses to run the same image's workload under strace instead of
 # plainly — see tools/truth-run.sh. It is unset for every ordinary
 # measurement run.
+# stage_optime builds the optime helper (a tiny, dependency-free static Go binary; see
+# experiments/runtime-discovery/cmd/optime) and copies it into an image's own build
+# context directory so its Dockerfile can COPY it in - cases 26-28's own os-ops.sh calls
+# it for high-resolution CLOCK_MONOTONIC timing of curl/git/openssl, which a POSIX shell
+# cannot otherwise obtain without either a coarse (10ms) /proc/uptime reading or spawning
+# an extra process whose own latency would land inside the interval being measured. Skips
+# rebuilding an already-staged binary newer than its own source, so a batch of several
+# case-run.sh/load-run.sh calls in a row does not rebuild and recopy it every time.
+stage_optime() {
+	local dest_dir="$1" src="$here/../cmd/optime/main.go" dest
+	dest="$dest_dir/optime"
+	if [ -x "$dest" ] && [ "$dest" -nt "$src" ]; then
+		return 0
+	fi
+	command -v go >/dev/null 2>&1 || {
+		echo "stage_optime: go toolchain not found on PATH; cannot build $dest" >&2
+		return 1
+	}
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$dest" "$here/../cmd/optime" || {
+		echo "stage_optime: build failed for $dest_dir" >&2
+		return 1
+	}
+}
+
 # build_case_26/27/28 are the image-build half of up_case_26/27/28, split
 # out so a caller that needs the build finished (and the image ID settled)
 # before starting a timed measurement window can run it separately first.
@@ -689,9 +713,9 @@ up_case_22() {
 # keeps building the image exactly as before; running `run.sh build <case>`
 # first only means that second call hits Docker's own build cache and
 # returns immediately instead of spending the window on an uncached build.
-build_case_26() { docker build -t kl-case26 -f "$here/26/Dockerfile" "$here/images/26-python-webapp"; }
-build_case_27() { docker build -t kl-case27 -f "$here/27/Dockerfile" "$here/images/27-node-webapp"; }
-build_case_28() { docker build -t kl-case28 -f "$here/28/Dockerfile" "$here/images/28-java-app"; }
+build_case_26() { stage_optime "$here/images/26-python-webapp" && docker build -t kl-case26 -f "$here/26/Dockerfile" "$here/images/26-python-webapp"; }
+build_case_27() { stage_optime "$here/images/27-node-webapp" && docker build -t kl-case27 -f "$here/27/Dockerfile" "$here/images/27-node-webapp"; }
+build_case_28() { stage_optime "$here/images/28-java-app" && docker build -t kl-case28 -f "$here/28/Dockerfile" "$here/images/28-java-app"; }
 
 up_case_26() {
 	local dir extra_env=()

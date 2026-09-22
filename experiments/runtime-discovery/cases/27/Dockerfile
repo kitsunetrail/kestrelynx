@@ -22,8 +22,9 @@ RUN npm ci --no-audit --no-fund \
     && rm -rf /root/.npm /tmp/node-compile-cache
 COPY app.js /app/app.js
 COPY os-ops.sh /os-ops.sh
+COPY optime /usr/local/bin/optime
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /os-ops.sh /entrypoint.sh \
+RUN chmod +x /os-ops.sh /usr/local/bin/optime /entrypoint.sh \
     && mkdir -p /opt/fixture-repo \
     && cd /opt/fixture-repo \
     && git init -q \

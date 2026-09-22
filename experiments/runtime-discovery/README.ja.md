@@ -292,6 +292,185 @@ python3 experiments/runtime-discovery/tools/coverage_rank.py experiments/runtime
 
 順位比較は `<out dir>/AGGREGATE-rank.md` と `<out dir>/AGGREGATE-rank.csv` に出力される。
 
+### 負荷と権限の計測（ケース 26〜28）
+
+#### 負荷の計測
+
+負荷の計測には `load-run.sh` を使い、動作中のワークロードに途中から参加する `attach_running` で、コレクターとトレーサーの負荷、運用処理の所要時間、Web の応答時間を記録する。
+
+```sh
+sudo bash experiments/runtime-discovery/tools/load-run.sh 26 1 procfs 30 300
+```
+
+引数は次のとおりである。
+
+- 第 1 引数の `26` は `<case>` で、計測するケース番号を `26`・`27`・`28` から選ぶ必須引数
+- 第 2 引数の `1` は `<replicate>` で、同じ条件の反復を区別する番号として保存先名の `r<replicate>` に使われ、省略時は `1`
+- 第 3 引数の `procfs` は `<config>` で、観測なしの `none`、コレクターだけの `procfs`、コレクターと 512 ページのイベントバッファを使うトレーサーを動かす `events` から選び、省略時は `procfs`
+- 第 4 引数の `30` は `<interval>` で、サンプル開始間隔を正の整数の秒数で指定し、省略時は `30`
+- 第 5 引数の `300` は `<window>` で、観測窓を正の整数の秒数で指定し、省略時は `300`
+
+保存先は `experiments/runtime-discovery/out/<case>-load-<config>-<interval>-<window>-r<replicate>-attach_running/` になる。生の計測値とログから `load.json` が作成され、後述の `load.py` で `AGGREGATE-load.md` と `AGGREGATE-load.csv` に集計する。イベント収集を含める場合は第 3 引数を `events` に置き換える。
+
+観測による差を比較する対照 run は、同じケース、反復番号、間隔、観測窓で `none` を指定して実行する。
+
+```sh
+sudo bash experiments/runtime-discovery/tools/load-run.sh 26 1 none 30 300
+```
+
+引数は次のとおりである。
+
+- 第 1 引数の `26` は `<case>` で、比較する計測と同じケース番号
+- 第 2 引数の `1` は `<replicate>` で、比較する計測と同じ反復番号
+- 第 3 引数の `none` は `<config>` で、コレクターとトレーサーを起動せず、ワークロードとホスト側の Web リクエストを動かす指定
+- 第 4 引数の `30` は `<interval>` で、サンプリングには使わないが、比較する計測との対応付けに使う値
+- 第 5 引数の `300` は `<window>` で、比較する計測と同じ観測窓の秒数
+
+この例の保存先は `experiments/runtime-discovery/out/26-load-none-30-300-r1-attach_running/` になる。対照 run は observation を生成せず、運用処理、Web、Docker デーモンの CPU 使用量などを `load.json` に記録する。同じ条件への再実行は run ディレクトリを作り直すため、反復を残す場合は `<replicate>` を変える。
+
+`load-run.sh` はトレーサーとコレクターの起動前に `watch-run.sh` を開始する。監視は既定で 10 秒ごとに行い、各サンプルを `watch.jsonl` に保存する。次の条件で停止を要求する。
+
+- トレーサーの CPU 使用量が 1 コア相当を超える状態が 3 サンプル連続する
+- `Lost N events` の欠落通知件数が 3 サンプル連続で増える
+- run ディレクトリが 1 GiB を超える
+- 出力先全体が 4 GiB を超える
+- 出力先のファイルシステムの空き容量が 20 GiB を下回る
+- Web の応答が記録順に 3 回連続で失敗する
+
+環境変数 `KL_WATCH_INTERVAL`、`KL_WATCH_CPU_CORES`、`KL_WATCH_RUN_BYTES`、`KL_WATCH_ROOT_BYTES`、`KL_WATCH_FREE_BYTES`、`KL_WATCH_WEB_FAILURES` で、それぞれ監視間隔、CPU しきい値、run の容量上限、出力先全体の容量上限、空き容量の下限、Web の連続失敗回数を変更できる。容量はバイト単位で指定する。`KL_WATCH_HARD_DEADLINE_GRACE_S` は監視対象の実行期限に加える猶予秒数で、既定値は `120` である。
+
+停止要求は `stop_request.txt` に記録され、ランナーと `supervise` が停止処理を行う。監視は停止要求後も続き、終了確認と監視自体の上限を区別する。観測窓が開いた後の早期停止でも `load.json` に取得済みの計測値と理由を残す。詳細は [REFERENCE.ja.md](REFERENCE.ja.md#負荷と権限の計測) を参照する。
+
+#### 権限条件の確認
+
+イベント収集に必要な操作を権限条件ごとに確認するには、`privilege-run.sh` を使う。非 root 条件では、`KL_PRIV_USER` に既存の非特権ユーザーを指定する。
+
+```sh
+sudo KL_PRIV_USER=kltest bash experiments/runtime-discovery/tools/privilege-run.sh bpf_perfmon
+```
+
+引数は次のとおりである。
+
+- 第 1 引数の `bpf_perfmon` は `<condition>` で、root の `root`、`CAP_BPF` と `CAP_PERFMON` を付ける `bpf_perfmon`、さらに `CAP_DAC_READ_SEARCH` を付ける `bpf_perfmon_dac`、`CAP_SYS_ADMIN` を付ける `sysadmin` から選ぶ必須引数
+
+出力先は `experiments/runtime-discovery/out/privilege-<condition>.json` と `privilege-<condition>.md` で、操作ごとの生ログと `supervise.json` などは `privilege-<condition>-artifacts/` に保存される。
+
+例の `kltest` は既存の非特権ユーザー名に置き換える。スクリプトはユーザーを作成せず、非 root 条件を UID 0 で実行することも認めない。`root` 条件では `KL_PRIV_USER` の指定は不要である。準備済みの両バイナリに加えて、bpftrace、setcap、ネイティブの Docker Engine が必要になる。
+
+ケーパビリティは `/var/tmp` の専用作業ディレクトリに置く bpftrace と `runtime-events` のコピーへ付ける。システムの bpftrace、ビルド済みの `out/runtime-events`、sysctl は変更しない。全操作の終了と証拠の保存を確認できた場合に作業ディレクトリを削除し、確認できない場合は保存先を報告して非ゼロで終了する。
+
+#### 集計
+
+保存済みの負荷計測をまとめるには、`load.py` を使う。
+
+```sh
+python3 experiments/runtime-discovery/tools/load.py experiments/runtime-discovery/out
+```
+
+引数は次のとおりである。
+
+- 第 1 引数の `experiments/runtime-discovery/out` は省略可能な `<out dir>` で、負荷計測の run を探す親ディレクトリと集計結果の出力先を兼ね、省略時も `experiments/runtime-discovery/out`
+
+集計結果は `<out dir>/AGGREGATE-load.md` と `<out dir>/AGGREGATE-load.csv` に出力される。各 run の計測値に加えて、同じケース、間隔、観測窓、反復番号の `none` 対照との運用処理・Web の中央値の差を示す。
+
+対照の欠落、早期停止、観測窓の不成立、計測の未完了、イメージ ID の欠落や不一致などで比較が成立しない場合は、差分を理由付きの未計測として表示する。個々の計測値が取得できない場合もゼロで代用せず、`load.json` では `not_measured: <reason>`、集計表では `n/a (<reason>)` と表示する。
+
+### 稼働中コンテナの観測
+
+稼働中のコンテナに途中から参加する `attach_running` で観測し、再起動や同じ名前での再作成をまたいだ場合も、世代ごとに証拠を分けて保存する。`runtime-discovery` と `runtime-events` のバイナリは開発機でビルドして観測先へ転送しておく。
+
+#### 事前確認
+
+観測先の環境を確認するには、`prod-precheck.sh` を root で実行する。
+
+```sh
+sudo bash experiments/runtime-discovery/tools/prod-precheck.sh \
+  /var/tmp/runtime-discovery-prod/precheck 512
+```
+
+引数は次のとおりである。
+
+- 第 1 引数の `/var/tmp/runtime-discovery-prod/precheck` は必須の `<out dir>` で、確認結果の保存先として使われ、存在しなければ作成される
+- 第 2 引数の `512` は省略可能な `[pages]` で、`64`・`256`・`512`・`none` から選び、省略時は `512`
+
+カーネル、BTF、tracepoint、bpftrace と bpftool のバージョン、cgroup v2、procfs のマウントオプション、sysctl、lockdown、AppArmor、Docker のバージョンと cgroup driver、稼働中コンテナの識別情報、出力先の空き容量を記録する。結果は `<out dir>/precheck.json` と `precheck.md`、生の確認結果は `raw/` に保存する。
+
+bpftrace があれば、選択値にかかわらず 64・256・512 ページの全スクリプトを `--dry-run` で確認する。BTF、必須 tracepoint、cgroup v2、到達可能なネイティブ Docker Engine などの必須要件が欠けていれば非ゼロで終了する。イベント収集を選んだ場合は、bpftrace の存在と選択したスクリプトの dry-run 成功も必須になる。bpftool の欠落は記録するが、それだけでは失敗にしない。
+
+このスクリプトはコンテナの作成・起動・停止・変更や sysctl の変更を行わない。
+
+#### 稼働中コンテナへの途中参加
+
+`prod-observe.sh` は既存コンテナを観測し、観測できた各世代のイメージを Trivy でスキャンして、HIGH/CRITICAL の Finding を対象とする `match` を実行する。
+
+```sh
+sudo KL_PROD_PAGES=512 bash experiments/runtime-discovery/tools/prod-observe.sh \
+  /var/tmp/runtime-discovery-prod/run-001 300 api worker
+```
+
+引数は次のとおりである。
+
+- 第 1 引数の `/var/tmp/runtime-discovery-prod/run-001` は必須の `<out dir>` で、この run の記録と結果を保存するディレクトリ
+- 第 2 引数の `300` は必須の `<window seconds>` で、要求する観測窓を正の整数の秒数で指定する値
+- 第 3 引数以降の `api worker` は省略可能な `[container names...]` で、省略すると開始時に稼働中のコンテナを対象にする指定
+
+コンテナ名は観測対象に置き換える。観測窓は `KL_PROD_MAX_SECONDS` の既定値 1800 秒を上限とし、超過する要求は記録した上で短縮する。サンプル開始間隔は `KL_PROD_INTERVAL` で変更でき、既定値は 30 秒である。上限適用後の観測窓は、この間隔以上にする。
+
+主な環境変数は次のとおりである。
+
+- `KL_PROD_PAGES` は `64`・`256`・`512`・`none` から選び、既定値は `512`、`none` はトレーサーとイベント収集を使わない指定
+- `KL_TRIVY_CMD` はイメージスキャンに使うコマンドで、既定値は `trivy`、空白で引数に分割され、スキャン結果は標準出力から保存される
+- `KL_RD_BIN` と `KL_RE_BIN` は転送済みバイナリのパスで、既定値はそれぞれ `experiments/runtime-discovery/out/runtime-discovery` と `experiments/runtime-discovery/out/runtime-events`
+- `KL_PROD_ALLOW_UNMEASURED_LOAD=1` はトレーサーとコレクターの両方を `supervise -no-cgroup` で実行し、専用 cgroup 由来の負荷を理由付き未計測にする明示的な指定
+
+ネイティブ Docker Engine、Python 3、Trivy、両バイナリと関連スクリプトを用意し、イベント収集時は bpftrace も用意する。`runtime-events` はイベント収集を無効にしても時計と cgroup 表の取得に使う。
+
+監視はトレーサーの起動前に開始する。既定では 10 秒ごとに確認し、トレーサーの CPU が 1 コア相当を超える状態が 3 サンプル連続した場合、`Lost N events` の通知件数が 3 サンプル連続で増えた場合、run が 1 GiB を超えた場合、親ディレクトリ全体が 4 GiB を超えた場合、空き容量が 20 GiB を下回った場合に停止を要求する。
+
+`KL_WATCH_INTERVAL`、`KL_WATCH_CPU_CORES`、`KL_WATCH_RUN_BYTES`、`KL_WATCH_ROOT_BYTES`、`KL_WATCH_FREE_BYTES` で監視間隔と各しきい値を変更でき、容量はバイト単位で指定する。`KL_WATCH_HARD_DEADLINE_GRACE_S` は監督対象の実行期限に加える猶予秒数で、既定値は `120` である。Web リクエストは発行しないため、`KL_WATCH_WEB_FAILURES` による停止条件は適用されない。専用 cgroup を使わない場合はトレーサー CPU を計測できず、そのしきい値による停止判定も行えない。
+
+主な出力は次のとおりである。
+
+- `collect/` に世代ごとの観測記録と manifest を保存する
+- `match/` と `csv_hc/` に世代ごとの `match` 結果を保存する
+- `scans/` にイメージ ID ごとの Trivy 結果を保存する
+- `timeline.jsonl` に観測開始、登録結果、停止理由、スキャンと照合結果などを保存する
+- `restarts.jsonl` に検出した再起動・再作成と補正イベントを追記する
+- `run_window.json` に世代分割とは独立した run 全体の予定観測窓を保存する
+- `collector_supervise.json` と、トレーサーを使う場合の `tracer_supervise.json` に起動・停止・終了確認と負荷の記録を保存する
+- `watch.jsonl`、`watch.log`、`stop_request.txt` に監視結果と停止要求を保存する
+
+同じ ID の `StartedAt` 変更を再起動、同じ名前の別 ID への置き換えを再作成として検出し、新世代では対応付け用の入力を読み直す。旧世代と新世代の観測窓と証拠を分け、各世代のイメージ ID に対応するスキャン結果で照合する。
+
+スクリプトは対象コンテナを作成・起動・停止・変更せず、ワークロードも発行しない。停止処理は自身の観測プロセスに対して行う。必要な処理が失敗した場合は、完了済みの世代の結果を残して非ゼロで終了する。詳細は [REFERENCE.ja.md](REFERENCE.ja.md#稼働中コンテナの観測) を参照する。
+
+#### 証拠の 3 区分の集計
+
+保存済みの run は、`prod_summary.py` で集計する。
+
+```sh
+sudo python3 experiments/runtime-discovery/tools/prod_summary.py \
+  /var/tmp/runtime-discovery-prod/run-001
+```
+
+引数は次のとおりである。
+
+- 第 1 引数の `/var/tmp/runtime-discovery-prod/run-001` は必須の `<run dir>` で、観測結果を読み込むディレクトリと集計結果の保存先を兼ねる
+- `--before <RFC3339 ts>` と `--after <RFC3339 ts>` は再起動前後の比較に使う世代を選ぶ省略可能な時刻指定で、それぞれ指定時刻までに開始した最新の世代を選ぶ
+- `--container <name>` は指定したコンテナ名だけを集計する省略可能な指定
+
+結果は `<run dir>/prod_summary.md` と `prod_summary.csv` に保存する。イベント証拠込みの判定を優先し、その系列が実行されていない場合に読み取り専用の追加手法込み、従来のルールの順に判定を選ぶ。未確認という判定だけを理由に、別の系列へ切り替えることはない。
+
+| 区分 | 定義 |
+| --- | --- |
+| 確認済み | 選んだ系列の判定が `confirmed` |
+| 判定不能（観測開始前に起動） | 未確認の言語パッケージで、その世代の開始時刻が有効な観測開始より前 |
+| 証拠なし | 上記以外で、権限不足、観測なし、対応付け不能、欠落などの下位理由も記録 |
+
+有効な観測開始には、run の timeline に記録したアタッチ確認時刻を使い、アタッチ未確認またはイベント収集なしの場合はコレクターの開始時刻を使う。「判定不能」は観測開始前の条件を示す区分であり、それ以前の利用を確認したことにはならない。
+
+世代ごとの HIGH/CRITICAL Finding 数を 3 区分に分け、パッケージ数は別に表示する。複数世代のあるコンテナには、既定で最初と最後の世代を比較する再起動前後の表を作る。表にはパッケージの分類・名前・バージョン、前後の状態、共通・追加・削除の区別、後の世代で最初に記録された証拠の時刻と種類、残る理由を示す。バージョンが変わったパッケージは、旧バージョンの削除と新バージョンの追加として分ける。
+
 ## ケース一覧
 
 次の表は、各ケースのコンテナの動作と確認する内容を示す。ケース 1〜12 は[手動のサンプリング手順](REFERENCE.ja.md#手動での計測手順)を使い、ケース 13〜22 と 26〜28 は `case-run.sh`、ケース 23・24 は `attribution-control-run.sh` で実行する。ケース 13〜24 はイベント証拠と追加のパッケージ対応付けを調べ、ケース 26〜28 は正解データと網羅性の集計の対象とする。

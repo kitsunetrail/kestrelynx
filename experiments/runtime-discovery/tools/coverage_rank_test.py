@@ -109,7 +109,7 @@ class RowsForRunTests(unittest.TestCase):
         self.assertEqual(s0['false_promotions'], 0)
 
     def test_a_demoted_missed_package_counts_as_not_promoted_but_not_rank_unchanged(self):
-        # The exact scenario codex review flagged: a missed package whose
+        # A missed package whose
         # own Finding is DEMOTED (pushed to a later, numerically higher
         # rank by some other Finding's promotion) is not "rank unchanged"
         # (its adjusted rank differs from its baseline rank), but it was
@@ -225,7 +225,7 @@ class RowsForRunTests(unittest.TestCase):
         self.assertEqual(s2['missed_pkg_outside_top20'], 1)
 
     def test_a_false_positive_package_promoted_into_top20_is_counted(self):
-        # The exact scenario codex review asked to be checkable: a
+        # A
         # confirmed-but-actually-unused package (coverage.json's own
         # false_positives for this series) that computeG4's additional
         # rule lifted out of its baseline rank.
@@ -288,7 +288,7 @@ class RowsForRunTests(unittest.TestCase):
         self.assertEqual(s2['false_promotions'], 0)
 
     def test_a_false_positive_with_only_watch_findings_never_blocks_act_now(self):
-        # The exact scenario codex review flagged: a false positive
+        # A false positive
         # ("evil") that carries only a watch Finding must not make the
         # OTHER bucket, act_now, read as unresolvable just because evil
         # is absent from act_now's own top 20 - it was never going to be

@@ -1657,10 +1657,9 @@ class TarCompletenessTests(unittest.TestCase):
     """_verify_tar_completeness's own defense against exactly what
     tarfile.open()'s own member-by-member reading misses: a tar cut off
     at a point that still looks, to tarfile's own lenient header reader,
-    like an ordinary end of archive rather than a truncation - codex's
-    own review found that cutting a two-member tar at either 512 or 612
-    bytes still leaves plain tarfile.open() reporting one complete
-    member and no error at all."""
+    like an ordinary end of archive rather than a truncation: cutting a
+    two-member tar at either 512 or 612 bytes still leaves plain
+    tarfile.open() reporting one complete member and no error at all."""
 
     def test_complete_tar_passes(self):
         with tempfile.TemporaryDirectory() as d:

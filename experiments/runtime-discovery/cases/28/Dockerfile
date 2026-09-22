@@ -55,9 +55,10 @@ COPY --from=build /build/libs/guava-33.2.1-jre.jar /app/unused/guava-33.2.1-jre.
 COPY --from=build /build/libs/commons-codec-1.16.1.jar /app/unused/commons-codec-1.16.1.jar
 COPY --from=build /build/libs/commons-collections4-4.4.jar /app/unused/commons-collections4-4.4.jar
 COPY os-ops.sh /os-ops.sh
+COPY optime /usr/local/bin/optime
 COPY dump-runtime-modules.sh /dump-runtime-modules.sh
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /os-ops.sh /dump-runtime-modules.sh /entrypoint.sh \
+RUN chmod +x /os-ops.sh /usr/local/bin/optime /dump-runtime-modules.sh /entrypoint.sh \
     && mkdir -p /opt/fixture-repo \
     && cd /opt/fixture-repo \
     && git init -q \

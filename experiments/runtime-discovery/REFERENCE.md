@@ -1042,3 +1042,611 @@ go run ./experiments/runtime-discovery match \
 - Evidence can only raise priority.
 - Missing evidence establishes neither safety nor grounds for lowering priority.
 - A listener does not prove internet reachability.
+
+## Load and privilege measurement
+
+### supervise
+
+`supervise` starts the specified command directly as a child and handles placement in a dedicated cgroup v2, verification of the actual executable and privileges, stop requests, and final measurements.
+
+```sh
+sudo experiments/runtime-discovery/out/runtime-discovery supervise \
+  -cgroup /sys/fs/cgroup/runtime-discovery-example \
+  -record experiments/runtime-discovery/out/supervise.json \
+  -stop-request experiments/runtime-discovery/out/supervise-stop.txt \
+  -grace 10 -deadline 30 -- /usr/bin/sleep 20
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `-cgroup` | New cgroup v2 directory to create, which must not already exist |
+| `-record` | Required output path for the JSON supervision record |
+| `-user` | Existing user whose UID/GID is selected before exec, rejecting UID 0 |
+| `-expect-exe` | Path to compare exactly against `/proc/<pid>/exe` after startup |
+| `-expect-capeff` | Hexadecimal value to compare against the actual process's `CapEff`, ignoring letter case |
+| `-unset-env` | Comma-separated environment variable names to remove from the child's environment |
+| `-stop-request` | File checked once per second, with nonempty contents used as the stop reason |
+| `-grace` | Seconds to wait after SIGINT and again after SIGTERM, default `10` |
+| `-deadline` | Maximum seconds after startup before requesting a stop, with the default `0` disabling the deadline |
+| `-allow-unmeasured` | Continue without confirmed memory-controller availability and record memory as unmeasured with a reason |
+| `-keep-cgroup` | Retain the cgroup and counters after exit for the caller's final readings and removal |
+| `-no-cgroup` | Supervise without a dedicated cgroup and mark cgroup-derived fields unmeasured, mutually exclusive with `-cgroup` |
+| `-- cmd [args...]` | Command and arguments to start directly |
+
+- With a cgroup, supervision creates a new directory under `/sys/fs/cgroup` and attempts to enable available cpu and memory controllers through the ancestor hierarchy.
+- When `clone3` with `CLONE_INTO_CGROUP` works, the child runs inside the cgroup from its first instruction, recorded as `cgroup_method=clone3_cgroup_fd` and `placement_atomic.value=true`.
+- The fallback writes the actual PID to `cgroup.procs` immediately after startup, recorded as `cgroup_method=post_start_write_fallback` and `placement_atomic.value=false`.
+- Fallback counters omit some startup CPU and initial memory, making the load measurement incomplete for comparison.
+- A stop file, SIGINT/SIGTERM delivered to the supervisor, or the execution deadline initiates the same SIGINT, SIGTERM, and SIGKILL sequence.
+- The final wait after SIGKILL is five seconds, and an unconfirmed child exit produces `status=stop_unconfirmed` without an invented exit time or code.
+- A reaped child whose cgroup still contains descendant tasks produces `status=exited_residual_tasks`.
+- Under `-no-cgroup`, descendant absence cannot be established, so `termination_confirmed` remains unmeasured even when the child was reaped.
+- The supervisor's own exit code describes supervision and can be zero after successfully supervising a child that failed.
+
+#### Main supervise.json fields
+
+The record is written after startup verification and rewritten with the final state after stop handling. Independently measured fields use objects containing `measured`, `value`, and an optional `reason`; a `value` with `measured=false` is not a measurement.
+
+| Field | Meaning |
+| --- | --- |
+| `command`, `pid`, `actual_exe` | Started command, actual child PID, and executable read from procfs |
+| `real_uid`, `effective_uid`, `saved_uid`, `filesystem_uid` | Four UID values read from the actual process |
+| `cap_eff`, `attr_current`, `limits` | Actual effective capabilities, LSM attribute, and resource limits |
+| `exe_verified`, `uid_verified`, `capeff_verified`, `verification_error` | Executable, UID, and CapEff verification results and any inability to verify |
+| `cgroup`, `cgroup_method`, `placement_atomic` | Placement directory, method, and whether placement covered the first instruction |
+| `controllers_enabled`, `controller_warnings` | Controller enablement records and warnings |
+| `started_at_wall`, `started_at_monotonic_s` | Startup time and the monotonic reference whose zero is startup |
+| `exited_at_wall`, `exited_at_monotonic_s` | Time the child's exit was confirmed and elapsed seconds since startup |
+| `exit_code`, `exit_signal`, `wait_error` | Child exit code, terminating signal, and wait error |
+| `status` | `setup_failed`, `running`, `exited`, `exited_residual_tasks`, or `stop_unconfirmed` |
+| `stop_requested`, `stop_reason`, `deadline_exceeded` | Stop request, reason, and deadline status |
+| `termination_confirmed`, `residual_tasks` | Confirmation of child reaping and no remaining tasks, plus cgroup residual-task status |
+| `baseline_cpu_usage_usec`, `final_cpu_usage_usec` | Cumulative CPU usage before startup and after stop handling |
+| `baseline_memory_peak_bytes`, `final_memory_peak_bytes` | Cgroup memory peaks before startup and after stop handling |
+| `cgroup_removed` | Removal result or reason for retention or failed removal |
+
+`exit_code` is `null` when no exit was observed; a signal-terminated child records `-1` alongside `exit_signal`. `termination_confirmed` is measured true only when the child was reaped and the cgroup reported `populated=0`.
+
+### cgroup-stat and cgroup-remove
+
+`cgroup-stat` writes a cgroup's CPU, memory peak, and residual-task status to standard output as JSON.
+
+```sh
+experiments/runtime-discovery/out/runtime-discovery cgroup-stat "<cgroup v2 directory>"
+```
+
+- The single required positional argument is the cgroup v2 directory to read.
+- Output contains `path`, `cpu_usage_usec`, `memory_peak_bytes`, and `populated`.
+- CPU comes from `cpu.stat`'s `usage_usec`, memory from `memory.peak`, and residual-task status from `cgroup.events`'s `populated`.
+- Each reading succeeds or fails independently, so successful command completion does not establish that every field was measured.
+
+`cgroup-remove` waits for a cgroup to have no tasks, removes its directory, and writes the result to standard output as JSON.
+
+```sh
+sudo experiments/runtime-discovery/out/runtime-discovery cgroup-remove \
+  -wait 30 "<cgroup v2 directory>"
+```
+
+- The single required positional argument is the cgroup v2 directory to remove, and `-wait` defaults to `30` seconds.
+- Output contains `path`, `populated`, `removed`, and `waited_s`.
+- Emptiness is established from `cgroup.events` reporting `populated=0`, never inferred from the size of `cgroup.procs`.
+- An already-absent directory is reported as removed with a reason.
+- Unreadable state, remaining tasks after the wait, or failed removal records a reason and returns non-zero.
+- After final readings, remove a hierarchy retained with `-keep-cgroup` in child-first order, followed by the parent.
+
+### optime and operational command timing
+
+`optime -- cmd [args...]` starts a command as a child, measures elapsed time from startup handling through reaping with `CLOCK_MONOTONIC`, and writes one JSON line to standard output. The child command's stdout and stderr are discarded.
+
+- `stage_optime` in `cases/run.sh` builds a static binary with `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`.
+- The binary is staged at each case's `cases/images/*/optime`, and the Dockerfiles for cases 26 through 28 copy it to `/usr/local/bin/optime`.
+- Rebuilding is skipped when the staged executable is newer than `cmd/optime/main.go`.
+- Each image's `os-ops.sh` runs curl, git, and openssl through this helper.
+- The helper's `pid` and `starttime` identify the actual wrapped child command, with `starttime` recorded as zero when it cannot be read.
+- Duration uses a monotonic-clock difference truncated to microseconds, separately from wall-clock start and end times.
+
+| Output | Fields and meaning |
+| --- | --- |
+| `optime` stdout | `pid`, `starttime`, `start_wall`, `end_wall`, `duration_us`, `exit_code`, and `clock_source` |
+| Existing `operations.jsonl` fields | Preserved `id`, `ts`, `op`, and `ok`, with `op` set to `osops_curl`, `osops_git`, or `osops_openssl` |
+| Added `operations.jsonl` fields | `end_ts`, `duration_ms`, `exit_code`, `clock_source`, and `clock_resolution_ms` |
+| `duration_ms` | The helper's `duration_us` divided by 1000 and recorded in milliseconds with three decimal places |
+| `clock_source`, `clock_resolution_ms` | `CLOCK_MONOTONIC` and `0.001` |
+| `exit_code` | Child command exit code, with `ok` indicating whether it is zero |
+
+`duration_us` belongs to the helper's output and is not directly stored in the current `operations.jsonl`. The added fields preserve the original fields, allowing existing operation-sequence readers to continue working. Durations from older `operations.jsonl` files without timing fields are unmeasured with reasons.
+
+### load-run.sh and load.json
+
+Run `tools/load-run.sh <case> [replicate] [config] [interval] [window]` as root to measure cases 26 through 28 with `attach_running`. Defaults are replicate `1`, configuration `procfs`, interval `30` seconds, and window `300` seconds.
+
+| Configuration | Observation performed |
+| --- | --- |
+| `none` | No collector or tracer and no observation record |
+| `procfs` | Collector |
+| `events` | Collector and a 512-page nofilter tracer |
+
+Every configuration runs the same workload and host-side web requests. The runner waits for workload firing and the lazy phase to finish, starts monitoring, and completes attachment checks and cgroup registration for event runs before deciding the window start. That instant becomes the collector's `-phase-base`.
+
+The output directory is `experiments/runtime-discovery/out/<case>-load-<config>-<interval>-<window>-r<replicate>-attach_running/`.
+
+| File | Contents |
+| --- | --- |
+| `run.log`, `case.json`, `clock.json` | Run log, case definition, and clock conversion |
+| `container_id.txt`, `image_id.txt`, `fired_at.txt` | Container and image identities and the timestamp recorded after firing |
+| `collector_supervise.json`, `tracer_supervise.json` | Supervision records for the processes started |
+| `cgroup-<target>-wstart.json`, `cgroup-<target>-wend.json` | Window-start and window-end readings for applicable `collector`, `tracer`, and `docker` targets |
+| `cgroup-remove-<target>.json` | Removal records for `collector`, `tracer`, and `parent` |
+| `collect/` | Observation and manifest for configurations running a collector |
+| `trace.txt`, `trace.err`, `events.jsonl`, `cgroup-map.json` | Event configuration's trace, timestamped stderr, converted events, and cgroup table |
+| `trace-stdout-wstart-bytes.txt`, `trace-stdout-wend-bytes.txt`, `trace-stderr-wstart-bytes.txt`, `trace-stderr-wend-bytes.txt` | Trace output byte counts at window start and end |
+| `gtb-raw/` | `usage.jsonl`, `occurrences.jsonl`, `operations.jsonl`, `runtime-modules.jsonl`, and `docker-top.txt` |
+| `web_timing.jsonl`, `web_timing.err` | Host-side web response records and errors |
+| `watch_targets.txt`, `watch.jsonl`, `watch.log` | Monitoring targets, samples, and monitor process log |
+| `stop_request.txt`, `termination_confirmed.txt`, `stop_failures.txt` | Stop request, termination confirmation, and failed confirmation reasons when applicable |
+| `load.json` | Per-run load summary assembled from raw records by `load_run_assemble.py` |
+
+`stop_request.txt` is used for early stops and also for normal window-end shutdown when supervised targets exist. Use `stopped_early` and `stop_reason` in `load.json` to identify an early stop.
+
+#### Four checkpoints
+
+| Checkpoint | Source and meaning |
+| --- | --- |
+| `before_start` | The supervisor's `baseline_*` readings before child startup |
+| `window_start` | The runner's `cgroup-stat` readings when the common observation window opens |
+| `window_end` | The runner's `cgroup-stat` readings when the window closes, before requesting shutdown |
+| `process_exit` | The supervisor's `final_*` readings after child exit waiting or stop handling |
+
+- Collector and tracer CPU measurements are divided into `prep`, `window`, `drain`, and `total`.
+- `prep` spans before startup to window start, `window` spans window start to end, `drain` spans window end to the final reading, and `total` spans before startup to the final reading.
+- JSON field names are `collector_cpu_usage_delta_<segment>_us` and `tracer_cpu_usage_delta_<segment>_us`.
+- A collector that takes all scheduled samples and exits before window end retains its counters through `-keep-cgroup` for the window-end reading.
+- `collector_memory_peak_bytes` and `tracer_memory_peak_bytes` cover the cgroup's lifetime rather than only the window.
+- `docker_daemon_cpu_usage_delta_window_us` comes from direct window-start and window-end readings of the same daemon cgroup in every configuration.
+- Unreadable values and deltas from decreasing counters become unmeasured with reasons.
+
+#### Window establishment and measurement completion
+
+| Field | Meaning |
+| --- | --- |
+| `run_id`, `case`, `config`, `interval`, `window`, `replicate`, `sync` | Run conditions |
+| `container_id`, `image_id`, `fired_at` | Workload identities and the timestamp recorded after firing |
+| `window_start_wall`, `window_end_wall`, `window_end_planned_wall` | Window start, actual close, and planned end |
+| `tracer_exited_at_wall` | Exit time from the tracer supervision record or an unmeasured reason |
+| `window_established`, `window_start_drift_s` | Whether the planned window start was established and the runner's start drift |
+| `collector_first_sample_delay_s` | First collector sample's delay from its scheduled time |
+| `stopped_early`, `stop_reason` | Early-stop status and reason |
+| `measurement_complete`, `measurement_incomplete_reasons` | Supervision and observation completion decision and reasons |
+| `collector_valid_samples`, `collector_invalid_samples` | Valid and invalid counts from collector collection results |
+| `cgroup_cleanup`, `stop_failures`, `notes` | Cgroup removal results, failed stop confirmations, and interpretation notes |
+| `dump_logs_ok`, `watch_samples`, `watch_stop_reason` | Workload-log retrieval status, monitor sample count, and stop reason |
+
+The lead time before window start defaults to five seconds through `KL_WINDOW_LEAD_S`, and start tolerance defaults to two seconds through `KL_WINDOW_START_TOLERANCE_S`. Runner start drift or a first collector sample delay beyond the tolerance sets `window_established=false`.
+
+Reasons for `measurement_complete=false` include the following.
+
+- Missing supervision records, non-atomic or unverified cgroup placement, or unconfirmed termination.
+- Recorded cgroup removal failures or runner stop-confirmation failures.
+- A missing collector exit code or non-zero collector exit.
+- Missing observation or sample timing, fewer attempted samples than planned, or target inspection failure.
+- Missing collection results or no valid observation among them.
+- Unconfirmed tracer attachment or event collection in state `failed`.
+- A missing tracer exit time or exit before the planned window end.
+
+The planned sample count is `max(1, window // interval)`. A collector that attempts all scheduled samples and exits before window end is not incomplete merely because it exited then. `measurement_complete`, `window_established`, and `stopped_early` are independent fields, and individual unmeasured values and event degradation also require inspection.
+
+`comparison_blocker` is the comparison function in `load.py`, not a `load.json` field. It finds the `none` control with the same case, interval, window, and replicate number and blocks comparison for the following reasons.
+
+- No matching `none` control exists.
+- Either run stopped early.
+- Either run does not explicitly record `window_established=true`.
+- Either run does not explicitly record `measurement_complete=true`.
+- Planned window lengths differ.
+- Image IDs are missing or different.
+
+The aggregate table records the decision in `comparable_to_none` and `not_comparable_because`. Available absolute measurements remain visible when comparison is blocked, while median differences become unmeasured with reasons. A `none` row uses itself as the control without applying this comparison check, so measured medians have a self-difference of zero.
+
+#### Events, output growth, and workload
+
+- `events_total` and `events_attributed` count all events and target-container events whose `ts` falls inside the actual observation window.
+- `events_total_per_second` and `events_attributed_per_second` divide those counts by the actual window duration.
+- `events_outside_window` counts events not included in the window.
+- `drops` retains conversion-trailer loss information rather than applying the same timestamp filtering used for window event counts.
+- `drops` preserves `lost_events`, `lost_notifications`, `map_overflow`, `convert_failures`, `enter_exit_unmatched`, `enter_exit_unmatched_boundary`, `path_read_failures`, `path_truncations`, `identity_unavailable`, `unmatched_identity_unavailable`, `events_before_filter`, and `events_after_filter`.
+- `partial_events` follows the existing rule by summing path-read failures, path truncations, unmatched boundary halves, and unavailable identity.
+- `malformed_lines` counts unparseable lines in converted JSONL and is also added to the trailer's `convert_failures` when a trailer exists.
+- A missing trailer leaves loss fields unmeasured instead of zero, except that actually counted malformed lines can supply `convert_failures`.
+- `event_state` uses `not_attempted`, `failed`, `observed`, and `degraded`, with missing trailers, malformed lines, early stops, losses, and unmeasured categories contributing to degradation.
+- `trace_stdout_bytes` and `trace_stderr_bytes` are whole-trace sizes, while their `*_bytes_per_second` fields divide window-start/end byte increments by the actual window duration.
+- Separate `*_bytes_per_second_whole_lifetime` fields use the tracer's full lifetime as the denominator.
+- `run_dir_growth_bytes` is the sum of file sizes in the run directory, which started empty.
+
+`workload.curl`, `workload.git`, and `workload.openssl` summarize operational commands whose start and end in `operations.jsonl` both fall within the window. Commands crossing a boundary or having unknown timing count toward `boundary_crossing`, while wholly excluded commands count toward `outside_window`.
+
+- Each summary contains `n`, successful-command `median_ms`, `p95_ms`, and `max_ms`, and the failure count `failures`.
+- Median and p95 use nearest-rank percentiles without interpolation.
+- No matching operations produces a reason in `state`, and all-failed operations leave duration statistics unmeasured.
+- `workload.web` summarizes host-side requests issued on a planned five-second schedule.
+- Web requests use a two-second connection timeout and a four-second total limit, with successful curl completion and HTTP 2xx/3xx required for success.
+- `web_timing.jsonl` records `planned_ts`, `ts`, `seq`, `status`, `latency_ms`, `ok`, `curl_exit`, and `timeout_type`.
+- Web summaries add `success_count`, `timeout_count`, and `failure_count`, classifying only `operation_timeout` as a timeout.
+- Connection failures, resolution failures, empty replies, unsuccessful HTTP responses, and other errors count as non-timeout failures.
+
+### watch-run.sh stop conditions and bounds
+
+`tools/watch-run.sh <run dir> <out root dir> <targets file> <stop file>` is normally started by `load-run.sh`. Its required arguments are the run directory, shared output directory, monitoring targets file, and shared stop-request file.
+
+| Environment variable | Default and stop condition |
+| --- | --- |
+| `KL_WATCH_INTERVAL` | Sampling interval of `10` seconds |
+| `KL_WATCH_CPU_CORES` | Tracer CPU exceeds `1` core-equivalent for three consecutive samples |
+| `KL_WATCH_RUN_BYTES` | Run exceeds `1073741824` bytes |
+| `KL_WATCH_ROOT_BYTES` | Shared output exceeds `4294967296` bytes |
+| `KL_WATCH_FREE_BYTES` | Free space falls below `21474836480` bytes |
+| `KL_WATCH_WEB_FAILURES` | `3` consecutive web responses fail in recorded order |
+
+- An increasing loss-notification count for three consecutive samples also requests a stop, and that streak length has no environment override.
+- CPU core-equivalents divide the cgroup CPU delta by monotonic elapsed time from `/proc/uptime`, rather than the configured sampling interval.
+- A failed CPU reading discards the previous baseline, and the next successful reading establishes a new one.
+- Web failure streaks are evaluated response by response, so a later success in the same monitor sample does not undo a threshold already reached.
+- The monitor writes a stop reason to the shared file without directly signaling targets.
+- An existing nonempty stop reason is preserved.
+- Monitoring continues after a stop request, with samples in `watch.jsonl` and stop requests and monitoring-bound exits in `run.log`.
+
+#### Targets file
+
+| Key | Meaning |
+| --- | --- |
+| `tracer_pid`, `collector_pid` | Monitoring PIDs published by the runner, currently the respective `supervise` PIDs |
+| `tracer_cgroup`, `trace_err`, `web_timing` | Sources for CPU, loss notifications, and web responses |
+| `expect_tracer`, `expect_collector` | `0` or `1` indicating whether the run expects each supervised target, including before startup |
+| `min_until_epoch` | Planned observation-window end in epoch seconds |
+| `termination_confirmed_file` | File the runner writes only after confirming termination of every supervised target |
+| `residual_unconfirmed` | `1` when the runner has determined that termination cannot be confirmed |
+| `watch_until_epoch` | Absolute bound for the monitor itself in epoch seconds |
+
+The targets file is reread on every sample. Normal exit requires the expected monitoring PIDs to have been announced and exited, the planned window end to have passed, and a nonempty `termination_confirmed_file`. `residual_unconfirmed=1` prevents treating termination as confirmed. The older format without `expect_*` uses whether all announced PIDs have exited.
+
+Reaching `watch_until_epoch` records `WATCH_EXIT` with termination undetermined and exits with code 3. `load-run.sh` sets this bound from the planned window end plus `KL_RESIDUAL_WATCH_S`, which defaults to 1800 seconds, and also publishes a finite bound during preparation and after failed termination confirmation. Once every supervised target is confirmed stopped, the runner writes the confirmation file, stops monitoring, and removes cgroups. Otherwise, it leaves monitoring and cgroups in place and exits non-zero. The `none` configuration also monitors capacity and web responses, with the runner stopping the monitor after window-end or stop handling.
+
+Supervised process deadlines are managed separately by `supervise -deadline`. `load-run.sh` gives the tracer the sum of the preparation budget, window lead time, window length, and deadline allowance; the collector receives the same sum without the preparation budget. Defaults are `KL_PREP_BUDGET_S=180` and `KL_WATCH_HARD_DEADLINE_GRACE_S=120`.
+
+### privilege-run.sh operations and decisions
+
+Run `tools/privilege-run.sh <condition>` as root. Non-root conditions use the existing user named by `KL_PRIV_USER`; the script does not create an account.
+
+| Condition | Execution user and capabilities applied to copies |
+| --- | --- |
+| `root` | Run as root without applying capabilities to the copies |
+| `bpf_perfmon` | Non-root with `cap_bpf,cap_perfmon=ep` |
+| `bpf_perfmon_dac` | Non-root with `cap_bpf,cap_perfmon,cap_dac_read_search=ep` |
+| `sysadmin` | Non-root with `cap_sys_admin=ep` |
+
+Capabilities are applied to both private copies of bpftrace and `runtime-events` in a dedicated directory under `/var/tmp`. System executables and sysctls are unchanged. Results are saved as `out/privilege-<condition>.json` and `.md`, with raw evidence under `out/privilege-<condition>-artifacts/`. Here, `out/` means `experiments/runtime-discovery/out/`.
+
+| Operation key | Check and decision |
+| --- | --- |
+| `bpf_program_load` | Test the nofilter script with `--dry-run -v`, reporting completed loading as success, a load-stage error as failure, and an unknown stage as unreached |
+| `tracepoint_attach` | Use `attach-check` to confirm a known event from a normally started tracer, reporting success when confirmed, unreached when loading did not complete or the stage is unknown, and failure for other unconfirmed attachment |
+| `buffer_create_and_read` | After attachment confirmation, execute a unique marker in a temporary container, reporting success when it reaches the trace, failure when it does not, and unreached without confirmed attachment |
+| `cgroup_id_map` | Require child exit code zero from `runtime-events cgroup-map`, nonempty `entries`, empty `errors`, no entry `handle_error`, and an entry for this operation's own cgroup |
+
+- `result=success` means the operation's confirmation conditions were met.
+- `result=failure` means the privilege condition was established but the operation's check failed.
+- `result=unreached` means preparation failure, an unestablished privilege condition, an incomplete preceding stage, or an unknown reached stage prevented evaluation.
+- Unperformed conditions or runs without records receive no invented success or failure, and the current tool does not generate a fourth `result` value specifically for unperformed work.
+- A missing operation result file during summary assembly also defaults to `unreached` with a reason.
+- Operation `exit_code` and `exit_signal` describe the child, while `supervisor_exit_code` describes supervision.
+
+#### Stage heuristics and condition_established
+
+The bpftrace stage classifier uses heuristics over v0.25.0's free-text diagnostics. These are not machine-readable stage reports, and the rules apply in the following order.
+
+1. A `--dry-run` child exiting zero establishes successful loading.
+2. `Attached N probes` establishes completed loading.
+3. Attachment diagnostics such as `cannot attach probe` produce `attach_failed`, implying that loading itself completed.
+4. Compilation, verifier, or program-loading errors produce `load_failed`.
+5. Anything else remains `unknown`, without inferring the stage from the exit code alone.
+
+Each operation records `condition_established` separately from its result. It verifies the actual executable and, for non-root conditions, requires real and effective UIDs matching the requested user, a non-zero effective UID, and CapEff matching the requested capability set. The `root` condition inherits execution from the root runner and checks executable identity in its condition decision.
+
+- Successful verification records `condition_established=true`, while failed verification records `false` with an explanation in `condition_detail`.
+- Operations that never reached condition verification have `condition_established=null`.
+- An unestablished condition produces an unreached result with a `condition_not_established` reason, separately from operation failure under that condition.
+- `errno` uses only a number explicitly present in the log and otherwise remains `unknown`.
+- `denying_layer` heuristically classifies diagnostic wording as `perf_bpf_check`, `tracefs_dac`, `lsm`, or `unknown`.
+- The summary retains requested capabilities, binary SHA-256 hashes, three sysctl values, lockdown, and available per-operation procfs information.
+- `log_excerpt` contains at most the last 4000 characters, while artifacts retain complete logs and supervision records.
+- Unreached summaries primarily retain reasons and condition status, with details of started operations also available in artifact supervision records.
+
+The working directory is removed only after supervision records confirm termination of every started operation and evidence preservation succeeds. Missing supervision records, residual tasks, failed supervisor waits, or failed evidence preservation retain the original working directory, report reasons and its path, and produce a non-zero exit.
+
+### AGGREGATE-load columns
+
+`tools/load.py [out dir]` reads `load.json` from load run directories directly under the selected directory and creates `AGGREGATE-load.md` and `AGGREGATE-load.csv` with one row per run. The default directory is `experiments/runtime-discovery/out`.
+
+| Column | Meaning |
+| --- | --- |
+| `run`, `case`, `config`, `interval`, `window`, `replicate` | Run name and measurement conditions |
+| `stopped_early`, `stop_reason` | Early-stop status and reason |
+| `window_established`, `measurement_complete` | Window establishment and measurement completion |
+| `comparable_to_none`, `not_comparable_because` | Comparability with the matching control and blocking reason |
+| `collector_cpu_prep_s`, `collector_cpu_window_s`, `collector_cpu_drain_s`, `collector_cpu_total_s` | Collector CPU seconds by segment and in total |
+| `collector_memory_peak_bytes` | Collector cgroup memory peak |
+| `tracer_cpu_prep_s`, `tracer_cpu_window_s`, `tracer_cpu_drain_s`, `tracer_cpu_total_s` | Tracer CPU seconds by segment and in total |
+| `tracer_memory_peak_bytes` | Tracer cgroup memory peak |
+| `dockerd_cpu_window_s` | Docker daemon CPU seconds during the window |
+| `events_total`, `events_total_per_second`, `events_attributed`, `events_attributed_per_second` | Window event and attributed-event counts and rates |
+| `event_state`, `partial_events`, `malformed_lines` | Event state, partial-event count, and unparseable-line count |
+| `lost_events`, `lost_notifications`, `map_overflow`, `convert_failures`, `enter_exit_unmatched` | Loss, conversion failure, and unmatched in-window halves exposed in the aggregate |
+| `trace_stdout_bytes`, `trace_stdout_bytes_per_second`, `trace_stderr_bytes`, `trace_stderr_bytes_per_second` | Whole-trace sizes and window output growth rates |
+| `run_dir_growth_bytes` | Sum of file sizes in the run directory |
+| `<kind>_n`, `<kind>_median_ms`, `<kind>_p95_ms`, `<kind>_max_ms`, `<kind>_failures` | Statistics for each `<kind>` of `curl`, `git`, `openssl`, and `web` |
+| `<kind>_median_delta_ms` | Each median minus the matching `none` control's median |
+| `web_success_count`, `web_timeout_count`, `web_failure_count` | Successful web requests, timeouts, and other failures |
+
+CPU values are converted from microseconds in `load.json` to seconds rounded to three decimal places. Difference columns cover only operational command and web medians. Unmeasured values appear as `n/a (<reason>)`; detailed loss fields, boundary handling, and supervision records remain available alongside the aggregate.
+
+## Observing running containers
+
+Use `prod-precheck.sh` to check the observation environment and `prod-observe.sh` to observe existing containers with `attach_running`. Match observations separately for each generation, then use `prod_summary.py` to classify HIGH/CRITICAL Finding evidence into three states.
+
+### Restart tracking in collect
+
+| Flag | Meaning |
+| --- | --- |
+| `-track-restarts` | Detect restarts and re-creation and split records by generation, default `false` |
+| `-restarts-file` | JSONL path for appended generation events, default `<out-dir>/restarts.jsonl`, unused without `-track-restarts` |
+| `-load-unmeasured` | Nonempty reason string that disables cgroup load readings and records them as unmeasured |
+
+Restart tracking checks the Docker API during each sample.
+
+- A changed, nonempty `StartedAt` under the same container ID produces a `restart` event.
+- When `docker top` fails for the old ID, the collector lists running containers again and records `recreate` if another ID has the same name.
+- Missing `StartedAt` alone does not establish a restart, and failed listing or an absent replacement is checked again on the next sample.
+- Failures from the sample that detected the change remain with the old generation, while the new generation rereads layout information without inheriting package-index caches, evidence deduplication state, or auxiliary-input indexes.
+
+Each line in `restarts.jsonl` contains the following fields.
+
+| Field | Meaning |
+| --- | --- |
+| `kind` | `restart` or `recreate` |
+| `container_name` | Tracked name |
+| `old_container_id`, `new_container_id` | Container IDs before and after the change |
+| `image_id_before`, `image_id_after` | Image IDs before and after the change |
+| `started_at_before`, `started_at_after` | Start times before and after the change |
+| `detected_at` | Time the change or correction was detected |
+| `sample_id` | Sample that detected the change, omitted for correction events |
+
+#### Generation windows, pending changes, and corrections
+
+The old generation's `window.scheduled_end` closes when the change is detected, before the replacement is committed. The boundary prefers a parseable `StartedAt` for the new generation, falls back to `detected_at`, and is clamped to the planned window for the whole run. Once narrowed, the old generation's end is not extended by retries or further changes while replacement remains pending.
+
+If listing or inspecting the new ID fails, replacement remains pending and is retried on the next sample. The old generation's window stays closed. The new generation's start is calculated from the identity confirmed at commit time, using its `StartedAt` or the detection time clamped to the run window as `window.scheduled_start`. Its end is the run's planned end. Further changes during a pending replacement can leave a gap between the old generation's end and the committed generation's start.
+
+When the confirming inspect differs from the detected information, the original event is retained and a correction event is appended.
+
+- If detection had an empty `started_at_after` and confirmation supplies it, the correction fills the start time while retaining the original `kind` and old/new IDs.
+- If detection already had a start time and confirmation finds a different one, a further generation change is recorded from the detected new ID to the confirmed ID.
+- The further change's `kind` follows its own old/new IDs: `restart` for the same ID and `recreate` for different IDs.
+
+The committed generation attempts a fresh layout reading and records `generation_prepare_failed` if it fails. Evidence is not fabricated for intermediate generations that could not be observed.
+
+#### Per-generation record files
+
+A target with one generation uses `<name>__<run-key>.json`. Multiple generations use `<name>__<run-key>__gen1.json`, `__gen2.json`, and so on, numbered in observation order. `<name>` is the sanitized container name, falling back to its ID when empty. `<run-key>` includes case variant, permission, interval, window, phase, replicate, synchronization condition, and collection configuration. The manifest records each generation's container ID, name, and filename.
+
+Samples and evidence from older generations are not merged into later generations. Initial package-database reading cost is retained per generation. Steady-state collector and Docker daemon load measure the collector's whole sampling loop and are copied into every generation, so those values must not be summed across generations.
+
+### Unmeasured load and partial saves
+
+`-load-unmeasured "<reason>"` skips cgroup readings for the collector and Docker daemon and saves their steady-state and daemon load as `measured=false` with the reason. Memory peaks are also unmeasured. This prevents a process without a dedicated cgroup from attributing an inherited shared cgroup's load to itself. Initial package-database reading measurements are retained separately.
+
+When the sampling loop receives SIGTERM or SIGINT, it stops starting new samples and saves collected observations, load, per-generation files, and the manifest. This handles stop requests received during the sampling loop; it does not guarantee saving during preparation or after SIGKILL.
+
+- Manifest `errors` records the received signal and completed/planned sample counts.
+- Each target's final generation receives a `collector_stopped_early` failure.
+- Every unattempted planned sample receives a collection result with `proc_observe=top_failed`, `pkgdb_read=error`, and `valid=false`.
+- Older generations that already ended do not receive placeholders for samples missed after the signal.
+
+These invalid collection results let `match` distinguish an interrupted record from a smaller window that completed normally. Remaining valid observations produce `observation_state=partially_observed`; no valid observations produce `observation_failed`. Collection containing unattempted samples is treated as `collection_complete=false`.
+
+### prod-precheck.sh
+
+```sh
+sudo bash experiments/runtime-discovery/tools/prod-precheck.sh \
+  /var/tmp/runtime-discovery-prod/precheck 512
+```
+
+The script takes a required `<out dir>` and optional `[64|256|512|none]`, defaulting to `512`. It writes `precheck.json`, `precheck.md`, and raw check data under `raw/`.
+
+| precheck.json field | Contents |
+| --- | --- |
+| `generated_at`, `selected_pages` | Generation time and selected page count |
+| `kernel`, `btf` | Kernel information and BTF presence/details |
+| `tracepoints` | `present` and `required` for each tracepoint |
+| `bpftrace_version`, `bpftool_version` | Tool versions or missing-installation records |
+| `cgroup2`, `procfs_mount_options` | Cgroup v2 check and procfs mount options |
+| `sysctls` | `kernel/unprivileged_bpf_disabled`, `kernel/perf_event_paranoid`, and `kernel/yama/ptrace_scope` |
+| `lockdown`, `apparmor` | Lockdown, AppArmor enablement, the executing shell's profile, and related readings |
+| `docker` | Server version, OS, cgroup driver, and cgroup version |
+| `running_containers` | Running containers' `name`, `id`, `image_id`, and `started_at` |
+| `free_bytes_on_output_filesystem` | Free output-filesystem bytes, or `null` when unavailable |
+| `dry_run` | Dry-run results for the 64-, 256-, and 512-page scripts |
+| `hard_failures`, `ok` | Hard-requirement failures and overall result |
+
+Hard requirements include BTF, cgroup v2, a reachable native Docker Engine, enter/exit tracepoints for `open`, `openat`, and `openat2`, and `sched_process_exec`. The presence of `sys_enter_execve` is recorded but not required.
+
+When bpftrace is available, all three scripts are checked, but only the selected script's dry-run affects the hard-requirement result. `none` removes the bpftrace and selected-script success requirements; it does not disable the other checks, including BTF and required tracepoints. bpftool, free space, sysctls, and AppArmor readings have no additional threshold-based failure rules. A nonempty `hard_failures` produces exit code 1; errors such as invalid arguments or execution user produce exit code 2.
+
+The script does not operate on containers or change sysctls.
+
+### prod-observe.sh runs
+
+```sh
+sudo KL_PROD_PAGES=512 bash experiments/runtime-discovery/tools/prod-observe.sh \
+  /var/tmp/runtime-discovery-prod/run-001 300 api worker
+```
+
+Arguments are `<out dir> <window seconds> [container names...]`. Root and a reachable native Docker Engine are required. Omitted container names are resolved from the running-container list at startup; this does not continuously add newly appearing containers under other names.
+
+| Environment variable | Default and purpose |
+| --- | --- |
+| `KL_RD_BIN`, `KL_RE_BIN` | `experiments/runtime-discovery/out/runtime-discovery` and `experiments/runtime-discovery/out/runtime-events` |
+| `KL_PROD_PAGES` | `512`, selected from `64`, `256`, `512`, or `none` |
+| `KL_PROD_INTERVAL`, `KL_PROD_MAX_SECONDS` | Sample-start interval `30` seconds and window ceiling `1800` seconds |
+| `KL_PROD_ALLOW_UNMEASURED_LOAD` | `0`; setting `1` disables dedicated cgroups for both observation processes |
+| `KL_TRIVY_CMD` | `trivy`; split on spaces into command arguments, with scan results captured from stdout |
+| `KL_INTEL_SNAPSHOT` | Reuse the specified saved KEV/EPSS snapshot |
+| `KL_PROD_CGROUP_REFRESH_SECONDS` | Periodic cgroup-table refresh interval, `60` seconds |
+| `KL_PROD_RESTART_POLL_SECONDS` | Generation-event append polling interval, `5` seconds |
+| `KL_WINDOW_LEAD_S`, `KL_WINDOW_START_TOLERANCE_S` | Window-start lead time `5` seconds and allowed start delay `2` seconds |
+| `KL_STOP_TIMEOUT_S`, `KL_SUPERVISE_WAIT_S` | Per-signal-stage grace `15` seconds and supervisor wait `90` seconds |
+| `KL_PREP_BUDGET_S`, `KL_WATCH_HARD_DEADLINE_GRACE_S` | Preparation budget `180` seconds and execution-deadline allowance `120` seconds |
+| `KL_CGROUP_REMOVE_WAIT_S` | Wait for each cgroup removal, `30` seconds |
+| `KL_PROD_LOG_BYTES` | Limit used to retain the tail of `run.log`, `52428800` bytes |
+| `KL_ROOT` | Repository root for a relocated installation, defaulting to three directories above the script |
+
+After applying the ceiling, the observation window must still be at least the sample-start interval. The runner decides the whole-run window after tracer attachment checking and initial cgroup registration, then passes the same start to the collector as `-phase-base`. `scheduled_start` and `scheduled_end` in `run_window.json` remain independent of generation splitting and are also used for event conversion.
+
+With event collection enabled, the cgroup table is refreshed periodically and when polling detects additional lines in `restarts.jsonl`. Each generation is scanned by its own image ID, reusing scans for identical IDs. `match` covers HIGH/CRITICAL Findings without declaring ground truth.
+
+#### Directory layout
+
+| File or directory | Contents |
+| --- | --- |
+| `run.log`, `collect.log` | Runner and collector logs |
+| `targets_initial.json` | Initial target names, container IDs, image IDs/references, and start times |
+| `clock.json`, `cgroup-map.json` | Clock conversion information and cgroup table |
+| `run_window.json` | Planned whole-run observation window |
+| `timeline.jsonl`, `restarts.jsonl` | Processing milestones and generation events appended when detected |
+| `collect/` | Per-generation observations, manifest, and registration state in `ready.json` |
+| `collector_supervise.json`, `tracer_supervise.json` | Supervision records for observation processes that were started |
+| `cgroup-<target>-wstart.json`, `cgroup-<target>-wend.json` | Window-start/end readings for dedicated `collector` and `tracer` cgroups |
+| `cgroup-remove-<target>.json` | Removal records for `collector`, `tracer`, and `parent` |
+| `watch_targets.txt`, `watch.jsonl`, `watch.log` | Monitoring targets, samples, and log |
+| `stop_request.txt`, `termination_confirmed.txt` | Stop request and termination confirmation after its conditions are met |
+| `trace.txt`, `trace.err`, `convert.log`, `events.jsonl` | Event trace, timestamped stderr, conversion log, and converted events |
+| `scans/<image-key>.json`, `scans/<image-key>.err` | Trivy results and stderr keyed by image ID with `:` removed |
+| `case/<base>.json` | Per-generation case definition for matching |
+| `match/<base>.match_hc.json`, `match/<base>.log` | Per-generation match result and log |
+| `csv_hc/<base>/` | Per-generation match CSV files |
+| `intel.json` | Enrichment snapshot when a saved snapshot was not supplied |
+
+Files are absent when their stage was not reached or their feature was disabled. `restarts.jsonl` is also absent when no generation event occurred. `prod_summary.md` and `prod_summary.csv` are created by running `prod_summary.py` separately.
+
+#### timeline.jsonl fields
+
+Each line is JSON with `ts`, `event`, and event-specific fields. Additional values written by the runner are normally strings; copied generation events and other records can use different types.
+
+| `event` | Main additional fields |
+| --- | --- |
+| `run_start`, `window_clamped` | Requested/effective window, pages, interval, and ceiling |
+| `target_snapshot` | `container`, `container_id`, `image_id`, `started_at` |
+| `monitor_started` | `pid` |
+| `attach_check` | `attached` and attachment-confirmation time in `at` |
+| `collector_start` | Supervisor `pid` and collector startup time in `at` |
+| `effective_observation_start` | `mode` and the `at` used for classification |
+| `target_registration_result` | `attached` and `at` from `ready.json` |
+| `run_window_decided`, `window_established` | Planned `start`/`end`, establishment `value`, and `drift_s` |
+| `cgroup_refresh` | `reason` and `result` |
+| `stop_reason`, `tracer_stop`, `run_actual_end` | Stop reason, `stopped_early`, exit time, supervision-record path, and related fields |
+| `convert_done`, `scan_done`, `match_done` | Result and relevant file, image, container, or generation identity |
+| `first_evidence_summary` | `container`, `record`, `first_layout_reading`, `first_language_package_evidence` |
+| `generation_change` | Generation-event fields copied from `restarts.jsonl` |
+| `run_end` | Observation-record count and failure/warning counts, or `population=empty` |
+
+`first_evidence_summary` reports the earliest valid auxiliary-input reading and the earliest evidence timestamp among language-package confirmations. Missing values are `null`. Its `ts` is the generation's scheduled end. Generation events are copied after matching, so timeline line order is not necessarily chronological.
+
+#### Stop conditions and termination confirmation
+
+Monitoring starts before the tracer and samples every 10 seconds by default through `KL_WATCH_INTERVAL`.
+
+| Condition | Setting and default |
+| --- | --- |
+| Tracer CPU exceeds the threshold for three consecutive samples | `KL_WATCH_CPU_CORES=1` |
+| `Lost N events` notification count increases for three consecutive samples | Fixed streak of three |
+| Run directory exceeds its size limit | `KL_WATCH_RUN_BYTES=1073741824` |
+| Run parent directory exceeds its total size limit | `KL_WATCH_ROOT_BYTES=4294967296` |
+| Output filesystem falls below minimum free space | `KL_WATCH_FREE_BYTES=21474836480` |
+
+Observation also refuses to start when initial free space is below the minimum. There is no web measurement, so `KL_WATCH_WEB_FAILURES` does not apply. Tracer CPU and loss-notification conditions do not apply without a tracer, and the CPU condition cannot be evaluated without a dedicated cgroup.
+
+Planned window completion, SIGINT/SIGTERM, monitor requests, and loss of the monitor while observation processes remain active use the common stop path. `supervise -deadline` independently enforces process deadlines: preparation budget plus lead time, window, and deadline allowance for the tracer, and the same sum without preparation for the collector.
+
+The reason is saved in `stop_request.txt`, and the runner waits for the supervisor's SIGINT, SIGTERM, and SIGKILL sequence. If waiting for a supervisor times out, the runner sends TERM to that supervisor and waits again. It does not send SIGKILL to the supervisor itself.
+
+| Mode | Termination confirmation |
+| --- | --- |
+| Dedicated cgroup | Require `status=exited`, `termination_confirmed.measured=true`, and `value=true` in the supervision record |
+| `-no-cgroup` | Confirm only direct-child reaping through `status=exited`, retaining a reason that descendant absence was not measured |
+
+The supervisor's own exit is not sufficient evidence that its child terminated. Separately from physical termination, the tracer is expected to exit cleanly after a stop request; spontaneous exit, signal termination, and non-zero exit are recorded as failures. A collector that normally finishes all scheduled samples before window end is not failed merely for that early completion.
+
+After confirming every target's termination and successfully writing `termination_confirmed.txt`, the runner stops monitoring and removes dedicated cgroups whose final readings have been taken. If termination cannot be confirmed, monitoring and cgroups remain and the runner exits non-zero. Conversion and matching are skipped if termination confirmation or cleanup did not complete. The monitor has its own finite waiting bound, whose expiry is not treated as termination confirmation.
+
+Failures in required steps, including collector or tracer execution, cgroup registration/refresh, event conversion, image scanning, and generation matching, produce a non-zero exit while retaining completed results. An initially empty target population with no observation records is recorded as empty and exits successfully.
+
+### prod_summary.py classification and output
+
+```sh
+sudo python3 experiments/runtime-discovery/tools/prod_summary.py \
+  /var/tmp/runtime-discovery-prod/run-001 \
+  --container api
+```
+
+Arguments are `<run dir> [--before <RFC3339 ts>] [--after <RFC3339 ts>] [--container <name>]`. The script pairs `match/*.match_hc.json` with `collect/*.json` sharing the same base filename, then groups generations using container names and start times from the JSON content. Generations are ordered by start time, without inferring identity from filenames or `restarts.jsonl`.
+
+#### Verdict series and effective observation start
+
+Classification prefers the verdict including event evidence, falling back to the verdict including read-only additions and then the original rules only when the later verdict field is empty. `unobserved`, `unresolved`, and `not_determined` are nonempty verdicts and do not trigger fallback. Sub-reasons use the selected series' own factor.
+
+The effective observation start is the `at` value of the first `effective_observation_start` event in the timeline.
+
+- Runs with confirmed tracer attachment record that confirmation time with `mode=events`.
+- Runs without confirmed attachment or without event collection record the collector supervision record's `started_at_wall` with `mode=procfs`.
+- If the runner cannot obtain collector startup time, it records the planned window start as a substitute.
+- If the summary finds no such event or timestamp, the start remains unknown rather than being inferred from another time.
+
+| Priority | State | Condition |
+| --- | --- | --- |
+| 1 | Confirmed, `confirmed` | The selected series reports `confirmed` |
+| 2 | Undeterminable (started before observation), `undeterminable_started_before_observation` | An unconfirmed `class=lang` package with known generation and effective observation starts, where the former is strictly earlier |
+| 3 | No evidence, `no_evidence` | Everything else |
+
+An unknown start does not establish that the generation started before observation. A confirmed language package remains confirmed even when its generation started earlier.
+
+#### No-evidence sub-reasons
+
+The first applicable reason in this order is used.
+
+| Sub-reason | Condition |
+| --- | --- |
+| `permission_failure` | Factor is `proc_denied` or `rootfs_denied` |
+| `no_observation` | Factor is `no_observation`, `top_failed`, `proc_gone`, or `event_no_observation`, or `observation_state=observation_failed` |
+| `mapping_unsupported` | Factor is `no_file_list`, `lang_pkg_unmappable`, `db_absent`, `db_error`, `mapping_input_missing`, or `event_path_unresolved` |
+| `mapping_unsupported` | `confirmation_gap_class=E2`, only when the original rules were selected |
+| `drops` | An otherwise unexplained language package whose generation has `event_state=degraded` or `failed` and a positive designated loss counter |
+| `drops_candidate` | The same language-package condition without a positive designated loss counter |
+| `unclassified` | None of the above |
+
+The designated `event_drops` fields are `lost_events`, `lost_notifications`, `map_overflow`, `path_read_failures`, `path_truncations`, `convert_failures`, `enter_exit_unmatched`, `identity_unavailable`, and `unmatched_identity_unavailable`. Unmatched boundary halves, before/after-filter counts, and free-text `event_notes` are not used as loss evidence. Event degradation alone remains `drops_candidate`, rather than measured loss. An established mapping shortfall takes precedence over loss.
+
+#### Summary tables and CSV columns
+
+`prod_summary.md` contains per-generation counts, no-evidence sub-reason counts, and a before/after comparison when multiple generations exist. Finding counts sum each package's `finding_count`, with the three states adding to the HIGH/CRITICAL Finding total. Package counts are separate and are not added to Finding counts.
+
+| Output | Columns |
+| --- | --- |
+| Per-generation count table | Container, generation, image ID, start time, total HIGH/CRITICAL Findings, Finding counts for the three states, and package counts for the three states |
+| Sub-reason table | Sub-reason and HIGH/CRITICAL Finding count |
+| Before/after table | Container, class, package, versions before/after, common/added/removed membership, generations and states before/after, earliest later-generation evidence time/type, and remaining reason |
+| `prod_summary.csv` identity columns | `container`, `generation`, `image_id`, `container_started_at`, `package`, `version`, `class` |
+| `prod_summary.csv` verdict columns | `finding_count`, the verdicts from the original rules, including read-only additions, and including event evidence, plus `verdict_tier_used` |
+| `prod_summary.csv` state columns | `event_state`, `observation_state`, `state`, `subreason` |
+
+CSV has one row per package carrying Findings and preserves the original verdicts separately from classification. The before/after table is written to Markdown; CSV retains per-generation rows.
+
+The comparison defaults to the first and last generations. `--before` and `--after` each select the latest generation that had started by the specified timestamp, retaining the default selection if no candidate exists. No comparison rows are produced when both selections identify the same generation or only one generation exists.
+
+The comparison key is class, name, and installed version. A key present on both sides is `common`, only afterward is `added`, and only beforehand is `removed`. Membership refers to the population carrying HIGH/CRITICAL Findings, so losing those Findings can count as removal from the comparison. An absent side is displayed as `not_present`. The earliest evidence is selected from confirmations for that exact key in the later generation, displaying its `observed_at` and `source`.

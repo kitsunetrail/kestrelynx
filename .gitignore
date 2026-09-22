@@ -10,6 +10,10 @@
 # Runtime discovery measurement output (never commit collected observations)
 /experiments/runtime-discovery/out/
 
+# optime, staged into each coverage-validation case's own Docker build context by
+# cases/run.sh's stage_optime (built from experiments/runtime-discovery/cmd/optime)
+/experiments/runtime-discovery/cases/images/*/optime
+
 # Python documentation hooks
 __pycache__/
 

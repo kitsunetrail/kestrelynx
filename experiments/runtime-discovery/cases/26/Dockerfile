@@ -40,8 +40,9 @@ RUN mkdir -p /opt/fixture-repo \
        git commit -q -m "digest input"
 COPY server.py /server.py
 COPY os-ops.sh /os-ops.sh
+COPY optime /usr/local/bin/optime
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /os-ops.sh /entrypoint.sh
+RUN chmod +x /os-ops.sh /usr/local/bin/optime /entrypoint.sh
 ENV CASE_ID=26
 ENV HEALTH_URL=http://127.0.0.1:8000/health
 ENTRYPOINT ["/entrypoint.sh"]

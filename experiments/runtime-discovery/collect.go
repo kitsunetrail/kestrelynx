@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -47,6 +48,9 @@ func runCollect(args []string) error {
 	auxScanDepth := fs.Int("aux-scan-depth", 8, "how many directory levels below each conventional installation root to search for module directories")
 	cgroupPath := fs.String("cgroup-path", "", "cgroup v2 directory to measure this collector in (default: the collector's own cgroup from /proc/self/cgroup, which is only this collector's cost if it was started in a cgroup of its own)")
 	dockerCgroupPath := fs.String("docker-cgroup-path", defaultDockerServiceCgroup, "cgroup v2 directory of the Docker daemon, whose cpu.stat covers the ps processes docker top starts")
+	loadUnmeasured := fs.String("load-unmeasured", "", "when non-empty, records this run's steady-state and Docker-daemon load tiers as not_measured with this reason instead of reading any cgroup at all - for a caller that started this process with no dedicated cgroup of its own (e.g. supervise -no-cgroup), where reading /proc/self/cgroup would silently attribute a shared cgroup's load (other processes included) to this run instead of admitting nothing was actually isolated")
+	trackRestarts := fs.Bool("track-restarts", false, "detect a target restarting (same id, new StartedAt) or being re-created (new id, same name) during the window; finalize the affected generation's record as it stands, take a fresh layout reading, and continue sampling the new generation into a record of its own, instead of reporting every remaining sample as a restart failure against the old one")
+	restartsFile := fs.String("restarts-file", "", "path of the JSON Lines file each detected generation change is appended to as it happens (default: <out-dir>/restarts.jsonl); unused unless -track-restarts is set")
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "usage: %s collect [flags]\n\nSamples every running container's procfs-visible evidence over Docker's API, writing one record file per container.\n\nflags:\n", os.Args[0])
 		fs.PrintDefaults()
@@ -131,26 +135,13 @@ func runCollect(args []string) error {
 
 	manifest := Manifest{GeneratedAt: time.Now().UTC(), SocketPath: *socket}
 
-	// A target's record and the collection state that reads into it are
-	// one thing and are kept as one.
-	//
-	// They were separate, and a preparation that failed then left the
-	// state pointing into a record that was thrown away: the next attempt
-	// built a fresh record and the state's index into the old one no
-	// longer addressed anything. Retrying is the ordinary case here — a
-	// container is watched for until it is ready — so the two have to
-	// survive a failed attempt together, or not at all.
-	type target struct {
-		id     string
-		record *ContainerRecord
-		state  *containerCollectState
-		// prepared is set only when preparation actually completed. It is
-		// what a retry consults: a record holding a partial reading from a
-		// failed attempt is not a prepared target, and counting readings
-		// instead let one such reading stand in for a completed
-		// preparation.
-		prepared bool
+	restartsPath := strings.TrimSpace(*restartsFile)
+	if restartsPath == "" {
+		restartsPath = filepath.Join(*outDir, "restarts.jsonl")
 	}
+
+	// target is defined in collect_restart.go, alongside the restart- and
+	// re-creation-tracking it needs to be visible to.
 	var order []string
 	byID := map[string]*target{}
 
@@ -274,33 +265,107 @@ func runCollect(args []string) error {
 	}
 
 	// Steady-state load: this collector process's own cgroup v2 accounting,
-	// snapshotted before and after the whole sampling loop.
+	// snapshotted before and after the whole sampling loop. Skipped
+	// entirely under -load-unmeasured: a caller that placed this process
+	// with no cgroup of its own has no dedicated cgroup path to read in
+	// the first place, and /proc/self/cgroup would resolve to whatever
+	// cgroup this process happens to have inherited (the caller's own
+	// shell, or a shared parent), whose load includes other processes -
+	// reading it would attribute that shared load to this run rather than
+	// admitting nothing here was actually isolated.
+	loadUnmeasuredReason := strings.TrimSpace(*loadUnmeasured)
 	selfDir := *cgroupPath
 	var selfCgroupErr error
-	if selfDir == "" {
-		selfDir, selfCgroupErr = selfCgroupDir()
-	}
 	var selfBefore, dockerBefore cgroupSnapshot
-	if selfCgroupErr == nil {
-		selfBefore = readCgroupSnapshot(selfDir, true)
-	} else {
-		selfBefore.CPUErr, selfBefore.MemoryErr = selfCgroupErr, selfCgroupErr
+	if loadUnmeasuredReason == "" {
+		if selfDir == "" {
+			selfDir, selfCgroupErr = selfCgroupDir()
+		}
+		if selfCgroupErr == nil {
+			selfBefore = readCgroupSnapshot(selfDir, true)
+		} else {
+			selfBefore.CPUErr, selfBefore.MemoryErr = selfCgroupErr, selfCgroupErr
+		}
+		dockerBefore = readCgroupSnapshot(*dockerCgroupPath, false)
 	}
-	dockerBefore = readCgroupSnapshot(*dockerCgroupPath, false)
+
+	// A stop-condition monitor (or an operator) asking this process to stop
+	// is not the same thing as it crashing: whatever samples were already
+	// taken are still a valid, if shorter, window, and are worth saving
+	// exactly the way a window that ran to its own scheduled end is. Before
+	// this, the default behavior of an unhandled SIGTERM/SIGINT was to
+	// exit immediately, discarding every sample already in memory, since
+	// records are only written once, at the very end of this function.
+	// Catching the signal here turns that into an early but still ordered
+	// finish: no new sample is started, and everything below this loop —
+	// the self-cgroup snapshot, the per-generation file writes — still
+	// runs.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	var stoppedEarly bool
+	var stopSignal os.Signal
+	samplesTaken := 0
 
 	for k := 0; k < sampleCount; k++ {
 		sampleID := fmt.Sprintf("s%d", k)
 		scheduledStart := windowStart.Add(time.Duration(k**interval) * time.Second)
 		if wait := time.Until(scheduledStart); wait > 0 {
-			time.Sleep(wait)
+			select {
+			case <-time.After(wait):
+			case stopSignal = <-sigCh:
+				stoppedEarly = true
+			}
+		} else {
+			select {
+			case stopSignal = <-sigCh:
+				stoppedEarly = true
+			default:
+			}
 		}
+		if stoppedEarly {
+			break
+		}
+		samplesTaken++
 		actualStart := time.Now()
 
 		for _, t := range targets {
 			if t.record.InspectError != "" {
 				continue
 			}
-			collectContainerSample(ctx, client, t.record, sampleID, *psArgs, t.state)
+			ev := collectContainerSample(ctx, client, t.record, sampleID, *psArgs, t.state, *trackRestarts)
+			if ev == nil {
+				continue
+			}
+			ev.SampleID = sampleID
+			if werr := appendGenerationEvent(restartsPath, *ev); werr != nil {
+				manifest.Errors = append(manifest.Errors, fmt.Sprintf("record generation change for %s: %v", ev.ContainerName, werr))
+			}
+			// Closing the current generation's own window end happens
+			// unconditionally, before attempting to commit a replacement:
+			// this is what keeps a same-id restart's later events from
+			// staying attributable to the old generation, and it must not
+			// wait on rolloverGeneration ever succeeding — a new
+			// generation whose inspect keeps failing for the rest of the
+			// run leaves this same record, already narrowed here, as the
+			// target's sole and final one.
+			closeGenerationEnd(t.record, *ev, windowStart, windowEnd)
+			correction, rerr := rolloverGeneration(ctx, client, t, *ev, runKey, windowID, phaseBase, phaseBaseFrom, windowStart, windowEnd, registrations, *auxInputs, limits, *psArgs)
+			if rerr != nil {
+				manifest.Errors = append(manifest.Errors, rerr.Error())
+			}
+			// A non-nil correction means the container had already moved on
+			// again by the time rolloverGeneration's own confirmation
+			// inspect ran: ev's own StartedAt described a generation that
+			// never lived long enough to be observed, so the commit above
+			// is against the correction's identity, not ev's, and that
+			// correction is recorded here as its own generation-change
+			// event rather than silently folded into ev's.
+			if correction != nil {
+				if werr := appendGenerationEvent(restartsPath, *correction); werr != nil {
+					manifest.Errors = append(manifest.Errors, fmt.Sprintf("record generation change for %s: %v", correction.ContainerName, werr))
+				}
+			}
 		}
 
 		endedAt := time.Now()
@@ -314,27 +379,89 @@ func runCollect(args []string) error {
 		}
 	}
 
-	selfAfter := cgroupSnapshot{CPUErr: selfCgroupErr, MemoryErr: selfCgroupErr}
-	if selfCgroupErr == nil {
-		selfAfter = readCgroupSnapshot(selfDir, true)
+	var steadyState, dockerLoad CgroupLoad
+	if loadUnmeasuredReason != "" {
+		steadyState = CgroupLoad{Measured: false, Error: loadUnmeasuredReason, MemoryPeakMeasured: false, MemoryError: loadUnmeasuredReason}
+		dockerLoad = CgroupLoad{Measured: false, Error: loadUnmeasuredReason, MemoryPeakMeasured: false, MemoryError: loadUnmeasuredReason}
+	} else {
+		selfAfter := cgroupSnapshot{CPUErr: selfCgroupErr, MemoryErr: selfCgroupErr}
+		if selfCgroupErr == nil {
+			selfAfter = readCgroupSnapshot(selfDir, true)
+		}
+		dockerAfter := readCgroupSnapshot(*dockerCgroupPath, false)
+		steadyState = cgroupLoadDelta(selfDir, selfBefore, selfAfter)
+		dockerLoad = cgroupLoadDelta(*dockerCgroupPath, dockerBefore, dockerAfter)
 	}
-	dockerAfter := readCgroupSnapshot(*dockerCgroupPath, false)
-	steadyState := cgroupLoadDelta(selfDir, selfBefore, selfAfter)
-	dockerLoad := cgroupLoadDelta(*dockerCgroupPath, dockerBefore, dockerAfter)
+
+	if stoppedEarly {
+		manifest.Errors = append(manifest.Errors, fmt.Sprintf(
+			"collector stopped early after %d of %d planned samples: received signal %v", samplesTaken, sampleCount, stopSignal))
+	}
 
 	for _, t := range targets {
-		t.record.Load = LoadMeasurement{InitialDBRead: t.state.initialDBRead, SteadyState: steadyState, DockerDaemon: dockerLoad}
-		if t.record.InspectError == "" {
-			t.record.Failures = append(t.record.Failures, loadFailures(t.record.Load)...)
+		// The current generation's own initial-database-read cost is still
+		// only on its state; every generation of this target — this one
+		// and every one restart tracking already finalized into t.prior —
+		// shares the same whole-run steady-state and daemon figures, since
+		// those measure the one collector process for its entire run
+		// rather than any single container's generation.
+		t.record.Load.InitialDBRead = t.state.initialDBRead
+		gens := append(append([]*ContainerRecord{}, t.prior...), t.record)
+		for i, g := range gens {
+			g.Load.SteadyState, g.Load.DockerDaemon = steadyState, dockerLoad
+			if g.InspectError == "" {
+				g.Failures = append(g.Failures, loadFailures(g.Load)...)
+			}
+			if stoppedEarly && i == len(gens)-1 {
+				// Only the target's last (still-active) generation was cut
+				// short by the signal; any earlier one in gens already
+				// ended through its own rollover, on its own terms.
+				g.Failures = append(g.Failures, Failure{
+					Step: "collector_stopped_early",
+					Message: fmt.Sprintf(
+						"received signal %v after %d of %d planned samples; the window ended early rather than at its scheduled end, and this record covers only the samples actually taken",
+						stopSignal, samplesTaken, sampleCount),
+				})
+				// match's own completeness judgment (observation_state,
+				// collection_complete) is computed entirely from
+				// len(CollectionResults) and how many of those are Valid —
+				// it has no other way to learn that a window was cut short,
+				// since a stopped-early record otherwise looks exactly like
+				// one that was simply given a smaller sample count on
+				// purpose. A placeholder, explicitly invalid result for
+				// every sample this window called for but never reached
+				// makes the true, planned total visible to that
+				// computation, the same way a "top_failed" sample already
+				// does for a container that could not be listed at all —
+				// this reuses that same, already-handled combination
+				// rather than a new, unrecognized one.
+				for k := samplesTaken; k < sampleCount; k++ {
+					g.CollectionResults = append(g.CollectionResults, CollectionResult{
+						SampleID:    fmt.Sprintf("s%d", k),
+						ProcObserve: "top_failed",
+						PkgdbRead:   "error",
+						Valid:       false,
+					})
+				}
+			}
+			base := sanitizeFileName(g.Subject.Docker.ContainerName, g.Subject.Docker.ContainerID) + "__" + runKeyFileTag(runKey)
+			fileName := base + ".json"
+			if len(gens) > 1 {
+				// A target that never changed generation keeps the plain
+				// name a run's other files already use; one that did is
+				// split one file per generation, numbered in the order
+				// they were observed, so a later restart's evidence is
+				// never in the same file as the generation before it.
+				fileName = fmt.Sprintf("%s__gen%d.json", base, i+1)
+			}
+			if err := writeJSON(filepath.Join(*outDir, fileName), g); err != nil {
+				manifest.Errors = append(manifest.Errors, fmt.Sprintf("write %s: %v", fileName, err))
+				continue
+			}
+			manifest.Containers = append(manifest.Containers, ManifestEntry{
+				ContainerID: g.Subject.Docker.ContainerID, ContainerName: g.Subject.Docker.ContainerName, File: fileName,
+			})
 		}
-		fileName := sanitizeFileName(t.record.Subject.Docker.ContainerName, t.id) + "__" + runKeyFileTag(runKey) + ".json"
-		if err := writeJSON(filepath.Join(*outDir, fileName), t.record); err != nil {
-			manifest.Errors = append(manifest.Errors, fmt.Sprintf("write %s: %v", fileName, err))
-			continue
-		}
-		manifest.Containers = append(manifest.Containers, ManifestEntry{
-			ContainerID: t.id, ContainerName: t.record.Subject.Docker.ContainerName, File: fileName,
-		})
 	}
 
 	return writeManifest(*outDir, manifest)
@@ -879,7 +1006,19 @@ func (o *procObservation) outcome() string {
 // namespace identity verified both before and after the reads, per-process
 // procfs evidence, path resolution against the package database generation
 // in force at this sample, and listening sockets.
-func collectContainerSample(ctx context.Context, client *dockerClient, rec *ContainerRecord, sampleID, psArgs string, state *containerCollectState) {
+// collectContainerSample runs one sample of rec's current generation.
+//
+// When trackRestarts is set and the container's identity no longer matches
+// what rec was built from — the same id reporting a new StartedAt, or the
+// id no longer answering at all — this sample is still recorded exactly as
+// it always was (a poisoned, invalidated sample against the generation
+// that was actually being read), but the mismatch is also returned as a
+// GenerationEvent so the caller can start a new generation for whatever
+// replaced it rather than reporting every remaining sample as the same
+// restart failure. When trackRestarts is not set, or no mismatch is found,
+// the return value is nil and nothing about this function's behavior
+// differs from before restart tracking existed.
+func collectContainerSample(ctx context.Context, client *dockerClient, rec *ContainerRecord, sampleID, psArgs string, state *containerCollectState, trackRestarts bool) *GenerationEvent {
 	fail := func(step string, gen ProcessGeneration, err error) {
 		rec.Failures = append(rec.Failures, Failure{Step: step, SampleID: sampleID, Generation: gen, Message: err.Error()})
 	}
@@ -892,7 +1031,13 @@ func collectContainerSample(ctx context.Context, client *dockerClient, rec *Cont
 		result.ProcObserve = "top_failed"
 		result.PkgdbRead = "error" // never attempted: no PIDs to resolve a rootfs through
 		rec.CollectionResults = append(rec.CollectionResults, result)
-		return
+		if trackRestarts {
+			// The id this record was tracking may have been removed
+			// outright (a re-creation) rather than merely restarted, in
+			// which case nothing further will ever be read through it.
+			return detectRecreate(ctx, client, rec)
+		}
+		return nil
 	}
 
 	var pids []int
@@ -914,16 +1059,20 @@ func collectContainerSample(ctx context.Context, client *dockerClient, rec *Cont
 	// The container itself must still be the one that was inspected: a
 	// restart between samples reuses the name and the ID but is a
 	// different set of processes and a different rootfs.
-	containerStable, startedAtNow := true, rec.Docker.StartedAt
+	containerStable, startedAtNow, imageIDNow := true, rec.Docker.StartedAt, rec.Subject.Docker.ImageID
 	if insp, ierr := client.inspectContainer(ctx, rec.Subject.Docker.ContainerID); ierr != nil {
 		fail("top_failed", ProcessGeneration{}, fmt.Errorf("re-inspect: %w", ierr))
 		containerStable = false
 	} else {
-		startedAtNow = insp.State.StartedAt
+		startedAtNow, imageIDNow = insp.State.StartedAt, insp.Image
 		if rec.Docker.StartedAt != "" && startedAtNow != "" && startedAtNow != rec.Docker.StartedAt {
 			containerStable = false
 			fail("top_failed", ProcessGeneration{}, fmt.Errorf("container restarted during the window: StartedAt was %q, is now %q", rec.Docker.StartedAt, startedAtNow))
 		}
+	}
+	var genEvent *GenerationEvent
+	if trackRestarts {
+		genEvent = classifyRestart(rec.Subject.Docker.ContainerName, rec.Subject.Docker.ContainerID, rec.Subject.Docker.ImageID, rec.Docker.StartedAt, imageIDNow, startedAtNow, time.Now().UTC())
 	}
 
 	// Pass 1: identity before the reads. A generation whose own identity
@@ -1393,6 +1542,7 @@ func collectContainerSample(ctx context.Context, client *dockerClient, rec *Cont
 		}
 		rec.PathResolution = append(rec.PathResolution, pendingPaths[o.pid]...)
 	}
+	return genEvent
 }
 
 // aggregateProcObserve reduces a sample's per-generation outcomes to the

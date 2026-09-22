@@ -170,8 +170,8 @@ func TestPackageDBFileInfoReexaminesEveryReadingForDirectoryChanges(t *testing.T
 	}
 }
 
-// TestPackageDBSymlinksReexaminesEveryReadingForNewSymlinks checks the
-// review fix for (2): the cached per-generation list is only ever which
+// TestPackageDBSymlinksReexaminesEveryReadingForNewSymlinks checks that
+// the cached per-generation list is only ever which
 // paths the database names, never which of them are symlinks — a plain
 // file the database lists can turn into a symlink without the database's
 // own generation changing at all, and a reading has to notice that on its
@@ -235,7 +235,7 @@ func TestPackageDBSymlinksReexaminesEveryReadingForNewSymlinks(t *testing.T) {
 }
 
 // TestPackageDBSymlinkCacheReuseStillRespectsThisSampleOwnBudget checks
-// the review fix for (7): the cached per-generation path list (see
+// that the cached per-generation path list (see
 // TestPackageDBSymlinksReexaminesEveryReadingForNewSymlinks) is still
 // scored against each reading's own current, shared budget — a reading
 // whose narrower sources (alternatives, the bin directories) already used

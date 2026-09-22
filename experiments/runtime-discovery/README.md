@@ -292,6 +292,185 @@ The arguments are as follows.
 
 Ranking comparisons are written to `<out dir>/AGGREGATE-rank.md` and `<out dir>/AGGREGATE-rank.csv`.
 
+### Load and privilege measurement for cases 26 through 28
+
+#### Measuring load
+
+Use `load-run.sh` to record collector and tracer load, operational command durations, and web response times while joining an already-running workload with `attach_running`.
+
+```sh
+sudo bash experiments/runtime-discovery/tools/load-run.sh 26 1 procfs 30 300
+```
+
+The arguments are as follows.
+
+- The first argument, `26`, is `<case>`, a required case number selected from `26`, `27`, or `28`.
+- The second argument, `1`, is `<replicate>`, a number that distinguishes repetitions under the same conditions, appears as `r<replicate>` in the run directory name, and defaults to `1`.
+- The third argument, `procfs`, is `<config>`, selected from `none` for no observation, `procfs` for the collector alone, or `events` for the collector and a tracer with 512 event buffer pages, and defaults to `procfs`.
+- The fourth argument, `30`, is `<interval>`, the interval between sample starts in positive integer seconds, and defaults to `30`.
+- The fifth argument, `300`, is `<window>`, the observation window in positive integer seconds, and defaults to `300`.
+
+The run directory is `experiments/runtime-discovery/out/<case>-load-<config>-<interval>-<window>-r<replicate>-attach_running/`. Raw measurements and logs are assembled into `load.json`, which the `load.py` command below aggregates into `AGGREGATE-load.md` and `AGGREGATE-load.csv`. Replace the third argument with `events` to include event collection.
+
+Run the control with `none` and the same case, replicate number, interval, and observation window to compare the effect of observation.
+
+```sh
+sudo bash experiments/runtime-discovery/tools/load-run.sh 26 1 none 30 300
+```
+
+The arguments are as follows.
+
+- The first argument, `26`, is `<case>`, the same case number as the measurement being compared.
+- The second argument, `1`, is `<replicate>`, the same replicate number as the measurement being compared.
+- The third argument, `none`, is `<config>`, which runs the workload and host-side web requests without starting a collector or tracer.
+- The fourth argument, `30`, is `<interval>`, unused for sampling in this configuration but used to pair the control with the measurement.
+- The fifth argument, `300`, is `<window>`, the same observation-window duration in seconds as the measurement being compared.
+
+This example saves its results in `experiments/runtime-discovery/out/26-load-none-30-300-r1-attach_running/`. The control generates no observation record and saves operational command timing, web timing, Docker daemon CPU usage, and other measurements in `load.json`. Rerunning the same conditions recreates the run directory, so change `<replicate>` to retain repetitions.
+
+`load-run.sh` starts `watch-run.sh` before starting the tracer and collector. Monitoring runs every 10 seconds by default and saves each sample in `watch.jsonl`. It requests a stop under the following conditions.
+
+- Tracer CPU usage exceeds one core-equivalent for three consecutive samples.
+- The count of `Lost N events` notifications increases for three consecutive samples.
+- The run directory exceeds 1 GiB.
+- The shared output directory exceeds 4 GiB.
+- Free space on the output filesystem falls below 20 GiB.
+- Three consecutive web responses fail in recorded order.
+
+The environment variables `KL_WATCH_INTERVAL`, `KL_WATCH_CPU_CORES`, `KL_WATCH_RUN_BYTES`, `KL_WATCH_ROOT_BYTES`, `KL_WATCH_FREE_BYTES`, and `KL_WATCH_WEB_FAILURES` override the sampling interval, CPU threshold, per-run size limit, shared output size limit, minimum free space, and consecutive web failure threshold, respectively. Size values are in bytes. `KL_WATCH_HARD_DEADLINE_GRACE_S` sets the allowance added to supervised process deadlines and defaults to `120` seconds.
+
+Stop requests are recorded in `stop_request.txt`, and the runner and `supervise` perform the stop sequence. Monitoring continues after a stop request and distinguishes confirmed termination from its own monitoring bound. An early stop after the observation window opens still preserves available measurements and reasons in `load.json`. See [REFERENCE.md](REFERENCE.md#load-and-privilege-measurement) for details.
+
+#### Checking privilege conditions
+
+Use `privilege-run.sh` to check the operations needed for event collection under each privilege condition. For non-root conditions, set `KL_PRIV_USER` to an existing unprivileged user.
+
+```sh
+sudo KL_PRIV_USER=kltest bash experiments/runtime-discovery/tools/privilege-run.sh bpf_perfmon
+```
+
+The arguments are as follows.
+
+- The first argument, `bpf_perfmon`, is the required `<condition>`, selected from `root` to run as root, `bpf_perfmon` for `CAP_BPF` and `CAP_PERFMON`, `bpf_perfmon_dac` to add `CAP_DAC_READ_SEARCH`, or `sysadmin` for `CAP_SYS_ADMIN`.
+
+Outputs are `experiments/runtime-discovery/out/privilege-<condition>.json` and `privilege-<condition>.md`, with per-operation raw logs, `supervise.json` records, and other evidence under `privilege-<condition>-artifacts/`.
+
+Replace `kltest` with an existing unprivileged username. The script neither creates a user nor allows a non-root condition to run as UID 0. The `root` condition does not require `KL_PRIV_USER`. In addition to both prepared binaries, the command requires bpftrace, setcap, and the native Docker Engine.
+
+Capabilities are applied to copies of bpftrace and `runtime-events` in a dedicated working directory under `/var/tmp`. The system bpftrace, the built `out/runtime-events`, and sysctls remain unchanged. The working directory is removed once every operation's termination and evidence preservation are confirmed; otherwise, the script reports its location and exits non-zero.
+
+#### Aggregation
+
+Use `load.py` to aggregate saved load measurements.
+
+```sh
+python3 experiments/runtime-discovery/tools/load.py experiments/runtime-discovery/out
+```
+
+The arguments are as follows.
+
+- The first argument, `experiments/runtime-discovery/out`, is the optional `<out dir>`, both the parent directory searched for load measurement runs and the output directory for aggregated results, and defaults to `experiments/runtime-discovery/out`.
+
+Aggregated results are written to `<out dir>/AGGREGATE-load.md` and `<out dir>/AGGREGATE-load.csv`. Each row includes the run's measurements and differences in operational command and web median durations against the `none` control with the same case, interval, observation window, and replicate number.
+
+Differences are reported as unmeasured with reasons when comparison is blocked by a missing control, an early stop, an unestablished window, an incomplete measurement, or missing or different image IDs. Unavailable individual measurements also retain reasons instead of becoming zero, using `not_measured: <reason>` in `load.json` and `n/a (<reason>)` in the aggregate tables.
+
+### Observing running containers
+
+Use `attach_running` to join existing containers and keep evidence separate for each generation across restarts or re-creation under the same name. Build the `runtime-discovery` and `runtime-events` binaries on a development machine and transfer them to the observation environment beforehand.
+
+#### Precheck
+
+Run `prod-precheck.sh` as root to check the observation environment.
+
+```sh
+sudo bash experiments/runtime-discovery/tools/prod-precheck.sh \
+  /var/tmp/runtime-discovery-prod/precheck 512
+```
+
+The arguments are as follows.
+
+- The first argument, `/var/tmp/runtime-discovery-prod/precheck`, is the required `<out dir>`, which stores the results and is created if missing.
+- The second argument, `512`, is the optional `[pages]`, selected from `64`, `256`, `512`, or `none`, and defaults to `512`.
+
+The script records the kernel, BTF, tracepoints, bpftrace and bpftool versions, cgroup v2, procfs mount options, sysctls, lockdown, AppArmor, Docker version and cgroup driver, running container identities, and free space on the output filesystem. Results are saved as `<out dir>/precheck.json` and `precheck.md`, with raw results under `raw/`.
+
+When bpftrace is available, all three scripts for 64, 256, and 512 pages are checked with `--dry-run`, regardless of the selected value. The script exits non-zero when a hard requirement is missing, including BTF, required tracepoints, cgroup v2, or a reachable native Docker Engine. Event collection also requires bpftrace and a successful dry-run of the selected script. Missing bpftool is recorded but does not itself cause failure.
+
+The script does not create, start, stop, or modify containers, or change sysctls.
+
+#### Joining running containers
+
+`prod-observe.sh` observes existing containers, scans each observed generation's image with Trivy, and runs `match` against HIGH/CRITICAL Findings.
+
+```sh
+sudo KL_PROD_PAGES=512 bash experiments/runtime-discovery/tools/prod-observe.sh \
+  /var/tmp/runtime-discovery-prod/run-001 300 api worker
+```
+
+The arguments are as follows.
+
+- The first argument, `/var/tmp/runtime-discovery-prod/run-001`, is the required `<out dir>`, which stores this run's records and results.
+- The second argument, `300`, is the required `<window seconds>`, a positive integer specifying the requested observation window.
+- The remaining arguments, `api worker`, are the optional `[container names...]`, defaulting to containers running at startup when omitted.
+
+Replace the container names with the intended targets. `KL_PROD_MAX_SECONDS` caps the observation window at 1800 seconds by default; larger requests are logged and shortened. `KL_PROD_INTERVAL` sets the interval between sample starts and defaults to 30 seconds. The window after applying the cap must be at least this interval.
+
+The main environment variables are as follows.
+
+- `KL_PROD_PAGES` selects `64`, `256`, `512`, or `none`, defaults to `512`, and disables the tracer and event collection when set to `none`.
+- `KL_TRIVY_CMD` selects the image-scanning command, defaults to `trivy`, is split into arguments on spaces, and has its scan output captured from stdout.
+- `KL_RD_BIN` and `KL_RE_BIN` specify the transferred binary paths, defaulting to `experiments/runtime-discovery/out/runtime-discovery` and `experiments/runtime-discovery/out/runtime-events`, respectively.
+- `KL_PROD_ALLOW_UNMEASURED_LOAD=1` explicitly runs both tracer and collector through `supervise -no-cgroup`, leaving dedicated-cgroup load measurements unmeasured with reasons.
+
+Prepare a native Docker Engine, Python 3, Trivy, both binaries, and the supporting scripts, plus bpftrace when collecting events. `runtime-events` is also used for clock and cgroup-table collection when events are disabled.
+
+Monitoring begins before tracer startup. By default, it checks every 10 seconds and requests a stop if tracer CPU exceeds one core-equivalent for three consecutive samples, the count of `Lost N events` notifications increases for three consecutive samples, the run exceeds 1 GiB, its parent directory exceeds 4 GiB, or free space falls below 20 GiB.
+
+`KL_WATCH_INTERVAL`, `KL_WATCH_CPU_CORES`, `KL_WATCH_RUN_BYTES`, `KL_WATCH_ROOT_BYTES`, and `KL_WATCH_FREE_BYTES` override the monitoring interval and thresholds; size values are in bytes. `KL_WATCH_HARD_DEADLINE_GRACE_S` sets the allowance added to supervised process deadlines and defaults to `120` seconds. No web requests are issued, so the `KL_WATCH_WEB_FAILURES` condition does not apply. Without a dedicated cgroup, tracer CPU cannot be measured and cannot trigger its threshold condition.
+
+The main outputs are as follows.
+
+- `collect/` stores per-generation observation records and the manifest.
+- `match/` and `csv_hc/` store per-generation `match` results.
+- `scans/` stores Trivy results by image ID.
+- `timeline.jsonl` records observation startup, registration results, stop reasons, scanning and matching results, and other milestones.
+- `restarts.jsonl` appends detected restarts, re-creations, and correction events.
+- `run_window.json` stores the planned window for the whole run, independently of generation splitting.
+- `collector_supervise.json` and, when a tracer is used, `tracer_supervise.json` record startup, stopping, termination confirmation, and load.
+- `watch.jsonl`, `watch.log`, and `stop_request.txt` store monitoring results and stop requests.
+
+A changed `StartedAt` under the same ID is detected as a restart, and replacement by another ID under the same name as re-creation. Mapping inputs are read again for the new generation. Observation windows and evidence are separated by generation, and each generation is matched against the scan for its own image ID.
+
+The script does not create, start, stop, or modify target containers, or issue a workload. Stop handling applies to its own observation processes. A required-step failure produces a non-zero exit while retaining results for completed generations. See [REFERENCE.md](REFERENCE.md#observing-running-containers) for details.
+
+#### Aggregating the three evidence states
+
+Use `prod_summary.py` to summarize a saved run.
+
+```sh
+sudo python3 experiments/runtime-discovery/tools/prod_summary.py \
+  /var/tmp/runtime-discovery-prod/run-001
+```
+
+The arguments are as follows.
+
+- The first argument, `/var/tmp/runtime-discovery-prod/run-001`, is the required `<run dir>`, both the input directory and the summary output directory.
+- `--before <RFC3339 ts>` and `--after <RFC3339 ts>` optionally select generations for the before/after comparison, each choosing the latest generation that had started by the specified time.
+- `--container <name>` optionally restricts the summary to one container name.
+
+Results are saved as `<run dir>/prod_summary.md` and `prod_summary.csv`. Classification prefers the verdict including event evidence, then falls back to the verdict including read-only additions and finally the original rules when the later series did not run. An unconfirmed verdict alone does not cause fallback to another series.
+
+| State | Definition |
+| --- | --- |
+| Confirmed | The selected series reports `confirmed` |
+| Undeterminable (started before observation) | An unconfirmed language package whose generation started before the effective observation start |
+| No evidence | Everything else, with sub-reasons such as permission failure, no observation, unsupported mapping, or loss |
+
+The effective observation start uses the attachment-confirmation time recorded in the run's timeline, or collector startup when attachment was unconfirmed or events were disabled. “Undeterminable” describes a condition that predates observation; it does not establish earlier use.
+
+The summary partitions each generation's HIGH/CRITICAL Finding count into the three states and reports package counts separately. For containers with multiple generations, a before/after table compares the first and last generations by default. It shows package class, name and version, states before and after, common/added/removed membership, the earliest recorded evidence time and type in the later generation, and the remaining reason. A version change produces separate removal and addition entries.
+
 ## Cases
 
 The following table shows each case's container behavior and what it checks. Cases 1 through 12 use the [manual sampling procedure](REFERENCE.md#manual-measurement), cases 13 through 22 and 26 through 28 use `case-run.sh`, and cases 23 and 24 use `attribution-control-run.sh`. Cases 13 through 24 investigate event evidence and added package mapping, while cases 26 through 28 are used for ground truth and coverage scoring.

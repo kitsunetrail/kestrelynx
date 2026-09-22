@@ -183,8 +183,8 @@ func TestSymlinkOwnedDifferentlyOnEachHopConfirmsBoth(t *testing.T) {
 	}
 }
 
-// TestResolveSymlinkChainCrossesTheSameLinkTwiceWithoutLooping checks the
-// review fix for (c): a link to its own containing directory ("/self" ->
+// TestResolveSymlinkChainCrossesTheSameLinkTwiceWithoutLooping checks that
+// a link to its own containing directory ("/self" ->
 // ".") is crossed once for each repeated path component that names it, and
 // each crossing is well-defined — this is not a cycle, and only the hop
 // count (mirrored from resolveInRoot and truth.py's own resolver), never
@@ -204,8 +204,8 @@ func TestResolveSymlinkChainCrossesTheSameLinkTwiceWithoutLooping(t *testing.T) 
 	}
 }
 
-// TestOriginalOwnerAloneDoesNotHideAmbiguityOnTheResolvedSide checks the
-// review fix for (4): when the observed path has one clean owner but what
+// TestOriginalOwnerAloneDoesNotHideAmbiguityOnTheResolvedSide checks that
+// when the observed path has one clean owner but what
 // it resolves to has two disagreeing ones, the ambiguity on the resolved
 // side is not silently discarded in favor of the clean answer on the
 // other.
@@ -247,7 +247,7 @@ func TestOriginalOwnerAloneDoesNotHideAmbiguityOnTheResolvedSide(t *testing.T) {
 	}
 }
 
-// TestUsrMergeAppliesAgainToASymlinkTarget checks the review fix for (2):
+// TestUsrMergeAppliesAgainToASymlinkTarget checks that
 // UsrMerge's own rewrite is not only applied once to the path as observed,
 // but again to a symlink's own raw target when that target still uses a
 // merged directory's pre-merge spelling.
@@ -290,7 +290,7 @@ func TestUsrMergeAppliesAgainToASymlinkTarget(t *testing.T) {
 }
 
 // TestNodeModulesFileResolvingOutsideIsNotAttributedToTheProject checks
-// the review fix for (5): a dependency's own file that a symlink chain
+// the a dependency's own file that a symlink chain
 // leads outside node_modules entirely (a store kept next to, not inside,
 // the project, say) is left unresolved rather than credited to the
 // application's own manifest merely because the dependency's own manifest

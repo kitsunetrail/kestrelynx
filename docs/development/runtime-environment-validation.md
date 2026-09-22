@@ -1,4 +1,4 @@
-# Runtime Evidence Observation Environment: Validation Plan
+# Runtime Evidence Observation Environment Validation
 
 - **Status:** Plan recorded; measurements not yet performed
 - **Started:** 2026-09-22

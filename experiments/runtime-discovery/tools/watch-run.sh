@@ -74,7 +74,7 @@
 #     consecutive successfully-measured samples
 #   the "Lost N events" notification count increases for 3 consecutive samples
 #   this run's own directory exceeds KL_WATCH_RUN_BYTES (default 1 GiB)
-#   the shared output directory exceeds KL_WATCH_ROOT_BYTES (default 4 GiB)
+#   the shared output directory has grown by more than KL_WATCH_ROOT_BYTES (default 4 GiB) since the watch started
 #   free space on the output filesystem drops below KL_WATCH_FREE_BYTES (default 20 GiB)
 #   KL_WATCH_WEB_FAILURES (default 3) consecutive web_timing.jsonl RESPONSES - not sample
 #     batches - each failed, processed strictly in the order they were recorded and judged
@@ -104,6 +104,7 @@ INTERVAL="${KL_WATCH_INTERVAL:-10}"
 CPU_CORES_LIMIT="${KL_WATCH_CPU_CORES:-1}"
 RUN_BYTES_LIMIT="${KL_WATCH_RUN_BYTES:-1073741824}"      # 1 GiB
 ROOT_BYTES_LIMIT="${KL_WATCH_ROOT_BYTES:-4294967296}"    # 4 GiB
+root_bytes_baseline=""                                   # first successful reading of the output root
 FREE_BYTES_LIMIT="${KL_WATCH_FREE_BYTES:-21474836480}"   # 20 GiB
 WEB_FAILURES_LIMIT="${KL_WATCH_WEB_FAILURES:-3}"
 
@@ -279,6 +280,16 @@ while true; do
 
 	run_bytes="$(dir_size_bytes "$R" 2>/dev/null || true)"; [ -n "$run_bytes" ] || run_bytes="null"
 	root_bytes="$(dir_size_bytes "$OUTROOT" 2>/dev/null || true)"; [ -n "$root_bytes" ] || root_bytes="null"
+	# The shared-output limit is about what THIS observation adds to the output root, not about
+	# what earlier runs already left there: the first successful reading is the baseline and the
+	# limit applies to the growth since then (a failed first reading leaves the baseline unset,
+	# so the growth stays unknown and the limit cannot fire on a guess).
+	if [ "$root_bytes" != "null" ]; then
+		[ -n "$root_bytes_baseline" ] || root_bytes_baseline="$root_bytes"
+		root_growth=$((root_bytes - root_bytes_baseline))
+	else
+		root_growth="null"
+	fi
 	free_bytes="$(fs_free_bytes "$OUTROOT" 2>/dev/null || true)"; [ -n "$free_bytes" ] || free_bytes="null"
 
 	# Web responses are processed one at a time, strictly in the order web_timing.jsonl's
@@ -311,15 +322,15 @@ while true; do
 		fi
 	fi
 
-	printf '{"ts":"%s","tracer_cpu_cores":%s,"tracer_cpu_state":"%s","lost_notifications_total":%s,"lost_notifications_state":"%s","run_dir_bytes":%s,"out_root_bytes":%s,"free_bytes":%s,"web_consecutive_failures":%s}\n' \
-		"$ts" "$cpu_cores" "$cpu_state" "$lost_notif" "$lost_state" "$run_bytes" "$root_bytes" "$free_bytes" "$web_consecutive_failures" >>"$WATCHLOG"
+	printf '{"ts":"%s","tracer_cpu_cores":%s,"tracer_cpu_state":"%s","lost_notifications_total":%s,"lost_notifications_state":"%s","run_dir_bytes":%s,"out_root_bytes":%s,"out_root_growth_bytes":%s,"free_bytes":%s,"web_consecutive_failures":%s}\n' \
+		"$ts" "$cpu_cores" "$cpu_state" "$lost_notif" "$lost_state" "$run_bytes" "$root_bytes" "$root_growth" "$free_bytes" "$web_consecutive_failures" >>"$WATCHLOG"
 
 	# Immediate (single-sample) stop conditions: capacity, not a transient spike.
 	if [ "$run_bytes" != "null" ] && [ "$run_bytes" -gt "$RUN_BYTES_LIMIT" ]; then
 		request_stop "run directory $run_bytes bytes exceeds the ${RUN_BYTES_LIMIT}-byte per-run limit"
 	fi
-	if [ "$root_bytes" != "null" ] && [ "$root_bytes" -gt "$ROOT_BYTES_LIMIT" ]; then
-		request_stop "output directory $root_bytes bytes exceeds the ${ROOT_BYTES_LIMIT}-byte shared limit"
+	if [ "$root_growth" != "null" ] && [ "$root_growth" -gt "$ROOT_BYTES_LIMIT" ]; then
+		request_stop "output directory grew by $root_growth bytes since the watch started (now $root_bytes bytes), exceeding the ${ROOT_BYTES_LIMIT}-byte shared limit"
 	fi
 	if [ "$free_bytes" != "null" ] && [ "$free_bytes" -lt "$FREE_BYTES_LIMIT" ]; then
 		request_stop "free space $free_bytes bytes is below the ${FREE_BYTES_LIMIT}-byte minimum"

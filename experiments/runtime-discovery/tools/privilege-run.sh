@@ -9,12 +9,15 @@
 # separate from and never confused with an operation's own success/failure/unreached.
 #
 # Usage (from the repository root, as root):
-#   sudo bash experiments/runtime-discovery/tools/privilege-run.sh <root|bpf_perfmon|bpf_perfmon_dac|sysadmin>
+#   sudo bash experiments/runtime-discovery/tools/privilege-run.sh <root|bpf_perfmon|bpf_perfmon_dac|bpf_perfmon_dac_override|sysadmin>
 #
 #   root             - runs every operation as root, through this same recording path,
 #                       with no capabilities applied to either private binary copy
 #   bpf_perfmon      - cap_bpf,cap_perfmon=ep on both private binary copies
 #   bpf_perfmon_dac  - the above plus cap_dac_read_search=ep
+#   bpf_perfmon_dac_override - the above plus cap_dac_override=ep (only to get past bpftrace's own
+#                      pre-check, which refuses to start without CAP_DAC_OVERRIDE; the result
+#                      then shows what the kernel itself allows once the tool is willing to run)
 #   sysadmin         - cap_sys_admin=ep on both private binary copies
 #
 # Every non-root condition runs as KL_PRIV_USER, an environment variable naming an
@@ -90,10 +93,10 @@ BT_PLAIN=experiments/runtime-events/bpftrace/runtime-events-nofilter.bt
 BPF_UNSET_ENV=BPFTRACE_MAX_STRLEN,BPFTRACE_PERF_RB_PAGES,BPFTRACE_ON_STACK_LIMIT
 RUNTIME_EVENTS_BUILT=$O/runtime-events
 
-USAGE="Usage: sudo bash experiments/runtime-discovery/tools/privilege-run.sh <root|bpf_perfmon|bpf_perfmon_dac|sysadmin>"
+USAGE="Usage: sudo bash experiments/runtime-discovery/tools/privilege-run.sh <root|bpf_perfmon|bpf_perfmon_dac|bpf_perfmon_dac_override|sysadmin>"
 [ $# -ge 1 ] || { echo "$USAGE" >&2; exit 2; }
 CONDITION="$1"
-case "$CONDITION" in root|bpf_perfmon|bpf_perfmon_dac|sysadmin) ;; *) echo "$USAGE" >&2; exit 2;; esac
+case "$CONDITION" in root|bpf_perfmon|bpf_perfmon_dac|bpf_perfmon_dac_override|sysadmin) ;; *) echo "$USAGE" >&2; exit 2;; esac
 [ "$(id -u)" = 0 ] || { echo "privilege-run: run as root (setcap, supervise's own user-switch, and reading another user's /proc entries all need it)" >&2; exit 1; }
 command -v setcap >/dev/null || { echo "privilege-run: setcap not installed" >&2; exit 1; }
 command -v bpftrace >/dev/null || { echo "privilege-run: bpftrace not installed" >&2; exit 1; }
@@ -317,6 +320,7 @@ case "$CONDITION" in
   root) CAP_SPEC="";;
   bpf_perfmon) CAP_SPEC="cap_bpf,cap_perfmon=ep";;
   bpf_perfmon_dac) CAP_SPEC="cap_bpf,cap_perfmon,cap_dac_read_search=ep";;
+  bpf_perfmon_dac_override) CAP_SPEC="cap_bpf,cap_perfmon,cap_dac_read_search,cap_dac_override=ep";;
   sysadmin) CAP_SPEC="cap_sys_admin=ep";;
 esac
 echo "$CAP_SPEC" > "$FACTS/capabilities_requested.txt"
@@ -477,6 +481,18 @@ bpftrace_stage() {
 	if grep -qiE 'verifier|failed to compile|syntax error|semantic error|invalid probe|BPF_PROG_LOAD|error loading program' "$log" 2>/dev/null; then
 		echo load_failed; return
 	fi
+	# bpftrace's own pre-check: without CAP_DAC_OVERRIDE (or uid 0) it refuses to start at all,
+	# before any kernel operation. That is the tool declining, not the kernel deciding, so it
+	# gets its own stage rather than being folded into a load failure.
+	if grep -qiE 'please run bpftrace as the root user|Missing CAP_[A-Z_]* capability' "$log" 2>/dev/null; then
+		echo tool_refused; return
+	fi
+	# tracefs itself refusing to be read (available_events, the tracepoint format files) happens
+	# while the program is still being prepared, so nothing was loaded: a load-stage failure
+	# whose denying layer classify_denial reports as tracefs_dac.
+	if grep -qiE '/sys/kernel/(debug/)?tracing' "$log" 2>/dev/null && grep -qi 'permission denied' "$log" 2>/dev/null; then
+		echo load_failed; return
+	fi
 	echo unknown
 }
 
@@ -526,6 +542,9 @@ else
 				echo success > "$D/result.txt"
 				echo "the load stage completed; the failure the log reports is at attach, which this operation does not test" > "$D/note.txt";;
 			load_failed) echo failure > "$D/result.txt"; extract_errno "$D/log.txt" > "$D/errno.txt"; classify_denial "$D/log.txt" > "$D/denial.txt";;
+			tool_refused)
+				echo failure > "$D/result.txt"; echo bpftrace_own_check > "$D/denial.txt"; extract_errno "$D/log.txt" > "$D/errno.txt"
+				echo "bpftrace refused to start under this condition (its own pre-check requires CAP_DAC_OVERRIDE or uid 0), so no kernel operation was attempted; this is a limit of the measurement tool, not a kernel decision" > "$D/reason.txt";;
 			*) echo unreached > "$D/result.txt"; echo "load-vs-attach stage undeterminable from bpftrace's own log (child exit=$child_code signal=$child_signal status=$child_status)" > "$D/reason.txt";;
 		esac
 	fi
@@ -593,6 +612,9 @@ else
 				elif [ "$stage" = load_failed ]; then
 					echo unreached > "$AD/result.txt"
 					echo "the BPF program never loaded (stage=load_failed), so the tracepoint attach was never attempted" > "$AD/reason.txt"
+				elif [ "$stage" = tool_refused ]; then
+					echo unreached > "$AD/result.txt"
+					echo "bpftrace refused to start under this condition (its own pre-check requires CAP_DAC_OVERRIDE or uid 0), so the tracepoint attach was never attempted; this is a limit of the measurement tool, not a kernel decision" > "$AD/reason.txt"
 				elif [ "$stage" = unknown ]; then
 					echo unreached > "$AD/result.txt"
 					echo "which stage this run reached could not be determined from bpftrace's own log (child exit=$child_code signal=$child_signal status=$child_status)" > "$AD/reason.txt"
@@ -601,7 +623,7 @@ else
 				fi
 				if [ "$ATTACHED" != 1 ]; then
 					echo unreached > "$BD/result.txt"
-					if [ "$stage" = load_failed ]; then
+					if [ "$stage" = load_failed ] || [ "$stage" = tool_refused ]; then
 						echo "the BPF program never loaded, so neither the attach nor a buffer read was reached" > "$BD/reason.txt"
 					else
 						echo "tracepoint attach was not confirmed; a buffer read cannot be meaningfully tested" > "$BD/reason.txt"

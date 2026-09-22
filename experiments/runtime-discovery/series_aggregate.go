@@ -242,13 +242,14 @@ func buildMappingReport(idx *scanFileIndex, packages []PackageVerdict, ev *evide
 		}
 	}
 	out := MappingReport{
-		CandidateConflicts: ev.candidateConflict,
-		UnresolvedPaths:    ev.unresolvedPaths,
-		UnresolvedEvents:   ev.unresolvedEventPaths,
-		UnmappablePaths:    ev.unmappablePaths,
-		UnmappableEvents:   ev.unmappableEvents,
-		OutsideScanPaths:   ev.outsideScanPaths,
-		OutsideScanEvents:  ev.outsideScanEvents,
+		CandidateConflicts:  ev.candidateConflict,
+		UnresolvedPaths:     ev.unresolvedPaths,
+		UnresolvedEvents:    ev.unresolvedEventPaths,
+		UnmappablePaths:     ev.unmappablePaths,
+		UnmappableEvents:    ev.unmappableEvents,
+		OutsideScanPaths:    ev.outsideScanPaths,
+		OutsideScanEvents:   ev.outsideScanEvents,
+		DirectoryOpenEvents: ev.directoryOpenEvents,
 	}
 	for _, r := range rows {
 		out.Rows = append(out.Rows, *r)

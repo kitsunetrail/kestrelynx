@@ -120,6 +120,12 @@ type evidenceSet struct {
 	unmappablePaths      int
 	outsideScanPaths     int
 	candidateConflict    int
+	// directoryOpenEvents counts an open event whose path saved layout
+	// information records as a directory — never produced for a sampled
+	// path or an exec, only resolveForEvent's own open-only refusal. Kept
+	// apart from outsideScanEvents: the scan may report plenty about the
+	// package that ships the directory, this event just never used it.
+	directoryOpenEvents int
 
 	eventState string
 	eventNotes []string
@@ -431,7 +437,12 @@ func buildEvidenceSet(rec *ContainerRecord, wv windowValidity, groups []pkgGroup
 				e.unresolvedEventPaths++
 				continue
 			}
-			outcome := set.resolveEvent(ev.Path, ev.Timestamp)
+			isExec := ev.Event == "exec"
+			// A directory is never refused for an exec (not a real
+			// scenario a directory can produce) — only for a genuine
+			// open, since that is the one ground truth itself excludes
+			// from use of the package that ships it.
+			outcome := set.resolveEventVerb(ev.Path, ev.Timestamp, !isExec)
 			if outcome.Conflict {
 				e.candidateConflict++
 				continue
@@ -441,7 +452,7 @@ func buildEvidenceSet(rec *ContainerRecord, wv windowValidity, groups []pkgGroup
 				continue
 			}
 			source, verb := sourceEventOpen, "opened"
-			if ev.Event == "exec" {
+			if isExec {
 				source, verb = sourceEventExec, "executed"
 			}
 			for _, m := range outcome.Matches {
@@ -583,6 +594,8 @@ func (e *evidenceSet) countEventMiss(kind string) {
 		e.unresolvedEventPaths++
 	case missUnmappable:
 		e.unmappableEvents++
+	case missDirectoryOpen:
+		e.directoryOpenEvents++
 	default:
 		e.outsideScanEvents++
 	}

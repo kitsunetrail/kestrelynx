@@ -434,6 +434,16 @@ const (
 	// report simply attributes no package to it. Most paths a workload
 	// touches are this.
 	missOutsideScan = "outside_scan"
+	// missDirectoryOpen: an open event named a path that saved layout
+	// information records as a directory. Opening a directory is not use
+	// of the package that ships it — ground truth itself excludes exactly
+	// this (an O_DIRECTORY open verified against the exported rootfs's own
+	// stat) — so it is kept apart from missOutsideScan rather than folded
+	// into "the scan reports nothing here", which would be the wrong
+	// reason: the scan may report plenty about the owning package, this
+	// one event just never used it. Never produced for an exec (resolve's
+	// own path), only for a genuine open event (resolveForEvent's).
+	missDirectoryOpen = "directory_open"
 )
 
 // mappingOutcome is what stage one concluded about one observed path.
@@ -485,8 +495,15 @@ type fileResolver struct {
 	// after it. A zero coversUntil means unbounded on that side.
 	coversFrom  time.Time
 	coversUntil time.Time
-	symlinks    []SymlinkEntry
-	pythonDirs  []string
+	// symlinkTargets is every recorded link's own raw destination (the
+	// readlink text, never pre-followed), keyed by the link's own path.
+	// resolveSymlinkChain walks it component by component rather than this
+	// resolver trusting any single entry's own precomputed destination, so
+	// a chain (a tool update-alternatives switched, say) resolves through
+	// as many recorded hops as it actually took, and a path this reading
+	// never saw as a symlink at all is left alone.
+	symlinkTargets map[string]string
+	pythonDirs     []string
 	// recordOwner maps one owned file to every distribution claiming it.
 	// Claims are kept rather than overwritten: two distributions claiming
 	// one file is a real ambiguity, and silently keeping the last one read
@@ -509,12 +526,26 @@ type fileResolver struct {
 	moduleDirs []ModuleDirListing
 }
 
+// addSymlinkTarget records one path's raw link target into table, the
+// first time that path is seen. Within one reading every source describes
+// the same layout, so a second entry for a path already recorded (the
+// package database and a bin directory both naming the same symlink, say)
+// is the same fact seen twice, not a disagreement to pick between.
+func addSymlinkTarget(table map[string]string, path, target string) {
+	if target == "" {
+		return
+	}
+	if _, exists := table[path]; !exists {
+		table[path] = target
+	}
+}
+
 // newFileResolver builds the resolver from a scan report index and the
 // auxiliary inputs saved for the database generations the window's valid
 // samples actually read.
 func newFileResolver(idx *scanFileIndex, auxes []AuxiliaryInputs) *fileResolver {
 	r := &fileResolver{
-		idx: idx, usrMerge: map[string]string{},
+		idx: idx, usrMerge: map[string]string{}, symlinkTargets: map[string]string{},
 		recordOwner: map[string][]string{}, ownedBy: map[string][]OwnedPathEntry{},
 		alias: map[string]*scanFile{}, sampleIDs: map[string]bool{},
 	}
@@ -535,11 +566,17 @@ func newFileResolver(idx *scanFileIndex, auxes []AuxiliaryInputs) *fileResolver 
 			if l.Resolved != "" && l.Resolved != l.Path {
 				r.usrMerge[l.Path] = l.Resolved
 			}
+			// UsrMerge's own entries are folded into the same table
+			// resolveSymlinkChain walks, not only used by mergeUsr's
+			// single top-level rewrite: a symlink whose own raw target
+			// still uses the pre-merge spelling (a package's own
+			// /usr/bin/tool linking to ../../bin/real, say) has to have
+			// that spelling merged too, at whatever point in the chain it
+			// turns up, not only when it is the very first component.
+			addSymlinkTarget(r.symlinkTargets, l.Path, l.Target)
 		}
 		for _, l := range aux.Symlinks {
-			if l.Resolved != "" && l.Resolved != l.Path {
-				r.symlinks = append(r.symlinks, l)
-			}
+			addSymlinkTarget(r.symlinkTargets, l.Path, l.Target)
 		}
 		for _, d := range aux.PythonSearchDirs {
 			if !containsString(r.pythonDirs, d.Path) {
@@ -569,9 +606,6 @@ func newFileResolver(idx *scanFileIndex, auxes []AuxiliaryInputs) *fileResolver 
 	// normalisation the observed side does, so the two meet by
 	// construction rather than by the two spellings happening to agree.
 	r.normalizeIndexes()
-	// Longest link path first: a link inside a linked directory must win
-	// over the directory's own link, or the inner one is never applied.
-	sort.Slice(r.symlinks, func(i, j int) bool { return len(r.symlinks[i].Path) > len(r.symlinks[j].Path) })
 	sort.Slice(r.pythonDirs, func(i, j int) bool { return len(r.pythonDirs[i]) > len(r.pythonDirs[j]) })
 	return r
 }
@@ -595,8 +629,17 @@ func (r *fileResolver) normalizeIndexes() {
 			}
 		}
 	}
+	// ownedBy is deliberately normalized through mergeUsr alone here, never
+	// through the full chain-following normalize(): its keys are compared
+	// against both the merged and the fully resolved spelling separately
+	// in resolve() (see osOwnersAt), specifically so that a package
+	// claiming a symlink and a different package claiming the file it
+	// names stay two distinct facts. Folding this index through the same
+	// chain resolution as recordOwner and the scan report's own files
+	// would merge those two facts into one key before resolve() ever got
+	// to compare them.
 	for p, owners := range r.ownedBy {
-		n := r.normalize(p)
+		n := r.mergeUsr(p)
 		if n == p {
 			continue
 		}
@@ -689,6 +732,16 @@ func newResolverSet(idx *scanFileIndex, auxes []AuxiliaryInputs) *resolverSet {
 	// reading answers from its own first instant: what the layout was
 	// before anyone read it is not known, and a registered target is read
 	// before its workload begins, so nothing the run measures precedes it.
+	//
+	// An instant before every reading of a mount view is answered by the
+	// dataless fallback alone (see resolveEventVerb), never by treating
+	// any one reading as if it also covered that earlier instant: a
+	// package (name, version) set matching the scan's own population does
+	// not prove the layout itself is unchanged back to container start —
+	// /etc/localtime can be re-pointed, and a file can be replaced by
+	// another of the same version, without either ever showing up in that
+	// set — so nothing here widens a reading's own coversFrom on that
+	// basis.
 	byView := map[string][]*fileResolver{}
 	for _, r := range set.resolvers {
 		if r.firstSeen.IsZero() {
@@ -733,13 +786,21 @@ func (s *resolverSet) forObservation(mountViewID, sampleID string, at time.Time)
 // that were both in force cannot both be the one the workload saw, and
 // picking one would be a guess.
 func (s *resolverSet) resolveEvent(observed string, at time.Time) mappingOutcome {
+	return s.resolveEventVerb(observed, at, false)
+}
+
+// resolveEventVerb is resolveEvent's own version for one event, exec or
+// open. isOpenEvent is true only for an open (never an exec — see
+// resolveOS's own refuseDirectoryOpen parameter, which this passes
+// through to every reading it consults, ordinary or fallback).
+func (s *resolverSet) resolveEventVerb(observed string, at time.Time, isOpenEvent bool) mappingOutcome {
 	var chosen mappingOutcome
 	seen, resolvedSeen, unresolvedSeen := false, false, false
 	for _, r := range s.resolvers {
 		if !r.covers("", "", at) {
 			continue
 		}
-		out := r.resolve(observed)
+		out := r.resolveForEvent(observed, isOpenEvent)
 		if out.Unresolved {
 			unresolvedSeen = true
 			if !seen {
@@ -759,7 +820,26 @@ func (s *resolverSet) resolveEvent(observed string, at time.Time) mappingOutcome
 		}
 	}
 	if !seen {
-		return s.fallback.resolve(observed)
+		// No reading's ordinary coverage answers for this instant at all —
+		// an event at or moments after container startup, before the
+		// first reading of its mount view completed, most notably. The
+		// dataless fallback resolver (built from no auxiliary inputs at
+		// all) still answers from the observed path and the scan report
+		// alone: a compiled binary's own path, a jar's own suffix, and a
+		// module tree's own /node_modules/ boundary need no saved layout
+		// to decide, so a require or an import from before the first
+		// reading — genuinely arriving there in a real run measured for
+		// this project, not merely a hypothetical — still resolves. Only
+		// an installed Python distribution's own record, and
+		// operating-system ownership, need the saved layout this dataless
+		// resolver never has, and those stay unresolved for an instant
+		// before the first reading — a package (name, version) set
+		// matching the scan's own population does not prove the layout
+		// itself is unchanged back to container start (/etc/localtime can
+		// be re-pointed, and a file can be replaced by another of the
+		// same version, without either ever showing up in that set), so
+		// this is never widened on that basis.
+		return s.fallback.resolveForEvent(observed, isOpenEvent)
 	}
 	// A reading that attributes the file and a neighbouring reading that
 	// cannot disagree about the layout at this instant just as two
@@ -837,8 +917,26 @@ func normalizeRecordEntry(rec DistInfoRecord, entry string) string {
 
 // normalize brings an observed path into the one spelling everything else
 // is compared in: absolute, with the merged top-level directories rewritten
-// and any recorded symbolic link followed.
+// and every recorded symbolic link in its way followed to the end of the
+// chain. A chain that loops or runs past maxMappingSymlinkHops is left at
+// its merged-but-unresolved spelling rather than guessed at further; see
+// resolveSymlinkChain.
 func (r *fileResolver) normalize(p string) string {
+	merged := r.mergeUsr(p)
+	if resolved, _, ok := r.resolveSymlinkChain(merged); ok {
+		return resolved
+	}
+	return merged
+}
+
+// mergeUsr rewrites a merged top-level directory's spelling (/lib/x, say)
+// into the one the image's real files sit under (/usr/lib/x), so a path
+// observed either way meets the same string. It does not follow any other
+// symlink: that is resolveSymlinkChain's job, kept separate because the two
+// answer different questions — mergeUsr says which of two spellings of one
+// real place was used, resolveSymlinkChain says what a genuine link
+// ultimately points at.
+func (r *fileResolver) mergeUsr(p string) string {
 	if p == "" {
 		return ""
 	}
@@ -848,19 +946,86 @@ func (r *fileResolver) normalize(p string) string {
 	p = path.Clean(p)
 	for from, to := range r.usrMerge {
 		if p == from || strings.HasPrefix(p, from+"/") {
-			p = to + strings.TrimPrefix(p, from)
-			break
-		}
-	}
-	for _, l := range r.symlinks {
-		if p == l.Path {
-			return path.Clean(l.Resolved)
-		}
-		if strings.HasPrefix(p, l.Path+"/") {
-			return path.Clean(l.Resolved + strings.TrimPrefix(p, l.Path))
+			return path.Clean(to + strings.TrimPrefix(p, from))
 		}
 	}
 	return p
+}
+
+// maxMappingSymlinkHops bounds symlink-chain-following during matching, the
+// same defense a real path resolution needs against a cycle. Matching runs
+// after the container is gone, working only from the symlink table saved at
+// observation time rather than a live filesystem, so this is its own bound
+// rather than a shared one with resolveInRoot's.
+const maxMappingSymlinkHops = 40
+
+// resolveSymlinkChain walks p (already absolute and clean) through the
+// recorded symlink table component by component, exactly as a real
+// resolution inside the container would: an absolute link target is
+// rebased at the container's own root, a relative one at the link's own
+// containing directory, and a component the table says nothing about is
+// kept as it is. ok is false when the chain loops or runs past
+// maxMappingSymlinkHops; the caller then has nothing more to go on than p
+// itself, and is never handed a partially-substituted guess. changed
+// reports whether any recorded link was actually followed, so a caller can
+// tell a path that never touched the table from one that happened to
+// resolve back to its own starting spelling.
+func (r *fileResolver) resolveSymlinkChain(p string) (resolved string, changed, ok bool) {
+	if len(r.symlinkTargets) == 0 {
+		return p, false, true
+	}
+	remaining := splitPath(p)
+	var out []string
+	hopsLeft := maxMappingSymlinkHops
+	followedAny := false
+	for len(remaining) > 0 {
+		comp := remaining[0]
+		remaining = remaining[1:]
+		switch comp {
+		case "", ".":
+			continue
+		case "..":
+			if len(out) > 0 {
+				out = out[:len(out)-1]
+			}
+			continue
+		}
+		candidate := "/" + strings.Join(append(append([]string{}, out...), comp), "/")
+		target, isLink := r.symlinkTargets[candidate]
+		if !isLink {
+			out = append(out, comp)
+			continue
+		}
+		if hopsLeft <= 0 {
+			// A chain deeper than any real alternatives setup ever runs,
+			// which is what a genuine cycle looks like from here: the same
+			// link can legitimately be crossed more than once along one
+			// path (a link to "." doubles back through itself for every
+			// repeated component, and is still a well-defined place), so
+			// only the hop count — the same defense resolveInRoot and
+			// truth.py's own resolver use — decides this, never whether a
+			// particular link's path was seen before.
+			return p, false, false
+		}
+		hopsLeft--
+		followedAny = true
+		targetParts := splitPath(target)
+		if strings.HasPrefix(target, "/") {
+			// Re-rooted at this reading's own "/", never partway through
+			// whatever "out" already held.
+			remaining = append(targetParts, remaining...)
+			out = nil
+		} else {
+			// Relative to the link's own containing directory, i.e. "out"
+			// as it stands — the link's own final component is not part
+			// of that directory.
+			remaining = append(targetParts, remaining...)
+		}
+	}
+	if len(out) == 0 {
+		return "/", followedAny, true
+	}
+	return "/" + strings.Join(out, "/"), followedAny, true
 }
 
 // pycacheToSource turns a compiled-module path back into the source path
@@ -913,10 +1078,166 @@ func nodePackageBoundary(p string) (string, bool) {
 	return p[:last+len(marker)] + name + "/package.json", true
 }
 
+// nodeProjectManifest finds the application's own manifest for a path that
+// nodePackageBoundary could not place — one outside any node_modules tree
+// at all. Trivy's node-pkg analyzer lists an application's own package.json
+// the same way it lists a dependency's, but that file sits above any
+// module tree and so has no /node_modules/ boundary to find; walking up to
+// the nearest ancestor directory the scan report actually names a
+// package.json under is what reaches it.
+func (r *fileResolver) nodeProjectManifest(norm string) (string, bool) {
+	for dir := path.Dir(norm); ; dir = path.Dir(dir) {
+		candidate := strings.TrimPrefix(path.Join(dir, "package.json"), "/")
+		if sf := r.scanFileAt(candidate); sf != nil {
+			return candidate, true
+		}
+		if dir == "/" {
+			return "", false
+		}
+	}
+}
+
+// osOwnersAt looks up which operating-system package the container's own
+// database claims for one exact, already-normalized path. Two or more
+// claims is a real ambiguity, returned as candidates for a conflict rather
+// than picked from; a claim whose recorded version matches no
+// Finding-bearing group at that name is treated the same as no claim at
+// all, since nothing this run scored can be credited to it.
+func (r *fileResolver) osOwnersAt(p string) (m fileMatch, found bool, conflictCandidates []string) {
+	owners := r.ownedBy[p]
+	if len(owners) > 1 {
+		for _, o := range owners {
+			conflictCandidates = append(conflictCandidates, o.Package+" "+o.Version)
+		}
+		return fileMatch{}, false, conflictCandidates
+	}
+	if len(owners) != 1 {
+		return fileMatch{}, false, nil
+	}
+	o := owners[0]
+	var keys []pkgGroupKey
+	for _, k := range r.idx.osByName[o.Package] {
+		// The version has to agree as well. A name that matches at a
+		// different version is the same package at a different state, and
+		// confirming it would credit a version that is not the one
+		// installed.
+		if k.InstalledVer != "" && k.InstalledVer == o.Version {
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) == 0 {
+		return fileMatch{}, false, nil
+	}
+	return fileMatch{
+		File: strings.TrimPrefix(p, "/"), Ecosystem: ecoOS,
+		Rule: "os_package_path_index", Via: o.Package + " " + o.Version, Keys: keys,
+	}, true, nil
+}
+
+// pathIsDir reports whether p (already normalized to whatever spelling
+// r.ownedBy is keyed on) is a directory according to any saved
+// package-database entry for it. An older reading that predates IsDir
+// simply has it false on every entry, so this — and refuseDirectoryOpen's
+// own check — costs nothing there: every path answers false, exactly the
+// way it always did before either existed.
+func (r *fileResolver) pathIsDir(p string) bool {
+	for _, e := range r.ownedBy[p] {
+		if e.IsDir {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveOS is resolveVerb's own operating-system rule, factored out for
+// readability — the directory check that used to live here has since
+// moved to resolveVerb's own start, ahead of every rule, not only this
+// one; see its own comment for why.
+//
+// The path as the kernel would have opened it (merged, before any symlink
+// chain is followed) and the path that chain resolves to (norm) are
+// checked separately and never silently collapsed into one. A tool
+// update-alternatives switched (mawk selected as /usr/bin/awk, say) or a
+// distribution-wide link (/etc/localtime, say) is owned by neither hop on
+// its own, and is only reached through the resolved side. A symlink one
+// package ships naming a file a different package ships (Ubuntu 26.04's
+// own /usr/bin/cat, a uutils-coreutils symlink, naming rust-coreutils's
+// own binary underneath ../lib/cargo/bin, say) is not an ambiguity
+// either: ground truth itself counts using either hop as using both
+// packages the chain names (the symlink is how the tool is invoked, the
+// file underneath is what actually runs), so both are confirmed rather
+// than neither.
+//
+// Either side being ambiguous on its own (two packages already
+// disagreeing about who owns the observed path, or about who owns what it
+// resolves to) is checked before either side's single-owner answer is
+// used: that is the one real conflict here — one file with more than one
+// owner — and a clean answer on one side does not resolve an ambiguity on
+// the other, so preferring it would silently discard a real disagreement.
+func (r *fileResolver) resolveOS(observed string) mappingOutcome {
+	out := mappingOutcome{}
+	if observed == "" || !strings.HasPrefix(observed, "/") {
+		out.Unresolved, out.MissKind = true, missPathUnresolved
+		out.UnresolvedWh = "the observation carries no usable absolute path"
+		return out
+	}
+	norm := r.normalize(observed)
+	merged := r.mergeUsr(observed)
+	m1, found1, conflict1 := r.osOwnersAt(merged)
+	m2, found2, conflict2 := r.osOwnersAt(norm)
+	if found2 && merged != norm {
+		m2.Via = "symlink:" + norm
+	}
+	switch {
+	case len(conflict1) > 0 || len(conflict2) > 0:
+		out.Conflict = true
+		out.Candidates = append(out.Candidates, conflict1...)
+		out.Candidates = append(out.Candidates, conflict2...)
+		if found1 {
+			out.Candidates = append(out.Candidates, m1.File)
+		}
+		if found2 {
+			out.Candidates = append(out.Candidates, m2.File)
+		}
+	case found1 && found2 && !sameKeys(m1.Keys, m2.Keys):
+		out.Matches = append(out.Matches, m1, m2)
+		out.Candidates = append(out.Candidates, m1.File, m2.File)
+	case found1:
+		out.Matches = append(out.Matches, m1)
+		out.Candidates = append(out.Candidates, m1.File)
+	case found2:
+		out.Matches = append(out.Matches, m2)
+		out.Candidates = append(out.Candidates, m2.File)
+	}
+	if len(out.Matches) == 0 && !out.Conflict {
+		out.Unresolved = true
+		out.MissKind = missOutsideScan
+		out.UnresolvedWh = "this path resolved, and the container's package database attributes no package to it"
+	}
+	return out
+}
+
 // resolve is stage one of the mapping: from an observed path to the file a
 // scan report named. Stage two — spreading the evidence over every package
 // that file carries — is the Keys of each match, and is not an ambiguity.
+//
+// It never refuses a directory open (see resolveForEvent): the sampling
+// pass and every direct caller resolve() has ever had use it for an exec,
+// a mapped file, or a plain path lookup, none of which a directory-open
+// exclusion belongs on.
 func (r *fileResolver) resolve(observed string) mappingOutcome {
+	return r.resolveVerb(observed, false)
+}
+
+// resolveForEvent is resolve's own version for one event, exec or open.
+// isOpenEvent is true only for an open (ev.Event != "exec"): see
+// resolveOS's own refuseDirectoryOpen parameter, which this passes
+// through unchanged.
+func (r *fileResolver) resolveForEvent(observed string, isOpenEvent bool) mappingOutcome {
+	return r.resolveVerb(observed, isOpenEvent)
+}
+
+func (r *fileResolver) resolveVerb(observed string, refuseDirectoryOpen bool) mappingOutcome {
 	out := mappingOutcome{}
 	if observed == "" {
 		out.Unresolved, out.MissKind = true, missPathUnresolved
@@ -930,6 +1251,32 @@ func (r *fileResolver) resolve(observed string) mappingOutcome {
 	}
 	norm := r.normalize(observed)
 	rel := strings.TrimPrefix(norm, "/")
+	// merged is the path as the kernel would actually have opened it: only
+	// the merged top-level directories are rewritten, no symlink chain is
+	// followed. It is the reference point for a rule that needs to tell
+	// "the path as observed" apart from "what a chain resolves it to" —
+	// the operating-system ownership check below, and the node_modules
+	// boundary check's own fallback gating.
+	merged := r.mergeUsr(observed)
+
+	// A directory is checked before any package rule, not only the
+	// operating-system one: opening a directory is not use of whatever
+	// package ships it, and that has to hold regardless of which rule
+	// would otherwise have matched the path (a bare module directory
+	// under node_modules, say, is exactly as much "not use" of that
+	// dependency as a bare operating-system directory is of the package
+	// that ships it). Checking this first, before any rule below ever
+	// calls add(), is what keeps a directory from being credited to a
+	// package on the strength of a rule that has no idea it was ever
+	// asked about a directory at all — see refuseDirectoryOpen's own
+	// comment on resolveOS for why an event carries no file-type
+	// information of its own by the time this runs.
+	if refuseDirectoryOpen && (r.pathIsDir(merged) || r.pathIsDir(norm)) {
+		out.Unresolved = true
+		out.MissKind = missDirectoryOpen
+		out.UnresolvedWh = "a directory was opened; opening a directory is not use of the package that ships it"
+		return out
+	}
 
 	add := func(file, rule, via string) {
 		sf := r.scanFileAt(file)
@@ -955,9 +1302,25 @@ func (r *fileResolver) resolve(observed string) mappingOutcome {
 		add(rel, "jar_path", "")
 	}
 	// A module tree: the package boundary decides which manifest the file
-	// belongs to, and that manifest is what the report names.
+	// belongs to, and that manifest is what the report names. A path
+	// outside any node_modules tree at all falls back to the nearest
+	// ancestor manifest the report names — the application's own
+	// package.json, which nodePackageBoundary has no boundary to find at
+	// all.
+	//
+	// The fallback is gated on the path as observed (merged), never only
+	// on the resolved one: a dependency's own file that a symlink chain
+	// leads outside node_modules entirely (a content-addressed store kept
+	// outside the project, say) is still that dependency's file, and
+	// attributing it to the application's own manifest merely because the
+	// dependency's own manifest could not be found afterward would be a
+	// wrong package, not a recovered one.
 	if manifest, ok := nodePackageBoundary(norm); ok {
 		add(strings.TrimPrefix(manifest, "/"), "node_package_boundary", manifest)
+	} else if _, hadBoundary := nodePackageBoundary(merged); !hadBoundary {
+		if manifest, ok := r.nodeProjectManifest(norm); ok {
+			add(manifest, "node_project_manifest", "")
+		}
 	}
 	// An installed Python distribution: the installed-file manifest says
 	// which distribution owns the file, and the distribution's metadata
@@ -981,35 +1344,12 @@ func (r *fileResolver) resolve(observed string) mappingOutcome {
 	// saved at observation time. Without this an execution of a program
 	// an operating-system package installed could never be related back to
 	// it, which is the whole of what an execution record is for on a
-	// distribution image.
-	if owners := r.ownedBy[norm]; len(owners) > 0 {
-		if len(owners) > 1 {
-			// Two packages claiming one file is a real ambiguity, and it
-			// is left unresolved rather than attributed to either.
-			out.Conflict = true
-			for _, o := range owners {
-				out.Candidates = append(out.Candidates, o.Package+" "+o.Version)
-			}
-		} else {
-			o := owners[0]
-			var keys []pkgGroupKey
-			for _, k := range r.idx.osByName[o.Package] {
-				// The version has to agree as well. A name that matches at
-				// a different version is the same package at a different
-				// state, and confirming it would credit a version that is
-				// not the one installed.
-				if k.InstalledVer != "" && k.InstalledVer == o.Version {
-					keys = append(keys, k)
-				}
-			}
-			if len(keys) > 0 {
-				out.Matches = append(out.Matches, fileMatch{
-					File: strings.TrimPrefix(norm, "/"), Ecosystem: ecoOS,
-					Rule: "os_package_path_index", Via: o.Package + " " + o.Version, Keys: keys,
-				})
-				out.Candidates = append(out.Candidates, strings.TrimPrefix(norm, "/"))
-			}
-		}
+	// distribution image. See resolveOS for the rule itself.
+	osOut := r.resolveOS(observed)
+	out.Matches = append(out.Matches, osOut.Matches...)
+	out.Candidates = append(out.Candidates, osOut.Candidates...)
+	if osOut.Conflict {
+		out.Conflict = true
 	}
 
 	if len(out.Matches) == 0 {
@@ -1025,7 +1365,20 @@ func (r *fileResolver) resolve(observed string) mappingOutcome {
 		out.MissKind, out.UnresolvedWh = r.explainMiss(norm, rel)
 		return out
 	}
-	if len(out.Matches) > 1 {
+	// More than one match is ordinarily a conflict: the rules above target
+	// disjoint ecosystems, and two of them answering for the same path at
+	// once is not expected. The operating-system rule's own two matches
+	// (the observed path and what it resolves to, owned by two different
+	// packages) are the one deliberate exception — already decided,
+	// immediately above, to be two facts rather than a conflict — so they
+	// are excluded from this count rather than re-litigated here.
+	nonOS := 0
+	for _, m := range out.Matches {
+		if m.Rule != "os_package_path_index" {
+			nonOS++
+		}
+	}
+	if nonOS > 1 {
 		out.Conflict = true
 	}
 	return out

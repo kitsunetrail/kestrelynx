@@ -1,0 +1,4 @@
+# confirmation of symlink resolution and the application's own package with real collection: one short run per case
+26 4 startup 512 30 300
+27 4 startup 512 30 300
+28 4 startup 512 30 300

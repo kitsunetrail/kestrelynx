@@ -8,14 +8,18 @@ Docker or image. Run with:
   python3 -m unittest discover -s tools -p 'truth_test.py'
   python3 tools/truth_test.py
 """
+import contextlib
 import io
 import json
 import os
+import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import truth
@@ -1603,6 +1607,207 @@ class DeclarationGapsTests(unittest.TestCase):
     def test_unknown_case_id_is_a_no_op(self):
         missing, extra = truth.declaration_gaps({'case_id': '99'}, {})
         self.assertEqual((missing, extra), ([], []))
+
+
+class RootfsExportDiskSpaceTests(unittest.TestCase):
+    """_check_rootfs_export_disk_space's own pre-flight gate: it must
+    refuse to let export_container_rootfs touch `docker export` or the
+    tar extraction at all once tmp's own filesystem cannot plausibly
+    hold both (see _required_rootfs_export_bytes), rather than
+    discovering that partway through - see the ENOSPC-mid-extraction
+    incident this hardening responds to (a full /tmp let rootfs
+    extraction fail silently, and truth.py still exited 0)."""
+
+    def test_raises_when_free_space_is_less_than_required(self):
+        with mock.patch('subprocess.run') as run_mock, \
+                mock.patch('shutil.disk_usage') as disk_usage_mock:
+            run_mock.return_value = subprocess.CompletedProcess(
+                ['docker', 'image', 'inspect'], 0, stdout='1000\n', stderr='')
+            disk_usage_mock.return_value = mock.Mock(free=500)  # required is 2x1000=2000
+            with self.assertRaises(OSError):
+                truth._check_rootfs_export_disk_space('img:tag', '/some/tmp')
+
+    def test_does_not_raise_when_free_space_is_sufficient(self):
+        with mock.patch('subprocess.run') as run_mock, \
+                mock.patch('shutil.disk_usage') as disk_usage_mock:
+            run_mock.return_value = subprocess.CompletedProcess(
+                ['docker', 'image', 'inspect'], 0, stdout='1000\n', stderr='')
+            disk_usage_mock.return_value = mock.Mock(free=10_000)
+            truth._check_rootfs_export_disk_space('img:tag', '/some/tmp')  # must not raise
+
+    def test_docker_image_inspect_failure_is_an_oserror(self):
+        with mock.patch('subprocess.run') as run_mock:
+            run_mock.return_value = subprocess.CompletedProcess(
+                ['docker', 'image', 'inspect'], 1, stdout='', stderr='no such image')
+            with self.assertRaises(OSError):
+                truth._check_rootfs_export_disk_space('img:tag', '/some/tmp')
+
+
+def _build_two_member_tar(path):
+    """A small, well-formed tar with two members, for
+    TarCompletenessTests below to truncate at specific byte offsets."""
+    with tarfile.open(path, 'w') as tf:
+        for name, content in (('a.txt', b'hello'), ('b.txt', b'world!!')):
+            info = tarfile.TarInfo(name=name)
+            info.size = len(content)
+            tf.addfile(info, io.BytesIO(content))
+
+
+class TarCompletenessTests(unittest.TestCase):
+    """_verify_tar_completeness's own defense against exactly what
+    tarfile.open()'s own member-by-member reading misses: a tar cut off
+    at a point that still looks, to tarfile's own lenient header reader,
+    like an ordinary end of archive rather than a truncation - codex's
+    own review found that cutting a two-member tar at either 512 or 612
+    bytes still leaves plain tarfile.open() reporting one complete
+    member and no error at all."""
+
+    def test_complete_tar_passes(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'rootfs.tar')
+            _build_two_member_tar(path)
+            truth._verify_tar_completeness(path)  # must not raise
+
+    def test_truncated_at_512_bytes_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            complete_path = os.path.join(d, 'rootfs.tar')
+            _build_two_member_tar(complete_path)
+            data = open(complete_path, 'rb').read()
+            truncated_path = os.path.join(d, 'truncated.tar')
+            with open(truncated_path, 'wb') as f:
+                f.write(data[:512])
+            with self.assertRaises(OSError):
+                truth._verify_tar_completeness(truncated_path)
+
+    def test_truncated_at_612_bytes_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            complete_path = os.path.join(d, 'rootfs.tar')
+            _build_two_member_tar(complete_path)
+            data = open(complete_path, 'rb').read()
+            truncated_path = os.path.join(d, 'truncated.tar')
+            with open(truncated_path, 'wb') as f:
+                f.write(data[:612])
+            with self.assertRaises(OSError):
+                truth._verify_tar_completeness(truncated_path)
+
+    def test_missing_end_of_archive_marker_is_rejected_even_with_both_members_intact(self):
+        with tempfile.TemporaryDirectory() as d:
+            complete_path = os.path.join(d, 'rootfs.tar')
+            _build_two_member_tar(complete_path)
+            with tarfile.open(complete_path) as tf:
+                last_end = max(m.offset_data + m.size for m in tf.getmembers())
+            content_end = ((last_end + 511) // 512) * 512
+            data = open(complete_path, 'rb').read()
+            # Keep both members' own header+data intact, but leave only
+            # ONE trailing all-zero block instead of the two the tar
+            # format itself requires to mark a real end of archive.
+            short_trailer_path = os.path.join(d, 'short-trailer.tar')
+            with open(short_trailer_path, 'wb') as f:
+                f.write(data[:content_end + 512])
+            with self.assertRaises(OSError):
+                truth._verify_tar_completeness(short_trailer_path)
+
+
+def _fake_docker_subprocess_run(cmd, **_kwargs):
+    """Stands in for every `docker` invocation build_inventory's own call
+    chain makes (docker create, gtb.extract_os_db's own docker cp calls,
+    docker image inspect, docker export, docker rm), so
+    MainAbortsOnRootfsExportFailureTests can drive that real call chain -
+    not a mock of build_inventory itself - all the way down into
+    export_container_rootfs raising OSError from a failed `docker
+    export`, without any real Docker daemon."""
+    cmd = list(cmd)
+    if cmd[:2] == ['docker', 'create']:
+        return subprocess.CompletedProcess(cmd, 0, stdout='fakecid1234\n', stderr='')
+    if cmd[:2] == ['docker', 'cp']:
+        # Both the dpkg and apk copies "fail" (no image to copy from at
+        # all here); gtb.extract_os_db reads that as os_db_available=False
+        # and moves on, which is fine - this test is only about the
+        # rootfs export path below it.
+        return subprocess.CompletedProcess(cmd, 1, stdout='', stderr='no such container')
+    if cmd[:3] == ['docker', 'image', 'inspect']:
+        return subprocess.CompletedProcess(cmd, 0, stdout='1000\n', stderr='')
+    if cmd[:2] == ['docker', 'export']:
+        return subprocess.CompletedProcess(
+            cmd, 1, stdout=None, stderr=b'write /fake/rootfs.tar: no space left on device')
+    if cmd[:2] == ['docker', 'rm']:
+        return subprocess.CompletedProcess(cmd, 0, stdout='', stderr='')
+    raise AssertionError(f'unexpected subprocess.run call in test: {cmd}')
+
+
+class MainAbortsOnRootfsExportFailureTests(unittest.TestCase):
+    """main()'s own reaction to a failed rootfs export/extraction: it
+    must exit nonzero and never write truth.json, rather than the old
+    behavior of recording rootfs_export_ok=false and completing anyway
+    with whatever partial inventory/used set the truncated rootfs
+    happened to yield."""
+
+    def _write_run_fixture(self, run_dir):
+        with open(os.path.join(run_dir, 'image_id.txt'), 'w') as f:
+            f.write('sha256:deadbeef\n')
+        case_path = os.path.join(run_dir, 'case.json')
+        with open(case_path, 'w') as f:
+            json.dump({}, f)
+        return case_path
+
+    def test_a_failed_docker_export_aborts_main_nonzero_without_writing_truth_json(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            case_path = self._write_run_fixture(run_dir)
+            with mock.patch('subprocess.run', side_effect=_fake_docker_subprocess_run), \
+                    mock.patch.object(sys, 'argv', ['truth.py', run_dir, case_path]):
+                stderr = io.StringIO()
+                with contextlib.redirect_stderr(stderr):
+                    result = truth.main()
+            self.assertEqual(result, 1)
+            self.assertFalse(os.path.exists(os.path.join(run_dir, 'truth.json')))
+            self.assertIn('rootfs export/extraction failed', stderr.getvalue())
+
+    def test_export_container_rootfs_raising_oserror_is_never_swallowed_by_build_inventory(self):
+        # The same scenario one level down: build_inventory itself must
+        # propagate the OSError, not catch it and return some fallback -
+        # its own try/finally around `cid` is for docker rm cleanup only.
+        with mock.patch('subprocess.run', side_effect=_fake_docker_subprocess_run), \
+                tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(OSError):
+                truth.build_inventory('sha256:deadbeef', tmp)
+
+
+class MainHonorsKlTruthTmpdirTests(unittest.TestCase):
+    """KL_TRUTH_TMPDIR must reach tempfile.mkdtemp's own `dir` argument,
+    so a truth.py invocation's own rootfs export/extraction can be
+    pointed at a filesystem other than tmpfs /tmp (the ENOSPC incident
+    this hardening responds to happened on a 7.7 GB tmpfs)."""
+
+    def _write_run_fixture(self, run_dir):
+        with open(os.path.join(run_dir, 'image_id.txt'), 'w') as f:
+            f.write('sha256:deadbeef\n')
+        case_path = os.path.join(run_dir, 'case.json')
+        with open(case_path, 'w') as f:
+            json.dump({}, f)
+        return case_path
+
+    def test_kl_truth_tmpdir_is_passed_to_mkdtemp(self):
+        with tempfile.TemporaryDirectory() as run_dir, tempfile.TemporaryDirectory() as custom_base:
+            case_path = self._write_run_fixture(run_dir)
+            with mock.patch.object(truth, 'build_inventory', side_effect=OSError('boom')), \
+                    mock.patch.object(sys, 'argv', ['truth.py', run_dir, case_path]), \
+                    mock.patch.dict(os.environ, {'KL_TRUTH_TMPDIR': custom_base}), \
+                    mock.patch('tempfile.mkdtemp', wraps=tempfile.mkdtemp) as mkdtemp_spy:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    truth.main()
+            self.assertEqual(mkdtemp_spy.call_args.kwargs.get('dir'), custom_base)
+
+    def test_unset_kl_truth_tmpdir_keeps_the_default(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            case_path = self._write_run_fixture(run_dir)
+            with mock.patch.object(truth, 'build_inventory', side_effect=OSError('boom')), \
+                    mock.patch.object(sys, 'argv', ['truth.py', run_dir, case_path]), \
+                    mock.patch.dict(os.environ, {}, clear=False) as _env:
+                os.environ.pop('KL_TRUTH_TMPDIR', None)
+                with mock.patch('tempfile.mkdtemp', wraps=tempfile.mkdtemp) as mkdtemp_spy:
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        truth.main()
+            self.assertIsNone(mkdtemp_spy.call_args.kwargs.get('dir'))
 
 
 if __name__ == '__main__':

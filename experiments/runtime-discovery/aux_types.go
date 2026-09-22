@@ -70,8 +70,9 @@ type ReadyReport struct {
 // SymlinkEntry is one symbolic link and the string it points at, recorded
 // verbatim. A directory listing alone cannot reproduce a layout that links
 // arbitrary paths together (a package manager that stores every real
-// package once and links each dependency into place), so the link text is
-// saved as well as the fact that the link exists.
+// package once and links each dependency into place, or a tool switched by
+// update-alternatives), so the link text is saved as well as the fact that
+// the link exists.
 type SymlinkEntry struct {
 	Path string `json:"path"`
 	// Target is the raw readlink result, relative or absolute as recorded.
@@ -150,6 +151,14 @@ type OwnedPathEntry struct {
 	DBKind  string `json:"db_kind"`
 	Package string `json:"package"`
 	Version string `json:"version,omitempty"`
+	// IsDir is this path's own lstat result at observation time (never a
+	// symlink's own target followed, the same "final component
+	// unresolved" convention the rest of the package-database reading
+	// keeps). Matching uses it to refuse crediting a package with use
+	// merely because a bare directory it ships (/proc, /dev, /run, /sys,
+	// say) was opened: ground truth itself does not count that as use of
+	// the package either.
+	IsDir bool `json:"is_dir,omitempty"`
 }
 
 // AuxTruncation records one place where a bounded read stopped early, so
@@ -206,7 +215,15 @@ type AuxiliaryInputs struct {
 	DistInfoRecords  []DistInfoRecord      `json:"dist_info_records,omitempty"`
 	EggInfoDists     []EggInfoDistribution `json:"egg_info_distributions,omitempty"`
 	ModuleDirs       []ModuleDirListing    `json:"module_dirs,omitempty"`
-	Symlinks         []SymlinkEntry        `json:"symlinks,omitempty"`
+	// Symlinks holds every link recorded outside the merged top-level
+	// directories UsrMerge already covers: links found inside a module
+	// tree while it was being listed, every entry of /etc/alternatives,
+	// /etc/localtime, the direct entries of the conventional bin/sbin
+	// directories, and any link among the operating-system package
+	// database's own file list. Matching resolves a chain through these
+	// the same way a real lookup would, hop by hop, rather than only ever
+	// seeing whichever single reading happened to record the final target.
+	Symlinks []SymlinkEntry `json:"symlinks,omitempty"`
 
 	// OwnedPaths is the operating-system package database's full
 	// path-to-package index at this generation.

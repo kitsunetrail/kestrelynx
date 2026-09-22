@@ -1362,7 +1362,106 @@ def attribute_evidence(evidence, fired_at, stopped_at, operation_intervals,
 # silently merge a used copy and an unused one into a single,
 # wrongly-labeled outcome.
 
-def export_container_rootfs(cid, tmp):
+def _required_rootfs_export_bytes(image_id):
+    """Twice image_id's own `docker image inspect` Size, in bytes: a
+    rough but cheap estimate of what exporting AND extracting the same
+    image's rootfs both cost under the same destination directory
+    (docker export's own tar plus the files it unpacks from that tar,
+    each roughly one image's worth of bytes)."""
+    inspect = subprocess.run(
+        ['docker', 'image', 'inspect', image_id, '--format', '{{.Size}}'],
+        capture_output=True, text=True)
+    if inspect.returncode != 0:
+        raise OSError(f'docker image inspect failed for {image_id}: {inspect.stderr.strip()}')
+    try:
+        image_size = int(inspect.stdout.strip())
+    except ValueError:
+        raise OSError(f'docker image inspect returned a non-numeric Size for {image_id}: {inspect.stdout!r}')
+    return image_size * 2
+
+
+def _check_rootfs_export_disk_space(image_id, tmp):
+    """Raises OSError, before either `docker export` or the extraction
+    below writes a single byte, when tmp's own filesystem has less free
+    space than _required_rootfs_export_bytes(image_id) - discovering a
+    full disk only partway through a multi-hundred-megabyte extraction
+    would already have spent the time and left a partial rootfs behind
+    for no benefit; checking first spends nothing extra to avoid that
+    entirely. KL_TRUTH_TMPDIR (see main()) is what actually decides which
+    filesystem tmp - and so this check - lands on."""
+    required = _required_rootfs_export_bytes(image_id)
+    free = shutil.disk_usage(tmp).free
+    if free < required:
+        raise OSError(
+            f'insufficient disk space to export and extract image {image_id} rootfs under {tmp}: '
+            f'required (approx., 2x image Size) {required} bytes, free {free} bytes, destination {tmp}')
+
+
+_TAR_BLOCK_SIZE = 512
+# The tar format's own end-of-archive marker is at least two consecutive
+# all-zero 512-byte blocks; some writers (a large GNU tar blocking
+# factor, say) pad further, but never fewer than two.
+_TAR_END_MARKER_BLOCKS = 2
+
+
+def _verify_tar_completeness(tar_path):
+    """Verifies docker export's own tar file was written to completion -
+    a check tarfile.open()'s own member-by-member reading cannot be
+    trusted to do by itself: reading simply stops, with whatever members
+    it already saw and NO exception at all, the moment it cannot find
+    one more full header block, whether that is because the archive
+    genuinely ends there (its own two-block, all-zero end-of-archive
+    marker) or because the file was truncated - cutting a two-member tar
+    at exactly 512 or 612 bytes both still leave tarfile.open() reporting
+    one complete member and no error whatsoever. A truncation that lands
+    exactly on a block boundary looks, to tarfile's own header reader,
+    identical to a well-formed archive that simply has no more members;
+    one that lands mid-header looks like the same "no more complete
+    header available" condition tarfile also treats as an ordinary end.
+
+    Checks, in order: (a) the file's own size is a multiple of 512 (a
+    tar's every block, header or data, is exactly this many bytes; any
+    other size can only be a truncation mid-block); (b) every member
+    tarfile itself can read still parses via its own header reading
+    (this still relies on tarfile for header-level correctness, just
+    never for whether it reached the real end); (c) what actually
+    follows the last member's own data, rounded up to the tar format's
+    own 512-byte block boundary, is ENTIRELY zero for at least
+    _TAR_END_MARKER_BLOCKS full blocks and runs all the way to the
+    file's own actual end - the real end-of-archive marker, not merely
+    "no more headers found from here".
+
+    Raises OSError, naming the exact byte offsets involved, on any
+    mismatch; returns None on success.
+    """
+    size = os.path.getsize(tar_path)
+    if size == 0 or size % _TAR_BLOCK_SIZE != 0:
+        raise OSError(f'tar is truncated: {tar_path} size {size} bytes is not a multiple of '
+                       f'{_TAR_BLOCK_SIZE} (every tar block is exactly this many bytes)')
+    last_end = 0
+    try:
+        with tarfile.open(tar_path) as tf:
+            for member in tf:
+                last_end = member.offset_data + member.size
+    except tarfile.TarError as e:
+        raise OSError(f'tar is truncated or corrupt while reading member headers of {tar_path}: {e}') from e
+    content_end = ((last_end + _TAR_BLOCK_SIZE - 1) // _TAR_BLOCK_SIZE) * _TAR_BLOCK_SIZE
+    trailer_len = size - content_end
+    if trailer_len < _TAR_BLOCK_SIZE * _TAR_END_MARKER_BLOCKS:
+        raise OSError(
+            f'tar is truncated: {tar_path} ends at byte {size}, only {trailer_len} bytes past the last '
+            f"member's own data (byte {content_end}) - the standard "
+            f'{_TAR_END_MARKER_BLOCKS}-block, all-zero end-of-archive marker does not fit there')
+    with open(tar_path, 'rb') as f:
+        f.seek(content_end)
+        trailer = f.read(trailer_len)
+    if trailer.strip(b'\x00'):
+        raise OSError(
+            f'tar is truncated or corrupt: {tar_path} has non-zero bytes at/after byte {content_end}, '
+            f'where the end-of-archive marker must be all zero')
+
+
+def export_container_rootfs(cid, tmp, image_id):
     """Exports a docker-create'd container's entire filesystem with
     `docker export` and extracts it under tmp, skipping /proc, /sys and
     /dev entirely: these are runtime pseudo-filesystems with nothing of
@@ -1375,9 +1474,18 @@ def export_container_rootfs(cid, tmp):
     separate, targeted copy — see gtb.extract_os_db — since only the
     language-ecosystem inventory needs to scan the whole tree).
 
+    Raises OSError, with a stage-labeled message, for anything serious
+    enough that I must never be built from a partial rootfs: too little
+    free space at tmp to even attempt this (see
+    _check_rootfs_export_disk_space), a nonzero `docker export`, an
+    unreadable or truncated tar stream, or any OSError extracting one
+    specific archive member (ENOSPC included). None of these is caught
+    and merely recorded on a scan_record for a caller to notice or not -
+    each aborts this run outright, the same way any other unexpected
+    OSError would.
+
     Returns (rootfs_dir, scan_record): scan_record carries the excluded
-    areas and reasons, and every archive member this run could not
-    extract, for this run's own inventory_scan record.
+    areas and reasons, for this run's own inventory_scan record.
     """
     rootfs_dir = os.path.join(tmp, 'rootfs')
     os.makedirs(rootfs_dir, exist_ok=True)
@@ -1389,50 +1497,59 @@ def export_container_rootfs(cid, tmp):
     excluded_names = ('proc', 'sys', 'dev')
     excluded_prefixes = tuple(f'{n}/' for n in excluded_names)
 
+    _check_rootfs_export_disk_space(image_id, tmp)
+
     tar_path = os.path.join(tmp, 'rootfs.tar')
     with open(tar_path, 'wb') as f:
         export = subprocess.run(['docker', 'export', cid], stdout=f, stderr=subprocess.PIPE)
     if export.returncode != 0:
-        return rootfs_dir, {
-            'excluded': excluded,
-            'extraction_failures': [f'docker export failed: {export.stderr.decode(errors="replace")}'],
-            'entries_extracted': 0, 'ok': False,
-        }
+        raise OSError(f'docker export failed for container {cid}: {export.stderr.decode(errors="replace")}')
 
-    extraction_failures = []
-    entries_extracted = 0
+    # A nonzero `docker export` exit is not the only way this tar can be
+    # incomplete: a write that ran out of space (ENOSPC) partway through
+    # can still leave `docker export` itself exiting 0 having already
+    # given up on writing more, or leave the file cut off at a boundary
+    # tarfile's own lenient reading below would otherwise accept without
+    # complaint (see _verify_tar_completeness).
+    _verify_tar_completeness(tar_path)
+
     try:
         tf = tarfile.open(tar_path)
     except tarfile.TarError as e:
-        return rootfs_dir, {'excluded': excluded, 'extraction_failures': [f'tar open failed: {e}'],
-                             'entries_extracted': 0, 'ok': False}
-    with tf:
-        for member in tf:
-            name = member.name.lstrip('./')
-            if not name or name in excluded_names or name.startswith(excluded_prefixes):
-                continue
-            try:
-                # "fully_trusted" (Python 3.12+'s pre-PEP-706 behavior),
-                # never the stricter "data"/"tar" filters: those refuse
-                # an absolute-target symlink outright (update-alternatives
-                # and plenty of ordinary shared-library symlinks use one),
-                # which is a real extraction gap for this tool's own
-                # fully-trusted source - this run's own `docker export` of
-                # an image it built itself, not untrusted third-party
-                # archive content the safety filters are meant to guard
-                # against.
-                tf.extract(member, path=rootfs_dir, set_attrs=False, filter='fully_trusted')
-                entries_extracted += 1
-            except (OSError, tarfile.TarError) as e:
-                extraction_failures.append(f'{name}: {e}')
+        raise OSError(f'tar open failed for {tar_path}: {e}') from e
+
+    entries_extracted = 0
+    try:
+        with tf:
+            for member in tf:
+                name = member.name.lstrip('./')
+                if not name or name in excluded_names or name.startswith(excluded_prefixes):
+                    continue
+                try:
+                    # "fully_trusted" (Python 3.12+'s pre-PEP-706 behavior),
+                    # never the stricter "data"/"tar" filters: those refuse
+                    # an absolute-target symlink outright (update-alternatives
+                    # and plenty of ordinary shared-library symlinks use one),
+                    # which is a real extraction gap for this tool's own
+                    # fully-trusted source - this run's own `docker export` of
+                    # an image it built itself, not untrusted third-party
+                    # archive content the safety filters are meant to guard
+                    # against.
+                    tf.extract(member, path=rootfs_dir, set_attrs=False, filter='fully_trusted')
+                    entries_extracted += 1
+                except (OSError, tarfile.TarError) as e:
+                    # Never recorded and tolerated: a partial rootfs (this
+                    # member's own content, or everything after it) is not
+                    # a smaller version of the truth, it is not the truth
+                    # at all - see the docstring above.
+                    raise OSError(f'failed to extract {name!r} from {tar_path} to {rootfs_dir}: {e}') from e
+    except tarfile.TarError as e:
+        raise OSError(f'tar archive truncated or unreadable while reading members of {tar_path}: {e}') from e
     try:
         os.remove(tar_path)
     except OSError:
         pass
-    return rootfs_dir, {
-        'excluded': excluded, 'extraction_failures': extraction_failures,
-        'entries_extracted': entries_extracted, 'ok': True,
-    }
+    return rootfs_dir, {'excluded': excluded, 'entries_extracted': entries_extracted}
 
 
 def _rootfs_local_path(rootfs_dir, image_path):
@@ -1859,11 +1976,18 @@ def build_inventory(image_id, tmp):
     version, kept out of I; resolution_context is what resolve_used_path
     needs; inventory_scan records the scan's own range, sources, and
     failures for this run's own truth.json.
+
+    Propagates OSError, uncaught, straight out of export_container_rootfs
+    when this run's own rootfs export or extraction failed in any way
+    (see there): building I from a rootfs this run knows is incomplete
+    would silently understate both the bundled-package inventory and the
+    used set that inventory keys, so the caller must not go on to build
+    either one from it.
     """
     cid = subprocess.run(['docker', 'create', image_id], capture_output=True, text=True).stdout.strip()
     try:
         owners, os_versions, os_db_available = gtb.extract_os_db(cid, tmp)
-        rootfs_dir, rootfs_scan = export_container_rootfs(cid, tmp)
+        rootfs_dir, rootfs_scan = export_container_rootfs(cid, tmp, image_id)
 
         py_site_roots = discover_python_site_roots(rootfs_dir)
         py_exact, py_prefixes = gtb.build_python_index(py_site_roots)
@@ -1900,8 +2024,12 @@ def build_inventory(image_id, tmp):
         inventory_scan = {
             'scan_root': "/ (the container's own full filesystem, exported and extracted locally)",
             'excluded': rootfs_scan.get('excluded', []),
-            'extraction_failures': rootfs_scan.get('extraction_failures', []),
-            'rootfs_export_ok': rootfs_scan.get('ok', False),
+            # Always True here: export_container_rootfs raises OSError,
+            # uncaught, instead of returning on any export or extraction
+            # failure (see there), so this key is never written as False
+            # for a caller to notice and tolerate - a run whose rootfs
+            # export failed never reaches this line at all.
+            'rootfs_export_ok': True,
             'os_db': {
                 'source': 'dpkg /var/lib/dpkg or apk /lib/apk/db/installed, copied directly rather than through the rootfs export',
                 'available': os_db_available,
@@ -2335,7 +2463,13 @@ def main():
     if fired_at is None:
         print(f'{run}: no ready_at.txt/fired_at.txt; evidence timestamps will be unavailable', file=sys.stderr)
 
-    tmp = tempfile.mkdtemp(prefix='truthdb-')
+    # KL_TRUTH_TMPDIR overrides where this run's own rootfs export and
+    # extraction land (see export_container_rootfs) - an empty string is
+    # treated the same as unset, since tempfile.mkdtemp's own default
+    # (TMPDIR, else /tmp) is not otherwise reachable once the variable is
+    # set at all. Unset (the ordinary case) keeps tempfile.mkdtemp's own
+    # default exactly as before.
+    tmp = tempfile.mkdtemp(prefix='truthdb-', dir=os.environ.get('KL_TRUTH_TMPDIR') or None)
     # This run's own exported rootfs (see export_container_rootfs)
     # lives under tmp for the rest of this function's own use of
     # context['rootfs_dir'] - removed again once this run is done with
@@ -2344,7 +2478,16 @@ def main():
     # export behind in /tmp. KL_TRUTH_KEEP_TMP=1 skips the cleanup, for
     # inspecting the export by hand.
     try:
-        inventory, java_version_unknown, context, inventory_scan = build_inventory(image_id, tmp)
+        try:
+            inventory, java_version_unknown, context, inventory_scan = build_inventory(image_id, tmp)
+        except OSError as e:
+            # A failed rootfs export or extraction (see
+            # export_container_rootfs) - I would otherwise be built from
+            # a rootfs this run knows is incomplete, understating both
+            # the bundled-package inventory and the used set it keys.
+            # Aborted outright: no truth.json is written below at all.
+            print(f'{run}: rootfs export/extraction failed: {e}', file=sys.stderr)
+            return 1
 
         strace_used, strace_unresolved, strace_failed, strace_evidence = (set(), [], 0, {})
         if os.path.isdir(strace_dir):

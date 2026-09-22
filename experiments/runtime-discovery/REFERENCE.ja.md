@@ -29,6 +29,15 @@
 - `-aux-inputs=true` では対応付け用の入力を各観測の `auxiliary_inputs` に保存する
 - 入力には Python の検索ディレクトリ、`.dist-info/RECORD` の一覧、`.egg-info` を使うディストリビューションを含む
 - Python と `node_modules` の構成、シンボリックリンクの参照先、OS パッケージのパス索引、`/usr` 統合に伴うリンク、プロセスごとの生の `mountinfo` も含む
+
+- `symlinks` にはモジュールツリー内、`/etc/localtime`、`/etc/alternatives` と一般的な bin/sbin ディレクトリの直下、OS パッケージデータベースのファイル一覧にあるリンクを記録する
+- 対象の一般的なディレクトリは `/bin`、`/sbin`、`/usr/bin`、`/usr/sbin`、`/usr/local/bin`、`/usr/local/sbin` で、再帰せず直下のエントリを調べる
+- 各リンクはパスと生の `readlink` 結果を保持し、参照先が相対か絶対かも保存する
+- `owned_paths[].is_dir` は観測時点でそのパス自体がディレクトリだったかを示し、末尾要素のシンボリックリンクをたどらない `lstat` の結果を使う
+- パスと所有者の索引をキャッシュから取得した場合も、ディレクトリ属性とパッケージデータベース由来のリンク先は補助入力の読み取りごとに調べ直す
+- ディレクトリ属性は補助入力の世代の指紋に含め、パッケージデータベースが変わらなくてもディレクトリからファイルへの変化を別世代として識別できるようにする
+- 追加リンクの収集枠は `/etc/localtime`、`/etc/alternatives`、一般的な bin/sbin の直下、パッケージデータベース由来のリンクで共有し、この順で調べる
+- 追加リンクの収集枠を使い切ると `extra_symlinks` の切り詰めを記録し、ディレクトリ属性の調査は継続する
 - ディレクトリ構成に保存するのはパスであり、モジュールの内容は含まない
 - Python の検索ディレクトリはコンテナのインタープリターを起動せず、ファイルシステムの調査で特定する
 - 各読み取りはマウントビュー、補助入力の世代、パッケージデータベースの世代、収集時刻、最初と最後の検出時刻、サンプル ID、読み取りに使った PID を記録する
@@ -125,6 +134,8 @@
 | `-aux-max-dir-entries` | ディレクトリツリーごとのモジュール構成パス数の上限で、既定値は `200000` |
 | `-aux-max-record-lines` | Python ディストリビューションごとのインストール済みファイル一覧の行数上限で、既定値は `100000` |
 | `-aux-max-owned-paths` | パッケージデータベースのパス索引の件数上限で、既定値は `400000` |
+
+| `-aux-max-extra-symlinks` | `/etc/localtime`、`/etc/alternatives`、一般的な bin/sbin ディレクトリ、OS パッケージのファイル一覧で共有する読み取りごとのリンク件数上限で、既定値は `20000` |
 | `-aux-scan-depth` | 一般的なインストール先のルート配下を検索する深さで、既定値は `8` |
 
 - 標準のサンプリング条件は root、300 秒の観測期間、30 秒間隔、オフセット 0、反復番号 1
@@ -145,7 +156,7 @@
 - 対象登録を待つ場合は待機後に既定の基準時刻を設定し直す
 - 基準時刻とその出所を記録する
 - ワークロードの周期に対する比較では、その周期の基準時刻を `-phase-base` に指定する
-- 補助入力には 1 回の読み取りにつきシンボリックリンクの参照先 100,000 件という固定上限もある
+- モジュールツリーの一覧取得中に収集するシンボリックリンクの参照先には、1 回の読み取りにつき 100,000 件という別の固定上限がある
 - このシンボリックリンクの上限を変更するフラグはない
 - 登録、検索、切り詰めの設定は run の条件とともに保存する
 
@@ -648,6 +659,12 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - 周期処理の反復回数の違いは許容し、共通範囲を超えた末尾のインスタンスは未対応として明示する
 - 正解 run に利用可能な内省ログがある場合、計測側の内省ログの欠落や利用不能は同等性の不成立になる
 
+#### 展開の失敗と一時領域
+
+- `truth.py` はイメージの rootfs を一時ディレクトリへ展開し、docker export・アーカイブの展開・ファイル書き込みのいずれかが失敗したら `truth.json` を書かずに非ゼロで終了する
+- 展開前に `docker image inspect` が返すイメージサイズの 2 倍以上の空き容量を要求し、不足していれば非ゼロで終了する
+- `KL_TRUTH_TMPDIR` で展開先のディレクトリを指定でき、`KL_TRUTH_KEEP_TMP=1` を付けると展開した内容を実行後に削除せず残す
+
 #### truth.json のフィールド
 
 | フィールド | 意味 |
@@ -736,6 +753,22 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - `gobinary` は追加パッケージの母集団と網羅性集計から除外する
 - match のグループキーは `(class, package, installed_version)` のままで、言語エコシステム間の同名同版を区別できない
 
+### シンボリックリンク、ディレクトリ、アプリのマニフェスト
+
+- 保存済みの symlink 連鎖はパスの構成要素ごとに解決し、絶対参照はコンテナのルート起点、相対参照はリンクの親ディレクトリ起点でたどる
+- リンクをたどる回数は最大 40 hop とし、循環などで上限を超えた場合は途中まで置換したパスを採用しない
+- OS の照合では `/usr` 統合を正規化した元パスと symlink 解決後のパスの所有者を別々に照会する
+- 両方のパスの所有者がそれぞれ単独で互いに異なる場合は、正解データと同じく両方のパッケージに使用確認を付ける
+- 解決によって変わった参照先のパスから対応付けた場合は `Via` に `symlink:<解決後のパス>` を記録する
+- どちらか一方のパス自体に複数の所有者がある場合は、他方の所有者が単独でも `Conflict` とする
+- open イベントでは全パッケージ照合ルールより前にディレクトリ判定を行い、保存済みの `is_dir` が元パスまたは解決後のパスをディレクトリと示す場合は使用の証拠から除外する
+- この除外は `missDirectoryOpen` (`directory_open`) とし、`outside_scan_events` とは別の `directory_open_events` に数える
+- ディレクトリ open の除外は open イベントに適用し、実行イベントやサンプルのパスには適用しない
+- `node_project_manifest` は解決後と元のどちらのパスにも `node_modules` のパッケージ境界がない場合だけ、スキャンに記録された最も近い祖先の `package.json` を探す
+- この規則はアプリ自身のマニフェストを対象に含めつつ、リンク先が `node_modules` の外にあるという理由だけで依存パッケージをアプリに帰属させない
+- 最初の配置読み取りより前など、イベントの瞬間をカバーする保存済みの読み取りがない場合は、観測パスとスキャン索引だけで解決する
+- この fallback では後の読み取りから過去の配置の不変性を証明できないため、保存済みの OS 所有者や symlink 表を使わない
+
 ## 網羅性の集計(coverage.py)
 
 ### 評価範囲と集合
@@ -793,6 +826,9 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - 対応付け不足の factor は `lang_pkg_unmappable`、`no_file_list`、`db_absent`、`db_error`、`mapping_input_missing`、`event_path_unresolved`
 - `proc_gone` だけでは権限不足や `other` を確定しない
 - `unknown` には欠落報告に対する `lost_events_candidate` と、S0 の保持証拠不足に対する `short_lived_use_candidate` を付ける場合がある
+
+- `read_event_state` は `lost_events`、`lost_notifications`、`map_overflow` の正の値だけをイベント欠落のカウンターとして扱い、`event_state=degraded` の場合も run 全体の欠落候補の判定を有効にする
+- `path_read_failures` のような捕捉済みイベントの属性取得失敗や、`events_before_filter` と `events_after_filter` のような通常の件数だけではイベント欠落とみなさない
 - 正解 run の保持時間を計測 run の保持区間の代わりに使わない
 
 ### 短命主体の直接確認数と出力
@@ -810,6 +846,46 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - イメージ ID の欠落・不一致、正解の入力ログの利用不能、操作・内省の同等性確認の失敗では `hold: true` と `hold_reason` を出力する
 - 保留時はコマンドが正常終了しても再現率と偽陽性の指標を算出せず、両方の出力ファイルに保留を記録する
 - トレースの不完全性は該当する未使用候補を `X` に残し、それだけでは同等性に関する集計保留を起こさない
+
+### 順位差の集計(coverage_rank.py)
+
+- `tools/coverage_rank.py [out-dir]` は保存済みの `g4` の順位を網羅性の集計結果と照合し、ディレクトリの既定値は `experiments/runtime-discovery/out`
+- 選択したディレクトリに `AGGREGATE-rank.md` と `AGGREGATE-rank.csv` を出力する
+- baseline は実行時情報なしの基準順位で、優先度、深刻度、パッケージ、脆弱性 ID で決まる
+- `series=none` は run × スキャン種別 × 優先度ごとに 1 行の基準順位を表す
+- 順位比較の対象は照合が出力する S0 と S2 の 2 系列、および `act_now` と `watch` の 2 優先度に限る
+- S0 はサンプリングの証拠を使い、S2 はサンプリング、追加の対応付け、イベントの証拠を組み合わせる
+- 詳細表は run × スキャン種別 × 系列または基準順位 × 優先度ごとに 1 行を持つ
+- Markdown の要約は replicate 以外が同じ条件をまとめ、数値列の一致を `consistent=yes` または `no` で示し、異なる値に `DIFFERS:` を付ける
+- 見逃しパッケージの列は各スキャン種別の `coverage.json` にある S2 の見逃しを使い、どの順位系列でもパッケージ名とインストール済みの版で照合する
+
+| 列 | 意味 |
+| --- | --- |
+| `total_findings` | 対象優先度の Finding 総数 |
+| `rank_changed_count` | 調整後の上位 20 件のうち、調整後順位が基準順位と異なる Finding 数 |
+| `vs_no_runtime_rank_changed` | 実行時情報なしとの比較を明示する列で、値は `rank_changed_count` と同じ |
+| `top20_promoted` | 調整後の上位 20 件のうち、`adjusted_rank < baseline_rank` の Finding 数 |
+| `labeled_count` | 対象優先度の全 Finding のうち、使用確認・全世界への公開・特権実行の複合ラベルを満たす件数 |
+| `missed_pkg_findings` | S2 の見逃しパッケージが対象優先度に持つ Finding の合計 |
+| `missed_pkg_in_top20` | その見逃しパッケージの Finding のうち、当該系列の調整後の上位 20 件に入る件数 |
+| `missed_pkg_rank_unchanged` | `missed_pkg_in_top20` のうち、`adjusted_rank == baseline_rank` の件数 |
+| `missed_pkg_not_promoted` | `missed_pkg_in_top20` のうち、`adjusted_rank >= baseline_rank` の件数で、順位不変と他の Finding に押し下げられたものを含む |
+| `missed_pkg_outside_top20` | `missed_pkg_findings - missed_pkg_in_top20` で、調整後順位を取得できない件数 |
+| `false_promotions` | 当該系列の FP を対象優先度に Finding があるパッケージへ絞り、パッケージ名と版を照合した、調整後の上位 20 件で順位が上がった Finding 数 |
+
+- 対象優先度に Finding を持つ FP パッケージがなければ `false_promotions` は 0
+- 該当する FP パッケージがその優先度の保存済み上位 20 件に 1 つでも現れなければ、順位が上がったか判断できないため `false_promotions` は N/A
+- 保存された上位 20 件の外にある Finding は順位変動を取得できないため、`missed_pkg_not_promoted` に含めない
+- 基準順位の行では順位変動と順位上昇を 0 とし、ラベル、見逃しの順位、偽の順位上昇の欄を N/A とする
+
+### 新収集器による確認結果
+
+- ケース 26・27・28 の確認 run は新収集器を使い、`startup`・300 秒窓で実行した
+- ケース 27 の Node の再現率は 100% (72/72、アプリ自身の `package.json` を含む)、常駐 OS の再現率は 100% (8/8)
+- ケース 26 の常駐 OS の再現率は 94% (17/18)、ケース 28 は 91% (10/11)
+- ケース 26 と 28 に残った常駐 OS の見逃し各 1 件はいずれも `tzdata` で、`/etc/localtime` の open がコンテナ起動直後の最初の配置読み取りより前に発生した
+- 保存済み symlink 表はケース 26 が 438 件、ケース 28 が 917 件で、ケース 28 の `IsDir` が真のエントリは 2,822 件
+- これらの確認 run では打ち切りがなく、偽陽性は 0 件
 
 ## 観測状態
 
@@ -904,6 +980,11 @@ go run ./experiments/runtime-discovery match \
 - イベント捕捉率にはイベントログと独立した発生レコードが必要
 
 ## 詳細な制限と注意
+
+- 最初の配置読み取りより前のイベントは過去の配置の不変性を証明できないため、OS の所有者や symlink 表を使わずスキャン索引だけで解決する
+- ディレクトリを開いただけではパッケージの使用とみなさず、その除外には保存済み入力のディレクトリ情報が必要になる
+- リンクとリンク先の所有者がそれぞれ単独で異なる場合は正解データと同じく両方を使用確認し、どちらかのパス自体に複数の所有者があれば競合として扱う
+- 照合の実装上、順位比較は S0 と S2 の 2 系列だけに存在し、保存された上位 20 件から範囲外の Finding の順位変動は確定できない
 
 - 網羅性検証のフィクスチャは apt パッケージの版を固定せず、後日の再ビルドを正解取得時のイメージと同等とはみなさない
 - 集計は正解と計測の同一イメージ ID を必要とし、毎回新しいコンテナを作って以前の run の書き込み層を持ち越さない

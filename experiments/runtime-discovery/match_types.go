@@ -380,6 +380,13 @@ type MappingReport struct {
 	UnmappableEvents  int `json:"unmappable_events"`
 	OutsideScanPaths  int `json:"outside_scan_paths"`
 	OutsideScanEvents int `json:"outside_scan_events"`
+	// DirectoryOpenEvents counts an open event (never an exec, and never a
+	// sampled path) whose own path saved layout information records as a
+	// directory. Kept apart from OutsideScanEvents: the scan may report
+	// plenty about the package that ships the directory, this event just
+	// never used it — opening a directory is not use of the package that
+	// ships it, the same exclusion ground truth itself applies.
+	DirectoryOpenEvents int `json:"directory_open_events"`
 }
 
 // MappingRow is one ecosystem's mapping outcome.

@@ -43,6 +43,7 @@ func runCollect(args []string) error {
 	auxMaxEntries := fs.Int("aux-max-dir-entries", 200000, "per-directory-tree cap on recorded module layout paths")
 	auxMaxRecord := fs.Int("aux-max-record-lines", 100000, "per-distribution cap on installed-file manifest lines")
 	auxMaxOwned := fs.Int("aux-max-owned-paths", 400000, "cap on package-database path index entries")
+	auxMaxExtraSymlinks := fs.Int("aux-max-extra-symlinks", 20000, "cap on symlink entries recorded from /etc/alternatives, /etc/localtime, the conventional bin/sbin directories, and the package database's own file list")
 	auxScanDepth := fs.Int("aux-scan-depth", 8, "how many directory levels below each conventional installation root to search for module directories")
 	cgroupPath := fs.String("cgroup-path", "", "cgroup v2 directory to measure this collector in (default: the collector's own cgroup from /proc/self/cgroup, which is only this collector's cost if it was started in a cgroup of its own)")
 	dockerCgroupPath := fs.String("docker-cgroup-path", defaultDockerServiceCgroup, "cgroup v2 directory of the Docker daemon, whose cpu.stat covers the ps processes docker top starts")
@@ -98,6 +99,7 @@ func runCollect(args []string) error {
 	limits := auxLimits{
 		ScanDepth: *auxScanDepth, DirEntries: *auxMaxEntries,
 		RecordFile: *auxMaxRecord, OwnedPaths: *auxMaxOwned, Symlinks: defaultAuxLimits().Symlinks,
+		ExtraSymlinks: *auxMaxExtraSymlinks,
 	}
 
 	runStart := time.Now()

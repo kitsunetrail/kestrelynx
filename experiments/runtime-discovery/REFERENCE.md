@@ -29,6 +29,15 @@
 - `-aux-inputs=true` saves mapping inputs in each observation's `auxiliary_inputs`.
 - Inputs include Python search directories, `.dist-info/RECORD` lists, and distributions using `.egg-info`.
 - Inputs also include Python and `node_modules` layouts, symlink targets, the OS package path index, merged-`/usr` links, and raw per-process `mountinfo`.
+
+- `symlinks` records links found in module trees, `/etc/localtime`, direct entries of `/etc/alternatives` and conventional bin/sbin directories, and paths listed by the OS package database.
+- The conventional directories are `/bin`, `/sbin`, `/usr/bin`, `/usr/sbin`, `/usr/local/bin`, and `/usr/local/sbin`, with their direct entries inspected without recursive descent.
+- Each link retains its path and raw `readlink` target, preserving whether the target is relative or absolute.
+- `owned_paths[].is_dir` records whether the path itself was a directory at observation time, using `lstat` without following a symlink in the final component.
+- Directory flags and package-database symlink targets are read again on every auxiliary reading even when the path-to-owner index is cached.
+- Directory flags participate in the auxiliary-generation fingerprint so a directory-to-file change can produce a new generation without a package database change.
+- The extra-symlink budget is shared by `/etc/localtime`, `/etc/alternatives`, conventional bin/sbin entries, and package-database links, with those sources inspected in that order.
+- Exhausting that budget records an `extra_symlinks` truncation without stopping directory-flag inspection.
 - Directory layouts contain paths rather than module contents.
 - Python search directories come from filesystem inspection without invoking the container's interpreter.
 - Each reading records its mount view, auxiliary generation, package database generation, collection time, first and last seen times, sample IDs, and reading PID.
@@ -125,6 +134,8 @@
 | `-aux-max-dir-entries` | Module-layout path limit per directory tree, default `200000` |
 | `-aux-max-record-lines` | Installed-file manifest line limit per Python distribution, default `100000` |
 | `-aux-max-owned-paths` | Package database path-index entry limit, default `400000` |
+
+| `-aux-max-extra-symlinks` | Shared link-entry limit per reading for `/etc/localtime`, `/etc/alternatives`, conventional bin/sbin directories, and the OS package file list, default `20000` |
 | `-aux-scan-depth` | Search depth below conventional installation roots, default `8` |
 
 - The standard sampling condition is root, a 300-second window, a 30-second interval, zero offset, and replicate 1.
@@ -145,7 +156,7 @@
 - Registration waits reset the default reference after the wait.
 - The reference time and its source are recorded.
 - Workload-relative comparisons use the workload cycle's reference instant as `-phase-base`.
-- Auxiliary reads also have a fixed limit of 100,000 symlink targets per reading.
+- Links collected while listing module trees have a separate fixed limit of 100,000 symlink targets per reading.
 - That symlink limit has no flag.
 - Registration, search, and truncation settings belong with the saved run conditions.
 
@@ -648,6 +659,12 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - Different periodic cycle counts are allowed, while trailing instances beyond the shared range remain explicitly unpaired.
 - Missing or unusable measurement introspection prevents equivalence when the truth run has usable introspection.
 
+#### Extraction failures and temporary space
+
+- `truth.py` exports the image's rootfs into a temporary directory and stops with a non-zero exit, writing no `truth.json`, when the export, the archive extraction, or any file write fails.
+- Before exporting, it requires free space of at least twice the image size reported by `docker image inspect` and stops with a non-zero exit when the space is short.
+- `KL_TRUTH_TMPDIR` selects the directory for the extraction, and `KL_TRUTH_KEEP_TMP=1` keeps the extracted tree after the run instead of deleting it.
+
 #### truth.json fields
 
 | Field | Meaning |
@@ -736,6 +753,22 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - `gobinary` entries are excluded from the added package population and from coverage scoring.
 - The match group key remains `(class, package, installed_version)` and cannot separate identical language-package names and versions across ecosystems.
 
+### Symlinks, directories, and application manifests
+
+- Saved symlink chains are resolved component by component, with absolute targets starting at the container root and relative targets starting at the link's parent directory.
+- Resolution follows at most 40 links and discards partial substitutions if the chain exceeds that limit, including through a cycle.
+- OS matching queries the original path after merged-`/usr` normalization and the symlink-resolved path separately.
+- If each path has a single owner and the owners differ, both packages receive use confirmation, following the ground truth.
+- A match through a changed target path records `Via` as `symlink:<resolved-path>`.
+- Multiple ownership claims for either individual path produce `Conflict`, even if the other path has a single owner.
+- Before any package-matching rule, an open event is rejected as package-use evidence if saved `is_dir` information identifies either the original or resolved path as a directory.
+- These exclusions use `missDirectoryOpen` (`directory_open`) and are counted in `directory_open_events` separately from `outside_scan_events`.
+- The directory-open exclusion applies to open events rather than executions or sampled paths.
+- `node_project_manifest` searches for the nearest ancestor `package.json` named by the scan only when neither the resolved path nor the original path has a `node_modules` package boundary.
+- This rule covers the application's own manifest without attributing a dependency to the application merely because a symlink leads outside `node_modules`.
+- If no saved reading covers an event's instant, including before the first layout reading, matching falls back to the observed path and scan index alone.
+- That fallback uses neither saved OS ownership nor the symlink table because later readings cannot establish that the earlier layout was unchanged.
+
 ## Coverage scoring (coverage.py)
 
 ### Scope and sets
@@ -793,6 +826,9 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - Mapping-gap factors are `lang_pkg_unmappable`, `no_file_list`, `db_absent`, `db_error`, `mapping_input_missing`, and `event_path_unresolved`.
 - `proc_gone` alone does not establish permission denial or the `other` cause.
 - An `unknown` miss can carry `lost_events_candidate` for reported event loss and `short_lived_use_candidate` when S0 retention evidence is insufficient.
+
+- `read_event_state` treats only positive `lost_events`, `lost_notifications`, or `map_overflow` counters as event loss, while `event_state=degraded` also enables the run-wide loss-candidate signal.
+- Captured-event attribute failures such as `path_read_failures` and ordinary counts such as `events_before_filter` and `events_after_filter` do not independently establish event loss.
 - Truth-run retention durations are not substituted for measurement-run retention intervals.
 
 ### Short-lived direct confirmations and output
@@ -810,6 +846,46 @@ sudo bash experiments/runtime-discovery/cases/run.sh dump-logs 13 "$run_dir"
 - Missing or different image IDs, unavailable truth source logs, or failed operation/introspection equivalence produce `hold: true` with `hold_reason`.
 - A hold writes both output files without recall or false-positive figures, even though the command exits successfully.
 - Trace incompleteness keeps affected negative candidates in `X` and does not by itself trigger the equivalence hold.
+
+### Ranking changes (coverage_rank.py)
+
+- `tools/coverage_rank.py [out-dir]` aggregates saved `g4` rankings against scored coverage results and defaults to `experiments/runtime-discovery/out`.
+- Outputs are `AGGREGATE-rank.md` and `AGGREGATE-rank.csv` under the selected directory.
+- The baseline is the order without runtime information, determined by priority, severity, package, and vulnerability ID.
+- A `series=none` reference row represents that baseline once per run, scan variant, and priority.
+- Ranking comparisons use only the S0 and S2 series produced by matching and only the `act_now` and `watch` priority buckets.
+- S0 uses sampling evidence, while S2 combines sampling, added mapping, and event evidence.
+- The detail table has one row per run × scan variant × series or baseline × priority.
+- The Markdown summary groups otherwise identical conditions across replicates and reports agreement across the numeric columns with `consistent=yes` or `no`, marking differing values with `DIFFERS:`.
+- Missed-package columns use the corresponding scan variant's S2 misses from `coverage.json`, matched by package name and installed version for every ranking series.
+
+| Column | Meaning |
+| --- | --- |
+| `total_findings` | Number of Findings in the priority bucket |
+| `rank_changed_count` | Number of Findings in the adjusted top 20 whose adjusted rank differs from their baseline rank |
+| `vs_no_runtime_rank_changed` | The same count as `rank_changed_count`, explicitly naming the comparison with no runtime information |
+| `top20_promoted` | Number of Findings in the adjusted top 20 with `adjusted_rank < baseline_rank` |
+| `labeled_count` | Number of Findings across the entire priority bucket meeting the combined label of confirmed use, publication to the world, and privileged execution |
+| `missed_pkg_findings` | Total Findings in this priority bucket belonging to packages listed as S2 misses |
+| `missed_pkg_in_top20` | Findings belonging to those missed packages that appear in this series' adjusted top 20 |
+| `missed_pkg_rank_unchanged` | Subset of `missed_pkg_in_top20` with `adjusted_rank == baseline_rank` |
+| `missed_pkg_not_promoted` | Subset of `missed_pkg_in_top20` with `adjusted_rank >= baseline_rank`, including unchanged and displaced-to-later ranks |
+| `missed_pkg_outside_top20` | `missed_pkg_findings - missed_pkg_in_top20`, whose adjusted ranks are unavailable |
+| `false_promotions` | Promoted Findings in the adjusted top 20 whose package and version are FP in this series, after restricting FP packages to those with Findings in this priority bucket |
+
+- `false_promotions` is zero when no FP package has a Finding in the relevant priority bucket.
+- If any relevant FP package is absent from that bucket's stored top 20, `false_promotions` is N/A because its promotion cannot be determined.
+- Findings outside the stored top 20 are not included in `missed_pkg_not_promoted` because their rank changes are unavailable.
+- Baseline rows report zero rank changes and promotions, with label, missed-rank, and false-promotion fields shown as N/A.
+
+### Checks with the updated collector
+
+- The verification runs for cases 26, 27, and 28 used `startup` with a 300-second window and the updated collector.
+- Case 27 reached 100% Node recall (72/72, including the application's own `package.json`) and 100% resident-OS recall (8/8).
+- Case 26 reached 94% resident-OS recall (17/18), and case 28 reached 91% (10/11).
+- The one remaining resident-OS miss in each of cases 26 and 28 was `tzdata`, whose `/etc/localtime` open occurred immediately after container startup and before the first layout reading.
+- The saved symlink tables contained 438 entries in case 26 and 917 in case 28, while case 28 recorded 2,822 entries with `IsDir` set.
+- These verification runs had no truncation and zero false positives.
 
 ## Observation states
 
@@ -904,6 +980,11 @@ go run ./experiments/runtime-discovery match \
 - Event capture rates require event logs and independent occurrence records.
 
 ## Detailed limitations and cautions
+
+- Events before the first layout reading use only the scan index, without OS ownership or the symlink table, because the earlier layout's immutability cannot be established.
+- Opening a directory alone does not establish package use, and its exclusion depends on directory information retained in the saved input.
+- A link and target with different single owners confirm both packages, following the ground truth, while multiple owners of either individual path remain a conflict.
+- Ranking comparisons exist only for S0 and S2 in the matching implementation, and stored top-20 results do not establish rank changes for Findings outside that window.
 
 - The coverage fixtures do not pin apt package versions, so an image rebuilt later is not assumed equivalent to the image used for truth.
 - Scoring requires the same image ID for truth and measurement, with fresh containers preventing reuse of a previous run's writable layer.

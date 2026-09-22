@@ -305,15 +305,26 @@ def read_sampling_interval_seconds(match_json):
 
 def read_event_state(match_json):
     """(event_state, has_drops) from one match result: has_drops is True
-    when the window is degraded or reports any lost/dropped event count
-    above zero - a run-wide signal classify_miss attaches as an auxiliary
-    tag on an otherwise-unexplained miss, rather than treating it as a
-    standalone cause on its own."""
+    when the window is degraded or reports an actual event loss - lost
+    events, the notifications that stand for events lost to buffer
+    overflow, or a map overflow that dropped an open/exec outright - a
+    run-wide signal classify_miss attaches as an auxiliary tag on an
+    otherwise-unexplained miss, rather than treating it as a standalone
+    cause on its own.
+
+    This deliberately does not sum every numeric field under event_drops:
+    fields like path_read_failures describe an event the collection DID
+    capture but could not fully describe (an attribute missing, not a
+    loss - see EventDropCounts.partialEventCount in events.go), and
+    events_before_filter/events_after_filter are plain counts, not a loss
+    count at all. Folding those in would mark nearly every run as having
+    dropped events regardless of whether anything was actually lost."""
     m = match_json or {}
     state = m.get('event_state')
     drops = m.get('event_drops') or {}
-    numeric_drops = sum(v for v in drops.values() if isinstance(v, (int, float)))
-    return state, (state == 'degraded' or numeric_drops > 0)
+    real_loss = (drops.get('lost_events') or 0) > 0 or (drops.get('lost_notifications') or 0) > 0 \
+        or (drops.get('map_overflow') or 0) > 0
+    return state, (state == 'degraded' or real_loss)
 
 
 def read_failures(match_json):

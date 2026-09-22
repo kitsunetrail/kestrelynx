@@ -2,7 +2,7 @@
 
 - **Status:** Development-machine measurements completed; minimum privileges, overhead, and production-environment validation remain untested.
 - **Started:** 2026-09-19
-- **Last updated:** 2026-09-20.
+- **Last updated:** 2026-09-21.
 
 ## Purpose
 
@@ -17,7 +17,6 @@ Evaluate package coverage before deciding whether to adopt runtime evidence for 
     - Measure coverage across all used packages, identified by name and version.
     - Check whether unused packages are incorrectly confirmed as used.
     - Compare how missed packages affect remediation priorities.
-    - This page records the plan; measurements and an adoption decision remain pending.
 
 ## Approach
 
@@ -127,7 +126,7 @@ Evaluate package coverage before deciding whether to adopt runtime evidence for 
     - Count findings associated with missed packages that meet the criteria for “act now” or “watch”.
     - Report package coverage separately from vulnerability finding counts.
 
-## Results (2026-09-20)
+## Results
 
 **Conclusions**
 
@@ -156,6 +155,8 @@ Evaluate package coverage before deciding whether to adopt runtime evidence for 
 - **attach_running**: Observation attaches to an already running workload.
 - **Recall**: The proportion of packages established as used by ground truth whose use was correctly confirmed.
 - **False positives**: The number of packages established as unused by ground truth but confirmed as used.
+- **Matching**: The process of linking observed file paths (executables and libraries visible through procfs, or targets of recorded open events) to the names and versions of the packages that own them, with “Unsupported package mapping” under “Reasons for misses” referring to limitations of this process.
+- **Act now (act-now) and Watch (watch)**: Remediation priority categories KestreLynx assigns to vulnerability findings under the [CVE priority rules](../documentation/how-it-works.md#cve-priority-rules), where Act now means a CISA KEV listing or EPSS at or above the threshold (10% by default), and Watch means a finding that does not qualify for Act now but has a weaker signal (EPSS at or above the lower threshold (1% by default) or CRITICAL severity), with the lowercase forms act-now and watch used in this development log.
 
 **Ground truth**
 
@@ -205,6 +206,39 @@ Every miss remaining with event evidence was assigned to one of the following gr
     - Under attach_running, the package owning awk was affected in every workload's resident OS group.
     - Node.js startup missed one package belonging to the application itself outside `node_modules`.
 
+**Confirmation after resolving matching limitations**
+
+- **Confirmation of OS packages used through symlinks**
+    - Previously, the matcher could not follow symlinks inside containers, so observed access to awk or time-zone data could not be linked to the owning package's name and version.
+    - Ground truth confirmed use of mawk and tzdata through the symlink targets, so these gaps were counted as misses due to unsupported package mapping.
+    - Collection now saves the container's symlink table, allowing the matcher to follow complete symlink chains and identify owning packages when `/usr/bin/awk` resolves through `/etc/alternatives/awk` or `/etc/localtime` points to time-zone data.
+    - When the link and its target each have exactly one owning package and those packages differ, both packages count as used, following the ground truth.
+
+- **Confirmation of the Node.js application's own package**
+    - Previously, the matcher could not link the application's own `package.json` outside `node_modules` to the application package detected by Trivy, missing one package established as used by ground truth.
+    - Matching now includes the application's own `package.json`, allowing confirmation of the application's own package as well as its dependencies.
+
+- **Prevention of incorrect confirmations from directory opens**
+    - Collection also records whether each file entry is a directory, and opening a directory alone does not count as package use.
+
+- **Scope of confirmation measurements**
+    - Each of the three applications was measured once under startup with a 30-second interval and a 300-second window, using collection that saves the symlink table and directory information.
+    - Because the collection method differs, the main results from the original 30 runs in the preceding table remain unchanged.
+    - This confirmation covers only one startup condition and does not establish that the criteria were met across all conditions, including attach_running.
+
+The table shows recall with event evidence, with parentheses giving “packages correctly confirmed as used / packages established as used by ground truth.”
+
+| Container behavior | Language package recall | Resident OS recall | Short-lived OS recall | False positives |
+| --- | --- | --- | --- | --- |
+| Python web application with periodic operations | 100% (19/19 packages) | 94% (17/18 packages) | 100% (33/33 packages) | 0 packages |
+| Node.js web application with periodic operations | 100% (72/72 packages) | 100% (8/8 packages) | 100% (31/31 packages) | 0 packages |
+| Java application with periodic operations | 100% (9/9 packages) | 91% (10/11 packages) | 100% (31/31 packages) | 0 packages |
+
+- **Remaining misses**
+    - Python and Java each missed one resident OS package, tzdata.
+    - `/etc/localtime` was opened immediately after container startup and before the first layout reading, so its symlink target and owning package at that time could not be confirmed.
+    - Layout information obtained later is not used to attribute earlier use because the layout cannot be proven to have remained unchanged before the first reading.
+
 **Acceptance criteria**
 
 The established recall threshold and 0 false-positive packages were required for each group and start condition with event evidence.
@@ -225,12 +259,34 @@ The established recall threshold and 0 false-positive packages were required for
 
 **Effects on remediation decisions**
 
-- **Evaluation**: Scan results and threat information were fixed per image, and findings belonging to missed packages were counted by the remediation priority categories “watch” and “act now” (act-now).
-- **Findings belonging to missed packages.**
-    - Under startup, every workload had 0 findings.
-    - Under attach_running, Python had two watch findings, Node.js had two watch findings and one act-now finding, and Java had 0 findings.
-- **Comparison limits**: These are not counts of changed classifications or rankings, and comparison of overall classification counts and ranking differences across four configurations—no runtime information, the previous rules, those rules with read-only additions, and those additions with event evidence—remains pending.
-- **Incorrect increases**: Incorrect confirmations of unused packages caused 0 priority increases across all conditions and methods.
+- **Comparison conditions and ranks**
+    - Scan results were fixed per image, and the full KEV/EPSS cache fetched on 2026-09-20 was applied uniformly to all runs as the threat information source.
+    - Ranks were compared across three configurations (no runtime information, the previous rules, and with event evidence), using no runtime information as the baseline.
+    - Rank changes were examined within the saved top 20 findings in each of the two categories, “act now” (act-now) and “watch” (watch).
+    - The following results use a 30-second interval and a 900-second window, with both repetitions agreeing under each of startup and attach_running.
+
+- **Findings with upward watch rank changes**
+    - Within the top 20 with event evidence, eight Python findings moved up under startup and nine under attach_running, while 20 Node.js findings and two Java findings moved up under each start condition.
+    - Within the top 20 with the previous rules, eight Python findings, seven Node.js findings, and zero Java findings moved up under each start condition.
+
+- **Findings with upward act-now rank changes**
+    - Only one Node.js finding moved up under attach_running with event evidence, with zero findings moving up in all other comparisons.
+
+- **Findings belonging to packages still missed with event evidence**
+    - Under startup, every application had zero act-now or watch findings belonging to missed packages.
+    - Under attach_running for Python, urllib3 and werkzeug each had one watch finding, and both findings were outside the top 20 with both the previous rules and with event evidence.
+    - Under attach_running for Node.js, lodash had two watch findings, of which one moved down within the top 20 and one was outside the top 20 with the previous rules, while both were outside the top 20 with event evidence.
+    - Under attach_running for Node.js, qs had one act-now finding whose rank was unchanged within the top 20 with the previous rules and moved down within the top 20 with event evidence.
+    - Under attach_running for Java, there were zero act-now or watch findings belonging to missed packages.
+    - The one Node.js act-now finding that moved up and the one finding belonging to the missed package qs that moved down were different findings.
+
+- **Upward rank changes from incorrect confirmations of unused packages**
+    - There were zero incorrect confirmations of unused packages, so upward rank changes caused by such confirmations numbered zero across all conditions and methods.
+
+- **Limits of this comparison**
+    - Ranks outside the top 20 were not saved, so rank changes for findings outside that range cannot be determined, and those findings are not counted as having unchanged ranks or as not having moved up.
+    - Ranks for the configuration with read-only additions are not output, so rank changes at that stage cannot be compared.
+    - Rank changes for findings belonging to missed packages alone cannot establish the causal effect of misses on remediation order.
 
 **Adoption decision**
 
@@ -243,10 +299,11 @@ Runtime evidence is adopted for remediation prioritization under the following c
     - Keep the observation process running continuously, with observation from before container startup as the standard operating mode.
     - Retain and display language packages in containers started before observation as “Indeterminate (container started before observation began),” separately from confirmed use and no evidence, and indicate resolution at the next container restart while observation remains active.
     - Enforce in both implementation and presentation that absent evidence or unused status never lowers priority or excludes a package from remediation.
+- **Completed work** (not preconditions for adoption; carried out afterwards)
+    - Resolved symlinks inside containers in the matcher.
+    - Added support for the application's own package outside `node_modules`.
+    - Compared ranking differences with and without runtime information.
 - **Remaining work** (not preconditions for adoption; carried out during implementation afterwards)
-    - Resolve symlinks inside containers in the matcher.
-    - Support the application's own package outside `node_modules`.
-    - Compare ranking differences with and without runtime information.
     - Verify minimum privileges, overhead, and behavior in production.
 
 **Corrections made during measurement**
@@ -264,35 +321,45 @@ Saved inputs for all 30 runs were reprocessed with the same corrections and rule
 - Comparisons apply to the same saved image, with no guarantee that the same build procedure reproduces it.
 - The absence of interval and window effects applies only to the tested workloads and operation sequences, while other usage frequencies and request patterns, representativeness of actual usage paths, minimum privileges, overhead, and production behavior remain untested.
 
-## Next steps
+## Completed work
 
 - **Coverage of all used packages**
-    - Done: Measure the proportion of used packages confirmed by each method and by their combination (cumulative comparison of the previous rules, those rules with read-only additions, and those additions with event evidence).
-    - Pending: Aggregate standalone confirmation counts for read-only additions and event evidence, and overlaps between methods.
+    - Measured the proportion of used packages confirmed by each method and by their combination (cumulative comparison of the previous rules, those rules with read-only additions, and those additions with event evidence).
 
 - **False confirmations**
-    - Done: Check whether any package independently established as unused is confirmed as used.
+    - Checked whether any package independently established as unused is confirmed as used.
 
 - **Differences between package groups**
-    - Done: Compare OS packages used by resident processes, OS packages used by short-lived operations, and language packages.
+    - Compared OS packages used by resident processes, OS packages used by short-lived operations, and language packages.
 
 - **Sensitivity to observation conditions**
-    - Done: Compare observation start times, window lengths, and sampling intervals.
+    - Compared observation start times, window lengths, and sampling intervals.
 
 - **Reasons for misses**
-    - Done: Separate brief use, use before observation began, unsupported package mapping, collection losses, and other causes.
+    - Separated brief use, use before observation began, unsupported package mapping, collection losses, and other causes.
 
 - **Effects on remediation decisions**
-    - Done: Use fixed scan results and threat information to count “act now” and “watch” findings belonging to packages still missed with event evidence, and incorrect priority increases for unused packages.
-    - Pending: Compare changes in “act now” and “watch” counts and rankings, including findings associated with missed packages (overall classification counts and ranking differences across four configurations: no runtime information, the previous rules, those rules with read-only additions, and those additions with event evidence).
+    - Used fixed scan results and threat information to count “act now” and “watch” findings belonging to packages still missed with event evidence, and incorrect priority increases for unused packages.
+    - Compared act-now and watch rank changes and the effects of misses within the top 20 across three configurations: no runtime information, the previous rules, and those rules with read-only additions and event evidence (2026-09-21).
 
-- **Remaining changes and validation of applicability**
-    - Pending: Resolve symlinks inside containers in the matcher and reassess ownership mapping for mawk and tzdata, including false confirmations.
-    - Pending: Add matching support for the application's own package outside `node_modules`.
-    - Pending: Reflect which use before observation began can and cannot be confirmed afterwards under attach_running in the specification and presentation.
-    - Pending: Verify minimum privileges, overhead, start conditions, and actual usage paths in production to assess where these results apply.
-    - Done: Decided to adopt runtime evidence for remediation prioritization subject to three conditions (2026-09-20).
-    - Pending: Implement the adoption conditions by retaining and displaying the indeterminate state, operating observation continuously, and enforcing in both implementation and presentation the rule that absent evidence or an unused classification must never lower priority or exclude a package from remediation.
+- **Matching changes and adoption decision**
+    - Resolved symlinks inside containers in the matcher and reassessed ownership mapping for mawk and tzdata, including false confirmations (2026-09-21).
+    - Added matching support for the application's own package outside `node_modules` (2026-09-21).
+    - Decided to adopt runtime evidence for remediation prioritization subject to three conditions (2026-09-20).
+
+## Remaining work
+
+- **Coverage of all used packages**
+    - Aggregate standalone confirmation counts for read-only additions and event evidence, and overlaps between methods.
+
+- **Effects on remediation decisions**
+    - Compare overall classification counts across all four configurations, including the configuration with read-only additions.
+
+- **Matching changes and validation of applicability**
+    - Define how to handle files opened immediately after startup and before the first layout reading (added 2026-09-21).
+    - Reflect which use before observation began can and cannot be confirmed afterwards under attach_running in the specification and presentation.
+    - Verify minimum privileges, overhead, start conditions, and actual usage paths in production to assess where these results apply.
+    - Implement the adoption conditions by retaining and displaying the indeterminate state, operating observation continuously, and enforcing in both implementation and presentation the rule that absent evidence or an unused classification must never lower priority or exclude a package from remediation.
 
 ## Change log
 
@@ -310,6 +377,13 @@ Saved inputs for all 30 runs were reprocessed with the same corrections and rule
 - **Recorded work status**
     - Recorded completed validation items and pending standalone method aggregation, remediation count and ranking comparisons, matching extensions, specification updates, and production-environment validation.
     - Decided to adopt runtime evidence subject to three conditions, with the criteria still unmet for language packages under attach_running and resident OS packages in the Node.js case.
+
+### 2026-09-21
+
+- Added symlink and application-package matching support, exclusion of directory opens as evidence of use, confirmation measurements for three applications, and the remaining misses.
+- Completed the comparison of rank differences for the previous rules and the configuration with event evidence against the baseline without runtime information within the stored act-now and watch top 20, recording the effects on findings belonging to missed packages and the limits of the comparison.
+- Updated next steps to mark matching changes and ranking comparisons as completed and added handling of files opened before the first layout reading as pending.
+- Removed the statement in Purpose that measurements and the adoption decision were pending, added matching and the remediation priority categories to Terms, restructured the explanation of matching limitations and the effects on remediation decisions for readability, removed the date from the Results heading, split the adoption decision's work items into completed and remaining, and replaced Next steps with the Completed work and Remaining work sections.
 
 ---
 

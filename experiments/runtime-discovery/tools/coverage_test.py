@@ -108,6 +108,52 @@ class CategoryAssignmentTests(unittest.TestCase):
         self.assertEqual(coverage.categories_for_unused(entry), ['java'])
 
 
+class ReadEventStateTests(unittest.TestCase):
+    def test_no_drops_at_all_is_not_flagged(self):
+        state, has_drops = coverage.read_event_state({'event_state': 'observed', 'event_drops': {}})
+        self.assertEqual(state, 'observed')
+        self.assertFalse(has_drops)
+
+    def test_path_read_failures_alone_is_not_flagged(self):
+        # The bug this guards against: path_read_failures describes an
+        # event the collection DID capture but could not fully describe
+        # (see EventDropCounts.partialEventCount in events.go), never a
+        # loss - a run reporting only this, with lost_events at 0, must
+        # not be treated as having dropped events.
+        state, has_drops = coverage.read_event_state(
+            {'event_state': 'observed', 'event_drops': {'lost_events': 0, 'path_read_failures': 2238}})
+        self.assertEqual(state, 'observed')
+        self.assertFalse(has_drops)
+
+    def test_events_before_after_filter_counts_are_not_flagged(self):
+        # These are plain totals, not a loss count - large values here
+        # must not be summed into a loss signal either.
+        state, has_drops = coverage.read_event_state(
+            {'event_state': 'observed',
+             'event_drops': {'events_before_filter': 528522, 'events_after_filter': 528522}})
+        self.assertFalse(has_drops)
+
+    def test_lost_events_is_flagged(self):
+        _state, has_drops = coverage.read_event_state({'event_drops': {'lost_events': 3}})
+        self.assertTrue(has_drops)
+
+    def test_lost_notifications_is_flagged(self):
+        _state, has_drops = coverage.read_event_state({'event_drops': {'lost_notifications': 1}})
+        self.assertTrue(has_drops)
+
+    def test_map_overflow_is_flagged(self):
+        _state, has_drops = coverage.read_event_state({'event_drops': {'map_overflow': 1}})
+        self.assertTrue(has_drops)
+
+    def test_degraded_state_is_flagged_even_with_no_drop_counts(self):
+        _state, has_drops = coverage.read_event_state({'event_state': 'degraded', 'event_drops': {}})
+        self.assertTrue(has_drops)
+
+    def test_missing_event_drops_is_not_flagged(self):
+        _state, has_drops = coverage.read_event_state({'event_state': 'observed'})
+        self.assertFalse(has_drops)
+
+
 class ClassifyMissTests(unittest.TestCase):
     def base_ctx(self, **overrides):
         ctx = {

@@ -696,11 +696,20 @@ stage_optime() {
 	if [ -x "$dest" ] && [ "$dest" -nt "$src" ]; then
 		return 0
 	fi
-	command -v go >/dev/null 2>&1 || {
-		echo "stage_optime: go toolchain not found on PATH; cannot build $dest" >&2
+	# Under sudo, root's PATH usually lacks the invoking user's own Go toolchain (commonly
+	# installed under their home directory), so look there and in /usr/local/go as well.
+	local gobin user_home
+	gobin="$(command -v go 2>/dev/null || true)"
+	if [ -z "$gobin" ] && [ -n "${SUDO_USER:-}" ]; then
+		user_home="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+		[ -x "$user_home/.local/go/bin/go" ] && gobin="$user_home/.local/go/bin/go"
+	fi
+	[ -z "$gobin" ] && [ -x /usr/local/go/bin/go ] && gobin=/usr/local/go/bin/go
+	[ -n "$gobin" ] || {
+		echo "stage_optime: go toolchain not found on PATH, under the invoking user's ~/.local/go, or in /usr/local/go; cannot build $dest" >&2
 		return 1
 	}
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$dest" "$here/../cmd/optime" || {
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 "$gobin" build -o "$dest" "$here/../cmd/optime" || {
 		echo "stage_optime: build failed for $dest_dir" >&2
 		return 1
 	}

@@ -1,8 +1,8 @@
 # Runtime Evidence Observation Environment Validation
 
-- **Status:** Plan recorded; measurements not yet performed
+- **Status:** Measured in the local environment; production checks not yet performed
 - **Started:** 2026-09-22
-- **Last updated:** 2026-09-22
+- **Last updated:** 2026-09-23
 
 ## Purpose
 
@@ -82,6 +82,12 @@ Before implementing the runtime evidence adopted in [Runtime Evidence Coverage: 
 
 - **Indeterminate**
     - A display state for a language package without confirming evidence whose container started before effective observation began, indicating that observation from startup was not established
+
+- **CPU time**
+    - CPU time is the total time the observation process actually spent processing on the CPU, excluding time spent waiting, measured using the CPU usage counter of its dedicated cgroup; 1.5 seconds of CPU time within a 300-second observation window corresponds to 0.5% utilization of one CPU core.
+
+- **Sampling interval and read count**
+    - The sampling interval was explicitly set to 30 or 10 seconds for the measurements, and the read count is the observation window length divided by that interval, giving 10 reads at a 30-second interval and 30 reads at a 10-second interval within a 300-second window.
 
 ### Permission checks
 
@@ -282,17 +288,83 @@ Define implementation requirements from the measurements, separating the verifie
 
 ## Results
 
-Not yet performed
+**Conclusions**
+
+- Confirmed a permission candidate that enables all four event-observation operations for an unprivileged user in the local environment
+- The procfs collector used approximately 0.14–0.21 seconds of CPU time per read, with total CPU time proportional to the read count, while CPU time for eBPF observation varied more with event volume than with the interval.
+- Differences in normal-processing medians were generally within about ±1 ms, with only curl in the Java application showing an increase of 1.0–2.2 ms across all repetitions with events
+- Web response failures were zero across all 36 runs
+- The results are limited to one machine in the local environment, and production checks have not yet been performed
+
+**Permissions**
+
+Event observation was compared under administrative privileges and conditions that assigned capabilities to an unprivileged user. Failures in the table include stops during prerequisite processing or startup self-checks.
+
+| Permission condition | BPF program load | Tracepoint attachment | Event buffer creation and reading | Mapping cgroup IDs to containers | Reason for stopping |
+| --- | --- | --- | --- | --- | --- |
+| Administrative privileges | Successful | Successful | Successful | Successful | None |
+| `CAP_BPF` + `CAP_PERFMON` | Failed | Not reached | Not reached | Successful | File read denied by tracefs permissions |
+| Above plus `CAP_DAC_READ_SEARCH` | Failed | Not reached | Not reached | Successful | bpftrace self-check required `CAP_DAC_OVERRIDE` |
+| Above plus `CAP_DAC_OVERRIDE` | Successful | Successful | Successful | Successful | None |
+| `CAP_SYS_ADMIN` only | Failed | Not reached | Not reached | Successful | File read denied by tracefs permissions |
+
+- **Successful candidate**: All four operations succeeded for an unprivileged user with `CAP_BPF`, `CAP_PERFMON`, `CAP_DAC_READ_SEARCH`, and `CAP_DAC_OVERRIDE`
+- **Limit on evaluating read permission**: Because bpftrace's startup self-check stops before kernel operations, these tests cannot establish whether adding only `CAP_DAC_READ_SEARCH` would suffice on the kernel side
+- **Limit of system-administration permission**: `CAP_SYS_ADMIN` alone could not bypass tracefs file permissions
+- **Interpretation of minimum permissions**: The successful combination is a candidate among the tested conditions and does not establish a minimum across all possible combinations
+- **Scope of procfs checks**: procfs permissions were not remeasured here, so event-observation results alone do not establish the permissions required for observation as a whole
+
+**Observation-method overhead**
+
+The table shows minimum and maximum values across three applications and two repetitions per condition. Collector values include both procfs only and procfs with events, while eBPF observation values were measured for bpftrace in a separate dedicated cgroup with events enabled. CPU time covers the 300-second observation window, and peak memory covers the full lifetime of each measurement cgroup.
+
+| Target | Sampling interval | CPU time | Peak memory |
+| --- | --- | --- | --- |
+| procfs collector | 30 seconds | 1.44–2.14 seconds | 42–49 MB |
+| procfs collector | 10 seconds | 4.49–6.31 seconds | 46–53 MB |
+| eBPF observation (bpftrace) | 30 seconds | 8.89–12.22 seconds | 93–237 MB |
+| eBPF observation (bpftrace) | 10 seconds | 9.48–14.10 seconds | 96–117 MB |
+
+- **Relationship to read count**: Within the 300-second observation window, the specified 30-second interval gave 10 reads and the specified 10-second interval gave 30 reads, with the procfs collector using approximately 0.14–0.21 seconds of CPU time per read and total CPU time proportional to the read count.
+- **Collector scope**: Values include periodic procfs reads and information retrieval through the Docker API
+- **Interpretation of eBPF observation values**: Values include bpftrace's own user-space cost and serve as an upper-bound estimate rather than measurements of the implementation's resource use
+- **CPU-time scope**: Observation-process cgroup values alone do not represent total observation-method CPU time, including eBPF processing in the kernel
+- **Outlier**: One Node.js web application run with events at a 30-second interval reached 237 MB of bpftrace memory, compared with 107 MB in the other repetition, with the cause unidentified
+- **Event volume and losses**: Runs with events recorded 953–1429 events per second overall and 58–192 for the target container, with zero recorded lost events under every condition
+
+**Effects on normal processing**
+
+- **Comparison method**: Compared median curl, git, and openssl durations and web response times against the no-observation run for the same application, interval comparison, and repetition
+- **Overall trend**: Median differences were generally within about ±1 ms and comparable to variation between repetitions
+- **curl in the Java application**: All four runs with events showed increases of 1.0–2.2 ms, with corresponding no-observation medians of 11.8–13.7 ms
+- **Web response failures**: Zero across all 36 runs, including no observation
+- **Interpretation limits**: Two repetitions per condition do not establish statistical significance or variation during long-term operation
+
+**Measurement conditions**
+
+- **Environment**: Measured on one machine running WSL2 in the local environment
+- **Applications**: Evaluated a Python web application, a Node.js web application, and a Java application
+- **Observation configurations**: Compared no observation, procfs only, and procfs with events
+- **Start condition and window**: Attached to running containers using attach_running for 300 seconds per run
+- **Intervals and repetitions**: Performed two repetitions per condition for the 30-second and 10-second comparisons, reversing configuration order in the second repetition
+- **Event buffer**: Used 512 pages for procfs with events
+- **Run count and completion**: All 36 runs established their observation windows and completed without early stopping
+
+**Fixes during measurement**
+
+- Fixed a build issue that prevented Go from being found when running with administrative privileges, reran 24 runs for the Node.js web application and Java application, and excluded the failed attempts from aggregation
+- Changed the monitor's output-size limit to count growth since observation started instead of the total including earlier measurements' output, and reran the first load measurement, which that limit had stopped early
 
 ## Completed work
 
 - **Recorded the plan**
     - Documented the purpose, validation questions, permission conditions, overhead comparisons, production checks, stop conditions, records to retain, and the method for defining implementation requirements
 
-## Remaining work
+- **Permission checks and overhead comparisons in the local environment**
+    - Checked outcomes and reasons for stopping across four operations under five event-observation permission conditions
+    - Compared observation-method overhead and effects on normal processing across three applications and 36 runs, recording the outlier and the scope of the results
 
-- **Preparation and measurements in the local environment**
-    - Prepare and run the procedures for permissions, overhead, task durations, stop monitoring, and restart tracking, and record the candidates to use in production
+## Remaining work
 
 - **Execute and record the four production stages**
     - Perform preflight checks and record the observation and scanning workflows
@@ -302,8 +374,17 @@ Not yet performed
 
 ## Change log
 
-- **2026-09-22 Recorded the plan**
+### 2026-09-22
+
+- **Recorded the plan**
     - Recorded the observation-environment validation plan and listed measurements and result documentation as remaining work
+
+### 2026-09-23
+
+- **Recorded results from the local environment**
+    - Recorded outcomes for five permission conditions, observation-method overhead, effects on normal processing, measurement conditions, and fixes during measurement
+    - Moved local permission checks and overhead comparisons to completed work and retained the four production stages as remaining work
+    - Added CPU time and the sampling interval and read count to Terms
 
 ---
 

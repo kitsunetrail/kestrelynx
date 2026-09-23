@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Before implementing the runtime evidence adopted in [Runtime Evidence Coverage: Validation Plan](runtime-coverage-validation.md), verify the permissions required for observation, the overhead of continuous observation, and the start conditions and operational workflows in a production environment.
+Before implementing the runtime evidence adopted in [Runtime Evidence Coverage Validation](runtime-coverage-validation.md), verify the permissions required for observation, the overhead of continuous observation, and the start conditions and operational workflows in a production environment.
 
 - **Relationship to previous investigations**
     - Evaluate the observation methods examined in [Runtime Evidence Prioritization: Feasibility Research](runtime-prioritization.md) and [Runtime Evidence Observation with eBPF: Feasibility Research](runtime-event-evidence.md)

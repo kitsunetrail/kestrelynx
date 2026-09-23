@@ -1,8 +1,8 @@
 # Runtime Evidence Observation with eBPF: Feasibility Research
 
-- **Status:** Development-machine measurements completed; minimum privileges, overhead, and production-environment validation remain untested
+- **Status:** Measurements completed in the local environment; privileges, overhead, and validation in production are covered in [runtime evidence observation environment validation](runtime-environment-validation.md)
 - **Started:** 2026-09-13
-- **Last updated:** 2026-09-16
+- **Last updated:** 2026-09-23
 
 ## Purpose
 
@@ -152,7 +152,7 @@ Extend the tooling described in the [harness README for the sampling investigati
 
 Event evidence linked findings for short-lived curl and git processes and Node.js dependencies to observed use where the previous methods could not, but coverage depends on when observation starts and whether records are lost.
 
-Tests ran on a development machine using WSL2, Linux 6.6, bpftrace 0.25, and root privileges, with five-minute observation windows and one to three runs per case.
+Tests ran in the local environment using WSL2, Linux 6.6, bpftrace 0.25, and root privileges, with five-minute observation windows and one to three runs per case.
 
 **Findings linked to evidence of use**
 
@@ -276,6 +276,12 @@ This table shows how many events were lost to recording-buffer overflow at each 
     - Recorded pending minimum-privilege, overhead, production-equivalent environment, and production-sample observation and reporting work.
     - Recorded conditional CO-RE implementation and measurement work.
     - Recorded pending publication of unresolved questions before a decision.
+
+### 2026-09-23
+
+- **Terminology and status updates**
+    - Updated the status line to reflect current progress and added a reference to [runtime evidence observation environment validation](runtime-environment-validation.md) for privileges, overhead, and validation in production.
+    - Standardized references to the measurement environment as "local environment".
 
 ---
 

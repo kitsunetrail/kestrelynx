@@ -1,8 +1,8 @@
-# Runtime Evidence Coverage: Validation Plan
+# Runtime Evidence Coverage Validation
 
-- **Status:** Development-machine measurements completed; minimum privileges, overhead, and production-environment validation remain untested.
+- **Status:** Measurements completed in the local environment; privileges, overhead, and validation in production are covered in [runtime evidence observation environment validation](runtime-environment-validation.md).
 - **Started:** 2026-09-19
-- **Last updated:** 2026-09-21.
+- **Last updated:** 2026-09-23
 
 ## Purpose
 
@@ -137,7 +137,7 @@ Evaluate package coverage before deciding whether to adopt runtime evidence for 
 
 **Measurement scale and scope**
 
-- **Environment**: Docker Engine on WSL2 on a development machine, with administrative privileges.
+- **Environment**: Docker Engine on WSL2 in the local environment, with administrative privileges.
 - **Workloads**: Three applications—Python and Node.js web applications and a Java application—each running curl, git, and openssl periodically, with packages without vulnerability findings also evaluated.
 - **Runs**: Three separate ground-truth runs, 30 measurement runs, and 0 runs on hold in the final aggregation.
 - **Observation conditions**: Intervals of 10 and 30 seconds, windows of 300 and 900 seconds, and a 512-page buffer, with two runs for the 30-second interval and 900-second window per workload and start condition, and one run for each other combination.
@@ -358,7 +358,7 @@ Saved inputs for all 30 runs were reprocessed with the same corrections and rule
 - **Matching changes and validation of applicability**
     - Define how to handle files opened immediately after startup and before the first layout reading (added 2026-09-21).
     - Reflect which use before observation began can and cannot be confirmed afterwards under attach_running in the specification and presentation.
-    - Verify minimum privileges, overhead, start conditions, and actual usage paths in production to assess where these results apply.
+    - [Runtime evidence observation environment validation](runtime-environment-validation.md) has confirmed candidate privilege sets and measured overhead in the local environment (bpftrace overhead provides an upper-bound estimate, not implementation overhead); verification of start conditions and actual usage paths in production, and assessment of where these results apply, remain work tracked in that log.
     - Implement the adoption conditions by retaining and displaying the indeterminate state, operating observation continuously, and enforcing in both implementation and presentation the rule that absent evidence or an unused classification must never lower priority or exclude a package from remediation.
 
 ## Change log
@@ -384,6 +384,14 @@ Saved inputs for all 30 runs were reprocessed with the same corrections and rule
 - Completed the comparison of rank differences for the previous rules and the configuration with event evidence against the baseline without runtime information within the stored act-now and watch top 20, recording the effects on findings belonging to missed packages and the limits of the comparison.
 - Updated next steps to mark matching changes and ranking comparisons as completed and added handling of files opened before the first layout reading as pending.
 - Removed the statement in Purpose that measurements and the adoption decision were pending, added matching and the remediation priority categories to Terms, restructured the explanation of matching limitations and the effects on remediation decisions for readability, removed the date from the Results heading, split the adoption decision's work items into completed and remaining, and replaced Next steps with the Completed work and Remaining work sections.
+
+### 2026-09-23
+
+- **Terminology and status updates**
+    - Updated the status line to reflect current progress and added a reference to [runtime evidence observation environment validation](runtime-environment-validation.md) for privileges, overhead, and validation in production.
+    - Standardized references to the measurement environment as "local environment".
+    - Moved the remaining production validation work to observation environment validation and reflected the scope of privilege and overhead checks completed in the local environment.
+    - Removed "Validation Plan" from the English title.
 
 ---
 

@@ -6,7 +6,7 @@ Development logs record how features were explored and implemented.
 For instructions on currently available features, see [Documentation](../documentation/index.md).
 
 - [Runtime Evidence Observation Environment Validation](runtime-environment-validation.md) — the permissions, continuous-observation overhead, and production start conditions and workflows to verify before implementing the adopted runtime evidence
-- [Runtime Evidence Coverage: Validation Plan](runtime-coverage-validation.md) — how much of the packages a workload really uses each method can confirm, measured against independent ground truth before runtime evidence is adopted for remediation priorities
+- [Runtime Evidence Coverage Validation](runtime-coverage-validation.md) — how much of the packages a workload really used each method confirmed, evaluated against independent ground truth (measured)
 - [Runtime evidence observation with eBPF: feasibility research](runtime-event-evidence.md) — whether eBPF-based execution and
   file-loading events can confirm the short-lived programs and language packages that sampling could not
 - [Runtime evidence prioritization: feasibility research](runtime-prioritization.md) — whether processes,

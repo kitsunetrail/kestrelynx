@@ -50,9 +50,9 @@ nav:
       - How it works: documentation/how-it-works.md
   - Development:
       - Overview: development/index.md
-      - Runtime evidence observation with eBPF: development/runtime-event-evidence.md
-      - Runtime evidence coverage validation: development/runtime-coverage-validation.md
       - Runtime evidence observation environment validation: development/runtime-environment-validation.md
+      - Runtime evidence coverage validation: development/runtime-coverage-validation.md
+      - Runtime evidence observation with eBPF: development/runtime-event-evidence.md
       - Runtime evidence prioritization: development/runtime-prioritization.md
       - Kubernetes support: development/kubernetes-support.md
       - Kubernetes scanning landscape: development/kubernetes-scanning-landscape.md

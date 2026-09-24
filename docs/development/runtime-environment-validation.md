@@ -1,8 +1,8 @@
 # Runtime Evidence Observation Environment Validation
 
-- **Status:** Measured in the local environment; production checks not yet performed
+- **Status:** Measurement complete
 - **Started:** 2026-09-22
-- **Last updated:** 2026-09-23
+- **Last updated:** 2026-09-24
 
 ## Purpose
 
@@ -288,17 +288,19 @@ Define implementation requirements from the measurements, separating the verifie
 
 ## Results
 
-**Conclusions**
+**Conclusion**
 
-- Confirmed a permission candidate that enables all four event-observation operations for an unprivileged user in the local environment
-- The procfs collector used approximately 0.14–0.21 seconds of CPU time per read, with total CPU time proportional to the read count, while CPU time for eBPF observation varied more with event volume than with the interval.
-- Differences in normal-processing medians were generally within about ±1 ms, with only curl in the Java application showing an increase of 1.0–2.2 ms across all repetitions with events
-- Web response failures were zero across all 36 runs
-- The results are limited to one machine in the local environment, and production checks have not yet been performed
+- **Observation without root**: procfs collection with `CAP_SYS_PTRACE` and `CAP_DAC_READ_SEARCH` obtained the same information as root, supporting a collector that runs without root, while Docker API access must be handled as a separate permission
+- **Event-observation permissions**: `CAP_BPF`, `CAP_PERFMON`, `CAP_DAC_READ_SEARCH`, and `CAP_DAC_OVERRIDE` enabled all four required operations with bpftrace in both local and production environments, but whether the implementation also needs `CAP_DAC_OVERRIDE` remains unresolved because bpftrace's self-check stops execution without it
+- **Continuous overhead and the default interval**: Locally, the procfs collector at a 30-second interval used less than 1% of one CPU core and bpftrace event observation used a few percent, while effects on normal processing were generally within variation between repetitions except for Java curl increases of 1.0–2.2 ms, supporting acceptable continuous overhead within the tested scope and a 30-second interval as a default candidate
+- **Initial reads and memory**: Production initial reads took 17–27 seconds and require allowance for startup overhead, while most event-observation memory growth came from trace-file page cache and is not expected in an implementation that does not write the same trace files, with bpftrace's own resource use treated as an upper-bound guide for estimating implementation overhead
+- **Continuous observation and indeterminate results**: Observation tracked separate container generations across both restart and recreation, and “Indeterminate (started before observation)” resolved on the next startup for applications that started, demonstrating that continuous observation and displaying and resolving indeterminate results work in production
+- **Usefulness for prioritization**: All 19 HIGH and CRITICAL vulnerability findings for Elasticsearch gained evidence after restart, while the Node.js backend gained evidence for 6 findings associated with the two packages loaded by the application, `js-yaml` and `multer`, distinguishing them from unused dependencies of bundled tools and providing practical input for identifying vulnerabilities in packages actually used, with these counts referring to findings rather than packages
+- **Scope and limitations**: Static Go binaries cannot provide per-module evidence, Node.js use could not be determined after attaching to running containers until the next startup, and production checks were limited to one run per condition and a small number of containers, so these results alone cannot guarantee coverage or long-term overhead
 
-**Permissions**
+**Event-observation permissions**
 
-Event observation was compared under administrative privileges and conditions that assigned capabilities to an unprivileged user. Failures in the table include stops during prerequisite processing or startup self-checks.
+Five conditions using administrative privileges or capabilities assigned to a non-root process were compared in the local and production environments. Operation outcomes and reasons for stopping were identical in both environments. Failures include stops during prerequisite processing or startup self-checks.
 
 | Permission condition | BPF program load | Tracepoint attachment | Event buffer creation and reading | Mapping cgroup IDs to containers | Reason for stopping |
 | --- | --- | --- | --- | --- | --- |
@@ -308,15 +310,15 @@ Event observation was compared under administrative privileges and conditions th
 | Above plus `CAP_DAC_OVERRIDE` | Successful | Successful | Successful | Successful | None |
 | `CAP_SYS_ADMIN` only | Failed | Not reached | Not reached | Successful | File read denied by tracefs permissions |
 
-- **Successful candidate**: All four operations succeeded for an unprivileged user with `CAP_BPF`, `CAP_PERFMON`, `CAP_DAC_READ_SEARCH`, and `CAP_DAC_OVERRIDE`
-- **Limit on evaluating read permission**: Because bpftrace's startup self-check stops before kernel operations, these tests cannot establish whether adding only `CAP_DAC_READ_SEARCH` would suffice on the kernel side
-- **Limit of system-administration permission**: `CAP_SYS_ADMIN` alone could not bypass tracefs file permissions
-- **Interpretation of minimum permissions**: The successful combination is a candidate among the tested conditions and does not establish a minimum across all possible combinations
-- **Scope of procfs checks**: procfs permissions were not remeasured here, so event-observation results alone do not establish the permissions required for observation as a whole
+- **Successful candidate**: `CAP_BPF`, `CAP_PERFMON`, `CAP_DAC_READ_SEARCH`, and `CAP_DAC_OVERRIDE` enabled all four operations, but this is a candidate among tested conditions rather than an established minimum across all combinations
+- **Read-permission limits**: The bpftrace self-check stops before kernel operations, leaving it unverified whether adding only `CAP_DAC_READ_SEARCH` would suffice, while `CAP_SYS_ADMIN` alone could not bypass tracefs file permissions
+- **AppArmor scope**: Production test processes ran unconfined, so feasibility under an applied AppArmor profile was not verified
 
-**Observation-method overhead**
+**Local overhead and effects on normal processing**
 
-The table shows minimum and maximum values across three applications and two repetitions per condition. Collector values include both procfs only and procfs with events, while eBPF observation values were measured for bpftrace in a separate dedicated cgroup with events enabled. CPU time covers the 300-second observation window, and peak memory covers the full lifetime of each measurement cgroup.
+A Python web application, a Node.js web application, and a Java application were measured on WSL2 with Linux 6.6 and `perf_event_paranoid=2`. No observation, procfs only, and procfs with events were compared at 30-second and 10-second intervals with two repetitions, reversing configuration order in the second repetition. Each run used a 300-second attach_running window and a 512-page event buffer where applicable, and all 36 runs completed without early stopping.
+
+The table shows minimum and maximum values across the three applications and two repetitions. Collector values include procfs only and procfs with events, while bpftrace was measured in a separate dedicated cgroup. CPU time covers the observation window, and peak memory covers each measurement cgroup's full lifetime.
 
 | Target | Sampling interval | CPU time | Peak memory |
 | --- | --- | --- | --- |
@@ -325,66 +327,101 @@ The table shows minimum and maximum values across three applications and two rep
 | eBPF observation (bpftrace) | 30 seconds | 8.89–12.22 seconds | 93–237 MB |
 | eBPF observation (bpftrace) | 10 seconds | 9.48–14.10 seconds | 96–117 MB |
 
-- **Relationship to read count**: Within the 300-second observation window, the specified 30-second interval gave 10 reads and the specified 10-second interval gave 30 reads, with the procfs collector using approximately 0.14–0.21 seconds of CPU time per read and total CPU time proportional to the read count.
-- **Collector scope**: Values include periodic procfs reads and information retrieval through the Docker API
-- **Interpretation of eBPF observation values**: Values include bpftrace's own user-space cost and serve as an upper-bound estimate rather than measurements of the implementation's resource use
-- **CPU-time scope**: Observation-process cgroup values alone do not represent total observation-method CPU time, including eBPF processing in the kernel
-- **Outlier**: One Node.js web application run with events at a 30-second interval reached 237 MB of bpftrace memory, compared with 107 MB in the other repetition, with the cause unidentified
+- **Read count**: The 30-second interval produced 10 reads and the 10-second interval produced 30, with the collector using approximately 0.14–0.21 seconds of CPU time per read for procfs and Docker API information retrieval
+- **Outlier**: One Node.js run with events at a 30-second interval reached 237 MB of bpftrace memory, compared with 107 MB in the other repetition, with the cause unidentified
 - **Event volume and losses**: Runs with events recorded 953–1429 events per second overall and 58–192 for the target container, with zero recorded lost events under every condition
+- **Normal-processing comparison**: Median curl, git, and openssl durations and web response times were compared against no observation for the same application, interval comparison, and repetition, with differences generally within about ±1 ms and comparable to variation between repetitions
+- **Java curl**: All four runs with events showed increases of 1.0–2.2 ms, with corresponding no-observation medians of 11.8–13.7 ms
+- **Web responses and interpretation limits**: All 36 runs, including no observation, had zero response failures, but two repetitions per condition cannot establish statistical significance or long-term variation
 
-**Effects on normal processing**
+**Production environment and measurement conditions**
 
-- **Comparison method**: Compared median curl, git, and openssl durations and web response times against the no-observation run for the same application, interval comparison, and repetition
-- **Overall trend**: Median differences were generally within about ±1 ms and comparable to variation between repetitions
-- **curl in the Java application**: All four runs with events showed increases of 1.0–2.2 ms, with corresponding no-observation medians of 11.8–13.7 ms
-- **Web response failures**: Zero across all 36 runs, including no observation
-- **Interpretation limits**: Two repetitions per condition do not establish statistical significance or variation during long-term operation
+- **Environment**: Used Ubuntu 26.04 LTS, Linux 7.0, Docker 29.x, bpftrace 0.25.0, and cgroup v2, confirming BTF, the required tracepoints, `perf_event_paranoid=4`, and AppArmor enabled
+- **Security restrictions**: Confirmed `unprivileged_bpf_disabled=2` and `ptrace_scope=1`, with no hidepid option on procfs and kernel lockdown disabled
+- **Targets and observation configuration**: Observed running Elasticsearch, a Node.js backend, a Node.js frontend (Next.js), and a service using a static Go binary with an administrative collector and event observation at a 30-second interval and a 512-page buffer
+- **Scanning and interpretation limits**: Matched Trivy HIGH and CRITICAL vulnerability findings against evidence, but collected no strace ground truth, so confirmed counts are neither package counts nor a measure of coverage of all packages actually used
 
-**Measurement conditions**
+**Attaching to running containers and observing restart and recreation**
 
-- **Environment**: Measured on one machine running WSL2 in the local environment
-- **Applications**: Evaluated a Python web application, a Node.js web application, and a Java application
-- **Observation configurations**: Compared no observation, procfs only, and procfs with events
-- **Start condition and window**: Attached to running containers using attach_running for 300 seconds per run
-- **Intervals and repetitions**: Performed two repetitions per condition for the 30-second and 10-second comparisons, reversing configuration order in the second repetition
-- **Event buffer**: Used 512 pages for procfs with events
-- **Run count and completion**: All 36 runs established their observation windows and completed without early stopping
+One 300-second and one 900-second attach_running window produced identical classifications. The table counts HIGH and CRITICAL vulnerability findings rather than packages.
 
-**Fixes during measurement**
+| Target | Findings | Confirmed | Indeterminate (started before observation) | No evidence |
+| --- | --- | --- | --- | --- |
+| Elasticsearch | 19 | 17 | 2 | 0 |
+| Node.js backend | 27 | 0 | 27 | 0 |
+| Node.js frontend (Next.js) | 19 | 0 | 19 | 0 |
+| Service using a static Go binary | 38 | 0 | 24 | 14 |
 
-- Fixed a build issue that prevented Go from being found when running with administrative privileges, reran 24 runs for the Node.js web application and Java application, and excluded the failed attempts from aggregation
-- Changed the monitor's output-size limit to count growth since observation started instead of the total including earlier measurements' output, and reran the first load measurement, which that limit had stopped early
+Restart and recreation were each checked during a continuous 1200-second observation in production. The three Elasticsearch and Node.js containers retained their IDs during restart, while both Node.js container IDs changed during recreation, with separate generations observed and matched before and after each operation. Classifications before the operations matched the table above, and the following table shows the results afterward. These are also counts of HIGH and CRITICAL vulnerability findings.
+
+| Target | State after operation | Findings | Confirmed | Indeterminate (started before observation) | No evidence |
+| --- | --- | --- | --- | --- | --- |
+| Elasticsearch | After restart | 19 | 19 | 0 | 0 |
+| Node.js backend | Same after restart and recreation | 27 | 6 | 0 | 21 |
+| Node.js frontend (Next.js) | After restart (server not started, excluded from conclusions) | 19 | 0 | 0 | 19 |
+| Node.js frontend (Next.js) | After recreation (server running) | 19 | 2 | 0 | 17 |
+
+- **Elasticsearch**: File opens for `bcprov-jdk18on` confirmed the remaining 2 findings after restart, while the service was not recreated during the recreation observation and had 17 confirmed and 2 indeterminate findings
+- **Backend evidence**: File opens for the two packages loaded by the application, `js-yaml` and `multer`, provided evidence for 6 vulnerability findings after both restart and recreation, while the remaining 21 involved dependencies of the npm and pnpm package-management tools bundled in the image rather than application dependencies under `/app`
+- **Backend non-use**: All 49,006 opens under `/usr/local/lib/node_modules/npm` and `/usr/local/lib/node_modules/pnpm` across the restart came from the collector reading the container layout, with zero opens by any container process, so the absence of usage evidence for the 21 findings associated with these dependencies is the correct result
+- **Interpreting backend counts**: The 6 of 27 breakdown means that 6 detected vulnerability findings corresponded to packages the application used during observation and does not indicate many missed uses, although the absence of ground truth prevents claiming that none were missed
+- **Initial frontend restart**: Startup processing did not finish rewriting about 150 GB of page cache under `.next/server` within the observation window and the server did not start, so these results were excluded from conclusions
+- **Frontend after recreation**: HTTP 200 was confirmed 5 seconds after recreation completed, observation with the server running confirmed 2 findings from 415 opens for `next`, and the host-side request loop had 296 successful request pairs and 2 failures during recreation
+- **Unused frontend dependencies**: The remaining 17 findings involved npm's bundled `brace-expansion`, `ip-address`, `pacote`, `picomatch`, `sigstore`, and `tar`, plus `sharp`, `postcss`, and `nanoid` under `/app/node_modules/.pnpm`, with zero opens by processes other than the collector showing that these packages were not loaded during the window
+- **Interpreting non-use**: Confirmed non-use in the backend and frontend applies only to these observation windows and does not establish non-use under other processing or inputs, or safety
+- **Static Go binary**: The service was not restarted and remained in the same generation with zero confirmed, 24 indeterminate, and 14 findings without evidence, requiring a display category separate from startup before observation because per-module file opens cannot be obtained even when observing from startup
+- **No-evidence classification**: The harness classified the backend's 21 findings as paths that could not be mapped, although no target file opens were observed, requiring a correction that separates mapping failures from missing evidence
+
+**Non-root procfs conditions**
+
+Four procfs-only conditions were compared on the running containers in production. Each condition used a 60-second window and a 30-second interval, with two reads per container. Non-root conditions used a regular user in the docker group with Docker API access and private collector copies with the capabilities assigned for each condition.
+
+| Permission condition | Valid reads | Process records | maps entries | Package-database reads | Listeners | Listeners attributed to a process |
+| --- | --- | --- | --- | --- | --- | --- |
+| Administrative privileges | 12/12 | 18 | 174 | Successful for 6 targets | 32 | 20 |
+| `CAP_SYS_PTRACE` + `CAP_DAC_READ_SEARCH` | 12/12 | 18 | 174 | Successful for 6 targets | 32 | 20 |
+| `CAP_SYS_PTRACE` only | 12/12 | 18 | 174 | Successful for 6 targets | 32 | 4 |
+| No capabilities | 0/12 | 18 (identity only) | 0 | None obtained | 0 | 0 |
+
+- **Agreement with root**: `CAP_SYS_PTRACE` and `CAP_DAC_READ_SEARCH` matched root in every table entry, agreeing with existing local results
+- **Effects of removing permissions**: `CAP_SYS_PTRACE` alone could not read `/proc/<pid>/fd` except for processes running as the same user, reducing attribution from 20 to 4, while no capabilities caused process observation and package-database reads to fail with zero valid reads
+- **Execution conditions**: Effective collector capabilities matched each condition and all processes ran unconfined, but Docker API access came from docker-group membership and must be handled separately from capabilities
+
+**Production overhead**
+
+The table shows collector and bpftrace values for each observation, with attach_running and restart observations covering four containers together. CPU time covers each observation window, while peak memory covers each measurement cgroup's full lifetime, and these are not per-container values.
+
+| Observation condition | Window | Collector CPU time | Collector peak memory | eBPF observation CPU time | eBPF observation peak memory |
+| --- | --- | --- | --- | --- | --- |
+| attach_running | 300 seconds | 36.5 seconds | 223 MB | 13.4 seconds | 192 MB |
+| attach_running | 900 seconds | 58.0 seconds | 217 MB | 39.7 seconds | 702 MB |
+| Across a restart | 1200 seconds | 81.1 seconds | 309 MB | 61.3 seconds | 839 MB |
+| Across recreation | 1200 seconds | 27.2 seconds | 228 MB | 16.1 seconds | 156 MB |
+
+- **Event volume and losses**: Recorded 1962 events per second for the 300-second attach_running window, 1954 for the 900-second window, 2081 across restart, and about 407 per second across recreation, with zero lost events in all observations
+- **bpftrace memory**: Samples every 60 seconds across restart showed anonymous memory constant at 40 MB while trace-output page cache grew from 182 MB to 776 MB and accounted for most memory growth
+- **Collector memory and reads**: Anonymous memory was about 20 MB and page cache was 39–157 MB, while initial layout and package-database reads for four containers during attach_running took 17–27 seconds of elapsed time and subsequent reads took about 1.8 seconds in total
+- **Interpreting resource use**: Initial-read elapsed time differs from CPU time, cgroup peak memory does not indicate growth in the process's own memory, and observation-process CPU time alone excludes the full cost of eBPF processing in the kernel
+- **Applicability to implementation**: Local and production values including bpftrace are upper-bound estimates that include its user-space cost, and differences in target counts and configurations prevent using the two environments as overhead-difference baselines
 
 ## Completed work
 
-- **Recorded the plan**
-    - Documented the purpose, validation questions, permission conditions, overhead comparisons, production checks, stop conditions, records to retain, and the method for defining implementation requirements
-
-- **Permission checks and overhead comparisons in the local environment**
-    - Checked outcomes and reasons for stopping across four operations under five event-observation permission conditions
-    - Compared observation-method overhead and effects on normal processing across three applications and 36 runs, recording the outlier and the scope of the results
-
-## Remaining work
-
-- **Execute and record the four production stages**
-    - Perform preflight checks and record the observation and scanning workflows
-    - Attach to running containers and record evidence categories and overhead
-    - Check a restart while observation continues and record the conditions under which evidence and the indeterminate display change
-    - Recheck minimum-permission candidates and define implementation requirements, including the scope that worked and conditions not tested
+- Checked event-observation permissions and compared observation-method overhead and effects on normal processing in the local environment
+- Performed production preflight checks of the kernel, required observation features, security restrictions, and observation and scanning workflows
+- Checked evidence and overhead when attaching to running containers in production
+- Observed across restart and recreation in production, checking generation separation, evidence changes, resolution of indeterminate results, overhead, and observation quality
+- Confirmed non-use during the observation windows for backend and frontend dependencies without evidence and identified the harness classification defect
+- Compared event-observation and procfs permission conditions in production
 
 ## Change log
 
 ### 2026-09-22
 
-- **Recorded the plan**
-    - Recorded the observation-environment validation plan and listed measurements and result documentation as remaining work
+- Recorded the plan
 
 ### 2026-09-23
 
-- **Recorded results from the local environment**
-    - Recorded outcomes for five permission conditions, observation-method overhead, effects on normal processing, measurement conditions, and fixes during measurement
-    - Moved local permission checks and overhead comparisons to completed work and retained the four production stages as remaining work
-    - Added CPU time and the sampling interval and read count to Terms
+- Recorded local and production results
 
 ---
 

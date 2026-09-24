@@ -140,8 +140,9 @@
 # Prerequisites: run as root (supervise creates cgroup v2 directories); bpftrace installed unless
 # KL_PROD_PAGES=none; the native Docker Engine daemon (not Docker Desktop) reachable at
 # /var/run/docker.sock; the runtime-discovery/runtime-events binaries built (see
-# KL_RD_BIN/KL_RE_BIN); tools/load-lib.sh and tools/watch-run.sh present alongside this script -
-# both are hard requirements, not optional extras.
+# KL_RD_BIN/KL_RE_BIN); tools/load-lib.sh and tools/watch-run.sh present alongside this script, and
+# experiments/runtime-discovery/cases/run.sh (its attach-check and register-cgroups helpers) at the
+# same place relative to the repository root - all hard requirements, not optional extras.
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${KL_ROOT:-$here/../../..}"

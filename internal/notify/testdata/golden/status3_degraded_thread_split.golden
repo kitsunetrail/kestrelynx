@@ -1,0 +1,46 @@
+📊 *Full report — 2026-06-24 09:00*
+
+*🚨 ACT NOW (3) — exploited or likely to be*
+• web:1.0
+   • e2fsprogs 1.47.0-2 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> CRITICAL · severity only (intel unavailable) — no fix yet, consider mitigation
+       e2fsprogs: out-of-bounds write
+     ⏱ open 20 day(s) — first seen 2026-06-04
+   • gcc-12-base 12.2.0-14 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0005|CVE-2031-0005> CRITICAL · severity only (intel unavailable) — upstream won't fix, consider replacing
+===== next thread message =====
+*🚨 ACT NOW (3) — exploited or likely to be* _(cont.)_
+     ⏱ open 20 day(s) — first seen 2026-06-04
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> CRITICAL · severity only (intel unavailable)
+       openssl: buffer overread
+       📎 <https://avd.example/CVE-2031-0001|advisory> · <https://vendor.example/advisory/1|vendor advisory>
+     ⏱ open 20 day(s) — first seen 2026-06-04
+===== next thread message =====
+*👀 WATCH (5) — not urgent, keep an eye on*
+• api:2.0
+   • libxml2 2.9.14 (no fix available) (CRITICAL 0 / HIGH 2)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0006|CVE-2031-0006> HIGH · severity only (intel unavailable) — no fix yet, consider mitigation
+       libxml2: use-after-free
+       📎 <https://avd.example/CVE-2031-0006|advisory>
+     also: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
+     ⏱ open 20 day(s) — first seen 2026-06-04
+   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [lang]
+===== next thread message =====
+*👀 WATCH (5) — not urgent, keep an eye on* _(cont.)_
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0008|CVE-2031-0008> HIGH · severity only (intel unavailable)
+     ⏱ open 20 day(s) — first seen 2026-06-04
+   • zlib 1.2.13 (no fix available) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> HIGH · severity only (intel unavailable) — upstream won't fix, consider replacing
+     ⏱ first seen today
+===== next thread message =====
+*👀 WATCH (5) — not urgent, keep an eye on* _(cont.)_
+• web:1.0
+   • dpkg 1.21.22 → 1.21.23 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> HIGH · severity only (intel unavailable)
+     ⏱ open 20 day(s) — first seen 2026-06-04
+   • openssl 3.0.7 (no fix available) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> HIGH · severity only (intel unavailable) — no fix yet, consider mitigation
+     ⏱ open 20 day(s) — first seen 2026-06-04
+
+⚠️ identity unconfirmed: scanned by reference — broken:1

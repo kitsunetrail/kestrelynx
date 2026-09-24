@@ -18,7 +18,7 @@
 - **Prioritization**: act now / watch / low, based on severity, CISA KEV, and EPSS
 - **Package grouping**: fix availability, fixed versions, and upgrade-risk annotations
 - **Unpatched vulnerabilities**: inclusion of findings without available fixes
-- **Base-OS EOL**: prominent reporting of images with unsupported operating systems
+- **Base-OS and package EOL**: prominent reporting at the top, separately from CVE priority, of unsupported base operating systems (EOL base) and packages with CVEs reported by vendors as out of support for this release (EOL package)
 - **Change tracking**: new findings, added CVEs, newly available fixes, priority escalations, and resolutions
 - **Environment identification**: optional environment name in Slack headers
 - **Container identification**: container names, Compose project/service, and Kubernetes workload information in the generic webhook

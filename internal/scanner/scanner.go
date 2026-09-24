@@ -27,12 +27,22 @@ const (
 
 // Status mirrors Trivy's vulnerability status and is the primary axis for
 // triage (more meaningful than "has a fixed version"). See docs/TRIVY_OUTPUT.md §5.
+//
+// Trivy defines eight values. The raw value is kept as-is (apart from the
+// missing-key case, see ParseReport), including values outside this list:
+// deciding what a status means for the report is analyze's job, not the
+// parser's.
 type Status string
 
 const (
-	StatusFixed    Status = "fixed"
-	StatusAffected Status = "affected"
-	StatusWontFix  Status = "will_not_fix"
+	StatusFixed              Status = "fixed"
+	StatusAffected           Status = "affected"
+	StatusWontFix            Status = "will_not_fix"
+	StatusFixDeferred        Status = "fix_deferred"
+	StatusUnderInvestigation Status = "under_investigation"
+	StatusEndOfLife          Status = "end_of_life"
+	StatusNotAffected        Status = "not_affected"
+	StatusUnknown            Status = "unknown"
 )
 
 // Severity is restricted in practice to HIGH/CRITICAL because KestreLynx asks
@@ -183,13 +193,20 @@ func ParseReport(data []byte) (ImageScan, error) {
 	for _, res := range r.Results {
 		class := classOf(res.Class)
 		for _, v := range res.Vulnerabilities {
+			// Trivy stores the status as an enum whose zero value is
+			// "unknown" and serializes it with omitempty, so an unknown
+			// status arrives as a missing key rather than the string.
+			status := Status(v.Status)
+			if status == "" {
+				status = StatusUnknown
+			}
 			scan.Findings = append(scan.Findings, Finding{
 				Image:        r.ArtifactName,
 				Class:        class,
 				Package:      v.PkgName,
 				InstalledVer: v.InstalledVersion,
 				FixedVer:     v.FixedVersion,
-				Status:       Status(v.Status),
+				Status:       status,
 				Severity:     Severity(v.Severity),
 				VulnID:       v.VulnerabilityID,
 				URL:          v.PrimaryURL,

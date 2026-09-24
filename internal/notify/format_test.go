@@ -159,7 +159,7 @@ func TestFormatSlackDiffText_NewFindings(t *testing.T) {
 		"web:1.0",
 		"libc-bin",
 		"setuptools",
-		"Open now: CRITICAL 1 / HIGH 3",
+		"Open now: ⛔ 1 EOL base / CRITICAL 1 / HIGH 3",
 		"broken:1", // scan errors always shown
 		"pull failed",
 	}
@@ -183,7 +183,7 @@ func TestFormatSlackDiffText_Heartbeat(t *testing.T) {
 	if !strings.Contains(out, "No changes since last scan") {
 		t.Errorf("expected heartbeat line:\n%s", out)
 	}
-	if !strings.Contains(out, "Open now: CRITICAL 1 / HIGH 3") {
+	if !strings.Contains(out, "Open now: ⛔ 1 EOL base / CRITICAL 1 / HIGH 3") {
 		t.Errorf("heartbeat must keep the open summary:\n%s", out)
 	}
 	if strings.Contains(out, "libc-bin") {

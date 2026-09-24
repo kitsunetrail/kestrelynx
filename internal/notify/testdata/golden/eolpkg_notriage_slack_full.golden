@@ -1,0 +1,19 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 3 affected
+*Priority:* ⛔ 2 EOL base · ⛔ 4 EOL package · 🔴 2 CRITICAL
+
+*⛔ Base OS end-of-life (top priority)*
+• legacy:1 — base OS is EOL (no more security updates coming) · includes 2 end-of-life package(s)
+• old:3 — base OS is EOL (no more security updates coming) · includes 1 end-of-life package(s)
+
+*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*
+🔴 app:2.1  CRITICAL 1 / HIGH 3
+   • libwebkit2gtk 2.38.5-1 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 0)
+   • curl 7.61.1-34 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1)
+   • libxml2 2.9.7-16 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1)
+   • qt5-qtbase 5.15.3-1 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1)
+
+*ℹ️ No fix yet (affected / waiting on upstream)*
+🟠 app:2.1  CRITICAL 0 / HIGH 3
+   • curl 7.61.1-34 (no fix available) (CRITICAL 0 / HIGH 2)
+   • sqlite-libs 3.26.0-19 (no fix available) (CRITICAL 0 / HIGH 1)

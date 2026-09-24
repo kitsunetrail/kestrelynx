@@ -1,504 +1,417 @@
 # How KestreLynx works
 
-KestreLynx turns point-in-time Trivy scan results into notifications organized
-around two views:
+KestreLynx uses Trivy scan results for running images to report changes since the previous scan and findings that remain unresolved.
 
-- **Changes since the previous scan** — posted to the Slack channel in the
-  default `diff` mode.
-- **Vulnerabilities that remain unresolved** — available in a Slack thread when
-  bot delivery is configured and in the generic webhook payload.
+- The Slack channel shows changes since the previous scan in the default `diff` mode.
+- Slack Bot threads show the current state, and the generic webhook provides all findings and changes.
+- See [Configuration](configuration.md) for setup instructions.
 
-Repeating every CVE every day makes new risk easy to miss, while reporting only
-changes makes it hard to see what remains unresolved. KestreLynx handles these
-two views separately.
+The overall scan flow is:
 
 ```text
-Docker host or Kubernetes cluster
+Docker host / Kubernetes cluster
     │
     ▼
-Discover running containers
+Discover running containers (Chapter 1)
     │
     ▼
-Derive distinct images by identity
+Derive distinct images by identity (Chapter 1)
     │
     ▼
-Scan each image with Trivy
+Scan each image with Trivy (Chapter 1)
     │
     ▼
-Normalize and group findings by image, package, and fix status
+Group findings by image, package, and fix status (Chapter 2)
     │
     ▼
-Enrich CVEs with CISA KEV and EPSS, then assign priority
+Assign priority using CISA KEV and EPSS (Chapter 3)
     │
     ▼
-Compare the current groups with persisted state
+Compare with persisted state to detect changes (Chapter 4)
     │
-    ├── Slack summary: changes since the previous scan
-    ├── Slack thread: current open findings
-    └── Generic webhook: structured current state and diff
+    ├── Slack summary: changes since the previous scan (Chapters 5 and 6)
+    ├── Slack thread: current unresolved findings (Chapter 6)
+    └── Generic webhook: structured current state and diff (Chapter 7)
 ```
 
 ## 1. Scan cycle
 
-### Discover running images
+Scans cover images used by running containers. One instance monitors one Docker host or one Kubernetes cluster. Stopped containers and images not used by a running container are outside the scan scope.
 
-The Docker adapter calls `GET /containers/json` through the configured Docker
-socket. It reads each running container's image reference (`Image`), image
-config digest (`ImageID`), name (`Names`), and labels (`Labels`). A config digest
-is accepted only in the form `sha256:` followed by 64 hexadecimal digits.
+Identical reference-and-identity pairs are combined into one entry. The same reference with different digests produces separate entries. Each image is scanned with Trivy, and findings are grouped by package.
 
-The container name comes from `Names`, with the leading slash removed and link
-aliases excluded. When both `com.docker.compose.project` and
-`com.docker.compose.service` labels are present and valid, they identify the
-container's workload as a Compose project and service. Otherwise, the workload
-is `unknown`.
+`scan.severity` selects the severity levels to include. The default is `HIGH,CRITICAL`.
 
-Distinct images are derived from the running containers by reference and
-identity, then sorted. Ten containers using the same reference and digest
-produce one image entry. One reference running two different digests produces
-two entries.
+### Image and container identification
 
-One KestreLynx instance monitors one Docker host or one Kubernetes cluster.
-Stopped containers and images that are present on disk but not used by a
-running container are outside the scan scope.
+Docker and Kubernetes scan targets depend on the identity information available. Docker connections use `docker.socket`. Set `kubernetes.enabled: true` to monitor Kubernetes.
 
-If KestreLynx cannot list the running containers, the cycle ends without
-changing the saved state. A later scheduled cycle will try again.
+Kubernetes discovery includes running containers and currently running init containers with `restartPolicy: Always`. Ordinary init containers and ephemeral containers are excluded. `kubernetes.namespaces` can restrict discovery to selected namespaces.
 
-### Kubernetes discovery
+Container and workload information is included only in the generic webhook. If the associated workload cannot be identified, it is recorded as `unknown`.
 
-With `kubernetes.enabled: true`, the Kubernetes adapter makes paginated,
-read-only LIST requests for nodes, pods, replicasets, and jobs. Nodes are always
-listed cluster-wide. Pods, replicasets, and jobs are listed across all
-namespaces, or separately in each namespace selected by
-`kubernetes.namespaces`.
+### Discovery retries
 
-The adapter includes containers whose status has `state.running`, including
-native sidecars: init containers with `restartPolicy: Always` that are currently
-running. Ordinary init containers and ephemeral containers are excluded.
-Container names use the form `<namespace>/<pod>/<container>`.
+If listing containers fails, the cycle ends without changing saved state and retries on the next scheduled cycle. In Kubernetes, even a partial listing failure discards the partial results and leaves state unchanged for that cycle.
 
-The image reference comes from `containerStatus.image`. A registry digest is
-read from `containerStatus.imageID` in the form `<repo>@sha256:<hex>`, optionally
-prefixed with `docker-pullable://`. The platform comes from the node's
-`status.nodeInfo.operatingSystem` and `architecture`; no variant is inferred.
-A bare `sha256:...` image ID does not establish a registry identity and falls
-back to a reference scan.
+### Scan targets and identity verification
 
-Workloads are resolved through `ownerReferences`:
+When an image's identity is known, the scan targets that identity. A result that does not match the requested digest or platform is treated as a scan failure.
 
-| Owner chain | Workload |
-| --- | --- |
-| Pod → ReplicaSet → Deployment | Deployment |
-| Pod → StatefulSet | StatefulSet |
-| Pod → DaemonSet | DaemonSet |
-| Pod → Job → CronJob | CronJob |
-| Pod → Job without a parent owner | Job |
-| Pod without an owner | Pod |
-| Unresolved or unsupported chain | `unknown` |
+When the identity is unknown, the image is scanned by reference and annotated with `identity unconfirmed: scanned by reference`.
 
-Container and workload context is included only in the generic webhook payload,
-not in Slack.
+### Failed scans and unconfirmed identities
 
-LIST requests use pages of up to 500 objects. Transport errors, HTTP 429, and
-server errors are retried up to three times with exponential backoff, honoring
-`Retry-After`. HTTP 410 restarts a list up to twice. The ServiceAccount token and
-CA are read each cycle, and the token is read again after HTTP 401. Any LIST
-failure fails the whole cycle: partial results are discarded and saved state
-does not advance.
+A failed scan retains the target's previous findings. Unverified results cannot resolve previous findings. Failure to scan one image does not stop the remaining scans, and failures appear under Scan failures in Slack.
 
-### Scan each unique image
+When only some identities under the same reference fail, previous CVE IDs, fix availability, and the higher priority are retained. In Kubernetes, even a successful reference scan retains previous findings and does not resolve ordinary packages or clear EOL packages.
 
-KestreLynx runs the Trivy CLI for each distinct image identity and requests JSON
-output. The configured `scan.severity` values are passed to Trivy; the default is
-`HIGH,CRITICAL`.
+### Package-level grouping
 
-The scan target depends on the identity available at discovery:
+Findings are grouped by image reference and identity, package, and canonical fix status. Different fix statuses produce separate groups even for the same package.
 
-| Identity | Scan target |
-| --- | --- |
-| Docker config digest | Local Docker image selected by config digest with `--image-src docker`. |
-| Kubernetes registry digest and known platform | Registry image selected by digest with `--image-src remote` and `--platform`. |
-| Unresolved identity | Image reference fallback. |
+Each group deduplicates CVE IDs and retains versions, CRITICAL and HIGH counts, reference URLs, and the highest priority in the group. State and diffs are keyed by image reference and package.
 
-The three invocation shapes are:
+When a reference has multiple identities, Slack distinguishes them with labels such as `web:1.0 (3f2a9c1b7d4e)` or `web:1.0 (3f2a9c1b7d4e linux/amd64)`.
 
-```text
-trivy image --quiet --format json --severity <list> --image-src docker sha256:<config-digest>
-trivy image --quiet --format json --severity <list> --image-src remote --platform <os>/<arch> <repo>@sha256:<hex>
-trivy image --quiet --format json --severity <list> <ref>
-```
+??? note "Technical details"
 
-After a digest-targeted scan, KestreLynx verifies the returned metadata. For a
-Docker scan, `Metadata.ImageID` must match the requested config digest. For a
-registry scan, the requested digest must appear in `Metadata.RepoDigests`, and
-`Metadata.ImageConfig` must match the requested OS and architecture. A mismatch
-is reported as a scan failure rather than attributed to the running image.
+    Scan results are obtained as JSON from the Trivy CLI.
 
-When several references identify the same content, a scan is shared across
-those aliases only after it successfully pins the identity. After a failed or
-unpinned scan, the next alias is scanned again.
-Registry identities include the platform, so different
-platforms are not treated as the same image. Reference scans are annotated
-`identity unconfirmed: scanned by reference`.
-For reference-level Slack labels and the summary, a reference is confirmed only when
-every entity under it was identified by a Docker config digest at discovery, regardless
-of scan results. Kubernetes registry digests count as unconfirmed in this check.
+    | Item | Docker | Kubernetes |
+    | --- | --- | --- |
+    | Container listing | `GET /containers/json`: `Image`, `ImageID`, `Names`, and `Labels`. | Read-only LIST requests for nodes, pods, replicasets, and jobs. `kubernetes.namespaces` applies to all except nodes. |
+    | Container names and running status | Leading slashes and link aliases are removed from `Names`. | Regular containers are considered running when `state.running` is present. |
+    | Image identity | Config digest from `ImageID`, accepted only as `sha256:` followed by 64 hexadecimal digits. | Reference from `containerStatus.image`. Registry digest from `<repo>@sha256:<hex>` in `containerStatus.imageID`, optionally prefixed with `docker-pullable://`. A bare `sha256:...` uses a reference scan. |
+    | Platform | Not applicable. | The node's `status.nodeInfo.operatingSystem` and `architecture`. No variant is inferred. The platform also contributes to image identity. |
+    | Workload resolution | Compose when both `com.docker.compose.project` and `com.docker.compose.service` are valid. | `ownerReferences` resolves to a Deployment, StatefulSet, DaemonSet, CronJob, Job, or bare Pod. |
+    | Trivy scan method | Local image selected by config digest with `--image-src docker`. | When the registry digest and platform are known, `<repo>@sha256:<hex>` with `--image-src remote` and `--platform <os>/<arch>`. |
+    | Scan result verification | `Metadata.ImageID` must match the requested config digest. | `Metadata.RepoDigests` must contain the requested digest, and `Metadata.ImageConfig` must match the requested OS and architecture. |
 
-An error for one image does not cancel the other image scans. It is included in
-the notification under **Scan failures**. Previous findings for that image are
-carried forward in state for the cycle, because treating an unscanned image as
-clean would create false “resolved” findings.
+    - Kubernetes LIST requests use pages of up to 500 objects and retry each page independently. Transport errors, HTTP 429, and server errors are retried up to 3 times with `Retry-After` and exponential backoff; HTTP 410 restarts the listing up to 2 times; HTTP 401 causes the ServiceAccount token to be read again.
+    - The ServiceAccount token and CA are read each scan cycle.
+    - Aliases for the same identity share only results that successfully confirm that identity. After a failed or unconfirmed scan, the next alias is scanned again.
+    - When only some identities under the same reference fail, `content_id` is cleared and the union of CVE IDs is retained.
+    - Slack considers a reference confirmed only when every identity under it was identified by a Docker config digest at discovery. This check is independent of scan results, and Kubernetes registry digests count as unconfirmed.
 
-If a reference runs several identities and only some scans fail, previous
-findings are retained with `content_id` cleared. Overlapping previous and
-current findings are merged conservatively: CVE IDs are combined, fix
-availability is retained if either result reports a fix, and the higher
-priority is kept. Resolution is deferred for that reference.
+## 2. Severity, fix status, and EOL
 
-In Kubernetes mode, a successful reference scan also holds previous findings
-because it cannot confirm the running image's identity. Slack reports
-`⏳ unconfirmed this cycle, holding previous findings — <refs>`. A notification
-is sent when the unconfirmed reference has previously recorded package findings
-being held, even if nothing changed. Retained EOL history alone does not trigger
-this notification.
+Severity, fix status, and priority describe different information.
 
-### Build package-level findings
+- Severity describes the potential impact reported by Trivy and advisory data.
+- Fix status describes fix availability and support status reported by Trivy.
+- Priority describes the urgency of review based on exploitation evidence.
 
-Raw Trivy rows are normalized into package groups. The primary unit shown in
-notifications is:
+### Status handling
 
-```text
-(image reference + identity) + package + Trivy status
-```
+Fix status comes from Trivy's `Status` and is not inferred from fix availability. A missing or empty `Status` is treated as `unknown`. Unrecognized statuses are included in `affected` rather than excluded.
 
-All selected CVEs for that unit are deduplicated and collected together. The
-group contains the installed version, fixed version when available, CRITICAL
-and HIGH counts, references, and the strongest priority among its CVEs.
-
-A package can appear in more than one status group when, for example, one CVE
-has a fix while another CVE in the same package does not.
-
-When one tag refers to two running digests, Slack distinguishes the entries
-with a short digest suffix, such as `web:1.0 (3f2a9c1b7d4e)` or
-`web:1.0 (3f2a9c1b7d4e linux/amd64)`. State and diff keys remain image reference
-plus package.
-
-## 2. Three independent classifications
-
-KestreLynx deliberately keeps severity, fix status, and priority separate.
-They describe different facts and should not be interpreted as synonyms.
-
-| Classification | Source | Question it answers |
-| --- | --- | --- |
-| Severity | Trivy/advisory data | How large could the impact be? |
-| Fix status | Trivy | Is an upstream fix currently available? |
-| Priority | KestreLynx triage | How urgently should this be reviewed, given exploitation evidence? |
-
-For example, a CRITICAL CVE can be **Watch** when it has no strong exploitation
-signal, while a HIGH CVE can be **Act now** because it is in CISA KEV.
-
-### Fix status
-
-KestreLynx preserves Trivy's status as the canonical remediation state:
+When the original status differs from the canonical group status, it is available in the webhook's `vulns[].status`.
 
 | Trivy status | Meaning in KestreLynx |
 | --- | --- |
-| `fixed` | A fixed version is available. |
-| `affected` | The package is affected, but no fix is available yet. |
-| `will_not_fix` | Upstream indicates that it will not be fixed. |
+| `fixed` | A fixed version is available. Included in `fixed`. |
+| `affected` | The package is affected, but no fix is available. Included in `affected`. |
+| `will_not_fix` | Upstream indicates that it will not be fixed. Included in `will_not_fix`. |
+| `fix_deferred` | A fix is deferred. Included in `affected`. |
+| `end_of_life` | The selected CVEs are out of support for this release. Included in EOL package. |
+| `unknown` | The fix status is unknown. Included in `affected`. |
+| `under_investigation` | The vulnerability is under investigation. Included in `affected`. |
+| `not_affected` | Excluded from grouping, notifications, and priority classification. |
 
-These status groups remain in the structured webhook format. Slack is normally
-rearranged by priority so the most urgent work appears first.
+### EOL base and EOL package
 
-### Upgrade-risk hint
+EOL describes support status and is handled separately from CVE priority. Base OS and package status appear as follows.
 
-For a `fixed` package, KestreLynx annotates the size or type of the proposed
-version change:
+- EOL base indicates that Trivy reported the base OS as end of life and appears at the top.
+- EOL package contains packages with `end_of_life` status and appears after EOL base, whether triage is enabled or disabled.
 
-| Label | Rule |
-| --- | --- |
-| Distribution security update | OS package versions are handled as distribution revisions, not semantic versions. |
-| Relatively safe | A language package stays on the same major version, or moves to a lower major version. |
-| Needs care | A language package moves to a higher major version. |
-| Unknown | The language-package versions cannot be parsed reliably. |
+The usual response to EOL base is to rebuild on a supported base image. If the base OS is also EOL, the reference's EOL packages are folded into the base-OS line with `includes N end-of-life package(s)`.
 
-This is an **upgrade-size hint**, not a guarantee that an update is safe.
-Release notes, application compatibility, and tests still matter.
+Act now EOL packages show their details in Act now whether or not they are folded, including during degraded triage. Unfolded packages show `🚨 see Act now` in the EOL section, so EOL package and Act now counts can overlap.
 
-### End-of-life base OS
+EOL packages with Watch or Low priority appear only in their dedicated EOL section and are not repeated in the ordinary Watch or Low sections.
 
-When Trivy reports that an image's base OS is end of life, KestreLynx shows the
-image in a separate **EOL base** section above the vulnerability buckets. EOL is
-not a CVE priority: it means that normal security updates may no longer arrive,
-so rebuilding on a supported base image is usually the appropriate response.
+??? note "Technical details"
+
+    - If the same CVE ID has multiple original statuses within one group, the canonical group status takes precedence when present; otherwise, the lexically smaller status is retained.
 
 ## 3. Exploitation-based triage
 
-Triage is enabled by default. KestreLynx enriches the CVE IDs found by Trivy
-with two data sources:
+Triage indicates review priority based on exploitation evidence and is enabled by default. Each package group receives the highest priority of any CVE in that group.
 
-- **CISA KEV** identifies vulnerabilities known to have been exploited in the
-  wild.
-- **EPSS** estimates the probability of exploitation activity in the next 30
-  days. It does not estimate impact and does not prove exploitability in the
-  monitored environment.
+- CISA KEV identifies vulnerabilities known to have been exploited in the wild.
+- EPSS estimates the probability of exploitation activity in the next 30 days.
 
-### CVE priority rules
+EPSS does not establish impact or guarantee exploitability in the monitored environment.
 
-With the default thresholds, each CVE is classified in this order:
+### CVE priority rules {#cve-priority-rules}
 
-| Priority | Rule |
+Normal triage assigns the following priorities using KEV membership, EPSS, and severity. `triage.act_now_epss` and `triage.watch_epss` configure the thresholds.
+
+| Priority | Default condition |
 | --- | --- |
-| **Act now** | Listed in CISA KEV, or EPSS is at least `0.10` (10%). |
+| **Act now** | Listed in KEV, or EPSS is at least `0.10` (10%). |
 | **Watch** | Not Act now, and EPSS is at least `0.01` (1%) or severity is CRITICAL. |
 | **Low** | No rule above matched. This includes HIGH findings below the EPSS threshold and not in KEV. |
 
-`triage.act_now_epss` and `triage.watch_epss` change the two EPSS thresholds.
-If EPSS has no score for a CVE, the EPSS conditions are skipped rather than
-treating the missing value as zero.
+If no EPSS score is available, EPSS conditions are skipped rather than treating the score as 0. The KEV ransomware-campaign flag is displayed as evidence but does not create a separate priority.
 
-The KEV ransomware-campaign flag is displayed as evidence, but it does not
-create a separate priority level.
+Fix status affects priority as follows.
 
-### Interaction between priority and fix status
+| Fix status | Relationship to priority |
+| --- | --- |
+| All reportable statuses | Act now is retained. When no fix is available, consider mitigation, replacement, or a supported version. |
+| `will_not_fix` | Watch is reduced to Low during normal triage. |
+| `affected`, `fix_deferred`, `under_investigation`, `unknown` | The same priority rules apply. |
+| `end_of_life` | The reduction from Watch to Low does not apply. |
+| All reportable statuses | Low is retained regardless of fix status. |
+| `not_affected` | Excluded from priority classification. |
 
-Lack of a fix never hides a strong exploitation signal:
+### Feeds and degraded operation
 
-- An Act-now CVE stays Act now for `fixed`, `affected`, and `will_not_fix`.
-  When no fix exists, the notification suggests mitigation or replacement.
-- A Watch CVE marked `will_not_fix` is reduced to Low to keep an unfixable item
-  without a strong exploitation signal out of the active queue.
-- Low remains Low regardless of status.
+If intelligence refresh fails, triage continues using a validated cache for up to 7 days. The cache is stored in the `intel` directory beside `state.path` and refreshed after about 20 hours.
 
-The priority of a package group is the highest priority of any CVE in that
-group. Counts in a full priority view are therefore package-group counts, not
-raw CVE counts. The diff heartbeat merges status groups with the same image and
-package, counts that package once, and uses its highest current priority.
+Limited source availability is handled as follows.
 
-### Feed download, cache, and privacy
+- If only one source is usable, triage continues with that source and the notification identifies the unavailable source.
+- If neither source is usable, degraded triage assigns CRITICAL findings to Act now and other selected severities to Watch.
 
-KEV and EPSS are downloaded in bulk. KestreLynx then matches CVE IDs locally;
-it does not submit the host's complete CVE list to those services. The feed
-cache is stored in the `intel` directory beside `state.path`.
+During degraded triage, nothing is classified as Low, and ordinary and EOL priority-escalation notifications are suppressed.
 
-- A feed is refreshed after about 20 hours.
-- If refresh fails, a previously validated cache can be used for up to 7 days.
-- KEV and EPSS are tracked independently. If one remains usable, triage uses it
-  and the notification identifies the missing source.
-- Downloads are validated before replacing the existing cache.
+When `triage.discussion_links` is enabled, Hacker News discussions are added for Act now CVEs. A discussion must match the CVE ID and have at least 20 points. Set `triage.discussion_links: false` to stop sending CVE IDs for discussion searches.
 
-If neither source is usable, KestreLynx enters **degraded triage**. It displays
-a warning and falls back to CRITICAL = Act now and other selected severities =
-Watch. Nothing is placed in Low while exploitation intelligence is unavailable.
-Priority-escalation events are also suppressed for that cycle, avoiding a feed
-outage being reported as a mass risk increase.
+Feed matching does not send the host's complete CVE list to external services.
 
-When `triage.discussion_links` is enabled, only CVE IDs already classified as
-Act now are sent to the Hacker News search API. A result is attached only when
-the CVE ID matches and the discussion has at least 20 points. Set the option to
-`false` if this additional CVE-ID egress is not wanted.
+??? note "Technical details"
+
+    - KEV and EPSS are downloaded in bulk, and CVE IDs are matched locally.
+    - Normal triage evaluates the priority table from top to bottom.
+    - Discussion searches send only Act now CVE IDs to the Hacker News search API.
 
 ## 4. Diff state and change detection
 
-In the default `diff` mode, KestreLynx stores history in `state.path` (default:
-`/var/lib/kestrelynx/state.json`). The directory should be persisted with a
-Docker volume, or a persistent volume in Kubernetes.
+In `diff` mode, the history in `state.path` is compared with current results to identify changes since the previous scan. The default state file is `/var/lib/kestrelynx/state.json`, and its directory should be persisted.
 
-For each image and package, state records:
+One state file holds one environment and must not be shared by multiple instances. Adding, changing, or removing `environment.name` does not reset history or first-seen dates.
 
-- when it was first seen,
-- the set of CVE IDs,
-- whether any fix is available,
-- the package's previous maximum priority, and
-- `content_id`, the config digest of a single verified identity, left blank
-  when the reference is ambiguous or partially failed.
+Ordinary and EOL package state can coexist for the same image reference and package. Older state files load without conversion, but if `eol_packages` is absent, current EOL packages are reported as newly detected EOL packages.
 
-The top-level `images` map is keyed by reference and records sorted
-`content_ids`, `registry_digests`, `ambiguous`, and `last_seen`. When
-`environment.name` is set, an `environment` object records its `name` and
-adapter-derived `kind`.
+### Changes included in the diff
 
-These fields were added without changing the state-format version, which
-remains `1`. Older state files load without conversion. Naming, renaming, or
-removing the environment name does not change history keys, reset first-seen
-dates, or re-notify existing findings. One state file holds one environment;
-two instances must not share it.
+For ordinary packages, notifications cover new findings, priority escalations, added CVEs, and newly available fixes. If multiple changes apply at once, only one reason is reported.
 
-EOL first-seen dates and the reference to the most recent Slack full-report
-thread are stored separately. State writes use a temporary file followed by an
-atomic rename.
+- New means that the image reference and package combination was absent from the previous state.
+- Escalated means that the priority rose above the saved maximum priority.
+- New CVEs means that new CVE IDs were added to a known package.
+- Now fixable means that no fix was previously available and at least 1 fix is now available.
 
-### What counts as a change
+Priority decreases are saved without notification, and later escalations use the saved value as their baseline. Moving from EOL back to ordinary findings alone does not count as New or New CVEs.
 
-Current and previous package state are compared in the following precedence
-order. Image replacements are detected independently:
+EOL package changes are reported independently of ordinary changes.
 
-| Change | Condition |
-| --- | --- |
-| New | The image-and-package key was not in the previous state. |
-| Escalated | A known package's maximum priority increased, for example Watch → Act now. |
-| New CVEs | The known package gained one or more CVE IDs. |
-| Now fixable | The known package had no fix before and has at least one fix now. |
-| Resolved | A previously stored image-and-package key is absent from a successful current scan. |
-| Replaced | A reference's verified content-ID sets are non-empty in both cycles and differ. Shown as `🔄 Image content changed`. |
+- Newly detected EOL means that no previous EOL record exists, including a move from ordinary findings or a return after EOL cleared.
+- Escalation to Act now means that an EOL package rose from its saved EOL priority to Act now; missing saved priority, degraded triage, and a rise from Low to Watch do not qualify.
+- New EOL CVEs means that new EOL CVE IDs were added to a known EOL package.
 
-Only the highest-precedence package reason is shown when several conditions
-become true in the same cycle. Priority decreases are silent, but the new lower
-priority is saved and can be used as the baseline for a later escalation.
-Escalation requires a stored priority and is suppressed during degraded triage.
+A package being “resolved” means that its findings have left the current scope; it does not prove that a patch was installed. A previous image reference and package combination is resolved when it is absent from both ordinary and EOL findings in the current successful scan.
 
-Replaced is an image-level change, independent of package-level precedence. It
-can appear alongside package changes and triggers a notification even for a
-clean image. The first observation of an identity is not a replacement.
+Moving all ordinary findings to EOL does not resolve the package. A combination that disappears from both sides is counted once in Slack. If ordinary findings remain after EOL clears, Slack shows `no longer end-of-life` rather than treating the vulnerabilities as resolved.
 
-“Resolved” means that the finding is no longer in KestreLynx's current scope.
-Possible causes include installing a fix, changing the image, stopping the
-container, changing the selected severity levels, or a scanner-data change. It
-does not by itself prove that a patch was installed. Fully failed, partially
-failed, and unconfirmed Kubernetes references do not produce resolutions.
+Base-OS changes also report newly detected EOL and references no longer recorded as EOL.
 
-On the first run, or when no usable state file exists, every current package is
-reported as New. A corrupt state file is treated the same way and a warning is
-logged. A state-format version mismatch starts fresh without trying to interpret
-incompatible history.
+Image replacement is a diff independent of package changes and is reported even for images without findings. It applies when the previous and current verified content-ID sets are both nonempty and differ. The first observation does not count as a replacement.
 
-### When state advances
+Resolutions and EOL clearances are not reported when previous state is retained because of fully or partially failed scans or unconfirmed Kubernetes identities.
 
-If no notification is required, the newly computed state is saved immediately.
-If delivery is required, state is saved only after all configured destinations
-succeed. A failed delivery therefore causes the same changes to be retried on
-the next cycle rather than silently lost.
+### State persistence and repeated notifications
 
-When several destinations are configured, KestreLynx attempts all of them. A
-partial failure can cause the successful destination to receive the same change
-again on the next cycle; delivery favors not losing an alert over exactly-once
-semantics.
+When a notification is required, state is saved only after delivery succeeds to every configured destination. Delivery is attempted to all destinations even if some fail, so a destination that succeeded may receive the same change again on the next cycle.
 
-## 5. When a notification is sent
+When no notification is required, the new state is saved directly.
 
-### Diff mode (default)
+The first run, a missing or corrupt state file, or a state-format version mismatch starts fresh and reports current packages as new. A corrupt state file also produces a log warning.
 
-| Current result | Notification with `notify_on_clean: false` |
-| --- | --- |
-| Findings exist and something changed | Send the changes and the current open-count summary. |
-| Findings exist but nothing changed | Send a short heartbeat; do not repeat the detailed list in the channel. |
-| The final finding was resolved | Send the resolved change and an all-clear status. |
-| Clean and unchanged | Do not send. |
-| One or more image scans failed | Send the failure, even if no vulnerability finding is available. |
-| Image content changed | Send the replacement, even if the image is clean. |
-| Kubernetes reference scan is unconfirmed and previously recorded package findings for that reference are held | Send the holding status, even if nothing changed. Retained EOL history alone does not trigger this notification. |
+??? note "Technical details"
 
-After 14 days, the heartbeat marks the age of the oldest EOL, Act-now, or Watch
-item with a clock. Low items do not age the heartbeat because an old Low item is
-not treated as urgent debt.
+    - Ordinary package state stores the first-seen timestamp, CVE ID set, fix availability, maximum priority, and `content_id` for a single verified identity.
+    - Package-state `content_id` is empty when the reference is ambiguous or some scans fail.
+    - The state file's `images` map is keyed by reference and records sorted `content_ids`, `registry_digests`, `ambiguous`, and `last_seen`.
+    - Base-OS EOL first-seen timestamps are stored separately from ordinary package state.
+    - EOL package first-seen-as-EOL timestamps, CVE ID sets, and maximum priorities are stored separately from ordinary package state.
+    - The state-format version remains `1`.
+    - Ordinary package changes are evaluated in the order New, Escalated, New CVEs, and Now fixable, with only the highest-precedence reason reported when several apply.
+    - Ordinary comparisons also use previous EOL history.
+    - EOL package changes are evaluated in the order newly detected EOL, escalation to Act now, and new EOL CVEs.
+    - Retention caused by fully or partially failed scans or unconfirmed Kubernetes identities takes precedence over transitions between ordinary and EOL state.
+    - State is written to a temporary file and then replaced atomically.
 
-On `notify.full_report_day` (Monday by default), the complete Slack report is
-included when that cycle otherwise has something to send. Set the value to
-`never` to disable the weekly report. The weekly setting does not force a
-notification for a clean, unchanged result when `notify_on_clean` is false.
+## 5. Notification conditions
 
-### Full mode
+The default `notify.mode: diff` reports changes and current unresolved counts. `notify_on_clean` (`notify.notify_on_clean`) controls whether cycles without vulnerabilities also send notifications.
 
-With `notify.mode: full`, no diff state is used. Every scan with findings or
-scan failures sends the current report. A clean result is sent only when
-`notify_on_clean` is true.
+- When findings exist and something changed, the notification includes changes and unresolved counts.
+- When findings exist but nothing changed, a short heartbeat is sent.
+- When the final finding is resolved, the notification includes the resolution and an all-clear status.
+- When there are no findings or changes, `notify_on_clean: false` suppresses the notification.
+
+Scan failures and image replacements trigger notifications even when there are no vulnerability findings.
+
+When an unconfirmed Kubernetes identity causes previous package findings to be retained, including EOL packages, a notification is sent even if nothing changed. Retained base-OS EOL history alone does not meet this holding-notification condition.
+
+On the weekday selected by `notify.full_report_day`, a full Slack report is added to cycles that qualify for notification. The default is Monday, and `never` disables it. Even on the weekly report day, no notification is forced for a cycle without findings or changes when `notify_on_clean: false`.
+
+With `notify.mode: full`, diff state is not used, and every cycle with findings or scan failures sends the current report. If neither exists, a report is sent only when `notify_on_clean: true`.
 
 ## 6. Slack presentation
 
-Slack messages use plain `mrkdwn` text rather than Block Kit. In Slack,
-“full report” means a current-state report rather than a full dump of every CVE:
-Act-now and Watch items are expanded, while Low remains count-only. The generic
-webhook is the unabridged data source.
+Slack channels show changes, and Bot threads show current details. Empty sections are omitted, and Low remains count-only even in a full report. The generic webhook provides the complete per-CVE data.
 
-With triage enabled, the current report is ordered as follows:
+The image counts in the header have the following meanings.
 
-1. EOL base images
-2. Act now — package details and the strongest CVE's KEV/EPSS evidence
-3. Watch — compact package details and the strongest signal
-4. Low — count only
-5. Scan failures and intelligence freshness warnings
-6. Identity-unconfirmed and previous-findings-held annotations, when applicable
+- `images scanned` counts distinct reference-and-identity pairs, including failed scans; separate references count separately even when they share a scan.
+- `affected` counts images with a selected vulnerability or an EOL base OS and excludes images with only a scan failure.
 
-Act-now references can include Trivy's primary advisory, a vendor advisory from
-KEV notes, and an optional Hacker News discussion. Low details are intentionally
-omitted from Slack; the structured generic webhook carries the full list.
+Times use the process's local timezone, configured through `TZ` in a container. `environment.name` appears only in the channel header.
 
-CVE IDs in Slack evidence lines, Watch reasons, and thread `also:` lists are
-links to their NVD records. The examples below show the visible IDs without link
-markup. Other identifiers, such as GHSA or DLA IDs, remain plain text.
+### Section order
 
-### Common header
+Diff notifications show changes since the previous scan, while current-state reports show unresolved findings by EOL status and priority. Each notification uses the following display order.
 
-Every Slack channel notification starts with the scan time and two image counts:
+- Diff notifications use this order: common header → image content changes → new EOL base → EOL package changes → intelligence-source warnings → ordinary new or changed findings → resolutions and EOL clearances → weekly report or scan failures and Open now → identity-unconfirmed and holding annotations → Bot report link.
+- Current-state reports use this order: EOL base → unfolded EOL package → Act now → Watch → Low → scan failures and intelligence-freshness warnings → identity-unconfirmed and holding annotations.
+- Bot threads use this order: EOL base → EOL packages → ACT NOW → WATCH → LOW.
 
-```text
-🛡️ *KestreLynx* — scan results for 2026-08-16 09:00
-4 images scanned, 3 affected
-```
+Warnings about unavailable intelligence sources appear immediately after the current-state report's Priority line, before the EOL sections.
 
-With `environment.name: prod-vps`, the header becomes:
+Ordinary new and changed entries are sorted by priority, image name, and package name. `New since last scan (N)` counts ordinary image reference and package combinations that changed.
 
-```text
-🛡️ *KestreLynx* [prod-vps] — scan results for 2026-08-16 09:00
-4 images scanned, 3 affected
-```
+Act now EOL changes are shown individually. Other EOL changes are summarized as counts for each existing EOL base-OS reference. When a base OS and its packages become newly EOL in the same cycle, packages other than Act now are folded into the base-OS line and excluded from the EOL package diff heading's count.
 
-The environment name appears only in the channel header, not in the thread.
+### Open now and counts
 
-- `images scanned` is the number of distinct reference-and-identity pairs
-  discovered in the cycle, including images whose scan failed. One reference
-  running two digests counts twice; two references sharing one scan also count
-  twice.
-- `affected` is the number of distinct images with a selected vulnerability or
-  an EOL base OS. An image with only a scan failure is not counted as affected;
-  it appears under **Scan failures** instead.
-- The time is formatted in the process's local timezone. In the container, this
-  is controlled by the `TZ` environment variable.
+Open now shows unresolved state after the latest scan, including retained records. EOL counts appear before priority counts and use the following units.
 
-### Diff notification in the channel
+- EOL base counts retained EOL base-image references.
+- EOL package counts image reference and package combinations not folded into a base OS.
+- Act now, Watch, and Low count each reference and package once, using Act now if either its ordinary or EOL findings are Act now, and otherwise using its ordinary priority.
 
-The default channel message is a change report, not a copy of the current full
-report. Its sections appear in this order when applicable:
+EOL Watch and Low findings do not contribute to priority counts. EOL package and Act now counts can overlap.
 
-1. Common header
-2. Image content changed
-3. Newly detected EOL base images
-4. Vulnerability-intelligence warning
-5. New or changed packages
-6. Resolved EOL images and packages
-7. Weekly current-state report, or scan failures and the **Open now** line
-8. Identity-unconfirmed and previous-findings-held annotations
-9. Bot-only link to the report in this message's thread or the previous report
+The current-state report's Priority line counts package groups by fix status, so one package may contribute more than once.
 
-An abbreviated example is:
+Open now varies with current findings and retained state.
 
-```text
-🛡️ *KestreLynx* — scan results for 2026-08-16 09:00
-4 images scanned, 3 affected
+- If the current report contains findings or EOL base images, counts are shown.
+- `🎉 Open now: none — all clear` appears only when neither the current report nor retained state contains findings and no unconfirmed-identity holding condition applies.
+- If the current report has no findings or EOL base images and packages are retained because of unconfirmed Kubernetes identities, an unconfirmed holding status is shown.
+- Otherwise, if the current report has no findings but records are retained, a holding status is shown until the next successful scan.
 
-*🔄 Image content changed (1)*
-• ghcr.io/example/worker:latest: image updated (111111111111 → 222222222222)
+### Unresolved age
 
-*🆕 New since last scan (1)*
-🚨 ghcr.io/example/api:latest
-   • openssl 3.0.13 → 3.0.14 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — ⬆️ escalated to ACT NOW
-     ↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
+The heartbeat's age is measured from the oldest first-seen date among included items. It shows the age after 1 day and adds a clock after 14 days. Retained records are included.
 
-*✅ Resolved since last scan (1)*
-• ghcr.io/example/worker:latest: libxml2
+- With triage enabled, the age includes ordinary Act now and Watch findings, EOL base images, unfolded EOL packages, and folded EOL packages with Act now priority.
+- With triage disabled, the age includes all ordinary packages and EOL records.
 
-📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 8 low — oldest act-now/watch unresolved 4 day(s)
-_Details in the generic webhook payload, or in the weekly full report._
+With triage enabled, ordinary Low findings are excluded, and the label remains `oldest act-now/watch unresolved N day(s)` even when EOL records contribute. With triage disabled, the label is `oldest unresolved N day(s)`.
 
-_📊 Full report in this message's thread ↓_
-```
+EOL packages use their first-seen-as-EOL date. Folded EOL packages other than Act now use the base OS's first-seen-as-EOL date. Act now EOL packages contribute their own first-seen-as-EOL date even when folded.
 
-The number in `New since last scan (N)` is the number of changed
-image-and-package entries, not the number of CVEs. New and changed entries are
-sorted by priority first, then image and package name.
+### Label meanings
 
-If nothing changed, the body becomes:
+Labels identify changes, review priority, and reasons results could not be confirmed. Green upgrade icons describe only the type of version change and do not guarantee safety.
+
+CRITICAL and HIGH count distinct CVE IDs within each package and fix-status group.
+
+| Label | Meaning |
+| --- | --- |
+| `⛔ EOL base` | The base OS is end of life. |
+| `⛔ EOL package` | The selected CVEs are out of support for this release. |
+| `⛔ N EOL base` | EOL base-image count in the Priority line. |
+| `⛔ N EOL package` | EOL group count in the Priority line, excluding groups folded into a base OS. |
+| `🚨 N act now` | Act now group count in the Priority line, including Act now EOL groups. |
+| `⛔ Package end-of-life (N) — vendor reports these CVEs as out of support for this release` | Current-state EOL package section. |
+| `⛔ New: package end-of-life (N) — vendor reports these CVEs as out of support for this release` | Newly detected EOL packages, escalations to Act now, and added CVEs. |
+| `⛔ EOL packages (N) — vendor reports these CVEs as out of support for this release` | EOL package section in a thread. |
+| `🚨 Act now` | Known exploitation or EPSS at or above the threshold; also includes CRITICAL findings during degraded triage. |
+| `👀 Watch` | Findings to review and monitor. |
+| `🔕 Low` | No signal reaches the threshold; this does not mean there is no vulnerability. |
+| `🔄 Image content changed` | A verified content-ID set changed. |
+| `🆕 New since last scan` | New packages and changed known packages. |
+| `✅ Resolved since last scan` | Resolved packages and EOL base images, and cleared EOL package records. |
+| `📌 Open now` | Unresolved state after the latest scan. |
+| `📌 Open now: unconfirmed — holding previous findings until re-confirmed` | No current findings, with previous ordinary or EOL package findings retained because of unconfirmed Kubernetes identities. |
+| `📌 Open now: not re-scanned — holding previous findings until the next successful scan` | No current findings, with previous records retained outside the unconfirmed holding condition. |
+| `⏰ oldest ... unresolved` | An included item has been unresolved for at least 14 days. |
+| `<ref> — identity unconfirmed: scanned by reference` | A reference includes an identity that was not identified by a Docker config digest at discovery. |
+| `<ref> (<12hex>)`, `<ref> (<12hex> linux/amd64)` | Digest and platform distinguish multiple identities under one reference. |
+| `⚠️ identity unconfirmed: scanned by reference — a, b` | References containing identities not identified by Docker config digests at discovery, independent of scan results; this may list every Kubernetes reference. |
+| `⏳ unconfirmed this cycle, holding previous findings — a, b` | Kubernetes references containing targets whose remote scans succeeded without pinning their identities; references with only failures are excluded, and the line may appear even without history. |
+| `⚠️ Scan failures` | Failed scans, including digest or platform verification failures. |
+| `⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low` | Neither source is usable, so triage uses severity alone and does not reduce anything to Low. |
+| `⚠️ CISA KEV data unavailable — act-now detection may be incomplete` | Triage uses EPSS and severity, and Act now detection may be incomplete. |
+| `⚠️ EPSS data unavailable — triage is using KEV and severity only` | Triage uses KEV and severity. |
+| `_Intel data is N day(s) old (feeds unreachable)._` | Refresh failed, and a validated stale cache is in use. |
+| `📋 Weekly full report` | Current-state report for the configured weekday. |
+| `📊 *Full report — YYYY-MM-DD HH:MM*` | Heading for the current-state report in a Bot thread. |
+| `📊 Full report in this message's thread` | The Bot posted the current state in this message's thread. |
+| `🔗 Last full report` | Link to the most recent successful report. |
+| `✅ Actionable now (fixed)` | Fix-available section when triage is disabled, separate from Act now. |
+
+| Package or change label | Meaning |
+| --- | --- |
+| `🟢 upgrade: distro security patch` | OS package update treated as a distribution revision without SemVer comparison. |
+| `🟢 upgrade: low-risk` | A language-package change that does not increase the major version. |
+| `🟠 upgrade: major version bump — needs care` | A language-package change that increases the major version and may break compatibility. |
+| `⚪ upgrade: risk unknown` | Versions could not be parsed reliably. |
+| `[lang]` | Trivy classified the package as a language dependency. |
+| `(no fix available)` | No fixed version is available for an ordinary fix status. |
+| `⬆️ escalated to ACT NOW/WATCH` | A known package's maximum priority increased. |
+| `new: CVE-…, CVE-… (+N more)` | Added CVEs are linked, with up to 3 per line and the remainder shown as a count. |
+| `fix now available` | No fix was previously available, and at least 1 fix is now available. |
+| `(end-of-life: no fix planned for this release)` | The selected CVEs are out of support for this release. |
+| `🚨 see Act now` | The EOL package's details appear in Act now. |
+| `includes N end-of-life package(s)` | Count of EOL groups folded into the base-OS line. |
+| `includes N newly end-of-life package(s)` | Count of newly EOL packages other than Act now folded into a new EOL base. |
+| `N package(s) newly end-of-life (base OS already EOL)` | Count of newly EOL packages other than Act now under an existing EOL base. |
+| `N end-of-life package(s) with new CVEs (base OS already EOL)` | EOL packages other than Act now under an existing EOL base gained CVEs. |
+| `no longer end-of-life` | Ordinary findings remain after EOL clears. |
+
+| Evidence or reference label | Meaning |
+| --- | --- |
+| `CISA KEV (exploited in the wild)` | Listed in the usable KEV catalog. |
+| `EPSS N%` | EPSS probability; missing scores use `n/a`, very small values use `<0.1%`, and very large values use `>99%`. |
+| `🧨 ransomware campaign` | CISA identifies known use in ransomware campaigns. |
+| `severity only (intel unavailable)` | Neither source is usable, so only severity is used. |
+| `no fix yet, consider mitigation` | An `affected` group has no fix, so mitigation should be considered. |
+| `upstream won't fix, consider replacing` | The group is `will_not_fix`, so replacement or another response should be considered. |
+| `end-of-life: no fix planned for this release, consider a supported version` | A supported version should be considered for the EOL package. |
+| `📎 advisory` | Trivy's primary advisory. |
+| `vendor advisory` | A vendor or CISA reference from KEV notes. |
+| `💬 HN (N pts)` | A qualifying Hacker News discussion and its point count. |
+
+### Details and threads
+
+Act now shows evidence for the strongest CVE, while Watch uses a compact display. In the channel, other CVEs are summarized as `(+N more CVE(s) in this package)`.
+
+Changes outside Act now include `CVE-ID · KEV/EPSS`, or `CVE-ID SEVERITY` when intelligence is unavailable. Lines listing new IDs omit this suffix.
+
+CVE IDs in evidence, Watch reasons, and `also:` lists link to NVD. Other identifiers, such as GHSA and DLA IDs, appear as plain text.
+
+Threads show the strongest CVE's title, evidence, URLs, and age. Up to 8 other IDs appear after `also:`, with the remainder summarized as `(+N more)`.
+
+On the day of detection, the age reads `first seen today`. Long reports are split into multiple replies, and continued headings receive `(cont.)`.
+
+The following settings configure delivery methods and destinations.
+
+- `notify.slack_webhook_url` supports channel notifications only.
+- `slack_bot_token` (`notify.slack_bot_token`) enables Bot delivery and, together with `slack_channel`, supports thread reports and links to the previous report.
+- `slack_channel` (`notify.slack_channel`) selects the Bot's destination channel.
+
+The Bot posts current state in a thread when findings change or the weekly report is due, and links to the latest report on unchanged days. It also creates a new thread on the first notification, after a channel change, or when no valid previous permalink exists.
+
+A typical unchanged-day message is:
 
 ```text
 No changes since last scan.
@@ -507,322 +420,116 @@ _Details in the generic webhook payload, or in the weekly full report._
 🔗 Last full report → thread
 ```
 
-Scan failures and identity annotations are included when applicable. When EOL
-images remain open, the **Open now** counts start with `⛔ N EOL base`.
-
-If nothing remains open, the **Open now** line is instead:
-
-```text
-🎉 Open now: none — all clear
-```
-
-If the current report contains any findings or EOL images, normal counts are
-shown. If previous findings are held after an unconfirmed Kubernetes scan and
-the current report has no findings or EOL images at all, it reads:
-
-```text
-📌 Open now: unconfirmed — holding previous findings until re-confirmed
-```
-
-### Current-state report layout
-
-Full mode, the weekly report in a diff notification, and the Bot API thread all
-represent what is open at the time of the current scan. The channel version has
-the following shape:
-
-```text
-*Priority:* ⛔ 1 EOL base · 🚨 1 act now · 👀 2 watch · 🔕 8 low
-
-*⛔ Base OS end-of-life (top priority)*
-• ghcr.io/example/legacy:latest — base OS is EOL (no more security updates coming)
-
-*🚨 Act now (1) — exploited or likely to be*
-• ghcr.io/example/api:latest
-   • openssl 3.0.13 → 3.0.14 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch
-     ↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
-       📎 advisory · vendor advisory · 💬 HN (120 pts)
-
-*👀 Watch (2) — not urgent, keep an eye on*
-• ghcr.io/example/frontend:latest
-   • zlib 1.2.13 (no fix available) (CRITICAL 1 / HIGH 0) — CVE-2026-23456 · EPSS 0.4%
-
-*🔕 Low priority (8)* — 8 finding(s) across 3 image(s), no exploitation signal (not in KEV, EPSS below threshold).
-_Details in the generic webhook payload or the weekly full report._
-```
-
-Zero-count priority segments and empty sections are omitted. The priority
-headline counts status-specific package groups. Consequently, one package can
-contribute more than once if Trivy reports different CVEs for it under different
-fix statuses.
-
-### How to read a package entry
-
-A fixable package line has this format:
-
-```text
-package installed-version → fixed-version (CRITICAL N / HIGH N) upgrade-label [lang] change-label
-```
-
-A package without a fix replaces the arrow and fixed version with
-`(no fix available)`. CRITICAL and HIGH are counts of distinct CVE IDs in that
-specific package and status group. `[lang]` identifies a language package; its
-absence normally means an OS package.
-
-The labels following a package have these meanings:
-
-| Displayed label | Meaning |
-| --- | --- |
-| `🟢 upgrade: distro security patch` | Fix for an OS package; distribution versions are not compared as SemVer. |
-| `🟢 upgrade: low-risk` | Language-package fix does not increase the major version. This is not a safety guarantee. |
-| `🟠 upgrade: major version bump — needs care` | Language-package fix increases the major version and may break compatibility. |
-| `⚪ upgrade: risk unknown` | The versions could not be parsed reliably. |
-| `[lang]` | Trivy classified the package as a language dependency rather than an OS package. |
-| `⬆️ escalated to ACT NOW/WATCH` | A known package's maximum priority rose since the previous scan. |
-| `new: CVE-…, CVE-… (+N more)` | New CVE IDs appeared under a known image and package, linked, up to 3 listed per line and the rest counted. |
-| `fix now available` | A known package changed from no available fix to at least one available fix. |
-
-The green upgrade icon describes the proposed version change. It does **not**
-mean that the image, package, or vulnerability is safe.
-
-Every changed entry other than Act now also carries a compact evidence suffix
-naming its strongest CVE — `CVE-ID · KEV/EPSS` when triage is on and the intel
-behind it is usable, or `CVE-ID SEVERITY` otherwise — so the entry says which
-CVE is behind it without a trip to the webhook payload. A line that lists new
-CVE IDs omits the compact evidence, since that list is already the headline;
-when a package renders as two lines (fixed and unfixed CVEs), each new ID is
-listed only under the line it belongs to, and the other line follows the
-normal rule.
-
-### Evidence and reference lines
-
-An Act-now package is followed by an evidence line for its strongest CVE:
+An Act now evidence line reads as follows:
 
 ```text
 ↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
 ```
 
-The strongest CVE is selected by priority, then known and higher EPSS, then CVE
-ID. If the package contains other CVEs, the channel appends
-`(+N more CVE(s) in this package)` instead of expanding each one.
+??? note "Technical details"
 
-During degraded triage, the evidence line uses:
-
-```text
-↳ CVE-2026-12345 CRITICAL · severity only (intel unavailable)
-```
-
-Evidence labels mean:
-
-| Label | Meaning |
-| --- | --- |
-| `CISA KEV (exploited in the wild)` | The CVE is present in the current usable KEV catalog. |
-| `EPSS N%` | Current EPSS probability. Missing scores are shown as `n/a`. Very small values use `<0.1%`; very large values use `>99%`. |
-| `🧨 ransomware campaign` | CISA marks known use in ransomware campaigns. This is evidence, not a separate priority. |
-| `severity only (intel unavailable)` | Neither intelligence source is usable; priority is based on severity. |
-| `no fix yet, consider mitigation` | The strongest evidence belongs to an `affected` group without a fix. |
-| `upstream won't fix, consider replacing` | The group is `will_not_fix`; replacement or another compensating action may be needed. |
-| `📎 advisory` | Trivy's primary advisory URL. |
-| `vendor advisory` | A vendor or CISA reference extracted from KEV notes. |
-| `💬 HN (N pts)` | An optional matching Hacker News discussion and its point count. |
-
-Watch uses a shorter inline reason after the package, normally the strongest CVE
-and its EPSS value. Low has no per-package Slack detail.
-
-### Section, status, and warning labels
-
-| Label | Meaning |
-| --- | --- |
-| `⛔ EOL base` | The base OS is end of life. It is tracked separately from CVE priority. |
-| `🚨 Act now` | Known exploitation or EPSS at/above the Act-now threshold. |
-| `👀 Watch` | Review and monitor; weaker signal than Act now. |
-| `🔕 Low` | No signal reached the configured thresholds. It does not mean “not vulnerable.” |
-| `🔄 Image content changed` | A reference's verified content-ID set changed; independent of package changes and possible for clean images. |
-| `🆕 New since last scan` | Contains new packages and known packages that changed. |
-| `✅ Resolved since last scan` | No longer present in current scope; it does not prove a patch was installed. |
-| `📌 Open now` | Compact current backlog counts after applying the latest scan. |
-| `📌 Open now: unconfirmed — holding previous findings until re-confirmed` | The current report has no findings or EOL images at all, and previous package findings are being held after an unconfirmed Kubernetes scan. If any current findings or EOL images exist, normal counts are shown. |
-| `⏰ oldest ... unresolved` | The oldest EOL/Act-now/Watch item has remained open for at least 14 days. |
-| `<ref> — identity unconfirmed: scanned by reference` | At reference level, this label marks references with at least one entity that was not identified by a Docker config digest at discovery, regardless of scan results. Kubernetes registry digests count as unconfirmed in this check. |
-| `<ref> (<12hex>)` or `<ref> (<12hex> linux/amd64)` | Short digest and optional platform distinguish multiple identities under one reference. |
-| `⚠️ identity unconfirmed: scanned by reference — a, b` | References with at least one entity that was not identified by a Docker config digest at discovery, regardless of scan results. Kubernetes registry digests count as unconfirmed in this check, so the summary can list every Kubernetes reference. |
-| `⏳ unconfirmed this cycle, holding previous findings — a, b` | Kubernetes references with at least one entity whose remote scan succeeded this cycle but could not pin its identity. Scan failures alone do not qualify. This line appears regardless of whether previous findings exist, including on a first run with no history. |
-| `⚠️ Scan failures` | Images that could not be scanned in this cycle, including digest or platform verification failures. |
-| `⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low` | Neither exploitation-intelligence source is usable. |
-| `⚠️ CISA KEV data unavailable — act-now detection may be incomplete` | KEV is unavailable; triage uses EPSS and severity. |
-| `⚠️ EPSS data unavailable — triage is using KEV and severity only` | EPSS is unavailable; triage uses KEV and severity. |
-| `_Intel data is N day(s) old (feeds unreachable)._` | A validated stale cache is being used because refresh failed. |
-| `📋 Weekly full report` | The current-state view appended on the configured weekday. |
-| `📊 Full report in this message's thread` | The Bot API posted current-state replies below this channel message. |
-| `🔗 Last full report` | No new thread was needed; follow the link to the last successful report. |
-
-`✅ Actionable now (fixed)` appears only in the triage-disabled layout. In that
-label, “actionable” means that a fix version exists. It is not the same as the
-triage priority **Act now**.
-
-### Slack thread format
-
-The Bot API thread starts with `📊 *Full report — YYYY-MM-DD HH:MM*`, followed by
-EOL, ACT NOW, WATCH, and LOW sections. Act-now and Watch packages are expanded:
-
-```text
-📊 *Full report — 2026-08-16 09:00*
-
-*🚨 ACT NOW (1) — exploited or likely to be*
-• ghcr.io/example/api:latest
-   • openssl 3.0.13 → 3.0.14 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch
-     ↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
-       Short title supplied by Trivy
-       📎 advisory · vendor advisory · 💬 HN (120 pts)
-     also: CVE-2026-20001, CVE-2026-20002
-     ⏱ open 4 day(s) — first seen 2026-08-12
-
-*🔕 LOW (8)* — no exploitation signal; details in the weekly full report or the webhook payload
-```
-
-Only the strongest CVE receives a full evidence line and title. Up to eight
-additional CVE IDs are displayed after `also:`; the rest become `(+N more)`.
-`first seen today` is shown instead of an age on day zero. If the report exceeds
-the message-size budget, it is split into consecutive replies and continued
-section headings receive `(cont.)`.
-
-When applicable, the thread ends with the same identity-unconfirmed summary:
-
-```text
-⚠️ identity unconfirmed: scanned by reference — legacy:1
-```
-
-Slack's current Low footer also refers readers to the weekly report. Low remains
-count-only there as well, so the generic webhook is the source for the complete
-per-CVE Low list.
-
-### Incoming Webhook and Bot API
-
-| Capability | Slack Incoming Webhook | Slack Bot API |
-| --- | --- | --- |
-| Post the channel summary | Yes | Yes |
-| Post a current-state report in a thread | No | Yes |
-| Link to the previous report thread on unchanged days | No | Yes |
-
-With `slack_bot_token` and `slack_channel`, the channel remains the change feed.
-When findings change or the weekly report is due, replies under that channel
-message contain the current state. On an unchanged day, the channel heartbeat
-links to the most recent successful report thread instead of recreating it.
-
-The thread expands EOL, Act-now, and Watch items. For each package it shows the
-strongest CVE, title when Trivy supplies one, evidence, references, additional
-CVE IDs, and first-seen age. Low remains count-only. Long reports are split into
-multiple replies at image or line boundaries. Slack API calls are retried up to
-three times; the new thread reference is saved only after the report finishes.
-
-On the first Bot API notification, after a channel change, or when no valid
-previous permalink exists, KestreLynx creates a fresh report thread so future
-heartbeats have a valid destination.
+    - Slack uses plain `mrkdwn` text.
+    - The strongest CVE is selected by priority, whether an EPSS score is known, higher EPSS, and then CVE ID.
+    - Slack API calls are attempted up to 3 times.
+    - A new thread reference is saved only after the report finishes posting.
 
 ## 7. Generic webhook
 
-`notify.generic_webhook_url` receives structured JSON and can be enabled beside
-either Slack delivery method. It is a generic HTTP endpoint, not a preformatted
-Discord, Teams, or other service-specific message.
+The generic webhook provides the complete current report as structured JSON. It sends to `notify.generic_webhook_url` only when a cycle meets the notification conditions and includes changes in `diff` mode.
 
-Whenever a notification is sent, the payload includes the full current report:
-summary counts, environment, EOL images, fix-status sections, image identities,
-containers and workloads, package versions, upgrade-risk and priority values,
-CVE IDs and evidence, scan failures, and—when diff mode is active—the current
-diff. Container and workload context appears only in this payload, not in
-Slack.
+The payload includes Low findings, EOL packages folded in Slack, containers, and workloads. It can be used alongside either Slack delivery method, but it does not convert the payload into a Discord- or Teams-specific message format.
 
-### Top-level fields
+The top-level `watch` array is a fix-status section, separate from the Watch priority. `not_affected` is excluded from every finding section.
 
-| JSON field | Type | Contents |
+### Top-level fields and environment
+
+Top-level fields provide the scan time, environment, findings by fix status, failures, and changes. `environment` is always present; only `name` is omitted when no environment name is configured.
+
+| Field | Type | Meaning |
 | --- | --- | --- |
 | `generated_at` | string | Scan time in RFC 3339 format. |
-| `environment` | object | Always present; adapter kind and optional environment name. |
-| `summary` | object | Image counts, plus priority counts and intelligence freshness when triage is enabled. |
-| `eosl_images` | array of strings or `null` | Images whose base OS is EOL; may be `null` when none. |
-| `actionable` | array of image objects | Current package groups with Trivy status `fixed`. |
-| `watch` | array of image objects | Current package groups with Trivy status `affected`. |
-| `wont_fix` | array of image objects | Current package groups with Trivy status `will_not_fix`. |
-| `scan_errors` | array of objects | Per-image failures, each with string fields `image` and `error`. |
-| `diff` | object | Changes since the previous scan. Omitted in full mode. |
-
-### Environment
-
-| JSON field | Type | Contents |
-| --- | --- | --- |
-| `kind` | string | `docker` or `kubernetes`, derived from the active adapter. |
-| `name` | string | Configured `environment.name`; omitted for the unnamed default. |
+| `environment` | object | Adapter kind and optional environment name. |
+| `environment.kind` | string | `docker` or `kubernetes`. |
+| `environment.name` | string | Configured `environment.name`; omitted when unset. |
+| `summary` | object | Counts and intelligence status. |
+| `eosl_images` | array of strings or `null` | EOL base images; may be `null` when none. |
+| `actionable` | array of image objects | Current `fixed` groups. |
+| `watch` | array of image objects | Current groups normalized to `affected`. |
+| `wont_fix` | array of image objects | Current `will_not_fix` groups. |
+| `eol_packages` | array of image objects | All `end_of_life` groups; `[]` when empty. |
+| `scan_errors` | array of objects | Per-image scan failures. |
+| `scan_errors[].image` | string | Image reference. |
+| `scan_errors[].error` | string | Error details. |
+| `diff` | object | Current changes; omitted in full mode. |
 
 ### Summary
 
-| JSON field | Type | Contents |
+`summary` provides image counts and, when triage is enabled, priority counts and intelligence status.
+
+`priority_counts` includes EOL packages only when they are Act now. Its counts can therefore overlap with `eol_packages`, and the sum of its 3 values is not necessarily the total number of groups.
+
+| `summary` field | Type | Meaning |
 | --- | --- | --- |
 | `images_total` | integer | Distinct reference-and-identity pairs, including failed scans. |
 | `images_affected` | integer | Images with a selected vulnerability or an EOL base OS. |
-| `priority_counts` | object | Present only with triage; integer package-group counts named `act_now`, `watch`, and `low`. |
-| `intel` | object | Present only with triage; intelligence availability and freshness. |
-| `intel.degraded` | boolean | Neither intelligence source is usable. |
-| `intel.kev_ok` | boolean | KEV data is usable. |
-| `intel.epss_ok` | boolean | EPSS data is usable. |
+| `priority_counts` | object | Integer package-group counts named `act_now`, `watch`, and `low`; present only with triage. |
+| `intel` | object | Intelligence availability and freshness; present only with triage. |
+| `intel.degraded` | boolean | Whether neither intelligence source is usable. |
+| `intel.kev_ok` | boolean | Whether KEV data is usable. |
+| `intel.epss_ok` | boolean | Whether EPSS data is usable. |
 | `intel.stale_days` | integer | Age in days of stale intelligence data in use. |
 
-### Image object
+### Images and containers
 
-Each entry in `actionable`, `watch`, and `wont_fix` represents an image reference
-and identity within that fix-status section.
+Each entry in `actionable`, `watch`, `wont_fix`, and `eol_packages` represents a reference and identity within that fix-status section. Even for an ambiguous reference, `containers` includes only containers matching that identity.
 
-| JSON field | Type | Contents |
+`registry_digests` is the union for the reference, while `identity_resolved` describes the individual entry.
+
+| Field | Type | Meaning |
 | --- | --- | --- |
 | `image` | string | Display reference. |
 | `severity_counts` | object | Integer counts named `CRITICAL` and `HIGH`. |
 | `findings` | array of finding objects | Package groups for this image and fix status. |
-| `containers` | array of container objects | Running containers matching this image identity; an empty array, never `null`, when none. |
-| `content_id` | string | `sha256:<hex>` config digest for a confirmed Docker config-digest scan. Omitted for registry-digest and reference scans. |
-| `registry_digests` | array of strings | Union of Trivy `RepoDigests` for the reference, from successful confirmed scans only. Never `null`. |
-| `identity_resolved` | boolean | Whether this entry's scan confirmed the running image identity. |
+| `containers` | array of container objects | Matching running containers; `[]` when none. |
+| `content_id` | string | `sha256:<hex>` from a confirmed Docker config-digest scan; omitted for registry-digest and reference scans. |
+| `registry_digests` | array of strings | Union of `RepoDigests` for the reference from successful confirmed scans; never `null`. |
+| `identity_resolved` | boolean | Whether this scan confirmed the running image's identity. |
 | `scan_target_kind` | string | `content_id`, `registry_digest`, or `reference`. |
-
-Container and workload fields are:
-
-| JSON field | Type | Contents |
-| --- | --- | --- |
 | `containers[].name` | string | Docker container name with the leading slash removed and link aliases excluded, or `<namespace>/<pod>/<container>` in Kubernetes. |
 | `containers[].workload` | object | Workload association, always present. |
-| `containers[].workload.kind` | string | `unknown`, `compose`, `deployment`, `statefulset`, `daemonset`, `job`, `cronjob`, or `pod`. Always present. |
-| `containers[].workload.group` | string | Compose project or Kubernetes namespace. Omitted when unknown. |
-| `containers[].workload.name` | string | Compose service, resolved Kubernetes workload name, or bare Pod name. Omitted when unknown. |
+| `containers[].workload.kind` | string | `unknown`, `compose`, `deployment`, `statefulset`, `daemonset`, `job`, `cronjob`, or `pod`; always present. |
+| `containers[].workload.group` | string | Compose project or namespace; omitted when unknown. |
+| `containers[].workload.name` | string | Compose service, resolved workload name, or bare Pod name; omitted when unknown. |
 
-For an ambiguous reference, each image entry lists only its own matching
-containers. `registry_digests` is the union for the reference, while
-`identity_resolved` describes the individual entry.
+### Findings and vulnerabilities
 
-### Finding
+`findings` provides package groups, and `vulns` provides individual vulnerabilities. The `priority` field in both findings and vulnerabilities is omitted when triage is disabled.
 
-| JSON field | Type | Contents |
+When `vulns[].status` is omitted, it has the same value as the finding's `status`.
+
+| Finding field | Type | Meaning |
 | --- | --- | --- |
 | `package` | string | Package name. |
 | `installed` | string | Installed version. |
 | `fixed` | string | Fixed version, or `""` when none is available. |
-| `status` | string | `fixed`, `affected`, or `will_not_fix`. |
+| `status` | string | `fixed`, `affected`, `will_not_fix`, or `end_of_life`. |
 | `severity_counts` | object | Integer counts named `CRITICAL` and `HIGH`. |
 | `upgrade_risk` | string | `""`, `distro_update`, `safe`, `caution`, or `unknown`. |
-| `priority` | string | `act_now`, `watch`, or `low`; omitted when triage is disabled. |
+| `priority` | string | `act_now`, `watch`, or `low`. |
 | `vuln_ids` | array of strings | Sorted vulnerability IDs. |
 | `vulns` | array of vulnerability objects | Per-vulnerability details. |
 
-### Vulnerability
-
-Each object in `vulns` has these fields:
-
-| JSON field | Type | Contents |
+| Vulnerability field | Type | Meaning |
 | --- | --- | --- |
-| `id` | string | Vulnerability ID, without Slack link markup. |
+| `id` | string | Vulnerability ID without Slack link markup. |
 | `severity` | string | Trivy severity. |
+| `status` | string | Original Trivy status, included only when it differs from the canonical group status; a missing original `Status` is represented as `unknown`. |
 | `url` | string | Primary advisory URL; omitted when unavailable. |
 | `title` | string | Short title supplied by Trivy; omitted when unavailable. |
 | `kev` | boolean | Whether the vulnerability is in the usable KEV catalog. |
-| `ransomware` | boolean | KEV ransomware-campaign flag; omitted when false. |
-| `epss` | number or `null` | EPSS probability; `null` when no score is known. |
-| `priority` | string | `act_now`, `watch`, or `low`; omitted when triage is disabled. |
+| `ransomware` | boolean | KEV ransomware-campaign flag; omitted when `false`. |
+| `epss` | number or `null` | EPSS probability; `null` when unknown. |
+| `priority` | string | `act_now`, `watch`, or `low`. |
 | `refs` | array of reference objects | Additional references; omitted when empty. |
 | `refs[].kind` | string | `vendor` or `discussion`. |
 | `refs[].label` | string | Display label. |
@@ -830,79 +537,79 @@ Each object in `vulns` has these fields:
 
 ### Diff
 
-The `diff` object is present only in diff mode. Its arrays are `[]`, not `null`,
-when empty.
+`diff` provides changes since the previous scan by type. It is present only in diff mode, and empty arrays are returned as `[]` rather than `null`.
 
-| JSON field | Type | Contents |
+| `diff` field | Type | Meaning |
 | --- | --- | --- |
-| `new` | array of change objects | New or changed image-and-package entries. |
-| `resolved` | array of objects | Resolved entries, each with string fields `image` and `package`. |
+| `new` | array of change objects | New or changed ordinary findings. |
+| `resolved` | array of objects | Resolved combinations. |
+| `resolved[].image` | string | Image reference. |
+| `resolved[].package` | string | Package name. |
 | `replaced` | array of replacement objects | References whose verified content-ID sets changed. |
-| `new_eosl` | array of strings | Newly detected EOL image references. |
-| `resolved_eosl` | array of strings | Image references no longer recorded as EOL. |
-| `oldest_open_days` | integer | Age in whole days from the earliest first-seen date across all retained package findings, including Low, and all retained EOL images. Unlike this field, the Slack heartbeat age excludes Low when triage is enabled. |
+| `new_eosl` | array of strings | Newly detected EOL base-image references. |
+| `resolved_eosl` | array of strings | References no longer recorded as EOL. |
+| `new_eol_packages` | array of EOL change objects | New or changed EOL findings, including those folded in Slack. |
+| `resolved_eol_packages` | array of EOL resolution objects | Packages that left the EOL section. |
+| `oldest_open_days` | integer | Whole days since the earliest included first-seen date across all ordinary packages, EOL base images, unfolded EOL packages, and folded Act now EOL packages; fractional days are rounded down. |
 
-Each object in `new` has these fields:
+`oldest_open_days` includes retained records and ordinary Low findings, so its scope differs from the Slack age when triage is enabled. EOL packages use their first-seen-as-EOL date, while folded EOL packages other than Act now use the base OS's first-seen-as-EOL date.
 
-| JSON field | Type | Contents |
+| `new[]` field | Type | Meaning |
 | --- | --- | --- |
 | `image` | string | Image reference. |
 | `package` | string | Package name. |
 | `kind` | string | `new`, `escalated`, `new_cves`, or `now_fixable`. |
-| `new_cve_count` | integer | Number of added CVE IDs, populated only when `kind` is `new_cves`. Omitted for other kinds even if CVE IDs were added. |
-| `new_cve_ids` | array of strings | The added CVE IDs themselves, without Slack link markup. Populated only when `kind` is `new_cves`, same count as `new_cve_count`. |
+| `new_cve_count` | integer | Added CVE count; included only for `new_cves`. |
+| `new_cve_ids` | array of strings | Added IDs without Slack link markup, included only for `new_cves`; the length matches `new_cve_count`. |
 | `critical` | integer | CRITICAL count. |
 | `high` | integer | HIGH count. |
 | `priority` | string | `act_now`, `watch`, or `low`; omitted when unavailable. |
 | `reason` | string | Plain-text evidence for an escalation; omitted otherwise. |
 
-Each object in `replaced` has these fields:
+| `new_eol_packages[]` field | Type | Meaning |
+| --- | --- | --- |
+| `image` | string | Image reference. |
+| `package` | string | Package name. |
+| `kind` | string | `eol_new` for newly detected EOL, `eol_new_cves` for added CVEs, or `eol_escalated` for escalation to Act now. |
+| `new_cve_ids` | array of strings | Sorted added EOL IDs without Slack link markup; included only for `eol_new_cves`. |
+| `critical` | integer | CRITICAL count across current EOL groups. |
+| `high` | integer | HIGH count across current EOL groups. |
+| `priority` | string | `act_now`, `watch`, or `low`; omitted when triage is disabled. |
+| `reason` | string | Evidence included only for `eol_escalated`. |
 
-| JSON field | Type | Contents |
+EOL changes have no `new_cve_count` field. Use the length of `new_cve_ids` to obtain the added count.
+
+| `resolved_eol_packages[]` field | Type | Meaning |
+| --- | --- | --- |
+| `image` | string | Image reference. |
+| `package` | string | Package name. |
+| `still_open` | boolean | `true` when ordinary findings remain for the same reference and package; present even when `false`. |
+
+| `replaced[]` field | Type | Meaning |
 | --- | --- | --- |
 | `ref` | string | Image reference. |
 | `prev_content_ids` | array of strings | Sorted previous verified content-ID set. |
 | `content_ids` | array of strings | Sorted current verified content-ID set. |
 
-For compatibility, the top-level finding sections use fix status:
-`actionable` means Trivy status `fixed`, `watch` means status `affected`, and
-`wont_fix` means `will_not_fix`. These names are independent of each package's
-triage `priority` field. In particular, the webhook's top-level `watch` array is
-not the same thing as the triage priority **Watch**.
+### Backward compatibility
 
-The full payload is attached only to cycles that meet the notification rules
-above. A clean, unchanged cycle skipped by `notify_on_clean: false` does not
-call the webhook. Image replacements and Kubernetes cycles holding previously
-recorded package findings for an unconfirmed reference still meet the notification
-rules. Retained EOL history alone does not trigger the holding notification.
+Existing fields and the structure organized by fix status are preserved. Fix-status sections and `priority` are handled separately.
+
+- `actionable` represents `fixed`.
+- `watch` represents groups normalized to `affected`.
+- `wont_fix` represents `will_not_fix`.
+- `eol_packages` represents `end_of_life`.
+
+`diff.new[].kind` remains `new`, `escalated`, `new_cves`, or `now_fixable`.
+
+EOL changes use separate arrays and `kind` values. `diff.new_eol_packages` and `diff.resolved_eol_packages` return `[]` even when empty. EOL support preserves existing fields and adds new arrays and the optional `vulns[].status` field.
 
 ## 8. Triage disabled
 
-Setting `triage.enabled: false` stops the KEV, EPSS, and discussion lookups.
-There are no Act-now, Watch-priority, or Low buckets. Slack falls back to the
-fix-status view:
+With `triage.enabled: false`, priority classification stops, and Slack shows results by fix status. KEV, EPSS, and discussion-link lookups also stop.
 
-1. EOL base images
-2. Fix available
-3. Affected, waiting for an upstream fix
-4. Upstream will not fix
+Slack uses this order: EOL base → EOL package → fix available → waiting for an upstream fix → upstream will not fix. EOL sections and folding into the base OS work as they do with triage enabled. The waiting-for-an-upstream-fix section includes `affected`, `fix_deferred`, `under_investigation`, and `unknown`.
 
-Diff detection still reports New, New CVEs, Now fixable, and Resolved. Priority
-escalation is unavailable because no priority baseline is computed.
+Open now starts with EOL counts, including retained records. The following CRITICAL, HIGH, and affected-image counts come from current findings. If there are no current findings and only retained records remain, the same holding display is used as with triage enabled.
 
-## 9. Example across several scans
-
-Suppose `openssl` in an image has one HIGH CVE with EPSS 0.4% and no KEV entry.
-
-1. On the first scan, the package is **New** and its priority is **Low**.
-2. The next day, the result is unchanged. KestreLynx sends only the open-count
-   heartbeat in Slack.
-3. A fix appears. The package is reported as **Now fixable** and its version
-   change is annotated.
-4. Before the update is deployed, the CVE is added to CISA KEV. The package is
-   reported as **Escalated to Act now**, even though it was already known.
-5. After the container image is updated and the package no longer appears, the
-   finding is reported as **Resolved**.
-
-This sequence is the core of KestreLynx: retain enough history to report a
-meaningful change, while preserving the current state for investigation.
+New, New CVEs, Now fixable, Resolved, newly detected EOL, new EOL CVEs, and EOL clearances are still detected. Ordinary priority escalations and EOL package escalations to Act now are not detected.

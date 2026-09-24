@@ -1,5 +1,6 @@
 // Package analyze turns raw scanner findings into a triaged, aggregated Report:
-// it splits vulnerabilities by Trivy Status, groups them per image+package,
+// it sorts vulnerabilities into sections by Trivy Status (sectionOf), groups
+// them per image+package,
 // judges update risk (semver for language packages only), and surfaces
 // end-of-life base images. This is the differentiation core (docs/PROJECT_CONTEXT.md):
 // the post-processing that makes raw scanner output actionable.
@@ -32,7 +33,7 @@ type PackageGroup struct {
 	Class        scanner.PkgClass
 	InstalledVer string
 	FixedVer     string
-	Status       scanner.Status
+	Status       scanner.Status // the section's status (sectionOf), never a raw status that sectionOf folds into another
 	Risk         Risk
 	Critical     int       // count of distinct CRITICAL CVEs
 	High         int       // count of distinct HIGH CVEs
@@ -184,13 +185,19 @@ type ImageObservation struct {
 
 // Report is the triaged output, ready for the notify layer. Sections are
 // ordered by priority via their position (docs/NOTIFICATION_SPEC.md §2):
-// EOSL first, then actionable (fixed), watch (affected), wont-fix.
+// EOSL first, then actionable (fixed), watch (affected), wont-fix, and the
+// packages the vendor reports as end-of-life for this release.
 type Report struct {
 	ImagesTotal int             // unique images scanned this run (incl. failures)
 	EOSLImages  []string        // base OS end-of-life: highest priority
 	Actionable  []ImageFindings // Status == fixed
-	Watch       []ImageFindings // Status == affected (upstream not yet fixed)
+	Watch       []ImageFindings // Status == affected, plus the statuses sectionOf folds into it (upstream not yet fixed)
 	WontFix     []ImageFindings // Status == will_not_fix
+	// EOLPackages holds every end_of_life package group, including those of
+	// images whose base OS is itself end-of-life: renderers decide what to
+	// fold (EOLPackageAlerts, FoldedEOLCount), the report and the webhook
+	// keep everything.
+	EOLPackages []ImageFindings // Status == end_of_life
 	ScanErrors  []ScanError
 	// Images is the per-reference identity inventory, covering every scanned
 	// reference regardless of findings. Sorted by Ref.
@@ -212,7 +219,7 @@ type Report struct {
 // or EOLL). Scan failures are not counted as "affected".
 func (r Report) AffectedImageCount() int {
 	seen := map[string]bool{}
-	for _, section := range [][]ImageFindings{r.Actionable, r.Watch, r.WontFix} {
+	for _, section := range [][]ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			seen[img.Image] = true
 		}
@@ -225,7 +232,82 @@ func (r Report) AffectedImageCount() int {
 
 // HasFindings reports whether any vulnerability or EOSL image is present.
 func (r Report) HasFindings() bool {
-	return len(r.Actionable) > 0 || len(r.Watch) > 0 || len(r.WontFix) > 0 || len(r.EOSLImages) > 0
+	return len(r.Actionable) > 0 || len(r.Watch) > 0 || len(r.WontFix) > 0 || len(r.EOLPackages) > 0 || len(r.EOSLImages) > 0
+}
+
+// IsEOL reports whether g is an end_of_life package group: the vendor
+// reports its CVEs as out of support for the installed release.
+func IsEOL(g PackageGroup) bool { return g.Status == scanner.StatusEndOfLife }
+
+// EOLPackageAlerts is the part of EOLPackages shown as individual rows: every
+// entry except those of images whose base OS is end-of-life (r.EOSLImages),
+// which the base-OS line summarizes instead. It does not filter by priority,
+// and it keeps each entry whole (Subject, Pinned, Containers) without merging
+// entries that share an image.
+func (r Report) EOLPackageAlerts() []ImageFindings {
+	folded := stringSet(r.EOSLImages)
+	var out []ImageFindings
+	for _, img := range r.EOLPackages {
+		if !folded[img.Image] {
+			out = append(out, img)
+		}
+	}
+	return out
+}
+
+// FoldedEOLCount is the number of end_of_life package groups the base-OS
+// line of ref summarizes, act_now groups included. It is 0 when ref's base
+// OS is not end-of-life.
+func (r Report) FoldedEOLCount(ref string) int {
+	if !stringSet(r.EOSLImages)[ref] {
+		return 0
+	}
+	n := 0
+	for _, img := range r.EOLPackages {
+		if img.Image == ref {
+			n += len(img.Packages)
+		}
+	}
+	return n
+}
+
+func stringSet(ss []string) map[string]bool {
+	out := make(map[string]bool, len(ss))
+	for _, s := range ss {
+		out[s] = true
+	}
+	return out
+}
+
+// sectionOf maps a raw Trivy status to the report section it belongs to.
+// ok is false for not_affected, the one status that is dropped: it states
+// the package is not vulnerable. fix_deferred, under_investigation,
+// unknown (including a missing status), and any value Trivy may add later
+// are all unfixed findings, so they join affected rather than disappearing;
+// the raw value survives on VulnRef.Status.
+func sectionOf(s scanner.Status) (scanner.Status, bool) {
+	switch s {
+	case scanner.StatusFixed, scanner.StatusWontFix, scanner.StatusEndOfLife:
+		return s, true
+	case scanner.StatusNotAffected:
+		return "", false
+	default:
+		return scanner.StatusAffected, true
+	}
+}
+
+// mergeRawStatus picks one raw status for a CVE ID seen more than once in the
+// same package group with different raw statuses. The result must not depend
+// on the order Trivy listed the lines in: the section's own status wins when
+// either side carries it, otherwise the lexically smaller value.
+func mergeRawStatus(section, a, b scanner.Status) scanner.Status {
+	if a == section || b == section {
+		return section
+	}
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // HasIssues reports whether anything worth a notification exists, including
@@ -236,9 +318,10 @@ func (r Report) HasIssues() bool {
 
 // vulnInfo is the per-CVE data captured from the scanner during accumulation.
 type vulnInfo struct {
-	sev   scanner.Severity
-	url   string
-	title string
+	sev    scanner.Severity
+	url    string
+	title  string
+	status scanner.Status // raw Trivy status (see mergeRawStatus)
 }
 
 // pkgAcc accumulates a package group while deduplicating CVEs by ID.
@@ -292,7 +375,7 @@ type obsAcc struct {
 func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triage, now time.Time) Report {
 	r := Report{GeneratedAt: now, ImagesTotal: len(scans), Triage: tr.Enabled, Intel: tr.Intel}
 
-	// status -> (ref, entity key) -> package -> accumulator
+	// section status -> (ref, entity key) -> package -> accumulator
 	byStatus := map[scanner.Status]map[imgKey]map[string]*pkgAcc{}
 	obs := map[string]*obsAcc{}     // by ref, the inventory backing Report.Images
 	meta := map[imgKey]entityMeta{} // per-entity Subject/Pinned, for buildSection
@@ -347,10 +430,14 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 		k := imgKey{ref: s.Image, key: s.Subject.Key}
 		meta[k] = entityMeta{subject: s.Subject, pinned: s.Pinned}
 		for _, find := range s.Findings {
-			images := byStatus[find.Status]
+			section, ok := sectionOf(find.Status)
+			if !ok {
+				continue
+			}
+			images := byStatus[section]
 			if images == nil {
 				images = map[imgKey]map[string]*pkgAcc{}
-				byStatus[find.Status] = images
+				byStatus[section] = images
 			}
 			pkgs := images[k]
 			if pkgs == nil {
@@ -365,7 +452,7 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 						Class:        find.Class,
 						InstalledVer: find.InstalledVer,
 						FixedVer:     find.FixedVer,
-						Status:       find.Status,
+						Status:       section,
 						URL:          find.URL,
 					},
 					vulns: map[string]vulnInfo{},
@@ -375,11 +462,16 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 			// The same CVE ID can appear on more than one Trivy result line (e.g.
 			// matched via more than one data source); prefer whichever line carries
 			// a non-empty Title rather than letting a later, title-less line blank it.
+			prev, seen := acc.vulns[find.VulnID]
 			title := find.Title
 			if title == "" {
-				title = acc.vulns[find.VulnID].title
+				title = prev.title
 			}
-			acc.vulns[find.VulnID] = vulnInfo{sev: find.Severity, url: find.URL, title: title}
+			status := find.Status
+			if seen {
+				status = mergeRawStatus(section, prev.status, find.Status)
+			}
+			acc.vulns[find.VulnID] = vulnInfo{sev: find.Severity, url: find.URL, title: title, status: status}
 		}
 	}
 
@@ -388,6 +480,7 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 	r.Actionable = buildSection(byStatus[scanner.StatusFixed], tr, byKey, meta)
 	r.Watch = buildSection(byStatus[scanner.StatusAffected], tr, byKey, meta)
 	r.WontFix = buildSection(byStatus[scanner.StatusWontFix], tr, byKey, meta)
+	r.EOLPackages = buildSection(byStatus[scanner.StatusEndOfLife], tr, byKey, meta)
 	r.Images = buildInventory(obs, byRef)
 	for _, o := range r.Images {
 		if o.Unconfirmed {
@@ -500,6 +593,7 @@ func finalize(acc *pkgAcc, tr Triage) PackageGroup {
 			Severity:   info.sev,
 			URL:        info.url,
 			Title:      info.title,
+			Status:     info.status,
 			KEV:        e.KEV,
 			Ransomware: e.Ransomware,
 			EPSS:       e.EPSS,

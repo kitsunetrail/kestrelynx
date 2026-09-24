@@ -23,13 +23,8 @@ func writeTriageBody(b *strings.Builder, r analyze.Report) {
 	writeTriageHeadline(b, r, pv)
 	writeIntelWarning(b, r)
 
-	if len(r.EOSLImages) > 0 {
-		b.WriteString("\n*⛔ Base OS end-of-life (top priority)*\n")
-		for _, img := range r.EOSLImages {
-			fmt.Fprintf(b, "• %s — base OS is EOL (no more security updates coming)\n", refLabel(img, byRef))
-		}
-	}
-
+	writeEOSLSection(b, r, byRef)
+	writeEOLPackages(b, r, byRef)
 	writeActNow(b, r, pv.ActNow, byRef)
 	writeWatch(b, r, pv.Watch, byRef)
 	writeLow(b, pv.Low)
@@ -39,12 +34,18 @@ func writeTriageBody(b *strings.Builder, r analyze.Report) {
 }
 
 // writeTriageHeadline is the one-line summary that replaces the severity
-// headline: EOL bases (kept as their own segment so counts stay honest), then
-// the three priority buckets. Zero segments are omitted.
+// headline: EOL bases and end-of-life packages (kept as their own segments so
+// counts stay honest), then the three priority buckets. Zero segments are
+// omitted. The end-of-life package segment counts fix status and act now
+// counts exploitation priority, so an act_now end-of-life package is counted
+// in both.
 func writeTriageHeadline(b *strings.Builder, r analyze.Report, pv analyze.PriorityView) {
 	var seg []string
 	if n := len(r.EOSLImages); n > 0 {
 		seg = append(seg, fmt.Sprintf("⛔ %d EOL base", n))
+	}
+	if n := analyze.GroupCount(r.EOLPackageAlerts()); n > 0 {
+		seg = append(seg, fmt.Sprintf("⛔ %d EOL package", n))
 	}
 	if n := analyze.GroupCount(pv.ActNow); n > 0 {
 		seg = append(seg, fmt.Sprintf("🚨 %d act now", n))
@@ -145,6 +146,8 @@ func writeEvidence(b *strings.Builder, r analyze.Report, g analyze.PackageGroup)
 		b.WriteString(" — no fix yet, consider mitigation")
 	case scanner.StatusWontFix:
 		b.WriteString(" — upstream won't fix, consider replacing")
+	case scanner.StatusEndOfLife:
+		b.WriteString(eolEvidenceMark)
 	}
 	b.WriteString("\n")
 	writeRefs(b, top)
@@ -290,17 +293,10 @@ func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Ch
 // having a previous finding held rather than resolved.
 func writeTriageOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool) {
 	if !r.HasFindings() {
-		if holding {
-			b.WriteString("\n📌 Open now: unconfirmed — holding previous findings until re-confirmed\n")
-			return
-		}
-		b.WriteString("\n🎉 Open now: none — all clear\n")
+		writeNothingOpenNow(b, d, holding)
 		return
 	}
-	var seg []string
-	if n := len(r.EOSLImages); n > 0 {
-		seg = append(seg, fmt.Sprintf("⛔ %d EOL base", n))
-	}
+	seg := openNowEOLSegments(d, true)
 	if d.OpenActNow > 0 {
 		seg = append(seg, fmt.Sprintf("🚨 %d act-now", d.OpenActNow))
 	}

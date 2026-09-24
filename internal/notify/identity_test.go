@@ -403,7 +403,7 @@ func TestBuildThreadMessages_UnresolvedIdentityWarning(t *testing.T) {
 		},
 	}}
 	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
-	out := strings.Join(BuildThreadMessages(r, nil, 0), "\n")
+	out := strings.Join(BuildThreadMessages(r, Ages{}, 0), "\n")
 	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference") {
 		t.Errorf("expected the unresolved-identity warning in the thread report:\n%s", out)
 	}
@@ -610,7 +610,7 @@ func TestBuildThreadMessages_UnresolvedRefsSummarySection(t *testing.T) {
 		},
 	}}
 	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
-	out := strings.Join(BuildThreadMessages(r, nil, 0), "\n")
+	out := strings.Join(BuildThreadMessages(r, Ages{}, 0), "\n")
 	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — legacy:1") {
 		t.Errorf("expected the cross-cutting unresolved-refs summary section in the thread report:\n%s", out)
 	}

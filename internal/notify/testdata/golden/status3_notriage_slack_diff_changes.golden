@@ -1,0 +1,22 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 2 affected
+
+*🆕 New since last scan (4)*
+🔴 web:1.0
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> CRITICAL
+   • openssl 3.0.7 (no fix available) (CRITICAL 0 / HIGH 1) — new: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002>
+   • dpkg 1.21.22 → 1.21.23 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> HIGH — fix now available
+🟠 api:2.0
+   • libxml2 2.9.14 (no fix available) (CRITICAL 0 / HIGH 2) — new: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
+   • zlib 1.2.13 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> HIGH
+
+*✅ Resolved since last scan (1)*
+• web:1.0: old-pkg
+
+*⚠️ Scan failures*
+• broken:1 — identity unconfirmed: scanned by reference — pull failed
+
+📌 Open now: CRITICAL 3 / HIGH 6 across 2 image(s) — ⏰ oldest unresolved 20 day(s)
+_Details in the generic webhook payload, or in the weekly full report._
+
+⚠️ identity unconfirmed: scanned by reference — broken:1

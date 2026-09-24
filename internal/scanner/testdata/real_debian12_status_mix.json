@@ -1,0 +1,294 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.71.2"
+  },
+  "CreatedAt": "2026-09-12T08:45:20.054809849+09:00",
+  "ArtifactName": "sha256:6784fb0834aa7dbbe12e3d7471e69c290df3e6ba810dc38b34ae33d3c1c05f7d",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "OS": {
+      "Family": "debian",
+      "Name": "12.11"
+    },
+    "ImageID": "sha256:6784fb0834aa7dbbe12e3d7471e69c290df3e6ba810dc38b34ae33d3c1c05f7d",
+    "RepoTags": [
+      "nginx:1.27"
+    ],
+    "RepoDigests": [
+      "nginx@sha256:6784fb0834aa7dbbe12e3d7471e69c290df3e6ba810dc38b34ae33d3c1c05f7d"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "Results": [
+    {
+      "Target": "sha256:6784fb0834aa7dbbe12e3d7471e69c290df3e6ba810dc38b34ae33d3c1c05f7d (debian 12.11)",
+      "Class": "os-pkgs",
+      "Type": "debian",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-12064",
+          "PkgID": "curl@7.88.1-10+deb12u12",
+          "PkgName": "curl",
+          "PkgIdentifier": {
+            "PURL": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u12?arch=amd64&distro=debian-12.11",
+            "UID": "74ceae509293fd87"
+          },
+          "InstalledVersion": "7.88.1-10+deb12u12",
+          "Status": "fix_deferred",
+          "Layer": {
+            "Digest": "sha256:3b00567da96412a0298328fad6b96aadd3bc9ca97e6683534da152b0b9e8a977",
+            "DiffID": "sha256:626ab8a5d57bb70a67c14c62eed096ee3a141f78f41aa575ccb2b4566eecc5b7"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-12064",
+          "DataSource": {
+            "ID": "debian",
+            "Name": "Debian Security Tracker",
+            "URL": "https://salsa.debian.org/security-tracker-team/security-tracker"
+          },
+          "Fingerprint": "sha256:57a0aaad48744230ab53d103afa3c37a333f81a40b380865ca98054ae05b3e91",
+          "Title": "curl: curl: SSH host verification bypass when using schemeless URLs with SFTP/SCP",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-295"
+          ],
+          "VendorSeverity": {
+            "azure": 3,
+            "julia": 3,
+            "oracle-oval": 3,
+            "photon": 3,
+            "redhat": 3,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "julia": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "PublishedDate": "2026-07-03T07:16:24.217Z",
+          "LastModifiedDate": "2026-07-07T19:43:11.187Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-5773",
+          "PkgID": "curl@7.88.1-10+deb12u12",
+          "PkgName": "curl",
+          "PkgIdentifier": {
+            "PURL": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u12?arch=amd64&distro=debian-12.11",
+            "UID": "74ceae509293fd87"
+          },
+          "InstalledVersion": "7.88.1-10+deb12u12",
+          "FixedVersion": "7.88.1-10+deb12u15",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:3b00567da96412a0298328fad6b96aadd3bc9ca97e6683534da152b0b9e8a977",
+            "DiffID": "sha256:626ab8a5d57bb70a67c14c62eed096ee3a141f78f41aa575ccb2b4566eecc5b7"
+          },
+          "SeveritySource": "nvd",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-5773",
+          "DataSource": {
+            "ID": "debian",
+            "Name": "Debian Security Tracker",
+            "URL": "https://salsa.debian.org/security-tracker-team/security-tracker"
+          },
+          "Fingerprint": "sha256:228598255b54b0cf8c0f9b66be9af9c25aef49dea05cdf7477549cf455899e1a",
+          "Title": "curl: libcurl: Wrong file transfer due to incorrect SMB connection reuse",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-918"
+          ],
+          "VendorSeverity": {
+            "julia": 3,
+            "nvd": 3,
+            "photon": 3,
+            "redhat": 2,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "julia": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 7.5
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N",
+              "V3Score": 6.5
+            }
+          },
+          "PublishedDate": "2026-05-13T13:01:56.307Z",
+          "LastModifiedDate": "2026-06-17T10:59:37.34Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-6276",
+          "PkgID": "curl@7.88.1-10+deb12u12",
+          "PkgName": "curl",
+          "PkgIdentifier": {
+            "PURL": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u12?arch=amd64&distro=debian-12.11",
+            "UID": "74ceae509293fd87"
+          },
+          "InstalledVersion": "7.88.1-10+deb12u12",
+          "Status": "affected",
+          "Layer": {
+            "Digest": "sha256:3b00567da96412a0298328fad6b96aadd3bc9ca97e6683534da152b0b9e8a977",
+            "DiffID": "sha256:626ab8a5d57bb70a67c14c62eed096ee3a141f78f41aa575ccb2b4566eecc5b7"
+          },
+          "SeveritySource": "nvd",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-6276",
+          "DataSource": {
+            "ID": "debian",
+            "Name": "Debian Security Tracker",
+            "URL": "https://salsa.debian.org/security-tracker-team/security-tracker"
+          },
+          "Fingerprint": "sha256:c9b5ea4005325bfea7aaac5a500f0b0ee7c4afaa5ef230bcdb0e869a233e285a",
+          "Title": "curl: libcurl: Information disclosure due to cookie leak when reusing connections with custom Host headers",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-319"
+          ],
+          "VendorSeverity": {
+            "azure": 2,
+            "julia": 3,
+            "nvd": 3,
+            "photon": 3,
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "julia": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
+              "V3Score": 3.7
+            }
+          },
+          "PublishedDate": "2026-05-13T13:01:56.8Z",
+          "LastModifiedDate": "2026-06-17T11:00:35.067Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-8286",
+          "PkgID": "curl@7.88.1-10+deb12u12",
+          "PkgName": "curl",
+          "PkgIdentifier": {
+            "PURL": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u12?arch=amd64&distro=debian-12.11",
+            "UID": "74ceae509293fd87"
+          },
+          "InstalledVersion": "7.88.1-10+deb12u12",
+          "Status": "fix_deferred",
+          "Layer": {
+            "Digest": "sha256:3b00567da96412a0298328fad6b96aadd3bc9ca97e6683534da152b0b9e8a977",
+            "DiffID": "sha256:626ab8a5d57bb70a67c14c62eed096ee3a141f78f41aa575ccb2b4566eecc5b7"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-8286",
+          "DataSource": {
+            "ID": "debian",
+            "Name": "Debian Security Tracker",
+            "URL": "https://salsa.debian.org/security-tracker-team/security-tracker"
+          },
+          "Fingerprint": "sha256:fd245a209eb23ba1c2c2446da0f4edbd3333779a0c68924a0ad8446df0c02554",
+          "Title": "curl: curl: Insecure connection establishment due to TLS configuration mismatch",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-295"
+          ],
+          "VendorSeverity": {
+            "alma": 3,
+            "azure": 3,
+            "julia": 3,
+            "oracle-oval": 3,
+            "photon": 3,
+            "redhat": 3,
+            "rocky": 3,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "julia": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+              "V3Score": 8.1
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+              "V3Score": 8.1
+            }
+          },
+          "PublishedDate": "2026-07-03T07:16:24.453Z",
+          "LastModifiedDate": "2026-07-07T19:42:11.24Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2023-45853",
+          "PkgID": "zlib1g@1:1.2.13.dfsg-1",
+          "PkgName": "zlib1g",
+          "PkgIdentifier": {
+            "PURL": "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.11&epoch=1",
+            "UID": "c01aa8ec84a815b"
+          },
+          "InstalledVersion": "1:1.2.13.dfsg-1",
+          "Status": "will_not_fix",
+          "Layer": {
+            "Digest": "sha256:dad67da3f26bce15939543965e09c4059533b025f707aad72ed3d3f3a09c66f8",
+            "DiffID": "sha256:7fb72a7d1a8e984ccd01277432de660162a547a00de77151518dc9033cfb8cb4"
+          },
+          "SeveritySource": "nvd",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2023-45853",
+          "DataSource": {
+            "ID": "debian",
+            "Name": "Debian Security Tracker",
+            "URL": "https://salsa.debian.org/security-tracker-team/security-tracker"
+          },
+          "Fingerprint": "sha256:081c659b1a418b190c0c41032587ec77f115ea72b37625e667414ae08b6fa084",
+          "Title": "zlib: integer overflow and resultant heap-based buffer overflow in zipOpenNewFileInZip4_6",
+          "Severity": "CRITICAL",
+          "CweIDs": [
+            "CWE-190"
+          ],
+          "VendorSeverity": {
+            "amazon": 2,
+            "azure": 3,
+            "cbl-mariner": 4,
+            "ghsa": 4,
+            "julia": 4,
+            "nvd": 4,
+            "photon": 4,
+            "redhat": 2,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V3Score": 9.8
+            },
+            "julia": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V3Score": 9.8
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V3Score": 9.8
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "PublishedDate": "2023-10-14T02:15:09.323Z",
+          "LastModifiedDate": "2026-07-14T13:17:02.983Z"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 3 affected
+⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low
+
+*📋 Weekly full report — everything currently open*
+*Priority:* ⛔ 2 EOL base · ⛔ 4 EOL package · 🚨 2 act now · 👀 2 watch
+⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low
+
+*⛔ Base OS end-of-life (top priority)*
+• legacy:1 — base OS is EOL (no more security updates coming) · includes 2 end-of-life package(s)
+• old:3 — base OS is EOL (no more security updates coming) · includes 1 end-of-life package(s)
+
+*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*
+• app:2.1
+   • libwebkit2gtk 2.38.5-1 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 0) — 🚨 see Act now
+   • curl 7.61.1-34 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1)
+   • libxml2 2.9.7-16 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1)
+   • qt5-qtbase 5.15.3-1 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1)
+
+*🚨 Act now (2) — exploited or likely to be*
+• legacy:1
+   • zlib 1.2.11 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> CRITICAL · severity only (intel unavailable) (+1 more CVE(s) in this package) — end-of-life: no fix planned for this release, consider a supported version
+       📎 <https://avd.example/CVE-2033-0005|advisory>
+• app:2.1
+   • libwebkit2gtk 2.38.5-1 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0001|CVE-2033-0001> CRITICAL · severity only (intel unavailable) — end-of-life: no fix planned for this release, consider a supported version
+       📎 <https://avd.example/CVE-2033-0001|advisory>
+
+*👀 Watch (2) — not urgent, keep an eye on*
+• app:2.1
+   • curl 7.61.1-34 (no fix available) (CRITICAL 0 / HIGH 2)
+   • sqlite-libs 3.26.0-19 (no fix available) (CRITICAL 0 / HIGH 1)

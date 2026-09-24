@@ -49,6 +49,17 @@ type Entry struct {
 	ContentID string    `json:"content_id,omitempty"`
 }
 
+// EOLEntry is the persisted memory of one package's end-of-life findings
+// (one package within one image), kept apart from Entry so that its changes,
+// its age and its carry-over rules never mix with the package's ordinary
+// findings. FirstSeen is when the package was first seen end-of-life, not
+// when any of its CVEs first appeared.
+type EOLEntry struct {
+	FirstSeen time.Time `json:"first_seen"`
+	Priority  string    `json:"priority,omitempty"` // strongest priority among the end-of-life CVEs
+	VulnIDs   []string  `json:"vuln_ids"`           // the end-of-life CVE IDs, sorted
+}
+
 // ImageMeta is the persisted identity record for one reference. ContentIDs/
 // Ambiguous are Docker-observed data (analyze.ImageObservation.ContentIDs
 // survives a Trivy scan failure unchanged, chunk1), so Compute refreshes
@@ -85,11 +96,17 @@ type EnvironmentRecord struct {
 // Environment was added for the Environment/Workload model without a
 // version bump, for the same reason as Images: older state decodes with a
 // nil pointer, and Save simply starts recording the current value.
+//
+// EOLPackages was added for end-of-life package findings without a version
+// bump: older state decodes with a nil map, the first cycle on the new
+// binary announces every end-of-life package once, and a state with none is
+// written byte-for-byte as before (omitempty drops the empty map).
 type State struct {
 	Version        int                  `json:"version"`
-	Findings       map[string]Entry     `json:"findings"`         // keyed by image \t package
-	EOSL           map[string]time.Time `json:"eosl"`             // image -> first seen as EOL
-	Images         map[string]ImageMeta `json:"images,omitempty"` // keyed by reference
+	Findings       map[string]Entry     `json:"findings"`               // keyed by image \t package
+	EOSL           map[string]time.Time `json:"eosl"`                   // image -> first seen as EOL
+	EOLPackages    map[string]EOLEntry  `json:"eol_packages,omitempty"` // keyed by image \t package, like Findings
+	Images         map[string]ImageMeta `json:"images,omitempty"`       // keyed by reference
 	LastFullReport *ReportRef           `json:"last_full_report,omitempty"`
 	// Environment records which environment this file belongs to, for
 	// self-description and diagnostics only. It is nil for the unnamed
@@ -119,10 +136,11 @@ func (r *ReportRef) ValidFor(channel string) bool {
 // empty returns a fresh, usable state.
 func empty() State {
 	return State{
-		Version:  version,
-		Findings: map[string]Entry{},
-		EOSL:     map[string]time.Time{},
-		Images:   map[string]ImageMeta{},
+		Version:     version,
+		Findings:    map[string]Entry{},
+		EOSL:        map[string]time.Time{},
+		EOLPackages: map[string]EOLEntry{},
+		Images:      map[string]ImageMeta{},
 	}
 }
 
@@ -151,13 +169,26 @@ func (s State) FirstSeen(image, pkg string) (time.Time, bool) {
 	return e.FirstSeen, ok
 }
 
+// EOLFirstSeen returns when the package (image, pkg) was first seen
+// end-of-life. ok is false when this state has no end-of-life record for it.
+func (s State) EOLFirstSeen(image, pkg string) (time.Time, bool) {
+	e, ok := s.EOLPackages[key(image, pkg)]
+	return e.FirstSeen, ok
+}
+
 // HasFindingsFor reports whether s has at least one recorded finding for
-// ref. Read-only: it does not touch Compute, the key space, or the
-// persisted format — a lookup helper for callers (the diff-mode send
-// decision) that need to ask "did we have anything on record for this
-// reference" without hand-rolling the key format themselves.
+// ref, ordinary or end-of-life package. Read-only: it does not touch
+// Compute, the key space, or the persisted format — a lookup helper for
+// callers (the diff-mode send decision) that need to ask "did we have
+// anything on record for this reference" without hand-rolling the key
+// format themselves. A base-OS end-of-life record alone does not count.
 func (s State) HasFindingsFor(ref string) bool {
 	for k := range s.Findings {
+		if keyImage(k) == ref {
+			return true
+		}
+	}
+	for k := range s.EOLPackages {
 		if keyImage(k) == ref {
 			return true
 		}
@@ -199,6 +230,9 @@ func (s FileStore) Load() (State, error) {
 	}
 	if st.EOSL == nil {
 		st.EOSL = map[string]time.Time{}
+	}
+	if st.EOLPackages == nil {
+		st.EOLPackages = map[string]EOLEntry{}
 	}
 	if st.Images == nil {
 		st.Images = map[string]ImageMeta{}
@@ -264,6 +298,37 @@ type Resolved struct {
 	Package string
 }
 
+// EOLChangeKind classifies a change to a package's end-of-life findings. It
+// is a type of its own, not a ChangeKind: end-of-life changes are judged
+// and reported independently of the package's ordinary changes.
+type EOLChangeKind string
+
+const (
+	EOLKindNew       EOLChangeKind = "eol_new"       // package newly end-of-life (never recorded, or recorded again after it cleared)
+	EOLKindNewCVEs   EOLChangeKind = "eol_new_cves"  // an end-of-life package gained end-of-life CVEs
+	EOLKindEscalated EOLChangeKind = "eol_escalated" // an end-of-life package's priority rose to act_now
+)
+
+// EOLChange is one package whose end-of-life findings are new or changed
+// since the previous scan. Groups holds only the package's end_of_life
+// groups.
+type EOLChange struct {
+	Image   string
+	Package string
+	Kind    EOLChangeKind
+	NewIDs  []string // for EOLKindNewCVEs: the new end-of-life CVE IDs, sorted
+	Groups  []analyze.PackageGroup
+}
+
+// ResolvedEOL is a package that was end-of-life in the previous scan and no
+// longer is. StillOpen is true when the package still has ordinary findings
+// this scan (its CVEs left end-of-life but not the report).
+type ResolvedEOL struct {
+	Image     string
+	Package   string
+	StillOpen bool
+}
+
 // ImageReplacement is one reference whose running content changed between
 // scans. It fires only when both the previous and current verified
 // ContentID sets are non-empty and differ as sets — never on first
@@ -300,11 +365,27 @@ type Diff struct {
 	OpenWatch    int
 	OpenLow      int
 	OldestUrgent time.Time
+
+	// End-of-life packages, judged apart from Changes/Resolved.
+	NewEOLPackages      []EOLChange
+	ResolvedEOLPackages []ResolvedEOL
+	// OpenEOSL is every reference whose base OS is recorded end-of-life after
+	// this cycle, held records included (the keys of the next State.EOSL,
+	// sorted). State-derived views fold end-of-life packages into the base-OS
+	// line by this set, so the base-OS count and the fold always agree.
+	OpenEOSL []string
+	// OpenEOLPackages counts the end-of-life package records not folded into
+	// a base-OS line (OpenEOSL), whatever their priority.
+	OpenEOLPackages int
+	// AnyOpen is true when the next state still holds anything — ordinary
+	// findings, end-of-life packages or base-OS records, held ones included.
+	AnyOpen bool
 }
 
 // HasChanges reports whether anything is new or resolved since the last scan.
 func (d Diff) HasChanges() bool {
-	return len(d.Changes) > 0 || len(d.Resolved) > 0 || len(d.NewEOSL) > 0 || len(d.ResolvedEOSL) > 0 || len(d.Replaced) > 0
+	return len(d.Changes) > 0 || len(d.Resolved) > 0 || len(d.NewEOSL) > 0 || len(d.ResolvedEOSL) > 0 || len(d.Replaced) > 0 ||
+		len(d.NewEOLPackages) > 0 || len(d.ResolvedEOLPackages) > 0
 }
 
 // OldestOpenDays is the age in whole days of the oldest open finding at now,
@@ -347,6 +428,14 @@ type current struct {
 // sibling entity's temporary scan failure can never look like "fixed" or
 // "gone" and then reappear as new/escalated once it recovers), or fully
 // resolved (ordinary diffing, unaffected).
+//
+// End-of-life package findings (Report.EOLPackages) live in their own map,
+// State.EOLPackages, and produce their own changes (NewEOLPackages,
+// ResolvedEOLPackages) under the same carry-over rules. The two sides touch
+// in three places only: an ordinary judgement counts the package's previous
+// end-of-life record as history, a package whose ordinary findings all moved
+// to end-of-life is not reported resolved, and the heartbeat counts each
+// package once.
 func Compute(prev State, r analyze.Report) (Diff, State) {
 	next := empty()
 	now := r.GeneratedAt
@@ -376,42 +465,35 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 	next.Images = nextImages(prev.Images, r.Images, now)
 	d := Diff{Replaced: replacedImages(prev.Images, r.Images)}
 
-	cur := map[string]*current{}
-	order := []string{} // report order: sections are already priority-sorted
-	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix} {
-		for _, img := range section {
-			for _, g := range img.Packages {
-				k := key(img.Image, g.Package)
-				c := cur[k]
-				if c == nil {
-					c = &current{ids: map[string]bool{}}
-					cur[k] = c
-					order = append(order, k)
-				}
-				c.groups = append(c.groups, g)
-				for _, id := range g.VulnIDs() {
-					c.ids[id] = true
-				}
-				if g.Status == scanner.StatusFixed {
-					c.fixable = true
-				}
-			}
-		}
-	}
+	// Report order: sections are already priority-sorted.
+	cur, order := mergeSections(r.Actionable, r.Watch, r.WontFix)
+	curEOL, eolOrder := mergeSections(r.EOLPackages)
 
 	for _, k := range order {
 		ref := keyImage(k)
 		c := cur[k]
-		ids := make([]string, 0, len(c.ids))
-		for id := range c.ids {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
+		ids := sortedIDs(c.ids)
 
-		prevE, known := prev.Findings[k]
+		// The package's previous end-of-life record counts as history for
+		// the ordinary judgement: a CVE that leaves end-of-life for the
+		// ordinary sections is not new, and the package is not new either.
+		prevE, knownE := prev.Findings[k]
+		prevEOL, knownEOL := prev.EOLPackages[k]
+		known := knownE || knownEOL
 		firstSeen := now
-		if known {
+		switch {
+		case knownE:
 			firstSeen = prevE.FirstSeen
+		case knownEOL:
+			firstSeen = prevEOL.FirstSeen
+		}
+		baseIDs := prevE.VulnIDs
+		if knownEOL {
+			baseIDs = mergeSorted(prevE.VulnIDs, prevEOL.VulnIDs)
+		}
+		basePrio := analyze.Priority(prevE.Priority)
+		if p := analyze.Priority(prevEOL.Priority); p.Rank() > basePrio.Rank() {
+			basePrio = p
 		}
 		prio := analyze.MaxPriority(c.groups)
 
@@ -421,7 +503,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		// contributed last time it succeeded: VulnIDs is the union of prev and
 		// cur, Fixable is prev||cur, and Priority is whichever is higher.
 		storeIDs, storeFixable, storePrio := ids, c.fixable, prio
-		if partiallyFailedRef[ref] && known {
+		if partiallyFailedRef[ref] && knownE {
 			storeIDs = mergeSorted(ids, prevE.VulnIDs)
 			storeFixable = storeFixable || prevE.Fixable
 			if prevPrio := analyze.Priority(prevE.Priority); prevPrio.Rank() > storePrio.Rank() {
@@ -434,7 +516,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		}
 
 		change := Change{Image: ref, Package: keyPackage(k), Groups: c.groups}
-		added := newIDs(ids, prevE.VulnIDs)
+		added := newIDs(ids, baseIDs)
 		switch {
 		case !known:
 			change.Kind = KindNew
@@ -445,7 +527,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		// escalations too: severity-only fallback inflates every priority, and
 		// announcing that en masse would turn a feed outage into a false alarm
 		// storm (the header warning carries the news instead).
-		case !r.Intel.Degraded() && prevE.Priority != "" && prio.Rank() > analyze.Priority(prevE.Priority).Rank():
+		case !r.Intel.Degraded() && basePrio != analyze.PriorityNone && prio.Rank() > basePrio.Rank():
 			change.Kind = KindEscalated
 		case len(added) > 0:
 			change.Kind = KindNewCVEs
@@ -477,8 +559,15 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			// it over unknown-but-not-resolved, and blank ContentID — unlike
 			// the full-failure case, a sibling's success this cycle makes it
 			// misleading to keep asserting an old identity as current.
+			// This holds even when a sibling now shows the same package as
+			// end-of-life: that says nothing about the failed entity's own
+			// findings.
 			e.ContentID = ""
 			next.Findings[k] = e
+			continue
+		case curEOL[k] != nil:
+			// Every CVE left for end-of-life: the package is not resolved,
+			// its end-of-life change announces it instead.
 			continue
 		}
 		d.Resolved = append(d.Resolved, Resolved{Image: ref, Package: keyPackage(k)})
@@ -488,6 +577,28 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			return d.Resolved[i].Image < d.Resolved[j].Image
 		}
 		return d.Resolved[i].Package < d.Resolved[j].Package
+	})
+
+	d.NewEOLPackages = computeEOL(prev, next, curEOL, eolOrder, partiallyFailedRef, r.Intel.Degraded(), now)
+	for k, e := range prev.EOLPackages {
+		if _, ok := curEOL[k]; ok {
+			continue
+		}
+		ref := keyImage(k)
+		// Same carry-over as ordinary findings and EOSL: a reference that
+		// (partially) failed to scan this cycle is no evidence the package
+		// stopped being end-of-life.
+		if fullyFailedRef[ref] || partiallyFailedRef[ref] {
+			next.EOLPackages[k] = e
+			continue
+		}
+		d.ResolvedEOLPackages = append(d.ResolvedEOLPackages, ResolvedEOL{Image: ref, Package: keyPackage(k), StillOpen: cur[k] != nil})
+	}
+	sort.Slice(d.ResolvedEOLPackages, func(i, j int) bool {
+		if d.ResolvedEOLPackages[i].Image != d.ResolvedEOLPackages[j].Image {
+			return d.ResolvedEOLPackages[i].Image < d.ResolvedEOLPackages[j].Image
+		}
+		return d.ResolvedEOLPackages[i].Package < d.ResolvedEOLPackages[j].Package
 	})
 
 	for _, img := range r.EOSLImages {
@@ -514,37 +625,153 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 	sort.Strings(d.ResolvedEOSL)
 
 	d.OpenImages = r.AffectedImageCount()
-	for _, e := range next.Findings {
-		if d.OldestOpen.IsZero() || e.FirstSeen.Before(d.OldestOpen) {
-			d.OldestOpen = e.FirstSeen
+	for img := range next.EOSL {
+		d.OpenEOSL = append(d.OpenEOSL, img)
+	}
+	sort.Strings(d.OpenEOSL)
+	folded := map[string]bool{}
+	for _, img := range d.OpenEOSL {
+		folded[img] = true
+	}
+	older := func(cur *time.Time, t time.Time) {
+		if cur.IsZero() || t.Before(*cur) {
+			*cur = t
 		}
-		switch analyze.Priority(e.Priority) {
-		case analyze.PriorityActNow:
+	}
+
+	// Priority buckets count each (image, package) once: act_now on either
+	// side wins; otherwise the ordinary side's priority counts. An
+	// end-of-life record's watch/low is represented by the end-of-life
+	// segment (OpenEOLPackages) alone, so it never adds a second bucket.
+	for k, e := range next.Findings {
+		older(&d.OldestOpen, e.FirstSeen)
+		if urgent(e.Priority) {
+			older(&d.OldestUrgent, e.FirstSeen)
+		}
+		eolActNow := analyze.Priority(next.EOLPackages[k].Priority) == analyze.PriorityActNow
+		switch {
+		case analyze.Priority(e.Priority) == analyze.PriorityActNow || eolActNow:
 			d.OpenActNow++
-		case analyze.PriorityWatch:
+		case analyze.Priority(e.Priority) == analyze.PriorityWatch:
 			d.OpenWatch++
-		case analyze.PriorityLow:
+		case analyze.Priority(e.Priority) == analyze.PriorityLow:
 			d.OpenLow++
 		}
-		if urgent(e.Priority) && (d.OldestUrgent.IsZero() || e.FirstSeen.Before(d.OldestUrgent)) {
-			d.OldestUrgent = e.FirstSeen
+	}
+	for k, e := range next.EOLPackages {
+		actNow := analyze.Priority(e.Priority) == analyze.PriorityActNow
+		if !folded[keyImage(k)] {
+			d.OpenEOLPackages++
+		}
+		if _, ok := next.Findings[k]; !ok && actNow {
+			d.OpenActNow++
+		}
+		// A folded record ages through its base-OS record instead, unless
+		// it is act_now and so shown on its own.
+		if !folded[keyImage(k)] || actNow {
+			older(&d.OldestOpen, e.FirstSeen)
+			older(&d.OldestUrgent, e.FirstSeen)
 		}
 	}
 	for _, t := range next.EOSL {
-		if d.OldestOpen.IsZero() || t.Before(d.OldestOpen) {
-			d.OldestOpen = t
-		}
-		if d.OldestUrgent.IsZero() || t.Before(d.OldestUrgent) {
-			d.OldestUrgent = t
-		}
+		older(&d.OldestOpen, t)
+		older(&d.OldestUrgent, t)
 	}
-	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix} {
+	d.AnyOpen = len(next.Findings) > 0 || len(next.EOLPackages) > 0 || len(next.EOSL) > 0
+	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			d.OpenCritical += img.CriticalCount()
 			d.OpenHigh += img.TotalCount() - img.CriticalCount()
 		}
 	}
 	return d, next
+}
+
+// mergeSections merges report section entries into one view per
+// (image, package), in report order.
+func mergeSections(sections ...[]analyze.ImageFindings) (map[string]*current, []string) {
+	cur := map[string]*current{}
+	var order []string
+	for _, section := range sections {
+		for _, img := range section {
+			for _, g := range img.Packages {
+				k := key(img.Image, g.Package)
+				c := cur[k]
+				if c == nil {
+					c = &current{ids: map[string]bool{}}
+					cur[k] = c
+					order = append(order, k)
+				}
+				c.groups = append(c.groups, g)
+				for _, id := range g.VulnIDs() {
+					c.ids[id] = true
+				}
+				if g.Status == scanner.StatusFixed {
+					c.fixable = true
+				}
+			}
+		}
+	}
+	return cur, order
+}
+
+// computeEOL records this cycle's end-of-life packages in next and returns
+// their changes. The previous ordinary entry is deliberately not consulted:
+// a CVE moving from the ordinary sections into end-of-life is news for the
+// end-of-life view even when the package itself is long known.
+func computeEOL(prev, next State, curEOL map[string]*current, order []string, partiallyFailedRef map[string]bool, degraded bool, now time.Time) []EOLChange {
+	var changes []EOLChange
+	for _, k := range order {
+		ref := keyImage(k)
+		c := curEOL[k]
+		ids := sortedIDs(c.ids)
+		prio := analyze.MaxPriority(c.groups)
+
+		prevL, known := prev.EOLPackages[k]
+		firstSeen := now
+		if known {
+			firstSeen = prevL.FirstSeen
+		}
+		// Same conservative merge as ordinary entries: a partially-failed
+		// reference keeps what the failed entity contributed last time.
+		storeIDs, storePrio := ids, prio
+		if partiallyFailedRef[ref] && known {
+			storeIDs = mergeSorted(ids, prevL.VulnIDs)
+			if p := analyze.Priority(prevL.Priority); p.Rank() > storePrio.Rank() {
+				storePrio = p
+			}
+		}
+		next.EOLPackages[k] = EOLEntry{FirstSeen: firstSeen, Priority: string(storePrio), VulnIDs: storeIDs}
+
+		change := EOLChange{Image: ref, Package: keyPackage(k), Groups: c.groups}
+		added := newIDs(ids, prevL.VulnIDs)
+		prevPrio := analyze.Priority(prevL.Priority)
+		switch {
+		case !known:
+			change.Kind = EOLKindNew
+		// Only a rise to act_now is announced, under the same conditions as
+		// an ordinary escalation (a baseline exists, intel is not degraded).
+		case !degraded && prevPrio != analyze.PriorityNone && prio == analyze.PriorityActNow && prio.Rank() > prevPrio.Rank():
+			change.Kind = EOLKindEscalated
+		case len(added) > 0:
+			change.Kind = EOLKindNewCVEs
+			change.NewIDs = added
+		default:
+			continue
+		}
+		changes = append(changes, change)
+	}
+	return changes
+}
+
+// sortedIDs returns the members of an ID set, sorted.
+func sortedIDs(set map[string]bool) []string {
+	ids := make([]string, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // nextImages builds State.Images for the next cycle from this cycle's

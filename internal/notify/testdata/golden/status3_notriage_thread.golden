@@ -1,0 +1,45 @@
+📊 *Full report — 2026-06-24 09:00*
+
+*✅ Actionable now (fixed)*
+🔴 web:1.0
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> CRITICAL
+       openssl: buffer overread
+       📎 <https://avd.example/CVE-2031-0001|advisory>
+     ⏱ open 20 day(s) — first seen 2026-06-04
+   • dpkg 1.21.22 → 1.21.23 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> HIGH
+     ⏱ open 20 day(s) — first seen 2026-06-04
+🟠 api:2.0
+   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [lang]
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0008|CVE-2031-0008> HIGH
+     ⏱ open 20 day(s) — first seen 2026-06-04
+
+*ℹ️ No fix yet (affected / waiting on upstream)*
+🔴 web:1.0
+   • e2fsprogs 1.47.0-2 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> CRITICAL — no fix yet, consider mitigation
+       e2fsprogs: out-of-bounds write
+     ⏱ open 20 day(s) — first seen 2026-06-04
+   • openssl 3.0.7 (no fix available) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> HIGH — no fix yet, consider mitigation
+     ⏱ open 20 day(s) — first seen 2026-06-04
+🟠 api:2.0
+   • libxml2 2.9.14 (no fix available) (CRITICAL 0 / HIGH 2)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0006|CVE-2031-0006> HIGH — no fix yet, consider mitigation
+       libxml2: use-after-free
+       📎 <https://avd.example/CVE-2031-0006|advisory>
+     also: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
+     ⏱ open 20 day(s) — first seen 2026-06-04
+
+*🔕 Upstream won't fix (will_not_fix)*
+🔴 web:1.0
+   • gcc-12-base 12.2.0-14 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0005|CVE-2031-0005> CRITICAL — upstream won't fix, consider replacing
+     ⏱ open 20 day(s) — first seen 2026-06-04
+🟠 api:2.0
+   • zlib 1.2.13 (no fix available) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> HIGH — upstream won't fix, consider replacing
+     ⏱ first seen today
+
+⚠️ identity unconfirmed: scanned by reference — broken:1

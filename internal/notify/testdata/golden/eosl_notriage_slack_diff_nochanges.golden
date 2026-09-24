@@ -1,0 +1,12 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 2 affected
+
+No changes since last scan.
+
+*⚠️ Scan failures*
+• broken:1 — identity unconfirmed: scanned by reference — pull failed
+
+📌 Open now: ⛔ 1 EOL base / CRITICAL 3 / HIGH 6 across 2 image(s) — ⏰ oldest unresolved 20 day(s)
+_Details in the generic webhook payload, or in the weekly full report._
+
+⚠️ identity unconfirmed: scanned by reference — broken:1

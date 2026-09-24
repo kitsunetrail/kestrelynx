@@ -1,0 +1,30 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 2 affected
+*Priority:* 🔴 3 CRITICAL · 🟠 1 need care · 🟢 1 safe
+
+*✅ Actionable now (fixed)*
+🔴 web:1.0  CRITICAL 1 / HIGH 1
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch
+   • +1 lower-risk fixes (HIGH 1): dpkg
+🟠 api:2.0  CRITICAL 0 / HIGH 1
+   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [lang]
+
+*ℹ️ No fix yet (affected / waiting on upstream)*
+🔴 web:1.0  CRITICAL 1 / HIGH 1
+   • e2fsprogs 1.47.0-2 (no fix available) (CRITICAL 1 / HIGH 0)
+   • openssl 3.0.7 (no fix available) (CRITICAL 0 / HIGH 1)
+🟠 api:2.0  CRITICAL 0 / HIGH 2
+   • libxml2 2.9.14 (no fix available) (CRITICAL 0 / HIGH 2)
+
+*🔕 Upstream won't fix (will_not_fix)*
+🔴 web:1.0  CRITICAL 1 / HIGH 0
+   • gcc-12-base 12.2.0-14 (no fix available) (CRITICAL 1 / HIGH 0)
+🟠 api:2.0  CRITICAL 0 / HIGH 1
+   • zlib 1.2.13 (no fix available) (CRITICAL 0 / HIGH 1)
+
+*⚠️ Scan failures*
+• broken:1 — identity unconfirmed: scanned by reference — pull failed
+
+⚠️ identity unconfirmed: scanned by reference — broken:1
+
+_1 lower-risk fix(es) summarized — full list in the generic webhook payload._

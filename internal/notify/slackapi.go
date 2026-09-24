@@ -54,7 +54,7 @@ func (n SlackAPINotifier) Send(ctx context.Context, m Message) error {
 	}
 	var thread []string
 	if postThread {
-		thread = BuildThreadMessages(m.Report, m.FirstSeen, n.Limit)
+		thread = BuildThreadMessages(m.Report, Ages{Finding: m.FirstSeen, EOL: m.EOLFirstSeen}, n.Limit)
 	}
 
 	text := summaryText(m)

@@ -1,0 +1,27 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 2 affected
+
+*🆕 New since last scan (4)*
+🚨 api:2.0
+   • libxml2 2.9.14 (no fix available) (CRITICAL 0 / HIGH 2) — new: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0006|CVE-2031-0006> HIGH · EPSS 20% (+1 more CVE(s) in this package) — no fix yet, consider mitigation
+       📎 <https://avd.example/CVE-2031-0006|advisory>
+   • zlib 1.2.13 (no fix available) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> HIGH · CISA KEV (exploited in the wild) · EPSS 50% — upstream won't fix, consider replacing
+🚨 web:1.0
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — ⬆️ escalated to ACT NOW
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> CRITICAL · CISA KEV (exploited in the wild) · EPSS 94% · 🧨 ransomware campaign
+       📎 <https://avd.example/CVE-2031-0001|advisory> · <https://vendor.example/advisory/1|vendor advisory>
+   • openssl 3.0.7 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> · EPSS <0.1% — ⬆️ escalated to ACT NOW
+   • dpkg 1.21.22 → 1.21.23 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> · EPSS <0.1% — fix now available
+
+*✅ Resolved since last scan (1)*
+• web:1.0: old-pkg
+
+*⚠️ Scan failures*
+• broken:1 — identity unconfirmed: scanned by reference — pull failed
+
+📌 Open now: ⛔ 1 EOL base / 🚨 3 act-now / 👀 1 watch / 🔕 3 low — ⏰ oldest act-now/watch unresolved 20 day(s)
+_Details in the generic webhook payload, or in the weekly full report._
+
+⚠️ identity unconfirmed: scanned by reference — broken:1

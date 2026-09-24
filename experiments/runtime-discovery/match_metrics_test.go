@@ -803,11 +803,12 @@ func TestAggregatePathTallyDistinguishesInodes(t *testing.T) {
 }
 
 // statusMixTrivyReport mirrors what a real Debian scan contains: Trivy
-// reports a vulnerability status per finding, and only three of the values
-// it emits (fixed, affected, will_not_fix) are ones the product's triage
-// sorts into a section. curl in a real case 9 scan carried four fix_deferred
-// findings and one affected one, and the four were the ones that came back
-// with no priority at all.
+// reports a vulnerability status per finding. curl in a real case 9 scan
+// carried four fix_deferred findings and one affected one; the four came
+// back with no priority at all while the product's triage only sorted
+// fixed, affected and will_not_fix into sections. The product now sorts
+// every status into a section except not_affected, which it drops, so the
+// not_affected finding below is what keeps the unclassified path covered.
 const statusMixTrivyReport = `{
   "SchemaVersion": 2,
   "ArtifactName": "kl-status-mix:1",
@@ -867,7 +868,15 @@ const statusMixTrivyReport = `{
           "InstalledVersion": "3.0.16-1~deb12u1",
           "Status": "end_of_life",
           "Severity": "HIGH",
-          "Title": "end of life, another status with no section"
+          "Title": "end of life, triaged in its own section"
+        },
+        {
+          "VulnerabilityID": "CVE-2030-1007",
+          "PkgName": "libc6",
+          "InstalledVersion": "2.36-9+deb12u10",
+          "Status": "not_affected",
+          "Severity": "HIGH",
+          "Title": "not affected, the one status the product drops"
         }
       ]
     }
@@ -879,14 +888,15 @@ const statusMixTrivyReport = `{
 // they fell out of the per-priority tables while staying in the overall
 // denominator, and the two stopped adding up. Every finding must now carry
 // a named priority, and the per-priority denominators must reconcile with
-// the overall one.
+// the overall one. fix_deferred and end_of_life now get real priorities;
+// not_affected is the status left unclassified.
 func TestPrioritiesCoverEveryStatus(t *testing.T) {
 	scan, err := scanner.ParseReport([]byte(statusMixTrivyReport))
 	if err != nil {
 		t.Fatalf("ParseReport: %v", err)
 	}
-	if len(scan.Findings) != 6 {
-		t.Fatalf("ParseReport returned %d findings, want 6: no status may be dropped before matching", len(scan.Findings))
+	if len(scan.Findings) != 7 {
+		t.Fatalf("ParseReport returned %d findings, want 7: no status may be dropped before matching", len(scan.Findings))
 	}
 
 	tr := analyze.Triage{
@@ -906,19 +916,17 @@ func TestPrioritiesCoverEveryStatus(t *testing.T) {
 	for i, f := range scan.Findings {
 		byVuln[f.VulnID] = priorityByIndex[i]
 	}
-	for _, vuln := range []string{"CVE-2030-1001", "CVE-2030-1002", "CVE-2030-1006"} {
-		if byVuln[vuln] != priorityUnclassified {
-			t.Errorf("%s: priority = %q, want %q", vuln, byVuln[vuln], priorityUnclassified)
-		}
+	if byVuln["CVE-2030-1007"] != priorityUnclassified {
+		t.Errorf("CVE-2030-1007: priority = %q, want %q", byVuln["CVE-2030-1007"], priorityUnclassified)
 	}
-	for _, vuln := range []string{"CVE-2030-1003", "CVE-2030-1004", "CVE-2030-1005"} {
+	for _, vuln := range []string{"CVE-2030-1001", "CVE-2030-1002", "CVE-2030-1003", "CVE-2030-1004", "CVE-2030-1005", "CVE-2030-1006"} {
 		if byVuln[vuln] == priorityUnclassified || byVuln[vuln] == "" {
 			t.Errorf("%s: priority = %q, want a real priority (its status has a section)", vuln, byVuln[vuln])
 		}
 	}
 
-	if got := unclassifiedByStatus(scan.Findings, priorityByIndex); got["fix_deferred"] != 2 || got["end_of_life"] != 1 || len(got) != 2 {
-		t.Errorf("unclassifiedByStatus = %v, want fix_deferred=2 and end_of_life=1 only", got)
+	if got := unclassifiedByStatus(scan.Findings, priorityByIndex); got["not_affected"] != 1 || len(got) != 1 {
+		t.Errorf("unclassifiedByStatus = %v, want not_affected=1 only", got)
 	}
 
 	// The denominators have to reconcile: every Finding is in exactly one
@@ -937,8 +945,8 @@ func TestPrioritiesCoverEveryStatus(t *testing.T) {
 	}
 
 	overall, _, byPrio, _, _, _, _ := aggregate(packages)
-	if overall.FindingDenominator != 6 {
-		t.Fatalf("overall denominator = %d, want 6", overall.FindingDenominator)
+	if overall.FindingDenominator != 7 {
+		t.Fatalf("overall denominator = %d, want 7", overall.FindingDenominator)
 	}
 	sum, pkgSum := 0, 0
 	for prio, m := range byPrio {

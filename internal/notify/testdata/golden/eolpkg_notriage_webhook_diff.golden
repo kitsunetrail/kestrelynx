@@ -1,0 +1,385 @@
+{
+  "generated_at": "2026-06-24T09:00:00Z",
+  "environment": {
+    "kind": ""
+  },
+  "summary": {
+    "images_total": 3,
+    "images_affected": 3
+  },
+  "eosl_images": [
+    "legacy:1",
+    "old:3"
+  ],
+  "actionable": [],
+  "watch": [
+    {
+      "image": "app:2.1",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 3
+      },
+      "findings": [
+        {
+          "package": "curl",
+          "installed": "7.61.1-34",
+          "fixed": "",
+          "status": "affected",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 2
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-2033-0011",
+            "CVE-2033-0012"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2033-0011",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2033-0011",
+              "kev": false,
+              "epss": null
+            },
+            {
+              "id": "CVE-2033-0012",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2033-0012",
+              "status": "fix_deferred",
+              "kev": false,
+              "epss": null
+            }
+          ]
+        },
+        {
+          "package": "sqlite-libs",
+          "installed": "3.26.0-19",
+          "fixed": "",
+          "status": "affected",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-2033-0008"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2033-0008",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2033-0008",
+              "kev": false,
+              "epss": null
+            }
+          ]
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
+  "wont_fix": [],
+  "eol_packages": [
+    {
+      "image": "app:2.1",
+      "severity_counts": {
+        "CRITICAL": 1,
+        "HIGH": 3
+      },
+      "findings": [
+        {
+          "package": "libwebkit2gtk",
+          "installed": "2.38.5-1",
+          "fixed": "",
+          "status": "end_of_life",
+          "severity_counts": {
+            "CRITICAL": 1,
+            "HIGH": 0
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-2033-0001"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2033-0001",
+              "severity": "CRITICAL",
+              "url": "https://avd.example/CVE-2033-0001",
+              "kev": false,
+              "epss": null
+            }
+          ]
+        },
+        {
+          "package": "curl",
+          "installed": "7.61.1-34",
+          "fixed": "",
+          "status": "end_of_life",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-2033-0004"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2033-0004",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2033-0004",
+              "kev": false,
+              "epss": null
+            }
+          ]
+        },
+        {
+          "package": "libxml2",
+          "installed": "2.9.7-16",
+          "fixed": "",
+          "status": "end_of_life",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-2033-0003"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2033-0003",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2033-0003",
+              "kev": false,
+              "epss": null
+            }
+          ]
+        },
+        {
+          "package": "qt5-qtbase",
+          "installed": "5.15.3-1",
+          "fixed": "",
+          "status": "end_of_life",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-2033-0002"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2033-0002",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2033-0002",
+              "kev": false,
+              "epss": null
+            }
+          ]
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    },
+    {
+      "image": "legacy:1",
+      "severity_counts": {
+        "CRITICAL": 1,
+        "HIGH": 2
+      },
+      "findings": [
+        {
+          "package": "zlib",
+          "installed": "1.2.11",
+          "fixed": "",
+          "status": "end_of_life",
+          "severity_counts": {
+            "CRITICAL": 1,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-2033-0005",
+            "CVE-2033-0007"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2033-0005",
+              "severity": "CRITICAL",
+              "url": "https://avd.example/CVE-2033-0005",
+              "kev": false,
+              "epss": null
+            },
+            {
+              "id": "CVE-2033-0007",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2033-0007",
+              "kev": false,
+              "epss": null
+            }
+          ]
+        },
+        {
+          "package": "bzip2",
+          "installed": "1.0.6",
+          "fixed": "",
+          "status": "end_of_life",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-2033-0006"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2033-0006",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2033-0006",
+              "kev": false,
+              "epss": null
+            }
+          ]
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    },
+    {
+      "image": "old:3",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 1
+      },
+      "findings": [
+        {
+          "package": "perl",
+          "installed": "5.26.3",
+          "fixed": "",
+          "status": "end_of_life",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-2033-0009"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2033-0009",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2033-0009",
+              "kev": false,
+              "epss": null
+            }
+          ]
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
+  "scan_errors": [],
+  "diff": {
+    "new": [
+      {
+        "image": "app:2.1",
+        "package": "curl",
+        "kind": "new_cves",
+        "new_cve_count": 1,
+        "new_cve_ids": [
+          "CVE-2033-0012"
+        ],
+        "critical": 0,
+        "high": 2
+      }
+    ],
+    "resolved": [
+      {
+        "image": "app:2.1",
+        "package": "tar"
+      }
+    ],
+    "replaced": [],
+    "new_eosl": [
+      "old:3"
+    ],
+    "resolved_eosl": [],
+    "oldest_open_days": 20,
+    "new_eol_packages": [
+      {
+        "image": "app:2.1",
+        "package": "curl",
+        "kind": "eol_new",
+        "critical": 0,
+        "high": 1
+      },
+      {
+        "image": "app:2.1",
+        "package": "qt5-qtbase",
+        "kind": "eol_new",
+        "critical": 0,
+        "high": 1
+      },
+      {
+        "image": "legacy:1",
+        "package": "zlib",
+        "kind": "eol_new_cves",
+        "new_cve_ids": [
+          "CVE-2033-0007"
+        ],
+        "critical": 1,
+        "high": 1
+      },
+      {
+        "image": "legacy:1",
+        "package": "bzip2",
+        "kind": "eol_new",
+        "critical": 0,
+        "high": 1
+      },
+      {
+        "image": "old:3",
+        "package": "perl",
+        "kind": "eol_new",
+        "critical": 0,
+        "high": 1
+      }
+    ],
+    "resolved_eol_packages": [
+      {
+        "image": "app:2.1",
+        "package": "old-eol",
+        "still_open": false
+      },
+      {
+        "image": "app:2.1",
+        "package": "sqlite-libs",
+        "still_open": true
+      },
+      {
+        "image": "app:2.1",
+        "package": "tar",
+        "still_open": false
+      }
+    ]
+  }
+}

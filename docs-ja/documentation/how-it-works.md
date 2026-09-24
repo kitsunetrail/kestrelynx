@@ -1,485 +1,417 @@
 # KestreLynxの仕組み
 
-KestreLynxは、ある時点のTrivyスキャン結果を、次の2つの方針で通知へ
-変換します。
+KestreLynxは、稼働中イメージのTrivyスキャン結果から、前回との差分と現在の未解決項目を通知する。
 
-- **前回のスキャンからの変化** — 既定の`diff`モードでSlackチャンネルへ
-  投稿する内容です。
-- **現在も未解決の脆弱性** — Slack Botを使用する場合のスレッドと、汎用Webhookの
-  ペイロードで確認できます。
+- Slackチャンネルでは、既定の`diff`モードで前回からの変化を確認する
+- Slack Botのスレッドでは現在の状態、汎用Webhookでは全検出結果と差分を確認する
+- 設定方法は[設定](configuration.md)を参照する
 
-毎日すべてのCVEを繰り返すと新しいリスクを見落としやすくなります。一方、変化だけを
-通知すると、現在の未解決項目が分かりにくくなります。KestreLynxはこの2つを分けて
-扱います。
+スキャン全体の流れは次のとおり。
 
 ```text
-Docker host or Kubernetes cluster
+Dockerホスト / Kubernetesクラスタ
     │
     ▼
-Discover running containers
+実行中のコンテナを取得する（1章）
     │
     ▼
-Derive distinct images by identity
+実体ごとに一意なイメージを決める（1章）
     │
     ▼
-Scan each image with Trivy
+各イメージをTrivyでスキャンする（1章）
     │
     ▼
-Normalize and group findings by image, package, and fix status
+イメージ・パッケージ・修正状態ごとに集約する（2章）
     │
     ▼
-Enrich CVEs with CISA KEV and EPSS, then assign priority
+CISA KEVとEPSSで優先度を判定する（3章）
     │
     ▼
-Compare the current groups with persisted state
+保存済みの状態と比べて変化を判定する（4章）
     │
-    ├── Slack summary: changes since the previous scan
-    ├── Slack thread: current open findings
-    └── Generic webhook: structured current state and diff
+    ├── Slackサマリー：前回からの変化（5・6章）
+    ├── Slackスレッド：現在の未解決項目（6章）
+    └── 汎用Webhook：現在の状態と差分の構造化データ（7章）
 ```
 
 ## 1. スキャンの流れ
 
-### 実行中のイメージを特定する
+スキャンの対象は、実行中のコンテナが使うイメージである。1インスタンスでDockerホスト1台、またはKubernetesクラスタ1つを対象とし、停止中コンテナと実行中コンテナが使っていないイメージは対象外とする。
 
-Docker adapterは、設定されたDockerソケットを通して`GET /containers/json`を呼び出します。
-実行中コンテナごとに、イメージ参照（`Image`）、image configのdigest（`ImageID`）、
-名前（`Names`）、ラベル（`Labels`）を取得します。config digestとして受け付けるのは、
-`sha256:`に64桁の16進数が続く形式だけです。
+同じ参照と実体の組み合わせは1件にまとめ、同じ参照でもdigestが異なれば別件として扱う。各イメージをTrivyでスキャンし、検出結果をパッケージ単位にまとめる。
 
-コンテナ名は`Names`から取得し、先頭のスラッシュを取り除き、リンクの別名を除外します。
-`com.docker.compose.project`と`com.docker.compose.service`の両ラベルが存在し、
-有効な場合は、ComposeのプロジェクトとサービスとしてコンテナのWorkloadを特定します。
-それ以外の場合、Workloadは`unknown`です。
+対象深刻度は`scan.severity`で指定し、既定値は`HIGH,CRITICAL`である。
 
-実行中コンテナからイメージ参照と実体の識別情報に基づいて重複を除去し、並べ替えます。
-10個のコンテナが同じ参照とdigestを使用している場合、イメージのエントリーは1つです。
-1つの参照で異なる2つのdigestが稼働している場合は、2つのエントリーになります。
+### イメージとコンテナの特定
 
-KestreLynxインスタンス1つが監視する範囲は、Dockerホスト1台またはKubernetesクラスタ1つです。
-停止中のコンテナと、ディスクに存在していても実行中コンテナが使用していないイメージは対象外です。
+DockerとKubernetesでは、取得できる識別情報に応じてスキャン対象を決める。Dockerへの接続には`docker.socket`を使い、Kubernetesを対象にする場合は`kubernetes.enabled: true`を設定する。
 
-実行中コンテナの一覧を取得できなかった場合、そのスキャン回は終了し、保存済みの状態は
-変更しません。次のスケジュールで再試行します。
+Kubernetesでは、実行中のコンテナと稼働中の`restartPolicy: Always`付きinit containerが対象である。通常のinit containerとephemeral containerは対象外であり、`kubernetes.namespaces`で対象のnamespaceを絞れる。
 
-### Kubernetesでの発見処理
+コンテナとWorkloadの情報は、汎用Webhookだけに含める。対応するWorkloadを特定できない場合は`unknown`として扱う。
 
-`kubernetes.enabled: true`の場合、Kubernetes adapterはnodes、pods、replicasets、
-jobsに対して、ページング付きの読み取り専用LISTリクエストを送ります。nodesは常に
-クラスタ全体で取得します。pods、replicasets、jobsはすべてのnamespaceを対象に取得するか、
-`kubernetes.namespaces`で選択したnamespaceごとに取得します。
+### 発見処理の再試行
 
-対象となるのは、ステータスに`state.running`があるコンテナです。native sidecarである、
-`restartPolicy: Always`付きで現在稼働中のinit containerも含みます。通常の
-init containerとephemeral containerは対象外です。コンテナ名は
-`<namespace>/<pod>/<container>`形式です。
+コンテナ一覧の取得に失敗した回は、保存済み状態を変更せず終了し、次のスケジュールで再試行する。Kubernetesでは一覧取得の一部が失敗した場合も部分結果を使わず、その回の状態を更新しない。
 
-イメージ参照は`containerStatus.image`から取得します。registry digestは
-`containerStatus.imageID`から、`<repo>@sha256:<hex>`形式で読み取ります。
-先頭に`docker-pullable://`が付く形式も受け付けます。プラットフォームはノードの
-`status.nodeInfo.operatingSystem`と`architecture`から取得し、variantは推測しません。
-`sha256:...`だけのimage IDではレジストリ上の実体を特定できないため、
-参照によるスキャンへフォールバックします。
+### スキャン対象と実体の検証
 
-Workloadは`ownerReferences`をたどって解決します。
+実体を特定できるイメージは、その実体を指定してスキャンする。指定したdigestやプラットフォームと結果が一致しない場合は、スキャン失敗として扱う。
 
-| 所有関係のチェーン | Workload |
+実体を特定できない場合はイメージ参照でスキャンし、`identity unconfirmed: scanned by reference`の注釈を付ける。
+
+### 失敗・実体未確認時の扱い
+
+スキャンに失敗した対象は前回の検出状態を保持し、確認できない結果から解消を判定しない。1イメージのスキャンに失敗しても残りのスキャンは続け、失敗はSlackのScan failuresに表示する。
+
+同じ参照の一部だけが失敗した場合も、前回のCVE ID、修正版ありの状態、高い方の優先度を保持する。Kubernetesでは参照によるスキャンが成功しても前回の検出結果を保持し、通常のパッケージもEOLパッケージも解消・解除しない。
+
+### パッケージ単位の集約
+
+検出結果は、イメージ参照と実体、パッケージ、正規化した修正状態ごとにまとめる。同じパッケージでも修正状態が異なれば別グループである。
+
+各グループではCVE IDの重複を除き、バージョン、CRITICAL・HIGH件数、参照URL、グループ内の最高優先度を保持する。状態と差分は、イメージ参照とパッケージの組み合わせで管理する。
+
+同じ参照に複数の実体がある場合は、Slackで`web:1.0 (3f2a9c1b7d4e)`や`web:1.0 (3f2a9c1b7d4e linux/amd64)`のように区別する。
+
+??? note "技術的な詳細"
+
+    スキャン結果はTrivy CLIからJSONで取得する。
+
+    | 項目 | Docker | Kubernetes |
+    | --- | --- | --- |
+    | コンテナ一覧の取得 | `GET /containers/json`：`Image`、`ImageID`、`Names`、`Labels` | nodes・pods・replicasets・jobsの読み取り専用LIST。`kubernetes.namespaces`の適用はnodes以外 |
+    | コンテナ名・実行判定 | `Names`から先頭スラッシュとリンクの別名を除外 | 通常コンテナの実行判定：`state.running` |
+    | イメージの実体の識別 | config digest：`ImageID`（`sha256:`＋64桁の16進数のみ） | 参照：`containerStatus.image`。registry digest：`containerStatus.imageID`の`<repo>@sha256:<hex>`（先頭の`docker-pullable://`も許容）。`sha256:...`のみなら参照スキャン |
+    | プラットフォーム | — | ノードの`status.nodeInfo.operatingSystem`と`architecture`。variantの推測なし。実体の識別にも使用 |
+    | Workload の判定 | 有効な`com.docker.compose.project`と`com.docker.compose.service`の両方でCompose | `ownerReferences`からDeployment・StatefulSet・DaemonSet・CronJob・Job・単独Podへ解決 |
+    | Trivy でのスキャン方法 | config digest指定：`--image-src docker`でローカルイメージ | registry digest・プラットフォーム既知：`--image-src remote`と`--platform <os>/<arch>`で`<repo>@sha256:<hex>` |
+    | スキャン結果の照合 | `Metadata.ImageID`と指定config digestの一致 | `Metadata.RepoDigests`への指定digestの包含、`Metadata.ImageConfig`のOS・アーキテクチャの一致 |
+
+    - KubernetesのLISTは1ページ最大500オブジェクト、ページ単位で再試行。通信エラー・HTTP 429・サーバーエラーは`Retry-After`と指数バックオフで最大3回、HTTP 410は一覧取得を最初から最大2回やり直し、HTTP 401後はServiceAccountのトークンを再読み込み
+    - ServiceAccountのトークンとCAはスキャン回ごとに読み込み
+    - 同じ実体を指す別名間では、実体を確認できた結果だけを共有。失敗・未確認なら次の別名で再スキャン
+    - 同じ参照の一部だけが失敗した場合は`content_id`を空にし、CVE IDの和集合を保持
+    - Slackの参照単位の確認済み判定は、発見時に全実体をDockerのconfig digestで識別できた場合のみ。スキャン結果には非依存、Kubernetesのregistry digestは未確認扱い
+
+## 2. 深刻度・修正状態・EOL
+
+深刻度、修正状態、優先度は、それぞれ異なる意味を持つ情報である。
+
+- 深刻度はTrivyとアドバイザリーが示す影響の大きさ
+- 修正状態はTrivyが示す修正版やサポートの状態
+- 優先度は悪用情報を踏まえた確認の緊急性
+
+### Statusの扱い
+
+修正状態はTrivyの`Status`で決まり、修正版の有無からは推測しない。`Status`がない場合や空の場合は`unknown`として扱い、未定義のステータスも除外せず`affected`へまとめる。
+
+元のステータスが集約先と異なる場合は、Webhookの`vulns[].status`で確認できる。
+
+| Trivyのステータス | 扱い |
 | --- | --- |
-| Pod → ReplicaSet → Deployment | Deployment |
-| Pod → StatefulSet | StatefulSet |
-| Pod → DaemonSet | DaemonSet |
-| Pod → Job → CronJob | CronJob |
-| Pod → 親の所有者がないJob | Job |
-| 所有者がないPod | Pod |
-| 解決できない、または未対応のチェーン | `unknown` |
+| `fixed` | 修正版あり、`fixed`へ集約 |
+| `affected` | 影響あり・修正版なし、`affected`へ集約 |
+| `will_not_fix` | 上流に修正予定なし、`will_not_fix`へ集約 |
+| `fix_deferred` | 修正延期、`affected`へ集約 |
+| `end_of_life` | このリリースでは対象CVEがサポート対象外、EOL packageへ集約 |
+| `unknown` | 修正状態不明、`affected`へ集約 |
+| `under_investigation` | 調査中、`affected`へ集約 |
+| `not_affected` | 集約・通知・優先度判定から除外 |
 
-コンテナとWorkloadの情報は汎用Webhookのペイロードにだけ含まれ、Slackには表示しません。
+### EOL baseとEOL package
 
-LISTリクエストは1ページ最大500オブジェクトで取得します。通信エラー、HTTP 429、
-サーバーエラーでは、`Retry-After`に従い、指数バックオフで最大3回再試行します。
-HTTP 410では一覧取得を最大2回最初からやり直します。ServiceAccountのトークンとCAは
-スキャン回ごとに読み込み、HTTP 401のあとにはトークンを再読み込みします。
-いずれかのLISTが失敗すると、そのスキャン回全体が失敗します。部分的な結果は破棄し、
-保存済みの状態は更新しません。
+EOLはサポート状態を示し、CVEの優先度とは別に扱う。ベースOSとパッケージでは、次のように表示する。
 
-### 一意な各イメージをスキャンする
+- EOL baseはTrivyが報告したベースOSのサポート終了で、最上部に表示する
+- EOL packageは`end_of_life`のパッケージで、トリアージの有効・無効にかかわらずEOL baseの次に表示する
 
-KestreLynxは、一意なイメージ実体ごとにTrivy CLIを実行し、JSON形式の結果を取得します。
-`scan.severity`で指定した深刻度をTrivyへ渡します。既定値は`HIGH,CRITICAL`です。
+EOL baseへの基本対応は、サポート中のベースイメージでの再ビルドである。ベースOSもEOLなら、その参照のEOLパッケージをベースOSの行へ畳み込み、`includes N end-of-life package(s)`を付ける。
 
-スキャン対象は、発見時に取得できた実体の識別情報によって決まります。
+Act nowのEOLパッケージは、縮退トリアージの場合も含め、畳み込みの有無にかかわらずAct nowに詳細を表示する。畳み込まれていない場合はEOL区分に`🚨 see Act now`を表示し、EOL packageとAct nowの件数が重なる場合がある。
 
-| 実体の識別情報 | スキャン対象 |
-| --- | --- |
-| Dockerのconfig digest | `--image-src docker`を使用し、config digestで指定したローカルのDockerイメージです。 |
-| Kubernetesのregistry digestと既知のプラットフォーム | `--image-src remote`と`--platform`を使用し、digestで指定したレジストリ上のイメージです。 |
-| 実体を特定できない場合 | イメージ参照によるスキャンへフォールバックします。 |
+EOL側のWatch・Lowは専用区分だけに表示し、通常のWatch・Lowへ重ねて表示しない。
 
-呼び出し形式は次の3種類です。
+??? note "技術的な詳細"
 
-```text
-trivy image --quiet --format json --severity <list> --image-src docker sha256:<config-digest>
-trivy image --quiet --format json --severity <list> --image-src remote --platform <os>/<arch> <repo>@sha256:<hex>
-trivy image --quiet --format json --severity <list> <ref>
-```
-
-digestを指定したスキャンのあと、KestreLynxは返されたメタデータを検証します。
-Dockerのスキャンでは、`Metadata.ImageID`が指定したconfig digestと一致する必要があります。
-レジストリのスキャンでは、指定したdigestが`Metadata.RepoDigests`に含まれ、
-`Metadata.ImageConfig`が指定したOSとアーキテクチャに一致する必要があります。
-一致しない場合は、稼働中イメージの結果として扱わず、スキャン失敗として報告します。
-
-複数の参照が同じ実体を指す場合、スキャンで実体を確認できたときだけ、
-それらの別名で結果を共有します。スキャンに失敗した場合や実体を確認できなかった場合は、
-次の別名で再度スキャンします。
-レジストリ上の実体の識別にはプラットフォームも含むため、異なるプラットフォームは
-同じイメージとして扱いません。参照によるスキャンには
-`identity unconfirmed: scanned by reference`という注釈を付けます。
-参照単位のSlackラベルとサマリーでは、参照に属するすべての実体を発見時に
-Dockerのconfig digestで識別できた場合だけ、スキャン結果にかかわらず確認済みとします。
-この判定では、Kubernetesのregistry digestは未確認扱いになります。
-
-1つのイメージでエラーが発生しても、ほかのイメージのスキャンは続行します。エラーは
-通知の**Scan failures**（スキャン失敗）に表示します。また、そのイメージの前回の検出状態を今回も
-引き継ぎます。スキャンできなかったイメージを安全とみなすと、誤った「解消」通知が
-発生するためです。
-
-1つの参照で複数の実体が稼働し、一部のスキャンだけが失敗した場合は、`content_id`を
-空にして前回の検出結果を保持します。前回と今回で重複する検出結果は保守的に統合します。
-CVE IDをまとめ、どちらかの結果に修正版があれば修正版が利用可能な状態を維持し、
-優先度は高い方を保持します。その参照の解消判定は保留します。
-
-Kubernetesモードでは、参照によるスキャンが成功した場合も、稼働中イメージの実体を
-確認できないため、前回の検出結果を保持します。Slackには
-`⏳ unconfirmed this cycle, holding previous findings — <refs>`と表示します。
-実体未確認の参照について、以前に記録したパッケージの検出結果を保持している間は、
-変化がなくても通知します。保持している履歴がEOLの記録だけの場合は、
-それだけではこの通知の条件を満たしません。
-
-### パッケージ単位に集約する
-
-Trivyの各行を正規化し、次の単位でパッケージグループを作成します。
-
-```text
-(image reference + identity) + package + Trivy status
-```
-
-この単位に属するCVEの重複を除去してまとめます。グループには、インストール済み
-バージョン、修正版がある場合はそのバージョン、CRITICALとHIGHの件数、参照URL、
-グループ内で最も高い優先度が含まれます。
-
-同じパッケージでも、あるCVEには修正版があり、別のCVEには修正版がない場合などは、
-複数の修正状態グループに現れることがあります。
-
-1つのタグが稼働中の2つのdigestを指す場合、Slackでは
-`web:1.0 (3f2a9c1b7d4e)`や`web:1.0 (3f2a9c1b7d4e linux/amd64)`のように、
-末尾に短いdigestを付けて区別します。状態と差分のキーは、引き続きイメージ参照と
-パッケージの組み合わせです。
-
-## 2. 3種類の分類
-
-KestreLynxは、深刻度、修正状態、優先度を別々に扱います。それぞれが示す意味は異なり、
-同じものではありません。
-
-| 分類 | 情報源 | 判断する内容 |
-| --- | --- | --- |
-| 深刻度 | Trivyおよびアドバイザリー情報 | 影響がどの程度大きくなり得るか |
-| 修正状態 | Trivy | 上流で利用可能な修正版があるか |
-| 優先度 | KestreLynxのトリアージ | 悪用シグナルを踏まえて、どの程度急いで確認すべきか |
-
-たとえばCRITICALのCVEでも、強い悪用シグナルがなければ**Watch**になる場合があります。
-反対にHIGHのCVEでも、CISA KEVへ掲載されていれば**Act now**になります。
-
-### 修正状態
-
-KestreLynxは、Trivyのステータスを修正対応の基準となる状態として保持します。
-
-| Trivyのステータス | KestreLynxでの意味 |
-| --- | --- |
-| `fixed` | 修正版が利用できます。 |
-| `affected` | 影響を受けますが、まだ修正版がありません。 |
-| `will_not_fix` | 上流が修正しないと判断しています。 |
-
-この修正状態の分類は、汎用Webhookの構造化データにも保持されます。Slackでは通常、
-緊急性の高い対応を先に確認できるよう、優先度順に組み替えて表示します。
-
-### アップグレード時の注意度
-
-`fixed`のパッケージには、提示されたバージョン変更の大きさや種類を表す注釈を付けます。
-
-| 表示 | 判定方法 |
-| --- | --- |
-| ディストリビューションのセキュリティ更新 | OSパッケージのバージョンはSemVerではなく、ディストリビューションのリビジョンとして扱います。 |
-| 比較的安全 | 言語パッケージのメジャーバージョンが同じ、または小さくなります。 |
-| 注意が必要 | 言語パッケージのメジャーバージョンが大きくなります。 |
-| 不明 | 言語パッケージのバージョンを確実に解析できません。 |
-
-これは**変更規模の目安**であり、更新の安全性を保証するものではありません。実際の更新時は、
-リリースノート、アプリケーションとの互換性、テスト結果も確認する必要があります。
-
-### ベースOSのサポート終了
-
-イメージのベースOSがサポート終了であるとTrivyが報告した場合、KestreLynxはCVEの
-優先度とは別に、**EOL base**として最上部へ表示します。EOLはCVEの優先度では
-ありません。通常のセキュリティ更新が今後提供されない可能性があるため、サポート中の
-ベースイメージで再ビルドすることが基本的な対応になります。
+    - 同じグループの同じCVE IDに複数の元ステータスがある場合は、集約先と同じ値を優先し、なければ辞書順で先の値を採用する
 
 ## 3. 悪用情報に基づくトリアージ
 
-トリアージは既定で有効です。KestreLynxは、Trivyが検出したCVE IDへ次の2種類の
-情報を付加します。
+トリアージは、悪用情報を踏まえて確認の優先度を示す機能であり、既定で有効である。パッケージグループには、含まれるCVEの最も高い優先度を付ける。
 
-- **CISA KEV**は、実際の悪用が確認された脆弱性を示します。
-- **EPSS**は、今後30日以内に悪用活動が発生する確率を推定します。影響の大きさを
-  示すものではなく、監視対象の環境で悪用可能であることを証明するものでもありません。
+- CISA KEVは実際の悪用が確認された脆弱性を示す
+- EPSSは今後30日以内の悪用活動の確率を示す
 
-### CVEごとの優先度判定
+EPSSは、影響の大きさや監視環境での悪用可能性を保証するものではない。
 
-既定のしきい値では、各CVEを次の順序で分類します。
+### 優先度の規則 {#cve}
 
-| 優先度 | 条件 |
+通常のトリアージでは、KEVへの掲載、EPSS、深刻度に基づいて次の優先度を付ける。しきい値は`triage.act_now_epss`と`triage.watch_epss`で変更できる。
+
+| 優先度 | 既定の条件 |
 | --- | --- |
-| **Act now** | CISA KEVに掲載されている、またはEPSSが`0.10`（10%）以上です。 |
-| **Watch** | Act nowではなく、EPSSが`0.01`（1%）以上、または深刻度がCRITICALです。 |
-| **Low** | 上記のどちらにも該当しません。KEVになく、EPSSがしきい値未満のHIGHも含まれます。 |
+| **Act now** | KEVに掲載、またはEPSSが`0.10`（10%）以上 |
+| **Watch** | Act nowではなく、EPSSが`0.01`（1%）以上、またはCRITICAL |
+| **Low** | 上記以外で、KEVになくEPSSがしきい値未満のHIGHも含む |
 
-EPSSの2つのしきい値は、`triage.act_now_epss`と`triage.watch_epss`で変更できます。
-EPSSにCVEのスコアがない場合は、0として扱うのではなく、EPSSに関する条件を
-判定から除外します。
+EPSSスコアがない場合は0として扱わず、EPSS条件を判定から除外する。KEVのランサムウェア情報は判定根拠として表示するが、別の優先度は作らない。
 
-KEVのランサムウェアキャンペーン情報は根拠として表示しますが、それだけで別の
-優先度を作ることはありません。
+修正状態による優先度の扱いは次のとおりである。
 
-### 優先度と修正状態の関係
+| 修正状態 | 優先度との関係 |
+| --- | --- |
+| 通知対象の全状態 | Act nowは維持し、修正版がなければ緩和・置き換え・サポート中バージョンを検討 |
+| `will_not_fix` | 通常のトリアージではWatchをLowへ下げる |
+| `affected`、`fix_deferred`、`under_investigation`、`unknown` | 同じ規則で判定 |
+| `end_of_life` | WatchからLowへの引き下げを適用しない |
+| 通知対象の全状態 | Lowは修正状態にかかわらず維持 |
+| `not_affected` | 判定対象外 |
 
-修正版がない場合でも、強い悪用シグナルを隠さないようにします。
+### フィードと縮退動作
 
-- Act nowのCVEは、`fixed`、`affected`、`will_not_fix`のどの状態でもAct nowの
-  ままです。修正版がなければ、通知で緩和策や置き換えの検討を促します。
-- WatchのCVEが`will_not_fix`の場合、強い悪用シグナルのない修正不能項目を
-  対応キューへ残し続けないようLowへ下げます。
-- Lowは修正状態にかかわらずLowのままです。
+脅威情報を更新できない場合も、検証済みキャッシュを最大7日間使用して判定を続ける。キャッシュは`state.path`と同じ場所の`intel`に保存し、約20時間で更新する。
 
-パッケージグループの優先度は、そのグループに含まれるCVEのうち最も高い優先度です。
-完全な優先度表示で**Act now**、**Watch**、**Low**の横に表示する件数は、CVE件数では
-なくパッケージグループの件数です。diffのハートビートでは、同じイメージとパッケージの
-修正状態グループをまとめ、現在の最も高い優先度で1件として数えます。
+利用できる情報源が限られる場合は、次のように扱う。
 
-### フィードの取得、キャッシュ、プライバシー
+- 片方だけ利用できる場合は、その情報で判定を続け、利用できない情報源を通知する
+- 両方利用できない場合は縮退トリアージとなり、CRITICALをAct now、それ以外の選択済み深刻度をWatchにする
 
-KEVとEPSSのフィードは一括でダウンロードし、CVE IDとの照合はローカルで行います。
-ホストで検出したCVEの完全な一覧を、これらのサービスへ送信することはありません。
-フィードのキャッシュは、`state.path`と同じ場所にある`intel`ディレクトリへ保存します。
+縮退中はLowへ分類せず、通常とEOLの優先度上昇通知を抑止する。
 
-- フィードは約20時間経過すると更新します。
-- 更新できない場合、検証済みのキャッシュを最大7日間使用できます。
-- KEVとEPSSは別々に状態を管理します。片方だけ利用できる場合は、その情報を使って
-  トリアージを続け、利用できない情報源を通知へ表示します。
-- ダウンロードしたデータは検証してから既存のキャッシュと置き換えます。
+`triage.discussion_links`が有効なら、Act nowのCVEに関するHacker Newsの議論を追加する。対象はCVE IDが一致する20ポイント以上の議論であり、議論検索のCVE ID送信は`triage.discussion_links: false`で止められる。
 
-どちらの情報源も利用できない場合は、**縮退トリアージ**になります。警告を表示し、
-CRITICALをAct now、それ以外の選択済み深刻度をWatchとして扱います。悪用情報が
-利用できない間は、何もLowへ分類しません。また、その回は優先度上昇の通知を抑止します。
-これにより、フィード障害を大量のリスク上昇として誤通知することを防ぎます。
+フィード照合でホストの全CVE一覧を外部送信することはない。
 
-`triage.discussion_links`が有効な場合、Act nowと判定済みのCVE IDだけを
-Hacker Newsの検索APIへ送信します。CVE IDが一致し、20ポイント以上の議論だけを
-参照リンクとして追加します。このCVE IDの外部送信を避ける場合は`false`にします。
+??? note "技術的な詳細"
+
+    - KEVとEPSSは一括取得し、CVE IDとの照合はローカルで行う
+    - 通常のトリアージは、優先度の表を上から順に判定する
+    - 議論検索では、Act nowのCVE IDだけをHacker News検索APIへ送る
 
 ## 4. 差分状態と変化の判定
 
-既定の`diff`モードでは、`state.path`へ履歴を保存します。既定のパスは
-`/var/lib/kestrelynx/state.json`です。このディレクトリはDockerボリューム、
-またはKubernetesの永続ボリュームで永続化する必要があります。
+`diff`モードでは、前回から何が変わったかを`state.path`の履歴と今回の結果から確認できる。既定の状態ファイルは`/var/lib/kestrelynx/state.json`であり、保存先ディレクトリを永続化する。
 
-イメージとパッケージの組み合わせごとに、次の情報を保存します。
+1状態ファイルは1環境用とし、複数インスタンスでは共有しない。`environment.name`を追加・変更・削除しても、履歴や初回検出日はリセットしない。
 
-- 初めて検出した日時
-- CVE IDの集合
-- 1つ以上の修正版が利用可能か
-- 前回のパッケージ最大優先度
-- `content_id`として、確認済みの単一実体のconfig digestを保存します。参照が曖昧な場合や、
-  一部のスキャンが失敗した場合は空にします。
+通常とEOLのパッケージ状態は、同じイメージ参照とパッケージの組み合わせで共存できる。古い状態ファイルも変換せず読めるが、`eol_packages`がない場合は今回のEOLパッケージを初回EOL検出として通知する。
 
-トップレベルの`images`マップは参照をキーとし、並べ替え済みの`content_ids`、
-`registry_digests`、`ambiguous`、`last_seen`を記録します。`environment.name`を
-設定した場合、`environment`オブジェクトにその`name`とadapter由来の`kind`を記録します。
+### 差分になる変化
 
-これらのフィールドを追加しても、状態ファイルの形式バージョンは`1`のままです。
-古い状態ファイルは変換せずに読み込めます。環境名の設定、変更、削除によって、
-履歴のキーを変えたり、初回検出日時をリセットしたり、既存の検出項目を再通知したり
-することはありません。1つの状態ファイルが保持するのは1つの環境です。
-2つのインスタンスで共有しないでください。
+通常のパッケージでは、新規検出、優先度上昇、CVE追加、修正版が利用可能になった変化を通知する。複数の変化が同時に成立した場合は、1つの理由だけを通知する。
 
-EOLを初めて検出した日時と、直近のSlack完全レポートスレッドへの参照は、別に保存します。
-状態ファイルは一時ファイルへ書き込んだあと、アトミックに置き換えます。
+- 新規は、前回にイメージ参照とパッケージの組み合わせがない場合
+- 優先度上昇は、保存済みの最大優先度より高くなった場合
+- CVE追加は、既知のパッケージに新しいCVE IDが加わった場合
+- 修正版が利用可能は、前回は修正版がなく、今回は1つ以上ある場合
 
-### 変化として扱う条件
+優先度低下は通知せず保存し、その後の上昇は保存した値を基準に判定する。EOLから通常へ戻っただけでは、新規やCVE追加として扱わない。
 
-現在と前回のパッケージ状態を、次の優先順位で比較します。
-イメージの置き換えは独立して検出します。
+EOLパッケージの変化は、通常側とは独立して通知する。
 
-| 変化 | 条件 |
-| --- | --- |
-| 新規 | イメージとパッケージの組み合わせが前回の状態にありません。 |
-| 優先度上昇 | 既知のパッケージの最大優先度が上昇しました。例：WatchからAct now。 |
-| CVE追加 | 既知のパッケージに1つ以上の新しいCVE IDが加わりました。 |
-| 修正版が利用可能 | 前回は修正版がなく、今回は1つ以上の修正版があります。 |
-| 解消 | 前回保存されていたイメージとパッケージの組み合わせが、成功した今回のスキャン結果にありません。 |
-| 置き換え | 参照の確認済みcontent-ID集合が前回と今回の両方で空ではなく、異なっています。`🔄 Image content changed`と表示します。 |
+- 新たなEOL検出は、前回のEOL記録がない場合で、通常側からの移動や解除後の再検出も含む
+- EOLのAct nowへの上昇は、保存済みのEOL側優先度からAct nowになった場合で、優先度未保存・縮退中・LowからWatchへの上昇は対象外
+- EOLのCVE追加は、既知のEOLパッケージに新しいEOLのCVE IDが加わった場合
 
-同じスキャン回で複数の条件が成立した場合、優先順位が最も高い理由だけを表示します。
-優先度が下がった場合は変化として通知しませんが、新しい優先度は保存します。その後に
-再び優先度が上がった場合は、保存した値を基準に上昇を検出できます。
-優先度上昇の検出には保存済みの優先度が必要で、縮退トリアージ中は抑止します。
+パッケージの「解消」は、現在の対象から検出項目がなくなったことを意味し、パッチ適用を証明するものではない。前回の組み合わせが、スキャンに成功した今回の通常側にもEOL側にもない場合に解消とする。
 
-置き換えはイメージ単位の変化であり、パッケージ単位の優先順位とは独立しています。
-パッケージの変化と同時に表示される場合があり、検出項目がないイメージでも通知します。
-実体を初めて観測した場合は、置き換えとはみなしません。
+通常側の検出結果がすべてEOLへ移っただけでは解消とせず、両側から消えた同じ組み合わせはSlackで1件と数える。EOL解除後も通常側に検出結果が残る場合は、`no longer end-of-life`と表示し、脆弱性の解消とは扱わない。
 
-「解消」は、KestreLynxの現在の対象から検出項目がなくなったことを意味します。
-修正版の適用、イメージの変更、コンテナの停止、対象深刻度の変更、スキャナー側データの
-変更など、複数の原因が考えられます。「解消」だけでは、パッチの適用を証明しません。
-スキャンが全面的に失敗した参照、一部だけ失敗した参照、Kubernetesで実体未確認の参照では、
-解消を通知しません。
+ベースOSについても、新たなEOL検出と、EOLとして記録されなくなった変化を通知する。
 
-初回実行時や利用可能な状態ファイルがない場合、現在のすべてのパッケージを新規として
-通知します。状態ファイルが壊れている場合も同じ扱いになり、警告をログへ出力します。
-状態ファイルの形式バージョンが一致しない場合は、互換性のない履歴を解釈せず、
-新しい状態として開始します。
+イメージの置き換えはパッケージの変化と独立した差分であり、検出項目がないイメージでも通知する。前回と今回の確認済みcontent-ID集合が両方とも空でなく、異なる場合が対象であり、初回観測は含めない。
 
-### 状態を更新するタイミング
+全面・一部スキャン失敗やKubernetesの実体未確認で前回の状態を保持する場合は、解消やEOL解除を通知しない。
 
-通知が不要な場合は、計算した新しい状態をそのまま保存します。通知が必要な場合は、
-設定したすべての通知先への送信が成功したあとにだけ保存します。送信に失敗した変化は
-失われず、次のスキャン回で再通知されます。
+### 状態の保存と再通知
 
-複数の通知先を設定した場合は、すべてへの送信を試みます。一部だけ失敗すると、成功した
-通知先にも次の回で同じ変化が届く可能性があります。これは厳密な1回限りの配信よりも、
-通知を失わないことを優先した動作です。
+通知が必要な回は、設定した全通知先への送信に成功してから状態を保存する。一部の通知先だけが失敗した場合も全通知先への送信を試みるため、次回は成功済みの通知先にも同じ変化が届く場合がある。
 
-## 5. 通知を送信する条件
+通知が不要な回は、新しい状態をそのまま保存する。
 
-### diffモード（既定）
+初回、状態ファイルがない場合、破損、形式バージョン不一致では、新しい状態として開始し、現在のパッケージを新規として通知する。状態ファイルが破損している場合は、警告をログへ出力する。
 
-| 現在の結果 | `notify_on_clean: false`の場合の動作 |
-| --- | --- |
-| 検出項目があり、変化もある | 変化と現在の未解決件数を通知します。 |
-| 検出項目があるが、変化はない | 短いハートビートを送り、チャンネルには詳細一覧を繰り返しません。 |
-| 最後の検出項目が解消した | 解消した内容と、未解決項目がないことを通知します。 |
-| 検出項目がなく、前回から変化もない | 通知しません。 |
-| 1つ以上のイメージでスキャンが失敗した | 脆弱性の検出項目がなくても、失敗を通知します。 |
-| イメージの実体が変わった | 検出項目がないイメージでも、置き換えを通知します。 |
-| Kubernetesの参照によるスキャンで実体が未確認で、その参照について以前に記録したパッケージの検出結果を保持している | 変化がなくても、検出結果を保持している状態を通知します。保持している履歴がEOLの記録だけの場合は、それだけではこの通知の条件を満たしません。 |
+??? note "技術的な詳細"
 
-EOL、Act now、Watchのいずれかで最も古い項目が14日を超えると、ハートビートへ
-経過日数と時計マークを表示します。Lowは緊急の滞留とはみなさないため、
-ハートビートの経過日数には使用しません。
+    - 通常のパッケージ状態には、初回検出日時、CVE ID集合、修正版の有無、最大優先度、確認済みの単一実体の`content_id`を保存する
+    - 参照が曖昧な場合や一部スキャン失敗時は、パッケージ状態の`content_id`を空にする
+    - 状態ファイルの`images`マップは参照をキーに、並べ替え済みの`content_ids`、`registry_digests`、`ambiguous`、`last_seen`を記録する
+    - ベースOSのEOL初回検出日時は、通常のパッケージ状態とは別に保存する
+    - EOLパッケージの初回EOL検出日時・CVE ID集合・最大優先度は、通常のパッケージ状態とは別に保存する
+    - 状態ファイルの形式バージョンは`1`のままとする
+    - 通常のパッケージの変化は、新規、優先度上昇、CVE追加、修正版が利用可能の順に判定し、同時成立なら最上位の理由だけを通知する
+    - 通常側の比較には前回のEOL履歴も使う
+    - EOLパッケージの変化は、新たなEOL検出、Act nowへの上昇、EOLのCVE追加の順に判定する
+    - 全面・一部スキャン失敗やKubernetesの実体未確認による保持は、通常側とEOL側の移動処理より優先する
+    - 状態は一時ファイルへ書いたあとアトミックに置き換える
 
-`notify.full_report_day`の曜日（既定は月曜日）には、その回が通知対象であれば、
-Slackへ現在の完全レポートも含めます。`never`で週次レポートを無効化できます。
-`notify_on_clean`が`false`の場合、週次レポートの曜日であっても、検出項目も変化もない
-スキャンについて通知を強制することはありません。
+## 5. 通知を送る条件
 
-### fullモード
+既定の`notify.mode: diff`では、変化と現在の未解決件数を通知する。脆弱性がない回も通知するかどうかは、`notify_on_clean`（`notify.notify_on_clean`）で指定する。
 
-`notify.mode: full`では差分状態を使用しません。検出項目またはスキャン失敗があれば、
-スキャンのたびに現在のレポートを送ります。何も検出されなかった場合の通知は、
-`notify_on_clean`が`true`のときだけです。
+- 検出項目と変化があれば、変化と未解決件数を送る
+- 検出項目があり変化がなければ、短いハートビートを送る
+- 最後の検出項目が解消した回は、解消内容と未解決なしを送る
+- 検出項目も変化もなければ、`notify_on_clean: false`では送らない
+
+スキャン失敗やイメージ置き換えは、脆弱性の検出項目がなくても通知する。
+
+Kubernetesの実体未確認で以前のパッケージ検出結果を保持中の場合は、EOLパッケージも含め、変化がなくても通知する。保持履歴がベースOSのEOLだけの場合は、それだけでは実体未確認による保持通知の条件を満たさない。
+
+`notify.full_report_day`で指定した曜日は、通知対象の回にSlackの完全レポートを加える。既定は月曜日で、`never`で無効化できる。週次レポートの曜日でも、`notify_on_clean: false`で検出項目も変化もない回の通知は強制しない。
+
+`notify.mode: full`では差分状態を使わず、検出項目かスキャン失敗があれば毎回現在のレポートを送る。何もない場合は、`notify_on_clean: true`のときだけ送る。
 
 ## 6. Slackでの表示
 
-SlackメッセージはBlock Kitではなく、通常の`mrkdwn`テキストで作成します。Slackでいう
-「完全レポート」は、全CVEをそのまま列挙するという意味ではなく、現在の状態を示す
-レポートです。Act nowとWatchは展開しますが、Lowは件数だけにまとめます。省略のない
-データは汎用Webhookで取得できます。
+Slackのチャンネルでは変化を、Botのスレッドでは現在の詳細を確認できる。空の区分は表示せず、完全レポートでもLowは件数だけを示す。CVEごとの全データは汎用Webhookで確認する。
 
-トリアージが有効な場合、現在のレポートは次の順に表示します。
+ヘッダーのイメージ件数は、次の意味である。
 
-1. EOLのベースイメージ
-2. Act now — パッケージの詳細と、最も強いCVEのKEVおよびEPSSの根拠
-3. Watch — 簡潔なパッケージ情報と最も強いシグナル
-4. Low — 件数のみ
-5. スキャン失敗と、脅威情報の鮮度に関する警告
-6. 該当する場合、実体未確認と前回の検出結果の保持に関する注釈
+- `images scanned`は失敗も含む一意な参照と実体の組み合わせ数で、別参照がスキャンを共有しても別件として数える
+- `affected`は対象脆弱性またはEOLベースOSがあるイメージ数で、失敗だけのイメージは含めない
 
-Act nowの参照先には、Trivyの主要アドバイザリー、KEVのnotesにあるベンダー情報、
-任意のHacker News議論リンクが含まれる場合があります。Lowの詳細はSlackでは省略し、
-完全な一覧は構造化された汎用Webhookで確認できます。
+時刻はプロセスのローカルタイムゾーンを使い、コンテナでは`TZ`で指定する。`environment.name`はチャンネルのヘッダーだけに表示する。
 
-Slackの判定根拠の行、Watchの理由、スレッドの`also:`一覧にあるCVE IDは、
-それぞれのNVDレコードへのリンクです。以下の例では、リンクのマークアップを省略し、
-表示されるIDだけを記載しています。GHSAやDLAのIDなど、ほかの識別子は通常のテキストです。
+### 区分の順序
 
-### 共通ヘッダー
+差分通知では前回からの変化を、現在状態レポートではEOLと優先度別の未解決項目を確認できる。各通知の表示順は次のとおりである。
 
-すべてのSlackチャンネル通知は、スキャン時刻と2種類のイメージ件数から始まります。
+- 差分通知は、共通ヘッダー → 実体変更 → 新規EOL base → EOL packageの変化 → 脅威情報源の警告 → 通常の新規・変化 → 解消・EOL解除 → 週次レポートまたはスキャン失敗とOpen now → 実体未確認・保持の注釈 → Botのレポートリンク
+- 現在状態レポートは、EOL base → 畳み込まれていないEOL package → Act now → Watch → Low → スキャン失敗・情報鮮度の警告 → 実体未確認・保持の注釈
+- Botスレッドは、EOL base → EOL packages → ACT NOW → WATCH → LOWの順
 
-```text
-🛡️ *KestreLynx* — scan results for 2026-08-16 09:00
-4 images scanned, 3 affected
-```
+脅威情報源が利用できない警告は、現在状態レポートのPriority行直後、EOL区分より前に表示する。
 
-`environment.name: prod-vps`を設定した場合、ヘッダーは次のようになります。
+通常の新規・変化項目は、優先度、イメージ名、パッケージ名の順に並ぶ。`New since last scan (N)`は、通常側で変化したイメージ参照とパッケージの組み合わせ数である。
 
-```text
-🛡️ *KestreLynx* [prod-vps] — scan results for 2026-08-16 09:00
-4 images scanned, 3 affected
-```
+EOLのAct nowの変化は個別に表示し、それ以外は既存のEOLベースOS参照ごとに件数へまとめる。ベースOSとパッケージが同時に新規EOLとなった場合、Act now以外はベースOSの行へ畳み込み、EOLパッケージの差分見出し件数から除外する。
 
-環境名はチャンネルのヘッダーにだけ表示し、スレッドには表示しません。
+### Open nowと件数
 
-- `images scanned`は、その回で検出した一意な参照と実体の組み合わせの数です。
-  スキャンに失敗したイメージも含みます。1つの参照で2つのdigestが稼働していれば2件と数え、
-  2つの参照で1回のスキャンを共有する場合も2件と数えます。
-- `affected`は、対象の脆弱性またはEOLのベースOSがある一意なイメージ数です。
-  スキャン失敗しかないイメージはaffectedに含めず、**Scan failures**へ表示します。
-- 時刻にはプロセスのローカルタイムゾーンを使用します。コンテナでは`TZ`環境変数で
-  指定します。
+Open nowは最新スキャン後の未解決状態を示し、保持中の記録も含める。EOL件数を優先度件数より先に表示し、次の単位で数える。
 
-### チャンネルの差分通知
+- EOL baseは保持するEOLベースイメージの参照数
+- EOL packageはベースOSへ畳み込まれないイメージ参照とパッケージの組み合わせ数
+- Act now・Watch・Lowは同じ参照とパッケージを1件とし、通常側かEOL側がAct nowならAct now、それ以外は通常側の優先度で数える
 
-既定のチャンネル通知は、現在の完全レポートの複製ではなく、変化のレポートです。
-該当する項目がある場合、次の順序で表示します。
+EOL側のWatch・Lowは優先度件数へ加算しない。EOL packageとAct nowの件数は重なる場合がある。
 
-1. 共通ヘッダー
-2. イメージ実体の変更
-3. 新たに検出したEOLベースイメージ
-4. 脆弱性情報源に関する警告
-5. 新規または変化したパッケージ
-6. 解消したEOLイメージとパッケージ
-7. 週次の現在状態レポート、またはスキャン失敗と**Open now**
-8. 実体未確認と前回の検出結果の保持に関する注釈
-9. Bot使用時のみ、今回のスレッドレポートまたは前回のレポートへのリンク
+現在状態レポートのPriority行は、修正状態別のパッケージグループ数を示すため、同じパッケージが複数件になる場合がある。
 
-省略した表示例は次のとおりです。
+Open nowの表示は、今回の検出結果と保持状態によって異なる。
 
-```text
-🛡️ *KestreLynx* — scan results for 2026-08-16 09:00
-4 images scanned, 3 affected
+- 今回のレポートに検出結果かEOLベースイメージがあれば、件数を表示する
+- 今回も保持状態にも検出項目がなく、実体未確認による保持もない場合だけ、`🎉 Open now: none — all clear`と表示する
+- 今回の検出結果もEOLベースイメージもなく、Kubernetesの実体未確認でパッケージを保持中なら、未確認による保持を表示する
+- 上記以外で今回の検出項目がなく保持記録があれば、次の成功スキャンまでの保持を表示する
 
-*🔄 Image content changed (1)*
-• ghcr.io/example/worker:latest: image updated (111111111111 → 222222222222)
+### 未解決の経過日数
 
-*🆕 New since last scan (1)*
-🚨 ghcr.io/example/api:latest
-   • openssl 3.0.13 → 3.0.14 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — ⬆️ escalated to ACT NOW
-     ↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
+ハートビートの経過日数は、対象項目の最も古い初回検出日から数える。1日以上で日数、14日以上で時計マークを表示し、保持中の記録も対象に含める。
 
-*✅ Resolved since last scan (1)*
-• ghcr.io/example/worker:latest: libxml2
+- トリアージ有効時は、通常のAct now・Watch、EOL base、畳み込まれていないEOL package、畳み込まれていてもAct nowのEOL packageが対象
+- トリアージ無効時は、通常の全パッケージとEOLが対象
 
-📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 8 low — oldest act-now/watch unresolved 4 day(s)
-_Details in the generic webhook payload, or in the weekly full report._
+トリアージ有効時は通常のLowを除外し、EOLを含む場合も`oldest act-now/watch unresolved N day(s)`と表示する。無効時は`oldest unresolved N day(s)`と表示する。
 
-_📊 Full report in this message's thread ↓_
-```
+EOLパッケージには初回EOL検出日を使う。ベースOSへ畳み込んだAct now以外のEOLパッケージはベースOSの初回EOL検出日で数え、Act nowなら畳み込まれていてもパッケージの初回EOL検出日を対象に含める。
 
-`New since last scan (N)`のNはCVE件数ではなく、変化したイメージとパッケージの
-組み合わせ件数です。新規・変化項目は、優先度、イメージ名、パッケージ名の順で
-並べ替えます。
+### ラベルの意味
 
-変化がない場合は、次のような本文になります。
+ラベルから、変更内容、対応の優先度、結果を確認できなかった理由を読み取れる。緑色の更新アイコンはバージョン変更の種類を示すだけで、安全性を保証するものではない。
+
+CRITICAL・HIGHは、パッケージと修正状態のグループ内で重複を除いたCVE ID件数である。
+
+| ラベル | 意味 |
+| --- | --- |
+| `⛔ EOL base` | ベースOSのサポート終了 |
+| `⛔ EOL package` | このリリースでは対象CVEがサポート対象外 |
+| `⛔ N EOL base` | Priority行のEOLベースイメージ件数 |
+| `⛔ N EOL package` | Priority行のEOLグループ件数で、ベースOSへ畳み込んだ分を除外 |
+| `🚨 N act now` | Priority行のAct nowグループ件数で、Act nowのEOLグループも含む |
+| `⛔ Package end-of-life (N) — vendor reports these CVEs as out of support for this release` | 現在状態のEOLパッケージ区分 |
+| `⛔ New: package end-of-life (N) — vendor reports these CVEs as out of support for this release` | EOLパッケージの新規検出・Act nowへの上昇・CVE追加 |
+| `⛔ EOL packages (N) — vendor reports these CVEs as out of support for this release` | スレッドのEOLパッケージ区分 |
+| `🚨 Act now` | 悪用確認済み、またはEPSSがしきい値以上で、縮退時はCRITICALも対象 |
+| `👀 Watch` | 確認・監視する対象 |
+| `🔕 Low` | しきい値に達するシグナルがない状態で、脆弱性がない意味ではない |
+| `🔄 Image content changed` | 確認済みcontent-ID集合の変更 |
+| `🆕 New since last scan` | 新規パッケージと変化した既知パッケージ |
+| `✅ Resolved since last scan` | パッケージ・EOL baseの解消、EOL packageの解除 |
+| `📌 Open now` | 最新スキャン後の未解決状態 |
+| `📌 Open now: unconfirmed — holding previous findings until re-confirmed` | 今回は検出項目がなく、Kubernetesの実体未確認で前回の通常・EOLパッケージを保持中 |
+| `📌 Open now: not re-scanned — holding previous findings until the next successful scan` | 今回は検出項目がなく、実体未確認の表示条件以外で前回の記録を保持中 |
+| `⏰ oldest ... unresolved` | 対象項目が14日以上未解決 |
+| `<ref> — identity unconfirmed: scanned by reference` | 発見時にDockerのconfig digestで識別できない実体を含む参照 |
+| `<ref> (<12hex>)`、`<ref> (<12hex> linux/amd64)` | 同じ参照の複数実体をdigestとプラットフォームで区別 |
+| `⚠️ identity unconfirmed: scanned by reference — a, b` | 発見時にDockerのconfig digestで識別できない実体を含む参照の一覧で、スキャン結果に依存せず、Kubernetes参照がすべて並ぶ場合もある |
+| `⏳ unconfirmed this cycle, holding previous findings — a, b` | リモートスキャン成功でも実体を固定できない対象を含むKubernetes参照で、失敗だけの参照は除外し、履歴なしでも表示する場合がある |
+| `⚠️ Scan failures` | スキャン失敗で、digest・プラットフォーム検証失敗も含む |
+| `⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low` | 両情報源が利用不能で、深刻度だけで判定しLowへ下げない |
+| `⚠️ CISA KEV data unavailable — act-now detection may be incomplete` | EPSSと深刻度で判定し、Act now検出が不完全な可能性 |
+| `⚠️ EPSS data unavailable — triage is using KEV and severity only` | KEVと深刻度で判定 |
+| `_Intel data is N day(s) old (feeds unreachable)._` | 更新できず検証済みの古いキャッシュを使用中 |
+| `📋 Weekly full report` | 設定曜日の現在状態レポート |
+| `📊 *Full report — YYYY-MM-DD HH:MM*` | Botスレッドの現在状態レポートの見出し |
+| `📊 Full report in this message's thread` | Botが今回のスレッドへ現在状態を投稿済み |
+| `🔗 Last full report` | 直近の成功済みレポートへのリンク |
+| `✅ Actionable now (fixed)` | トリアージ無効時の修正版あり区分で、Act nowとは別 |
+
+| パッケージ・変化のラベル | 意味 |
+| --- | --- |
+| `🟢 upgrade: distro security patch` | OSパッケージの更新で、ディストリビューションのリビジョンとして扱いSemVer比較しない |
+| `🟢 upgrade: low-risk` | 言語パッケージのメジャーバージョンが増えない変更 |
+| `🟠 upgrade: major version bump — needs care` | 言語パッケージのメジャーバージョンが増え、互換性を壊す可能性がある変更 |
+| `⚪ upgrade: risk unknown` | バージョンを確実に解析できない状態 |
+| `[lang]` | Trivyが言語依存パッケージと分類した項目 |
+| `(no fix available)` | 通常の修正状態で修正版なし |
+| `⬆️ escalated to ACT NOW/WATCH` | 既知パッケージの最大優先度が上昇 |
+| `new: CVE-…, CVE-… (+N more)` | 追加CVEのリンクを1行最大3件、残りは件数で表示 |
+| `fix now available` | 前回は修正版なし、今回は1つ以上あり |
+| `(end-of-life: no fix planned for this release)` | このリリースでは対象CVEがサポート対象外 |
+| `🚨 see Act now` | EOLパッケージの詳細はAct now区分に表示 |
+| `includes N end-of-life package(s)` | ベースOSの行へ畳み込んだEOLグループ件数 |
+| `includes N newly end-of-life package(s)` | 新規EOL baseへ畳み込んだAct now以外の新規EOLパッケージ件数 |
+| `N package(s) newly end-of-life (base OS already EOL)` | 既存EOL baseのAct now以外の新規EOLパッケージ件数 |
+| `N end-of-life package(s) with new CVEs (base OS already EOL)` | 既存EOL baseのAct now以外のEOLパッケージでCVEが増加 |
+| `no longer end-of-life` | EOL解除後も通常側に検出結果あり |
+
+| 判定根拠・参照のラベル | 意味 |
+| --- | --- |
+| `CISA KEV (exploited in the wild)` | 利用可能なKEVカタログに掲載 |
+| `EPSS N%` | EPSS確率で、スコアなしは`n/a`、非常に小さい値は`<0.1%`、非常に大きい値は`>99%` |
+| `🧨 ransomware campaign` | CISAがランサムウェアキャンペーンでの使用を確認 |
+| `severity only (intel unavailable)` | 両情報源が利用不能で深刻度のみを使用 |
+| `no fix yet, consider mitigation` | `affected`グループに修正版がなく緩和策を検討 |
+| `upstream won't fix, consider replacing` | `will_not_fix`のため置き換えなどを検討 |
+| `end-of-life: no fix planned for this release, consider a supported version` | EOLパッケージのサポート中バージョンを検討 |
+| `📎 advisory` | Trivyの主要アドバイザリー |
+| `vendor advisory` | KEVのnotesにあるベンダーまたはCISAの参照 |
+| `💬 HN (N pts)` | 条件を満たすHacker Newsの議論とポイント数 |
+
+### 詳細とスレッド
+
+Act nowには最も強いCVEの根拠を示し、Watchは簡潔に表示する。チャンネルでは他のCVEを`(+N more CVE(s) in this package)`にまとめる。
+
+Act now以外の変化には`CVE-ID · KEV/EPSS`を付け、情報を使えない場合は`CVE-ID SEVERITY`を付ける。新規ID一覧の行では、この表記を省略する。
+
+判定根拠、Watchの理由、`also:`のCVE IDはNVDへのリンクである。GHSAやDLAなどは通常のテキストで表示する。
+
+スレッドでは、最も強いCVEのタイトル・根拠・URL・経過日数を確認できる。他のIDは`also:`に最大8件を示し、残りは`(+N more)`にまとめる。
+
+検出当日は`first seen today`と表示する。長いレポートは複数返信へ分け、継続見出しに`(cont.)`を付ける。
+
+通知方式と送信先は、次の設定で指定する。
+
+- `notify.slack_webhook_url`はチャンネル通知だけに対応する
+- `slack_bot_token`（`notify.slack_bot_token`）はBot通知を有効にし、`slack_channel`と組み合わせてスレッド投稿と前回レポートへのリンクを使えるようにする
+- `slack_channel`（`notify.slack_channel`）はBotの通知先チャンネルを指定する
+
+Botは変化があった日と週次レポートの日に現在状態をスレッドへ投稿し、変化がない日は直近のレポートへリンクする。初回通知、チャンネル変更、有効な前回パーマリンクがない場合も、新しいスレッドを作る。
+
+変化がない日の代表例は次のとおりである。
 
 ```text
 No changes since last scan.
@@ -488,394 +420,196 @@ _Details in the generic webhook payload, or in the weekly full report._
 🔗 Last full report → thread
 ```
 
-該当する場合は、スキャン失敗と実体の識別に関する注釈も含みます。
-EOLイメージが未解決のまま残っている場合、**Open now**の件数は`⛔ N EOL base`から始まります。
-
-未解決項目がない場合、**Open now**は次の表示になります。
-
-```text
-🎉 Open now: none — all clear
-```
-
-現在のレポートに検出結果またはEOLイメージが1つでもあれば、通常の件数を表示します。
-Kubernetesのスキャンで実体が未確認のため前回の検出結果を保持しており、
-現在のレポートに検出結果もEOLイメージも1つもない場合は、次の表示になります。
-
-```text
-📌 Open now: unconfirmed — holding previous findings until re-confirmed
-```
-
-### 現在状態レポートのレイアウト
-
-fullモード、diff通知内の週次レポート、Bot APIのスレッドは、そのスキャン時点で
-未解決の内容を表します。チャンネルへ表示する形式は次のようになります。
-
-```text
-*Priority:* ⛔ 1 EOL base · 🚨 1 act now · 👀 2 watch · 🔕 8 low
-
-*⛔ Base OS end-of-life (top priority)*
-• ghcr.io/example/legacy:latest — base OS is EOL (no more security updates coming)
-
-*🚨 Act now (1) — exploited or likely to be*
-• ghcr.io/example/api:latest
-   • openssl 3.0.13 → 3.0.14 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch
-     ↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
-       📎 advisory · vendor advisory · 💬 HN (120 pts)
-
-*👀 Watch (2) — not urgent, keep an eye on*
-• ghcr.io/example/frontend:latest
-   • zlib 1.2.13 (no fix available) (CRITICAL 1 / HIGH 0) — CVE-2026-23456 · EPSS 0.4%
-
-*🔕 Low priority (8)* — 8 finding(s) across 3 image(s), no exploitation signal (not in KEV, EPSS below threshold).
-_Details in the generic webhook payload or the weekly full report._
-```
-
-件数が0の優先度と空のセクションは表示しません。Priority行では、修正状態ごとに分かれた
-パッケージグループを数えます。そのため、同じパッケージのCVEが異なる修正状態で
-報告された場合、同じパッケージが複数件として数えられることがあります。
-
-### パッケージ行の読み方
-
-修正版があるパッケージ行の形式は次のとおりです。
-
-```text
-package installed-version → fixed-version (CRITICAL N / HIGH N) upgrade-label [lang] change-label
-```
-
-修正版がない場合、矢印と修正版の代わりに`(no fix available)`を表示します。
-CRITICALとHIGHは、そのパッケージと修正状態のグループに含まれる、重複を除いた
-CVE IDの件数です。`[lang]`は言語パッケージを示し、通常、付いていないものは
-OSパッケージです。
-
-パッケージの後ろに表示するラベルの意味は次のとおりです。
-
-| 実際の表示 | 意味 |
-| --- | --- |
-| `🟢 upgrade: distro security patch` | OSパッケージの修正です。ディストリビューションのバージョンをSemVerとして比較しません。 |
-| `🟢 upgrade: low-risk` | 言語パッケージのメジャーバージョンが増えません。安全性を保証する表示ではありません。 |
-| `🟠 upgrade: major version bump — needs care` | 言語パッケージのメジャーバージョンが増えるため、互換性を壊す可能性があります。 |
-| `⚪ upgrade: risk unknown` | バージョンを確実に解析できません。 |
-| `[lang]` | TrivyがOSパッケージではなく言語依存パッケージとして分類しています。 |
-| `⬆️ escalated to ACT NOW/WATCH` | 前回から、既知パッケージの最大優先度が上昇しました。 |
-| `new: CVE-…, CVE-… (+N more)` | 既知のイメージとパッケージに追加された新しいCVE IDのリンク付き一覧です。1行につき最大3件表示し、残りは件数のみ表示します。 |
-| `fix now available` | 前回は修正版がなく、今回は1つ以上の修正版があります。 |
-
-緑色の更新アイコンは、提示されたバージョン変更の種類を示します。イメージ、
-パッケージ、脆弱性が安全であるという意味ではありません。
-
-Act now以外の変化項目の末尾には、最も強いCVEを示す簡潔な判定根拠を付けます。
-トリアージが有効で判定に使える脅威情報がある場合は`CVE-ID · KEV/EPSS`、
-それ以外は`CVE-ID SEVERITY`です。新規IDを列挙する行は、その一覧自体が
-見出しを兼ねるため、この判定根拠を省略します。1つのパッケージが修正版あり
-と修正版なしの2行に分かれる場合、新規IDは属する行にだけ列挙し、もう一方の
-行は通常の規則に従います。
-
-### 判定根拠と参照URLの行
-
-Act nowのパッケージには、最も強いCVEの判定根拠を続けて表示します。
+Act nowの判定根拠は次のように読む。
 
 ```text
 ↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
 ```
 
-最も強いCVEは、優先度、EPSSが取得済みか、EPSSの高さ、CVE IDの順で決まります。
-同じパッケージにほかのCVEもある場合、チャンネルではCVEごとに展開せず、
-`(+N more CVE(s) in this package)`と表示します。
+??? note "技術的な詳細"
 
-縮退トリアージ中は、判定根拠の行を次のように表示します。
-
-```text
-↳ CVE-2026-12345 CRITICAL · severity only (intel unavailable)
-```
-
-判定根拠のラベルには次の意味があります。
-
-| ラベル | 意味 |
-| --- | --- |
-| `CISA KEV (exploited in the wild)` | 利用可能な現在のKEVカタログにCVEが掲載されています。 |
-| `EPSS N%` | 現在のEPSS確率です。スコアがない場合は`n/a`、非常に小さい値は`<0.1%`、非常に大きい値は`>99%`と表示します。 |
-| `🧨 ransomware campaign` | CISAがランサムウェアキャンペーンでの使用を確認しています。別の優先度ではなく、判定根拠です。 |
-| `severity only (intel unavailable)` | どちらの脅威情報源も利用できないため、深刻度に基づいて優先度を決定しています。 |
-| `no fix yet, consider mitigation` | `affected`グループに修正版がないため、緩和策の検討が必要です。 |
-| `upstream won't fix, consider replacing` | `will_not_fix`のため、置き換えなど別の対応が必要な可能性があります。 |
-| `📎 advisory` | Trivyが提供する主要アドバイザリーURLです。 |
-| `vendor advisory` | KEVのnotesから取得したベンダーまたはCISAの参照URLです。 |
-| `💬 HN (N pts)` | 条件を満たした任意のHacker News議論とポイント数です。 |
-
-Watchでは、通常は最も強いCVEとEPSS値だけをパッケージ行の後ろへ簡潔に表示します。
-LowはSlackでパッケージごとの詳細を表示しません。
-
-### セクション、状態、警告ラベル
-
-| ラベル | 意味 |
-| --- | --- |
-| `⛔ EOL base` | ベースOSがサポート終了です。CVE優先度とは別に管理します。 |
-| `🚨 Act now` | 悪用が確認済み、またはEPSSがAct nowのしきい値以上です。 |
-| `👀 Watch` | Act nowより弱いシグナルですが、確認・監視する対象です。 |
-| `🔕 Low` | 設定したしきい値へ達するシグナルがありません。「脆弱ではない」という意味ではありません。 |
-| `🔄 Image content changed` | 参照の確認済みcontent-ID集合が変わりました。パッケージの変化とは独立しており、検出項目がないイメージでも表示する場合があります。 |
-| `🆕 New since last scan` | 新しいパッケージと、内容が変化した既知パッケージを含みます。 |
-| `✅ Resolved since last scan` | 現在の対象から消えました。パッチ適用済みを証明する表示ではありません。 |
-| `📌 Open now` | 最新スキャン後の未解決項目を件数でまとめたものです。 |
-| `📌 Open now: unconfirmed — holding previous findings until re-confirmed` | 現在のレポートに検出結果もEOLイメージも1つもなく、Kubernetesの実体未確認スキャン後に前回のパッケージの検出結果を保持しています。現在の検出結果またはEOLイメージが1つでもあれば、通常の件数を表示します。 |
-| `⏰ oldest ... unresolved` | 最も古いEOL、Act now、Watchが14日以上残っています。 |
-| `<ref> — identity unconfirmed: scanned by reference` | 参照単位の表示では、発見時にDockerのconfig digestで識別できなかった実体を含む参照に付けます。スキャン結果には依存せず、Kubernetesのregistry digestはこの判定では未確認扱いになります。 |
-| `<ref> (<12hex>)`または`<ref> (<12hex> linux/amd64)` | 短いdigestと、該当する場合はプラットフォームで、1つの参照に属する複数の実体を区別します。 |
-| `⚠️ identity unconfirmed: scanned by reference — a, b` | 発見時にDockerのconfig digestで識別できなかった実体を含む参照の一覧です。スキャン結果には依存しません。この判定ではKubernetesのregistry digestは未確認扱いになるため、すべてのKubernetes参照が並ぶ場合があります。 |
-| `⏳ unconfirmed this cycle, holding previous findings — a, b` | 今回のリモートスキャンが成功したものの、実体を固定できなかったスキャン対象を含むKubernetes参照の一覧です。スキャン失敗だけの参照は対象外です。前回の検出結果の有無にかかわらず表示するため、履歴のない初回スキャンでも表示する場合があります。 |
-| `⚠️ Scan failures` | その回でスキャンできなかったイメージです。digestやプラットフォームの検証に失敗した場合も含みます。 |
-| `⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low` | どちらの悪用情報源も利用できません。 |
-| `⚠️ CISA KEV data unavailable — act-now detection may be incomplete` | KEVを利用できないため、EPSSと深刻度でトリアージしています。 |
-| `⚠️ EPSS data unavailable — triage is using KEV and severity only` | EPSSを利用できないため、KEVと深刻度でトリアージしています。 |
-| `_Intel data is N day(s) old (feeds unreachable)._` | 更新に失敗したため、検証済みの古いキャッシュを使用しています。 |
-| `📋 Weekly full report` | 設定した曜日に追加する現在状態のレポートです。 |
-| `📊 Full report in this message's thread` | Bot APIが、このチャンネルメッセージのスレッドへ現在状態を投稿しました。 |
-| `🔗 Last full report` | 新しいスレッドは不要だったため、直近の成功済みレポートを参照します。 |
-
-`✅ Actionable now (fixed)`は、トリアージを無効にしたレイアウトだけに表示します。
-この場合の「actionable」は修正版が存在するという意味で、トリアージ優先度の
-**Act now**とは異なります。
-
-### Slackスレッドの形式
-
-Bot APIのスレッドは`📊 *Full report — YYYY-MM-DD HH:MM*`から始まり、EOL、ACT NOW、
-WATCH、LOWの順に表示します。Act nowとWatchのパッケージは詳細を展開します。
-
-```text
-📊 *Full report — 2026-08-16 09:00*
-
-*🚨 ACT NOW (1) — exploited or likely to be*
-• ghcr.io/example/api:latest
-   • openssl 3.0.13 → 3.0.14 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch
-     ↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
-       Short title supplied by Trivy
-       📎 advisory · vendor advisory · 💬 HN (120 pts)
-     also: CVE-2026-20001, CVE-2026-20002
-     ⏱ open 4 day(s) — first seen 2026-08-12
-
-*🔕 LOW (8)* — no exploitation signal; details in the weekly full report or the webhook payload
-```
-
-完全な判定根拠とタイトルを表示するのは、最も強いCVEだけです。追加のCVE IDは
-`also:`の後ろへ最大8件表示し、残りは`(+N more)`にまとめます。検出当日は経過日数の
-代わりに`first seen today`を表示します。レポートがメッセージの上限を超える場合、
-連続する複数の返信へ分割し、継続するセクション見出しには`(cont.)`を付けます。
-
-該当する場合、スレッドの末尾にも同じ実体未確認の一覧を表示します。
-
-```text
-⚠️ identity unconfirmed: scanned by reference — legacy:1
-```
-
-現在のSlackのLowフッターは週次レポートも参照先として案内しますが、週次レポートでも
-Lowは件数のみです。LowのCVEごとの完全な一覧は汎用Webhookで確認します。
-
-### Incoming WebhookとBot APIの違い
-
-| 機能 | Slack Incoming Webhook | Slack Bot API |
-| --- | --- | --- |
-| チャンネルへサマリーを投稿 | 可能 | 可能 |
-| スレッドへ現在のレポートを投稿 | 不可 | 可能 |
-| 変化がない日に前回レポートへのリンクを表示 | 不可 | 可能 |
-
-`slack_bot_token`と`slack_channel`を設定すると、チャンネルは変化を確認する場所になります。
-検出結果に変化があった日と週次レポートの日は、そのチャンネルメッセージのスレッドへ
-現在の状態を投稿します。変化がない日はスレッドを作り直さず、チャンネルの
-ハートビートから直近の完全レポートへリンクします。
-
-スレッドではEOL、Act now、Watchを展開します。パッケージごとに、最も強いCVE、
-Trivyが提供する場合はタイトル、判定根拠、参照URL、ほかのCVE ID、初回検出からの
-経過日数を表示します。Lowは件数だけです。長いレポートはイメージまたは行の境界で
-複数の返信に分割します。Slack APIの呼び出しは最大3回試行し、レポートの投稿が
-完了した場合だけ新しいスレッド参照を保存します。
-
-Bot APIで初めて通知する場合、通知先チャンネルを変更した場合、または前回の有効な
-パーマリンクがない場合は、新しい完全レポートスレッドを作成します。これにより、
-次回以降のハートビートが参照できる通知先を確保します。
+    - Slackは通常の`mrkdwn`テキストを使う
+    - 最も強いCVEは、優先度、EPSS取得済みか、EPSSの高さ、CVE IDの順で決める
+    - Slack APIは最大3回試行する
+    - 新しいスレッド参照は、レポート投稿完了後だけ保存する
 
 ## 7. 汎用Webhook
 
-`notify.generic_webhook_url`は構造化JSONを受け取るHTTPエンドポイントです。どちらの
-Slack通知方式とも併用できます。Discord、Teamsなど、特定サービス用のメッセージへ
-整形する機能ではありません。
+汎用Webhookでは、現在の完全なレポートを構造化JSONで取得できる。`notify.generic_webhook_url`へ通知条件を満たした回だけ送り、`diff`モードでは差分も含める。
 
-通知を送る回では、サマリー件数、環境、EOLイメージ、修正状態ごとのセクション、
-イメージ実体の識別情報、コンテナとWorkload、パッケージバージョン、更新時の注意度と
-優先度、CVE IDと判定根拠、スキャン失敗を含む現在の完全なレポートを送ります。
-diffモードの場合は、今回の差分も含みます。コンテナとWorkloadの情報は
-このペイロードにだけ含まれ、Slackには表示しません。
+Low、Slackで畳み込むEOLパッケージ、コンテナ、Workloadも確認できる。Slackのどちらの方式とも併用できるが、DiscordやTeams専用のメッセージ形式には変換しない。
 
-### トップレベルのフィールド
+トップレベルの`watch`は修正状態の区分であり、優先度のWatchとは別である。`not_affected`は、どの検出セクションにも含めない。
 
-| JSONフィールド | 型 | 内容 |
+### トップレベル・環境
+
+トップレベルでは、スキャン時刻、環境、修正状態別の検出結果、失敗、差分を確認できる。`environment`は常に含み、環境名がない場合は`name`だけを省略する。
+
+| フィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `generated_at` | string | RFC 3339形式のスキャン時刻です。 |
-| `environment` | object | 常に含まれます。adapterの種別と、設定されている場合は環境名です。 |
-| `summary` | object | イメージ件数です。トリアージ有効時は優先度件数と脅威情報の鮮度も含みます。 |
-| `eosl_images` | 文字列の配列または`null` | ベースOSがEOLのイメージです。該当するものがない場合は`null`になることがあります。 |
-| `actionable` | イメージオブジェクトの配列 | Trivyのステータスが`fixed`の現在のパッケージグループです。 |
-| `watch` | イメージオブジェクトの配列 | Trivyのステータスが`affected`の現在のパッケージグループです。 |
-| `wont_fix` | イメージオブジェクトの配列 | Trivyのステータスが`will_not_fix`の現在のパッケージグループです。 |
-| `scan_errors` | オブジェクトの配列 | イメージごとのスキャン失敗です。各オブジェクトに文字列フィールド`image`と`error`を含みます。 |
-| `diff` | object | 前回のスキャンからの変化です。fullモードでは省略します。 |
-
-### 環境
-
-| JSONフィールド | 型 | 内容 |
-| --- | --- | --- |
-| `kind` | string | 使用中のadapterに基づく`docker`または`kubernetes`です。 |
-| `name` | string | 設定した`environment.name`です。名前のない既定の状態では省略します。 |
+| `generated_at` | string | RFC 3339形式のスキャン時刻 |
+| `environment` | object | adapter種別と任意の環境名 |
+| `environment.kind` | string | `docker`または`kubernetes` |
+| `environment.name` | string | `environment.name`の値で、未設定なら省略 |
+| `summary` | object | 件数と脅威情報の状態 |
+| `eosl_images` | 文字列の配列または`null` | EOLベースイメージで、該当なしなら`null`の場合あり |
+| `actionable` | イメージオブジェクトの配列 | `fixed`の現在のグループ |
+| `watch` | イメージオブジェクトの配列 | `affected`へ正規化した現在のグループ |
+| `wont_fix` | イメージオブジェクトの配列 | `will_not_fix`の現在のグループ |
+| `eol_packages` | イメージオブジェクトの配列 | 全`end_of_life`グループで、空なら`[]` |
+| `scan_errors` | オブジェクトの配列 | イメージごとのスキャン失敗 |
+| `scan_errors[].image` | string | イメージ参照 |
+| `scan_errors[].error` | string | エラー内容 |
+| `diff` | object | 今回の差分で、fullモードでは省略 |
 
 ### サマリー
 
-| JSONフィールド | 型 | 内容 |
+`summary`ではイメージ件数を確認でき、トリアージ有効時は優先度件数と脅威情報の状態も確認できる。
+
+`priority_counts`は、EOLパッケージをAct nowの場合だけ加算する。そのため`eol_packages`と件数が重なり、3値の合計は全グループ数とは限らない。
+
+| `summary`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `images_total` | integer | 一意な参照と実体の組み合わせの数です。スキャン失敗も含みます。 |
-| `images_affected` | integer | 対象の脆弱性またはEOLのベースOSがあるイメージ数です。 |
-| `priority_counts` | object | トリアージ有効時だけ含まれます。`act_now`、`watch`、`low`という整数値のパッケージグループ件数です。 |
-| `intel` | object | トリアージ有効時だけ含まれます。脅威情報の利用可否と鮮度です。 |
-| `intel.degraded` | boolean | どちらの脅威情報源も利用できないかを示します。 |
-| `intel.kev_ok` | boolean | KEVのデータが利用可能かを示します。 |
-| `intel.epss_ok` | boolean | EPSSのデータが利用可能かを示します。 |
-| `intel.stale_days` | integer | 使用中の古い脅威情報の経過日数です。 |
+| `images_total` | integer | スキャン失敗を含む一意な参照と実体の組み合わせ数 |
+| `images_affected` | integer | 対象脆弱性またはEOLベースOSがあるイメージ数 |
+| `priority_counts` | object | トリアージ有効時だけ含む、整数値の`act_now`、`watch`、`low`によるパッケージグループ件数 |
+| `intel` | object | トリアージ有効時だけ含む脅威情報の利用可否と鮮度 |
+| `intel.degraded` | boolean | 両情報源が利用不能か |
+| `intel.kev_ok` | boolean | KEVを利用可能か |
+| `intel.epss_ok` | boolean | EPSSを利用可能か |
+| `intel.stale_days` | integer | 使用中の古い脅威情報の経過日数 |
 
-### イメージオブジェクト
+### イメージとコンテナ
 
-`actionable`、`watch`、`wont_fix`の各エントリーは、その修正状態のセクションに属する
-イメージ参照と実体を表します。
+`actionable`、`watch`、`wont_fix`、`eol_packages`の各エントリーは、修正状態ごとの参照と実体を表す。参照が曖昧でも、`containers`にはその実体に一致するコンテナだけを含める。
 
-| JSONフィールド | 型 | 内容 |
+`registry_digests`は参照全体の和集合であり、`identity_resolved`は各エントリーの状態を示す。
+
+| フィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `image` | string | 表示用の参照です。 |
-| `severity_counts` | object | `CRITICAL`と`HIGH`という整数値の件数です。 |
-| `findings` | 検出結果オブジェクトの配列 | このイメージと修正状態に属するパッケージグループです。 |
-| `containers` | コンテナオブジェクトの配列 | このイメージ実体に一致する稼働中コンテナです。該当するものがない場合は空配列で、`null`にはなりません。 |
-| `content_id` | string | 実体を確認できたDockerのconfig digest指定スキャンにおける、`sha256:<hex>`形式のconfig digestです。registry digest指定と参照によるスキャンでは省略します。 |
-| `registry_digests` | 文字列の配列 | スキャンが成功し、実体を確認できた結果だけから集めた、参照ごとのTrivyの`RepoDigests`の和集合です。`null`にはなりません。 |
-| `identity_resolved` | boolean | このエントリーのスキャンで、稼働中イメージの実体を確認できたかを示します。 |
-| `scan_target_kind` | string | `content_id`、`registry_digest`、`reference`のいずれかです。 |
+| `image` | string | 表示用の参照 |
+| `severity_counts` | object | 整数値の`CRITICAL`・`HIGH`件数 |
+| `findings` | 検出結果オブジェクトの配列 | このイメージと修正状態のパッケージグループ |
+| `containers` | コンテナオブジェクトの配列 | 一致する稼働中コンテナで、該当なしは`[]` |
+| `content_id` | string | 実体を確認できたDockerのconfig digest指定スキャンの`sha256:<hex>`で、registry digest指定・参照スキャンでは省略 |
+| `registry_digests` | 文字列の配列 | 成功して実体確認できた結果の`RepoDigests`を参照ごとに集めた和集合で、`null`にはならない |
+| `identity_resolved` | boolean | このスキャンで稼働中イメージの実体を確認できたか |
+| `scan_target_kind` | string | `content_id`、`registry_digest`、`reference` |
+| `containers[].name` | string | Dockerは先頭スラッシュ・リンク別名を除いた名前、Kubernetesは`<namespace>/<pod>/<container>` |
+| `containers[].workload` | object | 常に含むWorkload対応情報 |
+| `containers[].workload.kind` | string | 常に含む`unknown`、`compose`、`deployment`、`statefulset`、`daemonset`、`job`、`cronjob`、`pod`のいずれか |
+| `containers[].workload.group` | string | Composeプロジェクトまたはnamespaceで、不明なら省略 |
+| `containers[].workload.name` | string | Composeサービス、解決したWorkload名、単独Pod名で、不明なら省略 |
 
-コンテナとWorkloadのフィールドは次のとおりです。
+### 検出結果と脆弱性
 
-| JSONフィールド | 型 | 内容 |
+`findings`ではパッケージグループを、`vulns`では個々の脆弱性を確認できる。検出結果と脆弱性の`priority`は、トリアージ無効時に省略する。
+
+`vulns[].status`が省略されている場合は、検出結果の`status`と同じ値として読む。
+
+| 検出結果のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `containers[].name` | string | Dockerでは先頭のスラッシュを取り除き、リンクの別名を除外したコンテナ名です。Kubernetesでは`<namespace>/<pod>/<container>`形式です。 |
-| `containers[].workload` | object | Workloadとの対応付けです。常に含まれます。 |
-| `containers[].workload.kind` | string | `unknown`、`compose`、`deployment`、`statefulset`、`daemonset`、`job`、`cronjob`、`pod`のいずれかです。常に含まれます。 |
-| `containers[].workload.group` | string | Composeのプロジェクト、またはKubernetesのnamespaceです。不明な場合は省略します。 |
-| `containers[].workload.name` | string | Composeのサービス、解決したKubernetesのWorkload名、または単独Podの名前です。不明な場合は省略します。 |
+| `package` | string | パッケージ名 |
+| `installed` | string | インストール済みバージョン |
+| `fixed` | string | 修正版バージョンで、なければ`""` |
+| `status` | string | `fixed`、`affected`、`will_not_fix`、`end_of_life` |
+| `severity_counts` | object | 整数値の`CRITICAL`・`HIGH`件数 |
+| `upgrade_risk` | string | `""`、`distro_update`、`safe`、`caution`、`unknown` |
+| `priority` | string | `act_now`、`watch`、`low` |
+| `vuln_ids` | 文字列の配列 | 並べ替え済み脆弱性ID |
+| `vulns` | 脆弱性オブジェクトの配列 | 脆弱性ごとの詳細 |
 
-参照が曖昧な場合、各イメージエントリーには、その実体に一致するコンテナだけを含めます。
-`registry_digests`は参照全体の和集合である一方、`identity_resolved`は個々のエントリーの
-状態を示します。
-
-### 検出結果
-
-| JSONフィールド | 型 | 内容 |
+| 脆弱性のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `package` | string | パッケージ名です。 |
-| `installed` | string | インストール済みバージョンです。 |
-| `fixed` | string | 修正版のバージョンです。利用可能な修正版がない場合は`""`です。 |
-| `status` | string | `fixed`、`affected`、`will_not_fix`のいずれかです。 |
-| `severity_counts` | object | `CRITICAL`と`HIGH`という整数値の件数です。 |
-| `upgrade_risk` | string | `""`、`distro_update`、`safe`、`caution`、`unknown`のいずれかです。 |
-| `priority` | string | `act_now`、`watch`、`low`のいずれかです。トリアージ無効時は省略します。 |
-| `vuln_ids` | 文字列の配列 | 並べ替え済みの脆弱性IDです。 |
-| `vulns` | 脆弱性オブジェクトの配列 | 脆弱性ごとの詳細です。 |
-
-### 脆弱性
-
-`vulns`の各オブジェクトには、次のフィールドがあります。
-
-| JSONフィールド | 型 | 内容 |
-| --- | --- | --- |
-| `id` | string | Slackのリンクマークアップを含まない脆弱性IDです。 |
-| `severity` | string | Trivyの深刻度です。 |
-| `url` | string | 主要アドバイザリーURLです。取得できない場合は省略します。 |
-| `title` | string | Trivyが提供する短いタイトルです。取得できない場合は省略します。 |
-| `kev` | boolean | 利用可能なKEVカタログに脆弱性が掲載されているかを示します。 |
-| `ransomware` | boolean | KEVのランサムウェアキャンペーンのフラグです。falseの場合は省略します。 |
-| `epss` | numberまたは`null` | EPSS確率です。スコアが不明な場合は`null`です。 |
-| `priority` | string | `act_now`、`watch`、`low`のいずれかです。トリアージ無効時は省略します。 |
-| `refs` | 参照オブジェクトの配列 | 追加の参照情報です。空の場合は省略します。 |
-| `refs[].kind` | string | `vendor`または`discussion`です。 |
-| `refs[].label` | string | 表示用のラベルです。 |
-| `refs[].url` | string | 参照URLです。 |
+| `id` | string | Slackリンク表記を含まない脆弱性ID |
+| `severity` | string | Trivyの深刻度 |
+| `status` | string | 集約先と異なる元のTrivyステータスだけを含み、元の`Status`なしは`unknown` |
+| `url` | string | 主要アドバイザリーURLで、取得できなければ省略 |
+| `title` | string | Trivyの短いタイトルで、取得できなければ省略 |
+| `kev` | boolean | 利用可能なKEVカタログに掲載されているか |
+| `ransomware` | boolean | KEVのランサムウェアフラグで、`false`なら省略 |
+| `epss` | numberまたは`null` | EPSS確率で、不明なら`null` |
+| `priority` | string | `act_now`、`watch`、`low` |
+| `refs` | 参照オブジェクトの配列 | 追加参照で、空なら省略 |
+| `refs[].kind` | string | `vendor`または`discussion` |
+| `refs[].label` | string | 表示ラベル |
+| `refs[].url` | string | 参照URL |
 
 ### 差分
 
-`diff`オブジェクトはdiffモードだけに含まれます。配列が空の場合は`null`ではなく`[]`です。
+`diff`では、前回からの変化を種類別に確認できる。diffモードだけに含み、空の配列は`null`ではなく`[]`を返す。
 
-| JSONフィールド | 型 | 内容 |
+| `diff`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `new` | 変化オブジェクトの配列 | 新規または変化したイメージとパッケージのエントリーです。 |
-| `resolved` | オブジェクトの配列 | 解消したエントリーです。各オブジェクトに文字列フィールド`image`と`package`を含みます。 |
-| `replaced` | 置き換えオブジェクトの配列 | 確認済みcontent-ID集合が変わった参照です。 |
-| `new_eosl` | 文字列の配列 | 新たにEOLを検出したイメージ参照です。 |
-| `resolved_eosl` | 文字列の配列 | EOLとして記録されなくなったイメージ参照です。 |
-| `oldest_open_days` | integer | Lowを含む保持中のすべてのパッケージ検出結果と、保持中のすべてのEOLイメージのうち、最も古い初回検出日からの経過日数です。1日未満は切り捨てます。このフィールドと異なり、トリアージ有効時のSlackハートビートの経過日数はLowを除外します。 |
+| `new` | 変化オブジェクトの配列 | 通常側の新規・変化 |
+| `resolved` | オブジェクトの配列 | 解消した組み合わせ |
+| `resolved[].image` | string | イメージ参照 |
+| `resolved[].package` | string | パッケージ名 |
+| `replaced` | 置き換えオブジェクトの配列 | 確認済みcontent-ID集合が変化した参照 |
+| `new_eosl` | 文字列の配列 | 新規EOLベースイメージ参照 |
+| `resolved_eosl` | 文字列の配列 | EOLとして記録されなくなった参照 |
+| `new_eol_packages` | EOL変化オブジェクトの配列 | Slackで畳み込むものも含むEOLの新規・変化 |
+| `resolved_eol_packages` | EOL解除オブジェクトの配列 | EOL区分からなくなったパッケージ |
+| `oldest_open_days` | integer | 通常の全パッケージ、EOL base、畳み込まれていないEOL package、畳み込まれていてもAct nowのEOL packageの最古の初回検出日からの日数で、1日未満は切り捨て |
 
-`new`の各オブジェクトには、次のフィールドがあります。
+`oldest_open_days`は保持中の記録と通常のLowも含むため、Slackのトリアージ有効時の経過日数とは対象が異なる。EOLパッケージには初回EOL検出日を使い、畳み込まれたAct now以外はベースOSの初回EOL検出日で数える。
 
-| JSONフィールド | 型 | 内容 |
+| `new[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `image` | string | イメージ参照です。 |
-| `package` | string | パッケージ名です。 |
-| `kind` | string | `new`、`escalated`、`new_cves`、`now_fixable`のいずれかです。 |
-| `new_cve_count` | integer | 追加されたCVE IDの件数です。`kind`が`new_cves`の場合だけ設定します。ほかの`kind`では、CVE IDが追加されていても省略します。 |
-| `new_cve_ids` | 文字列の配列 | 追加されたCVE ID自体です(Slackのリンク表記なし)。`kind`が`new_cves`の場合だけ設定し、件数は`new_cve_count`と同じです。 |
-| `critical` | integer | CRITICALの件数です。 |
-| `high` | integer | HIGHの件数です。 |
-| `priority` | string | `act_now`、`watch`、`low`のいずれかです。利用できない場合は省略します。 |
-| `reason` | string | 優先度上昇の判定根拠を示すプレーンテキストです。それ以外の場合は省略します。 |
+| `image` | string | イメージ参照 |
+| `package` | string | パッケージ名 |
+| `kind` | string | `new`、`escalated`、`new_cves`、`now_fixable` |
+| `new_cve_count` | integer | `new_cves`の場合だけ含む追加CVE件数 |
+| `new_cve_ids` | 文字列の配列 | `new_cves`の場合だけ含む追加IDで、Slackリンク表記なし、長さは`new_cve_count`と同じ |
+| `critical` | integer | CRITICAL件数 |
+| `high` | integer | HIGH件数 |
+| `priority` | string | `act_now`、`watch`、`low`で、利用できなければ省略 |
+| `reason` | string | 優先度上昇の根拠を示すプレーンテキストで、それ以外は省略 |
 
-`replaced`の各オブジェクトには、次のフィールドがあります。
-
-| JSONフィールド | 型 | 内容 |
+| `new_eol_packages[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `ref` | string | イメージ参照です。 |
-| `prev_content_ids` | 文字列の配列 | 並べ替え済みの、前回の確認済みcontent-ID集合です。 |
-| `content_ids` | 文字列の配列 | 並べ替え済みの、今回の確認済みcontent-ID集合です。 |
+| `image` | string | イメージ参照 |
+| `package` | string | パッケージ名 |
+| `kind` | string | 新規EOLの`eol_new`、CVE追加の`eol_new_cves`、Act nowへの上昇の`eol_escalated` |
+| `new_cve_ids` | 文字列の配列 | `eol_new_cves`の場合だけ含む並べ替え済み追加EOL IDで、Slackリンク表記なし |
+| `critical` | integer | 今回のEOLグループのCRITICAL件数 |
+| `high` | integer | 今回のEOLグループのHIGH件数 |
+| `priority` | string | `act_now`、`watch`、`low`で、トリアージ無効時は省略 |
+| `reason` | string | `eol_escalated`の場合だけ含む判定根拠 |
 
-互換性を維持するため、トップレベルの検出セクションは修正状態を表します。
-`actionable`はTrivyの`fixed`、`watch`は`affected`、`wont_fix`は`will_not_fix`です。
-これらは、各パッケージに含まれるトリアージの`priority`フィールドとは別のものです。
-特に、Webhookのトップレベルにある`watch`配列と、トリアージ優先度の**Watch**は
-同じ意味ではありません。
+EOL変化には`new_cve_count`がないため、追加件数は`new_cve_ids`の長さで確認する。
 
-完全なペイロードを送るのは、前述の通知条件を満たすスキャン回だけです。
-`notify_on_clean: false`によって省略された、検出項目も変化もないスキャンでは、
-Webhookを呼び出しません。イメージの置き換えがあった場合や、Kubernetesで実体未確認の
-参照について以前に記録したパッケージの検出結果を保持している場合も、通知条件を
-満たします。保持している履歴がEOLの記録だけの場合は、それだけでは保持に伴う
-通知の条件を満たしません。
+| `resolved_eol_packages[]`のフィールド名 | 型 | 意味 |
+| --- | --- | --- |
+| `image` | string | イメージ参照 |
+| `package` | string | パッケージ名 |
+| `still_open` | boolean | 同じ参照とパッケージに通常側の検出結果が残れば`true`で、`false`でも省略しない |
+
+| `replaced[]`のフィールド名 | 型 | 意味 |
+| --- | --- | --- |
+| `ref` | string | イメージ参照 |
+| `prev_content_ids` | 文字列の配列 | 並べ替え済みの前回の確認済みcontent-ID集合 |
+| `content_ids` | 文字列の配列 | 並べ替え済みの今回の確認済みcontent-ID集合 |
+
+### 後方互換
+
+既存のフィールドと修正状態別の構造は維持する。修正状態の区分と`priority`は分けて扱う。
+
+- `actionable`は`fixed`を表す
+- `watch`は`affected`への集約を表す
+- `wont_fix`は`will_not_fix`を表す
+- `eol_packages`は`end_of_life`を表す
+
+`diff.new[].kind`は、`new`、`escalated`、`new_cves`、`now_fixable`のまま変更しない。
+
+EOL変化は別配列と別の`kind`で表し、`diff.new_eol_packages`と`diff.resolved_eol_packages`は空でも`[]`を返す。EOL対応は既存フィールドを維持し、新しい配列と省略可能な`vulns[].status`の追加で表す。
 
 ## 8. トリアージを無効にした場合
 
-`triage.enabled: false`にすると、KEV、EPSS、議論リンクの取得を停止します。
-Act now、優先度としてのWatch、Lowという分類は行いません。Slackは修正状態に基づく
-次の表示へ切り替わります。
+`triage.enabled: false`では、優先度の分類を停止し、Slackで修正状態別に結果を確認する。KEV・EPSS・議論リンクの取得も停止する。
 
-1. EOLのベースイメージ
-2. 修正版あり
-3. 影響あり、上流の修正待ち
-4. 上流では修正予定なし
+Slackの表示順は、EOL base → EOL package → 修正版あり → 上流の修正待ち → 上流では修正予定なしである。EOL区分とベースOSへの畳み込みは有効時と同じであり、上流の修正待ちには`affected`、`fix_deferred`、`under_investigation`、`unknown`を含む。
 
-差分では引き続き、新規、CVE追加、修正版が利用可能、解消を検出します。優先度の
-基準を作らないため、優先度上昇の検出は行いません。
+Open nowは、保持中の記録を含むEOL件数を先に表示する。続くCRITICAL・HIGH・影響イメージ数は今回の検出結果から数え、今回の検出項目がなく保持だけがある場合は、有効時と同じ保持表示を使う。
 
-## 9. 複数回のスキャン例
-
-あるイメージの`openssl`に、EPSS 0.4%でKEVにはないHIGHのCVEが1件あるとします。
-
-1. 初回スキャンでは、パッケージを**新規**、優先度を**Low**として通知します。
-2. 翌日に結果が変わっていなければ、Slackには未解決件数のハートビートだけを送ります。
-3. 修正版が公開されると、**修正版が利用可能**としてバージョン変更の注釈とともに
-   通知します。
-4. 更新を適用する前にCVEがCISA KEVへ追加されると、既知のパッケージであっても
-   **Act nowへ優先度上昇**として通知します。
-5. コンテナイメージを更新し、そのパッケージが検出されなくなると**解消**として
-   通知します。
-
-この流れがKestreLynxの中心です。意味のある変化を通知できるだけの履歴を保持しながら、
-調査時に必要な現在の状態も残します。
+新規、CVE追加、修正版が利用可能、解消、EOLの新規・CVE追加・解除は引き続き検出する。通常の優先度上昇とEOLパッケージのAct nowへの上昇は検出しない。

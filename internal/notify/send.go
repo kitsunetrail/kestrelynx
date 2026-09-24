@@ -24,7 +24,8 @@ import (
 // notifiers ignore them. Thread asks for the full open-findings report to be
 // posted as replies under the summary message.
 // FirstSeen looks up a finding's first-seen time for the "open N day(s)"
-// lines. LastReport is the most recent successfully posted thread (nil when
+// lines, and EOLFirstSeen the time an end-of-life package was first seen
+// end-of-life, for the same lines of end-of-life groups. LastReport is the most recent successfully posted thread (nil when
 // none). Result, when non-nil, receives the ref of a thread posted by this
 // send, so the caller can persist it only after delivery succeeded.
 //
@@ -40,10 +41,11 @@ type Message struct {
 	FullReport bool
 	Holding    bool
 
-	Thread     bool
-	FirstSeen  func(image, pkg string) (time.Time, bool)
-	LastReport *state.ReportRef
-	Result     *ThreadResult
+	Thread       bool
+	FirstSeen    func(image, pkg string) (time.Time, bool)
+	EOLFirstSeen func(image, pkg string) (time.Time, bool)
+	LastReport   *state.ReportRef
+	Result       *ThreadResult
 }
 
 // ThreadResult is the out-slot for a thread post: a zero Ref means no thread

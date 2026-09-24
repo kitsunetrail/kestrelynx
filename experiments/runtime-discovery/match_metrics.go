@@ -68,13 +68,16 @@ func groupFindings(findings []scanner.Finding) []pkgGroup {
 // triage never assigned one to.
 //
 // The product sorts findings into sections by vulnerability status and
-// prioritizes what lands in them: fixed, affected and will_not_fix. Trivy
-// emits other statuses too — fix_deferred, end_of_life, unknown — and a
-// Finding carrying one of those appears in no section, so no priority
-// exists to recover. Deriving one here would be re-implementing the triage
-// rules this harness exists to measure, so the gap is named instead: these
-// Findings stay in every denominator and are reported as unclassified,
-// which is why the per-priority denominators add up to the overall one.
+// prioritizes what lands in them. Every status Trivy emits has a section
+// (fix_deferred, under_investigation and unknown are treated as affected,
+// end_of_life has its own) except not_affected, which the product drops as
+// "not vulnerable"; a Finding carrying it appears in no section, so no
+// priority exists to recover. Deriving one here would be re-implementing
+// the triage rules this harness exists to measure, so the gap is named
+// instead: these Findings stay in every denominator and are reported as
+// unclassified, which is why the per-priority denominators add up to the
+// overall one. Results recorded before end_of_life and the statuses folded
+// into affected had sections counted those as unclassified too.
 const priorityUnclassified = "unclassified"
 
 // computePriorities calls analyze.Build once per raw Finding, each time with
@@ -99,7 +102,7 @@ func computePriorities(findings []scanner.Finding, artifactName, osFamily string
 // not triage presents itself; an empty priority with found true means the
 // product reached it but assigned none.
 func extractSolePriority(r analyze.Report) (priority string, found bool) {
-	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix} {
+	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			for _, g := range img.Packages {
 				for _, v := range g.Vulns {

@@ -93,8 +93,9 @@ func (tr Triage) SignalsActNow(e Enrichment) bool {
 type VulnRef struct {
 	ID         string
 	Severity   scanner.Severity
-	URL        string // scanner's primary advisory link for this CVE
-	Title      string // short human-readable summary, if the scanner supplied one
+	URL        string         // scanner's primary advisory link for this CVE
+	Title      string         // short human-readable summary, if the scanner supplied one
+	Status     scanner.Status // raw Trivy status; differs from the group's Status when sectionOf folded it in (e.g. fix_deferred in an affected group)
 	KEV        bool
 	Ransomware bool
 	EPSS       float64
@@ -198,6 +199,11 @@ func GroupCount(imgs []ImageFindings) int {
 // status sections remain the report's canonical structure (ADR-010, webhook
 // compatibility); this is the Slack rendering's axis.
 //
+// End-of-life package groups have their own section in every rendering;
+// only the act_now ones also join ActNow, including those of an image whose
+// base OS is end-of-life (tonight's work must not hide behind that summary
+// line). They never join Watch or Low.
+//
 // Regrouping keys on (Ref, EntityKey) — the same imgKey the status sections
 // already use (analyze.go) — not on Ref alone: keying on Ref alone would
 // silently merge an Ambiguous reference's distinct entities back into one
@@ -213,12 +219,15 @@ func (r Report) ByPriority() PriorityView {
 	// on each sighting is harmless.
 	containers := map[imgKey][]inventory.Container{}
 	meta := map[imgKey]entityMeta{}
-	for _, section := range [][]ImageFindings{r.Actionable, r.Watch, r.WontFix} {
+	for _, section := range [][]ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			k := imgKey{ref: img.Image, key: img.Subject.Key}
 			containers[k] = img.Containers
 			meta[k] = entityMeta{subject: img.Subject, pinned: img.Pinned}
 			for _, g := range img.Packages {
+				if IsEOL(g) && g.Priority != PriorityActNow {
+					continue
+				}
 				m := buckets[g.Priority]
 				if m == nil {
 					m = map[imgKey][]PackageGroup{}

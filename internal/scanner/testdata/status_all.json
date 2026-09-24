@@ -1,0 +1,244 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.71.2"
+  },
+  "CreatedAt": "2026-09-24T09:00:00.000000000Z",
+  "ArtifactName": "registry.example/ubi8-app:2.1",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "OS": {
+      "Family": "redhat",
+      "Name": "8.10"
+    },
+    "ImageID": "sha256:5f3c7a9e1b2d4c6f8a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f",
+    "RepoTags": [
+      "registry.example/ubi8-app:2.1"
+    ],
+    "RepoDigests": [
+      "registry.example/ubi8-app@sha256:9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "Results": [
+    {
+      "Target": "registry.example/ubi8-app:2.1 (redhat 8.10)",
+      "Class": "os-pkgs",
+      "Type": "redhat",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2032-0001",
+          "PkgID": "openssl-libs@1.1.1k-12.el8.x86_64",
+          "PkgName": "openssl-libs",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/openssl-libs@1.1.1k-12.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "1.1.1k-12.el8",
+          "FixedVersion": "1:1.1.1k-14.el8_10",
+          "Status": "fixed",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0001",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "openssl-libs: synthetic finding for status fixed",
+          "Severity": "HIGH"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0002",
+          "PkgID": "libxml2@2.9.7-18.el8.x86_64",
+          "PkgName": "libxml2",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/libxml2@2.9.7-18.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "2.9.7-18.el8",
+          "Status": "affected",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0002",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "libxml2: synthetic finding for status affected",
+          "Severity": "HIGH"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0003",
+          "PkgID": "libxml2@2.9.7-18.el8.x86_64",
+          "PkgName": "libxml2",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/libxml2@2.9.7-18.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "2.9.7-18.el8",
+          "Status": "fix_deferred",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0003",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "libxml2: synthetic finding for status fix_deferred",
+          "Severity": "HIGH"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0004",
+          "PkgID": "libxml2@2.9.7-18.el8.x86_64",
+          "PkgName": "libxml2",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/libxml2@2.9.7-18.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "2.9.7-18.el8",
+          "Status": "under_investigation",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0004",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "libxml2: synthetic finding for status under_investigation",
+          "Severity": "CRITICAL"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0005",
+          "PkgID": "libxml2@2.9.7-18.el8.x86_64",
+          "PkgName": "libxml2",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/libxml2@2.9.7-18.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "2.9.7-18.el8",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0005",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "libxml2: synthetic finding for status (absent)",
+          "Severity": "HIGH"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0006",
+          "PkgID": "libxml2@2.9.7-18.el8.x86_64",
+          "PkgName": "libxml2",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/libxml2@2.9.7-18.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "2.9.7-18.el8",
+          "Status": "unknown",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0006",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "libxml2: synthetic finding for status unknown",
+          "Severity": "HIGH"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0007",
+          "PkgID": "libxml2@2.9.7-18.el8.x86_64",
+          "PkgName": "libxml2",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/libxml2@2.9.7-18.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "2.9.7-18.el8",
+          "Status": "future_status",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0007",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "libxml2: synthetic finding for status future_status",
+          "Severity": "HIGH"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0008",
+          "PkgID": "qt5-qtbase@5.15.3-8.el8.x86_64",
+          "PkgName": "qt5-qtbase",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/qt5-qtbase@5.15.3-8.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "5.15.3-8.el8",
+          "Status": "end_of_life",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0008",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "qt5-qtbase: synthetic finding for status end_of_life",
+          "Severity": "CRITICAL"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0009",
+          "PkgID": "qt5-qtbase@5.15.3-8.el8.x86_64",
+          "PkgName": "qt5-qtbase",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/qt5-qtbase@5.15.3-8.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "5.15.3-8.el8",
+          "Status": "end_of_life",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0009",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "qt5-qtbase: synthetic finding for status end_of_life",
+          "Severity": "HIGH"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0010",
+          "PkgID": "sqlite-libs@3.26.0-19.el8.x86_64",
+          "PkgName": "sqlite-libs",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/sqlite-libs@3.26.0-19.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "3.26.0-19.el8",
+          "Status": "will_not_fix",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0010",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "sqlite-libs: synthetic finding for status will_not_fix",
+          "Severity": "HIGH"
+        },
+        {
+          "VulnerabilityID": "CVE-2032-0011",
+          "PkgID": "glibc@2.28-251.el8.x86_64",
+          "PkgName": "glibc",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/glibc@2.28-251.el8?arch=x86_64&distro=redhat-8.10"
+          },
+          "InstalledVersion": "2.28-251.el8",
+          "Status": "not_affected",
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2032-0011",
+          "DataSource": {
+            "ID": "redhat",
+            "Name": "Red Hat",
+            "URL": "https://www.redhat.com/"
+          },
+          "Title": "glibc: synthetic finding for status not_affected",
+          "Severity": "HIGH"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+📊 *Full report — 2026-06-24 09:00*
+
+*⛔ EOL base images (2)*
+• legacy:1 — base OS is EOL (no more security updates coming) · includes 2 end-of-life package(s)
+• old:3 — base OS is EOL (no more security updates coming) · includes 1 end-of-life package(s)
+
+*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release*
+• app:2.1
+   • libwebkit2gtk 2.38.5-1 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0001|CVE-2033-0001> CRITICAL · EPSS 0.4% — end-of-life: no fix planned for this release, consider a supported version
+       📎 <https://avd.example/CVE-2033-0001|advisory>
+     ⏱ open 20 day(s) — first seen 2026-06-04
+   • curl 7.61.1-34 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0004|CVE-2033-0004> HIGH · EPSS <0.1% — end-of-life: no fix planned for this release, consider a supported version
+       📎 <https://avd.example/CVE-2033-0004|advisory>
+     ⏱ first seen today
+   • libxml2 2.9.7-16 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — 🚨 see Act now
+   • qt5-qtbase 5.15.3-1 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> HIGH · EPSS <0.1% — end-of-life: no fix planned for this release, consider a supported version
+       📎 <https://avd.example/CVE-2033-0002|advisory>
+     ⏱ first seen today
+
+*🚨 ACT NOW (2) — exploited or likely to be*
+• legacy:1
+   • zlib 1.2.11 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> CRITICAL · CISA KEV (exploited in the wild) · EPSS 30% — end-of-life: no fix planned for this release, consider a supported version
+       📎 <https://avd.example/CVE-2033-0005|advisory>
+     also: <https://nvd.nist.gov/vuln/detail/CVE-2033-0007|CVE-2033-0007>
+     ⏱ open 20 day(s) — first seen 2026-06-04
+• app:2.1
+   • libxml2 2.9.7-16 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0003|CVE-2033-0003> HIGH · CISA KEV (exploited in the wild) · EPSS 12% — end-of-life: no fix planned for this release, consider a supported version
+       📎 <https://avd.example/CVE-2033-0003|advisory>
+     ⏱ open 20 day(s) — first seen 2026-06-04
+===== next thread message =====
+*👀 WATCH (1) — not urgent, keep an eye on*
+• app:2.1
+   • curl 7.61.1-34 (no fix available) (CRITICAL 0 / HIGH 2)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0011|CVE-2033-0011> HIGH · EPSS 2% — no fix yet, consider mitigation
+       📎 <https://avd.example/CVE-2033-0011|advisory>
+     also: <https://nvd.nist.gov/vuln/detail/CVE-2033-0012|CVE-2033-0012>
+     ⏱ open 20 day(s) — first seen 2026-06-04
+
+*🔕 LOW (1)* — no exploitation signal; details in the weekly full report or the webhook payload

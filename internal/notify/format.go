@@ -25,6 +25,26 @@ const collapsePreview = 5
 // this many days an unresolved finding stops being news and starts being debt.
 const staleDays = 14
 
+// openNowEOLBaseWithoutTriage decides whether the triage-off "Open now"
+// heartbeat leads with the "⛔ N EOL base" segment, as the triage heartbeat
+// always has. The end-of-life package segment is shown in both modes
+// regardless; this switch only covers the base-OS segment.
+const openNowEOLBaseWithoutTriage = true
+
+// Wording for end-of-life package groups: the vendor reports the detected
+// CVEs as out of support for the installed release. It deliberately makes
+// no claim about the package or the release as a whole.
+const (
+	eolPackageText   = "end-of-life: no fix planned for this release"
+	eolSectionReason = "vendor reports these CVEs as out of support for this release"
+	// eolEvidenceMark follows the evidence line of an end-of-life group.
+	eolEvidenceMark = " — end-of-life: no fix planned for this release, consider a supported version"
+	// eolSeeActNow replaces the details of an act_now group in an
+	// end-of-life section that sits next to an Act now section showing
+	// them in full.
+	eolSeeActNow = " — 🚨 see Act now"
+)
+
 // writeHeader renders the product header line shared by full and diff-mode
 // Slack messages. A named environment gets inserted once, right after the
 // product name; the unnamed default environment renders exactly the text
@@ -77,13 +97,8 @@ func writeFullBody(b *strings.Builder, r analyze.Report) {
 	writeHeadline(b, summarize(r))
 	byRef := imagesByRef(r)
 
-	if len(r.EOSLImages) > 0 {
-		b.WriteString("\n*⛔ Base OS end-of-life (top priority)*\n")
-		for _, img := range r.EOSLImages {
-			fmt.Fprintf(b, "• %s — base OS is EOL (no more security updates coming)\n", refLabel(img, byRef))
-		}
-	}
-
+	writeEOSLSection(b, r, byRef)
+	writeEOLPackages(b, r, byRef)
 	collapsed := writeActionable(b, r.Actionable, byRef)
 	writeSection(b, "ℹ️ No fix yet (affected / waiting on upstream)", r.Watch, false, byRef)
 	writeSection(b, "🔕 Upstream won't fix (will_not_fix)", r.WontFix, false, byRef)
@@ -131,12 +146,18 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holdin
 		return b.String()
 	}
 
+	eol := splitEOLChanges(d)
 	if len(d.NewEOSL) > 0 {
 		b.WriteString("\n*⛔ New: base OS end-of-life (top priority)*\n")
 		for _, img := range d.NewEOSL {
-			fmt.Fprintf(&b, "• %s — base OS is EOL (no more security updates coming)\n", refLabel(img, byRef))
+			note := ""
+			if n := eol.newEOSLNote[img]; n > 0 {
+				note = fmt.Sprintf(" · includes %d newly end-of-life package(s)", n)
+			}
+			fmt.Fprintf(&b, "• %s — base OS is EOL (no more security updates coming)%s\n", refLabel(img, byRef), note)
 		}
 	}
+	writeEOLChanges(&b, r, eol, byRef)
 
 	if r.Triage {
 		writeIntelWarning(&b, r)
@@ -464,7 +485,12 @@ func compactEvidence(r analyze.Report, v analyze.VulnRef) string {
 }
 
 func changesEmoji(c state.Change) string {
-	for _, g := range c.Groups {
+	return groupsEmoji(c.Groups)
+}
+
+// groupsEmoji is the severity marker of a set of package groups.
+func groupsEmoji(groups []analyze.PackageGroup) string {
+	for _, g := range groups {
 		if g.Critical > 0 {
 			return "🔴"
 		}
@@ -475,25 +501,92 @@ func changesEmoji(c state.Change) string {
 // writeResolved renders findings that disappeared since the previous scan, one
 // line per image. Seeing yesterday's fix confirmed is the reward loop of diff
 // mode, so it is never collapsed away.
+//
+// A package whose ordinary and end-of-life findings cleared together is
+// listed once: the per-image lists are the (image, package) union of
+// Resolved and the end-of-life clearances that left nothing behind. A
+// package that left end-of-life but still has ordinary findings gets its
+// own "no longer end-of-life" line instead.
 func writeResolved(b *strings.Builder, d state.Diff, byRef map[string]analyze.ImageObservation) {
-	if len(d.Resolved) == 0 && len(d.ResolvedEOSL) == 0 {
+	type pkgKey struct{ image, pkg string }
+	seen := map[pkgKey]bool{}
+	var gone []pkgKey
+	for _, res := range d.Resolved {
+		k := pkgKey{res.Image, res.Package}
+		if !seen[k] {
+			seen[k] = true
+			gone = append(gone, k)
+		}
+	}
+	var leftEOL []state.ResolvedEOL
+	for _, res := range d.ResolvedEOLPackages {
+		k := pkgKey{res.Image, res.Package}
+		switch {
+		case res.StillOpen:
+			leftEOL = append(leftEOL, res)
+		case !seen[k]:
+			seen[k] = true
+			gone = append(gone, k)
+		}
+	}
+	if len(gone) == 0 && len(leftEOL) == 0 && len(d.ResolvedEOSL) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*✅ Resolved since last scan (%d)*\n", len(d.Resolved)+len(d.ResolvedEOSL))
+	sort.SliceStable(gone, func(i, j int) bool {
+		if gone[i].image != gone[j].image {
+			return gone[i].image < gone[j].image
+		}
+		return gone[i].pkg < gone[j].pkg
+	})
+	fmt.Fprintf(b, "\n*✅ Resolved since last scan (%d)*\n", len(gone)+len(leftEOL)+len(d.ResolvedEOSL))
 	for _, img := range d.ResolvedEOSL {
 		fmt.Fprintf(b, "• %s — base OS no longer EOL\n", refLabel(img, byRef))
 	}
 	byImage := map[string][]string{}
 	var imgOrder []string
-	for _, res := range d.Resolved {
-		if _, ok := byImage[res.Image]; !ok {
-			imgOrder = append(imgOrder, res.Image)
+	for _, k := range gone {
+		if _, ok := byImage[k.image]; !ok {
+			imgOrder = append(imgOrder, k.image)
 		}
-		byImage[res.Image] = append(byImage[res.Image], res.Package)
+		byImage[k.image] = append(byImage[k.image], k.pkg)
 	}
 	for _, img := range imgOrder {
 		fmt.Fprintf(b, "• %s: %s\n", refLabel(img, byRef), strings.Join(byImage[img], ", "))
 	}
+	for _, res := range leftEOL {
+		fmt.Fprintf(b, "• %s: %s — no longer end-of-life\n", refLabel(res.Image, byRef), res.Package)
+	}
+}
+
+// writeNothingOpenNow is the heartbeat for a cycle whose report has no
+// findings. "All clear" is only claimed when state holds nothing either:
+// findings held for an unpinned scan (holding) or for a failed scan
+// (d.AnyOpen) are still open, just not re-scanned.
+func writeNothingOpenNow(b *strings.Builder, d state.Diff, holding bool) {
+	switch {
+	case holding:
+		b.WriteString("\n📌 Open now: unconfirmed — holding previous findings until re-confirmed\n")
+	case d.AnyOpen:
+		b.WriteString("\n📌 Open now: not re-scanned — holding previous findings until the next successful scan\n")
+	default:
+		b.WriteString("\n🎉 Open now: none — all clear\n")
+	}
+}
+
+// openNowEOLSegments are the end-of-life segments leading the "Open now"
+// heartbeat, counted from state so held records are included and the
+// base-OS count agrees with the fold (d.OpenEOSL). The package segment is
+// independent of triage; the base-OS one follows openNowEOLBaseWithoutTriage
+// when triage is off.
+func openNowEOLSegments(d state.Diff, triage bool) []string {
+	var seg []string
+	if n := len(d.OpenEOSL); n > 0 && (triage || openNowEOLBaseWithoutTriage) {
+		seg = append(seg, fmt.Sprintf("⛔ %d EOL base", n))
+	}
+	if d.OpenEOLPackages > 0 {
+		seg = append(seg, fmt.Sprintf("⛔ %d EOL package", d.OpenEOLPackages))
+	}
+	return seg
 }
 
 // writeOpenNow renders the one-line ambient summary that keeps unresolved
@@ -503,14 +596,11 @@ func writeResolved(b *strings.Builder, d state.Diff, byRef map[string]analyze.Im
 // contradict the fact that state is still carrying something over.
 func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool) {
 	if !r.HasFindings() {
-		if holding {
-			b.WriteString("\n📌 Open now: unconfirmed — holding previous findings until re-confirmed\n")
-			return
-		}
-		b.WriteString("\n🎉 Open now: none — all clear\n")
+		writeNothingOpenNow(b, d, holding)
 		return
 	}
-	fmt.Fprintf(b, "\n📌 Open now: CRITICAL %d / HIGH %d across %d image(s)", d.OpenCritical, d.OpenHigh, d.OpenImages)
+	seg := append(openNowEOLSegments(d, false), fmt.Sprintf("CRITICAL %d / HIGH %d across %d image(s)", d.OpenCritical, d.OpenHigh, d.OpenImages))
+	fmt.Fprintf(b, "\n📌 Open now: %s", strings.Join(seg, " / "))
 	if days := d.OldestOpenDays(r.GeneratedAt); days > 0 {
 		if days >= staleDays {
 			fmt.Fprintf(b, " — ⏰ oldest unresolved %d day(s)", days)
@@ -533,15 +623,16 @@ func writeScanErrors(b *strings.Builder, errs []analyze.ScanError, byRef map[str
 
 // priority holds the headline counts shown at the top of the message.
 type priority struct {
-	eol, critical, care, safe int
+	eol, eolPackages, critical, care, safe int
 }
 
-// summarize tallies the headline: EOL base images, total CRITICAL CVEs across
-// all sections, fixable packages that need care (major bump), and fixable
-// packages low-risk enough to be collapsed.
+// summarize tallies the headline: EOL base images, end-of-life packages shown
+// individually, total CRITICAL CVEs across all sections, fixable packages
+// that need care (major bump), and fixable packages low-risk enough to be
+// collapsed.
 func summarize(r analyze.Report) priority {
-	p := priority{eol: len(r.EOSLImages)}
-	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix} {
+	p := priority{eol: len(r.EOSLImages), eolPackages: analyze.GroupCount(r.EOLPackageAlerts())}
+	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			p.critical += img.CriticalCount()
 		}
@@ -565,6 +656,9 @@ func writeHeadline(b *strings.Builder, p priority) {
 	var seg []string
 	if p.eol > 0 {
 		seg = append(seg, fmt.Sprintf("⛔ %d EOL base", p.eol))
+	}
+	if p.eolPackages > 0 {
+		seg = append(seg, fmt.Sprintf("⛔ %d EOL package", p.eolPackages))
 	}
 	if p.critical > 0 {
 		seg = append(seg, fmt.Sprintf("🔴 %d CRITICAL", p.critical))
@@ -632,9 +726,12 @@ func writeSection(b *strings.Builder, title string, imgs []analyze.ImageFindings
 
 func writePackage(b *strings.Builder, g analyze.PackageGroup, fixed bool, suffix string) {
 	b.WriteString("   • ")
-	if fixed {
+	switch {
+	case fixed:
 		fmt.Fprintf(b, "%s %s → %s", g.Package, g.InstalledVer, g.FixedVer)
-	} else {
+	case analyze.IsEOL(g):
+		fmt.Fprintf(b, "%s %s (%s)", g.Package, g.InstalledVer, eolPackageText)
+	default:
 		fmt.Fprintf(b, "%s %s (no fix available)", g.Package, g.InstalledVer)
 	}
 	fmt.Fprintf(b, " (CRITICAL %d / HIGH %d)", g.Critical, g.High)
@@ -705,6 +802,7 @@ type webhookPayload struct {
 	Actionable  []imagePayload      `json:"actionable"`
 	Watch       []imagePayload      `json:"watch"`
 	WontFix     []imagePayload      `json:"wont_fix"`
+	EOLPackages []imagePayload      `json:"eol_packages"` // every end-of-life package group, folded and act_now ones included
 	ScanErrors  []errorPayload      `json:"scan_errors"`
 	Diff        *diffPayload        `json:"diff,omitempty"`
 }
@@ -728,6 +826,30 @@ type diffPayload struct {
 	NewEOSL       []string          `json:"new_eosl"`
 	ResolvedEOSL  []string          `json:"resolved_eosl"`
 	OldestOpenDay int               `json:"oldest_open_days"`
+
+	// End-of-life package changes, independent of new/resolved above (the
+	// same package can appear in both).
+	NewEOLPackages      []eolChangePayload   `json:"new_eol_packages"`
+	ResolvedEOLPackages []eolResolvedPayload `json:"resolved_eol_packages"`
+}
+
+// eolChangePayload mirrors state.EOLChange.
+type eolChangePayload struct {
+	Image    string   `json:"image"`
+	Package  string   `json:"package"`
+	Kind     string   `json:"kind"`                  // eol_new | eol_new_cves | eol_escalated
+	NewIDs   []string `json:"new_cve_ids,omitempty"` // eol_new_cves: the end-of-life CVE ids added
+	Critical int      `json:"critical"`
+	High     int      `json:"high"`
+	Priority string   `json:"priority,omitempty"` // triage: act_now | watch | low
+	Reason   string   `json:"reason,omitempty"`   // eol_escalated: evidence for the new verdict
+}
+
+// eolResolvedPayload mirrors state.ResolvedEOL.
+type eolResolvedPayload struct {
+	Image     string `json:"image"`
+	Package   string `json:"package"`
+	StillOpen bool   `json:"still_open"` // the package still has ordinary findings
 }
 
 // replacedPayload mirrors state.ImageReplacement: a reference whose verified
@@ -839,8 +961,9 @@ type findingPayload struct {
 type vulnPayload struct {
 	ID         string       `json:"id"`
 	Severity   string       `json:"severity"`
-	URL        string       `json:"url,omitempty"`   // scanner's primary advisory
-	Title      string       `json:"title,omitempty"` // short human-readable summary, if the scanner supplied one
+	URL        string       `json:"url,omitempty"`    // scanner's primary advisory
+	Title      string       `json:"title,omitempty"`  // short human-readable summary, if the scanner supplied one
+	Status     string       `json:"status,omitempty"` // raw scanner status, only when it differs from the finding's status (e.g. fix_deferred in watch)
 	KEV        bool         `json:"kev"`
 	Ransomware bool         `json:"ransomware,omitempty"`
 	EPSS       *float64     `json:"epss"`
@@ -875,11 +998,12 @@ func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
 			ImagesTotal:    r.ImagesTotal,
 			ImagesAffected: r.AffectedImageCount(),
 		},
-		EOSLImages: r.EOSLImages,
-		Actionable: imagePayloads(r.Actionable, byRef),
-		Watch:      imagePayloads(r.Watch, byRef),
-		WontFix:    imagePayloads(r.WontFix, byRef),
-		ScanErrors: errorPayloads(r.ScanErrors),
+		EOSLImages:  r.EOSLImages,
+		Actionable:  imagePayloads(r.Actionable, byRef),
+		Watch:       imagePayloads(r.Watch, byRef),
+		WontFix:     imagePayloads(r.WontFix, byRef),
+		EOLPackages: imagePayloads(r.EOLPackages, byRef),
+		ScanErrors:  errorPayloads(r.ScanErrors),
 	}
 	if r.Triage {
 		pv := r.ByPriority()
@@ -903,12 +1027,14 @@ func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
 
 func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 	dp := &diffPayload{
-		New:           []changePayload{},
-		Resolved:      []resolvedPayload{},
-		Replaced:      []replacedPayload{},
-		NewEOSL:       emptyIfNil(d.NewEOSL),
-		ResolvedEOSL:  emptyIfNil(d.ResolvedEOSL),
-		OldestOpenDay: d.OldestOpenDays(r.GeneratedAt),
+		New:                 []changePayload{},
+		Resolved:            []resolvedPayload{},
+		Replaced:            []replacedPayload{},
+		NewEOSL:             emptyIfNil(d.NewEOSL),
+		ResolvedEOSL:        emptyIfNil(d.ResolvedEOSL),
+		OldestOpenDay:       d.OldestOpenDays(r.GeneratedAt),
+		NewEOLPackages:      []eolChangePayload{},
+		ResolvedEOLPackages: []eolResolvedPayload{},
 	}
 	for _, c := range d.Changes {
 		var crit, high int
@@ -941,6 +1067,29 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			ContentIDs:     emptyIfNil(rep.ContentIDs),
 		})
 	}
+	for _, c := range d.NewEOLPackages {
+		var crit, high int
+		for _, g := range c.Groups {
+			crit += g.Critical
+			high += g.High
+		}
+		cp := eolChangePayload{
+			Image:    c.Image,
+			Package:  c.Package,
+			Kind:     string(c.Kind),
+			NewIDs:   c.NewIDs,
+			Critical: crit,
+			High:     high,
+			Priority: string(analyze.MaxPriority(c.Groups)),
+		}
+		if c.Kind == state.EOLKindEscalated {
+			cp.Reason = changeEvidence(r, eolAsChange(c))
+		}
+		dp.NewEOLPackages = append(dp.NewEOLPackages, cp)
+	}
+	for _, res := range d.ResolvedEOLPackages {
+		dp.ResolvedEOLPackages = append(dp.ResolvedEOLPackages, eolResolvedPayload{Image: res.Image, Package: res.Package, StillOpen: res.StillOpen})
+	}
 	return dp
 }
 
@@ -966,6 +1115,9 @@ func imagePayloads(imgs []analyze.ImageFindings, byRef map[string]analyze.ImageO
 					KEV:        v.KEV,
 					Ransomware: v.Ransomware,
 					Priority:   string(v.Priority),
+				}
+				if v.Status != g.Status {
+					vp.Status = string(v.Status)
 				}
 				if v.EPSSKnown {
 					epss := v.EPSS

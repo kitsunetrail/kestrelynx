@@ -1,0 +1,27 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 3 affected
+
+*⛔ New: base OS end-of-life (top priority)*
+• old:3 — base OS is EOL (no more security updates coming) · includes 1 newly end-of-life package(s)
+
+*⛔ New: package end-of-life (4) — vendor reports these CVEs as out of support for this release*
+🚨 legacy:1
+   • zlib 1.2.11 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 1) — new: <https://nvd.nist.gov/vuln/detail/CVE-2033-0007|CVE-2033-0007>
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> CRITICAL · severity only (intel unavailable) (+1 more CVE(s) in this package) — end-of-life: no fix planned for this release, consider a supported version
+       📎 <https://avd.example/CVE-2033-0005|advisory>
+👀 app:2.1
+   • curl 7.61.1-34 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-2033-0004|CVE-2033-0004> HIGH
+   • qt5-qtbase 5.15.3-1 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> HIGH
+• legacy:1 — 1 package(s) newly end-of-life (base OS already EOL)
+⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low
+
+*🆕 New since last scan (1)*
+👀 app:2.1
+   • curl 7.61.1-34 (no fix available) (CRITICAL 0 / HIGH 2) — new: <https://nvd.nist.gov/vuln/detail/CVE-2033-0012|CVE-2033-0012>
+
+*✅ Resolved since last scan (3)*
+• app:2.1: old-eol, tar
+• app:2.1: sqlite-libs — no longer end-of-life
+
+📌 Open now: ⛔ 2 EOL base / ⛔ 4 EOL package / 🚨 2 act-now / 👀 2 watch — ⏰ oldest act-now/watch unresolved 20 day(s)
+_Details in the generic webhook payload, or in the weekly full report._

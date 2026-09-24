@@ -19,7 +19,7 @@ func seenDaysAgo(days int) func(image, pkg string) (time.Time, bool) {
 }
 
 func TestBuildThreadMessages_TriageLayout(t *testing.T) {
-	msgs := BuildThreadMessages(triageReport(), seenDaysAgo(3), 0)
+	msgs := BuildThreadMessages(triageReport(), Ages{Finding: seenDaysAgo(3)}, 0)
 	if len(msgs) != 1 {
 		t.Fatalf("expected one message, got %d", len(msgs))
 	}
@@ -126,14 +126,14 @@ func TestWriteThreadDetail_NoTitleLineWhenEmpty(t *testing.T) {
 }
 
 func TestBuildThreadMessages_FirstSeenToday(t *testing.T) {
-	msgs := BuildThreadMessages(triageReport(), seenDaysAgo(0), 0)
+	msgs := BuildThreadMessages(triageReport(), Ages{Finding: seenDaysAgo(0)}, 0)
 	if !strings.Contains(msgs[0], "⏱ first seen today") {
 		t.Errorf("day-zero findings should read 'first seen today':\n%s", msgs[0])
 	}
 }
 
 func TestBuildThreadMessages_NilFirstSeen(t *testing.T) {
-	msgs := BuildThreadMessages(triageReport(), nil, 0)
+	msgs := BuildThreadMessages(triageReport(), Ages{}, 0)
 	if len(msgs) == 0 {
 		t.Fatal("expected messages without a firstSeen lookup")
 	}
@@ -144,7 +144,7 @@ func TestBuildThreadMessages_NilFirstSeen(t *testing.T) {
 
 func TestBuildThreadMessages_NothingOpen(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{{Image: "clean:1"}}, nil, analyze.Triage{}, genTime)
-	if msgs := BuildThreadMessages(r, nil, 0); msgs != nil {
+	if msgs := BuildThreadMessages(r, Ages{}, 0); msgs != nil {
 		t.Errorf("no open findings must skip the thread (edge case 4), got %d message(s)", len(msgs))
 	}
 }
@@ -159,7 +159,7 @@ func TestBuildThreadMessages_AlsoIDs(t *testing.T) {
 		},
 	}}
 	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
-	out := strings.Join(BuildThreadMessages(r, nil, 0), "\n")
+	out := strings.Join(BuildThreadMessages(r, Ages{}, 0), "\n")
 	if !strings.Contains(out, "also: <https://nvd.nist.gov/vuln/detail/CVE-B|CVE-B>, <https://nvd.nist.gov/vuln/detail/CVE-C|CVE-C>") {
 		t.Errorf("secondary CVE ids must be listed:\n%s", out)
 	}
@@ -188,7 +188,7 @@ func wideReport(images int) analyze.Report {
 
 func TestBuildThreadMessages_SplitsAtLimit(t *testing.T) {
 	limit := 900
-	msgs := BuildThreadMessages(wideReport(12), seenDaysAgo(2), limit)
+	msgs := BuildThreadMessages(wideReport(12), Ages{Finding: seenDaysAgo(2)}, limit)
 	if len(msgs) < 2 {
 		t.Fatalf("expected the report to split, got %d message(s)", len(msgs))
 	}
@@ -220,7 +220,7 @@ func TestBuildThreadMessages_SplitsAtLimit(t *testing.T) {
 }
 
 func TestBuildThreadMessages_TriageOffFallback(t *testing.T) {
-	out := strings.Join(BuildThreadMessages(sampleReport(), seenDaysAgo(1), 0), "\n")
+	out := strings.Join(BuildThreadMessages(sampleReport(), Ages{Finding: seenDaysAgo(1)}, 0), "\n")
 	mustContain := []string{
 		"*✅ Actionable now (fixed)*",
 		"🔴 web:1.0", // triage off: no bucket signal, severity emoji stays

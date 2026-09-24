@@ -22,8 +22,10 @@ const wantSlackTextUnnamed = "🛡️ *KestreLynx* — scan results for 2026-06-
 // wantSlackDiffTextUnnamed is the diff-mode counterpart of
 // wantSlackTextUnnamed: the frozen full-text output of
 // FormatSlackDiffText(r, d, false, false) for diffFixture()'s unnamed-environment
-// report.
-const wantSlackDiffTextUnnamed = "🛡️ *KestreLynx* — scan results for 2026-06-24 09:00\n2 images scanned, 1 affected\n\n*⛔ New: base OS end-of-life (top priority)*\n• web:1.0 — identity unconfirmed: scanned by reference — base OS is EOL (no more security updates coming)\n\n*🆕 New since last scan (4)*\n🔴 web:1.0 — identity unconfirmed: scanned by reference\n   • libc-bin 2.28-10 → 2.28-10+deb10u2 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> CRITICAL\n   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [lang] — <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2> HIGH\n   • e2fsprogs 1.44 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3> HIGH\n   • gcc-8-base 8.3 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> HIGH\n\n*⚠️ Scan failures*\n• broken:1 — identity unconfirmed: scanned by reference — pull failed\n\n📌 Open now: CRITICAL 1 / HIGH 3 across 1 image(s)\n_Details in the generic webhook payload, or in the weekly full report._\n\n⚠️ identity unconfirmed: scanned by reference — broken:1, web:1.0\n"
+// report. The one deliberate change since it was captured is the "⛔ 1 EOL
+// base" segment leading the triage-off "Open now" line (see
+// openNowEOLBaseWithoutTriage).
+const wantSlackDiffTextUnnamed = "🛡️ *KestreLynx* — scan results for 2026-06-24 09:00\n2 images scanned, 1 affected\n\n*⛔ New: base OS end-of-life (top priority)*\n• web:1.0 — identity unconfirmed: scanned by reference — base OS is EOL (no more security updates coming)\n\n*🆕 New since last scan (4)*\n🔴 web:1.0 — identity unconfirmed: scanned by reference\n   • libc-bin 2.28-10 → 2.28-10+deb10u2 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> CRITICAL\n   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [lang] — <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2> HIGH\n   • e2fsprogs 1.44 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3> HIGH\n   • gcc-8-base 8.3 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> HIGH\n\n*⚠️ Scan failures*\n• broken:1 — identity unconfirmed: scanned by reference — pull failed\n\n📌 Open now: ⛔ 1 EOL base / CRITICAL 1 / HIGH 3 across 1 image(s)\n_Details in the generic webhook payload, or in the weekly full report._\n\n⚠️ identity unconfirmed: scanned by reference — broken:1, web:1.0\n"
 
 // TestFormatSlackText_UnnamedEnvironmentUnchanged pins the exact,
 // full-message output for the unnamed default environment: a single-host
@@ -83,11 +85,11 @@ func TestFormatSlackDiffText_NamedEnvironment(t *testing.T) {
 // does render identically whether or not the report carries a named
 // environment, and never leaks the name into its output.
 func TestBuildThreadMessages_EnvironmentUnaffected(t *testing.T) {
-	unnamed := BuildThreadMessages(sampleReport(), seenDaysAgo(3), 0)
+	unnamed := BuildThreadMessages(sampleReport(), Ages{Finding: seenDaysAgo(3)}, 0)
 
 	named := sampleReport()
 	named.Environment = inventory.Environment{Name: "prod-vps", Kind: inventory.KindDocker}
-	withEnv := BuildThreadMessages(named, seenDaysAgo(3), 0)
+	withEnv := BuildThreadMessages(named, Ages{Finding: seenDaysAgo(3)}, 0)
 
 	if !reflect.DeepEqual(unnamed, withEnv) {
 		t.Errorf("thread report changed with a named environment:\nunnamed: %#v\nnamed:   %#v", unnamed, withEnv)
@@ -270,6 +272,7 @@ func TestBuildWebhookPayload_Containers(t *testing.T) {
 // environment, captured before the environment/containers additions existed
 // and then stripped of the "environment" key and every imagePayload's
 // "containers" key (see TestBuildWebhookPayload_NoEnvironmentNoContainersUnchanged).
+// The later "eol_packages" key is stripped too.
 // It pins every other field — summary, findings, severity counts, the three
 // status sections, scan_errors — so a change to any of them, not just the
 // two new fields, fails this test.
@@ -302,6 +305,11 @@ func TestBuildWebhookPayload_NoEnvironmentNoContainersUnchanged(t *testing.T) {
 		t.Errorf("unnamed environment must omit name, got %v", env)
 	}
 	delete(got, "environment")
+	// Always present, empty here: sampleReport has no end-of-life packages.
+	if eol, ok := got["eol_packages"].([]any); !ok || len(eol) != 0 {
+		t.Errorf("eol_packages = %#v, want an empty array", got["eol_packages"])
+	}
+	delete(got, "eol_packages")
 
 	for _, section := range []string{"actionable", "watch", "wont_fix"} {
 		arr, ok := got[section].([]any)

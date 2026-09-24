@@ -326,10 +326,11 @@ func (r Runner) sendDiff(ctx context.Context, report analyze.Report) error {
 		// The thread mirrors the channel: post the full state when something
 		// changed (or on the weekly digest day); on quiet days the summary
 		// links to the previous thread instead.
-		Thread:     diff.HasChanges() || fullToday,
-		FirstSeen:  next.FirstSeen,
-		LastReport: prev.LastFullReport,
-		Result:     res,
+		Thread:       diff.HasChanges() || fullToday,
+		FirstSeen:    next.FirstSeen,
+		EOLFirstSeen: next.EOLFirstSeen,
+		LastReport:   prev.LastFullReport,
+		Result:       res,
 	}
 	if err := r.Notifier.Send(ctx, m); err != nil {
 		return fmt.Errorf("send notification: %w", err)

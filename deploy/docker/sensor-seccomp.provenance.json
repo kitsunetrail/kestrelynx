@@ -1,0 +1,5 @@
+{
+  "generator": "scripts/gen_sensor_seccomp_profile.py",
+  "source": "https://raw.githubusercontent.com/moby/profiles/main/seccomp/default.json",
+  "source_sha256": "785b2429264afba4d594320337cb17f144f3c7d51585f9805eef72e28f4f9334"
+}

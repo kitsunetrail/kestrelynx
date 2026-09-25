@@ -49,6 +49,11 @@ func (w Workload) Known() bool { return w.Kind != WorkloadUnknown }
 // display name — the container equivalent of a Kubernetes pod/container
 // name — and is never confused with an opaque runtime ID.
 type Container struct {
+	// ID is the runtime's own identifier for this container: for Docker,
+	// the 64-hex container ID (RunningContainers' "Id" field). It is the
+	// join key the Sensor's evidence.ContainerRef and this package's own
+	// Container agree on; "" means the adapter could not determine one.
+	ID       string
 	Name     string // adapter-normalized display name; "" when it couldn't be determined.
 	Workload Workload
 	Image    RunningImage

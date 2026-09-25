@@ -12,6 +12,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -56,16 +58,74 @@ func newClient(baseURL string, hc *http.Client) *Client {
 	return &Client{httpClient: hc, baseURL: baseURL}
 }
 
+// allowedPath is one Docker Engine API path this Client may GET. It is a
+// distinct type, constructed only by containersJSONPath and inspectPath
+// below, so that get (the only thing that can issue a request) cannot be
+// handed an arbitrary caller-supplied path or method — a coding discipline
+// that keeps this client's surface to "list" and "inspect" as the adapter
+// grows, not a privilege boundary: the mounted socket itself grants the
+// full Engine API regardless of what this type restricts.
+type allowedPath string
+
+// containersJSONPath is the fixed path RunningContainers lists from.
+func containersJSONPath() allowedPath { return "/containers/json" }
+
+// inspectPath is the per-container path Inspect reads from. id is
+// URL-escaped, not merely trusted, since it can originate from data this
+// package itself rejected as a malformed container ID upstream of a caller
+// that used it anyway.
+func inspectPath(id string) allowedPath {
+	return allowedPath("/containers/" + url.PathEscape(id) + "/json")
+}
+
+// get issues the one HTTP method this Client ever uses (GET) against one of
+// the allowed paths and returns the decoded JSON body. A non-200 response or
+// a body that doesn't decode as out is an error; the caller never sees a
+// half-decoded value.
+func (c *Client) get(ctx context.Context, path allowedPath, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+string(path), nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("GET %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("GET %s: status %s: %s", path, resp.Status, body)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
+	}
+	return nil
+}
+
 // container is the subset of /containers/json we use. Names/Labels are read
 // from the same response as Image/ImageID — no extra request is made — and
 // are consumed entirely within this file; nothing here reaches the common
 // inventory.Container model except what workloadFromLabels and
 // containerName distill out of it.
 type container struct {
+	ID      string            `json:"Id"`
 	Image   string            `json:"Image"`
 	ImageID string            `json:"ImageID"`
 	Names   []string          `json:"Names"`
 	Labels  map[string]string `json:"Labels"`
+}
+
+// containerIDRE matches a well-formed 64-hex Docker container ID.
+var containerIDRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// validContainerID reports whether id is a well-formed 64-hex Docker
+// container ID. A malformed value (short, mixed case, non-hex) is never
+// truncated or lower-cased into shape — the common model has no place for a
+// guessed identifier, matching the ImageID boundary check's philosophy.
+func validContainerID(id string) bool {
+	return containerIDRE.MatchString(id)
 }
 
 // Docker Compose labels that, together, resolve a container's Workload.
@@ -141,25 +201,9 @@ func containerName(names []string) string {
 // The return order is deterministic: (Image.Ref, Image.ContentID(),
 // Workload.Group, Workload.Name, Container.Name), lexicographically.
 func (c *Client) RunningContainers(ctx context.Context) ([]inventory.Container, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/containers/json", nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("list containers: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("list containers: status %s: %s", resp.Status, body)
-	}
-
 	var raw []container
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, fmt.Errorf("decode containers: %w", err)
+	if err := c.get(ctx, containersJSONPath(), &raw); err != nil {
+		return nil, fmt.Errorf("list containers: %w", err)
 	}
 
 	containers := make([]inventory.Container, 0, len(raw))
@@ -175,7 +219,16 @@ func (c *Client) RunningContainers(ctx context.Context) ([]inventory.Container, 
 			c.log().Warn("image id failed content id validation",
 				"ref", ct.Image, "raw_image_id", ct.ImageID)
 		}
+		id := ct.ID
+		if id != "" && !validContainerID(id) {
+			// A malformed Id is never truncated or guessed at — see
+			// validContainerID — so it is dropped with a diagnostic, the
+			// same treatment a malformed ImageID gets above.
+			c.log().Warn("container id failed validation", "ref", ct.Image, "raw_id", ct.ID)
+			id = ""
+		}
 		containers = append(containers, inventory.Container{
+			ID:       id,
 			Name:     containerName(ct.Names),
 			Workload: workloadFromLabels(ct.Labels),
 			Image:    img,
@@ -199,4 +252,99 @@ func (c *Client) RunningContainers(ctx context.Context) ([]inventory.Container, 
 		return a.Name < b.Name
 	})
 	return containers, nil
+}
+
+// PortBinding is one host-side binding for a published container port,
+// mirroring one entry of the Docker Engine API's NetworkSettings.Ports value
+// arrays.
+type PortBinding struct {
+	HostIP   string
+	HostPort string
+}
+
+// InspectResult is the subset of GET /containers/{id}/json the main body
+// needs: enough to corroborate a Sensor evidence generation against this
+// container's current identity (init PID and start time) and to describe
+// its exposure (network mode, privileged, published ports) once a package
+// running in it is judged in use.
+type InspectResult struct {
+	ID          string
+	Image       inventory.Digest // Kind == DigestConfig, or DigestUnknown when the field failed the boundary check
+	NetworkMode string
+	Privileged  bool
+	// Ports is NetworkSettings.Ports verbatim: a declared-but-unpublished
+	// port (exposed with no host binding) is a present key with a nil
+	// slice, not a dropped key.
+	Ports     map[string][]PortBinding
+	StartedAt time.Time
+	Pid       int
+}
+
+// inspectResponse is the wire shape of /containers/{id}/json, trimmed to the
+// fields InspectResult needs.
+type inspectResponse struct {
+	Id         string `json:"Id"`
+	Image      string `json:"Image"` // resolved ImageID at inspect time
+	HostConfig struct {
+		Privileged  bool   `json:"Privileged"`
+		NetworkMode string `json:"NetworkMode"`
+	} `json:"HostConfig"`
+	NetworkSettings struct {
+		Ports map[string][]struct {
+			HostIP   string `json:"HostIp"`
+			HostPort string `json:"HostPort"`
+		} `json:"Ports"`
+	} `json:"NetworkSettings"`
+	State struct {
+		StartedAt string `json:"StartedAt"`
+		Pid       int    `json:"Pid"`
+	} `json:"State"`
+}
+
+// Inspect returns one container's current identity and exposure by ID. id
+// must already be a well-formed 64-hex container ID (RunningContainers'
+// own boundary check produces one); a caller that passes anything else gets
+// an error before any request is made, since this is the one place a
+// caller-influenced value reaches a request path this client builds.
+func (c *Client) Inspect(ctx context.Context, id string) (InspectResult, error) {
+	if !validContainerID(id) {
+		return InspectResult{}, fmt.Errorf("inspect container: malformed container id %q", id)
+	}
+
+	var raw inspectResponse
+	if err := c.get(ctx, inspectPath(id), &raw); err != nil {
+		return InspectResult{}, fmt.Errorf("inspect container %s: %w", id, err)
+	}
+
+	result := InspectResult{
+		ID:          raw.Id,
+		NetworkMode: raw.HostConfig.NetworkMode,
+		Privileged:  raw.HostConfig.Privileged,
+		Pid:         raw.State.Pid,
+	}
+	if d, ok := inventory.ParseDigest(inventory.DigestConfig, raw.Image); ok {
+		result.Image = d
+	} else if raw.Image != "" {
+		// Same treatment as RunningContainers' ImageID: never normalized or
+		// guessed at, just logged and left at the zero value.
+		c.log().Warn("inspect image id failed content id validation", "id", id, "raw_image_id", raw.Image)
+	}
+	if raw.State.StartedAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, raw.State.StartedAt)
+		if err != nil {
+			return InspectResult{}, fmt.Errorf("inspect container %s: parse StartedAt %q: %w", id, raw.State.StartedAt, err)
+		}
+		result.StartedAt = t
+	}
+	if raw.NetworkSettings.Ports != nil {
+		result.Ports = make(map[string][]PortBinding, len(raw.NetworkSettings.Ports))
+		for k, bindings := range raw.NetworkSettings.Ports {
+			var converted []PortBinding
+			for _, b := range bindings {
+				converted = append(converted, PortBinding{HostIP: b.HostIP, HostPort: b.HostPort})
+			}
+			result.Ports[k] = converted
+		}
+	}
+	return result, nil
 }

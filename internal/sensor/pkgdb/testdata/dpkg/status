@@ -1,0 +1,98 @@
+Package: base-files
+Essential: yes
+Status: install ok installed
+Priority: required
+Section: admin
+Installed-Size: 341
+Maintainer: Santiago Vila <sanvila@debian.org>
+Architecture: amd64
+Multi-Arch: foreign
+Version: 12.4+deb12u15
+Replaces: base, dpkg (<= 1.15.0), miscutils
+Provides: base
+Pre-Depends: awk
+Breaks: debian-security-support (<< 2019.04.25), initscripts (<< 2.88dsf-13.3), sendfile (<< 2.1b.20080616-5.2~)
+Conffiles:
+ /etc/debian_version da9f3e5a56d6162ea9d5feed57fbf349
+ /etc/dpkg/origins/debian c47b6815f67ad1aeccb0d4529bd0b990
+ /etc/host.conf 4eb63731c9f5e30903ac4fc07a7fe3d6
+ /etc/issue 349d61a0e072d678e3e94923f0c3ce0e
+ /etc/issue.net 3ae9b9ff69a78d614864f1957778fecb
+ /etc/update-motd.d/10-uname 9e1b832b7b06f566156e7c9e0548247b
+Description: Debian base system miscellaneous files
+ This package contains the basic filesystem hierarchy of a Debian system, and
+ several important miscellaneous files, such as /etc/debian_version,
+ /etc/host.conf, /etc/issue, /etc/motd, /etc/profile, and others,
+ and the text of several common licenses in use on Debian systems.
+
+Package: bash
+Essential: yes
+Status: install ok installed
+Priority: required
+Section: shells
+Installed-Size: 7164
+Maintainer: Matthias Klose <doko@debian.org>
+Architecture: amd64
+Multi-Arch: foreign
+Source: bash (5.2.15-2)
+Version: 5.2.15-2+b13
+Replaces: bash-completion (<< 20060301-0), bash-doc (<= 2.05-1)
+Depends: base-files (>= 2.1.12), debianutils (>= 5.6-0.1)
+Pre-Depends: libc6 (>= 2.36), libtinfo6 (>= 6)
+Recommends: bash-completion (>= 20060301-0)
+Suggests: bash-doc
+Conflicts: bash-completion (<< 20060301-0)
+Conffiles:
+ /etc/bash.bashrc 89269e1298235f1b12b4c16e4065ad0d
+ /etc/skel/.bash_logout 22bfb8c1dd94b5f3813a2b25da67463f
+ /etc/skel/.bashrc ee35a240758f374832e809ae0ea4883a
+ /etc/skel/.profile f4e81ade7d6f9fb342541152d08e7a97
+Description: GNU Bourne Again SHell
+ Bash is an sh-compatible command language interpreter that executes
+ commands read from the standard input or from a file.  Bash also
+ incorporates useful features from the Korn and C shells (ksh and csh).
+ .
+ Bash is ultimately intended to be a conformant implementation of the
+ IEEE POSIX Shell and Tools specification (IEEE Working Group 1003.2).
+ .
+ The Programmable Completion Code, by Ian Macdonald, is now found in
+ the bash-completion package.
+Homepage: http://tiswww.case.edu/php/chet/bash/bashtop.html
+
+Package: dash
+Essential: yes
+Status: install ok installed
+Priority: required
+Section: shells
+Installed-Size: 191
+Maintainer: Andrej Shadura <andrewsh@debian.org>
+Architecture: amd64
+Multi-Arch: foreign
+Version: 0.5.12-2
+Depends: debianutils (>= 5.6-0.1), dpkg (>= 1.19.1)
+Pre-Depends: libc6 (>= 2.34)
+Description: POSIX-compliant shell
+ The Debian Almquist Shell (dash) is a POSIX-compliant shell derived
+ from ash.
+ .
+ Since it executes scripts faster than bash, and has fewer library
+ dependencies (making it more robust against software or hardware
+ failures), it is used as the default system shell on Debian systems.
+Homepage: http://gondor.apana.org.au/~herbert/dash/
+
+Package: gcc-12-base
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 100
+Maintainer: Debian GCC Maintainers <debian-gcc@lists.debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: gcc-12
+Version: 12.2.0-14+deb12u1
+Breaks: gnat (<< 7)
+Description: GCC, the GNU Compiler Collection (base package)
+ This package contains files common to all languages and libraries
+ contained in the GNU Compiler Collection (GCC).
+Homepage: http://gcc.gnu.org/
+

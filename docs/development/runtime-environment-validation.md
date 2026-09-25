@@ -2,7 +2,7 @@
 
 - **Status:** Measurement complete
 - **Started:** 2026-09-22
-- **Last updated:** 2026-09-24
+- **Last updated:** 2026-09-25
 
 ## Purpose
 
@@ -296,7 +296,7 @@ Define implementation requirements from the measurements, separating the verifie
 - **Initial reads and memory**: Production initial reads took 17–27 seconds and require allowance for startup overhead, while most event-observation memory growth came from trace-file page cache and is not expected in an implementation that does not write the same trace files, with bpftrace's own resource use treated as an upper-bound guide for estimating implementation overhead
 - **Continuous observation and indeterminate results**: Observation tracked separate container generations across both restart and recreation, and “Indeterminate (started before observation)” resolved on the next startup for applications that started, demonstrating that continuous observation and displaying and resolving indeterminate results work in production
 - **Usefulness for prioritization**: All 19 HIGH and CRITICAL vulnerability findings for Elasticsearch gained evidence after restart, while the Node.js backend gained evidence for 6 findings associated with the two packages loaded by the application, `js-yaml` and `multer`, distinguishing them from unused dependencies of bundled tools and providing practical input for identifying vulnerabilities in packages actually used, with these counts referring to findings rather than packages
-- **Scope and limitations**: Static Go binaries cannot provide per-module evidence, Node.js use could not be determined after attaching to running containers until the next startup, and production checks were limited to one run per condition and a small number of containers, so these results alone cannot guarantee coverage or long-term overhead
+- **Scope and limitations**: Node.js use could not be determined after attaching to running containers until the next startup, and production checks were limited to one run per condition and a small number of containers, so these results alone cannot guarantee coverage or long-term overhead
 
 **Event-observation permissions**
 
@@ -369,7 +369,7 @@ Restart and recreation were each checked during a continuous 1200-second observa
 - **Frontend after recreation**: HTTP 200 was confirmed 5 seconds after recreation completed, observation with the server running confirmed 2 findings from 415 opens for `next`, and the host-side request loop had 296 successful request pairs and 2 failures during recreation
 - **Unused frontend dependencies**: The remaining 17 findings involved npm's bundled `brace-expansion`, `ip-address`, `pacote`, `picomatch`, `sigstore`, and `tar`, plus `sharp`, `postcss`, and `nanoid` under `/app/node_modules/.pnpm`, with zero opens by processes other than the collector showing that these packages were not loaded during the window
 - **Interpreting non-use**: Confirmed non-use in the backend and frontend applies only to these observation windows and does not establish non-use under other processing or inputs, or safety
-- **Static Go binary**: The service was not restarted and remained in the same generation with zero confirmed, 24 indeterminate, and 14 findings without evidence, requiring a display category separate from startup before observation because per-module file opens cannot be obtained even when observing from startup
+- **Static Go binary**: The service was not restarted and remained in the same generation with zero confirmed, 24 indeterminate, and 14 findings without evidence. The 24 indeterminate findings corresponded to Go modules in the Trivy binary (`/usr/local/bin/trivy`) included in the same image, while there were zero HIGH or CRITICAL findings for the service binary (`/usr/local/bin/kestrelynx`). Trivy runs only during scanning and was not running during observation, so the absence of confirmed findings was consistent with its execution status. Go modules can be classified as included in an executed binary by matching the binary path reported by Trivy against the executable of a running process, and this method has been verified in synthetic cases
 - **No-evidence classification**: The harness classified the backend's 21 findings as paths that could not be mapped, although no target file opens were observed, requiring a correction that separates mapping failures from missing evidence
 
 **Non-root procfs conditions**
@@ -422,6 +422,10 @@ The table shows collector and bpftrace values for each observation, with attach_
 ### 2026-09-23
 
 - Recorded local and production results
+
+### 2026-09-25
+
+- Corrected the interpretation of the static Go result
 
 ---
 

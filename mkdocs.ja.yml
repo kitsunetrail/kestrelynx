@@ -24,6 +24,7 @@ nav:
       - 仕組み: documentation/how-it-works.md
   - 開発ログ:
       - 概要: development/index.md
+      - 実行時証拠による優先順位付けの開発: development/runtime-prioritization-development.md
       - 実行時証拠の観測環境の検証: development/runtime-environment-validation.md
       - 実行時証拠の網羅性の検証: development/runtime-coverage-validation.md
       - eBPFによる実行時証拠の観測調査: development/runtime-event-evidence.md

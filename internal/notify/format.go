@@ -739,10 +739,21 @@ func writePackage(b *strings.Builder, g analyze.PackageGroup, fixed bool, suffix
 		fmt.Fprintf(b, "  %s", label)
 	}
 	if g.Class == "lang" {
-		b.WriteString(" [lang]")
+		fmt.Fprintf(b, " [%s]", langTag(g.Ecosystem))
 	}
 	b.WriteString(suffix)
 	b.WriteString("\n")
+}
+
+// langTag is the bracketed tag writePackage appends to a language package's
+// line: the ecosystem name (e.g. "python-pkg", "gobinary") when Trivy's
+// Result.Type parsed to a known one, or the generic "lang" it always showed
+// before ecosystems were tracked, when it didn't.
+func langTag(eco inventory.Ecosystem) string {
+	if eco == inventory.EcosystemUnknown {
+		return "lang"
+	}
+	return string(eco)
 }
 
 // writeCollapsed renders one summary line for the lower-risk fixes hidden from
@@ -843,6 +854,10 @@ type eolChangePayload struct {
 	High     int      `json:"high"`
 	Priority string   `json:"priority,omitempty"` // triage: act_now | watch | low
 	Reason   string   `json:"reason,omitempty"`   // eol_escalated: evidence for the new verdict
+
+	// Ecosystems mirrors changePayload.Ecosystems: the deduplicated, sorted
+	// set across every merged analyze.PackageGroup.
+	Ecosystems []string `json:"ecosystems"`
 }
 
 // eolResolvedPayload mirrors state.ResolvedEOL.
@@ -871,6 +886,13 @@ type changePayload struct {
 	High     int      `json:"high"`
 	Priority string   `json:"priority,omitempty"` // triage: act_now | watch | low
 	Reason   string   `json:"reason,omitempty"`   // escalated: evidence for the new verdict
+
+	// Ecosystems is the deduplicated, sorted set of Ecosystem values across
+	// every analyze.PackageGroup this (image, package) change merged
+	// (state's key is (image, package name) only, so an OS package and a
+	// same-named language package, or two installed versions, can land in
+	// the same change). "" (unknown/OS-without-a-parsed-type) sorts first.
+	Ecosystems []string `json:"ecosystems"`
 }
 
 type resolvedPayload struct {
@@ -954,6 +976,13 @@ type findingPayload struct {
 	Priority       string         `json:"priority,omitempty"` // triage verdict for the package
 	VulnIDs        []string       `json:"vuln_ids"`
 	Vulns          []vulnPayload  `json:"vulns"` // per-CVE detail (superset of vuln_ids)
+
+	// Class is "os" or "lang" (analyze.PackageGroup.Class).
+	// Ecosystem is Trivy's Result.Type as parsed against the allowlist
+	// (analyze.PackageGroup.Ecosystem); "" when Trivy's value was empty or
+	// unrecognized.
+	Class     string `json:"class"`
+	Ecosystem string `json:"ecosystem"`
 }
 
 // vulnPayload is the per-CVE record: id and severity always; the triage fields
@@ -1043,14 +1072,15 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			high += g.High
 		}
 		cp := changePayload{
-			Image:    c.Image,
-			Package:  c.Package,
-			Kind:     string(c.Kind),
-			NewCVEs:  c.NewCVEs,
-			NewIDs:   c.NewIDs,
-			Critical: crit,
-			High:     high,
-			Priority: string(analyze.MaxPriority(c.Groups)),
+			Image:      c.Image,
+			Package:    c.Package,
+			Kind:       string(c.Kind),
+			NewCVEs:    c.NewCVEs,
+			NewIDs:     c.NewIDs,
+			Critical:   crit,
+			High:       high,
+			Priority:   string(analyze.MaxPriority(c.Groups)),
+			Ecosystems: ecosystemsOf(c.Groups),
 		}
 		if c.Kind == state.KindEscalated {
 			cp.Reason = changeEvidence(r, c)
@@ -1074,13 +1104,14 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			high += g.High
 		}
 		cp := eolChangePayload{
-			Image:    c.Image,
-			Package:  c.Package,
-			Kind:     string(c.Kind),
-			NewIDs:   c.NewIDs,
-			Critical: crit,
-			High:     high,
-			Priority: string(analyze.MaxPriority(c.Groups)),
+			Image:      c.Image,
+			Package:    c.Package,
+			Kind:       string(c.Kind),
+			NewIDs:     c.NewIDs,
+			Critical:   crit,
+			High:       high,
+			Priority:   string(analyze.MaxPriority(c.Groups)),
+			Ecosystems: ecosystemsOf(c.Groups),
 		}
 		if c.Kind == state.EOLKindEscalated {
 			cp.Reason = changeEvidence(r, eolAsChange(c))
@@ -1091,6 +1122,26 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 		dp.ResolvedEOLPackages = append(dp.ResolvedEOLPackages, eolResolvedPayload{Image: res.Image, Package: res.Package, StillOpen: res.StillOpen})
 	}
 	return dp
+}
+
+// ecosystemsOf is the deduplicated, sorted set of Ecosystem values across a
+// diff change's merged package groups. "" (EcosystemUnknown — Trivy's
+// Result.Type was empty, or outside the allowlist) sorts first like any
+// other string, and is included: its presence in the set is itself
+// informative (this (image, package) change includes at least one group
+// without a recognized ecosystem), so it is not filtered out the way
+// emptyIfNil clears an unset list.
+func ecosystemsOf(groups []analyze.PackageGroup) []string {
+	seen := map[string]bool{}
+	for _, g := range groups {
+		seen[string(g.Ecosystem)] = true
+	}
+	out := make([]string, 0, len(seen))
+	for e := range seen {
+		out = append(out, e)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func emptyIfNil(s []string) []string {
@@ -1138,6 +1189,8 @@ func imagePayloads(imgs []analyze.ImageFindings, byRef map[string]analyze.ImageO
 				Priority:       string(g.Priority),
 				VulnIDs:        g.VulnIDs(),
 				Vulns:          vulns,
+				Class:          string(g.Class),
+				Ecosystem:      string(g.Ecosystem),
 			})
 		}
 		// scan_target_kind and identity_resolved are both entity-level (this

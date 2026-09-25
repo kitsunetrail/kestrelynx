@@ -17,12 +17,16 @@ import (
 
 // PkgClass distinguishes OS packages (distro versioning, not semver) from
 // language packages (semver). This drives whether analyze applies a semver
-// breaking-change judgement. See docs/ARCHITECTURE.md ADR-005.
-type PkgClass string
+// breaking-change judgement.
+//
+// PkgClass itself now lives in inventory (the shared observation vocabulary
+// scanner, analyze, and remediation all build on); this is a type alias so
+// every existing scanner.PkgClass call site keeps compiling unchanged.
+type PkgClass = inventory.PkgClass
 
 const (
-	ClassOS   PkgClass = "os"
-	ClassLang PkgClass = "lang"
+	ClassOS   = inventory.ClassOS
+	ClassLang = inventory.ClassLang
 )
 
 // Status mirrors Trivy's vulnerability status and is the primary axis for
@@ -66,6 +70,41 @@ type Finding struct {
 	VulnID       string
 	URL          string
 	Title        string // short human-readable summary of the vulnerability, if Trivy supplied one
+
+	// Type is Trivy's raw Result.Type for the package's Result. It is kept
+	// verbatim (not just the PackageRef.Ecosystem it normalizes to through
+	// the allowlist) so a value outside that allowlist is not lost, only
+	// classified as unknown for aggregation purposes.
+	Type string
+	// Target is Trivy's Result.Target with a single leading "/" stripped if
+	// present, so it compares equal to the container-rooted paths runtime
+	// evidence reports. For an OS Result this is a descriptive label
+	// ("image:tag (distro version)"), not a path; for a lang Result it is
+	// either a path (a compiled binary) or a runtime label ("Python",
+	// "Node.js", "Java").
+	Target string
+	// PkgPath is Trivy's per-vulnerability PkgPath (e.g. the site-packages
+	// METADATA file, or the node_modules package.json) a language package
+	// was found at, normalized the same way as Target. Empty when Trivy
+	// didn't report one (typically OS packages, and any language package
+	// resolved without a distinct file path).
+	PkgPath string
+}
+
+// PackageRef is f's aggregation identity: Ecosystem (Type normalized through
+// the allowlist), Class, Name (== Package), and Version (== InstalledVer).
+// It is a method, not a stored field, so there is exactly one place that
+// computes it: every caller — analyze's aggregation, a test fixture built by
+// hand that never set Type — gets a value that is always consistent with
+// Class/Package/InstalledVer/Type, rather than a second, independently
+// settable copy that could silently drift from them.
+func (f Finding) PackageRef() inventory.PackageRef {
+	return inventory.PackageRef{
+		Ecosystem: inventory.ParseEcosystem(f.Type),
+		Class:     f.Class,
+		Name:      f.Package,
+		Version:   f.InstalledVer,
+	}
 }
 
 // ScanSource distinguishes where a scan target's bytes are fetched from: it
@@ -144,9 +183,12 @@ type trivyReport struct {
 	} `json:"Metadata"`
 	Results []struct {
 		Class           string `json:"Class"`
+		Type            string `json:"Type"`
+		Target          string `json:"Target"`
 		Vulnerabilities []struct {
 			VulnerabilityID  string `json:"VulnerabilityID"`
 			PkgName          string `json:"PkgName"`
+			PkgPath          string `json:"PkgPath"`
 			InstalledVersion string `json:"InstalledVersion"`
 			FixedVersion     string `json:"FixedVersion"`
 			Status           string `json:"Status"`
@@ -192,6 +234,7 @@ func ParseReport(data []byte) (ImageScan, error) {
 
 	for _, res := range r.Results {
 		class := classOf(res.Class)
+		target := trimLeadingSlash(res.Target)
 		for _, v := range res.Vulnerabilities {
 			// Trivy stores the status as an enum whose zero value is
 			// "unknown" and serializes it with omitempty, so an unknown
@@ -211,6 +254,9 @@ func ParseReport(data []byte) (ImageScan, error) {
 				VulnID:       v.VulnerabilityID,
 				URL:          v.PrimaryURL,
 				Title:        v.Title,
+				Type:         res.Type,
+				Target:       target,
+				PkgPath:      trimLeadingSlash(v.PkgPath),
 			})
 		}
 	}
@@ -227,4 +273,17 @@ func classOf(trivyClass string) PkgClass {
 		return ClassOS
 	}
 	return ClassLang
+}
+
+// trimLeadingSlash strips a single leading "/" from a Trivy path field
+// (Result.Target, Vulnerability.PkgPath) so it compares equal to the
+// container-rooted, slash-stripped paths runtime evidence reports. Values
+// that aren't paths at all (an OS Result's descriptive Target, a language
+// runtime label like "Python") never start with "/" and pass through
+// unchanged.
+func trimLeadingSlash(s string) string {
+	if len(s) > 0 && s[0] == '/' {
+		return s[1:]
+	}
+	return s
 }

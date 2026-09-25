@@ -5,6 +5,8 @@
       "content_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "findings": [
         {
+          "class": "os",
+          "ecosystem": "",
           "fixed": "3.0.11",
           "installed": "3.0.7",
           "package": "openssl",
@@ -39,6 +41,8 @@
           ]
         },
         {
+          "class": "os",
+          "ecosystem": "",
           "fixed": "1.21.23",
           "installed": "1.21.22",
           "package": "dpkg",
@@ -77,6 +81,8 @@
       "content_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
       "findings": [
         {
+          "class": "lang",
+          "ecosystem": "python-pkg",
           "fixed": "78.1.1",
           "installed": "53.0.0",
           "package": "setuptools",
@@ -143,6 +149,8 @@
       "content_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "findings": [
         {
+          "class": "os",
+          "ecosystem": "",
           "fixed": "",
           "installed": "1.47.0-2",
           "package": "e2fsprogs",
@@ -168,6 +176,8 @@
           ]
         },
         {
+          "class": "os",
+          "ecosystem": "",
           "fixed": "",
           "installed": "3.0.7",
           "package": "openssl",
@@ -206,6 +216,8 @@
       "content_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
       "findings": [
         {
+          "class": "os",
+          "ecosystem": "",
           "fixed": "",
           "installed": "2.9.14",
           "package": "libxml2",
@@ -256,6 +268,8 @@
       "content_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "findings": [
         {
+          "class": "os",
+          "ecosystem": "",
           "fixed": "",
           "installed": "12.2.0-14",
           "package": "gcc-12-base",
@@ -294,6 +308,8 @@
       "content_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
       "findings": [
         {
+          "class": "os",
+          "ecosystem": "",
           "fixed": "",
           "installed": "1.2.13",
           "package": "zlib",

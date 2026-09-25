@@ -105,7 +105,7 @@ func goldenTodayScans(eosl bool) []scanner.ImageScan {
 		Findings: []scanner.Finding{
 			{Image: "api:2.0", Class: scanner.ClassOS, Package: "libxml2", InstalledVer: "2.9.14", Status: scanner.StatusAffected, Severity: scanner.SeverityHigh, VulnID: "CVE-2031-0006", URL: "https://avd.example/CVE-2031-0006", Title: "libxml2: use-after-free"},
 			{Image: "api:2.0", Class: scanner.ClassOS, Package: "libxml2", InstalledVer: "2.9.14", Status: scanner.StatusAffected, Severity: scanner.SeverityHigh, VulnID: "CVE-2031-0007"},
-			{Image: "api:2.0", Class: scanner.ClassLang, Package: "setuptools", InstalledVer: "53.0.0", FixedVer: "78.1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-2031-0008"},
+			{Image: "api:2.0", Class: scanner.ClassLang, Package: "setuptools", InstalledVer: "53.0.0", FixedVer: "78.1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-2031-0008", Type: "python-pkg"},
 			{Image: "api:2.0", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1.2.13", Status: scanner.StatusWontFix, Severity: scanner.SeverityHigh, VulnID: "CVE-2031-0009"},
 		},
 	}, goldenContentAPI)
@@ -131,7 +131,7 @@ func goldenPrevScans(eosl bool) []scanner.ImageScan {
 		Image: "api:2.0",
 		Findings: []scanner.Finding{
 			{Image: "api:2.0", Class: scanner.ClassOS, Package: "libxml2", InstalledVer: "2.9.14", Status: scanner.StatusAffected, Severity: scanner.SeverityHigh, VulnID: "CVE-2031-0006"},
-			{Image: "api:2.0", Class: scanner.ClassLang, Package: "setuptools", InstalledVer: "53.0.0", FixedVer: "78.1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-2031-0008"},
+			{Image: "api:2.0", Class: scanner.ClassLang, Package: "setuptools", InstalledVer: "53.0.0", FixedVer: "78.1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-2031-0008", Type: "python-pkg"},
 		},
 	}, goldenContentAPI)
 	return []scanner.ImageScan{web, api}

@@ -16,7 +16,7 @@
 *👀 Watch (5) — not urgent, keep an eye on*
 • api:2.0
    • libxml2 2.9.14 (no fix available) (CRITICAL 0 / HIGH 2)
-   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [lang]
+   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [python-pkg]
    • zlib 1.2.13 (no fix available) (CRITICAL 0 / HIGH 1)
 • web:1.0
    • dpkg 1.21.22 → 1.21.23 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch

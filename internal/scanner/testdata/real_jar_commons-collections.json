@@ -1,0 +1,578 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.71.2"
+  },
+  "ReportID": "01a0d6b9-63ea-729c-a9ee-5b3da377fb9f",
+  "CreatedAt": "2026-09-25T13:01:09.098173622+09:00",
+  "ArtifactID": "sha256:dd5e612fd1cb19958089497b505d74b34ba54e76ef45942c56da3c120bb93e7e",
+  "ArtifactName": "kl-fixture-jar:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 421694976,
+    "OS": {
+      "Family": "ubuntu",
+      "Name": "22.04"
+    },
+    "ImageID": "sha256:5cef2dee10755f62ffe67be42876e6177c8cd1caaf6efe6927caea4196adaf26",
+    "DiffIDs": [
+      "sha256:ea16cace89338c84eb6bcb91a7efdfcae6838fff359efe951858227436486c34",
+      "sha256:3d26b129d53cd3187adedb65d727f85a0f115a0fdfd6832e090cdcb39cf7fb19",
+      "sha256:fb6a9efd78d236b5b3cb875eec412c39a828e6368224f16620bde4f001bc28da",
+      "sha256:547df9bd5183cdba97126b20520f31605056045204412b877f90ffa6f1e1bd99",
+      "sha256:fb7ed1b0e02709112f2d3152dee9b468f03074eaac8dccb74050583f8c861a1f",
+      "sha256:94a6aebb216eb891ca3e5f5285b0f700b3620697d8b0d9b971d8ad1b8fec10df",
+      "sha256:02df97adaba5e7a0274385a9e50de93e8f3e924033b4abe393334d27b4f353b9"
+    ],
+    "RepoTags": [
+      "kl-fixture-jar:latest"
+    ],
+    "RepoDigests": [
+      "kl-fixture-jar@sha256:5cef2dee10755f62ffe67be42876e6177c8cd1caaf6efe6927caea4196adaf26"
+    ],
+    "Reference": "kl-fixture-jar:latest",
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-09-25T04:01:03.48370017Z",
+      "history": [
+        {
+          "created": "2026-09-03T12:14:51Z",
+          "created_by": "/bin/sh -c #(nop)  ARG RELEASE",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-03T12:14:51Z",
+          "created_by": "/bin/sh -c #(nop)  ARG LAUNCHPAD_BUILD_ARCH",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-03T12:14:51Z",
+          "created_by": "/bin/sh -c #(nop)  LABEL org.opencontainers.image.version=22.04",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-03T12:14:53Z",
+          "created_by": "/bin/sh -c #(nop) ADD file:81c01921c5f642ac2fcbfae682e489e8e64b347467d9fa1587707e310e64d790 in / "
+        },
+        {
+          "created": "2026-09-03T12:14:54Z",
+          "created_by": "/bin/sh -c #(nop)  CMD [\"/bin/bash\"]",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-09T02:20:17Z",
+          "created_by": "ENV JAVA_HOME=/opt/java/openjdk",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-09T02:20:17Z",
+          "created_by": "ENV PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-09T02:20:17Z",
+          "created_by": "ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-09T02:20:17Z",
+          "created_by": "RUN /bin/sh -c set -eux;     apt-get update;     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends         curl         wget         gnupg         fontconfig         ca-certificates p11-kit         binutils         tzdata         locales     ;     echo \"en_US.UTF-8 UTF-8\" >> /etc/locale.gen;     locale-gen en_US.UTF-8;     rm -rf /var/lib/apt/lists/* # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-09-09T02:20:17Z",
+          "created_by": "ENV JAVA_VERSION=jdk-17.0.20+8",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-09T02:20:25Z",
+          "created_by": "RUN /bin/sh -c set -eux;     ARCH=\"$(dpkg --print-architecture)\";     case \"${ARCH}\" in        amd64)          ESUM='be7668bc030d578b83d6d5ef9221d6d6729bbbca8cf94a7d52e16ac68b5a5a35';          BINARY_URL='https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_x64_linux_hotspot_17.0.20_8.tar.gz';          ;;        arm64)          ESUM='d143936f473a4cb24e3b0e247d6d0775769d55ec9775c339540e753059a8d77a';          BINARY_URL='https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.20_8.tar.gz';          ;;        armhf)          ESUM='543173615a7e6e8905d99c45f9d0caeb5faf1a6dcdc25cbb5337f53e7ef06c78';          BINARY_URL='https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_arm_linux_hotspot_17.0.20_8.tar.gz';          ;;        ppc64el)          ESUM='a14127c5577dc12e058459549e5388fd47ebd1b3d8441fbd23c4d931bdcebee9';          BINARY_URL='https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_ppc64le_linux_hotspot_17.0.20_8.tar.gz';          ;;        s390x)          ESUM='d5bbce66faa1482adb6ddcabc51d6c14b7c35cb11174e657d84ecb2177a4f6e9';          BINARY_URL='https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_s390x_linux_hotspot_17.0.20_8.tar.gz';          ;;        *)          echo \"Unsupported arch: ${ARCH}\";          exit 1;          ;;     esac;     wget --progress=dot:giga -O /tmp/openjdk.tar.gz ${BINARY_URL};     wget --progress=dot:giga -O /tmp/openjdk.tar.gz.sig ${BINARY_URL}.sig;     export GNUPGHOME=\"$(mktemp -d)\";     gpg --batch --keyserver keyserver.ubuntu.com --recv-keys 3B04D753C9050D9A5D343F39843C48A565F8F04B;     gpg --batch --verify /tmp/openjdk.tar.gz.sig /tmp/openjdk.tar.gz;     rm -rf \"${GNUPGHOME}\" /tmp/openjdk.tar.gz.sig;     echo \"${ESUM} */tmp/openjdk.tar.gz\" | sha256sum -c -;     mkdir -p \"$JAVA_HOME\";     tar --extract         --file /tmp/openjdk.tar.gz         --directory \"$JAVA_HOME\"         --strip-components 1         --no-same-owner     ;     rm -f /tmp/openjdk.tar.gz ${JAVA_HOME}/lib/src.zip;     find \"$JAVA_HOME/lib\" -name '*.so' -exec dirname '{}' ';' | sort -u > /etc/ld.so.conf.d/docker-openjdk.conf;     ldconfig;     java -Xshare:dump; # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-09-09T02:20:26Z",
+          "created_by": "RUN /bin/sh -c set -eux;     echo \"Verifying install ...\";     fileEncoding=\"$(echo 'System.out.println(System.getProperty(\"file.encoding\"))' | jshell -s -)\"; [ \"$fileEncoding\" = 'UTF-8' ]; rm -rf ~/.java;     echo \"javac --version\"; javac --version;     echo \"java --version\"; java --version;     echo \"Complete.\" # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-09-09T02:20:26Z",
+          "created_by": "COPY --chmod=755 entrypoint.sh /__cacert_entrypoint.sh # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-09-09T02:20:26Z",
+          "created_by": "ENTRYPOINT [\"/__cacert_entrypoint.sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-09T02:20:26Z",
+          "created_by": "CMD [\"jshell\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-09-25T04:01:02Z",
+          "created_by": "/bin/sh -c #(nop) WORKDIR /app"
+        },
+        {
+          "created": "2026-09-25T04:01:03Z",
+          "created_by": "/bin/sh -c #(nop) ADD e9755ed45dcfb753e0963451a39f81f1cbfa80fa79ef6214610684ef99764e63 in /app/commons-collections-3.2.1.jar "
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:ea16cace89338c84eb6bcb91a7efdfcae6838fff359efe951858227436486c34",
+          "sha256:3d26b129d53cd3187adedb65d727f85a0f115a0fdfd6832e090cdcb39cf7fb19",
+          "sha256:fb6a9efd78d236b5b3cb875eec412c39a828e6368224f16620bde4f001bc28da",
+          "sha256:547df9bd5183cdba97126b20520f31605056045204412b877f90ffa6f1e1bd99",
+          "sha256:fb7ed1b0e02709112f2d3152dee9b468f03074eaac8dccb74050583f8c861a1f",
+          "sha256:94a6aebb216eb891ca3e5f5285b0f700b3620697d8b0d9b971d8ad1b8fec10df",
+          "sha256:02df97adaba5e7a0274385a9e50de93e8f3e924033b4abe393334d27b4f353b9"
+        ]
+      },
+      "config": {
+        "Cmd": [
+          "jshell"
+        ],
+        "Entrypoint": [
+          "/__cacert_entrypoint.sh"
+        ],
+        "Env": [
+          "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "JAVA_HOME=/opt/java/openjdk",
+          "LANG=en_US.UTF-8",
+          "LANGUAGE=en_US:en",
+          "LC_ALL=en_US.UTF-8",
+          "JAVA_VERSION=jdk-17.0.20+8"
+        ],
+        "Labels": {
+          "org.opencontainers.image.version": "22.04"
+        },
+        "WorkingDir": "/app"
+      }
+    },
+    "Layers": [
+      {
+        "Size": 80641024,
+        "Digest": "sha256:20c3783cc497b5b0df1fc5f92bd64c3d2fbb24057c88692c8fda205b6ea8a2f2",
+        "DiffID": "sha256:ea16cace89338c84eb6bcb91a7efdfcae6838fff359efe951858227436486c34"
+      },
+      {
+        "Size": 59420672,
+        "Digest": "sha256:0aa776214624d8f9afae89714cb131d929108f8319c57f7afd5e31a5684fa3c5",
+        "DiffID": "sha256:3d26b129d53cd3187adedb65d727f85a0f115a0fdfd6832e090cdcb39cf7fb19"
+      },
+      {
+        "Size": 281043968,
+        "Digest": "sha256:f821f946d45b08fb1cd8709ae1fa848908c8a9e9e5d97dafc4967b044a7019bd",
+        "DiffID": "sha256:fb6a9efd78d236b5b3cb875eec412c39a828e6368224f16620bde4f001bc28da"
+      },
+      {
+        "Size": 2560,
+        "Digest": "sha256:a946b32c7c1edcdbfc95f297ab0c54320417c6790f6a571dbc9ed67d68033f32",
+        "DiffID": "sha256:547df9bd5183cdba97126b20520f31605056045204412b877f90ffa6f1e1bd99"
+      },
+      {
+        "Size": 7680,
+        "Digest": "sha256:47c7774045fa164f50d453278cbfe6ae4580a5c0970eca03c38c835af73c1777",
+        "DiffID": "sha256:fb7ed1b0e02709112f2d3152dee9b468f03074eaac8dccb74050583f8c861a1f"
+      },
+      {
+        "Size": 1536,
+        "Digest": "sha256:78f229daf752a9fa99b98164ff1fd99be2fc20a76ad87a60146502e4b224be68",
+        "DiffID": "sha256:94a6aebb216eb891ca3e5f5285b0f700b3620697d8b0d9b971d8ad1b8fec10df"
+      },
+      {
+        "Size": 577536,
+        "Digest": "sha256:a0567166b12c01dd560c87833e7734944ef9c058e780611021797741189d6f50",
+        "DiffID": "sha256:02df97adaba5e7a0274385a9e50de93e8f3e924033b4abe393334d27b4f353b9"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "kl-fixture-jar:latest (ubuntu 22.04)",
+      "Class": "os-pkgs",
+      "Type": "ubuntu",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2025-69645",
+          "PkgID": "binutils@2.38-4ubuntu2.12",
+          "PkgName": "binutils",
+          "PkgIdentifier": {
+            "PURL": "pkg:deb/ubuntu/binutils@2.38-4ubuntu2.12?arch=amd64&distro=ubuntu-22.04",
+            "UID": "5668bbb442e70a28"
+          },
+          "InstalledVersion": "2.38-4ubuntu2.12",
+          "Status": "affected",
+          "Layer": {
+            "Digest": "sha256:0aa776214624d8f9afae89714cb131d929108f8319c57f7afd5e31a5684fa3c5",
+            "DiffID": "sha256:3d26b129d53cd3187adedb65d727f85a0f115a0fdfd6832e090cdcb39cf7fb19"
+          },
+          "SeveritySource": "ubuntu",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-69645",
+          "DataSource": {
+            "ID": "ubuntu",
+            "Name": "Ubuntu CVE Tracker",
+            "URL": "https://git.launchpad.net/ubuntu-cve-tracker"
+          },
+          "Fingerprint": "sha256:cc0a8394a62a5c506616aaf7ddfdd37b7a2fe1a8ff313f0b0eb1b930ea8e148a",
+          "Title": "binutils: Binutils objdump: Denial of Service via crafted DWARF debug information",
+          "Description": "Binutils objdump contains a denial-of-service vulnerability when processing a crafted binary with malformed DWARF debug information. A logic error in the handling of DWARF compilation units can result in an invalid offset_size value being used inside byte_get_little_endian, leading to an abort (SIGABRT). The issue was observed in binutils 2.44. A local attacker can trigger the crash by supplying a malicious input file.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400"
+          ],
+          "VendorSeverity": {
+            "azure": 2,
+            "redhat": 1,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:N/I:N/A:L",
+              "V3Score": 2.8
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-69645",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-69645",
+            "https://sourceware.org/bugzilla/show_bug.cgi?id=33637",
+            "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git;h=cdb728d4da6184631989b192f1022c219dea7677",
+            "https://www.cve.org/CVERecord?id=CVE-2025-69645"
+          ],
+          "PublishedDate": "2026-03-06T18:16:16.367Z",
+          "LastModifiedDate": "2026-06-17T10:00:47.74Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-69645",
+          "PkgID": "binutils-common@2.38-4ubuntu2.12",
+          "PkgName": "binutils-common",
+          "PkgIdentifier": {
+            "PURL": "pkg:deb/ubuntu/binutils-common@2.38-4ubuntu2.12?arch=amd64&distro=ubuntu-22.04",
+            "UID": "802227595f68d120"
+          },
+          "InstalledVersion": "2.38-4ubuntu2.12",
+          "Status": "affected",
+          "Layer": {
+            "Digest": "sha256:0aa776214624d8f9afae89714cb131d929108f8319c57f7afd5e31a5684fa3c5",
+            "DiffID": "sha256:3d26b129d53cd3187adedb65d727f85a0f115a0fdfd6832e090cdcb39cf7fb19"
+          },
+          "SeveritySource": "ubuntu",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-69645",
+          "DataSource": {
+            "ID": "ubuntu",
+            "Name": "Ubuntu CVE Tracker",
+            "URL": "https://git.launchpad.net/ubuntu-cve-tracker"
+          },
+          "Fingerprint": "sha256:0123ec56c8d78541aaf3ed2a15fda8b5f032bfc4e56b93b7ff5e1812f5fd80e9",
+          "Title": "binutils: Binutils objdump: Denial of Service via crafted DWARF debug information",
+          "Description": "Binutils objdump contains a denial-of-service vulnerability when processing a crafted binary with malformed DWARF debug information. A logic error in the handling of DWARF compilation units can result in an invalid offset_size value being used inside byte_get_little_endian, leading to an abort (SIGABRT). The issue was observed in binutils 2.44. A local attacker can trigger the crash by supplying a malicious input file.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400"
+          ],
+          "VendorSeverity": {
+            "azure": 2,
+            "redhat": 1,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:N/I:N/A:L",
+              "V3Score": 2.8
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-69645",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-69645",
+            "https://sourceware.org/bugzilla/show_bug.cgi?id=33637",
+            "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git;h=cdb728d4da6184631989b192f1022c219dea7677",
+            "https://www.cve.org/CVERecord?id=CVE-2025-69645"
+          ],
+          "PublishedDate": "2026-03-06T18:16:16.367Z",
+          "LastModifiedDate": "2026-06-17T10:00:47.74Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-69645",
+          "PkgID": "binutils-x86-64-linux-gnu@2.38-4ubuntu2.12",
+          "PkgName": "binutils-x86-64-linux-gnu",
+          "PkgIdentifier": {
+            "PURL": "pkg:deb/ubuntu/binutils-x86-64-linux-gnu@2.38-4ubuntu2.12?arch=amd64&distro=ubuntu-22.04",
+            "UID": "5e54a5a843624467"
+          },
+          "InstalledVersion": "2.38-4ubuntu2.12",
+          "Status": "affected",
+          "Layer": {
+            "Digest": "sha256:0aa776214624d8f9afae89714cb131d929108f8319c57f7afd5e31a5684fa3c5",
+            "DiffID": "sha256:3d26b129d53cd3187adedb65d727f85a0f115a0fdfd6832e090cdcb39cf7fb19"
+          },
+          "SeveritySource": "ubuntu",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-69645",
+          "DataSource": {
+            "ID": "ubuntu",
+            "Name": "Ubuntu CVE Tracker",
+            "URL": "https://git.launchpad.net/ubuntu-cve-tracker"
+          },
+          "Fingerprint": "sha256:b8fb40bb690579ed0f6cdc2ac10f940443478b442309f818b774b8e28462551a",
+          "Title": "binutils: Binutils objdump: Denial of Service via crafted DWARF debug information",
+          "Description": "Binutils objdump contains a denial-of-service vulnerability when processing a crafted binary with malformed DWARF debug information. A logic error in the handling of DWARF compilation units can result in an invalid offset_size value being used inside byte_get_little_endian, leading to an abort (SIGABRT). The issue was observed in binutils 2.44. A local attacker can trigger the crash by supplying a malicious input file.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400"
+          ],
+          "VendorSeverity": {
+            "azure": 2,
+            "redhat": 1,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:N/I:N/A:L",
+              "V3Score": 2.8
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-69645",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-69645",
+            "https://sourceware.org/bugzilla/show_bug.cgi?id=33637",
+            "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git;h=cdb728d4da6184631989b192f1022c219dea7677",
+            "https://www.cve.org/CVERecord?id=CVE-2025-69645"
+          ],
+          "PublishedDate": "2026-03-06T18:16:16.367Z",
+          "LastModifiedDate": "2026-06-17T10:00:47.74Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-18924",
+          "PkgID": "curl@7.81.0-1ubuntu1.27",
+          "PkgName": "curl",
+          "PkgIdentifier": {
+            "PURL": "pkg:deb/ubuntu/curl@7.81.0-1ubuntu1.27?arch=amd64&distro=ubuntu-22.04",
+            "UID": "e2561e9afec8c86f"
+          },
+          "InstalledVersion": "7.81.0-1ubuntu1.27",
+          "Status": "affected",
+          "Layer": {
+            "Digest": "sha256:0aa776214624d8f9afae89714cb131d929108f8319c57f7afd5e31a5684fa3c5",
+            "DiffID": "sha256:3d26b129d53cd3187adedb65d727f85a0f115a0fdfd6832e090cdcb39cf7fb19"
+          },
+          "SeveritySource": "ubuntu",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-18924",
+          "DataSource": {
+            "ID": "ubuntu",
+            "Name": "Ubuntu CVE Tracker",
+            "URL": "https://git.launchpad.net/ubuntu-cve-tracker"
+          },
+          "Fingerprint": "sha256:1ab58a63eaa7218492dd85ee9225941ff2d44e48ec0d56a6fde30ecffa6fb9e8",
+          "Title": "curl: libcurl: Use-after-free in HTTP/2 Server Push with shared connections",
+          "Description": "A flaw in libcurl's handling of HTTP/2 Server Push streams, when the parent\nhandle is set to share connections with other handles, can lead to\nuse-after-free in the cleanup process.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-416"
+          ],
+          "VendorSeverity": {
+            "photon": 4,
+            "redhat": 1,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 3.7
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-18924",
+            "https://curl.se/docs/CVE-2026-18924.html",
+            "https://curl.se/docs/CVE-2026-18924.json",
+            "https://github.com/curl/curl/commit/90325ff0444cbdff368bda5d26d6",
+            "https://hackerone.com/reports/3916059",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-18924",
+            "https://www.cve.org/CVERecord?id=CVE-2026-18924"
+          ],
+          "PublishedDate": "2026-09-06T18:17:20.553Z",
+          "LastModifiedDate": "2026-09-15T07:16:27.063Z"
+        }
+      ]
+    },
+    {
+      "Target": "Java",
+      "Class": "lang-pkgs",
+      "Type": "jar",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2015-7501",
+          "VendorIDs": [
+            "GHSA-fjq5-5j5f-mvxh"
+          ],
+          "PkgName": "commons-collections:commons-collections",
+          "PkgPath": "app/commons-collections-3.2.1.jar",
+          "PkgIdentifier": {
+            "PURL": "pkg:maven/commons-collections/commons-collections@3.2.1",
+            "UID": "30b421376d961a95"
+          },
+          "InstalledVersion": "3.2.1",
+          "FixedVersion": "3.2.2",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:a0567166b12c01dd560c87833e7734944ef9c058e780611021797741189d6f50",
+            "DiffID": "sha256:02df97adaba5e7a0274385a9e50de93e8f3e924033b4abe393334d27b4f353b9"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2015-7501",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Maven",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Amaven"
+          },
+          "Fingerprint": "sha256:ee10212573c94119ea0404e9101e76b5c9f16c0c8c41348e4cd5628999d3bcd8",
+          "Title": "apache-commons-collections: InvokerTransformer code execution during deserialisation",
+          "Description": "Red Hat JBoss A-MQ 6.x; BPM Suite (BPMS) 6.x; BRMS 6.x and 5.x; Data Grid (JDG) 6.x; Data Virtualization (JDV) 6.x and 5.x; Enterprise Application Platform 6.x, 5.x, and 4.3.x; Fuse 6.x; Fuse Service Works (FSW) 6.x; Operations Network (JBoss ON) 3.x; Portal 6.x; SOA Platform (SOA-P) 5.x; Web Server (JWS) 3.x; Red Hat OpenShift/xPAAS 3.x; and Red Hat Subscription Asset Manager 1.3 allow remote attackers to execute arbitrary commands via a crafted serialized Java object, related to the Apache Commons Collections (ACC) library.",
+          "Severity": "CRITICAL",
+          "CweIDs": [
+            "CWE-502"
+          ],
+          "VendorSeverity": {
+            "amazon": 3,
+            "ghsa": 4,
+            "nvd": 4,
+            "oracle-oval": 3,
+            "redhat": 4
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V3Score": 9.8
+            },
+            "nvd": {
+              "V2Vector": "AV:N/AC:L/Au:N/C:C/I:C/A:C",
+              "V3Vector": "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V2Score": 10,
+              "V3Score": 9.8
+            },
+            "redhat": {
+              "V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+              "V2Score": 7.5
+            }
+          },
+          "References": [
+            "http://foxglovesecurity.com/2015/11/06/what-do-weblogic-websphere-jboss-jenkins-opennms-and-your-application-have-in-common-this-vulnerability/",
+            "http://rhn.redhat.com/errata/RHSA-2015-2500.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2501.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2502.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2514.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2516.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2517.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2521.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2522.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2524.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2670.html",
+            "http://rhn.redhat.com/errata/RHSA-2015-2671.html",
+            "http://rhn.redhat.com/errata/RHSA-2016-0040.html",
+            "http://rhn.redhat.com/errata/RHSA-2016-1773.html",
+            "http://www.oracle.com/technetwork/security-advisory/cpuapr2018-3678067.html",
+            "http://www.oracle.com/technetwork/security-advisory/cpujan2018-3236628.html",
+            "http://www.oracle.com/technetwork/security-advisory/cpujul2018-4258247.html",
+            "http://www.oracle.com/technetwork/security-advisory/cpuoct2018-4428296.html",
+            "http://www.securityfocus.com/bid/78215",
+            "http://www.securitytracker.com/id/1034097",
+            "http://www.securitytracker.com/id/1037052",
+            "http://www.securitytracker.com/id/1037053",
+            "http://www.securitytracker.com/id/1037640",
+            "https://access.redhat.com/security/cve/CVE-2015-7501",
+            "https://access.redhat.com/security/vulnerabilities/2059393",
+            "https://access.redhat.com/solutions/2045023",
+            "https://arxiv.org/pdf/2306.05534.pdf",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=1279330",
+            "https://commons.apache.org/proper/commons-collections/release_4_1.html",
+            "https://foxglovesecurity.com/2015/11/06/what-do-weblogic-websphere-jboss-jenkins-opennms-and-your-application-have-in-common-this-vulnerability",
+            "https://github.com/apache/commons-collections",
+            "https://github.com/jensdietrich/xshady-release/tree/main/CVE-2015-7501",
+            "https://issues.apache.org/jira/browse/COLLECTIONS-580.",
+            "https://linux.oracle.com/cve/CVE-2015-7501.html",
+            "https://linux.oracle.com/errata/ELSA-2015-2671.html",
+            "https://nvd.nist.gov/vuln/detail/CVE-2015-7501",
+            "https://rhn.redhat.com/errata/RHSA-2015-2536.html",
+            "https://security.netapp.com/advisory/ntap-20240216-0010/",
+            "https://sourceforge.net/p/collections/code/HEAD/tree",
+            "https://www.cve.org/CVERecord?id=CVE-2015-7501",
+            "https://www.oracle.com/security-alerts/cpujul2020.html"
+          ],
+          "PublishedDate": "2017-11-09T17:29:00.203Z",
+          "LastModifiedDate": "2025-04-20T01:37:25.86Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2015-6420",
+          "VendorIDs": [
+            "GHSA-6hgm-866r-3cjv"
+          ],
+          "PkgName": "commons-collections:commons-collections",
+          "PkgPath": "app/commons-collections-3.2.1.jar",
+          "PkgIdentifier": {
+            "PURL": "pkg:maven/commons-collections/commons-collections@3.2.1",
+            "UID": "30b421376d961a95"
+          },
+          "InstalledVersion": "3.2.1",
+          "FixedVersion": "3.2.2",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:a0567166b12c01dd560c87833e7734944ef9c058e780611021797741189d6f50",
+            "DiffID": "sha256:02df97adaba5e7a0274385a9e50de93e8f3e924033b4abe393334d27b4f353b9"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2015-6420",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Maven",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Amaven"
+          },
+          "Fingerprint": "sha256:c545cb86721935122979a75f4041d275190ec88b4be0ca847c8d6e520594948b",
+          "Title": "Insecure Deserialization in Apache Commons Collection",
+          "Description": "Serialized-object interfaces in certain Cisco Collaboration and Social Media; Endpoint Clients and Client Software; Network Application, Service, and Acceleration; Network and Content Security Devices; Network Management and Provisioning; Routing and Switching - Enterprise and Service Provider; Unified Computing; Voice and Unified Communications Devices; Video, Streaming, TelePresence, and Transcoding Devices; Wireless; and Cisco Hosted Services products allow remote attackers to execute arbitrary commands via a crafted serialized Java object, related to the Apache Commons Collections (ACC) library.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-502"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "nvd": 4
+          },
+          "CVSS": {
+            "nvd": {
+              "V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V2Score": 7.5,
+              "V3Score": 9.8
+            }
+          },
+          "References": [
+            "http://tools.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-20151209-java-deserialization",
+            "http://www.oracle.com/technetwork/security-advisory/cpujul2018-4258247.html",
+            "http://www.securityfocus.com/bid/78872",
+            "https://arxiv.org/pdf/2306.05534",
+            "https://foxglovesecurity.com/2015/11/06/what-do-weblogic-websphere-jboss-jenkins-opennms-and-your-application-have-in-common-this-vulnerability/",
+            "https://github.com/apache/commons-collections",
+            "https://h20566.www2.hpe.com/portal/site/hpsc/public/kb/docDisplay?docId=emr_na-c05376917",
+            "https://h20566.www2.hpe.com/portal/site/hpsc/public/kb/docDisplay?docId=emr_na-c05390722",
+            "https://lists.apache.org/thread.html/r352e40ca9874d1beb4ad95403792adca7eb295e6bc3bd7b65fabcc21@%3Ccommits.samza.apache.org%3E",
+            "https://news.apache.org/foundation/entry/apache_commons_statement_to_widespread",
+            "https://nvd.nist.gov/vuln/detail/CVE-2015-6420",
+            "https://www.kb.cert.org/vuls/id/576313",
+            "https://www.kb.cert.org/vuls/id/581311",
+            "https://www.tenable.com/security/research/tra-2017-14",
+            "https://www.tenable.com/security/research/tra-2017-23"
+          ],
+          "PublishedDate": "2015-12-15T05:59:07.823Z",
+          "LastModifiedDate": "2026-02-24T19:36:10.86Z"
+        }
+      ]
+    }
+  ]
+}

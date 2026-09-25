@@ -50,7 +50,9 @@
               "kev": false,
               "epss": null
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "sqlite-libs",
@@ -73,7 +75,9 @@
               "kev": false,
               "epss": null
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         }
       ],
       "containers": [],
@@ -113,7 +117,9 @@
               "kev": false,
               "epss": null
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "curl",
@@ -136,7 +142,9 @@
               "kev": false,
               "epss": null
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "libxml2",
@@ -159,7 +167,9 @@
               "kev": false,
               "epss": null
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "qt5-qtbase",
@@ -182,7 +192,9 @@
               "kev": false,
               "epss": null
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         }
       ],
       "containers": [],
@@ -227,7 +239,9 @@
               "kev": false,
               "epss": null
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "bzip2",
@@ -250,7 +264,9 @@
               "kev": false,
               "epss": null
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         }
       ],
       "containers": [],
@@ -287,7 +303,9 @@
               "kev": false,
               "epss": null
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         }
       ],
       "containers": [],
@@ -309,7 +327,10 @@
           "CVE-2033-0012"
         ],
         "critical": 0,
-        "high": 2
+        "high": 2,
+        "ecosystems": [
+          ""
+        ]
       }
     ],
     "resolved": [
@@ -330,14 +351,20 @@
         "package": "curl",
         "kind": "eol_new",
         "critical": 0,
-        "high": 1
+        "high": 1,
+        "ecosystems": [
+          ""
+        ]
       },
       {
         "image": "app:2.1",
         "package": "qt5-qtbase",
         "kind": "eol_new",
         "critical": 0,
-        "high": 1
+        "high": 1,
+        "ecosystems": [
+          ""
+        ]
       },
       {
         "image": "legacy:1",
@@ -347,21 +374,30 @@
           "CVE-2033-0007"
         ],
         "critical": 1,
-        "high": 1
+        "high": 1,
+        "ecosystems": [
+          ""
+        ]
       },
       {
         "image": "legacy:1",
         "package": "bzip2",
         "kind": "eol_new",
         "critical": 0,
-        "high": 1
+        "high": 1,
+        "ecosystems": [
+          ""
+        ]
       },
       {
         "image": "old:3",
         "package": "perl",
         "kind": "eol_new",
         "critical": 0,
-        "high": 1
+        "high": 1,
+        "ecosystems": [
+          ""
+        ]
       }
     ],
     "resolved_eol_packages": [

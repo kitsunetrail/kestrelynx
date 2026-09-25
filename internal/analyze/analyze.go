@@ -27,7 +27,10 @@ const (
 )
 
 // PackageGroup aggregates all selected vulnerabilities of one package within
-// one image (docs/TRIVY_OUTPUT.md §6: a single package often carries many CVEs).
+// one image (a single package often carries many CVEs). The aggregation key
+// is PackageRef, not just Package's name: an image can run an OS package and
+// a language package that happen to share a name (distro openssl and a Rust
+// openssl crate), and they must never be merged into one row.
 type PackageGroup struct {
 	Package      string
 	Class        scanner.PkgClass
@@ -40,6 +43,54 @@ type PackageGroup struct {
 	Vulns        []VulnRef // deduplicated, strongest verdict first (sortVulns)
 	Priority     Priority  // max of Vulns' priorities; PriorityNone when triage is off
 	URL          string    // representative reference
+
+	// Ecosystem is the one identity field Package/Class/InstalledVer didn't
+	// already cover. It is not folded into a stored PackageRef alongside
+	// them — that would keep the same four values in two places — so
+	// PackageRef() (below) is how callers get the combined identity.
+	Ecosystem inventory.Ecosystem
+	// Instances is every distinct place this exact (ecosystem, class, name,
+	// version) was found in the image: which raw Trivy Result it came from
+	// (Type/Target) and, for a language package, which file reported it
+	// (PkgPath). More than one Instance means the same package shows up more
+	// than once — e.g. the same vendored Go module embedded in two
+	// separately built binaries under /app/api and /app/tool — and each
+	// place can end up with its own runtime usage verdict later. Sorted for
+	// determinism; never rendered directly in Slack or the webhook.
+	Instances []Instance
+}
+
+// Instance is one raw Trivy Result a PackageGroup's Instances collects,
+// deduplicated by (Type, Target, PkgPath): the same triple reported twice
+// (once per CVE on the package, say) counts once.
+type Instance struct {
+	PackageRef inventory.PackageRef
+	Type       string
+	Target     string
+	PkgPath    string
+}
+
+// sortInstances orders a group's Instances deterministically: Type, then
+// Target, then PkgPath (PackageRef is constant across one group's Instances,
+// so it never needs to break a tie).
+func sortInstances(instances []Instance) {
+	sort.Slice(instances, func(i, j int) bool {
+		if instances[i].Type != instances[j].Type {
+			return instances[i].Type < instances[j].Type
+		}
+		if instances[i].Target != instances[j].Target {
+			return instances[i].Target < instances[j].Target
+		}
+		return instances[i].PkgPath < instances[j].PkgPath
+	})
+}
+
+// PackageRef is g's identity, assembled from Package/Class/InstalledVer/
+// Ecosystem on demand — the same pattern as scanner.Finding.PackageRef():
+// one derivation, so nothing can independently drift from Package, Class,
+// InstalledVer or Ecosystem by being set to a different value.
+func (g PackageGroup) PackageRef() inventory.PackageRef {
+	return inventory.PackageRef{Ecosystem: g.Ecosystem, Class: g.Class, Name: g.Package, Version: g.InstalledVer}
 }
 
 // Total is the number of distinct vulnerabilities in the group.
@@ -324,10 +375,12 @@ type vulnInfo struct {
 	status scanner.Status // raw Trivy status (see mergeRawStatus)
 }
 
-// pkgAcc accumulates a package group while deduplicating CVEs by ID.
+// pkgAcc accumulates a package group while deduplicating CVEs by ID and
+// Instances by (Type, Target, PkgPath).
 type pkgAcc struct {
-	group PackageGroup
-	vulns map[string]vulnInfo
+	group     PackageGroup
+	vulns     map[string]vulnInfo
+	instances map[Instance]bool
 }
 
 // imgKey is the aggregation unit for findings: a running entity, identified
@@ -375,8 +428,8 @@ type obsAcc struct {
 func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triage, now time.Time) Report {
 	r := Report{GeneratedAt: now, ImagesTotal: len(scans), Triage: tr.Enabled, Intel: tr.Intel}
 
-	// section status -> (ref, entity key) -> package -> accumulator
-	byStatus := map[scanner.Status]map[imgKey]map[string]*pkgAcc{}
+	// section status -> (ref, entity key) -> package identity -> accumulator
+	byStatus := map[scanner.Status]map[imgKey]map[inventory.PackageRef]*pkgAcc{}
 	obs := map[string]*obsAcc{}     // by ref, the inventory backing Report.Images
 	meta := map[imgKey]entityMeta{} // per-entity Subject/Pinned, for buildSection
 
@@ -436,15 +489,16 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 			}
 			images := byStatus[section]
 			if images == nil {
-				images = map[imgKey]map[string]*pkgAcc{}
+				images = map[imgKey]map[inventory.PackageRef]*pkgAcc{}
 				byStatus[section] = images
 			}
 			pkgs := images[k]
 			if pkgs == nil {
-				pkgs = map[string]*pkgAcc{}
+				pkgs = map[inventory.PackageRef]*pkgAcc{}
 				images[k] = pkgs
 			}
-			acc := pkgs[find.Package]
+			ref := find.PackageRef()
+			acc := pkgs[ref]
 			if acc == nil {
 				acc = &pkgAcc{
 					group: PackageGroup{
@@ -454,11 +508,14 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 						FixedVer:     find.FixedVer,
 						Status:       section,
 						URL:          find.URL,
+						Ecosystem:    ref.Ecosystem,
 					},
-					vulns: map[string]vulnInfo{},
+					vulns:     map[string]vulnInfo{},
+					instances: map[Instance]bool{},
 				}
-				pkgs[find.Package] = acc
+				pkgs[ref] = acc
 			}
+			acc.instances[Instance{PackageRef: ref, Type: find.Type, Target: find.Target, PkgPath: find.PkgPath}] = true
 			// The same CVE ID can appear on more than one Trivy result line (e.g.
 			// matched via more than one data source); prefer whichever line carries
 			// a non-empty Title rather than letting a later, title-less line blank it.
@@ -559,7 +616,7 @@ func buildInventory(obs map[string]*obsAcc, byRef map[string][]inventory.Contain
 }
 
 // buildSection finalizes one status bucket into sorted ImageFindings.
-func buildSection(images map[imgKey]map[string]*pkgAcc, tr Triage, byKey map[imgKey][]inventory.Container, meta map[imgKey]entityMeta) []ImageFindings {
+func buildSection(images map[imgKey]map[inventory.PackageRef]*pkgAcc, tr Triage, byKey map[imgKey][]inventory.Container, meta map[imgKey]entityMeta) []ImageFindings {
 	if len(images) == 0 {
 		return nil
 	}
@@ -608,6 +665,10 @@ func finalize(acc *pkgAcc, tr Triage) PackageGroup {
 	}
 	sortVulns(g.Vulns)
 	g.Risk = riskOf(g)
+	for inst := range acc.instances {
+		g.Instances = append(g.Instances, inst)
+	}
+	sortInstances(g.Instances)
 	return g
 }
 
@@ -658,8 +719,14 @@ func majorVersion(v string) (int, bool) {
 	return n, true
 }
 
-// sortPackages orders packages within an image: CRITICAL-bearing first, then by
-// total count desc, then package name for stability.
+// sortPackages orders packages within an image: CRITICAL-bearing first, then
+// by total count desc, then package name. Two groups can now share a name
+// (the aggregation key is PackageRef, not the name alone — the OS openssl
+// and a Rust openssl crate, or two installed versions of the same package),
+// so Ecosystem, then Version, then Class break the tie and make the order
+// unique: a same-named, same-version OS/language pair with an unrecognized
+// (empty) Type on both sides shares Ecosystem and Version too, and only
+// Class still tells them apart.
 func sortPackages(g []PackageGroup) {
 	sort.Slice(g, func(i, j int) bool {
 		ci, cj := g[i].Critical > 0, g[j].Critical > 0
@@ -669,7 +736,16 @@ func sortPackages(g []PackageGroup) {
 		if g[i].Total() != g[j].Total() {
 			return g[i].Total() > g[j].Total()
 		}
-		return g[i].Package < g[j].Package
+		if g[i].Package != g[j].Package {
+			return g[i].Package < g[j].Package
+		}
+		if g[i].Ecosystem != g[j].Ecosystem {
+			return g[i].Ecosystem < g[j].Ecosystem
+		}
+		if g[i].InstalledVer != g[j].InstalledVer {
+			return g[i].InstalledVer < g[j].InstalledVer
+		}
+		return g[i].Class < g[j].Class
 	})
 }
 

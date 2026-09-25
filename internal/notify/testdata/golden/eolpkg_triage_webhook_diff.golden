@@ -64,7 +64,9 @@
               "epss": null,
               "priority": "low"
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "sqlite-libs",
@@ -89,7 +91,9 @@
               "epss": null,
               "priority": "low"
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         }
       ],
       "containers": [],
@@ -131,7 +135,9 @@
               "epss": 0.004,
               "priority": "watch"
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "curl",
@@ -156,7 +162,9 @@
               "epss": 0.0002,
               "priority": "low"
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "libxml2",
@@ -181,7 +189,9 @@
               "epss": 0.12,
               "priority": "act_now"
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "qt5-qtbase",
@@ -206,7 +216,9 @@
               "epss": 0.0001,
               "priority": "low"
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         }
       ],
       "containers": [],
@@ -254,7 +266,9 @@
               "epss": 0.0005,
               "priority": "low"
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         },
         {
           "package": "bzip2",
@@ -279,7 +293,9 @@
               "epss": 0.0003,
               "priority": "low"
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         }
       ],
       "containers": [],
@@ -318,7 +334,9 @@
               "epss": 0.0006,
               "priority": "low"
             }
-          ]
+          ],
+          "class": "os",
+          "ecosystem": ""
         }
       ],
       "containers": [],
@@ -341,7 +359,10 @@
         ],
         "critical": 0,
         "high": 2,
-        "priority": "watch"
+        "priority": "watch",
+        "ecosystems": [
+          ""
+        ]
       }
     ],
     "resolved": [
@@ -363,7 +384,10 @@
         "kind": "eol_new",
         "critical": 0,
         "high": 1,
-        "priority": "low"
+        "priority": "low",
+        "ecosystems": [
+          ""
+        ]
       },
       {
         "image": "app:2.1",
@@ -372,7 +396,10 @@
         "critical": 0,
         "high": 1,
         "priority": "act_now",
-        "reason": "CVE-2033-0003 HIGH · CISA KEV (exploited in the wild) · EPSS 12%"
+        "reason": "CVE-2033-0003 HIGH · CISA KEV (exploited in the wild) · EPSS 12%",
+        "ecosystems": [
+          ""
+        ]
       },
       {
         "image": "app:2.1",
@@ -380,7 +407,10 @@
         "kind": "eol_new",
         "critical": 0,
         "high": 1,
-        "priority": "low"
+        "priority": "low",
+        "ecosystems": [
+          ""
+        ]
       },
       {
         "image": "legacy:1",
@@ -391,7 +421,10 @@
         ],
         "critical": 1,
         "high": 1,
-        "priority": "act_now"
+        "priority": "act_now",
+        "ecosystems": [
+          ""
+        ]
       },
       {
         "image": "legacy:1",
@@ -399,7 +432,10 @@
         "kind": "eol_new",
         "critical": 0,
         "high": 1,
-        "priority": "low"
+        "priority": "low",
+        "ecosystems": [
+          ""
+        ]
       },
       {
         "image": "old:3",
@@ -407,7 +443,10 @@
         "kind": "eol_new",
         "critical": 0,
         "high": 1,
-        "priority": "low"
+        "priority": "low",
+        "ecosystems": [
+          ""
+        ]
       }
     ],
     "resolved_eol_packages": [

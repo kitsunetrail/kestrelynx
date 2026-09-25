@@ -1,0 +1,43 @@
+# One-shot deployment-and-permission verification for the Sensor's observer
+# half. Not the always-on Sensor deployment (that is a separate sensor
+# service, not shipped as a compose file yet) — this brings up a single
+# container that runs `kestrelynx sensor --probe`, reports its result to a
+# file, and exits.
+#
+# This is a standalone reference configuration, not something
+# deploy/docker/run-probe.sh drives: that script uses plain `docker build`/
+# `docker run` instead (see its own doc comment for why), constructs its own
+# per-run resource names and a --run-id, and is the one to use for an actual
+# verification run. Use `docker compose up` with this file directly only for
+# a manual, read-only check (there is no --target-pid in the command below,
+# so no write/connect/signal/exec probe runs against anything) — set
+# KESTRELYNX_SECCOMP_PROFILE/KESTRELYNX_PROBE_OUT_DIR/KESTRELYNX_PROBE_IN_DIR
+# yourself first.
+services:
+  kestrelynx-sensor:
+    image: ghcr.io/kitsunetrail/kestrelynx:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    entrypoint: ["kestrelynx-sensor"]
+    command: ["sensor", "--probe", "--out", "/out/probe-report.json", "--inspect-json", "/inspect/inspect.json", "--run-id", "manual"]
+    pid: "host"
+    cgroup: "host"
+    network_mode: "none"
+    cap_drop: ["ALL"]
+    # BPF/PERFMON are held only long enough for the observer's startup
+    # sequence to load and attach eBPF; the probe itself drops them before
+    # running any of its read/write checks (see cmd/kestrelynx/sensor.go).
+    cap_add: ["SYS_PTRACE", "DAC_READ_SEARCH", "BPF", "PERFMON"]
+    security_opt:
+      # No no-new-privs entry here: the Sensor sets NO_NEW_PRIVS on itself
+      # once past the file capability's exec, and Docker's own
+      # container-level no-new-privileges flag would otherwise strip the
+      # file capability this image's setcap layer relies on before the
+      # observer runs.
+      - "seccomp=${KESTRELYNX_SECCOMP_PROFILE:?set by deploy/docker/run-probe.sh to an absolute path to sensor-seccomp.json}"
+    user: "65532:65532"
+    read_only: true
+    volumes:
+      - "${KESTRELYNX_PROBE_OUT_DIR:?set by deploy/docker/run-probe.sh}:/out"
+      - "${KESTRELYNX_PROBE_IN_DIR:?set by deploy/docker/run-probe.sh}:/inspect:ro"

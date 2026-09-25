@@ -13,7 +13,7 @@ import (
 // ErrPreCheckFailed means the parser process did not start in the state it
 // must: either it already has an effective capability, or PR_SET_DUMPABLE
 // did not take. Either is a sign this binary was not launched the way the
-// design requires (a capability-less exec, condition 1), and the caller
+// parser requires (a capability-less exec, condition 1), and the caller
 // must exit without ever entering the request loop — the observer,
 // noticing the parser exit before ever reporting a Report, is what turns
 // this into an isolation_failed status in the evidence file.

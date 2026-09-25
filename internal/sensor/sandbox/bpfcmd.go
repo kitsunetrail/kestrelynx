@@ -13,4 +13,9 @@ const (
 	bpfMapDeleteElem = 3
 	bpfMapGetNextKey = 4
 	bpfProgLoad      = 5
+	bpfObjGet        = 7
+	bpfProgGetFdByID = 13
+	bpfMapGetFdByID  = 14
+	bpfLinkCreate    = 28
+	bpfLinkUpdate    = 29
 )

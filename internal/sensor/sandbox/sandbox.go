@@ -9,7 +9,7 @@
 // file format; it only changes and inspects the calling process's own
 // security state. The two filters this package builds (ObserverFilter and
 // ParserFilter) and the Landlock restriction (RestrictAllFiles) are the only
-// things that make the containment claims in the Sensor's design true, so
+// things that make the Sensor's containment claims true, so
 // every exported function here is deliberately narrow and independently
 // testable without root or any capability.
 package sandbox

@@ -39,7 +39,7 @@ func (p Probe) Unexpected() bool { return p.Err != nil && p.Err != unix.EPERM }
 // "isolation_degraded" from "isolation_failed" — that judgement belongs to
 // whatever holds the Sensor's full self-check state (see package doc).
 //
-// This is 5 of the design's 7 self-check probes. The other two —
+// This is 5 of the observer's 7 self-check probes. The other two —
 // execve and ptrace(PTRACE_TRACEME) — are in RunUnsafeProbes instead: see
 // its doc comment for why they must never be called from here.
 func RunProbes() []Probe {
@@ -157,4 +157,40 @@ func probeBPFProgLoad() Probe {
 		return Probe{Name: "bpf(BPF_PROG_LOAD)"}
 	}
 	return Probe{Name: "bpf(BPF_PROG_LOAD)", Err: errno}
+}
+
+// RunBPFCmdProbes attempts every bpf(2) subcommand the observer's own
+// filter denies once it is running past startup, beyond BPF_PROG_LOAD
+// (already covered by RunProbes' probeBPFProgLoad): creating or updating a
+// bpf_link, opening a pinned object, and resolving a program or map ID back
+// into a new fd. Each of these would hand a compromised observer a way to
+// attach a new program or recover an fd it does not already hold, which is
+// exactly what the filter's post-startup bpf allow-list (map
+// lookup/update/delete/get-next-key only) forecloses. It is not part of
+// RunProbes/RunObserverSelfCheck: it exists for the deployment-verification
+// tool (kestrelynx sensor --probe), which checks a wider set of denied
+// operations than the self-check every observer runs on every start.
+//
+// Safe to call repeatedly and safe to call before or after the filter is
+// active: like probeBPFProgLoad, every attempt passes a NULL attr pointer
+// and size 0, which the filter's own cmd-number check rejects before the
+// kernel would ever dereference it, and which the kernel's own capability
+// check (bpf_capable()/perfmon_capable(), absent CAP_BPF/CAP_PERFMON)
+// rejects the same way if the filter is not what caught it.
+func RunBPFCmdProbes() []Probe {
+	return []Probe{
+		probeBPFCmd("bpf(BPF_LINK_CREATE)", bpfLinkCreate),
+		probeBPFCmd("bpf(BPF_LINK_UPDATE)", bpfLinkUpdate),
+		probeBPFCmd("bpf(BPF_OBJ_GET)", bpfObjGet),
+		probeBPFCmd("bpf(BPF_PROG_GET_FD_BY_ID)", bpfProgGetFdByID),
+		probeBPFCmd("bpf(BPF_MAP_GET_FD_BY_ID)", bpfMapGetFdByID),
+	}
+}
+
+func probeBPFCmd(name string, cmd int) Probe {
+	_, _, errno := unix.Syscall(unix.SYS_BPF, uintptr(cmd), 0, 0)
+	if errno == 0 {
+		return Probe{Name: name}
+	}
+	return Probe{Name: name, Err: errno}
 }

@@ -4,3 +4,5 @@ design
 config.yml
 /kestrelynx
 internal/scanner/testdata/real_*.json
+experiments
+kestrelynx-probe-bundle.tar

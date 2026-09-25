@@ -43,13 +43,13 @@ OUTPUT_PROFILE = REPO_ROOT / "deploy" / "docker" / "sensor-seccomp.json"
 OUTPUT_PROVENANCE = REPO_ROOT / "deploy" / "docker" / "sensor-seccomp.provenance.json"
 
 # Architectures the Sensor's file capability, seccomp, and Landlock support
-# targets (design decision: x86_64 and aarch64 only).
+# targets (x86_64 and aarch64 only).
 ARCH_KEEP = {"SCMP_ARCH_X86_64", "SCMP_ARCH_AARCH64"}
 
 # Names removed unconditionally, wherever they appear in the upstream
 # profile's syscalls entries. socketpair is handled separately (constrained
 # by argument, not removed outright); ioctl is removed with no replacement
-# (an empty allow-list, per the design decision to allow no ioctl at all).
+# (an empty allow-list, since the sensor needs no ioctl at all).
 EXCLUDE_NAMES = frozenset(
     [
         # Other processes' connections, memory, and fds.
@@ -153,7 +153,7 @@ IO_URING_NAMES = frozenset(["io_uring_setup", "io_uring_enter", "io_uring_regist
 # UAPI values). The mask 0xf is SOCK_TYPE_MASK: the low 4 bits of the type
 # argument carry the socket type, the upper bits carry SOCK_CLOEXEC/
 # SOCK_NONBLOCK, which are allowed regardless (observer creates it with
-# SOCK_CLOEXEC per the design's startup order).
+# SOCK_CLOEXEC per the sensor's startup order).
 #
 # For SCMP_CMP_MASKED_EQ, the condition this whole toolchain (Docker's own
 # JSON loader -> libcontainer's configs.Arg -> libseccomp-golang's
@@ -251,7 +251,7 @@ def _verify_io_uring_absent(all_names: set) -> None:
         raise SystemExit(
             "gen_sensor_seccomp_profile: upstream profile now allows "
             f"{sorted(present)}; this script assumed io_uring is absent "
-            "(the design's non-fatal-if-true assumption) and needs an "
+            "(a non-fatal-if-true assumption) and needs an "
             "explicit exclusion added, not silent inheritance."
         )
 

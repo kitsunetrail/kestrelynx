@@ -104,6 +104,38 @@ func (h *Handle) Recheck() error {
 // dirfd argument to the unix package's *at() calls below.
 func (h *Handle) dirFD() int { return int(h.dir.Fd()) }
 
+// FD returns the same raw descriptor number as dirFD, exported for a caller
+// that needs to name this Handle's own open directory descriptor in a path
+// string — e.g. "/proc/self/fd/<FD()>/root/…" — for an operation (such as
+// connect(2) to a UNIX socket, which takes a pathname and has no *at()
+// form) that cannot go through openat/readlinkat directly. Resolving
+// through /proc/self/fd/<FD()> keeps the same guarantee OpenRelativeRaw
+// documents: the path stays bound to the exact process Open verified, not
+// to whatever process the PID number names by the time the path is
+// resolved.
+func (h *Handle) FD() int { return h.dirFD() }
+
+// OpenRelativeRaw opens name (a path relative to /proc/<pid>, e.g. "mem" or
+// "root/tmp/foo") through h's own directory descriptor, exactly like
+// openRelative but with caller-chosen flags/mode and returning a raw fd
+// instead of an *os.File. It exists for a caller that must open something
+// this package's own read-only methods do not cover (a write-flagged open,
+// or a multi-component path under "root/…"), while still getting this
+// package's core guarantee: because the resolution starts from h's already
+// -open directory descriptor rather than a freshly formatted "/proc/<pid>/…"
+// string, it stays bound to the exact process Open verified — even a
+// multi-component path like "root/tmp/foo" resolves against that same
+// descriptor in one openat(2) call, so a symlink swap or a PID reused by an
+// unrelated process between Open and this call cannot redirect it. The
+// caller owns the returned fd and must close it.
+func (h *Handle) OpenRelativeRaw(name string, flags int, mode uint32) (int, error) {
+	fd, err := unix.Openat(h.dirFD(), name, flags|unix.O_CLOEXEC, mode)
+	if err != nil {
+		return -1, fmt.Errorf("procfs: openat %s/%s: %w", procDir(h.pid), name, err)
+	}
+	return fd, nil
+}
+
 // openRelative opens name relative to h's directory descriptor.
 // O_NOFOLLOW is not set: every name this package opens this way (stat,
 // maps, status, cgroup, uid_map, net/tcp{,6}) is a plain file the kernel

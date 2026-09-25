@@ -27,6 +27,17 @@ import (
 )
 
 func main() {
+	// `kestrelynx sensor ...` is a distinct subcommand (the Sensor's
+	// observer/probe entry point, see sensor.go), dispatched before the
+	// default flag set below ever parses os.Args: it never reaches
+	// flag.Parse() with "-config", so this leaves every other invocation
+	// (no args, "-config ...", "--help", ...) exactly as it behaved before
+	// this subcommand existed.
+	if len(os.Args) > 1 && os.Args[1] == "sensor" {
+		runSensorCommand(os.Args[2:])
+		return
+	}
+
 	configPath := flag.String("config", "/etc/kestrelynx/config.yml", "path to config file")
 	flag.Parse()
 

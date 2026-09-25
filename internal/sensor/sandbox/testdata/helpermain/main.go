@@ -21,7 +21,7 @@
 // enough (e.g. TestAsyncPreemption_SurvivesParserFilter, which forces a
 // GC), not on every test regardless of what it is checking.
 //
-// Every role below mirrors what the design's startup order asks of the
+// Every role below mirrors what the startup order asks of the
 // observer or the parser, run in isolation so a test can check one claim
 // at a time. It reports results either by printing "name=OUTCOME" lines to
 // stdout (roles that never install ParserFilter) or, once ParserFilter's

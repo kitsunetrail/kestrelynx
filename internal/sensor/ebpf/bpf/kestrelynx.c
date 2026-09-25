@@ -143,6 +143,19 @@ struct {
 	__uint(max_entries, 8192);
 } kl_dedup SEC(".maps");
 
+// A small hash map no attach point in this file ever reads or writes: it
+// exists only so the deployment-verification tool (kestrelynx sensor
+// --probe) has a map to exercise lookup/update/delete/next-key against
+// once capabilities are dropped, without perturbing kl_lost_events (a live
+// counter) or kl_dedup (whose contents an in-progress attach point may be
+// relying on for suppression).
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, __u32);
+	__type(value, __u64);
+	__uint(max_entries, 8);
+} kl_selftest SEC(".maps");
+
 static __always_inline bool kl_is_excluded(__u64 cgroup_id)
 {
 	__u32 zero = 0;

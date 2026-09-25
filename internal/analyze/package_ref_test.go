@@ -29,7 +29,7 @@ func packagesNamed(t *testing.T, section []ImageFindings, image, pkg string) []P
 }
 
 // TestBuild_EcosystemCollisionNotMerged is the motivating case from the
-// design: an OS package and a language package that happen to share a name
+// rule: an OS package and a language package that happen to share a name
 // (the distro's openssl and a Rust openssl crate) must never be merged into
 // one row, because they are different things with different fixes.
 func TestBuild_EcosystemCollisionNotMerged(t *testing.T) {
@@ -120,7 +120,7 @@ func TestBuild_MultipleInstalledVersionsNotMerged(t *testing.T) {
 	}
 }
 
-// TestBuild_SameVersionAcrossBinariesKeepsBothInstances is the design's
+// TestBuild_SameVersionAcrossBinariesKeepsBothInstances pins the
 // worked example: the same vendored Go module, same installed version,
 // embedded in two separately built binaries (/app/api and /app/tool). They
 // share one PackageRef (name/version/ecosystem/class are identical) so they

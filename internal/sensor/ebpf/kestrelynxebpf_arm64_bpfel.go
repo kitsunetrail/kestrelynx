@@ -50,6 +50,7 @@ const (
 	kestrelynxebpfMapKlEvents         = "kl_events"
 	kestrelynxebpfMapKlExcludedCgroup = "kl_excluded_cgroup"
 	kestrelynxebpfMapKlLostEvents     = "kl_lost_events"
+	kestrelynxebpfMapKlSelftest       = "kl_selftest"
 	kestrelynxebpfProgKlCgroupMkdir   = "kl_cgroup_mkdir"
 	kestrelynxebpfProgKlExecSuccess   = "kl_exec_success"
 	kestrelynxebpfProgKlFileOpen      = "kl_file_open"
@@ -115,6 +116,7 @@ type kestrelynxebpfMapSpecs struct {
 	KlEvents         *ebpf.MapSpec `ebpf:"kl_events"`
 	KlExcludedCgroup *ebpf.MapSpec `ebpf:"kl_excluded_cgroup"`
 	KlLostEvents     *ebpf.MapSpec `ebpf:"kl_lost_events"`
+	KlSelftest       *ebpf.MapSpec `ebpf:"kl_selftest"`
 }
 
 // kestrelynxebpfVariableSpecs contains global variables before they are loaded into the kernel.
@@ -148,6 +150,7 @@ type kestrelynxebpfMaps struct {
 	KlEvents         *ebpf.Map `ebpf:"kl_events"`
 	KlExcludedCgroup *ebpf.Map `ebpf:"kl_excluded_cgroup"`
 	KlLostEvents     *ebpf.Map `ebpf:"kl_lost_events"`
+	KlSelftest       *ebpf.Map `ebpf:"kl_selftest"`
 }
 
 func (m *kestrelynxebpfMaps) Close() error {
@@ -156,6 +159,7 @@ func (m *kestrelynxebpfMaps) Close() error {
 		m.KlEvents,
 		m.KlExcludedCgroup,
 		m.KlLostEvents,
+		m.KlSelftest,
 	)
 }
 

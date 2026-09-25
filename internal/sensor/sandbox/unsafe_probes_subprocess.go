@@ -163,7 +163,7 @@ func runUnsafeProbeChild() {
 //
 // Callers must invoke this before installing their own ObserverFilter, not
 // after: once that filter is active, execve is denied unconditionally
-// (condition 3's own design), so the calling process could no longer start
+// (by condition 3), so the calling process could no longer start
 // this subprocess at all — the same reason the parser has to be spawned
 // before the observer's own filter goes live. The child applies
 // ObserverFilter to itself regardless, so the results reflect what the

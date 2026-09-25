@@ -189,6 +189,35 @@ func sendReport(fd int, r Report) error {
 	return sendJSON(fd, wireEnvelope{Report: &r})
 }
 
+// ReadReport receives the one message Run sends before serving any request:
+// the parser's self-check Report (see LockDown). It is the observer side's
+// half of sendReport, exported for whatever spawns the parser process and
+// needs to know whether the parser came up fully isolated
+// (Report.LandlockApplied) before handing it a single fd. It returns an
+// error if the message is not a report (a Response arriving first would
+// itself be a protocol violation — Run always sends exactly one report
+// before its first response) or if the socket closed before one arrived
+// (the parser exited during LockDown, which never sends a report at all;
+// see ErrPreCheckFailed/ErrPostCheckFailed's doc comments).
+func ReadReport(fd int) (Report, error) {
+	buf := make([]byte, maxRequestBytes)
+	n, err := unix.Read(fd, buf)
+	if err != nil {
+		return Report{}, fmt.Errorf("parser: read report: %w", err)
+	}
+	if n == 0 {
+		return Report{}, fmt.Errorf("parser: read report: socket closed before a report arrived")
+	}
+	var env wireEnvelope
+	if err := json.Unmarshal(buf[:n], &env); err != nil {
+		return Report{}, fmt.Errorf("parser: read report: unmarshal: %w", err)
+	}
+	if env.Report == nil {
+		return Report{}, fmt.Errorf("parser: read report: first message was not a report")
+	}
+	return *env.Report, nil
+}
+
 func sendResponse(fd int, r Response) error {
 	return sendJSON(fd, wireEnvelope{Response: &r})
 }

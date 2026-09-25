@@ -24,7 +24,7 @@ import (
 )
 
 // echoHandler reads up to 256 bytes from the fd it is handed (via a plain
-// read(2), never wrapped in *os.File — condition 3 of the design's parser
+// read(2), never wrapped in *os.File — condition 3 of the parser
 // conditions names read/pread64 specifically, and this avoids relying on
 // anything *os.File's setup might probe) and reports how much it read and
 // the bytes themselves, so a test can confirm the fd it sent is the fd the

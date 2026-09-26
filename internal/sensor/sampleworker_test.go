@@ -2,8 +2,11 @@ package sensor
 
 import (
 	"os"
+	"os/exec"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/kitsunetrail/kestrelynx/internal/sensor/procfs"
 )
@@ -112,6 +115,50 @@ func TestOpenRootWithBasis_ReaderMatchesItsOwnReportedBasis(t *testing.T) {
 	}
 	if dev != basis.rootDev || ino != basis.rootIno {
 		t.Errorf("r.Stat(\".\") = %s/%d, want it to match basis's own %s/%d — both must come from the same open, never a separate reopen", dev, ino, basis.rootDev, basis.rootIno)
+	}
+}
+
+// TestOpenRootWithBasis_RejectsZombie confirms openRootWithBasis's own
+// starttime-match check is not enough on its own — see
+// confirmGenerationAlive's own doc comment in genconfirm.go for why a
+// zombie's own /proc/<pid>/stat still reports its original, unchanged
+// starttime right up until its parent actually reaps it. Same reproduction
+// as TestConfirmGenerationAliveRejectsZombie: a real child that has already
+// exited but is confirmed, via waitid(P_PID, pid, WEXITED|WNOWAIT), not yet
+// reaped.
+func TestOpenRootWithBasis_RejectsZombie(t *testing.T) {
+	cmd := exec.Command("/bin/true")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Start(/bin/true): %v", err)
+	}
+	pid := cmd.Process.Pid
+	defer cmd.Wait()
+
+	var info unix.Siginfo
+	if err := unix.Waitid(unix.P_PID, pid, &info, unix.WEXITED|unix.WNOWAIT, nil); err != nil {
+		t.Fatalf("Waitid(WNOWAIT): %v", err)
+	}
+
+	h, err := procfs.Open(pid)
+	if err != nil {
+		t.Fatalf("procfs.Open(zombie child): %v", err)
+	}
+	starttime := h.Starttime()
+	state, stateErr := h.State()
+	h.Close()
+	if stateErr != nil {
+		t.Fatalf("State: %v", stateErr)
+	}
+	if state != 'Z' {
+		t.Fatalf("test's own precondition failed: state = %q, want 'Z' (zombie)", string(rune(state)))
+	}
+
+	r, basis := openRootWithBasis(InitProcess{PID: pid, Starttime: starttime})
+	if r != nil {
+		r.Close()
+	}
+	if basis.ok {
+		t.Error("openRootWithBasis(zombie init) basis.ok = true, want false -- a zombie's own unchanged starttime must never be treated as proof of life")
 	}
 }
 

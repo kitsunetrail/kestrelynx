@@ -121,12 +121,12 @@ func TestPruneEndedGenerations_RemovesOnlyAfterRetention(t *testing.T) {
 	old := now.Add(-endedRetention - time.Hour)
 	recent := now.Add(-time.Hour)
 
-	g1 := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, now)
+	g1 := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, now, evidence.CoverageNone)
 	g1.ended = true
 	g1.endedAt = &old
 	s.generations[g1.key()] = g1
 
-	g2 := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('b')}, InitProcess{PID: 2, Starttime: 2}, now)
+	g2 := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('b')}, InitProcess{PID: 2, Starttime: 2}, now, evidence.CoverageNone)
 	g2.ended = true
 	g2.endedAt = &recent
 	s.generations[g2.key()] = g2
@@ -153,7 +153,7 @@ func TestComputeStatus(t *testing.T) {
 		}
 	}
 	addGen := func(s *Session, id string, state evidence.GenerationState, sampled bool) {
-		g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: id}, InitProcess{PID: 1}, time.Unix(0, 0))
+		g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: id}, InitProcess{PID: 1}, time.Unix(0, 0), evidence.CoverageNone)
 		switch state {
 		case evidence.StateDenied:
 			g.lastSampleDenied = true
@@ -266,7 +266,7 @@ func TestComputeStatus(t *testing.T) {
 // SensorPermissionDenied, so one such container does not make every other,
 // unaffected container look denied too.
 func TestLastGoodSample_PerContainerDenialSetsStateDenied(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	g.idxState = indexReady
 	g.postIndexConfirmed = true // would otherwise progress to StateObserving; this test is about denial, not the separate post-ready confirmation window
 	g.lastGoodSample(time.Unix(100, 0), true)
@@ -298,12 +298,12 @@ func TestWriteParseFailedAndExit_MarksActiveGenerationsParseFailed(t *testing.T)
 	s.writerReportCh = make(chan writeReport, 1)
 	go runWriter(s.evidenceFD, s.writerCh, s.writerReportCh)
 
-	active := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	active := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	active.idxState = indexReady
 	s.generations[active.key()] = active
 
 	endedAt := time.Unix(1, 0)
-	ended := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('b')}, InitProcess{PID: 2, Starttime: 2}, time.Unix(0, 0))
+	ended := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('b')}, InitProcess{PID: 2, Starttime: 2}, time.Unix(0, 0), evidence.CoverageNone)
 	ended.ended = true
 	ended.endedAt = &endedAt
 	s.generations[ended.key()] = ended
@@ -421,7 +421,7 @@ func TestLoop_FatalDBResultWritesEvidenceBeforeReturning(t *testing.T) {
 		writerReportCh:   make(chan writeReport, 1),
 		heartbeatEvery:   time.Hour, // must not fire and race the fatal write below
 	}
-	active := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	active := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	active.idxState = indexReady
 	s.generations[active.key()] = active
 
@@ -512,7 +512,7 @@ func TestLoadPreviousEvidence_CarriesOverIncompleteAndTruncated(t *testing.T) {
 // all.
 func TestApplySampleResult_OutstandingLookupWithholdsIncompleteNotObserved(t *testing.T) {
 	s := newTestSession()
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	g.idxState = indexReady
 	g.packageDB = evidence.PackageDBInfo{Kind: evidence.DBKindDpkg, Status: evidence.DBStatusOK}
 	s.generations[g.key()] = g
@@ -530,7 +530,7 @@ func TestApplySampleResult_OutstandingLookupWithholdsIncompleteNotObserved(t *te
 	if g.pendingLookup == nil {
 		t.Fatalf("pendingLookup = nil, want a lookup outstanding for the one verified candidate")
 	}
-	if !g.toEvidence().Incomplete {
+	if !g.toEvidence(false).Incomplete {
 		t.Errorf("Incomplete = false while a lookup is still outstanding, want true — a reader must not draw not_observed from an unresolved candidate")
 	}
 
@@ -606,7 +606,7 @@ func TestApplyDiscoveryResult_DiscardsStaleOutOfOrderCompletion(t *testing.T) {
 // package's own Incomplete field.
 func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 	s := newTestSession()
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	g.idxState = indexReady
 	g.postIndexConfirmed = true
 	g.packageDB = evidence.PackageDBInfo{Kind: evidence.DBKindDpkg, Status: evidence.DBStatusOK}
@@ -637,10 +637,10 @@ func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 	if len(g.queuedCandidates) != 1 {
 		t.Fatalf("len(queuedCandidates) = %d after sample 2, want 1 (B queued behind A's own outstanding lookup)", len(g.queuedCandidates))
 	}
-	if !g.toEvidence().Incomplete {
+	if !g.toEvidence(false).Incomplete {
 		t.Errorf("Incomplete = false with B queued and A's lookup outstanding, want true")
 	}
-	if verdict := evidence.JudgeOSPackage(g.toEvidence(), refB); verdict.Usage != evidence.UsageUnavailable {
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), refB); verdict.Usage != evidence.UsageUnavailable {
 		t.Errorf("JudgeOSPackage(B) = %+v while B is still queued, want Unavailable — not_observed must stay withheld", verdict)
 	}
 
@@ -657,7 +657,7 @@ func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 	if g.pendingLookup == nil {
 		t.Fatalf("pendingLookup = nil after A's lookup answered, want B's own follow-up lookup now outstanding")
 	}
-	if !g.toEvidence().Incomplete {
+	if !g.toEvidence(false).Incomplete {
 		t.Errorf("Incomplete = false with B's own follow-up lookup now outstanding, want true — B has still not actually been resolved")
 	}
 
@@ -677,7 +677,7 @@ func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 		genKey: g.key(),
 		owners: map[string]lookupOutcome{pathB: {owners: []lookupOwner{{Name: "pkgB", Version: "1.0"}}}},
 	})
-	if verdict := evidence.JudgeOSPackage(g.toEvidence(), refB); verdict.Usage != evidence.UsageInUse {
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), refB); verdict.Usage != evidence.UsageInUse {
 		t.Fatalf("JudgeOSPackage(B) = %+v after B's own (queued, then resubmitted) lookup answered, want InUse — B must not have been lost", verdict)
 	}
 	if len(g.queuedCandidates) != 0 {
@@ -686,7 +686,7 @@ func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 	if g.pendingLookup == nil {
 		t.Fatalf("pendingLookup = nil after B's lookup answered, want C's own follow-up lookup now outstanding")
 	}
-	if !g.toEvidence().Incomplete {
+	if !g.toEvidence(false).Incomplete {
 		t.Errorf("Incomplete = false with C's own follow-up lookup still outstanding, want true")
 	}
 
@@ -696,7 +696,7 @@ func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 		genKey: g.key(),
 		owners: map[string]lookupOutcome{pathC: {owners: []lookupOwner{{Name: "pkgC", Version: "1.0"}}}},
 	})
-	if got := g.toEvidence().Incomplete; got {
+	if got := g.toEvidence(false).Incomplete; got {
 		t.Errorf("Incomplete = true after every queued/outstanding batch was eventually resolved, want false")
 	}
 }
@@ -711,7 +711,7 @@ func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 // resolves cleanly.
 func TestApplySampleResult_QueueOverflowIsUnrecoverable(t *testing.T) {
 	s := newTestSession()
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	g.idxState = indexReady
 	g.postIndexConfirmed = true
 	g.packageDB = evidence.PackageDBInfo{Kind: evidence.DBKindDpkg, Status: evidence.DBStatusOK}
@@ -774,7 +774,7 @@ func TestApplySampleResult_QueueOverflowIsUnrecoverable(t *testing.T) {
 	if g.pendingLookup != nil || len(g.queuedCandidates) != 0 {
 		t.Fatalf("pendingLookup/queuedCandidates = %+v/%+v after draining every round, want both empty", g.pendingLookup, g.queuedCandidates)
 	}
-	if !g.toEvidence().Incomplete {
+	if !g.toEvidence(false).Incomplete {
 		t.Errorf("Incomplete = false after every queued batch resolved cleanly, want true — the overflowed batch can never be recovered this session")
 	}
 }
@@ -791,7 +791,7 @@ func TestApplySampleResult_QueueOverflowIsUnrecoverable(t *testing.T) {
 // reach not_observed for this generation at all.
 func TestPostIndexConfirmed_WithholdsNotObservedUntilFirstPostReadyLookup(t *testing.T) {
 	s := newTestSession()
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	s.generations[g.key()] = g
 
 	ref := inventory.PackageRef{Class: inventory.ClassOS, Name: "never-mentioned-pkg", Version: "1.0"}
@@ -817,7 +817,7 @@ func TestPostIndexConfirmed_WithholdsNotObservedUntilFirstPostReadyLookup(t *tes
 	if derivePublishedState(g) != evidence.StateInitializing {
 		t.Fatalf("state = %q right after the index became ready but before any post-ready sample, want still initializing", derivePublishedState(g))
 	}
-	if verdict := evidence.JudgeOSPackage(g.toEvidence(), ref); verdict.Usage != evidence.UsageUnavailable || verdict.Reason != evidence.ReasonInitializing {
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), ref); verdict.Usage != evidence.UsageUnavailable || verdict.Reason != evidence.ReasonInitializing {
 		t.Errorf("JudgeOSPackage = %+v, want Unavailable/ReasonInitializing — the reader must not reach not_observed on a freshly-ready, never-sampled index", verdict)
 	}
 
@@ -834,7 +834,7 @@ func TestPostIndexConfirmed_WithholdsNotObservedUntilFirstPostReadyLookup(t *tes
 	if derivePublishedState(g) != evidence.StateInitializing {
 		t.Fatalf("state = %q with the first post-ready lookup still outstanding, want still initializing", derivePublishedState(g))
 	}
-	if verdict := evidence.JudgeOSPackage(g.toEvidence(), ref); verdict.Usage != evidence.UsageUnavailable {
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), ref); verdict.Usage != evidence.UsageUnavailable {
 		t.Errorf("JudgeOSPackage = %+v, want Unavailable while the first post-ready lookup is still outstanding (Incomplete, from pendingLookup != nil, outranks the State-level reason here)", verdict)
 	}
 
@@ -845,7 +845,7 @@ func TestPostIndexConfirmed_WithholdsNotObservedUntilFirstPostReadyLookup(t *tes
 	if derivePublishedState(g) != evidence.StateObserving {
 		t.Fatalf("state = %q once the first post-ready lookup has answered, want observing", derivePublishedState(g))
 	}
-	if verdict := evidence.JudgeOSPackage(g.toEvidence(), ref); verdict.Usage != evidence.UsageNotObserved {
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), ref); verdict.Usage != evidence.UsageNotObserved {
 		t.Errorf("JudgeOSPackage = %+v, want NotObserved now that a real post-ready observe-and-lookup round trip has completed", verdict)
 	}
 }
@@ -878,7 +878,7 @@ func TestPostIndexConfirmed_WithholdsNotObservedUntilFirstPostReadyLookup(t *tes
 // merely delayed.
 func TestFlushQueuedCandidates_DiscardsBatchFromBeforeIndexRebuild(t *testing.T) {
 	s := newTestSession()
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	g.idxState = indexReady
 	g.postIndexConfirmed = true
 	g.packageDB = evidence.PackageDBInfo{Kind: evidence.DBKindDpkg, Status: evidence.DBStatusOK}
@@ -955,7 +955,7 @@ func TestFlushQueuedCandidates_DiscardsBatchFromBeforeIndexRebuild(t *testing.T)
 	if !g.candidatesLostPermanently {
 		t.Fatalf("candidatesLostPermanently = false after B's own batch was discarded for a stale epoch, want true")
 	}
-	if !g.toEvidence().Incomplete {
+	if !g.toEvidence(false).Incomplete {
 		t.Errorf("Incomplete = false after B's own observation was permanently lost, want true")
 	}
 
@@ -972,10 +972,10 @@ func TestFlushQueuedCandidates_DiscardsBatchFromBeforeIndexRebuild(t *testing.T)
 	// The reader's own verdict: pathB's own owner under the new root must
 	// never have been recorded as in_use — B's own pre-rebuild candidate
 	// was discarded before it was ever looked up against any index at all.
-	if verdict := evidence.JudgeOSPackage(g.toEvidence(), refBUnderNewRoot); verdict.Usage == evidence.UsageInUse {
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), refBUnderNewRoot); verdict.Usage == evidence.UsageInUse {
 		t.Fatalf("JudgeOSPackage(pkgB-new-root) = %+v, want anything but InUse — B's own pre-rebuild candidate must never be matched against the rebuilt index", verdict)
 	}
-	if !g.toEvidence().Incomplete {
+	if !g.toEvidence(false).Incomplete {
 		t.Errorf("Incomplete = false once the rebuild has completed, want it to stay true — B's own observation is lost for the rest of this session")
 	}
 }
@@ -1064,7 +1064,7 @@ func TestRunDBWorker_RejectsLookupSubmittedAgainstASupersededEpoch(t *testing.T)
 // no chance to actually re-confirm against the new root.
 func TestApplySampleResult_BasisMismatchInvalidatesIndexEvenWithZeroCandidates(t *testing.T) {
 	s := newTestSession()
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	oldBasis := mountBasis{ok: true, mntNS: "mnt:[1]", rootDev: "8:1", rootIno: 100}
 	g.idxState = indexReady
 	g.idxBasis = oldBasis
@@ -1074,7 +1074,7 @@ func TestApplySampleResult_BasisMismatchInvalidatesIndexEvenWithZeroCandidates(t
 	s.generations[g.key()] = g
 
 	ref := inventory.PackageRef{Class: inventory.ClassOS, Name: "never-actually-recorded-pkg", Version: "1.0"}
-	if verdict := evidence.JudgeOSPackage(g.toEvidence(), ref); verdict.Usage != evidence.UsageNotObserved {
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), ref); verdict.Usage != evidence.UsageNotObserved {
 		t.Fatalf("test precondition: JudgeOSPackage = %+v before the sample below, want NotObserved (confirming the initial state really is reader-eligible)", verdict)
 	}
 
@@ -1102,7 +1102,7 @@ func TestApplySampleResult_BasisMismatchInvalidatesIndexEvenWithZeroCandidates(t
 		t.Errorf("lastVerifiedAt = %v, want unchanged at unix(1000) — nothing was actually confirmed this round (succeeded=0, denied=0)", g.lastVerifiedAt)
 	}
 
-	if verdict := evidence.JudgeOSPackage(g.toEvidence(), ref); verdict.Usage == evidence.UsageNotObserved {
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), ref); verdict.Usage == evidence.UsageNotObserved {
 		t.Errorf("JudgeOSPackage = %+v after the basis mismatch, want anything but NotObserved — the old index's own confirmation must not survive a root nothing this sample actually re-confirmed", verdict)
 	}
 }

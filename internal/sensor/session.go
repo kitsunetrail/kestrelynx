@@ -106,6 +106,13 @@ type Session struct {
 	// not actually exist on this machine. Leaving it nil never changes
 	// production behavior at all.
 	discoverFn func() (map[string]containerGroup, error)
+	// genConfirmFn is confirmGenerationAlive in production (the zero
+	// value); a test double in tests that need genconfirm.go's own
+	// liveness check to answer deterministically for a synthetic
+	// InitProcess (one that does not actually correspond to a running
+	// process on this machine) — the same seam sampleFn/discoverFn already
+	// give a sample worker and a discovery pass.
+	genConfirmFn func(pid int, starttime int64) bool
 
 	evidenceFD       int
 	sessionID        string
@@ -121,6 +128,76 @@ type Session struct {
 	eventsReason     evidence.EventsReason
 	eventsAttachedAt time.Time
 	eventsLost       int64
+	// attachedAtBootTicks is the boot-relative clock-tick instant eBPF
+	// attached this session (bootTicksNow, captured once at startup) — only
+	// meaningful when eventsStatus is EventsOK. initialEventsCoverage
+	// compares a freshly discovered generation's own init.Starttime against
+	// this to decide since_start vs. partial (see that function's own doc
+	// comment).
+	attachedAtBootTicks int64
+
+	// eventCh carries every decoded eBPF event from the dedicated reader
+	// goroutine (runEventReader) to loop, which is the only goroutine that
+	// ever applies one (events.go's applyEvent) — the same
+	// receive-only-goroutine-feeds-loop-a-channel shape sampleResCh and
+	// dbResultCh already use for a sample worker and the dbworker.
+	eventCh chan ebpf.Event
+	// cgroupRoute, pathIdx and pendingRouteEvents are loop's own eBPF event-
+	// routing state — see cgroupmap.go and events.go for what each does.
+	// Read and written only by loop's own goroutine, exactly like
+	// s.generations.
+	cgroupRoute        cgroupRoute
+	pathIdx            pathIndex
+	pendingRouteEvents []pendingRouteEvent
+	// ownUserNSInode is this observer's own user namespace's inode number,
+	// resolved once at startup (parseNSInode on s.ownUserNS) — the event-
+	// derived equivalent of ownUserNS itself, which a sampled process's own
+	// /proc/<pid>/ns/user link is compared against instead (see
+	// eventInDistinctUserNS vs. ownsDistinctUserNS).
+	ownUserNSInode uint32
+	// lastLostByCgroup and lastLostFallback are reconcileEventLossCounters'
+	// own memory of the eBPF ring buffer's loss counters as of the last time
+	// it ran, so it can attribute only the increase since then rather than
+	// re-attributing every loss on every call.
+	lastLostByCgroup map[uint64]uint64
+	lastLostFallback uint64
+	// unattributedEventsLost is recordUnattributableEventLoss's own running
+	// total: every pendingRouteEvent ever dropped (cap or TTL) without ever
+	// having resolved to a generation at all. Folded into s.eventsLost by
+	// buildSnapshot, alongside reconcileEventLossCounters' own kernel-side
+	// total.
+	unattributedEventsLost int64
+	// pathResolveCh carries every resolvePathAsync answer (a path-unknown
+	// success event's own live-/proc/<pid>/maps fallback lookup) back to
+	// loop, the only goroutine that ever applies one (pathresolve.go's
+	// applyPathResolveResult) — the same receive-only-goroutine-feeds-loop-
+	// a-channel shape eventCh/sampleResCh/dbResultCh already use.
+	pathResolveCh chan pathResolveResult
+	// pathResolveInFlight and pathResolveQueue are the maps-fallback worker
+	// pool's own bookkeeping (pathresolve.go's submitPathResolveRequest/
+	// dispatchPathResolve/applyPathResolveResult) — at most
+	// maxConcurrentPathResolves goroutines running at once, with
+	// maxQueuedPathResolves more waiting for a slot.
+	pathResolveInFlight int
+	pathResolveQueue    []pathResolveRequest
+
+	// genConfirmCh carries every confirmGenerationAlive answer (genconfirm.go)
+	// back to loop, the only goroutine that ever applies one
+	// (applyGenConfirmResult) — the same receive-only-goroutine-feeds-loop-a-
+	// channel shape eventCh/pathResolveCh/sampleResCh/dbResultCh already use.
+	// genConfirmInFlight and genConfirmQueue are that pool's own bookkeeping
+	// (submitGenConfirmRequest/dispatchGenConfirm/applyGenConfirmResult) — at
+	// most maxConcurrentGenConfirms goroutines running at once, with
+	// maxQueuedGenConfirms more waiting for a slot.
+	genConfirmCh       chan genConfirmResult
+	genConfirmInFlight int
+	genConfirmQueue    []genConfirmRequest
+	// lastEarlyDiscoveryRequest is requestEarlyDiscovery's own memory of the
+	// last time it actually started a discovery pass early (outside
+	// sampleTicker's own cadence) on an event handler's behalf — the rate
+	// limit that keeps a generation stuck in routeUnresolved/routeUnconfirmed
+	// from triggering a fresh /proc scan on every single retry.
+	lastEarlyDiscoveryRequest time.Time
 
 	generations map[string]*generationState
 
@@ -136,6 +213,13 @@ type Session struct {
 	// from one loop has since given up waiting for can be told apart from
 	// the current one — see discoveryResult's own doc comment.
 	discoveryGen int
+	// discoveryCh carries every discovery pass' own result back to loop —
+	// a Session field (not a local variable inside loop, as it used to be)
+	// so that resolveEventGeneration's own "could not confirm the candidate
+	// generation is still alive" case (events.go) can call s.startDiscovery
+	// directly, outside sampleTicker's own cadence, without loop itself
+	// needing to hand it anything.
+	discoveryCh chan discoveryResult
 
 	dbJobCh     chan dbJob
 	dbResultCh  chan dbResult
@@ -165,6 +249,10 @@ func Run(ctx context.Context, cfg Config) error {
 		sampleResCh:    make(chan sampleEnvelope, maxConcurrentSampleWorkers*2),
 		writerCh:       make(chan writerJob, 1),
 		writerReportCh: make(chan writeReport, 1),
+		eventCh:        make(chan ebpf.Event, eventChCapacity),
+		pathResolveCh:  make(chan pathResolveResult, pathResolveChCapacity),
+		genConfirmCh:   make(chan genConfirmResult, genConfirmChCapacity),
+		discoveryCh:    make(chan discoveryResult, 1),
 	}
 	return s.run(ctx)
 }
@@ -219,13 +307,9 @@ func (s *Session) run(ctx context.Context) error {
 	_, cgID, cgErr := OwnCgroupInfo()
 	s.ownContainerID = ownContainerID()
 	s.ownUserNS, _ = ownNamespaceLink("user")
+	s.ownUserNSInode, _ = parseUserNSInode(s.ownUserNS)
 
-	// --- 4. Load and attach eBPF before dropping CAP_BPF/CAP_PERFMON. Event
-	// consumption (feeding evidence from the ring buffer) is not implemented
-	// by anything in this package yet — no code here reads eBPF ring-buffer
-	// events at all (see sampleKindOf's own doc comment) — but the
-	// load/attach/drop sequence itself always runs regardless, since eBPF is
-	// never independently disabled.
+	// --- 4. Load and attach eBPF before dropping CAP_BPF/CAP_PERFMON.
 	btfReadable := false
 	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); err == nil {
 		btfReadable = true
@@ -236,10 +320,65 @@ func (s *Session) run(ctx context.Context) error {
 	} else {
 		loadErr = cgErr
 	}
+	if s.ebpfHandle != nil {
+		// Closing here unblocks runEventReader's own pending h.Read() (see
+		// that function's own doc comment) on every path out of run(),
+		// including the early isolation-failure return below — the
+		// (*ebpf.Handle).Close doc comment guarantees this is safe even
+		// when nothing has actually attached a reader goroutine yet, and
+		// buildSnapshot's own reconcileEventLossCounters call always runs,
+		// and completes, before this deferred Close (loop's own return
+		// path calls writeFinalSnapshotAndWait, which calls buildSnapshot,
+		// strictly before loop itself returns to here).
+		defer s.ebpfHandle.Close()
+	}
 	s.eventsStatus, s.eventsReason = ClassifyEBPFStatus(cgErr, btfReadable,
 		caps["CAP_BPF"].RaisedEffective, caps["CAP_PERFMON"].RaisedEffective, loadErr)
 	if s.eventsStatus == evidence.EventsOK {
+		// Seeded once, here, from the host's own cgroup2 tree: every
+		// cgroup that already exists when eBPF just attached (container or
+		// not) needs to be classified immediately, not only once its own
+		// cgroup_mkdir event (which will never come for one that already
+		// existed before this Sensor session started) happens to arrive.
+		// See scanCgroupTree's own doc comment. A failed or truncated scan
+		// means this table cannot be trusted to have fully classified the
+		// host's own cgroup tree, so events.status must not report ok over
+		// it — attributing an event via a table that silently missed part
+		// of the tree risks exactly the misattribution/leaked-loss-count
+		// problems a clean classification exists to prevent.
+		var scanTruncated, scanFailed bool
+		s.cgroupRoute, scanTruncated, scanFailed = scanCgroupTree(cgroupHostRoot)
+		if scanTruncated || scanFailed {
+			s.eventsStatus, s.eventsReason = evidence.EventsUnavailable, evidence.EventsReasonAttachFailed
+		}
+	}
+	if s.eventsStatus == evidence.EventsOK {
 		s.eventsAttachedAt = s.now()
+		if ticks, err := bootTicksNow(); err == nil {
+			s.attachedAtBootTicks = ticks
+		} else {
+			// Without a boot-relative reference point, no generation
+			// discovered from here on could be correctly classified
+			// since_start vs. partial (initialEventsCoverage) — safer to
+			// report events as unavailable than to guess.
+			s.eventsStatus, s.eventsReason = evidence.EventsUnavailable, evidence.EventsReasonAttachFailed
+		}
+	}
+	if s.eventsStatus == evidence.EventsOK {
+		go runEventReader(s.ebpfHandle, s.eventCh)
+	} else {
+		// Whether Load itself failed (s.ebpfHandle already nil), or it
+		// succeeded but a later check (the cgroup scan, or bootTicksNow)
+		// downgraded eventsStatus anyway: no reader goroutine is ever
+		// started in this branch, so a still-open ebpfHandle's own links,
+		// ring buffer and maps must be released right now, not left open
+		// until this process exits — every hook stays attached and the ring
+		// buffer keeps filling for the whole rest of this session otherwise,
+		// with nothing ever draining it. See closeEBPFHandle's own doc
+		// comment for why the deferred Close registered above is still safe
+		// alongside this early one.
+		s.closeEBPFHandle()
+		fmt.Fprintf(os.Stderr, "kestrelynx sensor: eBPF event collection unavailable (%s); continuing with procfs sampling only\n", s.eventsReason)
 	}
 
 	// --- 5. Drop CAP_BPF/CAP_PERFMON unconditionally.
@@ -310,6 +449,30 @@ func (s *Session) run(ctx context.Context) error {
 	return s.loop(ctx, status)
 }
 
+// closeEBPFHandle releases s.ebpfHandle's own links, ring buffer and maps
+// right now, if it is still open, and sets it back to nil — called the
+// moment eventsStatus is downgraded away from EventsOK after a successful
+// Load (run's own startup sequence: a failed or truncated cgroup scan, or a
+// failed bootTicksNow), since no reader goroutine is ever started for such a
+// session and nothing else would otherwise close these resources before
+// this process exits.
+//
+// This runs alongside, not instead of, run's own `defer s.ebpfHandle.Close()`
+// registered right after Load succeeds: that defer's receiver expression
+// (s.ebpfHandle) was already evaluated — to this exact *Handle value — the
+// moment the defer statement itself executed, per Go's own defer semantics,
+// so setting the field to nil here does not change what that deferred call
+// invokes; it will still call Close on the same handle this method just
+// closed. (*ebpf.Handle).Close's own doc comment guarantees a second Close
+// is safe, so this is never a double-free, only a redundant one.
+func (s *Session) closeEBPFHandle() {
+	if s.ebpfHandle == nil {
+		return
+	}
+	s.ebpfHandle.Close()
+	s.ebpfHandle = nil
+}
+
 // installObserverFilter builds and installs the observer's own seccomp
 // filter using this process's own PID.
 func installObserverFilter() error {
@@ -356,8 +519,21 @@ func (s *Session) loadPreviousEvidence() {
 		if g.State == evidence.StateEnded {
 			continue
 		}
-		gs := newGenerationState(g.Container, InitProcess{PID: g.Init.PID, Starttime: g.Init.Starttime}, g.StartedAt)
-		gs.eventsCoverage = evidence.CoverageNone
+		// initialCoverage is never CoverageSinceStart regardless of this
+		// session's own eventsStatus: a restarted Sensor's own reattachment
+		// happens after a gap (parser/observer restart), so a generation
+		// carried over from a previous session can never claim since_start
+		// now — see newGenerationState's own doc comment for why
+		// since_start is only ever assigned to a generation discovered
+		// fresh, after eBPF has already had a chance to attach before that
+		// generation's own start. If this session's own eBPF did attach,
+		// though, events are flowing for it again as of now, just with a
+		// gap already known to exist — CoveragePartial, not CoverageNone.
+		initialCoverage := evidence.CoverageNone
+		if s.eventsStatus == evidence.EventsOK {
+			initialCoverage = evidence.CoveragePartial
+		}
+		gs := newGenerationState(g.Container, InitProcess{PID: g.Init.PID, Starttime: g.Init.Starttime}, g.StartedAt, initialCoverage)
 		// Incomplete/Truncated carry over too: both describe a gap in what
 		// this generation's evidence can positively claim (a withdrawn
 		// not-observed verdict, a cut-short directory listing) that a fresh
@@ -486,6 +662,75 @@ func defaultDiscover(ownContainerID string, excludeIDs []string) (map[string]con
 	return groupContainers(scan.Procs, ownContainerID, excludeIDs), nil
 }
 
+// discoverOnce resolves loop's own discovery function: s.discoverFn if a
+// test has set one, else the real scanProcs()+groupContainers() pass
+// (defaultDiscover) against this process's own /proc.
+func (s *Session) discoverOnce() (map[string]containerGroup, error) {
+	if s.discoverFn != nil {
+		return s.discoverFn()
+	}
+	return defaultDiscover(s.ownContainerID, s.cfg.ExcludeIDs)
+}
+
+// earlyDiscoveryMinInterval is requestEarlyDiscovery's own absolute floor,
+// regardless of --interval: even a very short --interval must not let event
+// resolution alone drive discovery any faster than this.
+const earlyDiscoveryMinInterval = 2 * time.Second
+
+// requestEarlyDiscovery is the only path an event handler (resolveEventGeneration
+// or applyGenConfirmResult, in events.go/genconfirm.go) uses to ask for a
+// discovery pass sooner than sampleTicker's own cadence would provide one —
+// never s.startDiscovery() directly. Without a floor of its own, a container
+// stuck in routeUnresolved (no boot-tick-matched candidate yet) or
+// routeUnconfirmed-then-unconfirmed (a candidate whose liveness check just
+// failed) would have every single retry of every single still-pending event
+// trigger its own fresh /proc scan — a continuous, back-to-back discovery
+// loop for as long as sampling itself is delayed or stalled, exactly when
+// this Sensor can least afford one. At most one early request is honored per
+// max(--interval/4, earlyDiscoveryMinInterval); every other call in between
+// is a silent no-op, relying on the next request (or sampleTicker's own
+// regular cadence) to eventually run one anyway.
+func (s *Session) requestEarlyDiscovery(now time.Time) {
+	floor := s.cfg.Interval / 4
+	if floor < earlyDiscoveryMinInterval {
+		floor = earlyDiscoveryMinInterval
+	}
+	if !s.lastEarlyDiscoveryRequest.IsZero() && now.Sub(s.lastEarlyDiscoveryRequest) < floor {
+		return
+	}
+	s.lastEarlyDiscoveryRequest = now
+	s.startDiscovery()
+}
+
+// startDiscovery starts a new discovery pass unless one is already in
+// flight and not yet stale (discoveryStaleAfter). Called by loop itself on
+// every sampleTicker tick and once at loop startup, and indirectly (via
+// requestEarlyDiscovery, never directly) by event resolution when it finds a
+// container it cannot yet fully account for: rather than guess, it asks for
+// a discovery pass sooner than sampleTicker's own cadence would provide one,
+// so a genuinely new generation (a restart this session has not yet
+// noticed) gets registered as quickly as possible. Safe to call from within
+// an event handler: it only ever starts a goroutine and returns, exactly
+// like every other call site.
+func (s *Session) startDiscovery() {
+	if s.discoveryInFlight && s.now().Sub(s.discoveryStarted) < discoveryStaleAfter {
+		return // already in flight and not yet considered stale
+	}
+	s.discoveryGen++
+	gen := s.discoveryGen
+	s.discoveryInFlight = true
+	s.discoveryStarted = s.now()
+	go func() {
+		now := s.now()
+		groups, err := s.discoverOnce()
+		if err != nil {
+			s.discoveryCh <- discoveryResult{now: now, err: err, gen: gen}
+			return
+		}
+		s.discoveryCh <- discoveryResult{groups: groups, now: now, gen: gen}
+	}()
+}
+
 // loop is the whole body of the loop goroutine: the sole owner of every
 // mutable field on Session and of every generationState reachable from
 // s.generations. Every other goroutine this Session starts (discovery, a
@@ -518,34 +763,10 @@ func (s *Session) loop(ctx context.Context, initialStatus evidence.SensorStatus)
 	heartbeatTicker := time.NewTicker(heartbeatPeriod(s.cfg.Interval, s.heartbeatEvery))
 	defer heartbeatTicker.Stop()
 
-	discover := s.discoverFn
-	if discover == nil {
-		discover = func() (map[string]containerGroup, error) {
-			return defaultDiscover(s.ownContainerID, s.cfg.ExcludeIDs)
-		}
+	if s.discoveryCh == nil {
+		s.discoveryCh = make(chan discoveryResult, 1)
 	}
-
-	discoveryCh := make(chan discoveryResult, 1)
-	startDiscovery := func() {
-		if s.discoveryInFlight && s.now().Sub(s.discoveryStarted) < discoveryStaleAfter {
-			return // already in flight and not yet considered stale
-		}
-		s.discoveryGen++
-		gen := s.discoveryGen
-		s.discoveryInFlight = true
-		s.discoveryStarted = s.now()
-		go func() {
-			now := s.now()
-			groups, err := discover()
-			if err != nil {
-				discoveryCh <- discoveryResult{now: now, err: err, gen: gen}
-				return
-			}
-			discoveryCh <- discoveryResult{groups: groups, now: now, gen: gen}
-		}()
-	}
-
-	startDiscovery() // discover immediately at startup, same as every tick after
+	s.startDiscovery() // discover immediately at startup, same as every tick after
 	s.lastWriteModified = false
 	_ = initialStatus // status is recomputed fresh on every write; nothing more to seed here
 
@@ -563,13 +784,22 @@ func (s *Session) loop(ctx context.Context, initialStatus evidence.SensorStatus)
 			return nil
 
 		case <-sampleTicker.C:
-			startDiscovery()
+			s.startDiscovery()
 
-		case disc := <-discoveryCh:
+		case disc := <-s.discoveryCh:
 			s.applyDiscoveryResult(disc)
 
 		case env := <-s.sampleResCh:
 			s.handleSampleEnvelope(env)
+
+		case ev := <-s.eventCh:
+			s.applyEvent(ev)
+
+		case res := <-s.pathResolveCh:
+			s.applyPathResolveResult(res)
+
+		case res := <-s.genConfirmCh:
+			s.applyGenConfirmResult(res)
 
 		case res := <-s.dbResultCh:
 			if fatal := s.applyDBResult(res); fatal != nil {
@@ -643,8 +873,61 @@ func (s *Session) applySampleResult(g *generationState, res sampleResult) {
 	if res.incomplete {
 		g.incomplete = true
 	}
+	if g.mntNsID == 0 && res.basis.ok {
+		// Recorded once, the first time any sample resolves this
+		// generation's own mount namespace — see generationState.mntNsID's
+		// own doc comment for what this gates (matchesMountView) and what
+		// it is used for afterward (pruning s.pathIdx once this generation
+		// ends).
+		if id, ok := parseMntNSInode(res.basis.mntNS); ok {
+			g.mntNsID = id
+		}
+	}
+	if g.rootDev == "" && res.basis.ok {
+		// Recorded once, the first time any sample resolves this
+		// generation's own root identity — see generationState.rootDev's own
+		// doc comment. res.basis.rootIno is never legitimately 0 once
+		// res.basis.ok is true (every real inode number is nonzero), so
+		// checking g.rootDev alone (rather than also g.rootIno) is enough to
+		// tell "not yet recorded" from "already recorded".
+		g.rootDev, g.rootIno = res.basis.rootDev, res.basis.rootIno
+	}
+	if res.initAliveNsOK && (!g.lastAliveNsOK || res.initAliveNs > g.lastAliveNs) {
+		// This ordinary sample's own openRootWithBasis call already
+		// performed exactly the init-alive-with-matching-starttime-and-not-
+		// zombie check resolveEventGeneration's own proof rule needs — see
+		// generationState.lastAliveNs' own doc comment. Never decreased: a
+		// later sample's own result applied out of order (never actually
+		// expected, since sampleAlive/aliveSampleWorkers prevent two
+		// concurrent samples for the same generation, but not asserted
+		// here) must not un-prove an already-established later instant.
+		g.lastAliveNs = res.initAliveNs
+		g.lastAliveNsOK = true
+	}
+	if res.mergedUsrDirs != nil {
+		// Refreshed on every sample that resolves one, not just the first —
+		// see generationState.mergedUsrDirs' own doc comment for why an
+		// eBPF event's own candidateBatch reads this cached table instead
+		// of ever opening rootfs itself.
+		g.mergedUsrDirs = res.mergedUsrDirs
+	}
 	for _, e := range res.executables {
 		g.recordExecutable(e.path, e.dev, e.inode, e.kind, now, &e.obs)
+	}
+
+	// basisMismatch is computed here, before applyEventVerificationResult is
+	// ever called below, so a verifiedEvents lookup this exact sample's own
+	// worker just confirmed is never submitted against an index this same
+	// res.basis is about to invalidate a few lines further down. Submitting
+	// first and only detecting the mismatch afterward would let a file this
+	// sample actually confirmed under a *new* root be credited to whatever
+	// package the *old* root's now-stale index still says lived at that same
+	// (dev, inode) — exactly the kind of guess this whole check exists to
+	// rule out. See the mismatch branch below for what basisMismatch itself
+	// means and why it invalidates the index.
+	basisMismatch := g.idxState == indexReady && g.idxBasis.ok && res.basis.ok && !sameMountBasis(g.idxBasis, res.basis)
+	if !basisMismatch {
+		s.applyEventVerificationResult(g, res)
 	}
 
 	denied := res.attempted > 0 && res.denied == res.attempted
@@ -686,8 +969,9 @@ func (s *Session) applySampleResult(g *generationState, res sampleResult) {
 	// checking this only when candidates happens to be non-empty would let
 	// a generation already showing observing/postIndexConfirmed keep
 	// claiming that confirmation, unrevoked, against a root nothing this
-	// sample actually read confirms it still describes.
-	if g.idxState == indexReady && g.idxBasis.ok && res.basis.ok && !sameMountBasis(g.idxBasis, res.basis) {
+	// sample actually read confirms it still describes. basisMismatch itself
+	// was already computed above, before applyEventVerificationResult ran.
+	if basisMismatch {
 		g.idxState = indexIdle
 		g.incomplete = true
 		// A confirmation earned against the old root does not carry over
@@ -1086,6 +1370,16 @@ func (s *Session) submitDBJob(job dbJob) bool {
 // outstanding.
 func (s *Session) dispatchWork(now time.Time) {
 	s.checkBuildQueueHealth(now)
+	s.retryPendingRouteEvents(now)
+	// Every generation's own pendingEvents queue is expired here, including
+	// one that has already ended: an ended generation's evidence is still
+	// shown (and its own Incomplete flag still read) for the whole 7-day
+	// retention window, so a pendingEvents entry it can no longer do
+	// anything about must still be aged out rather than left to hold
+	// Incomplete true indefinitely.
+	for _, g := range s.generations {
+		g.expirePendingEvents(now)
+	}
 
 	// Sample workers are dispatched oldest-verified-first, so that with
 	// more live generations than maxConcurrentSampleWorkers, every
@@ -1128,6 +1422,13 @@ func (s *Session) startSampleWorker(g *generationState, now time.Time) {
 		indexReady: g.idxState == indexReady,
 		ownUserNS:  s.ownUserNS,
 		now:        now,
+	}
+	if job.indexReady && len(g.pendingEvents) > 0 {
+		// Only handed to the worker once there is an index for the
+		// eventual candidateBatch (submitted by applySampleResult once this
+		// result comes back) to be looked up against — see
+		// pendingEventItem's own doc comment.
+		job.pendingEvents = append([]pendingEventItem(nil), g.pendingEvents...)
 	}
 	g.sampleAlive = true
 	s.aliveSampleWorkers++
@@ -1293,14 +1594,30 @@ func (s *Session) reconcileGenerations(groups map[string]containerGroup, now tim
 			s.endGeneration(existing, now)
 		}
 		ref := evidence.ContainerRef{Runtime: "docker", ID: containerID}
-		gs := newGenerationState(ref, group.Init, now)
+		gs := newGenerationState(ref, group.Init, now, s.initialEventsCoverage(group.Init.Starttime))
 		gs.pendingProcesses = group.Processes
 		s.generations[gs.key()] = gs
 	}
+	// A newly (re)resolved generation may unblock events that were sitting
+	// in the pending-route queue only because no live generationState
+	// existed yet for their own container ID (see
+	// resolveEventGeneration's own doc comment on that startup race).
+	s.retryPendingRouteEvents(now)
 
 	for containerID, g := range liveByContainer {
 		if _, ok := groups[containerID]; !ok {
 			s.endGeneration(g, now)
+			// Pruned here, not on every endGeneration call: a same-ID
+			// restart (the branch above, ending the old generation only to
+			// immediately create a new one for the same container ID) keeps
+			// the same underlying cgroup, so its own mapping must survive.
+			// Only "no longer present in groups at all" means the container
+			// itself is confirmed gone and its own cgroup(s) will never
+			// produce another event.
+			s.cgroupRoute.pruneContainer(containerID)
+			if g.mntNsID != 0 {
+				s.pathIdx.pruneMountNamespace(g.mntNsID)
+			}
 		}
 	}
 }
@@ -1361,9 +1678,31 @@ func (s *Session) writeFinalSnapshotAndWait(status evidence.SensorStatus) {
 }
 
 // buildSnapshot assembles the current Session state into an
-// evidence.Snapshot reporting status.
+// evidence.Snapshot reporting status. Reading and attributing the eBPF ring
+// buffer's own loss counters (reconcileEventLossCounters) happens here, once
+// per snapshot, rather than on some independent schedule of its own: every
+// path that produces a snapshot (a heartbeat tick, an applied sample result,
+// the final snapshot on shutdown or an isolation failure) shares the one
+// place every generation's own EventsLost/EventsCoverage actually get
+// updated from the kernel's own counters, before s.eventsLost (the
+// Sensor-wide total) is itself derived from them — the sum of every
+// generation's own events_lost plus s.unattributedEventsLost (every loss
+// this session could never charge to a specific generation at all: a
+// pendingRouteEvent that expired unresolved, a pendingEventItem that expired
+// waiting on an index build, a maps-fallback or genConfirm request dropped
+// for exceeding its own pool's queue, and reconcileEventLossCounters' own
+// unattributable share of the kernel's counters). This is the one running
+// total everything else contributes to; it is never derived from the
+// kernel's own counter values directly, which would double-count whatever
+// has already been attributed via recordEventLoss.
 func (s *Session) buildSnapshot(status evidence.SensorStatus) evidence.Snapshot {
 	now := s.now()
+	s.reconcileEventLossCounters()
+	var attributedLost int64
+	for _, g := range s.generations {
+		attributedLost += g.eventsLost
+	}
+	s.eventsLost = attributedLost + s.unattributedEventsLost
 	snap := evidence.Snapshot{
 		Schema: evidence.Schema,
 		Sensor: evidence.SensorInfo{
@@ -1382,14 +1721,56 @@ func (s *Session) buildSnapshot(status evidence.SensorStatus) evidence.Snapshot 
 			},
 		},
 	}
-	if s.ebpfHandle != nil {
-		if lost, err := s.ebpfHandle.LostEvents(); err == nil {
-			s.eventsLost = int64(lost)
-			snap.Sensor.Events.Lost = s.eventsLost
-		}
-	}
+	knownPending, anyUnclassifiedPending := s.pendingRouteEventGating()
 	for _, g := range s.generations {
-		snap.Generations = append(snap.Generations, g.toEvidence())
+		hasPendingRouteEvent := !g.ended && (anyUnclassifiedPending || knownPending[g.container.ID])
+		snap.Generations = append(snap.Generations, g.toEvidence(hasPendingRouteEvent))
 	}
 	return snap
+}
+
+// pendingRouteEventGating inspects every event still sitting in
+// s.pendingRouteEvents — every event this session has received but has not
+// yet been able to place in any specific generation at all (see
+// pendingRouteEvent's own doc comment) — and reports two things toEvidence's
+// own hasPendingRouteEvent parameter needs:
+//
+//   - known: the set of container IDs a pending item's own cgroup is already
+//     classified to (s.cgroupRoute resolves it to a real, non-excluded
+//     container) — only that specific container's own live generation needs
+//     marking, since the item could still turn out to belong to it once
+//     fully routed.
+//   - anyUnclassified: whether at least one pending item's own cgroup cannot
+//     be classified at all right now — s.cgroupRoute has never seen it, or
+//     it was evicted from cgroupRoute since (see maxCgroupRouteEntries), or
+//     applyCgroupMkdirEvent refused a truncated/empty cgroup path for it
+//     (see that function's own doc comment). Such an item could still turn
+//     out to belong to *any* container this session currently holds a live
+//     generation for — which one is exactly the fact that has not resolved
+//     — so every live generation must be marked Incomplete while even one
+//     such item remains outstanding, not just downgraded to partial once
+//     pendingRouteEventTTL eventually expires it as an unattributable loss:
+//     a not_observed verdict published in the meantime would still be
+//     wrong, not merely stale.
+//
+// Computed once per snapshot (buildSnapshot) and consulted only for a live
+// generation — an event that might belong to a container could equally turn
+// out to belong to whichever generation is its *current* one, never to one
+// already ended.
+func (s *Session) pendingRouteEventGating() (known map[string]bool, anyUnclassified bool) {
+	for _, item := range s.pendingRouteEvents {
+		containerID, isKnown := s.cgroupRoute.lookup(item.ev.CgroupID)
+		if !isKnown {
+			anyUnclassified = true
+			continue
+		}
+		if containerID == "" || matchesExcludedID(containerID, s.cfg.ExcludeIDs) {
+			continue
+		}
+		if known == nil {
+			known = map[string]bool{}
+		}
+		known[containerID] = true
+	}
+	return known, anyUnclassified
 }

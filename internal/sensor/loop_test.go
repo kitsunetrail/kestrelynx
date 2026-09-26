@@ -35,8 +35,8 @@ func TestStartSampleWorker_StalledWorkerDoesNotBlockOthersOrHeartbeat(t *testing
 
 	var slowStarted, slowFinished int32
 
-	gSlow := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1}, time.Now())
-	gFast := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('b')}, InitProcess{PID: 2}, time.Now())
+	gSlow := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1}, time.Now(), evidence.CoverageNone)
+	gFast := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('b')}, InitProcess{PID: 2}, time.Now(), evidence.CoverageNone)
 	realSlowKey, realFastKey := gSlow.key(), gFast.key()
 
 	s := &Session{
@@ -145,7 +145,7 @@ func TestDispatchWork_DoesNotStartSecondWorkerForSameGeneration(t *testing.T) {
 			return sampleResult{genKey: job.genKey}
 		},
 	}
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: os.Getpid()}, time.Now())
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: os.Getpid()}, time.Now(), evidence.CoverageNone)
 	g.idxState = indexReady
 	s.generations[g.key()] = g
 
@@ -208,8 +208,8 @@ func TestStartSampleWorker_StalledWorkerBlocksNeitherOthersNorHeartbeat_Determin
 	var slowStarted int32
 	const fastExePath = "/usr/bin/fast-app"
 
-	gSlow := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1}, time.Now())
-	gFast := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('b')}, InitProcess{PID: 2}, time.Now())
+	gSlow := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1}, time.Now(), evidence.CoverageNone)
+	gFast := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('b')}, InitProcess{PID: 2}, time.Now(), evidence.CoverageNone)
 	realSlowKey, realFastKey := gSlow.key(), gFast.key()
 
 	s := &Session{

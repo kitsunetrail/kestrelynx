@@ -8,7 +8,7 @@ import (
 )
 
 func TestRecordOSPackage_MergesKindsAndObservations(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	t1 := time.Unix(100, 0)
 	t2 := time.Unix(200, 0)
 	obs1 := evidence.ProcessObservation{Exe: "/usr/sbin/nginx", EffectiveUID: 0, LastSeen: t1}
@@ -38,7 +38,7 @@ func TestRecordOSPackage_MergesKindsAndObservations(t *testing.T) {
 }
 
 func TestRecordOSPackage_ResolvesPreviousAmbiguity(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	g.recordUnavailableOSPackage("libssl3", "3.0.15", evidence.ReasonAttributionAmbiguous)
 	if _, ok := g.unavailable[pkgKey{Name: "libssl3", Version: "3.0.15"}]; !ok {
 		t.Fatalf("expected unavailable entry before resolution")
@@ -54,7 +54,7 @@ func TestRecordOSPackage_ResolvesPreviousAmbiguity(t *testing.T) {
 }
 
 func TestRecordUnavailableOSPackage_NeverShadowsInUse(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	g.recordOSPackage("libssl3", "3.0.15", evidence.KindExe, time.Unix(1, 0), nil)
 	g.recordUnavailableOSPackage("libssl3", "3.0.15", evidence.ReasonAttributionAmbiguous)
 
@@ -64,7 +64,7 @@ func TestRecordUnavailableOSPackage_NeverShadowsInUse(t *testing.T) {
 }
 
 func TestRecordExecutable_AlwaysRecordedRegardlessOfOwnership(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	obs := evidence.ProcessObservation{Exe: "/usr/local/bin/trivy", LastSeen: time.Unix(1, 0)}
 	g.recordExecutable("/usr/local/bin/trivy", "08:01", 12345, evidence.KindExe, time.Unix(1, 0), &obs)
 
@@ -114,13 +114,13 @@ func TestMergeKindObservation_SamplesOncePerDistinctSample(t *testing.T) {
 
 func TestGenerationState_ToEvidence_RoundTripsIdentity(t *testing.T) {
 	init := InitProcess{PID: 42, Starttime: 100}
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, init, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, init, time.Unix(0, 0), evidence.CoverageNone)
 	g.idxState = indexReady
 	g.packageDB = evidence.PackageDBInfo{Kind: evidence.DBKindDpkg, Status: evidence.DBStatusOK}
 	g.recordOSPackage("libssl3", "3.0.15", evidence.KindExe, time.Unix(1, 0), nil)
 	g.recordExecutable("/bin/app", "", 0, evidence.KindExe, time.Unix(1, 0), nil)
 
-	ev := g.toEvidence()
+	ev := g.toEvidence(false)
 	if ev.Init.PID != 42 || ev.Init.Starttime != 100 {
 		t.Errorf("Init = %+v, want PID 42 Starttime 100", ev.Init)
 	}
@@ -140,11 +140,11 @@ func TestGenerationState_ToEvidence_RoundTripsIdentity(t *testing.T) {
 // anything recorded — or mutated in place — against the generationState
 // afterward.
 func TestToEvidence_SurvivesLaterMutationOfTheSourceGeneration(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	g.recordOSPackage("libssl3", "3.0.15", evidence.KindExe, time.Unix(1, 0), &evidence.ProcessObservation{Listeners: []string{"0.0.0.0:443"}, LastSeen: time.Unix(1, 0)})
 	g.recordExecutable("/bin/app", "8:1", 99, evidence.KindExe, time.Unix(1, 0), &evidence.ProcessObservation{Listeners: []string{"0.0.0.0:80"}, LastSeen: time.Unix(1, 0)})
 
-	snap := g.toEvidence()
+	snap := g.toEvidence(false)
 	if len(snap.OSPackages) != 1 || len(snap.OSPackages[0].Observations) != 1 {
 		t.Fatalf("OSPackages = %+v, want exactly one package with one observation", snap.OSPackages)
 	}
@@ -181,7 +181,7 @@ func TestToEvidence_SurvivesLaterMutationOfTheSourceGeneration(t *testing.T) {
 }
 
 func TestParseFailureBackoff_FirstFailureUsesTenTimesInterval(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	now := time.Unix(1000, 0)
 	interval := 30 * time.Second
 
@@ -201,7 +201,7 @@ func TestParseFailureBackoff_FirstFailureUsesTenTimesInterval(t *testing.T) {
 }
 
 func TestParseFailureBackoff_RepeatSameInputDoublesAndCaps(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	interval := 30 * time.Second
 	now := time.Unix(1000, 0)
 
@@ -229,7 +229,7 @@ func TestParseFailureBackoff_RepeatSameInputDoublesAndCaps(t *testing.T) {
 }
 
 func TestParseFailureBackoff_ChangedIdentityResetsSchedule(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	interval := 30 * time.Second
 	now := time.Unix(1000, 0)
 
@@ -256,7 +256,7 @@ func TestParseFailureBackoff_ChangedIdentityResetsSchedule(t *testing.T) {
 }
 
 func TestShouldSkipForBackoff(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	interval := 30 * time.Second
 	now := time.Unix(1000, 0)
 	g.recordParseFailure("dpkg_list", "/x.list", "08:01", 111, 500, now, interval)
@@ -276,7 +276,7 @@ func TestShouldSkipForBackoff(t *testing.T) {
 }
 
 func TestRecordParseSuccess_RemovesEntry(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	now := time.Unix(1000, 0)
 	g.recordParseFailure("dpkg_list", "/x.list", "08:01", 111, 500, now, 30*time.Second)
 	g.recordParseFailure("dpkg_list", "/y.list", "08:01", 222, 600, now, 30*time.Second)
@@ -292,7 +292,7 @@ func TestRecordParseSuccess_RemovesEntry(t *testing.T) {
 }
 
 func TestNextRetryTime_PicksEarliest(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 	if !g.nextRetryTime().IsZero() {
 		t.Fatalf("nextRetryTime with no failures should be zero")
 	}

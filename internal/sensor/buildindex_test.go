@@ -15,7 +15,7 @@ import (
 )
 
 func newTestGenerationForIndex() *generationState {
-	return newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0))
+	return newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
 }
 
 // applyBuild runs the same (*Session).applyBuildResult production code path
@@ -386,7 +386,7 @@ func TestNoFileList_AffectsJudgeOSPackageEligibility(t *testing.T) {
 	// in for a sample that already confirmed the freshly-built index.
 	g.postIndexConfirmed = true // -> StateObserving, since idxState is now ready too
 
-	gen := g.toEvidence()
+	gen := g.toEvidence(false)
 	if gen.State != evidence.StateObserving {
 		t.Fatalf("generation state = %q, want observing (precondition for this test)", gen.State)
 	}

@@ -104,8 +104,7 @@ func OwnCgroupInfo() (CgroupInfo, uint64, error) {
 		err = fmt.Errorf("statfs /sys/fs/cgroup: %w", err)
 		return CgroupInfo{Err: err}, 0, err
 	}
-	if int64(stfs.Type) != int64(unix.CGROUP2_SUPER_MAGIC) {
-		err := fmt.Errorf("cgroup_v1: /sys/fs/cgroup is not cgroup2 (statfs type %#x)", stfs.Type)
+	if err := cgroupFSTypeError(int64(stfs.Type)); err != nil {
 		return CgroupInfo{CgroupV2: false, Err: err}, 0, err
 	}
 	data, err := os.ReadFile("/proc/self/cgroup")
@@ -124,6 +123,24 @@ func OwnCgroupInfo() (CgroupInfo, uint64, error) {
 		return CgroupInfo{CgroupV2: true, Path: rel, Err: err}, 0, err
 	}
 	return CgroupInfo{CgroupV2: true, Path: rel, KernfsID: ino}, ino, nil
+}
+
+// cgroupFSTypeError reports whether magic (a statfs(2) f_type value) names
+// cgroup2: nil if so, otherwise an error whose message always starts with
+// "cgroup_v1:" — the exact prefix ClassifyEBPFStatus checks for
+// (hasPrefix(cgErr.Error(), "cgroup_v1:")) to classify events.status as
+// EventsUnavailable/EventsReasonCgroupV1 rather than the more general
+// EventsReasonAttachFailed. Used for both cgroup v1's own magic
+// (unix.CGROUP_SUPER_MAGIC) and any other unexpected filesystem type — a
+// host where /sys/fs/cgroup is neither cgroup nor cgroup2 at all is just as
+// unable to support eBPF's cgroup-keyed self-exclusion and container
+// mapping as a genuine cgroup v1 host is, so it gets the same
+// classification rather than the generic attach-failure one.
+func cgroupFSTypeError(magic int64) error {
+	if magic == int64(unix.CGROUP2_SUPER_MAGIC) {
+		return nil
+	}
+	return fmt.Errorf("cgroup_v1: /sys/fs/cgroup is not cgroup2 (statfs type %#x)", magic)
 }
 
 // StatCgroupDirInode stats /sys/fs/cgroup/<relPath> and returns its inode

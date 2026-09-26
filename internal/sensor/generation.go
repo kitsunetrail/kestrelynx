@@ -54,6 +54,42 @@ type generationState struct {
 	startedAt      time.Time
 	endedAt        *time.Time
 	lastVerifiedAt time.Time
+	// lastAliveNs is the highest boot-relative CLOCK_BOOTTIME *nanosecond*
+	// (never rounded to a clock tick — see bootNsNow's own doc comment) this
+	// session has ever positively confirmed g.init (this exact PID, with
+	// this exact Starttime, and not a zombie/dead process still reporting
+	// that same starttime — see confirmGenerationAlive/runSampleWorker's own
+	// doc comments) was still alive at — never decreased once advanced, and
+	// meaningful only when lastAliveNsOK is true (see that field's own doc
+	// comment for why "never yet confirmed" must not be confused with "0
+	// nanoseconds since boot"). It is what makes resolveEventGeneration's
+	// own attribution provable rather than a guess: an eBPF event whose own
+	// process start nanosecond s_ns satisfies s_ns <= lastAliveNs is proof
+	// this generation's own init was still running at s_ns (it was confirmed
+	// alive at some later or equal nanosecond, lastAliveNs, so it must also
+	// have still existed at every earlier nanosecond back to its own start)
+	// — true regardless of whether this generation has since ended.
+	// Advanced by two sources: every ordinary sample that successfully
+	// resolves this generation's own mountBasis (applySampleResult, from
+	// sampleResult.initAliveNs — an ordinary sample already performs exactly
+	// this same init-alive-with-matching-starttime check via
+	// openRootWithBasis, so it costs nothing extra to also report the
+	// boot-relative nanosecond it did so at), and genconfirm.go's own
+	// dedicated liveness check (applyGenConfirmResult, from
+	// genConfirmResult.checkNs) for the one case ordinary sampling has not
+	// yet caught up to.
+	lastAliveNs uint64
+	// lastAliveNsOK is false until lastAliveNs is set for the first time
+	// (see newGenerationState) — a generation this session has registered
+	// (its own init.Starttime is known, from discovery) but has not yet
+	// actually sampled or confirmed alive even once. init.Starttime alone is
+	// never used as an initial lastAliveNs: the real instant a process
+	// started is somewhere within its own starttime's 10ms-wide clock tick
+	// (ticksToNs's own floor), never provably at that tick's exact start, so
+	// treating "started" as "confirmed alive at the start of its own tick"
+	// would itself be exactly the kind of unproven guess this field exists
+	// to rule out.
+	lastAliveNsOK bool
 
 	// ended, sampleStalled, lastSampleDenied, parseFailed (len > 0) and
 	// forceParseFailed are the raw facts derivePublishedState combines into
@@ -133,6 +169,95 @@ type generationState struct {
 	pendingProcesses []InitProcess
 
 	eventsCoverage evidence.EventsCoverage
+	// mntNsID is this generation's own mount namespace's numeric inode,
+	// recorded the first time any sample resolves a mountBasis for it
+	// (applySampleResult, from res.basis.mntNS) — 0 until then. Two things
+	// depend on it: matchesMountView gates every eBPF event this generation
+	// is ever allowed to attribute anything from (an event whose own mount
+	// namespace does not match, or that arrives before this is even known,
+	// is never used — see that method's own doc comment), and, separately,
+	// it is what events.go's pathIndex.pruneMountNamespace is keyed on once
+	// this generation ends. It is never updated once set — a mount-
+	// namespace change this Sensor cannot detect from this field alone (see
+	// idxBasis's own doc comment on chroot/unshare) is not a correctness
+	// concern for either use: matchesMountView only ever needs to confirm
+	// an event still agrees with the *original* confirmed view, and a
+	// later, undetected change would just make every subsequent event fail
+	// that same check instead of succeeding wrongly.
+	mntNsID uint32
+	// rootDev/rootIno are this generation's own confirmed root filesystem
+	// identity — init's own root (dev, inode), recorded the first time any
+	// sample resolves a mountBasis for it (applySampleResult, from
+	// res.basis.rootDev/rootIno), the same way mntNsID is. Checked by
+	// matchesMountView alongside mntNsID: a mount namespace match alone
+	// cannot tell a chroot(2) apart from init's own unchanged root, since
+	// chroot never changes which mount namespace a task is in. Never
+	// updated once set, for the same reason mntNsID never is — see that
+	// field's own doc comment.
+	rootDev string
+	rootIno uint64
+	// mergedUsrDirs is this generation's own cached usrmerge-alias table
+	// (detectMergedUsrDirs's result), refreshed whenever a sample resolves
+	// one (applySampleResult, from res.mergedUsrDirs) — nil until the first
+	// sample that has any candidate to resolve at all. events.go's own
+	// submitEventCandidate reads this directly (an eBPF event never opens
+	// rootfs itself to compute one fresh), so a path recorded under one
+	// usrmerge spelling by an event still resolves against a package
+	// database that recorded the other, exactly as the sampling path does.
+	mergedUsrDirs map[string]bool
+	// eventsLost is this generation's own share of every eBPF event this
+	// session could not attribute with confidence: a path-unknown success
+	// event (correlation table had no matching (mount ns, dev, inode)) that
+	// also could not be resolved via a live /proc/<pid>/maps read, a
+	// pending-for-index event that expired or failed its re-verification
+	// (recordEventLoss's callers), and this generation's own cgroup ID's
+	// share of the ring buffer's reservation-failure counter (see
+	// reconcileEventLossCounters). It is never decremented.
+	eventsLost int64
+
+	// pendingEvents holds every resolved-path eBPF success event
+	// (exec_success, mmap_success) received while this generation's own
+	// package-database index was not yet ready to attribute it against —
+	// see recordPendingEvent's own doc comment for the cap/expiry this
+	// queue is held to, and sampleworker.go's own pending-event
+	// verification (piggybacked onto this generation's regular sample
+	// worker once idxState reaches indexReady) for how it eventually
+	// drains. Included in toEvidence's own Incomplete computation: an
+	// executable or OS-package fact this generation has already received
+	// but not yet finished attributing must never let a not_observed
+	// verdict be published in the meantime.
+	pendingEvents []pendingEventItem
+	// nextEventSeq allocates pendingEventItem.seq, one higher each call —
+	// never reused within this generation's lifetime.
+	nextEventSeq uint64
+	// pendingMapsLookups counts outstanding resolvePathAsync calls
+	// dispatched against this generation (pathresolve.go) that have not yet
+	// answered — an eBPF success event whose path-correlation lookup missed
+	// and is now waiting on a live /proc/<pid>/maps read. Included in
+	// toEvidence's own Incomplete computation for the same reason
+	// pendingEvents is: a "was this file used" answer that could still
+	// resolve to "yes" must never be preempted by a not_observed verdict.
+	pendingMapsLookups int
+	// pendingConfirms is 1 while a genConfirmRequest (genconfirm.go) is
+	// outstanding (in flight or queued) against this generation — a
+	// ticks-matched candidate (resolveEventGeneration's own routeUnconfirmed)
+	// whose init PID has not yet been confirmed still alive with that exact
+	// starttime — 0 otherwise. Included in toEvidence's own Incomplete
+	// computation for the same reason pendingMapsLookups is: a candidate
+	// that could still turn out to be the right generation for a "was this
+	// file used" event must never let a not_observed verdict be published
+	// while its own confirmation is still outstanding.
+	pendingConfirms int
+	// genConfirmWaiters holds every pendingRouteEvent whose own routing
+	// named this exact generation as an unconfirmed candidate while a
+	// confirmation for it was already outstanding (pendingConfirms > 0) —
+	// see submitGenConfirmRequest's own doc comment for why a second,
+	// redundant procfs read for the same (PID, starttime) is never
+	// dispatched. Every one of these receives the exact same
+	// confirmed/unconfirmed answer the one outstanding request eventually
+	// gets (applyGenConfirmResult), alongside that request's own primary
+	// item.
+	genConfirmWaiters []pendingRouteEvent
 
 	osPackages  map[pkgKey]*evidence.OSPackageEvidence
 	unavailable map[pkgKey]*evidence.UnavailablePackage
@@ -255,6 +380,129 @@ type pendingLookup struct {
 // and version — the same identity JudgeOSPackage matches a Finding against.
 type pkgKey struct{ Name, Version string }
 
+// pendingEventItem is one eBPF success event (exec_success or
+// mmap_success) whose path was already resolved (via the Session's own
+// path-correlation table, or its live-/proc/<pid>/maps fallback; see
+// events.go/pathresolve.go) but whose generation's own package-database
+// index was not yet ready to attribute it against a package. Any
+// recordExecutable call this event's own kind warrants already happened
+// when it was first dispatched (see dispatchUsageEvent's own doc comment on
+// why that never waits on OS index readiness) — this queue exists purely
+// to hold the OS-package candidate submission until the index is ready.
+type pendingEventItem struct {
+	// seq identifies this exact queued item so loop can remove precisely
+	// this one from generationState.pendingEvents once a sample worker's
+	// own verification result names it (evidence.ProcessObservation embeds
+	// a slice, so pendingEventItem is not a comparable type Go could use
+	// for a value-equality set on its own).
+	seq        uint64
+	path       string
+	dev        string
+	inode      uint64
+	kind       evidence.EvidenceKind
+	obs        evidence.ProcessObservation
+	receivedAt time.Time
+}
+
+// matchesMountView reports whether an event's own mount namespace
+// (eventMntNsID) AND root filesystem identity (eventRootDev, eventRootIno)
+// both match this generation's own confirmed ones (g.mntNsID/g.rootDev/
+// g.rootIno, populated once a real sample resolves them — see
+// applySampleResult). Zero on either side of either pair means "not yet
+// confirmed" and is treated the same as a mismatch: an event is never used
+// to attribute anything — recording an executable or submitting an
+// OS-package candidate alike — without a positive confirmation that it
+// describes init's own filesystem view.
+//
+// Mount namespace alone is not enough: chroot(2) replaces a task's own root
+// without changing which mount namespace it is in, so a process chrooted
+// into a completely different filesystem view than init's own would still
+// pass a namespace-only check, crediting its own numeric (dev, inode) to a
+// file this generation's package-database index does not actually describe
+// at that same (dev, inode) at all. Root identity closes that gap the same
+// way mount namespace closes the cross-container one.
+func (g *generationState) matchesMountView(eventMntNsID uint32, eventRootDev string, eventRootIno uint64) bool {
+	if g.mntNsID == 0 || eventMntNsID == 0 || g.mntNsID != eventMntNsID {
+		return false
+	}
+	return g.rootDev != "" && eventRootDev != "" && g.rootIno != 0 && eventRootIno != 0 &&
+		g.rootDev == eventRootDev && g.rootIno == eventRootIno
+}
+
+// maxPendingEventsPerGeneration bounds how many resolved-but-not-yet-
+// attributed eBPF events one generation holds while its own package index
+// is still building — deliberately generous (a container's own startup
+// burst of short-lived execs is exactly the case this queue exists for),
+// but not unbounded: past this, the newest arrival is dropped and counted
+// as lost rather than let the queue grow without bound for a generation
+// whose index build is stuck.
+const maxPendingEventsPerGeneration = 4096
+
+// pendingEventTTL bounds how long a pendingEventItem waits for its
+// generation's index to become ready before it is dropped and counted as
+// lost. ASSUMED: this value needs tuning once real indexing latency is
+// measured in production; chosen to comfortably exceed the several-second
+// index-build times observed so far, without staying stale long enough
+// that a re-verification against the eventually-ready index would be
+// comparing against a container long since finished starting up.
+const pendingEventTTL = 60 * time.Second
+
+// recordPendingEvent appends item to g.pendingEvents, dropping and counting
+// it as lost immediately if the queue is already at its cap — never
+// blocking or growing past maxPendingEventsPerGeneration.
+func (g *generationState) recordPendingEvent(item pendingEventItem) {
+	if len(g.pendingEvents) >= maxPendingEventsPerGeneration {
+		g.recordEventLoss(1)
+		return
+	}
+	g.nextEventSeq++
+	item.seq = g.nextEventSeq
+	g.pendingEvents = append(g.pendingEvents, item)
+}
+
+// expirePendingEvents removes every pendingEvents entry older than
+// pendingEventTTL as of now, counting each as lost — called once per
+// discovery pass (dispatchWork) so a generation whose index build never
+// completes does not hold onto stale events indefinitely.
+func (g *generationState) expirePendingEvents(now time.Time) {
+	if len(g.pendingEvents) == 0 {
+		return
+	}
+	kept := g.pendingEvents[:0]
+	var expired int64
+	for _, item := range g.pendingEvents {
+		if now.Sub(item.receivedAt) > pendingEventTTL {
+			expired++
+			continue
+		}
+		kept = append(kept, item)
+	}
+	g.pendingEvents = kept
+	if expired > 0 {
+		g.recordEventLoss(expired)
+	}
+}
+
+// recordEventLoss counts n eBPF events this generation could not attribute
+// with confidence (a path-unknown success event, an expired or
+// failed-re-verification pendingEventItem, or this generation's own share
+// of the ring buffer's reservation-failure counter): eventsLost advances,
+// incomplete is set (an event this generation could not place might have
+// been the missing evidence — the same rule recordOSPackage/recordExecutable
+// already apply to a discarded observation), and eventsCoverage downgrades
+// from since_start to partial (never upgraded back, and left alone if
+// already none: an eBPF-less generation has nothing to downgrade from).
+func (g *generationState) recordEventLoss(n int64) {
+	if n <= 0 {
+		return
+	}
+	g.eventsLost += n
+	g.incomplete = true
+	if g.eventsCoverage == evidence.CoverageSinceStart {
+		g.eventsCoverage = evidence.CoveragePartial
+	}
+}
+
 // mirrorMaxStringBytes and validRecordString mirror evidence's own
 // per-string validation (validString, unexported there) so a record this
 // Sensor accumulates is checked against the exact same rule its own reader
@@ -309,19 +557,27 @@ func (g *generationState) entityCount() int {
 	return len(g.osPackages) + len(g.unavailable) + len(g.executables)
 }
 
-func newGenerationState(container evidence.ContainerRef, init InitProcess, now time.Time) *generationState {
+// newGenerationState creates a fresh generationState. initialCoverage is the
+// events_coverage value this generation starts at: evidence.CoverageSinceStart
+// when the caller's Session already has eBPF attached and delivering events
+// at the moment this generation is first discovered (eBPF is loaded once,
+// at Sensor startup, strictly before the first discovery pass that could
+// ever create a generation — so "attached before this generation started"
+// is trivially true whenever events are attached at all), or
+// evidence.CoverageNone when they are not. It only ever downgrades to
+// CoveragePartial afterward (see recordEventLoss); nothing upgrades it back.
+func newGenerationState(container evidence.ContainerRef, init InitProcess, now time.Time, initialCoverage evidence.EventsCoverage) *generationState {
 	return &generationState{
-		container:   container,
-		init:        init,
-		startedAt:   now,
-		osPackages:  map[pkgKey]*evidence.OSPackageEvidence{},
-		unavailable: map[pkgKey]*evidence.UnavailablePackage{},
-		executables: map[string]*evidence.ExecutableEvidence{},
-		// Explicit, not the zero value: eBPF event consumption does not
-		// exist in this package yet (see sampleKindOf's own doc comment), so
-		// no generation can claim any degree of event coverage — it is
-		// always exactly "none", never merely unset.
-		eventsCoverage: evidence.CoverageNone,
+		container:      container,
+		init:           init,
+		startedAt:      now,
+		osPackages:     map[pkgKey]*evidence.OSPackageEvidence{},
+		unavailable:    map[pkgKey]*evidence.UnavailablePackage{},
+		executables:    map[string]*evidence.ExecutableEvidence{},
+		eventsCoverage: initialCoverage,
+		// lastAliveNsOK starts false (the zero value) — see that field's own
+		// doc comment for why init.Starttime itself is never used as an
+		// initial lastAliveNs.
 	}
 }
 
@@ -499,12 +755,11 @@ func (g *generationState) recordExecutable(path, dev string, inode uint64, kind 
 }
 
 // sampleKindOf reports whether kind is sampling-derived (KindObservation.
-// Samples) as opposed to event-derived (KindObservation.Count). Nothing in
-// this package produces an event kind (exec_event, library_load_event) yet:
-// no code here reads eBPF events at all. The distinction is centralized in
-// this one function so that whatever eventually turns an eBPF event into
-// evidence only has to add cases here, not touch every call site that
-// already merges a kind into an entity.
+// Samples) as opposed to event-derived (KindObservation.Count) — see
+// events.go's applyUsageEvent for where an eBPF success event turns into a
+// KindExecEvent/KindLibraryLoadEvent recordOSPackage/recordExecutable call.
+// The distinction is centralized in this one function so every call site
+// that merges a kind into an entity shares the same answer.
 func sampleKindOf(kind evidence.EvidenceKind) bool {
 	switch kind {
 	case evidence.KindExe, evidence.KindMappedLibrary:
@@ -726,7 +981,7 @@ func (g *generationState) nextRetryTime() time.Time {
 // notify/state consumers key on (name, version)/path themselves, and the
 // evidence file's own reader never depends on array order — but tests that
 // compare a whole Generation value do their own sorting.
-func (g *generationState) toEvidence() evidence.Generation {
+func (g *generationState) toEvidence(hasPendingRouteEvent bool) evidence.Generation {
 	gen := evidence.Generation{
 		Container:      g.container,
 		Init:           evidence.InitProcess{PID: g.init.PID, Starttime: g.init.Starttime},
@@ -741,17 +996,40 @@ func (g *generationState) toEvidence() evidence.Generation {
 		},
 		// g.incomplete and g.candidatesLostPermanently are both sticky
 		// (once true, this generation never claims full confidence again
-		// this session); g.pendingLookup != nil and len(g.queuedCandidates)
-		// > 0 are transient, but only clear once every sample's own
-		// candidates have actually been looked up and had their answer
+		// this session); g.pendingLookup != nil, len(g.queuedCandidates) > 0,
+		// len(g.pendingEvents) > 0, g.pendingMapsLookups > 0 and
+		// g.pendingConfirms > 0 are all transient, but only clear once every
+		// sample's own candidates (or every outstanding eBPF event) have
+		// actually been looked up/verified/confirmed and had their answer
 		// applied — a batch queued behind an outstanding lookup is folded
 		// into the next one rather than dropped (see queuedCandidates' own
-		// doc comment), so this write must not claim full attribution
-		// confidence while any of the four still holds, even though one may
-		// already have cleared by the time the *next* snapshot is built.
-		Incomplete:     g.incomplete || g.pendingLookup != nil || len(g.queuedCandidates) > 0 || g.candidatesLostPermanently,
+		// doc comment), and an event still sitting in pendingEvents, still
+		// in flight via a maps fallback lookup, or still waiting on its own
+		// candidate generation's liveness to be confirmed (genconfirm.go) is
+		// exactly a "was this file used" answer that could still resolve to
+		// "yes" — so this write must not claim full attribution confidence
+		// while any of these seven still holds, even though one may already
+		// have cleared by the time the *next* snapshot is built.
+		//
+		// hasPendingRouteEvent (pendingRouteEventGating, computed once per
+		// snapshot in buildSnapshot) covers the one gap none of g's own
+		// fields can: an eBPF event this session has not yet even been able
+		// to place in any specific generation at all — still sitting in the
+		// Session-wide pendingRouteEvents queue — but that either names this
+		// generation's own container ID specifically, or cannot be
+		// classified to any container at all right now (in which case it
+		// could still turn out to belong to *any* live generation, this one
+		// included — see pendingRouteEventGating's own doc comment). Such an
+		// event could still turn out, once resolved, to belong to exactly
+		// this generation; a not_observed verdict published in the meantime
+		// would understate what this generation may yet turn out to have
+		// used.
+		Incomplete: g.incomplete || g.pendingLookup != nil || len(g.queuedCandidates) > 0 ||
+			g.candidatesLostPermanently || len(g.pendingEvents) > 0 || g.pendingMapsLookups > 0 ||
+			g.pendingConfirms > 0 || hasPendingRouteEvent,
 		Truncated:      g.truncated,
 		EventsCoverage: g.eventsCoverage,
+		EventsLost:     g.eventsLost,
 		ParseFailed:    append([]evidence.ParseFailure(nil), g.parseFailed...),
 	}
 	// Every field copied below is deep, not shallow: loop keeps mutating

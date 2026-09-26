@@ -254,6 +254,32 @@ func TestParseStarttimeMalformed(t *testing.T) {
 	}
 }
 
+func TestParseState(t *testing.T) {
+	postComm := make([]string, 20)
+	for i := range postComm {
+		postComm[i] = "0"
+	}
+	postComm[0] = "Z" // state
+	line := "4242 (some (nested) name) " + joinFields(postComm)
+
+	got, err := ParseState(line)
+	if err != nil {
+		t.Fatalf("ParseState: %v", err)
+	}
+	if got != 'Z' {
+		t.Errorf("ParseState = %q, want 'Z'", string(rune(got)))
+	}
+}
+
+func TestParseStateMalformed(t *testing.T) {
+	if _, err := ParseState("no comm field here"); err == nil {
+		t.Fatal("expected error for a line with no comm field")
+	}
+	if _, err := ParseState("4242 (short)"); err == nil {
+		t.Fatal("expected error for no post-comm fields at all")
+	}
+}
+
 func TestParsePPID(t *testing.T) {
 	postComm := make([]string, 20)
 	for i := range postComm {

@@ -146,10 +146,10 @@ type candidateOutcome struct {
 // more than one or two descriptors open at once on this Sensor's own side,
 // no matter how many candidates there are in total.
 //
-// Unlike an eagerly-opened design, this never fails for a missing or
-// unreadable file, including the one mandatory per-database file (dpkg's
-// status, apk's installed): whether each candidate can actually be opened
-// is discovered later, by streamBuildFiles, at the moment it tries.
+// Unlike eagerly opening every file up front, this never fails for a
+// missing or unreadable file, including the one mandatory per-database file
+// (dpkg's status, apk's installed): whether each candidate can actually be
+// opened is discovered later, by streamBuildFiles, at the moment it tries.
 func gatherIndexFiles(r *rootfs.Reader, kind evidence.PackageDBKind, limits pkgdb.Limits) (candidateOutcome, error) {
 	switch kind {
 	case evidence.DBKindDpkg:

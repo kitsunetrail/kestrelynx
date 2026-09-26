@@ -251,6 +251,32 @@ func ParseStarttime(content string) (int64, error) {
 	return st, nil
 }
 
+// ParseState extracts field 3 (state) from the raw contents of
+// /proc/<pid>/stat, the same way ParseStarttime extracts field 22 — parsing
+// starts after the comm field's *last* ")" for the same reason. The
+// returned byte is one of proc_pid_stat(5)'s own single-character process
+// state codes ('R' running, 'S' sleeping, 'D' uninterruptible sleep, 'Z'
+// zombie, 'X'/'x' dead, among others) — used to tell a zombie or already-
+// reaped process apart from one that is genuinely still running, which
+// Starttime alone cannot: a zombie's own stat entry still reports its
+// original starttime unchanged (proc_pid_stat(5)) until its parent actually
+// reaps it, so a starttime match alone is not proof a process is still
+// alive in any sense that matters to a caller treating it as still running.
+func ParseState(content string) (byte, error) {
+	line := strings.TrimRight(content, "\n")
+	closeParen := strings.LastIndexByte(line, ')')
+	if closeParen < 0 {
+		return 0, fmt.Errorf("procfs: stat: no comm field in %q", line)
+	}
+	fields := strings.Fields(line[closeParen+1:])
+	// After the comm field: fields[0] is state (3rd overall).
+	const stateIndex = 0
+	if len(fields) <= stateIndex || len(fields[stateIndex]) != 1 {
+		return 0, fmt.Errorf("procfs: stat: malformed state field in %q", line)
+	}
+	return fields[stateIndex][0], nil
+}
+
 // ParsePPID extracts field 4 (ppid) from the raw contents of
 // /proc/<pid>/stat, the same way ParseStarttime extracts field 22 — parsing
 // starts after the comm field's *last* ")" for the same reason. Used to find

@@ -185,6 +185,19 @@ func (h *Handle) PPID() (int, error) {
 	return ParsePPID(string(data))
 }
 
+// State reads /proc/<pid>/stat fresh (not cached — a process can transition
+// into a zombie at any moment after Open) and returns its current
+// proc_pid_stat(5) state code. See ParseState's own doc comment for why this
+// is checked separately from Starttime wherever "is this process still
+// alive" needs to be more than "has this PID not yet been reused".
+func (h *Handle) State() (byte, error) {
+	data, err := h.readSmallFile("stat")
+	if err != nil {
+		return 0, fmt.Errorf("procfs: read stat for %d: %w", h.pid, err)
+	}
+	return ParseState(string(data))
+}
+
 // Exe resolves /proc/<pid>/exe and reports the (possibly deleted) target
 // path.
 func (h *Handle) Exe() (path string, deleted bool, err error) {

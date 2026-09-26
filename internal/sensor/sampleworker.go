@@ -72,6 +72,15 @@ func openRootWithBasis(init InitProcess) (r *rootfs.Reader, basis mountBasis) {
 	if h.Starttime() != init.Starttime {
 		return nil, mountBasis{}
 	}
+	// A zombie or already-dead task still reports its own original,
+	// unchanged starttime (proc_pid_stat(5)) right up until its parent
+	// actually reaps it — the Starttime match above is not by itself proof
+	// init is still genuinely running. See confirmGenerationAlive's own doc
+	// comment for the identical concern on genconfirm.go's own side of this
+	// same check.
+	if state, err := h.State(); err != nil || isDeadOrZombieState(state) {
+		return nil, mountBasis{}
+	}
 	mnt, err := h.NSLink("mnt")
 	if err != nil {
 		return nil, mountBasis{}
@@ -101,6 +110,18 @@ type sampleJob struct {
 	indexReady bool
 	ownUserNS  string
 	now        time.Time
+	// pendingEvents is this generation's own generationState.pendingEvents
+	// snapshot at dispatch time — only ever non-empty when indexReady is
+	// also true (loop only ever hands these to a worker once there is an
+	// index to re-verify them against; see startSampleWorker). Each one
+	// already carries a resolved path and the (dev, inode) the kernel
+	// reported for it at the moment the eBPF event fired; this worker's own
+	// job is only to confirm that path still resolves to the same file
+	// right now, using the same root it already opened for this sample's
+	// ordinary candidate resolution (see runSampleWorker's own doc comment
+	// on why events.go's applyUsageEvent never does this re-verification
+	// itself).
+	pendingEvents []pendingEventItem
 }
 
 // executableObs is one executable path observed for a process whose own
@@ -147,6 +168,19 @@ type sampleResult struct {
 	// having to read procfs/rootfs itself.
 	basis mountBasis
 
+	// initAliveNs is the boot-relative CLOCK_BOOTTIME *nanosecond* (never
+	// rounded to a clock tick), captured by this worker itself immediately
+	// before it confirmed job.init was still alive — with its own recorded
+	// Starttime, and not a zombie/dead task merely awaiting reaping —
+	// (openRootWithBasis, whose own success is exactly basis.ok) —
+	// meaningful only when initAliveNsOK is true (basis.ok, and this
+	// worker's own bootNsNow call itself did not fail). loop folds this into
+	// generationState.lastAliveNs (applySampleResult) — see that field's own
+	// doc comment for what it proves and why an ordinary sample is already
+	// exactly the check this needs, at no extra cost.
+	initAliveNs   uint64
+	initAliveNsOK bool
+
 	// indexReadyAtStart carries job.indexReady through unchanged — whether
 	// the package-database index this generation reports was already ready
 	// at the moment loop dispatched this very sample, not whatever idxState
@@ -158,6 +192,30 @@ type sampleResult struct {
 	// confirmed the freshly-built index (see postIndexConfirmed's own doc
 	// comment).
 	indexReadyAtStart bool
+
+	// verifiedEvents is every job.pendingEvents entry whose recorded path
+	// still resolves, right now, to the same (dev, inode) the eBPF event
+	// itself reported — eligible to be attributed the same way a fresh
+	// event is (see events.go's applyUsageEvent). lostEventItems is every
+	// entry that did not (the file was replaced, deleted, or could not be
+	// resolved at all) — accepted as a known limit of this re-verification: a
+	// mismatch here is simply counted as lost, never reported as a
+	// file_replaced verdict the way a sampling candidate's own replacement
+	// is. Both are reported as the
+	// actual items (not just counts) so loop can remove exactly these from
+	// generationState.pendingEvents — never a wholesale replacement, since
+	// a new event can arrive and be queued while this very sample worker is
+	// in flight (see loop's own doc comment on applySampleResult).
+	// stillPendingEvents carries job.pendingEvents through unchanged, for
+	// tests to confirm nothing here is dropped, when this sample could not
+	// open a root to check them against at all (basis.ok false) — those
+	// items are never actually removed from generationState.pendingEvents
+	// in the first place (dispatch only ever copies it), so loop itself has
+	// nothing to do with this field beyond what verifiedEvents/
+	// lostEventItems already account for.
+	verifiedEvents     []pendingEventItem
+	lostEventItems     []pendingEventItem
+	stillPendingEvents []pendingEventItem
 }
 
 // runSampleWorker is the whole body of one sample worker goroutine: read
@@ -190,11 +248,27 @@ func runSampleWorker(job sampleJob) sampleResult {
 	// basis reports and the root every candidate is actually resolved
 	// against can never drift apart (see openRootWithBasis's own doc
 	// comment).
+	// Captured immediately before openRootWithBasis's own init-alive check
+	// (procfs.Open(job.init.PID), a Starttime comparison, and a zombie/dead
+	// state check) — if that check succeeds (basis.ok), this nanosecond is
+	// proof g.init was still alive at least this recently; see
+	// sampleResult.initAliveNs' own doc comment. Captured at full nanosecond
+	// precision, not rounded to a clock tick, since resolveEventGeneration's
+	// own proof compares it directly against an eBPF event's own
+	// start_boottime_ns. A bootNsNow failure (never expected on a running
+	// kernel, but not assumed) simply leaves initAliveNs unset — this sample
+	// then contributes nothing to lastAliveNs, exactly as if basis.ok were
+	// false, rather than reporting a wrong instant.
+	preBasisNs, nsErr := bootNsNow()
 	root, basis := openRootWithBasis(job.init)
 	if root != nil {
 		defer root.Close()
 	}
 	res.basis = basis
+	if basis.ok && nsErr == nil {
+		res.initAliveNs = preBasisNs
+		res.initAliveNsOK = true
+	}
 
 	for _, proc := range job.processes {
 		res.attempted++
@@ -295,24 +369,45 @@ func runSampleWorker(job sampleJob) sampleResult {
 		}
 	}
 
-	if len(res.candidates) == 0 {
-		return res
-	}
-	if !basis.ok {
+	switch {
+	case len(res.candidates) == 0:
+		// Nothing sampled this round contributed a candidate — normal for a
+		// container with no live processes matching init's own root this
+		// sample — but pendingEvents (below) still needs its own chance to
+		// verify against root/basis regardless.
+	case !basis.ok:
 		res.incomplete = true
-		return res
+	default:
+		// root was already opened above, together with basis, from the same
+		// fd basis itself was derived from — reused here unchanged, never
+		// reopened (see openRootWithBasis's own doc comment).
+		resolution := resolveCandidatesWithRoot(root, res.candidates)
+		if resolution.incomplete {
+			res.incomplete = true
+		}
+		res.verified = resolution.verified
+		res.replaced = resolution.replaced
+		res.mergedUsrDirs = resolution.mergedUsrDirs
 	}
 
-	// root was already opened above, together with basis, from the same
-	// fd basis itself was derived from — reused here unchanged, never
-	// reopened (see openRootWithBasis's own doc comment).
-	resolution := resolveCandidatesWithRoot(root, res.candidates)
-	if resolution.incomplete {
-		res.incomplete = true
+	if len(job.pendingEvents) > 0 {
+		if !basis.ok {
+			// Nothing could be checked against a root this round; loop keeps
+			// waiting on the same items next round (see
+			// pendingEventTTL for how long).
+			res.stillPendingEvents = job.pendingEvents
+		} else {
+			for _, item := range job.pendingEvents {
+				statDev, statIno, err := root.Stat(item.path)
+				if err == nil && statDev == item.dev && statIno == item.inode {
+					res.verifiedEvents = append(res.verifiedEvents, item)
+				} else {
+					res.lostEventItems = append(res.lostEventItems, item)
+				}
+			}
+		}
 	}
-	res.verified = resolution.verified
-	res.replaced = resolution.replaced
-	res.mergedUsrDirs = resolution.mergedUsrDirs
+
 	return res
 }
 

@@ -76,11 +76,18 @@ type Event struct {
 	CapEffective     uint64
 	Dev              uint64
 	Ino              uint64
-	KtimeNs          uint64
-	EUID             uint32
-	Prot             uint32
-	PathTruncated    bool
-	Path             string
+	// RootDev/RootIno are the calling task's own fs->root identity at the
+	// moment a success event fired (kl_current_root_identity in
+	// bpf/kestrelynx.c) — set only for EventExecSuccess/EventMmapSuccess,
+	// zero for every other Kind. RootDev is the kernel-internal dev_t
+	// encoding, exactly like Dev; a caller decodes both the same way.
+	RootDev       uint64
+	RootIno       uint64
+	KtimeNs       uint64
+	EUID          uint32
+	Prot          uint32
+	PathTruncated bool
+	Path          string
 }
 
 // ErrShortRecord is returned by DecodeEvent when a record is smaller than a
@@ -138,6 +145,8 @@ func DecodeEvent(raw []byte) (Event, error) {
 		CapEffective:     rec.CapEffective,
 		Dev:              rec.Dev,
 		Ino:              rec.Ino,
+		RootDev:          rec.RootDev,
+		RootIno:          rec.RootIno,
 		KtimeNs:          rec.KtimeNs,
 		EUID:             rec.Euid,
 		Prot:             rec.Prot,

@@ -20,6 +20,8 @@ func TestDecodeEventRoundTrip(t *testing.T) {
 		CapEffective:    0x1FFFFFFFFF,
 		Dev:             6,
 		Ino:             7,
+		RootDev:         9,
+		RootIno:         10,
 		KtimeNs:         8,
 		Euid:            1000,
 		Prot:            0x4,
@@ -58,6 +60,10 @@ func TestDecodeEventRoundTrip(t *testing.T) {
 		t.Errorf("Dev = %d, want %d", got.Dev, want.Dev)
 	case got.Ino != want.Ino:
 		t.Errorf("Ino = %d, want %d", got.Ino, want.Ino)
+	case got.RootDev != want.RootDev:
+		t.Errorf("RootDev = %d, want %d", got.RootDev, want.RootDev)
+	case got.RootIno != want.RootIno:
+		t.Errorf("RootIno = %d, want %d", got.RootIno, want.RootIno)
 	case got.KtimeNs != want.KtimeNs:
 		t.Errorf("KtimeNs = %d, want %d", got.KtimeNs, want.KtimeNs)
 	case got.EUID != want.Euid:

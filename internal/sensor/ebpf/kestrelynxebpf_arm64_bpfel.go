@@ -13,13 +13,11 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type kestrelynxebpfKlDedupKey struct {
+type kestrelynxebpfKlAttemptKey struct {
 	_        structs.HostLayout
 	CgroupId uint64
 	Dev      uint64
 	Ino      uint64
-	Kind     uint8
-	_        [7]byte
 }
 
 type kestrelynxebpfKlEvent struct {
@@ -32,6 +30,8 @@ type kestrelynxebpfKlEvent struct {
 	CapEffective    uint64
 	Dev             uint64
 	Ino             uint64
+	RootDev         uint64
+	RootIno         uint64
 	KtimeNs         uint64
 	Euid            uint32
 	Prot            uint32
@@ -42,13 +42,39 @@ type kestrelynxebpfKlEvent struct {
 	_               [4]byte
 }
 
+type kestrelynxebpfKlPathKey struct {
+	_       structs.HostLayout
+	MntNsId uint32
+	_       [4]byte
+	RootDev uint64
+	RootIno uint64
+	Dev     uint64
+	Ino     uint64
+}
+
+type kestrelynxebpfKlUsageKey struct {
+	_            structs.HostLayout
+	CgroupId     uint64
+	Dev          uint64
+	Ino          uint64
+	CapEffective uint64
+	MntNsId      uint32
+	Kind         uint8
+	EuidIsRoot   uint8
+	InInitUserns uint8
+	_            [1]byte
+}
+
 // Names of all BPF objects in the ELF.
 //
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
-	kestrelynxebpfMapKlDedup          = "kl_dedup"
+	kestrelynxebpfMapKlDedupAttempt   = "kl_dedup_attempt"
+	kestrelynxebpfMapKlDedupPath      = "kl_dedup_path"
+	kestrelynxebpfMapKlDedupUsage     = "kl_dedup_usage"
 	kestrelynxebpfMapKlEvents         = "kl_events"
 	kestrelynxebpfMapKlExcludedCgroup = "kl_excluded_cgroup"
+	kestrelynxebpfMapKlLostByCgroup   = "kl_lost_by_cgroup"
 	kestrelynxebpfMapKlLostEvents     = "kl_lost_events"
 	kestrelynxebpfMapKlSelftest       = "kl_selftest"
 	kestrelynxebpfProgKlCgroupMkdir   = "kl_cgroup_mkdir"
@@ -112,9 +138,12 @@ type kestrelynxebpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type kestrelynxebpfMapSpecs struct {
-	KlDedup          *ebpf.MapSpec `ebpf:"kl_dedup"`
+	KlDedupAttempt   *ebpf.MapSpec `ebpf:"kl_dedup_attempt"`
+	KlDedupPath      *ebpf.MapSpec `ebpf:"kl_dedup_path"`
+	KlDedupUsage     *ebpf.MapSpec `ebpf:"kl_dedup_usage"`
 	KlEvents         *ebpf.MapSpec `ebpf:"kl_events"`
 	KlExcludedCgroup *ebpf.MapSpec `ebpf:"kl_excluded_cgroup"`
+	KlLostByCgroup   *ebpf.MapSpec `ebpf:"kl_lost_by_cgroup"`
 	KlLostEvents     *ebpf.MapSpec `ebpf:"kl_lost_events"`
 	KlSelftest       *ebpf.MapSpec `ebpf:"kl_selftest"`
 }
@@ -146,18 +175,24 @@ func (o *kestrelynxebpfObjects) Close() error {
 //
 // It can be passed to loadKestrelynxebpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type kestrelynxebpfMaps struct {
-	KlDedup          *ebpf.Map `ebpf:"kl_dedup"`
+	KlDedupAttempt   *ebpf.Map `ebpf:"kl_dedup_attempt"`
+	KlDedupPath      *ebpf.Map `ebpf:"kl_dedup_path"`
+	KlDedupUsage     *ebpf.Map `ebpf:"kl_dedup_usage"`
 	KlEvents         *ebpf.Map `ebpf:"kl_events"`
 	KlExcludedCgroup *ebpf.Map `ebpf:"kl_excluded_cgroup"`
+	KlLostByCgroup   *ebpf.Map `ebpf:"kl_lost_by_cgroup"`
 	KlLostEvents     *ebpf.Map `ebpf:"kl_lost_events"`
 	KlSelftest       *ebpf.Map `ebpf:"kl_selftest"`
 }
 
 func (m *kestrelynxebpfMaps) Close() error {
 	return _KestrelynxebpfClose(
-		m.KlDedup,
+		m.KlDedupAttempt,
+		m.KlDedupPath,
+		m.KlDedupUsage,
 		m.KlEvents,
 		m.KlExcludedCgroup,
+		m.KlLostByCgroup,
 		m.KlLostEvents,
 		m.KlSelftest,
 	)

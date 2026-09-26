@@ -143,7 +143,7 @@ func TestLoop_ShortIntervalDrivesHeartbeatFasterThanFloor(t *testing.T) {
 // result submits a snapshot immediately, without waiting for the next
 // heartbeat tick at all.
 func TestHandleSampleEnvelope_ResultTriggersImmediateSnapshot(t *testing.T) {
-	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1}, time.Now())
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1}, time.Now(), evidence.CoverageNone)
 	s := &Session{
 		now:            time.Now,
 		cfg:            Config{Interval: time.Hour},

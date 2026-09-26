@@ -10,7 +10,7 @@ import (
 // building seccomp programs by hand. Both filters this package installs
 // (ObserverFilter, ParserFilter) are small enough (well under BPF_MAXINSNS)
 // that computing raw relative jump offsets by hand would be error-prone and
-// unreviewable; a label lets each instruction be written next to the
+// hard to check by eye; a label lets each instruction be written next to the
 // condition it tests instead of next to an offset arithmetic comment.
 //
 // seccomp_data (the struct BPF_ABS loads read from) is a stable kernel UAPI

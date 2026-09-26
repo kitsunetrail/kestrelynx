@@ -65,15 +65,39 @@ func (h *Handle) Read() (Event, error) {
 	return DecodeEvent(record.RawSample)
 }
 
-// LostEvents returns the count of events dropped, Sensor-wide, because
-// bpf_ringbuf_reserve failed (the ring buffer was full at submission time)
-// since the programs attached.
+// LostEvents returns kl_lost_events, the fallback counter for a lost event
+// that could not be attributed to any one cgroup's own counter (cgroup ID
+// unknown, or kl_lost_by_cgroup itself was full) — not the Sensor-wide
+// total. A caller that wants the Sensor-wide total adds this to the sum of
+// every value LostEventsByCgroup returns.
 func (h *Handle) LostEvents() (uint64, error) {
 	var count uint64
 	if err := h.objs.KlLostEvents.Lookup(lostEventsSlot, &count); err != nil {
 		return 0, fmt.Errorf("ebpf: read lost-events counter: %w", err)
 	}
 	return count, nil
+}
+
+// LostEventsByCgroup returns kl_lost_by_cgroup's full contents: how many
+// events were dropped (bpf_ringbuf_reserve failed) for each cgroup ID that
+// has lost at least one, since the programs attached. A cgroup ID absent
+// from the returned map has lost none. Combined with LostEvents (the
+// fallback counter for a loss that could not be attributed this way), this
+// is what lets a caller mark only the generations that actually lost events
+// "partial" rather than every generation whenever the ring buffer is
+// briefly oversubscribed by one noisy container.
+func (h *Handle) LostEventsByCgroup() (map[uint64]uint64, error) {
+	out := map[uint64]uint64{}
+	var key uint64
+	var value uint64
+	it := h.objs.KlLostByCgroup.Iterate()
+	for it.Next(&key, &value) {
+		out[key] = value
+	}
+	if err := it.Err(); err != nil {
+		return nil, fmt.Errorf("ebpf: iterate lost-by-cgroup counter: %w", err)
+	}
+	return out, nil
 }
 
 // Close releases the ring buffer reader, every attached link, and every map

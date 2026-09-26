@@ -254,6 +254,33 @@ func TestParseStarttimeMalformed(t *testing.T) {
 	}
 }
 
+func TestParsePPID(t *testing.T) {
+	postComm := make([]string, 20)
+	for i := range postComm {
+		postComm[i] = "0"
+	}
+	postComm[0] = "S"
+	postComm[1] = "777" // ppid
+	line := "4242 (some (nested) name) " + joinFields(postComm)
+
+	got, err := ParsePPID(line)
+	if err != nil {
+		t.Fatalf("ParsePPID: %v", err)
+	}
+	if got != 777 {
+		t.Errorf("ParsePPID = %d, want 777", got)
+	}
+}
+
+func TestParsePPIDMalformed(t *testing.T) {
+	if _, err := ParsePPID("no comm field here"); err == nil {
+		t.Fatal("expected error for a line with no comm field")
+	}
+	if _, err := ParsePPID("4242 (short) S"); err == nil {
+		t.Fatal("expected error for too few post-comm fields")
+	}
+}
+
 // anonMapLine is one line that never produces a MapEntry (no path, inode
 // 0): the shape of line ParseMapsStream must still count toward
 // MaxMapsLines even though it never contributes an entry.

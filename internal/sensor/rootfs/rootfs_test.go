@@ -391,3 +391,60 @@ func TestReader_Close_ClosesRoot(t *testing.T) {
 		t.Error("root fd is still valid after Close")
 	}
 }
+
+func TestStat_SameDirViaSymlinkMatches(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "usr", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("usr/bin", filepath.Join(dir, "bin")); err != nil {
+		t.Fatal(err)
+	}
+	r := openRoot(t, dir)
+	defer r.Close()
+
+	dev1, ino1, err := r.Stat("/bin")
+	if err != nil {
+		t.Fatalf("Stat(/bin): %v", err)
+	}
+	dev2, ino2, err := r.Stat("/usr/bin")
+	if err != nil {
+		t.Fatalf("Stat(/usr/bin): %v", err)
+	}
+	if dev1 != dev2 || ino1 != ino2 {
+		t.Errorf("Stat(/bin) = (%s,%d), Stat(/usr/bin) = (%s,%d), want equal (merged-usr symlink)", dev1, ino1, dev2, ino2)
+	}
+}
+
+func TestStat_DistinctDirsDoNotMatch(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "usr", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r := openRoot(t, dir)
+	defer r.Close()
+
+	dev1, ino1, err := r.Stat("/bin")
+	if err != nil {
+		t.Fatalf("Stat(/bin): %v", err)
+	}
+	dev2, ino2, err := r.Stat("/usr/bin")
+	if err != nil {
+		t.Fatalf("Stat(/usr/bin): %v", err)
+	}
+	if dev1 == dev2 && ino1 == ino2 {
+		t.Errorf("Stat(/bin) and Stat(/usr/bin) unexpectedly matched for two distinct real directories")
+	}
+}
+
+func TestStat_MissingPathErrors(t *testing.T) {
+	dir := t.TempDir()
+	r := openRoot(t, dir)
+	defer r.Close()
+	if _, _, err := r.Stat("/no/such/path"); err == nil {
+		t.Error("expected an error for a missing path")
+	}
+}

@@ -293,6 +293,29 @@ func reopenSelfFD(fd int, flags int) (*os.File, error) {
 	return os.NewFile(uintptr(newFD), name), nil
 }
 
+// Stat resolves path against the container root, the same symlink-safe way
+// OpenFile and ReadDir do, and reports the resolved object's device and
+// inode — without requiring it to be a regular file or a directory the way
+// those two do. It exists for a caller that needs to compare two paths for
+// referring to the same underlying object (e.g. confirming that /bin is
+// actually a symlink into /usr/bin in this specific container, rather than
+// assuming a merged-/usr layout from the path spelling alone) rather than
+// to read or list one. The returned dev is formatted the same "MM:mm" hex
+// way /proc/<pid>/maps and Calibration.StatDev are, so it compares directly
+// against those.
+func (r *Reader) Stat(path string) (dev string, ino uint64, err error) {
+	fd, err := r.resolve(path)
+	if err != nil {
+		return "", 0, err
+	}
+	defer unix.Close(fd)
+	var st unix.Stat_t
+	if err := unix.Fstat(fd, &st); err != nil {
+		return "", 0, fmt.Errorf("rootfs: fstat %q: %w", path, err)
+	}
+	return formatDev(st.Dev), st.Ino, nil
+}
+
 // OpenFile resolves path against the container root and returns a
 // read-only handle to it, once every step of the read contract has agreed
 // it is safe to open: the final component must be a regular file (not a

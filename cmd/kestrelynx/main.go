@@ -1,6 +1,6 @@
 // Command kestrelynx scans the host's running container images for HIGH/CRITICAL
-// vulnerabilities and notifies Slack/webhook on a schedule. See docs/ for the
-// full design.
+// vulnerabilities and notifies Slack/webhook on a schedule. See docs/ for
+// more detail.
 package main
 
 import (

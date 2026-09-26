@@ -250,3 +250,28 @@ func ParseStarttime(content string) (int64, error) {
 	}
 	return st, nil
 }
+
+// ParsePPID extracts field 4 (ppid) from the raw contents of
+// /proc/<pid>/stat, the same way ParseStarttime extracts field 22 — parsing
+// starts after the comm field's *last* ")" for the same reason. Used to find
+// a container generation's init process: the process in that container's
+// cgroup whose parent is not (man 5 proc_pid_stat).
+func ParsePPID(content string) (int, error) {
+	line := strings.TrimRight(content, "\n")
+	closeParen := strings.LastIndexByte(line, ')')
+	if closeParen < 0 {
+		return 0, fmt.Errorf("procfs: stat: no comm field in %q", line)
+	}
+	fields := strings.Fields(line[closeParen+1:])
+	// After the comm field: fields[0] is state (3rd overall), fields[1] is
+	// ppid (4th overall).
+	const ppidIndex = 1
+	if len(fields) <= ppidIndex {
+		return 0, fmt.Errorf("procfs: stat: too few fields after comm (%d)", len(fields))
+	}
+	ppid, err := strconv.Atoi(fields[ppidIndex])
+	if err != nil {
+		return 0, fmt.Errorf("procfs: stat: malformed ppid %q: %w", fields[ppidIndex], err)
+	}
+	return ppid, nil
+}

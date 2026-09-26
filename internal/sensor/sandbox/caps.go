@@ -38,7 +38,7 @@ func currentCaps() (unix.CapUserHeader, [2]unix.CapUserData, error) {
 // of which OS thread a given goroutine happens to be scheduled on.
 //
 // Capabilities are thread-specific state in Linux (a deliberate, if
-// POSIX-violating, design predating this codebase), which is exactly why a
+// POSIX-violating, choice predating this codebase), which is exactly why a
 // plain single-threaded os/x/sys call would only affect one of the many OS
 // threads the Go runtime schedules goroutines onto.
 func setCapsAllThreads(hdr unix.CapUserHeader, data [2]unix.CapUserData) error {

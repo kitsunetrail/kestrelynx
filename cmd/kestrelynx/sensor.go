@@ -55,6 +55,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -62,7 +63,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
@@ -73,6 +74,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/kitsunetrail/kestrelynx/internal/evidence"
+	"github.com/kitsunetrail/kestrelynx/internal/sensor"
 	"github.com/kitsunetrail/kestrelynx/internal/sensor/ebpf"
 	"github.com/kitsunetrail/kestrelynx/internal/sensor/parser"
 	"github.com/kitsunetrail/kestrelynx/internal/sensor/procfs"
@@ -100,6 +102,21 @@ const (
 // --inspect-json or a reused PID than measurement jitter.
 const starttimeTolerance = 5 * time.Second
 
+// stringListFlag collects repeated flags (e.g. --exclude-id) into a slice.
+type stringListFlag []string
+
+func (s *stringListFlag) String() string {
+	if s == nil {
+		return ""
+	}
+	return strings.Join(*s, ",")
+}
+
+func (s *stringListFlag) Set(v string) error {
+	*s = append(*s, v)
+	return nil
+}
+
 // pidListFlag collects repeated -target-pid flags into a slice.
 type pidListFlag []int
 
@@ -123,9 +140,9 @@ func (p *pidListFlag) Set(s string) error {
 	return nil
 }
 
-// runSensorCommand handles `kestrelynx sensor <args...>`. Only --probe is
-// implemented today; any other invocation prints usage and exits non-zero
-// without touching anything, so this never changes the behavior of the
+// runSensorCommand handles `kestrelynx sensor <args...>`: the real, resident
+// observer by default, or the --probe deployment/permission verification
+// tool when that flag is given. Neither ever changes the behavior of the
 // pre-existing default command (which main.go never routes here).
 func runSensorCommand(args []string) {
 	fs := flag.NewFlagSet("kestrelynx sensor", flag.ExitOnError)
@@ -144,8 +161,15 @@ func runSensorCommand(args []string) {
 	parserChild := fs.Bool("probe-parser-child", false, "internal: this process is the probe's re-exec'd parser child; do not pass this directly")
 	execChildTarget := fs.String("probe-exec-child-target", "", "internal: this process is a disposable exec-denial probe child; do not pass this directly")
 	sameUIDChildFlag := fs.Bool("probe-sameuid-target-child", false, "internal: this process is the probe's disposable same-UID ptrace/process_vm/pidfd/kill target; do not pass this directly")
+	realParserChild := fs.Bool("parser-child", false, "internal: this process is the real observer's re-exec'd parser child; do not pass this directly")
 	var targetPIDs pidListFlag
 	fs.Var(&targetPIDs, "target-pid", "a host PID to run write/connect/signal/exec probes against (repeatable). Must pass verifyTarget's checks against --inspect-json and --run-id, or the probe against it is refused")
+
+	evidenceDir := fs.String("evidence-dir", "/var/lib/kestrelynx-runtime", "directory the evidence file (procfs.json) is written to; must be writable at startup or this process exits non-zero")
+	interval := fs.Duration("interval", 30*time.Second, "how often to sample every discovered container (10s-5m)")
+	requireIsolation := fs.Bool("require-isolation", false, "do not start observing at all if any part of the isolation sequence is degraded, not just failed")
+	var excludeIDs stringListFlag
+	fs.Var(&excludeIDs, "exclude-id", "a container ID prefix (at least 12 hex characters) to never observe (repeatable)")
 	fs.Parse(args)
 
 	if *execChildTarget != "" {
@@ -160,9 +184,21 @@ func runSensorCommand(args []string) {
 		runProbeSameUIDTargetChild()
 		return
 	}
+	if *realParserChild {
+		if err := sensor.RunParserChild(3); err != nil {
+			fmt.Fprintf(os.Stderr, "kestrelynx sensor --parser-child: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if !*probe {
-		fmt.Fprintln(os.Stderr, "kestrelynx sensor: only --probe is implemented; see --help")
-		os.Exit(2)
+		runSensorDaemon(sensorDaemonConfig{
+			EvidenceDir:      *evidenceDir,
+			Interval:         *interval,
+			ExcludeIDs:       excludeIDs,
+			RequireIsolation: *requireIsolation,
+		})
+		return
 	}
 	if *inspectJSONPath == "" {
 		fmt.Fprintln(os.Stderr, "kestrelynx sensor --probe: --inspect-json is required")
@@ -206,6 +242,57 @@ func runSensorCommand(args []string) {
 	})
 	if err := writeReport(outFile, report); err != nil {
 		fmt.Fprintf(os.Stderr, "kestrelynx sensor --probe: write report: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// sensorDaemonConfig is runSensorDaemon's input, gathered from flags.
+type sensorDaemonConfig struct {
+	EvidenceDir      string
+	Interval         time.Duration
+	ExcludeIDs       []string
+	RequireIsolation bool
+}
+
+// minSensorInterval and maxSensorInterval bound --interval, matching the
+// evidence file's own sensor.interval_seconds validation range: a value
+// outside it would only ever produce an evidence file the main body itself
+// rejects as malformed, so it is refused here instead, before this process
+// ever starts.
+const (
+	minSensorInterval = 10 * time.Second
+	maxSensorInterval = 5 * time.Minute
+)
+
+// runSensorDaemon runs the real, resident Sensor observer: `sensor.Run`'s
+// startup sequence and sampling loop, until SIGINT/SIGTERM. It is the only
+// caller of sensor.Run in this binary; runProbe exercises the same
+// building blocks (sensor.RaiseTransientCapabilities, sensor.OwnCgroupInfo,
+// sensor.ClassifyEBPFStatus, sensor.SpawnParserChild) directly, for its own
+// per-step reporting, rather than calling sensor.Run itself.
+func runSensorDaemon(cfg sensorDaemonConfig) {
+	if cfg.Interval < minSensorInterval || cfg.Interval > maxSensorInterval {
+		fmt.Fprintf(os.Stderr, "kestrelynx sensor: --interval %s out of range [%s, %s]\n", cfg.Interval, minSensorInterval, maxSensorInterval)
+		os.Exit(2)
+	}
+	for _, id := range cfg.ExcludeIDs {
+		if len(id) < 12 {
+			fmt.Fprintf(os.Stderr, "kestrelynx sensor: --exclude-id %q is shorter than 12 hex characters\n", id)
+			os.Exit(2)
+		}
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	err := sensor.Run(ctx, sensor.Config{
+		EvidenceDir:      cfg.EvidenceDir,
+		Interval:         cfg.Interval,
+		ExcludeIDs:       cfg.ExcludeIDs,
+		RequireIsolation: cfg.RequireIsolation,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "kestrelynx sensor: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -747,32 +834,22 @@ func runProbe(cfg probeConfig) probeReport {
 
 	// --- 1. Raise the observer's transient capabilities from the file
 	// capability's permitted set, one at a time (so one missing capability
-	// does not block the others from being reported individually).
-	capNames := []struct {
-		name string
-		num  uintptr
-	}{
-		{"CAP_SYS_PTRACE", unix.CAP_SYS_PTRACE},
-		{"CAP_DAC_READ_SEARCH", unix.CAP_DAC_READ_SEARCH},
-		{"CAP_BPF", unix.CAP_BPF},
-		{"CAP_PERFMON", unix.CAP_PERFMON},
-	}
-	report.Startup.Capabilities = map[string]*capState{}
-	startStatuses, statErr := sandbox.ReadTaskStatuses(os.Getpid())
-	var permittedAtStart uint64
+	// does not block the others from being reported individually). Shared
+	// with the real observer's own startup sequence (sensor.
+	// RaiseTransientCapabilities), so the two can never disagree on which
+	// capabilities are raised or in what order.
+	raised, statErr := sensor.RaiseTransientCapabilities()
 	if statErr != nil {
 		report.Warnings = append(report.Warnings, fmt.Sprintf("read own task status at start: %v", statErr))
-	} else if len(startStatuses) > 0 {
-		permittedAtStart = startStatuses[0].CapPermitted
 	}
-	for _, c := range capNames {
-		cs := &capState{PermittedAtStart: permittedAtStart&(1<<c.num) != 0}
-		if err := sandbox.RaiseEffective(c.num); err != nil {
-			cs.Error = err.Error()
-		} else {
-			cs.RaisedEffective = true
+	report.Startup.Capabilities = map[string]*capState{}
+	for _, c := range sensor.TransientCapabilities {
+		rc := raised[c.Name]
+		cs := &capState{PermittedAtStart: rc.PermittedAtStart, RaisedEffective: rc.RaisedEffective}
+		if rc.Err != nil {
+			cs.Error = rc.Err.Error()
 		}
-		report.Startup.Capabilities[c.name] = cs
+		report.Startup.Capabilities[c.Name] = cs
 	}
 
 	// --- 2. NO_NEW_PRIVS + non-dumpable, on every thread, before anything
@@ -790,7 +867,13 @@ func runProbe(cfg probeConfig) probeReport {
 
 	// --- 3. Determine this process's own cgroup ID (needed both for the
 	// eBPF self-exclusion map and for the cgroup-ID/inode cross-check).
-	cgRep, cgID, cgErr := ownCgroupInfo()
+	// Shared with the real observer's own startup sequence
+	// (sensor.OwnCgroupInfo).
+	cgInfo, cgID, cgErr := sensor.OwnCgroupInfo()
+	cgRep := cgroupReport{CgroupV2: cgInfo.CgroupV2, Path: cgInfo.Path, KernfsID: cgInfo.KernfsID}
+	if cgInfo.Err != nil {
+		cgRep.Error = cgInfo.Err.Error()
+	}
 	report.Cgroup = cgRep
 
 	// --- 4. Load and attach eBPF, before dropping CAP_BPF/CAP_PERFMON.
@@ -832,7 +915,7 @@ func runProbe(cfg probeConfig) probeReport {
 				// already cached from before Load — see ebpfReport's doc
 				// comment on these two fields for why that distinction
 				// matters.
-				if freshIno, ferr := statCgroupDirInode(cgRep.Path); ferr != nil {
+				if freshIno, ferr := sensor.StatCgroupDirInode(cgRep.Path); ferr != nil {
 					report.Warnings = append(report.Warnings, fmt.Sprintf("independent cgroup inode re-stat: %v", ferr))
 				} else {
 					report.EBPF.ExcludedCgroupMatchesDirInode = got == freshIno
@@ -840,7 +923,7 @@ func runProbe(cfg probeConfig) probeReport {
 			}
 		}
 	}
-	report.EBPF.Status, report.EBPF.Reason = classifyEBPFStatus(
+	report.EBPF.Status, report.EBPF.Reason = sensor.ClassifyEBPFStatus(
 		cgErr, report.EBPF.BTFReadable,
 		report.Startup.Capabilities["CAP_BPF"].RaisedEffective,
 		report.Startup.Capabilities["CAP_PERFMON"].RaisedEffective,
@@ -1064,88 +1147,8 @@ func runUnsafeOpsForTarget(vt verifiedTarget) (ops []probeResult, configError st
 	}
 }
 
-// ownCgroupInfo determines this process's own cgroup v2 path and the
-// kernfs (directory inode) ID that identifies it — the same ID
-// bpf_get_current_cgroup_id() returns for a process in that cgroup — by
-// reading /proc/self/cgroup and stat'ing the corresponding directory under
-// /sys/fs/cgroup (host-visible when the Sensor container runs with
-// `cgroup: host`, and simply the host's own tree otherwise).
-func ownCgroupInfo() (cgroupReport, uint64, error) {
-	var stfs unix.Statfs_t
-	if err := unix.Statfs("/sys/fs/cgroup", &stfs); err != nil {
-		err = fmt.Errorf("statfs /sys/fs/cgroup: %w", err)
-		return cgroupReport{Error: err.Error()}, 0, err
-	}
-	if int64(stfs.Type) != int64(unix.CGROUP2_SUPER_MAGIC) {
-		err := fmt.Errorf("cgroup_v1: /sys/fs/cgroup is not cgroup2 (statfs type %#x)", stfs.Type)
-		return cgroupReport{CgroupV2: false, Error: err.Error()}, 0, err
-	}
-	data, err := os.ReadFile("/proc/self/cgroup")
-	if err != nil {
-		err = fmt.Errorf("read /proc/self/cgroup: %w", err)
-		return cgroupReport{CgroupV2: true, Error: err.Error()}, 0, err
-	}
-	line := strings.TrimSpace(string(data))
-	rel, ok := strings.CutPrefix(line, "0::")
-	if !ok {
-		err := fmt.Errorf("unexpected /proc/self/cgroup content (not a single cgroup-v2 line): %q", line)
-		return cgroupReport{CgroupV2: true, Error: err.Error()}, 0, err
-	}
-	ino, err := statCgroupDirInode(rel)
-	if err != nil {
-		return cgroupReport{CgroupV2: true, Path: rel, Error: err.Error()}, 0, err
-	}
-	return cgroupReport{CgroupV2: true, Path: rel, KernfsID: ino}, ino, nil
-}
-
-// statCgroupDirInode stats /sys/fs/cgroup/<relPath> and returns its inode
-// number, freshly, every time it is called — used both by ownCgroupInfo at
-// startup and, called a second time later with the same relPath, as the
-// independent check ebpfReport's ExcludedCgroupMatchesDirInode field
-// documents: a second, later stat is what makes that check a comparison
-// against reality rather than only a map read-back of a value this process
-// wrote to the map itself.
-func statCgroupDirInode(relPath string) (uint64, error) {
-	full := filepath.Join("/sys/fs/cgroup", relPath)
-	var st unix.Stat_t
-	if err := unix.Stat(full, &st); err != nil {
-		return 0, fmt.Errorf("stat %s: %w", full, err)
-	}
-	return st.Ino, nil
-}
-
-// classifyEBPFStatus turns the individual failure points of the eBPF
-// load/attach attempt into the same (status, reason) vocabulary the real
-// Sensor's evidence file uses for sensor.events, so a probe run without
-// CAP_BPF/CAP_PERFMON in the container's bounding set (a --variant
-// no-bpf-caps run) reports the same thing a real, permission-limited
-// deployment would: EventsUnavailable with reason "permission", not a bare
-// error string. Checked in this order because an earlier failure explains
-// a later one (no cgroup ID means Load was never even attempted with a
-// real value; missing BTF means Load could not have succeeded regardless
-// of capabilities; missing capabilities explain a Load failure that would
-// otherwise look like an unexplained attach failure; --simulate-ebpf
-// -attach-failure, with capabilities and BTF both fine, falls through to
-// the final attach_failed case).
-func classifyEBPFStatus(cgErr error, btfReadable, capBPFRaised, capPERFMONRaised bool, loadErr error) (evidence.EventsStatus, evidence.EventsReason) {
-	switch {
-	case cgErr != nil && strings.HasPrefix(cgErr.Error(), "cgroup_v1:"):
-		return evidence.EventsUnavailable, evidence.EventsReasonCgroupV1
-	case cgErr != nil:
-		return evidence.EventsUnavailable, evidence.EventsReasonAttachFailed
-	case !btfReadable:
-		return evidence.EventsUnavailable, evidence.EventsReasonBTFMissing
-	case !capBPFRaised || !capPERFMONRaised:
-		return evidence.EventsUnavailable, evidence.EventsReasonPermission
-	case loadErr != nil:
-		return evidence.EventsUnavailable, evidence.EventsReasonAttachFailed
-	default:
-		return evidence.EventsOK, evidence.EventsReasonNone
-	}
-}
-
 // cgroupKernfsIDForPID resolves an arbitrary process's cgroup v2 kernfs ID
-// the same way ownCgroupInfo resolves this process's own — reading
+// the same way sensor.OwnCgroupInfo resolves this process's own — reading
 // /proc/<pid>/cgroup (world-readable, no ptrace check: see the read
 // contract's own table for exactly which procfs entries have none) and
 // stat'ing the corresponding directory under /sys/fs/cgroup. Used to build
@@ -1166,65 +1169,20 @@ func cgroupKernfsIDForPID(pid int) (uint64, error) {
 	if !ok {
 		return 0, fmt.Errorf("pid %d: unexpected /proc/%d/cgroup content (not a single cgroup-v2 line): %q", pid, pid, line)
 	}
-	return statCgroupDirInode(rel)
-}
-
-// plainParserBinary returns the path to the parser's own executable: the
-// same source and build as this process, but never a file that carries the
-// observer's file capability. In the deployed image, this process runs as
-// /usr/local/bin/kestrelynx-sensor (the setcap copy) and the parser must
-// instead exec /usr/local/bin/kestrelynx (the plain copy in the same
-// directory, with no security.capability xattr at all) — spawning the
-// parser from the setcap'd binary would give it CAP_SYS_PTRACE/
-// CAP_DAC_READ_SEARCH/CAP_BPF/CAP_PERFMON in its own permitted set purely
-// from the file it exec'd, defeating the goal of a parser with no
-// capability at all, even though those bits would stay out of its
-// effective set until something raised them. Outside that image (e.g. a
-// local, non-setcap build under test), this process's own executable has
-// no capability either way, so it is used as-is.
-func plainParserBinary() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	dir, base := filepath.Split(exe)
-	if base == "kestrelynx-sensor" {
-		return filepath.Join(dir, "kestrelynx"), nil
-	}
-	return exe, nil
+	return sensor.StatCgroupDirInode(rel)
 }
 
 // spawnProbeParser starts a fresh copy of this same binary as
 // `kestrelynx sensor --probe-parser-child` over a SOCK_SEQPACKET
 // socketpair, exactly the way a real observer spawns its parser, and waits
-// for its self-check Report.
+// for its self-check Report. Shared with the real observer's own startup
+// sequence (sensor.SpawnParserChild); the socket fd it also returns is
+// discarded here, same as before this shared helper existed — the probe
+// tool's parser child never receives a real request, so nothing here ever
+// needs to talk back to it after the report arrives.
 func spawnProbeParser() (pid int, report parser.Report, err error) {
-	exe, err := plainParserBinary()
-	if err != nil {
-		return 0, parser.Report{}, fmt.Errorf("locate plain (capability-less) executable: %w", err)
-	}
-	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_SEQPACKET|unix.SOCK_CLOEXEC, 0)
-	if err != nil {
-		return 0, parser.Report{}, fmt.Errorf("socketpair: %w", err)
-	}
-	parentFD := fds[0]
-	childFile := os.NewFile(uintptr(fds[1]), "sensor-probe-parser-sock")
-
-	cmd := exec.Command(exe, "sensor", "--probe-parser-child")
-	cmd.ExtraFiles = []*os.File{childFile}
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		unix.Close(parentFD)
-		childFile.Close()
-		return 0, parser.Report{}, fmt.Errorf("start parser child: %w", err)
-	}
-	childFile.Close()
-
-	report, rerr := parser.ReadReport(parentFD)
-	if rerr != nil {
-		return cmd.Process.Pid, parser.Report{}, fmt.Errorf("read parser report: %w", rerr)
-	}
-	return cmd.Process.Pid, report, nil
+	pid, _, report, err = sensor.SpawnParserChild("--probe-parser-child")
+	return pid, report, err
 }
 
 // runProbeParserChild is the entry point for a re-exec'd

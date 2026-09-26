@@ -174,6 +174,17 @@ func (h *Handle) readStarttime() (int64, error) {
 	return ParseStarttime(string(data))
 }
 
+// PPID reads /proc/<pid>/stat fresh (not cached the way Starttime is, since
+// a parent can change across samples — e.g. a reparented orphan — without
+// the child's own generation changing) and returns its parent PID.
+func (h *Handle) PPID() (int, error) {
+	data, err := h.readSmallFile("stat")
+	if err != nil {
+		return 0, fmt.Errorf("procfs: read stat for %d: %w", h.pid, err)
+	}
+	return ParsePPID(string(data))
+}
+
 // Exe resolves /proc/<pid>/exe and reports the (possibly deleted) target
 // path.
 func (h *Handle) Exe() (path string, deleted bool, err error) {

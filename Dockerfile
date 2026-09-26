@@ -39,6 +39,19 @@ COPY --from=build /out/kestrelynx /usr/local/bin/kestrelynx-sensor
 RUN apk add --no-cache libcap && \
     setcap cap_sys_ptrace,cap_dac_read_search,cap_bpf,cap_perfmon+p /usr/local/bin/kestrelynx-sensor && \
     apk del libcap
+# Pre-create the Sensor's default --evidence-dir, owned by the UID/GID the
+# Sensor's own compose file runs it as (65532:65532), so that the first time
+# it is mounted over by a fresh, empty named volume (docker-compose.sensor.yml's
+# own kestrelynx-runtime volume), Docker's own behavior of copying an image
+# directory's existing content and ownership into a brand-new volume leaves
+# that volume writable by the Sensor immediately — with no init container
+# and no chown step anywhere in the Sensor's own compose file, which never
+# runs as root at all (see that file's own user: 65532:65532). A volume that
+# already has content (a second `docker compose up`, or one reused from a
+# previous version) is never touched by this: Docker only copies the
+# image's content into a target that is still completely empty at mount
+# time.
+RUN mkdir -p /var/lib/kestrelynx-runtime && chown 65532:65532 /var/lib/kestrelynx-runtime
 # The base image's entrypoint is trivy; run kestrelynx instead.
 ENTRYPOINT ["kestrelynx"]
 CMD ["--config", "/etc/kestrelynx/config.yml"]

@@ -169,11 +169,32 @@ func handleOneRequest(cfg Config, req Request, fd int) error {
 	} else {
 		resp.Result = result
 	}
+
+	// A Handler is free to return whatever json.RawMessage it wants; this
+	// package is what actually puts bytes on the wire, so it is what must
+	// never hand something oversized to sendResponse. The observer's own
+	// ReadResponse enforces its own ceiling (maxResponseBytes, client.go);
+	// a response that arrived truncated or over that ceiling would look
+	// like a connection failure rather than the graceful, ordinary
+	// rejection an oversized response actually is.
+	if body, err := json.Marshal(wireEnvelope{Response: &resp}); err == nil && len(body) > maxResponseSendBytes {
+		resp = Response{OK: false, Error: "response exceeds size limit"}
+	}
+
 	if err := sendResponse(cfg.SocketFD, resp); err != nil {
 		return fmt.Errorf("parser: send response: %w", err)
 	}
 	return nil
 }
+
+// maxResponseSendBytes bounds the wire-encoded size of any Response this
+// package will actually attempt to send (the whole wireEnvelope, matching
+// what sendResponse actually transmits). A Handler implementation (such as
+// this Sensor's own dbHandler) is expected to keep its own responses well
+// under this on its own — see e.g. maxResponsePayloadBytes in dbop.go — so
+// that this fallback is a safety net for a Handler bug or an unexpectedly
+// large input, not something ordinary operation relies on.
+const maxResponseSendBytes = 128 << 10 // 128 KiB
 
 // wireEnvelope is the first-message-only wrapper Run sends instead of a
 // Response, distinguishing the initial self-check report from every

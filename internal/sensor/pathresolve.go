@@ -269,6 +269,6 @@ func (s *Session) applyPathResolveResult(res pathResolveResult) {
 		ev: res.ev, kind: res.kind, isExec: res.isExec,
 		path: res.path, lossOnly: !res.resolved, receivedAt: res.receivedAt,
 	}
-	g, outcome := s.resolveEventGeneration(res.ev.CgroupID, res.ev.StartBoottimeNs, res.ev.TGID)
+	g, outcome := s.resolveEventGeneration(res.ev.CgroupID, res.ev.StartBoottimeNs, res.ev.TGID, uint32(res.ev.MountNamespaceID))
 	s.finalizeRoutedItem(g, outcome, item, s.now())
 }

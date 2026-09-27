@@ -145,9 +145,9 @@ func TestApplyGenConfirmResult_UnconfirmedRequeuesAndRequestsDiscovery(t *testin
 	s := newTestSessionForEvents()
 	s.discoveryCh = make(chan discoveryResult, 1) // startDiscovery's own goroutine sends here
 	discovered := make(chan struct{}, 1)
-	s.discoverFn = func() (map[string]containerGroup, error) {
+	s.discoverFn = func() (map[string]containerGroup, []cgroupSeed, int, error) {
 		discovered <- struct{}{}
-		return map[string]containerGroup{}, nil
+		return map[string]containerGroup{}, nil, 0, nil
 	}
 	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('1')}, InitProcess{PID: 1 << 30, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
 	item := pendingRouteEvent{ev: ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 90}, kind: evidence.KindExecEvent, isExec: true, receivedAt: s.now()}
@@ -177,17 +177,69 @@ func TestApplyGenConfirmResult_UnconfirmedRequeuesAndRequestsDiscovery(t *testin
 	}
 }
 
+// TestApplyGenConfirmResult_UnconfirmedExpiredItemDowngradesOwnContainer
+// covers applyGenConfirmResult's own third downgradeContainerPartial call
+// site (the sibling of TestApplyGenConfirmResult_UnconfirmedRequeuesAndRequestsDiscovery
+// above, which only ever exercises the still-fresh, requeued half): an item
+// whose own pendingRouteEventTTL has already elapsed by the time an
+// unconfirmed answer comes back is never simply requeued (which would just
+// let it sit there until some later sweep), and is never folded into the
+// Sensor-wide unattributable total either — it downgrades its own
+// already-known container directly, scoped the same way as
+// submitGenConfirmRequest's own two pool-capacity paths.
+func TestApplyGenConfirmResult_UnconfirmedExpiredItemDowngradesOwnContainer(t *testing.T) {
+	s := newTestSessionForEvents()
+	s.discoveryCh = make(chan discoveryResult, 1)
+	s.discoverFn = func() (map[string]containerGroup, []cgroupSeed, int, error) {
+		return map[string]containerGroup{}, nil, 0, nil
+	}
+	cid := strings64('2')
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cid}, InitProcess{PID: 1 << 30, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	s.generations[g.key()] = g
+
+	item := pendingRouteEvent{
+		ev:         ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 91},
+		kind:       evidence.KindExecEvent,
+		isExec:     true,
+		receivedAt: s.now().Add(-(pendingRouteEventTTL + time.Second)),
+	}
+	s.submitGenConfirmRequest(genConfirmRequest{g: g, item: item})
+
+	select {
+	case res := <-s.genConfirmCh:
+		if res.confirmed {
+			t.Fatal("confirmed = true, want false -- PID 1<<30 should never exist")
+		}
+		s.applyGenConfirmResult(res)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for genconfirm.go's own answer")
+	}
+
+	if len(s.pendingRouteEvents) != 0 {
+		t.Errorf("len(pendingRouteEvents) = %d, want 0 -- an already-expired item must never be requeued", len(s.pendingRouteEvents))
+	}
+	if g.eventsCoverage != evidence.CoveragePartial || !g.incomplete {
+		t.Errorf("g coverage=%q incomplete=%v, want partial/true", g.eventsCoverage, g.incomplete)
+	}
+	if s.unattributedEventsLost != 0 {
+		t.Errorf("unattributedEventsLost = %d, want 0 -- scoped to this one container, never the Sensor-wide unattributable total", s.unattributedEventsLost)
+	}
+}
+
 // TestSubmitGenConfirmRequest_ConcurrencyAndQueueBounded confirms this pool's
 // own resource bound (maxConcurrentGenConfirms/maxQueuedGenConfirms): past
-// both, a request is counted as an unattributable loss (recordUnattributableEventLoss)
-// instead of growing the goroutine count or the queue without bound — a
-// ticks-matched candidate for a real, already-classified container is a
-// Sensor-side capacity failure to lose, not a "too short-lived to observe"
-// case (see submitGenConfirmRequest's own doc comment). Each request here
-// names its own distinct generation, so this pool's own concurrency/queue
-// bound is what is actually being exercised, never genConfirmWaiters'
-// own per-generation coalescing (see the sibling
-// TestSubmitGenConfirmRequest_CoalescesSameGeneration for that).
+// both, a request's own already-known container is downgraded
+// (downgradeContainerPartial) instead of growing the goroutine count or the
+// queue without bound — a ticks-matched candidate for a real,
+// already-classified container is a Sensor-side capacity failure to lose,
+// not a "too short-lived to observe" case (see submitGenConfirmRequest's
+// own doc comment), but it is a doubt scoped to that one container, never
+// the Sensor-wide unattributable total (unattributedEventsLost is reserved
+// for routeGapLoss alone now). Each request here names its own distinct
+// generation, so this pool's own concurrency/queue bound is what is
+// actually being exercised, never genConfirmWaiters' own per-generation
+// coalescing (see the sibling TestSubmitGenConfirmRequest_CoalescesSameGeneration
+// for that).
 func TestSubmitGenConfirmRequest_ConcurrencyAndQueueBounded(t *testing.T) {
 	s := newTestSessionForEvents()
 	s.genConfirmCh = make(chan genConfirmResult, maxConcurrentGenConfirms)
@@ -217,9 +269,17 @@ func TestSubmitGenConfirmRequest_ConcurrencyAndQueueBounded(t *testing.T) {
 		t.Errorf("unattributedEventsLost = %d, want 0 so far (nothing has overflowed the pool yet)", s.unattributedEventsLost)
 	}
 
-	// One more request, past both bounds, must be dropped and counted as an
-	// unattributable loss rather than accepted.
-	overflow := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('h')}, InitProcess{PID: 1 << 30, Starttime: 999}, s.now(), evidence.CoverageSinceStart)
+	// One more request, past both bounds, must be dropped and its own
+	// already-known container downgraded rather than accepted.
+	overflowID := strings64('h')
+	overflow := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: overflowID}, InitProcess{PID: 1 << 30, Starttime: 999}, s.now(), evidence.CoverageSinceStart)
+	s.generations[overflow.key()] = overflow
+	// An unrelated, already-registered generation must never be touched by
+	// this -- downgradeContainerPartial is scoped to overflow's own
+	// container ID only.
+	unrelated := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('i')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	s.generations[unrelated.key()] = unrelated
+
 	s.submitGenConfirmRequest(genConfirmRequest{g: overflow, item: pendingRouteEvent{ev: ebpf.Event{Kind: ebpf.EventExecSuccess}}})
 	if s.genConfirmInFlight != maxConcurrentGenConfirms {
 		t.Errorf("genConfirmInFlight = %d, want unchanged at %d", s.genConfirmInFlight, maxConcurrentGenConfirms)
@@ -230,8 +290,14 @@ func TestSubmitGenConfirmRequest_ConcurrencyAndQueueBounded(t *testing.T) {
 	if overflow.pendingConfirms != 0 {
 		t.Errorf("overflow.pendingConfirms = %d, want 0 (the overflow request was never accepted)", overflow.pendingConfirms)
 	}
-	if s.unattributedEventsLost != 1 {
-		t.Errorf("unattributedEventsLost = %d, want 1 (the request that overflowed both bounds)", s.unattributedEventsLost)
+	if s.unattributedEventsLost != 0 {
+		t.Errorf("unattributedEventsLost = %d, want 0 -- a pool-capacity overflow is scoped to its own known container now, never the Sensor-wide unattributable total", s.unattributedEventsLost)
+	}
+	if overflow.eventsCoverage != evidence.CoveragePartial || !overflow.incomplete {
+		t.Errorf("overflow generation coverage=%q incomplete=%v, want partial/true", overflow.eventsCoverage, overflow.incomplete)
+	}
+	if unrelated.eventsCoverage != evidence.CoverageSinceStart || unrelated.incomplete {
+		t.Errorf("unrelated generation coverage=%q incomplete=%v, want unchanged at since_start/false", unrelated.eventsCoverage, unrelated.incomplete)
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 )
 
 func TestLoadRejectsZeroExcludedCgroupID(t *testing.T) {
-	if _, err := Load(0); err == nil {
+	if _, err := Load(0, 0); err == nil {
 		t.Fatal("Load(0) = nil error, want an error (0 means \"no exclusion\" to the BPF side)")
 	}
 }
@@ -47,7 +47,7 @@ func TestLoadAttachAndReceiveEvent(t *testing.T) {
 	// The excluded cgroup ID only has to be nonzero and not match this
 	// test's own cgroup; the test process's own exec events are exactly
 	// what it wants to observe.
-	h, err := Load(1)
+	h, err := Load(1, 0)
 	if err != nil {
 		skipIfUnprivileged(t, err)
 		t.Fatalf("Load: %v", err)

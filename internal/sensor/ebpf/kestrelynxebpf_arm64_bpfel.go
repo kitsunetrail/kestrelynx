@@ -74,8 +74,10 @@ const (
 	kestrelynxebpfMapKlDedupUsage     = "kl_dedup_usage"
 	kestrelynxebpfMapKlEvents         = "kl_events"
 	kestrelynxebpfMapKlExcludedCgroup = "kl_excluded_cgroup"
+	kestrelynxebpfMapKlHostMntNs      = "kl_host_mnt_ns"
 	kestrelynxebpfMapKlLostByCgroup   = "kl_lost_by_cgroup"
 	kestrelynxebpfMapKlLostEvents     = "kl_lost_events"
+	kestrelynxebpfMapKlPidNs          = "kl_pid_ns"
 	kestrelynxebpfMapKlSelftest       = "kl_selftest"
 	kestrelynxebpfProgKlCgroupMkdir   = "kl_cgroup_mkdir"
 	kestrelynxebpfProgKlExecSuccess   = "kl_exec_success"
@@ -143,8 +145,10 @@ type kestrelynxebpfMapSpecs struct {
 	KlDedupUsage     *ebpf.MapSpec `ebpf:"kl_dedup_usage"`
 	KlEvents         *ebpf.MapSpec `ebpf:"kl_events"`
 	KlExcludedCgroup *ebpf.MapSpec `ebpf:"kl_excluded_cgroup"`
+	KlHostMntNs      *ebpf.MapSpec `ebpf:"kl_host_mnt_ns"`
 	KlLostByCgroup   *ebpf.MapSpec `ebpf:"kl_lost_by_cgroup"`
 	KlLostEvents     *ebpf.MapSpec `ebpf:"kl_lost_events"`
+	KlPidNs          *ebpf.MapSpec `ebpf:"kl_pid_ns"`
 	KlSelftest       *ebpf.MapSpec `ebpf:"kl_selftest"`
 }
 
@@ -180,8 +184,10 @@ type kestrelynxebpfMaps struct {
 	KlDedupUsage     *ebpf.Map `ebpf:"kl_dedup_usage"`
 	KlEvents         *ebpf.Map `ebpf:"kl_events"`
 	KlExcludedCgroup *ebpf.Map `ebpf:"kl_excluded_cgroup"`
+	KlHostMntNs      *ebpf.Map `ebpf:"kl_host_mnt_ns"`
 	KlLostByCgroup   *ebpf.Map `ebpf:"kl_lost_by_cgroup"`
 	KlLostEvents     *ebpf.Map `ebpf:"kl_lost_events"`
+	KlPidNs          *ebpf.Map `ebpf:"kl_pid_ns"`
 	KlSelftest       *ebpf.Map `ebpf:"kl_selftest"`
 }
 
@@ -192,8 +198,10 @@ func (m *kestrelynxebpfMaps) Close() error {
 		m.KlDedupUsage,
 		m.KlEvents,
 		m.KlExcludedCgroup,
+		m.KlHostMntNs,
 		m.KlLostByCgroup,
 		m.KlLostEvents,
+		m.KlPidNs,
 		m.KlSelftest,
 	)
 }

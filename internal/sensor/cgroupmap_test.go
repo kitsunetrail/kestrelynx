@@ -267,3 +267,197 @@ func TestScanCgroupTreeReportsFailedOnPermissionError(t *testing.T) {
 		t.Error("scanCgroupTree did not report failed for a directory it could not read at all")
 	}
 }
+
+// TestComputeCgroupSeeds_LiveProcessAndProcesslessChildBothSeeded confirms
+// computeCgroupSeeds' own two-part coverage of a container's own cgroup
+// subtree: a live process's own cgroup path is seeded directly, the
+// container's own top-level scope is seeded via walkContainerScope, and a
+// nested child cgroup with no live process of its own at all (a docker-exec
+// session that already exited, say) is still seeded by that same bounded
+// walk — exactly the coverage scanCgroupTree's own one-time startup walk
+// already gives every cgroup, but run fresh every discovery pass instead.
+func TestComputeCgroupSeeds_LiveProcessAndProcesslessChildBothSeeded(t *testing.T) {
+	root := t.TempDir()
+	id := strings64('d')
+	scopeRel := "/system.slice/docker-" + id + ".scope"
+	liveChildRel := scopeRel + "/init.scope"     // has a live process
+	deadChildRel := scopeRel + "/exec-session-1" // no live process at all
+
+	for _, rel := range []string{liveChildRel, deadChildRel} {
+		if err := os.MkdirAll(filepath.Join(root, rel), 0o755); err != nil {
+			t.Fatalf("MkdirAll(%q): %v", rel, err)
+		}
+	}
+
+	procs := map[int]procInfo{
+		1: {PID: 1, ContainerID: id, CgroupPath: liveChildRel, CgroupPathOK: true},
+	}
+	seeds, statFailures := computeCgroupSeeds(root, procs)
+	if statFailures != 0 {
+		t.Errorf("statFailures = %d, want 0 -- every path here genuinely exists", statFailures)
+	}
+
+	scopeIno, err := statDirInode(filepath.Join(root, scopeRel))
+	if err != nil {
+		t.Fatalf("statDirInode(scope): %v", err)
+	}
+	liveChildIno, err := statDirInode(filepath.Join(root, liveChildRel))
+	if err != nil {
+		t.Fatalf("statDirInode(liveChild): %v", err)
+	}
+	deadChildIno, err := statDirInode(filepath.Join(root, deadChildRel))
+	if err != nil {
+		t.Fatalf("statDirInode(deadChild): %v", err)
+	}
+
+	byIno := make(map[uint64]cgroupSeed, len(seeds))
+	for _, s := range seeds {
+		byIno[s.ino] = s
+	}
+
+	if got, ok := byIno[liveChildIno]; !ok || got.containerID != id {
+		t.Errorf("liveChild seed = %+v, ok=%v, want containerID %q -- a live process's own cgroup path must be seeded directly", got, ok, id)
+	}
+	if got, ok := byIno[scopeIno]; !ok || got.containerID != id {
+		t.Errorf("scope seed = %+v, ok=%v, want containerID %q -- walkContainerScope must seed the container's own scope root too", got, ok, id)
+	}
+	if got, ok := byIno[deadChildIno]; !ok || got.containerID != id {
+		t.Errorf("deadChild seed = %+v, ok=%v, want containerID %q -- a nested cgroup with no live process at all must still be seeded by the bounded scope walk", got, ok, id)
+	}
+}
+
+// TestComputeCgroupSeeds_NonContainerPathSeededEmpty confirms a process
+// outside any container's own cgroup is still seeded, with containerID ""
+// (a confirmed non-container classification), exactly like scanCgroupTree's
+// own startup walk — never simply skipped.
+func TestComputeCgroupSeeds_NonContainerPathSeededEmpty(t *testing.T) {
+	root := t.TempDir()
+	rel := "/user.slice/user-1000.slice"
+	if err := os.MkdirAll(filepath.Join(root, rel), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	procs := map[int]procInfo{1: {PID: 1, ContainerID: "", CgroupPath: rel, CgroupPathOK: true}}
+	seeds, statFailures := computeCgroupSeeds(root, procs)
+	if len(seeds) != 1 || seeds[0].containerID != "" {
+		t.Errorf("seeds = %+v, want exactly one seed with containerID \"\"", seeds)
+	}
+	if statFailures != 0 {
+		t.Errorf("statFailures = %d, want 0", statFailures)
+	}
+}
+
+// TestComputeCgroupSeeds_UnusablePathNeverSeedsSensorsOwnRoot confirms a
+// process whose own CgroupPathOK is false (procfs.CgroupPathFromCgroup
+// returned false -- most commonly the kernel's own "/.."-prefixed,
+// namespace-escaped form; see that function's own doc comment) is skipped
+// entirely, never treated as CgroupPath's own zero value ("" -- the cgroup
+// root) by mistake: doing so would stat the Sensor's own cgroup root
+// (root+"" == root itself) on this other, unrelated process's own behalf,
+// wrongly seeding that unrelated container's own ID onto the Sensor's own
+// cgroup inode.
+func TestComputeCgroupSeeds_UnusablePathNeverSeedsSensorsOwnRoot(t *testing.T) {
+	root := t.TempDir()
+	otherID := strings64('u')
+	procs := map[int]procInfo{
+		1: {PID: 1, ContainerID: otherID, CgroupPath: "", CgroupPathOK: false},
+	}
+	seeds, statFailures := computeCgroupSeeds(root, procs)
+	if len(seeds) != 0 {
+		t.Errorf("seeds = %+v, want none -- an unusable cgroup path must never be seeded at all", seeds)
+	}
+	if statFailures != 0 {
+		t.Errorf("statFailures = %d, want 0 -- CgroupPathOK=false skips before ever calling stat at all", statFailures)
+	}
+}
+
+// TestComputeCgroupSeeds_GoneSinceScanIsNotCountedAsStatFailure confirms
+// os.IsNotExist (the path was simply removed between the scan that read it
+// and this stat -- ordinary cgroup churn) is never counted as a stat
+// failure at all: the next discovery pass tries again if the path is still
+// seen then, and there is nothing an operator needs to be told about.
+func TestComputeCgroupSeeds_GoneSinceScanIsNotCountedAsStatFailure(t *testing.T) {
+	root := t.TempDir()
+	procs := map[int]procInfo{1: {PID: 1, ContainerID: strings64('q'), CgroupPath: "/already-gone", CgroupPathOK: true}}
+	seeds, statFailures := computeCgroupSeeds(root, procs)
+	if len(seeds) != 0 {
+		t.Errorf("seeds = %+v, want none", seeds)
+	}
+	if statFailures != 0 {
+		t.Errorf("statFailures = %d, want 0 -- ENOENT is ordinary churn, not a failure worth counting", statFailures)
+	}
+}
+
+// TestComputeCgroupSeeds_PermissionFailureIsCounted confirms a stat failure
+// other than ENOENT (here, EACCES: a parent directory this test itself
+// makes unsearchable) is counted in the second return value -- the one
+// case, unlike ordinary churn, that never gets another chance to be seeded
+// until the underlying permission problem itself changes, so a caller needs
+// to know it happened at all (see applyDiscoveryResult, which accumulates
+// and logs it).
+func TestComputeCgroupSeeds_PermissionFailureIsCounted(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping: running as root, which ignores directory permission bits")
+	}
+	root := t.TempDir()
+	const blockedRel = "/blocked"
+	const childRel = blockedRel + "/child"
+	if err := os.MkdirAll(filepath.Join(root, childRel), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := unix.Chmod(filepath.Join(root, blockedRel), 0o000); err != nil {
+		t.Fatalf("Chmod(blocked, 0): %v", err)
+	}
+	defer os.Chmod(filepath.Join(root, blockedRel), 0o755) // restore so t.TempDir's own cleanup can remove it
+
+	procs := map[int]procInfo{1: {PID: 1, ContainerID: strings64('p'), CgroupPath: childRel, CgroupPathOK: true}}
+	seeds, statFailures := computeCgroupSeeds(root, procs)
+
+	if len(seeds) != 0 {
+		t.Errorf("seeds = %+v, want none -- the stat itself failed", seeds)
+	}
+	if statFailures != 1 {
+		t.Errorf("statFailures = %d, want 1 -- a permission failure (not ENOENT) must be counted", statFailures)
+	}
+}
+
+// TestWalkContainerScope_NonNotExistStatFailureIsCounted confirms
+// walkContainerScope's own stat failures are counted the same way
+// computeCgroupSeeds' own primary loop's are (see that function's own doc
+// comment) -- a process-less child cgroup this walk visits specifically
+// because no live process sits in it to have already had its own path
+// stat'd is exactly where a distinct permission problem can first show up,
+// and it must not go uncounted just because it happened one level down.
+// Uses ENOTDIR (a regular file sitting where a directory component is
+// expected) rather than EACCES/chmod: deterministic and independent of the
+// test's own UID, unlike a permission-bit-based failure.
+func TestWalkContainerScope_NonNotExistStatFailureIsCounted(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "not-a-directory"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	const scopePath = "/not-a-directory/docker-x.scope"
+
+	seeds, statFailures := walkContainerScope(root, scopePath, strings64('x'))
+
+	if len(seeds) != 0 {
+		t.Errorf("seeds = %+v, want none -- the outermost stat itself failed", seeds)
+	}
+	if statFailures != 1 {
+		t.Errorf("statFailures = %d, want 1 -- ENOTDIR is not ENOENT and must be counted", statFailures)
+	}
+}
+
+// TestWalkContainerScope_NotExistIsNotCountedAsStatFailure is the ENOENT
+// counterpart: a scope path simply not existing at all (ordinary churn --
+// the container's own cgroup was removed between discovery noticing it and
+// this walk) must never be counted.
+func TestWalkContainerScope_NotExistIsNotCountedAsStatFailure(t *testing.T) {
+	root := t.TempDir()
+	seeds, statFailures := walkContainerScope(root, "/system.slice/already-gone.scope", strings64('y'))
+	if len(seeds) != 0 {
+		t.Errorf("seeds = %+v, want none", seeds)
+	}
+	if statFailures != 0 {
+		t.Errorf("statFailures = %d, want 0 -- ENOENT is ordinary churn, not a failure worth counting", statFailures)
+	}
+}

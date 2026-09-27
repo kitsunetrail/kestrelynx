@@ -75,7 +75,7 @@ func totalLost(t *testing.T, h *Handle) uint64 {
 // inode), not merely by kind) to actually appear.
 // Needs real privilege (CAP_BPF/CAP_PERFMON); skipped without it.
 func TestReservationFailureResendsTheSpecificFailedTarget(t *testing.T) {
-	h, err := Load(1)
+	h, err := Load(1, 0)
 	if err != nil {
 		skipIfUnprivileged(t, err)
 		t.Fatalf("Load: %v", err)

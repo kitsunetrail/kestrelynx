@@ -426,8 +426,8 @@ func TestLoop_StalledGenerationDoesNotBlockAnothersResultsOrRepeatedHeartbeats(t
 		isolationStatus: evidence.SensorOK,
 		eventsStatus:    evidence.EventsUnavailable,
 		eventsReason:    evidence.EventsReasonKernelUnsupported,
-		discoverFn: func() (map[string]containerGroup, error) {
-			return groups, nil
+		discoverFn: func() (map[string]containerGroup, []cgroupSeed, int, error) {
+			return groups, nil, 0, nil
 		},
 		sampleFn: func(job sampleJob) sampleResult {
 			if job.genKey == realSlowKey {

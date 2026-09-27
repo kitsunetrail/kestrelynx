@@ -27,7 +27,7 @@ import (
 // unavailable — this is an environment capability check, not this test's
 // own claim about the Sensor.
 func TestFileCapabilityExecReportsElevatedCapEffective(t *testing.T) {
-	h, err := Load(1)
+	h, err := Load(1, 0)
 	if err != nil {
 		skipIfUnprivileged(t, err)
 		t.Fatalf("Load: %v", err)

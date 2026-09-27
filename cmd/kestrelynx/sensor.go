@@ -168,6 +168,7 @@ func runSensorCommand(args []string) {
 	evidenceDir := fs.String("evidence-dir", "/var/lib/kestrelynx-runtime", "directory the evidence file (procfs.json) is written to; must be writable at startup or this process exits non-zero")
 	interval := fs.Duration("interval", 30*time.Second, "how often to sample every discovered container (10s-5m)")
 	requireIsolation := fs.Bool("require-isolation", false, "do not start observing at all if any part of the isolation sequence is degraded, not just failed")
+	ringBufferBytes := fs.Uint64("ring-buffer-bytes", uint64(ebpf.DefaultRingBufferBytes), "size, in bytes, of the eBPF kl_events ring buffer; must be a multiple of the page size and a power of two. Verification/testing only — changing the default is not recommended for production use")
 	var excludeIDs stringListFlag
 	fs.Var(&excludeIDs, "exclude-id", "a container ID prefix (at least 12 hex characters) to never observe (repeatable)")
 	fs.Parse(args)
@@ -197,6 +198,7 @@ func runSensorCommand(args []string) {
 			Interval:         *interval,
 			ExcludeIDs:       excludeIDs,
 			RequireIsolation: *requireIsolation,
+			RingBufferBytes:  *ringBufferBytes,
 		})
 		return
 	}
@@ -252,6 +254,7 @@ type sensorDaemonConfig struct {
 	Interval         time.Duration
 	ExcludeIDs       []string
 	RequireIsolation bool
+	RingBufferBytes  uint64
 }
 
 // minSensorInterval and maxSensorInterval bound --interval, matching the
@@ -281,6 +284,10 @@ func runSensorDaemon(cfg sensorDaemonConfig) {
 			os.Exit(2)
 		}
 	}
+	if err := ebpf.ValidateRingBufferBytes(cfg.RingBufferBytes); err != nil {
+		fmt.Fprintf(os.Stderr, "kestrelynx sensor: --ring-buffer-bytes: %v\n", err)
+		os.Exit(2)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -290,6 +297,7 @@ func runSensorDaemon(cfg sensorDaemonConfig) {
 		Interval:         cfg.Interval,
 		ExcludeIDs:       cfg.ExcludeIDs,
 		RequireIsolation: cfg.RequireIsolation,
+		RingBufferBytes:  uint32(cfg.RingBufferBytes),
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "kestrelynx sensor: %v\n", err)
@@ -895,7 +903,7 @@ func runProbe(cfg probeConfig) probeReport {
 		if cfg.SimulateEBPFAttachFailure {
 			h, err = ebpf.LoadForFaultInjectionTest(cgID)
 		} else {
-			h, err = ebpf.Load(cgID)
+			h, err = ebpf.Load(cgID, 0)
 		}
 		loadErr = err
 		if err != nil {

@@ -39,6 +39,16 @@ type dbJob struct {
 	// index generation the candidates being looked up were observed
 	// against.
 	epoch int
+	// seq identifies one specific lookup request, from
+	// generationState.nextLookupSeq (lookup jobs only; zero and unused for a
+	// build or forget job). epoch alone cannot tell two lookups for the same
+	// generation apart when neither one has caused a rebuild in between (the
+	// ordinary case): a lookup abandoned after pendingLookupTTL and a fresh
+	// one submitted in its place would otherwise carry the identical epoch,
+	// so applyLookupResult could not tell the abandoned one's own
+	// eventually-arriving answer apart from the new one it must not be
+	// mistaken for — see applyLookupResult's own doc comment.
+	seq uint64
 
 	// build only: the process whose root this generation's index is built
 	// from, and an immutable snapshot of its outstanding ParseFailure
@@ -126,6 +136,10 @@ type dbResult struct {
 	lookupFailed bool
 	epochStale   bool
 	epoch        int
+	// seq echoes job.seq back — see dbJob.seq's own doc comment.
+	// applyLookupResult uses this, not epoch alone, to refuse a stale
+	// lookup's own delayed answer.
+	seq uint64
 
 	// fatal is set whenever the parser connection itself failed (as opposed
 	// to answering with a rejection) during this job. The dbworker goroutine
@@ -183,10 +197,11 @@ func runDBWorker(sockFD int, jobCh <-chan dbJob, resultCh chan<- dbResult) {
 			res = handleBuildJob(sockFD, job)
 		case dbJobLookup:
 			if job.epoch != epochByGenKey[job.genKey] {
-				res = dbResult{kind: dbJobLookup, genKey: job.genKey, epoch: job.epoch, epochStale: true}
+				res = dbResult{kind: dbJobLookup, genKey: job.genKey, epoch: job.epoch, seq: job.seq, epochStale: true}
 			} else {
 				res = handleLookupJob(sockFD, job)
 				res.epoch = job.epoch
+				res.seq = job.seq
 			}
 		case dbJobForget:
 			// The generation this genKey named is gone for good (see

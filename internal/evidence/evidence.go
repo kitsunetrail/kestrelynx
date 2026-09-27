@@ -86,6 +86,21 @@ type EventsInfo struct {
 	Reason     EventsReason `json:"reason,omitempty"`
 	AttachedAt time.Time    `json:"attached_at,omitempty"`
 	Lost       int64        `json:"lost"`
+	// Unclassified counts eBPF usage events (or aggregate kernel loss-
+	// counter deltas) this session could neither resolve to a specific
+	// generation nor even narrow to one plausible candidate by mount
+	// namespace, after giving discovery a fair chance to classify their own
+	// cgroup first (see internal/sensor's own classifyUnattributedExpiry).
+	// Deliberately separate from Lost and never reflected in any
+	// generation's own events_coverage: folding it into Lost would produce
+	// a self-contradictory reading (every generation reporting since_start
+	// while the Sensor-wide total is nonzero). A sustained nonzero value
+	// here is itself the operator-visible signal that this session's own
+	// cgroup classification is not keeping up (most likely
+	// tp_btf/cgroup_mkdir's own event delivery, or discovery itself, not
+	// running often enough) — not, on its own, evidence that any specific
+	// container's own evidence is incomplete.
+	Unclassified int64 `json:"unclassified"`
 }
 
 // SensorInfo is the Sensor's self-report: who it is, how long it has been

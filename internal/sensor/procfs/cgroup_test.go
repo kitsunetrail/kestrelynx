@@ -54,6 +54,20 @@ func TestContainerIDFromCgroup_CgroupfsNestedChild(t *testing.T) {
 	}
 }
 
+func TestContainerIDFromCgroup_SystemdNestedChild(t *testing.T) {
+	// The systemd cgroup driver's own equivalent of
+	// TestContainerIDFromCgroup_CgroupfsNestedChild: a process moved into a
+	// child cgroup created under the container's own scope (e.g. a container
+	// that creates and moves itself into its own nested cgroup) still names
+	// the container's own "docker-<id>.scope" unit as a path component, not
+	// only as the whole path's own suffix.
+	data := []byte("0::/system.slice/docker-" + capturedSystemdContainerID + ".scope/kl-child\n")
+	id, ok := ContainerIDFromCgroup(data)
+	if !ok || id != capturedSystemdContainerID {
+		t.Errorf("ContainerIDFromCgroup = (%q, %v), want (%q, true)", id, ok, capturedSystemdContainerID)
+	}
+}
+
 func TestContainerIDFromCgroup_NoMatch(t *testing.T) {
 	cases := []struct {
 		name string
@@ -68,6 +82,64 @@ func TestContainerIDFromCgroup_NoMatch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if id, ok := ContainerIDFromCgroup([]byte(tc.data)); ok {
 				t.Errorf("ContainerIDFromCgroup(%q) = (%q, true), want no match", tc.data, id)
+			}
+		})
+	}
+}
+
+func TestCgroupPathFromCgroup(t *testing.T) {
+	cases := []struct {
+		name     string
+		data     string
+		wantPath string
+		wantOK   bool
+	}{
+		{"root", "0::/\n", "", true},
+		{"systemd scope", "0::/system.slice/docker-" + full + ".scope\n", "/system.slice/docker-" + full + ".scope", true},
+		{"cgroupfs", "0::/docker/" + full + "\n", "/docker/" + full, true},
+		{"not cgroup v2", "1:cpu:/docker/" + full + "\n", "", false},
+		{"empty", "", "", false},
+		{
+			// The kernel's own namespace-escaped form (see
+			// CgroupPathFromCgroup's own doc comment): reading another
+			// container's own /proc/<pid>/cgroup without --cgroupns=host
+			// produces exactly this shape, confirmed directly against a
+			// real host/container pair -- every real path segment above the
+			// escape point is already gone, so this must never be treated
+			// as usable (and, critically, never as "" -- the real root --
+			// which would misdirect a caller into stat()ing the Sensor's
+			// own cgroup on this other process's own behalf).
+			"namespace-escaped", "0::/../docker-" + full + ".scope\n", "", false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path, ok := CgroupPathFromCgroup([]byte(tc.data))
+			if path != tc.wantPath || ok != tc.wantOK {
+				t.Errorf("CgroupPathFromCgroup(%q) = (%q, %v), want (%q, %v)", tc.data, path, ok, tc.wantPath, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestContainerScopePath(t *testing.T) {
+	cases := []struct {
+		name      string
+		path      string
+		wantScope string
+		wantOK    bool
+	}{
+		{"already the scope, systemd", "/system.slice/docker-" + full + ".scope", "/system.slice/docker-" + full + ".scope", true},
+		{"nested child, systemd", "/system.slice/docker-" + full + ".scope/init.scope", "/system.slice/docker-" + full + ".scope", true},
+		{"already the scope, cgroupfs", "/docker/" + full, "/docker/" + full, true},
+		{"nested child, cgroupfs", "/docker/" + full + "/init.scope", "/docker/" + full, true},
+		{"not a container path", "/user.slice/user-1000.slice", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			scope, ok := ContainerScopePath(tc.path)
+			if scope != tc.wantScope || ok != tc.wantOK {
+				t.Errorf("ContainerScopePath(%q) = (%q, %v), want (%q, %v)", tc.path, scope, ok, tc.wantScope, tc.wantOK)
 			}
 		})
 	}

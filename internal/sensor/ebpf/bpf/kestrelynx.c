@@ -221,6 +221,43 @@ struct {
 	__uint(max_entries, 1);
 } kl_excluded_cgroup SEC(".maps");
 
+// Single-slot map holding the real host's own (PID 1's) mount namespace
+// inode number, written by the loader before any program attaches (see
+// kl_excluded_cgroup's own doc comment for the same "0 means not set yet"
+// convention — a mount namespace inode is never 0). Checked by
+// kl_file_open specifically (by far this Sensor's own highest-volume hook:
+// every open, not just an exec) to drop a host-side process's own file
+// opens before doing any further work at all, not merely before submitting
+// to the ring buffer: a real Docker container's own workload always execs
+// inside a mount namespace unshared away from the host's at container
+// creation (docker-compose.sensor.yml's own pid: host shares only the PID
+// namespace, never the mount one), so an open reporting the host's own
+// mount namespace can never be a container's own usage evidence regardless
+// of which cgroup it happens to carry — see internal/sensor's own
+// resolveEventGeneration, which already discards exactly this same
+// condition userspace-side; this is the same rule enforced earlier, in the
+// kernel, for the hook it costs the most to leave unfiltered.
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__type(key, __u32);
+	__type(value, __u64);
+	__uint(max_entries, 1);
+} kl_host_mnt_ns SEC(".maps");
+
+// kl_pid_ns holds the inode number of the Sensor's own PID namespace,
+// written once by the loader before attaching. The Sensor reads /proc/<pid>
+// for these same processes, so a tgid must be the PID that namespace
+// assigns, not the one the kernel's initial PID namespace does. The two
+// differ whenever the Docker host itself runs inside a PID namespace (WSL2,
+// or Docker inside a nested namespace). Zero means "not configured" and
+// falls back to the initial namespace's tgid.
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__type(key, __u32);
+	__type(value, __u64);
+	__uint(max_entries, 1);
+} kl_pid_ns SEC(".maps");
+
 // Fallback count of events dropped because bpf_ringbuf_reserve failed, for
 // exactly the two cases that cannot be attributed to one cgroup's own
 // counter below: the cgroup ID itself could not be determined (never
@@ -288,6 +325,19 @@ static __always_inline bool kl_is_excluded(__u64 cgroup_id)
 	__u64 *excluded = bpf_map_lookup_elem(&kl_excluded_cgroup, &zero);
 
 	return excluded && *excluded != 0 && *excluded == cgroup_id;
+}
+
+// kl_is_host_mnt_ns reports whether mnt_ns_id is the real host's own mount
+// namespace, per kl_host_mnt_ns's own doc comment. Returns false (never
+// filters anything) if the loader has not written a nonzero value yet —
+// the same fail-open convention kl_is_excluded already uses for
+// kl_excluded_cgroup.
+static __always_inline bool kl_is_host_mnt_ns(__u32 mnt_ns_id)
+{
+	__u32 zero = 0;
+	__u64 *host_mnt_ns = bpf_map_lookup_elem(&kl_host_mnt_ns, &zero);
+
+	return host_mnt_ns && *host_mnt_ns != 0 && *host_mnt_ns == (__u64)mnt_ns_id;
 }
 
 static __always_inline void kl_count_lost_fallback(void)
@@ -452,6 +502,51 @@ static __always_inline int kl_current_root_identity(struct task_struct *task, __
 // process actually triggered this event. Falls back to task's own
 // start_boottime if the group leader itself could not be read at all (never
 // expected: every task, including the leader itself, has a group_leader).
+// KL_MAX_PID_NS_DEPTH bounds how many PID namespace levels kl_current_tgid
+// inspects. A container's process sits one level below the Docker host's
+// namespace, and the host itself is rarely more than a level or two deep.
+#define KL_MAX_PID_NS_DEPTH 8
+
+// kl_current_tgid returns the calling task's tgid as seen from kl_pid_ns's
+// PID namespace, read from the group leader's struct pid: each level of
+// pid->numbers[] pairs a PID with the namespace that assigned it, from the
+// initial namespace (level 0) down to the task's own. It returns 0 when no
+// inspected level belongs to that namespace (the task is outside the
+// Sensor's view), which userspace treats as "no process to prove anything
+// against". bpf_get_ns_current_pid_tgid does not fit here: it only answers
+// when the namespace is the task's own innermost one, never an ancestor.
+static __always_inline __u32 kl_current_tgid(void)
+{
+	__u32 zero = 0;
+	__u64 *want = bpf_map_lookup_elem(&kl_pid_ns, &zero);
+
+	if (!want || !*want)
+		return bpf_get_current_pid_tgid() >> 32;
+
+	struct task_struct *task = (struct task_struct *)bpf_get_current_task_btf();
+	struct pid *pid = BPF_CORE_READ(task, group_leader, thread_pid);
+
+	if (!pid)
+		return 0;
+
+	unsigned int level = BPF_CORE_READ(pid, level);
+
+	for (int i = 0; i < KL_MAX_PID_NS_DEPTH; i++) {
+		if ((unsigned int)i > level)
+			break;
+
+		struct upid up = {};
+
+		if (bpf_core_read(&up, sizeof(up), &pid->numbers[i]))
+			return 0;
+		if (!up.ns)
+			return 0;
+		if ((__u64)BPF_CORE_READ(up.ns, ns.inum) == *want)
+			return (__u32)up.nr;
+	}
+	return 0;
+}
+
 static __always_inline __u64 kl_task_start_boottime(struct task_struct *task)
 {
 	struct task_struct *leader = BPF_CORE_READ(task, group_leader);
@@ -536,7 +631,7 @@ int BPF_PROG(kl_exec_success, struct task_struct *task, pid_t old_pid, struct li
 	ev->dev = dev;
 	ev->ino = ino;
 	ev->ktime_ns = now;
-	ev->tgid = bpf_get_current_pid_tgid() >> 32;
+	ev->tgid = kl_current_tgid();
 	ev->start_boottime_ns = kl_task_start_boottime(task);
 	ev->mnt_ns_id = mnt_ns_id;
 	ev->euid = euid;
@@ -590,18 +685,20 @@ int BPF_PROG(kl_file_open, struct file *file)
 	__u8 kind = (f_flags & KL_FMODE_EXEC) ? KL_EVENT_EXEC_OPEN : KL_EVENT_FILE_OPEN;
 	struct task_struct *task = (struct task_struct *)bpf_get_current_task_btf();
 	__u32 mnt_ns_id = kl_current_mnt_ns_id(task);
+
+	if (kl_is_host_mnt_ns(mnt_ns_id))
+		return 0;
+
 	__u64 root_dev = 0, root_ino = 0;
 
 	kl_current_root_identity(task, &root_dev, &root_ino);
 
 	__u64 now = bpf_ktime_get_ns();
 	// Keyed on (mount namespace, root identity, dev, inode) — no cgroup, no
-	// kind — so an exec-open and a file-open for the same file, opened from
-	// the same root, share one suppression window: both exist here only to
-	// give a success event's numeric dev/inode a path (see this file's
-	// header comment), a fact that does not depend on which of the two open
-	// kinds last reported it, but does depend on which root produced the
-	// path string (see this function's own doc comment above).
+	// path — so an exec-open and a file-open for the same file, opened from
+	// the same root, share the one suppression window this key gates below,
+	// and a file's own rename (dev/inode unchanged) is not itself a reason
+	// to lift it.
 	struct kl_path_key key = {
 		.mnt_ns_id = mnt_ns_id,
 		.root_dev = root_dev,
@@ -610,7 +707,29 @@ int BPF_PROG(kl_file_open, struct file *file)
 		.ino = ino,
 	};
 
-	if (kl_path_seen(&key, now))
+	// KL_EVENT_EXEC_OPEN is never suppressed by kl_path_seen, unlike
+	// KL_EVENT_FILE_OPEN: this key carries no path, so once anything at all
+	// opens a given (dev, inode) once, kl_path_seen's own suppression window
+	// would otherwise keep reporting whatever path was current at that
+	// moment — including one from before a later rename(2), since a rename
+	// changes no (dev, inode) at all and triggers no open of its own for
+	// this hook to ever see. A file-open a moment before a real exec of the
+	// exact same file (dpkg's own write-then-rename-into-place is exactly
+	// this shape: the temporary name's own write-open would otherwise be
+	// "seen" first) would then leave every later exec of that file attributed
+	// to whatever stale path that earlier open reported, for this key's
+	// whole suppression window — confirmed directly against a real container
+	// (a copied binary opened once under a temporary name, renamed into
+	// place, then exec'd repeatedly: the correlation table kept the
+	// temporary name). An exec is inherently rate-limited by how often a
+	// process can actually be created, unlike a plain file-open (mmap-driven
+	// library resolution, say, can open the same file far more often) — so
+	// exempting only this one kind from the check keeps its own report
+	// always current without meaningfully changing this hook's overall rate
+	// for its other, still-suppressed callers. kl_path_mark below still runs
+	// unconditionally, so a plain file-open of the same (dev, inode) right
+	// after an exec-open still benefits from suppression as before.
+	if (kind == KL_EVENT_FILE_OPEN && kl_path_seen(&key, now))
 		return 0;
 
 	struct kl_event *ev = bpf_ringbuf_reserve(&kl_events, sizeof(*ev), 0);
@@ -631,8 +750,8 @@ int BPF_PROG(kl_file_open, struct file *file)
 	ev->mnt_ns_id = mnt_ns_id;
 
 	if (kind == KL_EVENT_EXEC_OPEN) {
-		ev->tgid = bpf_get_current_pid_tgid() >> 32;
-		ev->start_boottime_ns = BPF_CORE_READ(task, start_boottime);
+		ev->tgid = kl_current_tgid();
+		ev->start_boottime_ns = kl_task_start_boottime(task);
 
 		const struct cred *cred = BPF_CORE_READ(task, cred);
 
@@ -724,7 +843,7 @@ int BPF_PROG(kl_mmap_success, struct file *file, unsigned long addr, unsigned lo
 	ev->ino = ino;
 	ev->ktime_ns = now;
 	ev->prot = (__u32)prot;
-	ev->tgid = bpf_get_current_pid_tgid() >> 32;
+	ev->tgid = kl_current_tgid();
 	ev->start_boottime_ns = kl_task_start_boottime(task);
 	ev->mnt_ns_id = mnt_ns_id;
 	ev->euid = euid;

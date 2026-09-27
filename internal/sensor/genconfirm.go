@@ -23,11 +23,12 @@ const genConfirmChCapacity = 1024
 // maxQueuedPathResolves bound the maps-fallback pool (pathresolve.go): at
 // most maxConcurrentGenConfirms goroutines run at once (each one a single,
 // bounded procfs read — see confirmGenerationAlive), and at most
-// maxQueuedGenConfirms requests wait for a slot; past that, the request is
-// counted as an unattributable loss instead (see submitGenConfirmRequest's
-// own doc comment on why this pool's own overflow is a Sensor-side capacity
-// failure, unlike a pendingRouteEvent that simply expires still in the
-// routePending state). ASSUMED, the same order of magnitude as the
+// maxQueuedGenConfirms requests wait for a slot; past that, the request's
+// own already-known container is downgraded instead (see
+// submitGenConfirmRequest's own doc comment on why this pool's own overflow
+// is a Sensor-side capacity failure, unlike a pendingRouteEvent that simply
+// expires still in the routePending state). ASSUMED, the same order of
+// magnitude as the
 // maps-fallback pool: confirmation is meant to be a rare disambiguation step
 // (one per distinct restart race, since a boot-tick-matched candidate
 // already bounded by a known successor never needs confirming at all — see
@@ -72,9 +73,9 @@ type genConfirmResult struct {
 
 // maxGenConfirmWaiters bounds genConfirmWaiters per generation
 // (generationState) the same way maxQueuedGenConfirms bounds the pool as a
-// whole: past this, a coalesced item is counted as an unattributable loss
-// instead of waiting indefinitely for an answer that, once it arrives, would
-// still only ever apply to it once anyway.
+// whole: past this, a coalesced item's own already-known container is
+// downgraded instead of waiting indefinitely for an answer that, once it
+// arrives, would still only ever apply to it once anyway.
 const maxGenConfirmWaiters = 4096
 
 // submitGenConfirmRequest either coalesces req.item onto an already-
@@ -84,22 +85,23 @@ const maxGenConfirmWaiters = 4096
 // (PID, starttime) is never dispatched), starts req's own liveness check
 // immediately (no confirmation outstanding for req.g, and a concurrency slot
 // is free), queues it (a slot is not, but the pool's own queue is not yet
-// full), or — every one of the above is unavailable — counts req.item as an
-// unattributable loss (recordUnattributableEventLoss) instead of ever
-// dispatching it. req.g is, by construction, a real, boot-tick-matched
-// candidate for a real, already-classified, non-excluded container (see
+// full), or — every one of the above is unavailable — downgrades req.g's
+// own container (downgradeContainerPartial) instead of ever dispatching it.
+// req.g is, by construction, a real, boot-tick-matched candidate for a
+// real, already-classified, non-excluded container (see
 // resolveEventGeneration's own routeUnconfirmed) — never a container this
 // session has simply never discovered at all (that case is routePending,
 // which never even reaches this pool) — so dropping it here for want of a
-// confirmation slot (or a waiter slot) is exactly the kind of Sensor-side
-// capacity failure recordUnattributableEventLoss exists to count, not a
-// "too short-lived to observe" case to discard silently. Whenever a fresh
-// confirmation is actually accepted (immediately or queued, never
-// coalesced), req.g's own pendingConfirms is incremented here, exactly
-// once, and only ever decremented by applyGenConfirmResult once this exact
-// request's own goroutine answers — at which point every coalesced waiter
-// receives the exact same answer. See maxConcurrentGenConfirms/
-// maxQueuedGenConfirms/maxGenConfirmWaiters for this pool's own bounds.
+// confirmation slot (or a waiter slot) is a genuine Sensor-side capacity
+// failure for a specific, already-known container, not a "too short-lived
+// to observe" case to discard silently, and never a reason to downgrade any
+// other container this session tracks. Whenever a fresh confirmation is
+// actually accepted (immediately or queued, never coalesced), req.g's own
+// pendingConfirms is incremented here, exactly once, and only ever
+// decremented by applyGenConfirmResult once this exact request's own
+// goroutine answers — at which point every coalesced waiter receives the
+// exact same answer. See maxConcurrentGenConfirms/maxQueuedGenConfirms/
+// maxGenConfirmWaiters for this pool's own bounds.
 func (s *Session) submitGenConfirmRequest(req genConfirmRequest) {
 	if req.g.pendingConfirms > 0 {
 		// A confirmation for this exact generation is already outstanding;
@@ -111,7 +113,7 @@ func (s *Session) submitGenConfirmRequest(req genConfirmRequest) {
 		// generation yet) from saturating this pool's own concurrency/queue
 		// bound on their own.
 		if len(req.g.genConfirmWaiters) >= maxGenConfirmWaiters {
-			s.recordUnattributableEventLoss(1)
+			s.downgradeContainerPartial(req.g.container.ID)
 			return
 		}
 		req.g.genConfirmWaiters = append(req.g.genConfirmWaiters, req.item)
@@ -119,7 +121,7 @@ func (s *Session) submitGenConfirmRequest(req genConfirmRequest) {
 	}
 	if s.genConfirmInFlight >= maxConcurrentGenConfirms {
 		if len(s.genConfirmQueue) >= maxQueuedGenConfirms {
-			s.recordUnattributableEventLoss(1)
+			s.downgradeContainerPartial(req.g.container.ID)
 			return
 		}
 		req.g.pendingConfirms++
@@ -262,7 +264,7 @@ func (s *Session) applyGenConfirmResult(res genConfirmResult) {
 		s.requestEarlyDiscovery(now)
 		for _, item := range items {
 			if now.Sub(item.receivedAt) > pendingRouteEventTTL {
-				s.recordUnattributableEventLoss(1)
+				s.downgradeContainerPartial(res.g.container.ID)
 				continue
 			}
 			s.queuePendingRouteEvent(item)
@@ -275,7 +277,7 @@ func (s *Session) applyGenConfirmResult(res genConfirmResult) {
 		res.g.lastAliveNsOK = true
 	}
 	for _, item := range items {
-		g2, outcome2 := s.resolveEventGeneration(item.ev.CgroupID, item.ev.StartBoottimeNs, item.ev.TGID)
+		g2, outcome2 := s.resolveEventGeneration(item.ev.CgroupID, item.ev.StartBoottimeNs, item.ev.TGID, uint32(item.ev.MountNamespaceID))
 		s.finalizeRoutedItem(g2, outcome2, item, now)
 	}
 }

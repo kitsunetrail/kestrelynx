@@ -16,6 +16,26 @@ type procInfo struct {
 	PPID        int
 	Starttime   int64
 	ContainerID string // "" when this process's cgroup names no Docker container
+	// CgroupPath is this process's own cgroup v2 path, normalized exactly
+	// like scanCgroupTree's own convention (procfs.CgroupPathFromCgroup) —
+	// "" for the cgroup root. Meaningful only when CgroupPathOK is true (see
+	// that field's own doc comment); used by computeCgroupSeeds to reseed
+	// cgroupRoute every discovery pass, independent of whether
+	// tp_btf/cgroup_mkdir's own events ever reach this Sensor for this
+	// process's own cgroup at all (see cgroupSeed's own doc comment).
+	CgroupPath string
+	// CgroupPathOK is CgroupPathFromCgroup's own second return value: false
+	// means CgroupPath must not be used for seeding at all — either this
+	// process's own /proc/<pid>/cgroup content was not recognizable cgroup
+	// v2 output, or (far more commonly, whenever the Sensor's own cgroup
+	// namespace is not the host's — see CgroupPathFromCgroup's own doc
+	// comment) it was a "/.."-prefixed, namespace-escaped path with its own
+	// real segments already stripped by the kernel. Without this flag,
+	// computeCgroupSeeds would treat that "/.." case identically to a
+	// genuine "" (the cgroup root) and wrongly stat the Sensor's own cgroup
+	// root on this *other* process's own behalf, corrupting cgroupRoute's
+	// own entry for the Sensor's own, real cgroup ID.
+	CgroupPathOK bool
 }
 
 // scanResult is one host-wide /proc pass: every process this Sensor could
@@ -65,6 +85,11 @@ func scanProcs() (scanResult, error) {
 
 // readProcInfo reads one process's cgroup and stat, classifying the first
 // failure it hits (Open, then Cgroup, then PPID) via procfs.Classify.
+// /proc/<pid>/cgroup is read exactly once (h.Cgroup()) and both the
+// container ID (ContainerIDFromCgroup) and the raw cgroup path
+// (CgroupPathFromCgroup) are derived from that same read, rather than
+// reading it twice — one via the ContainerID field this function already
+// needed, one new for CgroupPath.
 func readProcInfo(pid int) (procInfo, procfs.Outcome) {
 	h, err := procfs.Open(pid)
 	if err != nil {
@@ -72,15 +97,20 @@ func readProcInfo(pid int) (procInfo, procfs.Outcome) {
 	}
 	defer h.Close()
 
-	cid, _, err := h.ContainerID()
+	data, err := h.Cgroup()
 	if err != nil {
 		return procInfo{}, procfs.Classify(err)
 	}
+	cid, _ := procfs.ContainerIDFromCgroup(data)
+	cgroupPath, cgroupPathOK := procfs.CgroupPathFromCgroup(data)
 	ppid, err := h.PPID()
 	if err != nil {
 		return procInfo{}, procfs.Classify(err)
 	}
-	return procInfo{PID: pid, PPID: ppid, Starttime: h.Starttime(), ContainerID: cid}, procfs.OutcomeOK
+	return procInfo{
+		PID: pid, PPID: ppid, Starttime: h.Starttime(), ContainerID: cid,
+		CgroupPath: cgroupPath, CgroupPathOK: cgroupPathOK,
+	}, procfs.OutcomeOK
 }
 
 // containerGroup is every host process scanProcs found belonging to one

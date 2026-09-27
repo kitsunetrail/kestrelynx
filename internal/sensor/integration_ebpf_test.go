@@ -24,11 +24,14 @@ package sensor_test
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/kitsunetrail/kestrelynx/internal/evidence"
 )
@@ -46,11 +49,76 @@ func findGeneration(t *testing.T, snap evidence.Snapshot, containerID string) ev
 	return evidence.Generation{}
 }
 
-// TestSensorIntegrationEBPF_ShortLivedProcessesBecomeInUseViaEvents covers
-// this stage's own headline completion condition: a container whose only
-// OS-package activity is a short-lived curl/git-style exec (gone long
-// before any 10s sample could ever observe it in /proc) must still show
-// that package in_use, evidenced by exec_event, once eBPF is attached.
+// waitForGenerationCondition polls the evidence file until containerID's own
+// generation satisfies check, or timeout elapses. It returns the last
+// generation observed for containerID either way (ok reports whether check
+// was ever satisfied), so a caller's own failure message can show what was
+// actually recorded instead of nothing at all.
+//
+// This exists because a generation merely existing (waitForGenerations' own
+// condition) proves only that discovery has noticed the container — it says
+// nothing about whether whatever this test is actually waiting on (an
+// eBPF-derived exec/library-load event landing, in particular) has happened
+// yet. Checking a freshly-appeared generation's own Executables/OSPackages
+// immediately, as an earlier version of every caller below did, races
+// whatever real-world action (an apt-get install completing, a dlopen
+// happening) the test's own target container still needs time to perform.
+func waitForGenerationCondition(t *testing.T, evidenceDir, containerID string, timeout time.Duration, check func(evidence.Generation) bool) (evidence.Generation, bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	r := evidence.NewReader(evidenceDir)
+	var last evidence.Generation
+	for {
+		snap, err := r.Read(time.Now(), nil)
+		if err == nil {
+			if gens := generationsByContainer(snap)[containerID]; len(gens) > 0 {
+				g := gens[len(gens)-1]
+				last = g
+				if check(g) {
+					return g, true
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			return last, false
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+// TestSensorIntegrationEBPF_ShortLivedProcessesBecomesInUse covers a file
+// written under a temporary name and renamed into place before being
+// exec'd — exactly the shape dpkg's own install mechanism uses for every
+// package file it installs (write "<path>.dpkg-new", then rename(2) it onto
+// "<path>") — and confirms the resulting exec_event is recorded under the
+// renamed, exec'd path, not whatever path an earlier open of the same (dev,
+// inode) reported before the rename. rename(2) changes no (dev, inode) at
+// all and triggers no security_file_open of its own for kl_file_open to
+// ever see, so the only way the later exec's own path correlation can be
+// correct is if the earlier temporary-name open never permanently "claims"
+// that (dev, inode) for kl_path_seen's own suppression window — confirmed
+// directly against a real container: a binary opened once under a temporary
+// name and renamed into place kept reporting that temporary name for every
+// exec of it afterward, until KL_EVENT_EXEC_OPEN was exempted from
+// kl_path_seen's own suppression window (see bpf/kestrelynx.c's own comment
+// on that hook for why).
+//
+// The Sensor is started first, and this test waits for its own eBPF to
+// attach before the target container ever runs, precisely so this race is
+// actually exercised rather than accidentally sidestepped: the target's own
+// cp+mv+exec sequence below runs essentially immediately once the container
+// starts, and if the Sensor's own kl_file_open hook were not already
+// attached by then, it would simply never see the pre-rename open at all —
+// this test could then pass for the wrong reason (nothing to suppress
+// wrongly, not because the exemption actually works) even against a build
+// that reintroduced the original bug. With the Sensor already attached,
+// kl_file_open reliably records the temporary name's own open in
+// kl_dedup_path's suppression window before the rename ever happens; without
+// KL_EVENT_EXEC_OPEN's own exemption from that window, the later exec-open
+// for the exact same (dev, inode) would be suppressed outright, leaving
+// events.go's own path-correlation table still holding the stale, pre-rename
+// path when the exec_success event arrives — exactly the regression this
+// test's own assertion below would catch.
 func TestSensorIntegrationEBPF_ShortLivedProcessesBecomesInUse(t *testing.T) {
 	requireDocker(t)
 	runID := fmt.Sprintf("klsit-shortlived-%d", time.Now().UnixNano())
@@ -58,48 +126,54 @@ func TestSensorIntegrationEBPF_ShortLivedProcessesBecomesInUse(t *testing.T) {
 	defer dockerBestEffort(t, "rmi", "-f", imageTag)
 	defer cleanupIntegrationContainers(t, runID)
 
-	// A container that stays alive (so a generation exists to attribute
-	// against) but only ever *exec*s curl and git in short bursts, never
-	// running either as its own long-lived process.
-	containerID := runTarget(t, runID, "debian:12-slim", "sh", "-c",
-		"apt-get update >/dev/null 2>&1; apt-get install -y --no-install-recommends curl git >/dev/null 2>&1; "+
-			"while true; do curl --version >/dev/null 2>&1; git --version >/dev/null 2>&1; sleep 1; done")
-
 	evidenceDir := t.TempDir()
 	if err := os.Chmod(evidenceDir, 0o777); err != nil {
 		t.Fatalf("chmod evidence dir: %v", err)
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
-	// Generous timeout: the target container's own apt-get install has to
-	// finish before curl/git even exist to exec.
-	snap, err := waitForGenerations(t, evidenceDir, 1, 5*time.Minute)
+	preTarget, err := waitForGenerations(t, evidenceDir, 0, 150*time.Second)
 	if err != nil {
-		t.Fatalf("waiting for evidence: %v", err)
+		t.Fatalf("waiting for the Sensor's own first snapshot before the target container even starts: %v", err)
 	}
-	gen := findGeneration(t, snap, containerID)
+	if preTarget.Sensor.Events.Status != evidence.EventsOK {
+		t.Fatalf("sensor.events.status = %q before the target container even starts, want ok — "+
+			"this test cannot mean anything about the rename race without eBPF already attached", preTarget.Sensor.Events.Status)
+	}
+
+	containerID := runTarget(t, runID, "debian:12-slim", "sh", "-c", `
+set -e
+cp /bin/true /tmp/kl-renamed.tmp
+mv /tmp/kl-renamed.tmp /tmp/kl-renamed.final
+while true; do /tmp/kl-renamed.final; sleep 1; done`)
+
+	// Waited for, rather than checked against the first generation to
+	// appear: this generation existing already (waitForGenerations' own
+	// condition) says nothing about whether the target's own rename and
+	// first loop iteration have happened yet.
+	gen, ok := waitForGenerationCondition(t, evidenceDir, containerID, 150*time.Second, func(g evidence.Generation) bool {
+		for _, e := range g.Executables {
+			if e.Path == "/tmp/kl-renamed.final" {
+				if _, ok := e.Kinds[evidence.KindExecEvent]; ok {
+					return true
+				}
+			}
+		}
+		return false
+	})
+	if !ok {
+		t.Fatalf("executables = %+v, want /tmp/kl-renamed.final recorded with exec_event under its own, post-rename path", gen.Executables)
+	}
+	for _, e := range gen.Executables {
+		if e.Path == "/tmp/kl-renamed.tmp" {
+			t.Errorf("executables include the pre-rename path %q, want only the renamed /tmp/kl-renamed.final", e.Path)
+		}
+	}
 
 	if gen.EventsCoverage == evidence.CoverageNone {
 		t.Fatal("events_coverage = none, want since_start/partial — eBPF must have attached for this test to mean anything")
-	}
-
-	sawCurl, sawGit := false, false
-	for _, e := range gen.Executables {
-		if strings.Contains(e.Path, "curl") {
-			if _, ok := e.Kinds[evidence.KindExecEvent]; ok {
-				sawCurl = true
-			}
-		}
-		if strings.Contains(e.Path, "git") {
-			if _, ok := e.Kinds[evidence.KindExecEvent]; ok {
-				sawGit = true
-			}
-		}
-	}
-	if !sawCurl || !sawGit {
-		t.Errorf("executables = %+v, want curl and git both recorded with exec_event", gen.Executables)
 	}
 }
 
@@ -121,7 +195,16 @@ func TestSensorIntegrationEBPF_DlopenedLibraryBecomesInUse(t *testing.T) {
 	// python3's ctypes.CDLL both dlopen()s and (implicitly, on interpreter
 	// exit) dlclose()s libz — a mapping sampling alone would only catch by
 	// coincidence if a sample landed during the brief window it stayed
-	// mapped.
+	// mapped. This dlopens the exact same, real, package-owned libz.so.1
+	// every iteration (never a copy elsewhere: this test's own
+	// package-database lookup depends on the path being the real one) —
+	// bpf/kestrelynx.c's own kl_usage_seen dedup means only the first such
+	// mmap_success is ever a real kernel event, however many times the loop
+	// repeats it, but a usage event that arrives before this generation's
+	// own mount view is confirmed is now held and replayed once it is,
+	// rather than discarded (dispatchUsageEvent's own doc comment), so
+	// there is no need to delay this loop's own first iteration to dodge
+	// that window.
 	containerID := runTarget(t, runID, "python:3.12-slim", "sh", "-c",
 		"while true; do python3 -c \"import ctypes; ctypes.CDLL('libz.so.1')\"; sleep 2; done")
 
@@ -131,27 +214,38 @@ func TestSensorIntegrationEBPF_DlopenedLibraryBecomesInUse(t *testing.T) {
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
-
-	snap, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second)
-	if err != nil {
-		t.Fatalf("waiting for evidence: %v", err)
-	}
-	gen := findGeneration(t, snap, containerID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	// Debian's own zlib runtime package is named zlib1g; this identifies
 	// specifically that this is the package libz.so.1 actually belongs to,
 	// not any package that merely happens to carry a library_load_event.
-	var zlib *evidence.OSPackageEvidence
-	for i := range gen.OSPackages {
-		if strings.Contains(gen.OSPackages[i].Name, "zlib") {
-			zlib = &gen.OSPackages[i]
+	// Waited for, rather than checked against the first generation to
+	// appear: the mmap_success event's own OS-package candidate cannot
+	// resolve to zlib1g until this container's package-database index has
+	// itself finished building (indexReady) — a generation existing already
+	// says nothing about that — and, independently, python3's own dlopen
+	// loop needs at least one iteration to actually run first.
+	findZlib := func(gen evidence.Generation) *evidence.OSPackageEvidence {
+		for i := range gen.OSPackages {
+			if strings.Contains(gen.OSPackages[i].Name, "zlib") {
+				return &gen.OSPackages[i]
+			}
 		}
+		return nil
 	}
-	if zlib == nil {
-		t.Fatalf("os_packages = %+v, want a zlib1g package recorded at all", gen.OSPackages)
-	}
-	if _, ok := zlib.Kinds[evidence.KindLibraryLoadEvent]; !ok {
+	gen, ok := waitForGenerationCondition(t, evidenceDir, containerID, 150*time.Second, func(g evidence.Generation) bool {
+		zlib := findZlib(g)
+		if zlib == nil {
+			return false
+		}
+		_, hasLoadEvent := zlib.Kinds[evidence.KindLibraryLoadEvent]
+		return hasLoadEvent
+	})
+	if !ok {
+		zlib := findZlib(gen)
+		if zlib == nil {
+			t.Fatalf("os_packages = %+v, want a zlib1g package recorded at all", gen.OSPackages)
+		}
 		t.Errorf("zlib package = %+v, want library_load_event recorded for it specifically", zlib)
 	}
 }
@@ -178,7 +272,7 @@ func TestSensorIntegrationEBPF_SensorOwnReadsNeverAppearInEvidence(t *testing.T)
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	snap, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second)
 	if err != nil {
@@ -234,9 +328,21 @@ for w in $(seq 1 %[1]d); do
 done
 wait`, floodWorkers, floodPerWorker)
 
+// ringBufferOverflowTestBytes is the kl_events ring buffer size this Sensor
+// is started with for TestSensorIntegrationEBPF_RingBufferOverflowMarksPartial:
+// one host page, the smallest size ebpf.ValidateRingBufferBytes ever accepts.
+// A page this small holds only a handful of struct kl_event records, so
+// floodScript's own back-to-back exec churn is guaranteed to outrun the
+// userspace reader and force a genuine kernel-side reservation failure,
+// regardless of how fast a given host happens to drain the ring buffer at
+// its default 2 MiB size.
+var ringBufferOverflowTestBytes = uint64(unix.Getpagesize())
+
 // TestSensorIntegrationEBPF_RingBufferOverflowMarksPartial deliberately
-// floods a container with far more exec churn than the ring buffer (2 MiB,
-// bpf/kestrelynx.c's kl_events) can hold between drains, and confirms:
+// floods a container with far more exec churn than the ring buffer (started
+// deliberately small — see ringBufferOverflowTestBytes — rather than
+// bpf/kestrelynx.c's own compiled-in 2 MiB default) can hold between drains,
+// and confirms:
 //
 //  1. the target container is registered since_start (eBPF was already
 //     attached before it even started, since the Sensor is started first
@@ -255,10 +361,11 @@ wait`, floodWorkers, floodPerWorker)
 // triggered afterward, via `docker exec` into the by-then-already-running
 // target, once its own since_start generation is confirmed.
 //
-// floodWorkers*floodPerWorker (16000) distinct dev/inode pairs, well over
-// twice the 2 MiB ring buffer's own few-thousand-record capacity, is what
-// actually produces kernel-level (ring-buffer reservation failure) loss
-// here. This test has no exported way to read the Sensor's own
+// floodWorkers*floodPerWorker (16000) distinct dev/inode pairs, all racing
+// to reserve space in a ring buffer sized to hold only a handful of records
+// at once (ringBufferOverflowTestBytes), is what actually produces
+// kernel-level (ring-buffer reservation failure) loss here. This test has no
+// exported way to read the Sensor's own
 // kl_lost_events/kl_lost_by_cgroup BPF maps directly (the Sensor runs as a
 // separate process in a separate container) and the evidence file's own
 // events_lost is deliberately a single blended total (kernel-side and
@@ -280,10 +387,14 @@ func TestSensorIntegrationEBPF_RingBufferOverflowMarksPartial(t *testing.T) {
 		t.Fatalf("chmod evidence dir: %v", err)
 	}
 
-	// The Sensor starts first, with no target container to observe yet.
-	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
+	// The Sensor starts first, with no target container to observe yet —
+	// deliberately with a one-page kl_events ring buffer (see
+	// ringBufferOverflowTestBytes) so the flood below is guaranteed to
+	// overflow it.
+	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir,
+		"--ring-buffer-bytes", strconv.FormatUint(ringBufferOverflowTestBytes, 10))
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	// want=0: any successful read at all (the Sensor's own first heartbeat
 	// write) is enough, since no container exists yet to produce a
@@ -446,7 +557,7 @@ func TestSensorIntegrationEBPF_UnavailableDegradesToSamplingOnly(t *testing.T) {
 	}
 	sensorID := dockerT(t, args...)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	snap, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second)
 	if err != nil {
@@ -490,7 +601,7 @@ while true; do /tmp/kl-bad-shebang || true; sleep 1; done`)
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	snap, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second)
 	if err != nil {
@@ -530,31 +641,39 @@ while true; do su -s /bin/sh klunpriv -c /tmp/kl-setuid-id; sleep 1; done`)
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
-	snap, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second)
-	if err != nil {
-		t.Fatalf("waiting for evidence: %v", err)
-	}
-	gen := findGeneration(t, snap, containerID)
-
-	var exe *evidence.ExecutableEvidence
-	for i := range gen.Executables {
-		if strings.Contains(gen.Executables[i].Path, "kl-setuid-id") {
-			exe = &gen.Executables[i]
+	// Waited for, rather than checked against the first generation to
+	// appear: the target container's own useradd setup runs before the su
+	// loop ever execs kl-setuid-id for the first time, and a generation can
+	// already exist (discovery having merely noticed the container) well
+	// before that setup finishes.
+	rootSetuidObserved := func(g evidence.Generation) bool {
+		for i := range g.Executables {
+			exe := &g.Executables[i]
+			if !strings.Contains(exe.Path, "kl-setuid-id") {
+				continue
+			}
+			for _, o := range exe.Observations {
+				if o.EffectiveUID == 0 {
+					return true
+				}
+			}
 		}
+		return false
 	}
-	if exe == nil {
-		t.Fatalf("executables = %+v, want kl-setuid-id recorded", gen.Executables)
-	}
-	sawRoot := false
-	for _, o := range exe.Observations {
-		if o.EffectiveUID == 0 {
-			sawRoot = true
+	gen, ok := waitForGenerationCondition(t, evidenceDir, containerID, 150*time.Second, rootSetuidObserved)
+	if !ok {
+		var setuidExe *evidence.ExecutableEvidence
+		for i := range gen.Executables {
+			if strings.Contains(gen.Executables[i].Path, "kl-setuid-id") {
+				setuidExe = &gen.Executables[i]
+			}
 		}
-	}
-	if !sawRoot {
-		t.Errorf("observations = %+v, want at least one with EffectiveUID 0 (the setuid binary's post-exec identity)", exe.Observations)
+		if setuidExe == nil {
+			t.Fatalf("executables = %+v, want kl-setuid-id recorded", gen.Executables)
+		}
+		t.Errorf("kl-setuid-id executable = %+v, want an observation with EffectiveUID 0 (the setuid binary's post-exec identity)", *setuidExe)
 	}
 }
 
@@ -570,17 +689,21 @@ func TestSensorIntegrationEBPF_ChildCgroupAttributesToAncestorContainer(t *testi
 	defer dockerBestEffort(t, "rmi", "-f", imageTag)
 	defer cleanupIntegrationContainers(t, runID)
 
-	// Requires the container's own cgroup namespace to allow creating a
-	// child directory under its own cgroup2 mount (true for Docker's
-	// default cgroup namespacing on a cgroup v2 host) — mkdir a child
-	// cgroup, move this shell into it, then keep execing. Neither step is
-	// allowed to fail silently (no "|| true"): if cgroup delegation is not
-	// actually available in this environment, the container itself must
-	// exit non-zero and this test must fail loudly, rather than silently
-	// falling back to running from the container's own top-level cgroup,
-	// which would let this test pass without ever having exercised the
-	// child-cgroup attribution it exists to check at all.
-	containerID := runTarget(t, runID, "debian:12-slim", "sh", "-c", `
+	// Creating a child cgroup directory requires a writable /sys/fs/cgroup —
+	// this Docker Engine mounts it read-only for an ordinary container
+	// regardless of any individual --cap-add (confirmed directly: neither
+	// --cap-add SYS_ADMIN nor --cgroupns=host makes it writable, only
+	// --privileged does — see runPrivilegedTarget's own doc comment), so the
+	// target runs privileged here specifically to get that write access, not
+	// to relax anything about what this test itself is checking. Neither the
+	// mkdir nor the cgroup.procs write is allowed to fail silently (no
+	// "|| true"): if cgroup delegation is not actually available in this
+	// environment, the container itself must exit non-zero and this test
+	// must fail loudly, rather than silently falling back to running from
+	// the container's own top-level cgroup, which would let this test pass
+	// without ever having exercised the child-cgroup attribution it exists
+	// to check at all.
+	containerID := runPrivilegedTarget(t, runID, "debian:12-slim", "sh", "-c", `
 set -e
 mkdir /sys/fs/cgroup/kl-child
 echo $$ > /sys/fs/cgroup/kl-child/cgroup.procs
@@ -592,22 +715,127 @@ while true; do /usr/bin/env true; sleep 1; done`)
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
-	snap, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second)
-	if err != nil {
-		t.Fatalf("waiting for evidence: %v", err)
-	}
-	gen := findGeneration(t, snap, containerID)
-	found := false
-	for _, e := range gen.Executables {
-		if strings.Contains(e.Path, "env") || strings.Contains(e.Path, "true") {
-			if _, ok := e.Kinds[evidence.KindExecEvent]; ok {
-				found = true
+	// Waited for, rather than checked against the first generation to
+	// appear: the container's own mkdir/cgroup.procs setup, and then the
+	// first iteration of its own exec loop, both need time to actually run
+	// after discovery first notices the container.
+	gen, ok := waitForGenerationCondition(t, evidenceDir, containerID, 150*time.Second, func(g evidence.Generation) bool {
+		for _, e := range g.Executables {
+			if strings.Contains(e.Path, "env") || strings.Contains(e.Path, "true") {
+				if _, ok := e.Kinds[evidence.KindExecEvent]; ok {
+					return true
+				}
 			}
 		}
-	}
-	if !found {
+		return false
+	})
+	if !ok {
 		t.Errorf("executables = %+v, want the child-cgroup process's own exec_event attributed to this container", gen.Executables)
+	}
+}
+
+// TestSensorIntegrationEBPF_HostNoiseDoesNotTaintTrackedContainer covers
+// real host-side noise running concurrently (a `docker build` loop, forcing
+// fresh, short-lived intermediate containers — exactly the kind of
+// unclassifiable cgroup churn confirmed to reach this Sensor's own eBPF
+// hooks): an actively-tracked container's own generation must still report
+// events_coverage=since_start and incomplete=false, sustained across
+// several consecutive reads, not downgraded the moment any noise happens to
+// arrive regardless of whether that noise's own cgroup can ever be
+// classified at all.
+func TestSensorIntegrationEBPF_HostNoiseDoesNotTaintTrackedContainer(t *testing.T) {
+	requireDocker(t)
+	runID := fmt.Sprintf("klsit-hostnoise-%d", time.Now().UnixNano())
+	imageTag := buildIntegrationImage(t, runID)
+	defer dockerBestEffort(t, "rmi", "-f", imageTag)
+	defer cleanupIntegrationContainers(t, runID)
+
+	evidenceDir := t.TempDir()
+	if err := os.Chmod(evidenceDir, 0o777); err != nil {
+		t.Fatalf("chmod evidence dir: %v", err)
+	}
+	// The Sensor starts first, then the target -- exactly the "container
+	// tracked from birth" case events_coverage=since_start exists to report.
+	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
+	defer dockerBestEffort(t, "rm", "-f", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
+
+	// Waited for explicitly, rather than starting the target right after the
+	// Sensor container itself starts: the Sensor's own eBPF attach happens
+	// partway through its own startup sequence, after the container itself is
+	// already running, so starting the target too soon can let its own init
+	// process begin before eBPF has actually attached -- which classifies the
+	// resulting generation partial from birth (see initialEventsCoverage),
+	// never since_start at all, regardless of anything that happens
+	// afterward. want=0: any successful read at all (the Sensor's own first
+	// heartbeat write) is enough, since no container exists yet to produce a
+	// generation.
+	preTarget, err := waitForGenerations(t, evidenceDir, 0, 150*time.Second)
+	if err != nil {
+		t.Fatalf("waiting for the Sensor's own first snapshot before the target container even starts: %v", err)
+	}
+	if preTarget.Sensor.Events.Status != evidence.EventsOK {
+		t.Fatalf("sensor.events.status = %q before the target container even starts, want ok — "+
+			"this test cannot mean anything about since_start without eBPF actually attached", preTarget.Sensor.Events.Status)
+	}
+
+	containerID := runTarget(t, runID, "debian:12-slim", "sh", "-c", "while true; do sleep 1; done")
+
+	// Host-side noise: a real, repeated `docker build`, each round forced to
+	// miss every layer's own cache via a changing --build-arg, so every
+	// round creates a genuinely fresh intermediate container — this is the
+	// exact shape of churn (short-lived, never classified as any tracked
+	// container's own cgroup) this investigation already confirmed reaches
+	// this Sensor's own eBPF hooks. Runs for this test's own whole
+	// duration, stopped via noiseDone once the assertion below concludes.
+	noiseDone := make(chan struct{})
+	noiseTag := "kestrelynx-hostnoise-test:" + runID
+	dockerfileDir := t.TempDir()
+	dockerfile := "FROM debian:12-slim\nARG CACHEBUST=1\nRUN echo \"$CACHEBUST\" > /cachebust\n"
+	if err := os.WriteFile(dockerfileDir+"/Dockerfile", []byte(dockerfile), 0o644); err != nil {
+		t.Fatalf("write noise Dockerfile: %v", err)
+	}
+	defer dockerBestEffort(t, "rmi", "-f", noiseTag)
+	go func() {
+		for {
+			select {
+			case <-noiseDone:
+				return
+			default:
+			}
+			cmd := exec.Command("docker", "build", "-t", noiseTag,
+				"--build-arg", fmt.Sprintf("CACHEBUST=%d", time.Now().UnixNano()),
+				dockerfileDir)
+			_ = cmd.Run() // best-effort noise; a failed build round is not this test's own concern
+		}
+	}()
+	defer close(noiseDone)
+
+	// Waited for, and then required to hold across several consecutive
+	// reads (requiredStreak), not just checked once: a single lucky read
+	// would not distinguish "genuinely never downgraded" from "downgraded
+	// once, already recovered, and this read simply landed in between".
+	r := evidence.NewReader(evidenceDir)
+	deadline := time.Now().Add(150 * time.Second)
+	sinceStartStreak := 0
+	const requiredStreak = 3
+	for sinceStartStreak < requiredStreak {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %d consecutive since_start/incomplete=false reads while host noise ran (last streak %d)", requiredStreak, sinceStartStreak)
+		}
+		snap, err := r.Read(time.Now(), nil)
+		if err == nil {
+			if g := findGenerationOrZero(snap, containerID); g.Container.ID == containerID {
+				if g.EventsCoverage == evidence.CoverageSinceStart && !g.Incomplete {
+					sinceStartStreak++
+				} else {
+					t.Fatalf("generation regressed to events_coverage=%q incomplete=%v while host noise was running -- want since_start/false sustained throughout (had reached streak %d)",
+						g.EventsCoverage, g.Incomplete, sinceStartStreak)
+				}
+			}
+		}
+		time.Sleep(3 * time.Second)
 	}
 }

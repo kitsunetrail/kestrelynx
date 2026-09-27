@@ -13,6 +13,7 @@ import (
 
 	"github.com/kitsunetrail/kestrelynx/internal/evidence"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
+	"github.com/kitsunetrail/kestrelynx/internal/sensor/ebpf"
 )
 
 func newTestSession() *Session {
@@ -608,6 +609,136 @@ func TestApplyDiscoveryResult_DiscardsStaleOutOfOrderCompletion(t *testing.T) {
 	}
 }
 
+// TestApplyDiscoveryResult_NewGenerationSeesItsOwnJustDiscoveredPendingEvent
+// covers this round's fix to applyDiscoveryResult's own call order: a
+// pendingRouteEvent naming a cgroup this session has never classified at
+// all, already waiting past its own pendingRouteEventTTL, must not be given
+// up on the moment a *single* discovery pass both classifies that cgroup for
+// the first time (seeds) and registers a generation for it for the first
+// time (groups) -- exactly the shape a container whose own tp_btf/
+// cgroup_mkdir event never arrived, discovered only once a slow --interval
+// finally comes back around, produces. reconcileCgroupRoute resolving the
+// cgroup is not enough by itself: the generation reconcileGenerations is
+// about to create in this very call must already exist by the time the
+// queue is actually retried (dispatchWork, at the very end of
+// applyDiscoveryResult), or the event is discarded as unclassified for
+// good, an instant before the generation it belonged to was created.
+func TestApplyDiscoveryResult_NewGenerationSeesItsOwnJustDiscoveredPendingEvent(t *testing.T) {
+	s := &Session{
+		now: time.Now, cfg: Config{Interval: time.Hour},
+		generations: map[string]*generationState{},
+		dbJobCh:     make(chan dbJob, 8),
+		sampleResCh: make(chan sampleEnvelope, 8),
+		sampleFn:    func(job sampleJob) sampleResult { return sampleResult{genKey: job.genKey} },
+	}
+	cid := strings64('z')
+	const cgroupID = uint64(555)
+
+	// Already waiting past its own TTL, naming a cgroup this session has
+	// never classified at all.
+	base := time.Unix(1000, 0)
+	s.pendingRouteEvents = []pendingRouteEvent{
+		{ev: ebpf.Event{CgroupID: cgroupID}, kind: evidence.KindExecEvent, isExec: true, path: "/usr/bin/app", receivedAt: base},
+	}
+
+	// One discovery pass both classifies the cgroup for the first time
+	// (seeds) and registers this container's own generation for the first
+	// time (groups) -- exactly the race this fix exists for.
+	now := base.Add(pendingRouteEventTTL + time.Second)
+	seeds := []cgroupSeed{{ino: cgroupID, path: "/system.slice/docker-" + cid + ".scope", containerID: cid}}
+	groups := map[string]containerGroup{
+		cid: {ContainerID: cid, Processes: []InitProcess{{PID: 1, Starttime: 1}}, Init: InitProcess{PID: 1, Starttime: 1}},
+	}
+	if applied := s.applyDiscoveryResult(discoveryResult{groups: groups, seeds: seeds, now: now, gen: 0}); !applied {
+		t.Fatalf("applyDiscoveryResult = false, want true")
+	}
+
+	if len(s.pendingRouteEvents) != 0 {
+		t.Errorf("len(pendingRouteEvents) = %d, want 0 -- the event should have resolved against the generation created in this same pass", len(s.pendingRouteEvents))
+	}
+	if s.eventsUnclassified != 0 {
+		t.Errorf("eventsUnclassified = %d, want 0 -- must not have been given up on anonymously, an instant before its own generation was created", s.eventsUnclassified)
+	}
+	var g *generationState
+	for _, cand := range s.generations {
+		if cand.container.ID == cid {
+			g = cand
+		}
+	}
+	if g == nil {
+		t.Fatalf("no generation registered for container %s", cid)
+	}
+	// The event is already past its own TTL by the time this discovery pass
+	// runs, so finalizeRoutedItem's own age check still charges it as a loss
+	// rather than dispatching it live (unrelated to this fix — see that
+	// function's own doc comment) — but with the ordering fixed, it is
+	// charged to the correct, just-created generation specifically
+	// (recordEventLoss, tier 1), never anonymously to s.eventsUnclassified
+	// (tier 3) the way the ordering bug this test covers would have.
+	if g.eventsLost != 1 {
+		t.Errorf("g.eventsLost = %d, want 1 -- charged to the right, just-created generation, not lost anonymously", g.eventsLost)
+	}
+}
+
+// TestReconcileGenerations_WatermarkProtectedGenerationNeverReachesNotObserved
+// covers this round's fix to initialEventsCoverage/reconcileGenerations: a
+// generation created while s.forcedGapWatermarkTicks is in effect starts
+// CoveragePartial specifically because it might be the very container an
+// earlier forced eviction (applyForcedGapEviction) lost usage evidence for —
+// CoveragePartial alone does not block a not_observed verdict
+// (evidence.GenerationEligibleForNotObserved only blocks the OS class on
+// State, never on EventsCoverage), so without also marking this generation
+// Incomplete from the start, a package that lost evidence was itself proof
+// of could still be judged not_observed the moment this generation's own
+// index and a post-ready sample both complete, exactly the way
+// TestPostIndexConfirmed_WithholdsNotObservedUntilFirstPostReadyLookup's own
+// ordinary generation eventually is.
+func TestReconcileGenerations_WatermarkProtectedGenerationNeverReachesNotObserved(t *testing.T) {
+	s := newTestSession()
+	s.eventsStatus = evidence.EventsOK
+	s.forcedGapWatermarkSet = true
+	s.forcedGapWatermarkTicks = 5000
+
+	cid := strings64('w')
+	groups := map[string]containerGroup{
+		cid: {ContainerID: cid, Processes: []InitProcess{{PID: 1, Starttime: 1000}}, Init: InitProcess{PID: 1, Starttime: 1000}},
+	}
+	s.reconcileGenerations(groups, s.now())
+
+	var g *generationState
+	for _, cand := range s.generations {
+		g = cand
+	}
+	if g == nil {
+		t.Fatalf("no generation registered for container %s", cid)
+	}
+	if g.eventsCoverage != evidence.CoveragePartial || !g.incomplete {
+		t.Fatalf("g = {coverage=%q incomplete=%v} immediately after creation, want {partial, true} -- init.Starttime (1000) is at or before the watermark (5000)", g.eventsCoverage, g.incomplete)
+	}
+
+	// The index builds and a post-ready sample+lookup complete fully, the
+	// same round trip that lets an ordinary generation reach not_observed.
+	ref := inventory.PackageRef{Class: inventory.ClassOS, Name: "never-mentioned-pkg", Version: "1.0"}
+	s.applyBuildResult(g, dbResult{genKey: g.key(), dbKind: evidence.DBKindDpkg, dbStatus: evidence.DBStatusOK, buildOK: true})
+	const path = "/usr/lib/libX.so"
+	s.applySampleResult(g, sampleResult{
+		genKey: g.key(), attempted: 1, succeeded: 1, indexReadyAtStart: true,
+		candidates: map[string][]sampleCandidate{path: {{kind: evidence.KindMappedLibrary}}},
+		verified:   []string{path},
+	})
+	if g.pendingLookup == nil {
+		t.Fatalf("pendingLookup = nil after the post-ready sample, want its own lookup outstanding")
+	}
+	s.applyLookupResult(g, dbResult{genKey: g.key(), seq: g.pendingLookup.seq, owners: map[string]lookupOutcome{path: {}}})
+	if !g.postIndexConfirmed {
+		t.Fatalf("postIndexConfirmed = false after the post-ready lookup answered, want true")
+	}
+
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), ref); verdict.Usage == evidence.UsageNotObserved {
+		t.Errorf("JudgeOSPackage = %+v, want never NotObserved for a watermark-protected generation, even once its own index and a post-ready sample+lookup both complete", verdict)
+	}
+}
+
 // TestApplySampleResult_QueuedCandidatesAreResolvedNotLost covers the whole
 // reason queuedCandidates exists: a sample's own candidates observed while
 // an earlier lookup is still outstanding are queued, never dropped, and
@@ -662,7 +793,7 @@ func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 	// (deferred inside applyLookupResult) must immediately resubmit B's own
 	// queued batch as the new pendingLookup — never left waiting.
 	s.applyLookupResult(g, dbResult{
-		genKey: g.key(),
+		genKey: g.key(), seq: g.pendingLookup.seq,
 		owners: map[string]lookupOutcome{pathA: {owners: []lookupOwner{{Name: "pkgA", Version: "1.0"}}}},
 	})
 	if len(g.queuedCandidates) != 0 {
@@ -688,7 +819,7 @@ func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 	// intervening samples (A's own completion and C's own observation) —
 	// and C's own queued batch is flushed into yet another new lookup.
 	s.applyLookupResult(g, dbResult{
-		genKey: g.key(),
+		genKey: g.key(), seq: g.pendingLookup.seq,
 		owners: map[string]lookupOutcome{pathB: {owners: []lookupOwner{{Name: "pkgB", Version: "1.0"}}}},
 	})
 	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), refB); verdict.Usage != evidence.UsageInUse {
@@ -707,7 +838,7 @@ func TestApplySampleResult_QueuedCandidatesAreResolvedNotLost(t *testing.T) {
 	// C's lookup answers: nothing left queued or outstanding anywhere —
 	// only now does Incomplete finally clear.
 	s.applyLookupResult(g, dbResult{
-		genKey: g.key(),
+		genKey: g.key(), seq: g.pendingLookup.seq,
 		owners: map[string]lookupOutcome{pathC: {owners: []lookupOwner{{Name: "pkgC", Version: "1.0"}}}},
 	})
 	if got := g.toEvidence(false).Incomplete; got {
@@ -783,7 +914,7 @@ func TestApplySampleResult_QueueOverflowIsUnrecoverable(t *testing.T) {
 				owners[p] = lookupOutcome{owners: []lookupOwner{{Name: "pkg", Version: "1.0"}}}
 			}
 		}
-		s.applyLookupResult(g, dbResult{genKey: g.key(), owners: owners})
+		s.applyLookupResult(g, dbResult{genKey: g.key(), seq: pl.seq, owners: owners})
 	}
 	if g.pendingLookup != nil || len(g.queuedCandidates) != 0 {
 		t.Fatalf("pendingLookup/queuedCandidates = %+v/%+v after draining every round, want both empty", g.pendingLookup, g.queuedCandidates)
@@ -855,12 +986,84 @@ func TestPostIndexConfirmed_WithholdsNotObservedUntilFirstPostReadyLookup(t *tes
 	// That lookup answers (empty: no owner for this made-up path) — only
 	// now has a sample's own candidates actually been resolved against the
 	// ready index.
-	s.applyLookupResult(g, dbResult{genKey: g.key(), owners: map[string]lookupOutcome{path: {}}})
+	s.applyLookupResult(g, dbResult{genKey: g.key(), seq: g.pendingLookup.seq, owners: map[string]lookupOutcome{path: {}}})
 	if derivePublishedState(g) != evidence.StateObserving {
 		t.Fatalf("state = %q once the first post-ready lookup has answered, want observing", derivePublishedState(g))
 	}
 	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), ref); verdict.Usage != evidence.UsageNotObserved {
 		t.Errorf("JudgeOSPackage = %+v, want NotObserved now that a real post-ready observe-and-lookup round trip has completed", verdict)
+	}
+}
+
+// TestDerivePublishedState_PendingEventWithholdsObservingAcrossUnrelatedLookup
+// covers a gap postIndexConfirmed alone does not close: event A (a
+// resolved-path eBPF success event received while this generation's own
+// index was not yet ready) sits queued in g.pendingEvents until a *later*
+// sample worker, dispatched once idxState reaches ready, actually verifies
+// it (dispatchWork's own piggyback — never through the lookup/candidate path
+// at all). applyLookupResult sets postIndexConfirmed = true the moment ANY
+// post-ready lookup answers, regardless of which sample's own candidates
+// that lookup was for — so an entirely unrelated sample B's lookup
+// completing must not, by itself, let the published state reach observing
+// while A is still sitting unverified in pendingEvents: whatever package A's
+// own path might be the sole evidence for must not be judged not_observed in
+// that gap.
+func TestDerivePublishedState_PendingEventWithholdsObservingAcrossUnrelatedLookup(t *testing.T) {
+	s := newTestSession()
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageNone)
+	s.generations[g.key()] = g
+
+	ref := inventory.PackageRef{Class: inventory.ClassOS, Name: "never-mentioned-pkg", Version: "1.0"}
+
+	// Event A arrives while the index is not ready yet, and is queued.
+	g.recordPendingEvent(pendingEventItem{path: "/usr/lib/libA.so", receivedAt: s.now()})
+	if len(g.pendingEvents) != 1 {
+		t.Fatalf("setup: pendingEvents = %+v, want exactly one queued item", g.pendingEvents)
+	}
+
+	// The index finishes building.
+	s.applyBuildResult(g, dbResult{
+		genKey: g.key(), dbKind: evidence.DBKindDpkg, dbStatus: evidence.DBStatusOK, buildOK: true,
+	})
+	if g.idxState != indexReady {
+		t.Fatalf("setup: idxState = %v after a successful build, want ready", g.idxState)
+	}
+
+	// A completely unrelated, post-ready sample observes B, and its own
+	// lookup answers — this alone unconditionally confirms the index (see
+	// applyLookupResult), even though A is still sitting in pendingEvents,
+	// never itself resubmitted through this same path.
+	const pathB = "/usr/lib/libB.so"
+	s.applySampleResult(g, sampleResult{
+		genKey: g.key(), attempted: 1, succeeded: 1, indexReadyAtStart: true,
+		candidates: map[string][]sampleCandidate{pathB: {{kind: evidence.KindMappedLibrary}}},
+		verified:   []string{pathB},
+	})
+	if g.pendingLookup == nil {
+		t.Fatalf("setup: pendingLookup = nil after B's own post-ready sample, want its own lookup outstanding")
+	}
+	s.applyLookupResult(g, dbResult{genKey: g.key(), seq: g.pendingLookup.seq, owners: map[string]lookupOutcome{pathB: {}}})
+	if !g.postIndexConfirmed {
+		t.Fatalf("setup: postIndexConfirmed = false after B's own lookup answered, want true")
+	}
+
+	// A is still queued, unverified — the published state must still
+	// withhold not_observed.
+	if len(g.pendingEvents) != 1 {
+		t.Fatalf("setup: pendingEvents = %+v after an unrelated lookup answered, want event A still queued (this generation never drains it this way)", g.pendingEvents)
+	}
+	if derivePublishedState(g) != evidence.StateInitializing {
+		t.Errorf("state = %q with event A still queued in pendingEvents, want initializing", derivePublishedState(g))
+	}
+	if verdict := evidence.JudgeOSPackage(g.toEvidence(false), ref); verdict.Usage != evidence.UsageUnavailable || verdict.Reason != evidence.ReasonInitializing {
+		t.Errorf("JudgeOSPackage = %+v, want Unavailable/ReasonInitializing while event A is still queued in pendingEvents, unverified", verdict)
+	}
+
+	// Once pendingEvents actually drains (a later sample worker verifying A
+	// for real, exercised elsewhere), the state can finally report observing.
+	g.pendingEvents = nil
+	if derivePublishedState(g) != evidence.StateObserving {
+		t.Errorf("state = %q once pendingEvents has actually drained, want observing", derivePublishedState(g))
 	}
 }
 
@@ -957,7 +1160,7 @@ func TestFlushQueuedCandidates_DiscardsBatchFromBeforeIndexRebuild(t *testing.T)
 	// must discard B's own batch (epoch 0) rather than resubmit it against
 	// idxEpoch 1.
 	s.applyLookupResult(g, dbResult{
-		genKey: g.key(), epoch: 0,
+		genKey: g.key(), epoch: 0, seq: g.pendingLookup.seq,
 		owners: map[string]lookupOutcome{pathA: {owners: []lookupOwner{{Name: "pkgA", Version: "1.0"}}}},
 	})
 	if len(g.queuedCandidates) != 0 {

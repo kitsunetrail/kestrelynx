@@ -76,6 +76,9 @@ func validateSnapshot(snap *Snapshot, now time.Time) error {
 	if !validEventsReasons[snap.Sensor.Events.Reason] {
 		return fmt.Errorf("%w: unknown sensor.events.reason %q", ErrInvalid, snap.Sensor.Events.Reason)
 	}
+	if snap.Sensor.Events.Unclassified < 0 {
+		return fmt.Errorf("%w: sensor.events.unclassified is negative", ErrInvalid)
+	}
 	if len(snap.Generations) > maxGenerations {
 		return fmt.Errorf("%w: %d generations exceeds limit %d", ErrInvalid, len(snap.Generations), maxGenerations)
 	}

@@ -59,20 +59,32 @@ const maxCgroupRouteEntries = 65_536
 // See lookup's own doc comment.
 //
 // Seeded once at Sensor startup by scanCgroupTree (covering every cgroup
-// that already exists when eBPF attached, container or not) and grown
-// afterward by applyCgroupMkdir, one new cgroup at a time, as
-// tp_btf/cgroup_mkdir events arrive for cgroups created after that. Every
-// field is read and written only by loop's own goroutine, exactly like
-// generationState — nothing here needs its own synchronization.
+// that already exists when eBPF attached, container or not), grown as
+// tp_btf/cgroup_mkdir events arrive for cgroups created after that, and
+// reconciled every discovery pass by reconcileCgroupRoute against
+// computeCgroupSeeds' own stat-based seeds — the redundant, correctness-
+// guaranteeing path cgroup_mkdir's own event delivery is not reliable
+// enough to be the only one (see reconcileCgroupRoute's own doc comment;
+// confirmed directly on at least one real host/kernel combination where
+// tp_btf/cgroup_mkdir's own events never reached this Sensor at all, for
+// any cgroup, in 15/15 independent sessions, despite the kernel's own
+// ring-buffer loss counters staying at zero throughout — not a buffer-
+// contention problem, whatever its actual cause). Every field is read and
+// written only by loop's own goroutine, exactly like generationState —
+// nothing here needs its own synchronization.
 //
-// A container entry is never removed when the container is merely
-// restarted: a restarted container (the common case a Docker "restart"
-// produces) keeps the same underlying cgroup, so a mapping this table
-// already holds stays correct across it. pruneContainer removes it once the
-// container is confirmed gone entirely instead (see that method's own doc
-// comment); a non-container entry is never pruned at all (nothing calls
-// pruneContainer for a container ID that was never one), relying on
-// maxCgroupRouteEntries as its own bound instead.
+// A restarted container does NOT keep the same underlying cgroup: docker
+// stop rmdir's the old scope, and docker start creates a new one with a new
+// kernfs inode (a new eBPF cgroup ID) — the "same cgroup across a restart"
+// assumption an earlier version of this comment made here was wrong.
+// reconcileCgroupRoute's own idempotent reseeding is what keeps this table
+// correct across that: a restarted container's own new cgroup ID gets its
+// own fresh entry the next discovery pass notices it, exactly like a
+// container started for the first time. pruneContainer removes a
+// container's entries once it is confirmed gone entirely (see that
+// method's own doc comment); a non-container entry is never pruned at all
+// (nothing calls pruneContainer for a container ID that was never one),
+// relying on maxCgroupRouteEntries as its own bound instead.
 type cgroupRoute struct {
 	idToContainer   map[uint64]string
 	pathToContainer map[string]string
@@ -279,13 +291,19 @@ func (r *cgroupRoute) applyCgroupMkdir(cgroupID uint64, path string) (containerI
 // pruneContainer removes every entry recorded for containerID from both
 // maps together, along with their insertOrder bookkeeping. Called only once
 // a container is confirmed gone entirely (reconcileGenerations' own "no
-// longer present in groups at all" branch) — never for a same-ID restart,
-// which keeps the same underlying cgroup and whose mapping must survive the
-// old generation ending. This is this table's own routine cleanup, working
-// alongside (not replacing) maxCgroupRouteEntries' own safety-net cap: a
-// container whose cgroup mapping was never explicitly pruned for some
-// reason (a bug, or a code path this method is not wired into) is still
-// bounded by that cap.
+// longer present in groups at all" branch) — a same-ID restart is not this:
+// it keeps the same containerID but gets a genuinely new cgroup (docker
+// start creates a fresh scope with a new kernfs inode; see cgroupRoute's own
+// doc comment), so restarting never removes anything from this table at
+// all, it only ever adds the new cgroup's own entry once the next discovery
+// pass (or a cgroup_mkdir event, if one happens to arrive) notices it — the
+// old, now-stale cgroup ID entry is simply left in place until
+// maxCgroupRouteEntries' own eviction reclaims it, exactly like any other
+// entry for a cgroup that no longer exists. This is this table's own
+// routine cleanup, working alongside (not replacing) that same safety-net
+// cap: a container whose cgroup mapping was never explicitly pruned for
+// some reason (a bug, or a code path this method is not wired into) is
+// still bounded by it.
 func (r *cgroupRoute) pruneContainer(containerID string) {
 	if len(r.idToContainer) == 0 {
 		return
@@ -327,5 +345,208 @@ func (r *cgroupRoute) ancestorLookup(path string) (containerID string, known boo
 		} else {
 			path = ""
 		}
+	}
+}
+
+// cgroupSeed is one (cgroup inode, cgroup path, container ID) triple a
+// discovery pass computed off loop's own goroutine (computeCgroupSeeds/
+// walkContainerScope, run from defaultDiscover — see cgroupRoute's own doc
+// comment on why cgroup_mkdir's own event delivery alone is not relied on).
+// containerID is "" for a confirmed non-container cgroup, exactly like
+// cgroupRoute.set's own containerID parameter. Applied to cgroupRoute only
+// by loop itself (reconcileCgroupRoute), which is the only goroutine ever
+// allowed to write to it.
+type cgroupSeed struct {
+	ino         uint64
+	path        string
+	containerID string
+}
+
+// maxContainerScopeWalkDirs bounds how many directories walkContainerScope
+// will visit under one container's own cgroup scope, per discovery pass —
+// the same defensive-cap reasoning maxCgroupScanDirs already applies to the
+// one-time startup scan (scanCgroupTree), scoped down to one container's
+// own subtree and run every discovery pass instead of only once: a
+// container that delegates its own cgroup subtree (running its own systemd,
+// or Docker-in-Docker) could otherwise make this walk unbounded. ASSUMED:
+// no real container's own legitimate cgroup subtree needs more directories
+// than this to be fully covered; revisit once real-world dogfooding shows
+// otherwise.
+const maxContainerScopeWalkDirs = 1024
+
+// computeCgroupSeeds turns one scanProcs() pass's own procs into the
+// (cgroup inode, path, container ID) seeds reconcileCgroupRoute needs to
+// keep cgroupRoute correct without relying solely on tp_btf/cgroup_mkdir —
+// confirmed directly to sometimes never deliver a single event at all, on
+// at least one real host/kernel combination, for reasons unrelated to
+// ring-buffer contention. Every distinct cgroup path
+// seen across procs is stat()ed exactly once (deduplicated first, since
+// many processes typically share one container's own cgroup), regardless of
+// whether it belongs to a container at all — a confirmed non-container path
+// is seeded with containerID "" too, exactly like scanCgroupTree's own
+// startup walk, so a host-side cgroup (a systemd transient unit, say) gets
+// (re-)classified here as well, not only a container's own.
+//
+// For every container a live process actually placed this seed in, also
+// walks that container's own cgroup scope (walkContainerScope, bounded) so
+// a nested child cgroup with no live process of its own right now (a
+// docker-exec session that already exited, or a nested cgroup a process
+// inside the container created for its own children before this exact pass
+// happened to see one of them) still gets classified, the same way
+// scanCgroupTree's own startup walk already covers a nested cgroup with no
+// live process at Sensor startup.
+//
+// Runs entirely off loop's own goroutine (called from defaultDiscover,
+// dispatched by startDiscovery — see cgroupRoute's own doc comment on why
+// only loop itself may ever write to it): only stat/os.ReadDir here, never
+// a cgroupRoute write. root is cgroupHostRoot in production; a parameter
+// (mirroring scanCgroupTree's own signature) purely so a test can point it
+// at a temporary directory instead.
+//
+// The second return value counts every stat failure in the primary loop
+// below other than os.IsNotExist (ordinary churn — the path was simply gone
+// by the time this pass got to it, and the next pass tries again if it is
+// still seen then): an EACCES or similar failure is not ordinary churn, and
+// the path it names never gets another chance to be seeded until something
+// about the underlying permission problem itself changes, so a caller needs
+// to know it happened at all, even though this function itself — running
+// off loop's own goroutine — has no Session field of its own it may safely
+// touch to record it (see applyDiscoveryResult, the only place this count is
+// actually accumulated and logged).
+func computeCgroupSeeds(root string, procs map[int]procInfo) ([]cgroupSeed, int) {
+	containerIDForPath := make(map[string]string, len(procs))
+	for _, info := range procs {
+		if !info.CgroupPathOK {
+			// Unreadable, or a "/.."-prefixed, namespace-escaped path with
+			// its own real segments already stripped by the kernel (see
+			// procfs.CgroupPathFromCgroup's own doc comment) — never usable
+			// for seeding at all; in particular, never treated as "" (the
+			// cgroup root), which would wrongly stat the Sensor's own
+			// cgroup on this other process's own behalf.
+			continue
+		}
+		if _, seen := containerIDForPath[info.CgroupPath]; seen {
+			continue
+		}
+		containerIDForPath[info.CgroupPath] = info.ContainerID
+	}
+
+	seeds := make([]cgroupSeed, 0, len(containerIDForPath))
+	scopesWalked := make(map[string]bool, len(containerIDForPath))
+	var statFailures int
+	for path, containerID := range containerIDForPath {
+		ino, err := statDirInode(root + path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				statFailures++
+			}
+			continue
+		}
+		seeds = append(seeds, cgroupSeed{ino: ino, path: path, containerID: containerID})
+
+		if containerID == "" {
+			continue
+		}
+		scopePath, ok := procfs.ContainerScopePath(path)
+		if !ok || scopesWalked[scopePath] {
+			continue
+		}
+		scopesWalked[scopePath] = true
+		scopeSeeds, scopeStatFailures := walkContainerScope(root, scopePath, containerID)
+		seeds = append(seeds, scopeSeeds...)
+		statFailures += scopeStatFailures
+	}
+	return seeds, statFailures
+}
+
+// walkContainerScope walks every directory under root+scopePath
+// (containerID's own cgroup subtree), bounded at maxContainerScopeWalkDirs,
+// seeding one cgroupSeed per directory found — including scopePath itself
+// and every descendant, whether or not any live process currently sits in
+// it. Structurally the same walk scanCgroupTree's own startup pass makes,
+// scoped to one already-known container's own subtree instead of the whole
+// host cgroup tree, and run every discovery pass instead of only once. root
+// is cgroupHostRoot in production, passed through from computeCgroupSeeds'
+// own parameter of the same name.
+//
+// The second return value counts every one of this walk's own stat
+// failures other than os.IsNotExist, folded into computeCgroupSeeds' own
+// same-named return value — a process-less child cgroup this walk visits
+// specifically because no live process sits in it to have already had its
+// own path stat'd by the primary loop above is exactly where a permission
+// problem distinct from the container's own top-level scope can first show
+// up (see that function's own doc comment for why this needs counting at
+// all: an EACCES-shaped failure is not ordinary churn, and never gets
+// another chance until the underlying problem itself changes).
+func walkContainerScope(root, scopePath, containerID string) ([]cgroupSeed, int) {
+	var seeds []cgroupSeed
+	var statFailures int
+	visited := 0
+	var walk func(dir, relPath string)
+	walk = func(dir, relPath string) {
+		if visited >= maxContainerScopeWalkDirs {
+			return
+		}
+		visited++
+		if ino, err := statDirInode(dir); err == nil {
+			seeds = append(seeds, cgroupSeed{ino: ino, path: relPath, containerID: containerID})
+		} else if !os.IsNotExist(err) {
+			statFailures++
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			if visited >= maxContainerScopeWalkDirs {
+				return
+			}
+			walk(filepath.Join(dir, e.Name()), relPath+"/"+e.Name())
+		}
+	}
+	walk(root+scopePath, scopePath)
+	return seeds, statFailures
+}
+
+// reconcileCgroupRoute applies one discovery pass's own cgroup seeds
+// (computeCgroupSeeds/walkContainerScope, computed off loop's own goroutine
+// — see cgroupSeed's own doc comment) to s.cgroupRoute, the only place ever
+// allowed to write to it (applyDiscoveryResult's own call site runs on
+// loop's own goroutine, exactly like every other s.generations/cgroupRoute
+// mutation). Idempotent: re-seeding an already-correctly-classified cgroup
+// ID is a no-op past the underlying map write cgroupRoute.set already
+// tolerates.
+//
+// A seed's own classification disagreeing with what cgroupRoute already had
+// for the same cgroup ID (cgroupRoute.lookup) is a contradiction — counted
+// (s.cgroupRouteContradictions, diagnostic only) and resolved by always
+// adopting the newest seed's own answer, since a live discovery pass's own
+// fresh stat() is authoritative over whatever an earlier cgroup_mkdir event
+// or scan happened to record; a cgroup ID is never legitimately reassigned
+// to a different container by the kernel, so this should never actually
+// fire in practice.
+//
+// Newly classifying a cgroup ID that was previously unknown at all
+// (cgroupRoute.lookup's own known=false) can give a pendingRouteEvent
+// naming it a fresh chance to resolve — but this function deliberately
+// never retries the queue itself. Its own caller, applyDiscoveryResult,
+// calls reconcileGenerations right afterward, and a cgroup newly classified
+// by this same discovery pass often names a container reconcileGenerations
+// is *also* about to register a generation for, for the first time, in that
+// very call: retrying here, before that happens, would resolve the cgroup
+// but still find no generation to attribute anything to, permanently
+// discarding the event — see dispatchWork's own retryPendingRouteEvents
+// call, which applyDiscoveryResult always reaches only after
+// reconcileGenerations, for where the actual retry belongs.
+func (s *Session) reconcileCgroupRoute(seeds []cgroupSeed) {
+	for _, seed := range seeds {
+		existing, known := s.cgroupRoute.lookup(seed.ino)
+		if known && existing != seed.containerID {
+			s.cgroupRouteContradictions++
+		}
+		s.cgroupRoute.set(seed.ino, seed.path, seed.containerID)
 	}
 }

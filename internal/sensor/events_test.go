@@ -2,6 +2,7 @@ package sensor
 
 import (
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -328,6 +329,81 @@ func TestApplyUsageEventQueuesPendingIndexWhenNotReady(t *testing.T) {
 	}
 }
 
+// TestApplyUsageEvent_QueuesBeforeMountViewConfirmedThenAttributes covers
+// dispatchUsageEvent's own distinction between "this generation's mount view
+// has never been confirmed by any sample yet" and "confirmed, but genuinely
+// a different view": a usage event that arrives before the former is held
+// (generationState.pendingMountViewEvents), not guessed at as a mismatch —
+// a container discovered from an already-running process can have its very
+// first exec/mmap arrive before its own first sample ever runs. The held
+// event gets its own genuine matchesMountView decision once
+// applySampleResult confirms this generation's own mount view for the first
+// time.
+func TestApplyUsageEvent_QueuesBeforeMountViewConfirmedThenAttributes(t *testing.T) {
+	s := newTestSessionForEvents()
+	cid := strings64('m')
+	g := newReadyGeneration(s, 90, cid)
+	// Simulate a generation discovered from an already-running process,
+	// before any sample has resolved its own mount view yet.
+	g.mntNsID = 0
+	g.rootDev = ""
+	g.rootIno = 0
+
+	s.applyEvent(ebpf.Event{Kind: ebpf.EventFileOpen, MountNamespaceID: 1, RootDev: testRootDevRaw, RootIno: testRootIno, Dev: 30, Ino: 31, Path: "/usr/bin/trivy"})
+	s.applyEvent(ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 90, MountNamespaceID: 1, RootDev: testRootDevRaw, RootIno: testRootIno, Dev: 30, Ino: 31, EUID: 65532})
+
+	if g.incomplete {
+		t.Error("incomplete = true before this generation's own mount view was ever confirmed, want false (held, not guessed)")
+	}
+	if len(g.pendingMountViewEvents) != 1 {
+		t.Fatalf("len(pendingMountViewEvents) = %d, want 1", len(g.pendingMountViewEvents))
+	}
+	if _, ok := g.executables["/usr/bin/trivy"]; ok {
+		t.Error("executables[/usr/bin/trivy] recorded before this generation's own mount view was ever confirmed")
+	}
+
+	// The first sample confirms this generation's own mount view, matching
+	// the held event's own — it now gets its real, informed decision.
+	s.applySampleResult(g, sampleResult{
+		basis: mountBasis{ok: true, mntNS: "mnt:[1]", rootDev: formatKernelDev(testRootDevRaw), rootIno: testRootIno},
+	})
+
+	if len(g.pendingMountViewEvents) != 0 {
+		t.Errorf("len(pendingMountViewEvents) = %d, want 0 once this generation's own mount view was confirmed", len(g.pendingMountViewEvents))
+	}
+	if g.incomplete {
+		t.Error("incomplete = true, want false: the held event's own mount view actually matches once judged for real")
+	}
+	if _, ok := g.executables["/usr/bin/trivy"]; !ok {
+		t.Error("executables[/usr/bin/trivy] not recorded after the held event was replayed against the now-confirmed mount view")
+	}
+}
+
+// TestApplyUsageEvent_MountViewConfirmedMismatchNeverQueues covers the other
+// half of the same distinction: once a generation's own mount view actually
+// is confirmed, an event that genuinely does not match it is decided right
+// away (incomplete), never held for a retry that could never change the
+// answer.
+func TestApplyUsageEvent_MountViewConfirmedMismatchNeverQueues(t *testing.T) {
+	s := newTestSessionForEvents()
+	cid := strings64('n')
+	g := newReadyGeneration(s, 91, cid) // mntNsID/rootDev/rootIno already confirmed to 1/testRoot
+
+	otherRootDev := rawKernelDevFor(t, "09:09")
+	s.applyEvent(ebpf.Event{Kind: ebpf.EventFileOpen, MountNamespaceID: 1, RootDev: otherRootDev, RootIno: 99, Dev: 30, Ino: 31, Path: "/bin/tool"})
+	s.applyEvent(ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 91, MountNamespaceID: 1, RootDev: otherRootDev, RootIno: 99, Dev: 30, Ino: 31})
+
+	if len(g.pendingMountViewEvents) != 0 {
+		t.Errorf("len(pendingMountViewEvents) = %d, want 0: this generation's own mount view was already confirmed, so this is a real mismatch, not an unknown", len(g.pendingMountViewEvents))
+	}
+	if !g.incomplete {
+		t.Error("incomplete = false, want true: a genuinely different root must never be attributed")
+	}
+	if _, ok := g.executables["/bin/tool"]; ok {
+		t.Error("executables[/bin/tool] recorded despite a confirmed mount-view mismatch")
+	}
+}
+
 func TestApplyUsageEventSubmitsCandidateWhenIndexReady(t *testing.T) {
 	s := newTestSessionForEvents()
 	cid := strings64('c')
@@ -431,6 +507,113 @@ func TestApplyCgroupMkdirEventRetriesPendingRouteEvents(t *testing.T) {
 	}
 }
 
+// TestReconcileCgroupRoute_ClassifiesUnknownCgroupAndRetriesQueue mirrors
+// TestApplyCgroupMkdirEventRetriesPendingRouteEvents above, but classifying
+// the cgroup via discovery's own reseeding (reconcileCgroupRoute,
+// computeCgroupSeeds) instead of a live tp_btf/cgroup_mkdir event — the
+// path that actually matters on a host where cgroup_mkdir's own event
+// delivery cannot be relied on at all. reconcileCgroupRoute itself never
+// retries the queue (see its own doc comment on why); this test calls
+// retryPendingRouteEvents explicitly afterward, standing in for
+// applyDiscoveryResult's own dispatchWork call.
+func TestReconcileCgroupRoute_ClassifiesUnknownCgroupAndRetriesQueue(t *testing.T) {
+	s := newTestSessionForEvents()
+	cid := strings64('u')
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cid}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	g.idxState = indexReady
+	g.packageDB.Status = evidence.DBStatusOK
+	g.mntNsID = 1
+	g.rootDev = formatKernelDev(testRootDevRaw)
+	g.rootIno = testRootIno
+	g.lastVerifiedAt = s.now()
+	s.generations[g.key()] = g
+	// Deliberately never calls s.cgroupRoute.set at all -- simulating
+	// tp_btf/cgroup_mkdir never firing for this container's own cgroup.
+
+	s.applyEvent(ebpf.Event{Kind: ebpf.EventFileOpen, MountNamespaceID: 1, RootDev: testRootDevRaw, RootIno: testRootIno, Dev: 50, Ino: 51, Path: "/usr/bin/node"})
+	s.applyEvent(ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 900, MountNamespaceID: 1, RootDev: testRootDevRaw, RootIno: testRootIno, Dev: 50, Ino: 51})
+	if len(s.pendingRouteEvents) != 1 {
+		t.Fatalf("len(pendingRouteEvents) = %d, want 1 before the cgroup is known", len(s.pendingRouteEvents))
+	}
+
+	s.reconcileCgroupRoute([]cgroupSeed{{ino: 900, path: "/system.slice/docker-" + cid + ".scope", containerID: cid}})
+	s.retryPendingRouteEvents(s.now())
+
+	if len(s.pendingRouteEvents) != 0 {
+		t.Errorf("len(pendingRouteEvents) = %d, want 0 after reconcileCgroupRoute classified it and retryPendingRouteEvents ran", len(s.pendingRouteEvents))
+	}
+	if _, ok := g.executables["/usr/bin/node"]; !ok {
+		t.Error("the retried event was never attributed to the now-known generation")
+	}
+}
+
+// TestReconcileCgroupRoute_PruneThenRediscoveryRestoresMapping confirms
+// pruning a container's own cgroupRoute entries (a container discovery
+// briefly lost track of) does not prevent it from being re-seeded correctly
+// the moment discovery finds it again.
+func TestReconcileCgroupRoute_PruneThenRediscoveryRestoresMapping(t *testing.T) {
+	s := newTestSessionForEvents()
+	cid := strings64('v')
+	s.reconcileCgroupRoute([]cgroupSeed{{ino: 1000, path: "/system.slice/docker-" + cid + ".scope", containerID: cid}})
+	if got, ok := s.cgroupRoute.lookup(1000); !ok || got != cid {
+		t.Fatalf("lookup(1000) after first seed = (%q, %v), want (%q, true)", got, ok, cid)
+	}
+
+	s.cgroupRoute.pruneContainer(cid)
+	if _, ok := s.cgroupRoute.lookup(1000); ok {
+		t.Fatalf("lookup(1000) still resolves right after pruning")
+	}
+
+	s.reconcileCgroupRoute([]cgroupSeed{{ino: 1000, path: "/system.slice/docker-" + cid + ".scope", containerID: cid}})
+	if got, ok := s.cgroupRoute.lookup(1000); !ok || got != cid {
+		t.Errorf("lookup(1000) after rediscovery = (%q, %v), want (%q, true) -- pruning must not be permanent", got, ok, cid)
+	}
+}
+
+// TestReconcileCgroupRoute_RestartGetsFreshInodeMapping confirms the fixed
+// cgroupmap.go doc comment's own claim: a restarted container keeps its
+// containerID but gets a genuinely new cgroup inode (docker stop rmdir's
+// the old scope; docker start creates a new one) -- reconcileCgroupRoute
+// must give that new inode its own entry without disturbing (or needing to
+// touch) the old, now-stale one at all.
+func TestReconcileCgroupRoute_RestartGetsFreshInodeMapping(t *testing.T) {
+	s := newTestSessionForEvents()
+	cid := strings64('w')
+	scope := "/system.slice/docker-" + cid + ".scope"
+	s.reconcileCgroupRoute([]cgroupSeed{{ino: 2000, path: scope, containerID: cid}})
+
+	// The restart: a new inode, same path, same container ID.
+	s.reconcileCgroupRoute([]cgroupSeed{{ino: 2001, path: scope, containerID: cid}})
+
+	if got, ok := s.cgroupRoute.lookup(2001); !ok || got != cid {
+		t.Errorf("lookup(2001) (the post-restart inode) = (%q, %v), want (%q, true)", got, ok, cid)
+	}
+	if got, ok := s.cgroupRoute.lookup(2000); !ok || got != cid {
+		t.Errorf("lookup(2000) (the pre-restart inode) = (%q, %v), want (%q, true) -- the old entry is stale but must not be actively broken by the new one", got, ok, cid)
+	}
+}
+
+// TestReconcileCgroupRoute_ContradictionCounted confirms a seed
+// disagreeing with cgroupRoute's own existing classification for the same
+// inode is counted (diagnostic only) but always adopts the newest seed's
+// own answer regardless -- see reconcileCgroupRoute's own doc comment.
+func TestReconcileCgroupRoute_ContradictionCounted(t *testing.T) {
+	s := newTestSessionForEvents()
+	s.reconcileCgroupRoute([]cgroupSeed{{ino: 3000, path: "/user.slice", containerID: ""}})
+	if s.cgroupRouteContradictions != 0 {
+		t.Fatalf("cgroupRouteContradictions = %d, want 0 before any disagreement", s.cgroupRouteContradictions)
+	}
+
+	cid := strings64('x')
+	s.reconcileCgroupRoute([]cgroupSeed{{ino: 3000, path: "/user.slice", containerID: cid}})
+	if s.cgroupRouteContradictions != 1 {
+		t.Errorf("cgroupRouteContradictions = %d, want 1", s.cgroupRouteContradictions)
+	}
+	if got, ok := s.cgroupRoute.lookup(3000); !ok || got != cid {
+		t.Errorf("lookup(3000) = (%q, %v), want (%q, true) -- the newest seed's own answer is always adopted", got, ok, cid)
+	}
+}
+
 // TestApplyCgroupMkdirEvent_TruncatedOrEmptyPathNeverClassifies confirms
 // neither an empty path nor a truncated one is ever handed to
 // cgroupRoute.applyCgroupMkdir at all: either would risk ancestor-matching
@@ -461,44 +644,83 @@ func TestApplyCgroupMkdirEvent_TruncatedOrEmptyPathNeverClassifies(t *testing.T)
 	}
 }
 
-func TestRetryPendingRouteEventsExpires(t *testing.T) {
-	s := newTestSessionForEvents()
-	base := s.now()
-	s.pendingRouteEvents = []pendingRouteEvent{
-		{ev: ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 1}, kind: evidence.KindExecEvent, isExec: true, receivedAt: base},
-	}
-	s.retryPendingRouteEvents(base.Add(pendingRouteEventTTL + time.Second))
-	if len(s.pendingRouteEvents) != 0 {
-		t.Errorf("len(pendingRouteEvents) = %d, want 0 (expired)", len(s.pendingRouteEvents))
-	}
-}
-
+// TestQueuePendingRouteEventDropsOldestAtCap covers applyForcedGapEviction's
+// own full safety net, not merely "an evicted item is counted somewhere": a
+// forced eviction, before any discovery pass has ever had a chance to
+// classify the evicted cgroups, cannot prove they belong to nothing at all
+// — so it downgrades every live generation it cannot rule out (g's own
+// mount view is never confirmed in this test, so it qualifies), records a
+// watermark protecting a container not even discovered yet, and still
+// counts every eviction in eventsUnclassified regardless.
 func TestQueuePendingRouteEventDropsOldestAtCap(t *testing.T) {
 	s := newTestSessionForEvents()
+	s.eventsStatus = evidence.EventsOK
 	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('s')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
 	s.generations[g.key()] = g
+
+	beforeTicks, err := bootTicksNow()
+	if err != nil {
+		t.Fatalf("bootTicksNow: %v", err)
+	}
 
 	for i := 0; i < maxPendingRouteEvents+5; i++ {
 		s.queuePendingRouteEvent(pendingRouteEvent{ev: ebpf.Event{CgroupID: uint64(i)}, receivedAt: s.now()})
 	}
+
+	afterTicks, err := bootTicksNow()
+	if err != nil {
+		t.Fatalf("bootTicksNow: %v", err)
+	}
+
 	if len(s.pendingRouteEvents) != maxPendingRouteEvents {
 		t.Fatalf("len(pendingRouteEvents) = %d, want %d", len(s.pendingRouteEvents), maxPendingRouteEvents)
 	}
 	if s.pendingRouteEvents[0].ev.CgroupID != 5 {
 		t.Errorf("oldest surviving entry has CgroupID %d, want 5 (the first 5 should have been dropped)", s.pendingRouteEvents[0].ev.CgroupID)
 	}
-	if s.unattributedEventsLost != 5 {
-		t.Errorf("unattributedEventsLost = %d, want 5 (one per dropped entry)", s.unattributedEventsLost)
+	if s.eventsUnclassified != 5 {
+		t.Errorf("eventsUnclassified = %d, want 5 (one per dropped entry) -- counted regardless of whatever coverage downgrade also happened", s.eventsUnclassified)
 	}
+
+	// g's own mount view was never confirmed (no sample has run): any one of
+	// the 5 evicted events could still turn out to have been its own, so
+	// safety requires downgrading it rather than guessing it out.
 	if g.eventsCoverage != evidence.CoveragePartial {
-		t.Errorf("eventsCoverage = %q, want partial -- an unattributable loss must still downgrade every live generation", g.eventsCoverage)
+		t.Errorf("eventsCoverage = %q, want partial -- g's own mount view is unconfirmed, so it cannot be ruled out as the evicted events' own generation", g.eventsCoverage)
+	}
+	if !g.incomplete {
+		t.Errorf("incomplete = false, want true (markCoveragePartial's own side effect)")
 	}
 	if g.eventsLost != 0 {
-		t.Errorf("eventsLost = %d, want 0 -- an unattributable loss must never be charged to a specific generation's own counter", g.eventsLost)
+		t.Errorf("eventsLost = %d, want 0 -- a forced-safety downgrade is not a specific, countable loss the way tier 1 is", g.eventsLost)
+	}
+
+	// A container not even discovered yet is protected too, via the
+	// watermark this eviction recorded.
+	if !s.forcedGapWatermarkSet {
+		t.Fatalf("forcedGapWatermarkSet = false after a forced eviction, want true")
+	}
+	if s.forcedGapWatermarkTicks < beforeTicks || s.forcedGapWatermarkTicks > afterTicks {
+		t.Errorf("forcedGapWatermarkTicks = %d, want within [%d, %d] (the instant the eviction actually happened)", s.forcedGapWatermarkTicks, beforeTicks, afterTicks)
+	}
+	if got, watermarkProtected := s.initialEventsCoverage(s.forcedGapWatermarkTicks); got != evidence.CoveragePartial || !watermarkProtected {
+		t.Errorf("initialEventsCoverage(watermark) = (%q, %v), want (partial, true) -- a generation discovered later, whose own init started at or before the watermark, must never claim since_start", got, watermarkProtected)
+	}
+	if got, watermarkProtected := s.initialEventsCoverage(afterTicks + 1_000_000_000); got != evidence.CoverageSinceStart || watermarkProtected {
+		t.Errorf("initialEventsCoverage(well after the watermark) = (%q, %v), want (since_start, false) -- the watermark must not blanket-downgrade every future generation regardless of when it actually started", got, watermarkProtected)
 	}
 }
 
-func TestRetryPendingRouteEvents_ExpiryCountsAsUnattributableLoss(t *testing.T) {
+// TestRetryPendingRouteEvents_ExpiryCountsAsUnclassifiedOnceDiscoveryHasRun
+// covers classifyUnattributedExpiry's own tier 3: an item whose cgroup is
+// still unclassified when its own TTL elapses is only ever counted (never
+// silently discarded) once a discovery pass that started after it arrived
+// has actually completed -- reconcileCgroupRoute's own reseeding is the
+// primary way a cgroup ever gets classified on a host where tp_btf/
+// cgroup_mkdir's own event delivery cannot be relied on, so this readiness
+// gate is what keeps an event from being given up on before discovery even
+// had its first chance to classify it.
+func TestRetryPendingRouteEvents_ExpiryCountsAsUnclassifiedOnceDiscoveryHasRun(t *testing.T) {
 	s := newTestSessionForEvents()
 	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('t')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
 	s.generations[g.key()] = g
@@ -507,28 +729,55 @@ func TestRetryPendingRouteEvents_ExpiryCountsAsUnattributableLoss(t *testing.T) 
 	s.pendingRouteEvents = []pendingRouteEvent{
 		{ev: ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 1}, kind: evidence.KindExecEvent, isExec: true, receivedAt: base},
 	}
-	s.retryPendingRouteEvents(base.Add(pendingRouteEventTTL + time.Second))
+	// A discovery pass that started after this item arrived has already
+	// completed.
+	s.lastCompletedDiscoveryStartedAt = base.Add(time.Second)
+
+	s.retryPendingRouteEvents(base.Add(pendingRouteEventTTL + 2*time.Second))
 
 	if len(s.pendingRouteEvents) != 0 {
-		t.Errorf("len(pendingRouteEvents) = %d, want 0 (expired)", len(s.pendingRouteEvents))
+		t.Errorf("len(pendingRouteEvents) = %d, want 0 (expired, and a fresh discovery pass had already run)", len(s.pendingRouteEvents))
 	}
-	if s.unattributedEventsLost != 1 {
-		t.Errorf("unattributedEventsLost = %d, want 1", s.unattributedEventsLost)
+	if s.eventsUnclassified != 1 {
+		t.Errorf("eventsUnclassified = %d, want 1", s.eventsUnclassified)
 	}
-	if g.eventsCoverage != evidence.CoveragePartial {
-		t.Errorf("eventsCoverage = %q, want partial", g.eventsCoverage)
+	if g.eventsCoverage != evidence.CoverageSinceStart {
+		t.Errorf("eventsCoverage = %q, want unchanged at since_start -- an unrelated generation's own coverage must never be downgraded by this", g.eventsCoverage)
 	}
 }
 
-// TestPendingRouteEventGating_UnclassifiedCgroupMarksEveryLiveGeneration
-// confirms that a pendingRouteEvent whose own cgroup cannot be classified at
-// all right now (never seen, or evicted from cgroupRoute) could still turn
-// out to belong to *any* container this session currently holds a live
-// generation for — not just downgraded to partial once its own TTL
-// eventually expires it, but Incomplete on every one of them for as long as
-// it remains outstanding, since which one (if any) it actually belongs to
-// has not resolved at all yet.
-func TestPendingRouteEventGating_UnclassifiedCgroupMarksEveryLiveGeneration(t *testing.T) {
+// TestRetryPendingRouteEvents_ExpiryWithoutFreshDiscoveryKeepsWaiting is the
+// companion to the test above: without a discovery pass that started after
+// the item arrived having completed yet, pendingRouteEventTTL having
+// elapsed is not enough -- the item is "not ready to decide", not
+// "expired", and keeps waiting rather than being counted (or discarded) at
+// all.
+func TestRetryPendingRouteEvents_ExpiryWithoutFreshDiscoveryKeepsWaiting(t *testing.T) {
+	s := newTestSessionForEvents()
+	base := s.now()
+	s.pendingRouteEvents = []pendingRouteEvent{
+		{ev: ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 1}, kind: evidence.KindExecEvent, isExec: true, receivedAt: base},
+	}
+	// s.lastCompletedDiscoveryStartedAt is left at its zero value: no
+	// discovery pass has completed at all since this item arrived.
+	s.retryPendingRouteEvents(base.Add(pendingRouteEventTTL + time.Hour))
+
+	if len(s.pendingRouteEvents) != 1 {
+		t.Errorf("len(pendingRouteEvents) = %d, want 1 -- must keep waiting for a discovery pass that started after it arrived", len(s.pendingRouteEvents))
+	}
+	if s.eventsUnclassified != 0 {
+		t.Errorf("eventsUnclassified = %d, want 0 -- not ready to be counted yet", s.eventsUnclassified)
+	}
+}
+
+// TestPendingRouteEventGating_UnconfirmedMountViewMarksIncomplete confirms
+// that a pendingRouteEvent whose own cgroup cannot be classified at all
+// right now (never seen, or evicted from cgroupRoute) still marks
+// Incomplete a live generation whose own mount view is not yet confirmed at
+// all (nothing to rule it out on yet) — but never an already-ended
+// generation. See the companion test below for the narrower half of the
+// same rule once a generation's own mount view *is* confirmed.
+func TestPendingRouteEventGating_UnconfirmedMountViewMarksIncomplete(t *testing.T) {
 	s := newTestSessionForEvents()
 	live := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('5')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
 	ended := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('6')}, InitProcess{PID: 2, Starttime: 2}, s.now(), evidence.CoverageSinceStart)
@@ -539,23 +788,16 @@ func TestPendingRouteEventGating_UnclassifiedCgroupMarksEveryLiveGeneration(t *t
 	// Cgroup 999 is never registered anywhere in s.cgroupRoute at all.
 	s.pendingRouteEvents = []pendingRouteEvent{{ev: ebpf.Event{CgroupID: 999}, receivedAt: s.now()}}
 
-	known, anyUnclassified := s.pendingRouteEventGating()
-	if !anyUnclassified {
-		t.Error("anyUnclassified = false, want true for a cgroup this session has never classified at all")
+	incomplete := s.pendingRouteEventGating()
+	if !incomplete[live.container.ID] {
+		t.Error("live generation not marked incomplete, want true -- its own mount view is not yet confirmed at all")
 	}
-	if len(known) != 0 {
-		t.Errorf("known = %v, want empty", known)
-	}
-
-	if !live.toEvidence(true).Incomplete {
-		t.Error("a live generation must be Incomplete while an unclassified pendingRouteEvent remains outstanding")
-	}
-	if ended.toEvidence(false).Incomplete {
-		t.Error("an already-ended generation must not be marked Incomplete by this at all -- see buildSnapshot's own !g.ended gate")
+	if incomplete[ended.container.ID] {
+		t.Error("an already-ended generation must never be marked incomplete by this at all")
 	}
 
-	// End-to-end through buildSnapshot itself, not just the two pieces
-	// (pendingRouteEventGating, toEvidence) combined by hand above.
+	// End-to-end through buildSnapshot itself, not just pendingRouteEventGating
+	// combined by hand above.
 	snap := s.buildSnapshot(evidence.SensorOK)
 	for _, g := range snap.Generations {
 		switch g.Container.ID {
@@ -567,6 +809,78 @@ func TestPendingRouteEventGating_UnclassifiedCgroupMarksEveryLiveGeneration(t *t
 			if g.Incomplete {
 				t.Error("buildSnapshot: ended generation Incomplete = true, want false")
 			}
+		}
+	}
+}
+
+// TestPendingRouteEventGating_ConfirmedMountViewOnlyMarksMatchingGeneration
+// covers the narrower half of the same rule: once a live generation's own
+// mount view is confirmed, an unclassified pendingRouteEvent only marks it
+// Incomplete if its own mount namespace actually matches — never a
+// different, equally-confirmed generation this item demonstrably cannot
+// belong to.
+func TestPendingRouteEventGating_ConfirmedMountViewOnlyMarksMatchingGeneration(t *testing.T) {
+	s := newTestSessionForEvents()
+	matching := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('y')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	matching.mntNsID = 42
+	other := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('z')}, InitProcess{PID: 2, Starttime: 2}, s.now(), evidence.CoverageSinceStart)
+	other.mntNsID = 99
+	s.generations[matching.key()] = matching
+	s.generations[other.key()] = other
+
+	s.pendingRouteEvents = []pendingRouteEvent{{ev: ebpf.Event{CgroupID: 999, MountNamespaceID: 42}, receivedAt: s.now()}}
+
+	incomplete := s.pendingRouteEventGating()
+	if !incomplete[matching.container.ID] {
+		t.Error("matching generation not marked incomplete, want true")
+	}
+	if incomplete[other.container.ID] {
+		t.Error("other generation marked incomplete, want false -- its own confirmed mount namespace does not match this item's own")
+	}
+}
+
+// TestBuildSnapshot_PendingKernelLossMarksEveryLiveGenerationIncompleteNotSticky
+// covers this round's fix: a kernel per-cgroup ring-buffer loss delta this
+// session cannot yet resolve (pendingLossDeltas) carries no mount namespace
+// at all — unlike a pendingRouteEvent, there is nothing here to narrow which
+// live generation it might belong to (see pendingRouteEventGating's own
+// tier-2-style narrowing, which needs at least a mount namespace to work
+// with) — so every live generation, confirmed mount view or not, must
+// publish Incomplete for as long as anything sits in pendingLossDeltas at
+// all. Not sticky: the moment the queue empties (resolved, or finalized by
+// the existing three-tier rule), the next snapshot reverts on its own.
+func TestBuildSnapshot_PendingKernelLossMarksEveryLiveGenerationIncompleteNotSticky(t *testing.T) {
+	s := newTestSessionForEvents()
+	live := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('k')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	live.mntNsID = 1 // confirmed -- must still be marked; a kernel loss carries no mnt ns to narrow by
+	ended := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('l')}, InitProcess{PID: 2, Starttime: 2}, s.now(), evidence.CoverageSinceStart)
+	ended.ended = true
+	s.generations[live.key()] = live
+	s.generations[ended.key()] = ended
+
+	s.pendingLossDeltas = []pendingLossDelta{{cgroupID: 700, delta: 1, receivedAt: s.now()}}
+
+	snap := s.buildSnapshot(evidence.SensorOK)
+	for _, g := range snap.Generations {
+		switch g.Container.ID {
+		case live.container.ID:
+			if !g.Incomplete {
+				t.Error("live generation Incomplete = false while pendingLossDeltas is non-empty, want true")
+			}
+		case ended.container.ID:
+			if g.Incomplete {
+				t.Error("an already-ended generation must never be marked incomplete by this at all")
+			}
+		}
+	}
+
+	// The pending delta clears (resolved, or finalized) -- Incomplete must
+	// revert on its own, the next snapshot, not stay sticky.
+	s.pendingLossDeltas = nil
+	snap2 := s.buildSnapshot(evidence.SensorOK)
+	for _, g := range snap2.Generations {
+		if g.Container.ID == live.container.ID && g.Incomplete {
+			t.Error("live generation Incomplete = true after pendingLossDeltas emptied, want false (not sticky)")
 		}
 	}
 }
@@ -612,37 +926,42 @@ func TestAttributeEventLossDeltasPerCgroup(t *testing.T) {
 		}
 		return nil, routeUnresolved
 	}
-	unattributed := attributeEventLossDeltas(
+	unclassifiedNow, pending := attributeEventLossDeltas(
 		map[uint64]uint64{7: 5, 9: 2}, 0,
 		map[uint64]uint64{7: 2}, 0,
-		resolve, map[string]*generationState{g.key(): g},
+		resolve,
 	)
 	if g.eventsLost != 3 {
 		t.Errorf("eventsLost = %d, want 3 (5-2, attributed to cgroup 7's generation)", g.eventsLost)
 	}
-	if unattributed != 2 {
-		t.Errorf("unattributed (return value) = %d, want 2 (cgroup 9's own delta, which resolve could not attribute to anything)", unattributed)
+	if unclassifiedNow != 0 {
+		t.Errorf("unclassifiedNow = %d, want 0 -- cgroup 9's own delta is not resolvable yet, but must be queued (pending), not finalized on the spot", unclassifiedNow)
+	}
+	if want := []pendingCgroupLoss{{cgroupID: 9, delta: 2}}; !reflect.DeepEqual(pending, want) {
+		t.Errorf("pending = %+v, want %+v (cgroup 9's own delta, which resolve could not attribute to anything yet)", pending, want)
 	}
 	if g.eventsCoverage != evidence.CoveragePartial {
 		t.Errorf("eventsCoverage = %q, want partial", g.eventsCoverage)
 	}
 }
 
-// TestAttributeEventLossDeltasDiscardNeverCountsOrMarksPartial confirms that
-// a per-cgroup delta resolve confirms is routeDiscard (a host process's own
-// cgroup, or an operator-excluded container) contributes to neither the
-// returned unattributed total nor markAllGenerationsPartial -- it is not
-// this session's own observation being affected at all, so it must not make
-// an otherwise fully-since_start container look partial.
-func TestAttributeEventLossDeltasDiscardNeverCountsOrMarksPartial(t *testing.T) {
+// TestAttributeEventLossDeltasDiscardNeverCounts confirms that a per-cgroup
+// delta resolve confirms is routeDiscard (a host process's own cgroup, or an
+// operator-excluded container) contributes to neither the returned
+// unclassified total nor any generation's own coverage -- it is not this
+// session's own observation being affected at all, so it must not make an
+// otherwise fully-since_start container look partial.
+func TestAttributeEventLossDeltasDiscardNeverCounts(t *testing.T) {
 	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('3')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageSinceStart)
-	gens := map[string]*generationState{g.key(): g}
 	resolve := func(uint64) (*generationState, eventRouteOutcome) { return nil, routeDiscard }
 
-	unattributed := attributeEventLossDeltas(map[uint64]uint64{7: 5}, 0, map[uint64]uint64{7: 2}, 0, resolve, gens)
+	unclassifiedNow, pending := attributeEventLossDeltas(map[uint64]uint64{7: 5}, 0, map[uint64]uint64{7: 2}, 0, resolve)
 
-	if unattributed != 0 {
-		t.Errorf("unattributed = %d, want 0 -- a routeDiscard delta is not this session's own observation at all", unattributed)
+	if unclassifiedNow != 0 {
+		t.Errorf("unclassifiedNow = %d, want 0 -- a routeDiscard delta is not this session's own observation at all", unclassifiedNow)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending = %+v, want empty -- a routeDiscard delta must never be queued either", pending)
 	}
 	if g.eventsCoverage != evidence.CoverageSinceStart {
 		t.Errorf("eventsCoverage = %q, want unchanged at since_start -- a routeDiscard delta must never mark any generation partial", g.eventsCoverage)
@@ -652,41 +971,188 @@ func TestAttributeEventLossDeltasDiscardNeverCountsOrMarksPartial(t *testing.T) 
 	}
 }
 
-func TestAttributeEventLossDeltasFallbackMarksAllPartial(t *testing.T) {
+// TestAttributeEventLossDeltasFallbackIsAlwaysUnclassified confirms that
+// kl_lost_events (the fallback counter with no per-cgroup breakdown at all)
+// can never be tier 1 (there is no cgroup ID to resolve against anything)
+// and therefore never touches any generation's own coverage or eventsLost —
+// only the returned unclassified total, which the caller folds into
+// s.eventsUnclassified (recordUnclassifiedEventLoss), never s.eventsLost.
+func TestAttributeEventLossDeltasFallbackIsAlwaysUnclassified(t *testing.T) {
 	g1 := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('j')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageSinceStart)
 	g2 := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('k')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageSinceStart)
-	gens := map[string]*generationState{g1.key(): g1, g2.key(): g2}
 
-	unattributed := attributeEventLossDeltas(nil, 3, nil, 1, func(uint64) (*generationState, eventRouteOutcome) { return nil, routeUnresolved }, gens)
+	unclassifiedNow, pending := attributeEventLossDeltas(nil, 3, nil, 1, func(uint64) (*generationState, eventRouteOutcome) { return nil, routeUnresolved })
 
-	if unattributed != 2 {
-		t.Errorf("unattributed (return value) = %d, want 2 (3-1, the fallback counter's own delta)", unattributed)
+	if unclassifiedNow != 2 {
+		t.Errorf("unclassifiedNow = %d, want 2 (3-1, the fallback counter's own delta -- finalized immediately, unlike a per-cgroup delta)", unclassifiedNow)
 	}
-	if g1.eventsCoverage != evidence.CoveragePartial || g2.eventsCoverage != evidence.CoveragePartial {
-		t.Error("an unattributable (fallback) loss must downgrade every live generation's coverage to partial")
+	if len(pending) != 0 {
+		t.Errorf("pending = %+v, want empty -- byCgroup is empty, so there is nothing to queue", pending)
+	}
+	if g1.eventsCoverage != evidence.CoverageSinceStart || g2.eventsCoverage != evidence.CoverageSinceStart {
+		t.Error("the fallback counter carries no cgroup ID at all -- it must never downgrade any generation's own coverage")
 	}
 	if g1.eventsLost != 0 || g2.eventsLost != 0 {
-		t.Error("a fallback (unattributable) loss must not advance any one generation's own events_lost")
+		t.Error("must not advance any one generation's own events_lost either")
+	}
+}
+
+// TestRetryPendingLossDeltas_WithoutFreshDiscoveryKeepsWaiting covers the
+// core of this round's fix to attributeEventLossDeltas/reconcileEventLossCounters:
+// a per-cgroup kernel loss delta this session cannot yet resolve to a
+// specific generation must not be finalized as unclassified the moment it
+// is first observed — it keeps waiting, exactly the way a specific event's
+// own pendingRouteEvent already does, until a discovery pass that started
+// after it arrived has actually completed.
+func TestRetryPendingLossDeltas_WithoutFreshDiscoveryKeepsWaiting(t *testing.T) {
+	s := newTestSessionForEvents()
+	base := s.now()
+	s.pendingLossDeltas = []pendingLossDelta{{cgroupID: 42, delta: 3, receivedAt: base}}
+	// s.lastCompletedDiscoveryStartedAt is left at its zero value: no
+	// discovery pass has completed at all since this delta arrived.
+
+	s.retryPendingLossDeltas(base.Add(time.Hour))
+
+	if len(s.pendingLossDeltas) != 1 {
+		t.Errorf("len(pendingLossDeltas) = %d, want 1 -- must keep waiting for a discovery pass that started after it arrived", len(s.pendingLossDeltas))
+	}
+	if s.eventsUnclassified != 0 {
+		t.Errorf("eventsUnclassified = %d, want 0 -- not ready to be counted yet", s.eventsUnclassified)
+	}
+}
+
+// TestRetryPendingLossDeltas_CountsAsUnclassifiedOnceDiscoveryHasRun is the
+// companion to the test above: once a discovery pass that started after the
+// delta arrived has completed, and the cgroup still cannot be resolved to
+// anything, it is finally counted -- and only in eventsUnclassified, never
+// as a specific generation's own eventsLost or a coverage downgrade.
+func TestRetryPendingLossDeltas_CountsAsUnclassifiedOnceDiscoveryHasRun(t *testing.T) {
+	s := newTestSessionForEvents()
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('u')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	s.generations[g.key()] = g
+
+	base := s.now()
+	s.pendingLossDeltas = []pendingLossDelta{{cgroupID: 42, delta: 3, receivedAt: base}}
+	s.lastCompletedDiscoveryStartedAt = base.Add(time.Second)
+
+	s.retryPendingLossDeltas(base.Add(time.Hour))
+
+	if len(s.pendingLossDeltas) != 0 {
+		t.Errorf("len(pendingLossDeltas) = %d, want 0 (resolved -- a fresh discovery pass had already run)", len(s.pendingLossDeltas))
+	}
+	if s.eventsUnclassified != 3 {
+		t.Errorf("eventsUnclassified = %d, want 3", s.eventsUnclassified)
+	}
+	if g.eventsCoverage != evidence.CoverageSinceStart || g.eventsLost != 0 {
+		t.Errorf("g = %+v, want untouched -- an unrelated generation's own coverage/eventsLost must never be affected by this", g)
+	}
+}
+
+// TestRetryPendingLossDeltas_ResolvesToLiveGenerationOnceClassified covers
+// tier 1 for a pendingLossDelta: once the cgroup this delta names resolves
+// to a real, live generation (e.g. reconcileCgroupRoute classified it in
+// the meantime), a retry charges that generation's own eventsLost directly
+// -- never eventsUnclassified -- exactly as an already-resolved cgroup
+// already does in attributeEventLossDeltas itself.
+func TestRetryPendingLossDeltas_ResolvesToLiveGenerationOnceClassified(t *testing.T) {
+	s := newTestSessionForEvents()
+	cid := strings64('v')
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cid}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	s.generations[g.key()] = g
+
+	base := s.now()
+	s.pendingLossDeltas = []pendingLossDelta{{cgroupID: 42, delta: 3, receivedAt: base}}
+	// The cgroup becomes classified in the meantime -- no discovery-pass
+	// completion needed at all for tier 1, unlike tier 3.
+	s.cgroupRoute.set(42, "/system.slice/docker-"+cid+".scope", cid)
+
+	s.retryPendingLossDeltas(base)
+
+	if len(s.pendingLossDeltas) != 0 {
+		t.Errorf("len(pendingLossDeltas) = %d, want 0 (resolved outright)", len(s.pendingLossDeltas))
+	}
+	if g.eventsLost != 3 {
+		t.Errorf("eventsLost = %d, want 3", g.eventsLost)
+	}
+	if s.eventsUnclassified != 0 {
+		t.Errorf("eventsUnclassified = %d, want 0 -- a cgroup that resolves outright is never unclassified", s.eventsUnclassified)
+	}
+}
+
+// TestApplyForcedGapEviction_ConfirmedMountViewMatchOnly covers item (a) of
+// applyForcedGapEviction's own safety net: a live generation whose own
+// mount view is already confirmed only gets downgraded when it actually
+// matches mntNSID -- an equally-confirmed generation with a different mount
+// namespace is not this loss's own generation and must be left alone,
+// exactly like classifyUnattributedExpiry's own tier 2 exact-match rule.
+func TestApplyForcedGapEviction_ConfirmedMountViewMatchOnly(t *testing.T) {
+	s := newTestSessionForEvents()
+	matching := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('m')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	matching.mntNsID = 42
+	other := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('o')}, InitProcess{PID: 2, Starttime: 2}, s.now(), evidence.CoverageSinceStart)
+	other.mntNsID = 99
+	s.generations[matching.key()] = matching
+	s.generations[other.key()] = other
+
+	s.applyForcedGapEviction(42, 1, time.Time{})
+
+	if matching.eventsCoverage != evidence.CoveragePartial {
+		t.Errorf("matching.eventsCoverage = %q, want partial -- its own confirmed mount namespace matches", matching.eventsCoverage)
+	}
+	if other.eventsCoverage != evidence.CoverageSinceStart {
+		t.Errorf("other.eventsCoverage = %q, want unchanged at since_start -- its own confirmed mount namespace does not match", other.eventsCoverage)
+	}
+	if s.eventsUnclassified != 1 {
+		t.Errorf("eventsUnclassified = %d, want 1", s.eventsUnclassified)
+	}
+}
+
+// TestApplyForcedGapEviction_ZeroMountNamespaceProtectsConfirmedGenerationsToo
+// covers this round's fix: mntNSID == 0 (an aggregate kernel loss-counter
+// delta, carrying no single event's own mount namespace at all) leaves
+// nothing at all to narrow by, so even a live generation whose own mount
+// view is already confirmed must be downgraded — unlike the mntNSID != 0
+// case (TestApplyForcedGapEviction_ConfirmedMountViewMatchOnly above), where
+// a confirmed generation is only downgraded if its own mount namespace
+// actually matches.
+func TestApplyForcedGapEviction_ZeroMountNamespaceProtectsConfirmedGenerationsToo(t *testing.T) {
+	s := newTestSessionForEvents()
+	confirmed := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('n')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	confirmed.mntNsID = 42
+	unconfirmed := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('p')}, InitProcess{PID: 2, Starttime: 2}, s.now(), evidence.CoverageSinceStart)
+	s.generations[confirmed.key()] = confirmed
+	s.generations[unconfirmed.key()] = unconfirmed
+
+	s.applyForcedGapEviction(0, 1, time.Time{})
+
+	if confirmed.eventsCoverage != evidence.CoveragePartial || !confirmed.incomplete {
+		t.Errorf("confirmed = {coverage=%q incomplete=%v}, want {partial, true} -- an already-confirmed mount view is not enough to rule out an aggregate loss with no mount namespace of its own to compare against", confirmed.eventsCoverage, confirmed.incomplete)
+	}
+	if unconfirmed.eventsCoverage != evidence.CoveragePartial || !unconfirmed.incomplete {
+		t.Errorf("unconfirmed = {coverage=%q incomplete=%v}, want {partial, true}", unconfirmed.eventsCoverage, unconfirmed.incomplete)
+	}
+	if s.eventsUnclassified != 1 {
+		t.Errorf("eventsUnclassified = %d, want 1", s.eventsUnclassified)
 	}
 }
 
 func TestInitialEventsCoverage(t *testing.T) {
 	s := newTestSessionForEvents()
 	s.eventsStatus = evidence.EventsUnavailable
-	if got := s.initialEventsCoverage(9999); got != evidence.CoverageNone {
-		t.Errorf("initialEventsCoverage(9999) = %q, want none when eventsStatus is unavailable", got)
+	if got, watermarkProtected := s.initialEventsCoverage(9999); got != evidence.CoverageNone || watermarkProtected {
+		t.Errorf("initialEventsCoverage(9999) = (%q, %v), want (none, false) when eventsStatus is unavailable", got, watermarkProtected)
 	}
 
 	s.eventsStatus = evidence.EventsOK
 	s.attachedAtBootTicks = 1000
-	if got := s.initialEventsCoverage(1001); got != evidence.CoverageSinceStart {
-		t.Errorf("initialEventsCoverage(1001) = %q, want since_start when init started after attach (tick 1000)", got)
+	if got, watermarkProtected := s.initialEventsCoverage(1001); got != evidence.CoverageSinceStart || watermarkProtected {
+		t.Errorf("initialEventsCoverage(1001) = (%q, %v), want (since_start, false) when init started after attach (tick 1000)", got, watermarkProtected)
 	}
-	if got := s.initialEventsCoverage(1000); got != evidence.CoveragePartial {
-		t.Errorf("initialEventsCoverage(1000) = %q, want partial when init started at the same tick as attach", got)
+	if got, watermarkProtected := s.initialEventsCoverage(1000); got != evidence.CoveragePartial || watermarkProtected {
+		t.Errorf("initialEventsCoverage(1000) = (%q, %v), want (partial, false) when init started at the same tick as attach", got, watermarkProtected)
 	}
-	if got := s.initialEventsCoverage(999); got != evidence.CoveragePartial {
-		t.Errorf("initialEventsCoverage(999) = %q, want partial when init started before attach", got)
+	if got, watermarkProtected := s.initialEventsCoverage(999); got != evidence.CoveragePartial || watermarkProtected {
+		t.Errorf("initialEventsCoverage(999) = (%q, %v), want (partial, false) when init started before attach", got, watermarkProtected)
 	}
 }
 
@@ -751,7 +1217,7 @@ func TestEventDrivenOSPackage_LaterHighPrivilegeProcessUpdatesObservations(t *te
 
 	// The parser answers the first lookup.
 	fatal := s.applyDBResult(dbResult{
-		kind: dbJobLookup, genKey: job.genKey, epoch: job.epoch,
+		kind: dbJobLookup, genKey: job.genKey, epoch: job.epoch, seq: job.seq,
 		owners: map[string]lookupOutcome{"/usr/sbin/nginx": {owners: []lookupOwner{{Name: "nginx", Version: "1.24.0"}}}},
 	})
 	if fatal != nil {
@@ -763,7 +1229,7 @@ func TestEventDrivenOSPackage_LaterHighPrivilegeProcessUpdatesObservations(t *te
 	select {
 	case job2 := <-s.dbJobCh:
 		fatal := s.applyDBResult(dbResult{
-			kind: dbJobLookup, genKey: job2.genKey, epoch: job2.epoch,
+			kind: dbJobLookup, genKey: job2.genKey, epoch: job2.epoch, seq: job2.seq,
 			owners: map[string]lookupOutcome{"/usr/sbin/nginx": {owners: []lookupOwner{{Name: "nginx", Version: "1.24.0"}}}},
 		})
 		if fatal != nil {
@@ -827,9 +1293,43 @@ func TestResolveEventGeneration_ZeroStartBoottimeFallsBackToLive(t *testing.T) {
 	// resolveEventGeneration's own doc comment): it is only ever used for
 	// the aggregate per-cgroup loss-counter attribution, which has no
 	// single event to take a process start time from at all.
-	g, outcome := s.resolveEventGeneration(52, 0, 0)
+	g, outcome := s.resolveEventGeneration(52, 0, 0, 0)
 	if outcome != routeResolved || g != newGen {
 		t.Errorf("resolveEventGeneration(52, 0, 0) = (%v, %v), want (newGen, routeResolved)", g, outcome)
+	}
+}
+
+// TestResolveEventGeneration_HostMountNamespaceEventNeverAttributes covers
+// the host-mount-namespace discard added alongside the H1/H3 fixes: an event
+// reporting the Sensor's own known host mount namespace (s.hostMntNSID) must
+// route as routeDiscard even when its own cgroup ID is a real, already-known,
+// perfectly resolvable container — a real Docker container's own workload
+// never execs inside the host's own mount namespace (see
+// resolveEventGeneration's own doc comment), so this can never be that
+// container's own usage evidence regardless of which cgroup it carries.
+func TestResolveEventGeneration_HostMountNamespaceEventNeverAttributes(t *testing.T) {
+	s := newTestSessionForEvents()
+	s.hostMntNSID = 4026531840
+	cid := strings64('h')
+	gen := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cid}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	s.generations[gen.key()] = gen
+	s.cgroupRoute.set(60, "/system.slice/docker-"+cid+".scope", cid)
+
+	if g, outcome := s.resolveEventGeneration(60, 0, 0, s.hostMntNSID); outcome != routeDiscard || g != nil {
+		t.Errorf("resolveEventGeneration with mntNSID == hostMntNSID = (%v, %v), want (nil, routeDiscard)", g, outcome)
+	}
+
+	// A different mount namespace for the exact same cgroup still resolves
+	// normally — this is not a blanket "ignore this cgroup" rule, only a
+	// per-event mount-namespace check.
+	if g, outcome := s.resolveEventGeneration(60, 0, 0, s.hostMntNSID+1); outcome != routeResolved || g != gen {
+		t.Errorf("resolveEventGeneration with a distinct mntNSID = (%v, %v), want (gen, routeResolved)", g, outcome)
+	}
+
+	// mntNSID == 0 (the aggregate per-cgroup loss-counter caller, which has
+	// no single event to take one from at all) always skips this check.
+	if g, outcome := s.resolveEventGeneration(60, 0, 0, 0); outcome != routeResolved || g != gen {
+		t.Errorf("resolveEventGeneration with mntNSID 0 = (%v, %v), want (gen, routeResolved)", g, outcome)
 	}
 }
 
@@ -998,7 +1498,7 @@ func TestResolveEventGeneration_UnprovableGapNeverAttributesToBoundingGeneration
 	s.generations[other.key()] = other
 
 	gapEventTicks := int64(3000)
-	g, outcome := s.resolveEventGeneration(200, uint64(gapEventTicks)*nsPerClockTick, 999)
+	g, outcome := s.resolveEventGeneration(200, uint64(gapEventTicks)*nsPerClockTick, 999, 0)
 
 	if outcome != routeGapLoss || g != nil {
 		t.Fatalf("resolveEventGeneration = (%v, %v), want (nil, routeGapLoss)", g, outcome)
@@ -1019,7 +1519,7 @@ func TestResolveEventGeneration_UnprovableGapNeverAttributesToBoundingGeneration
 	// Never resolvable on a later retry either: re-resolving the exact same
 	// event again must reach the same conclusion, not silently succeed
 	// because a.lastAliveNs or c.init.Starttime happens to be read again.
-	if _, outcome2 := s.resolveEventGeneration(200, uint64(gapEventTicks)*nsPerClockTick, 999); outcome2 != routeGapLoss {
+	if _, outcome2 := s.resolveEventGeneration(200, uint64(gapEventTicks)*nsPerClockTick, 999, 0); outcome2 != routeGapLoss {
 		t.Errorf("second resolveEventGeneration call = %v, want routeGapLoss again", outcome2)
 	}
 	if s.unattributedEventsLost != 2 {
@@ -1066,7 +1566,7 @@ func TestResolveEventGeneration_SameTickBoundaryNeverConfirmsOldGeneration(t *te
 		p, n := newScenario(s, cid, 400)
 
 		const nEventNs = 10_009_000_000 // some other process, inside N's own tick
-		g, outcome := s.resolveEventGeneration(400, nEventNs, mismatchedTGID)
+		g, outcome := s.resolveEventGeneration(400, nEventNs, mismatchedTGID, 0)
 
 		if g == p {
 			t.Fatal("resolveEventGeneration attributed a post-restart event to the old generation P -- exactly the tick-truncation bug this rule exists to close")
@@ -1095,7 +1595,7 @@ func TestResolveEventGeneration_SameTickBoundaryNeverConfirmsOldGeneration(t *te
 		p.lastAliveNs = 9_995_000_000 // confirmed alive at 9.995s, before tick 1000 starts at 10.000s
 
 		const nEventNs = 10_009_000_000
-		g, outcome := s.resolveEventGeneration(401, nEventNs, mismatchedTGID)
+		g, outcome := s.resolveEventGeneration(401, nEventNs, mismatchedTGID, 0)
 
 		if g != nil || outcome != routeGapLoss {
 			t.Errorf("resolveEventGeneration = (%v, %v), want (nil, routeGapLoss) -- P's own last confirmation being before N's own tick is not proof P had already ended by then", g, outcome)
@@ -1133,7 +1633,7 @@ func TestResolveEventGeneration_ConfirmedSuccessorStillGapLossWithinOwnTick(t *t
 
 	const stragglerEventNs = 10_001_000_000 // one of A's own processes, 10.001s
 	const stragglerTGID = 42                // neither A's own init PID (1) nor B's own init PID (2)
-	g, outcome := s.resolveEventGeneration(600, stragglerEventNs, stragglerTGID)
+	g, outcome := s.resolveEventGeneration(600, stragglerEventNs, stragglerTGID, 0)
 
 	if g == b {
 		t.Fatal("resolveEventGeneration attributed A's own straggler event to B, using B's own later confirmation as if it proved B already existed at 10.001s")
@@ -1162,7 +1662,7 @@ func TestResolveEventGeneration_InitItselfProvenWithinOwnStartTick(t *testing.T)
 	s.cgroupRoute.set(700, "/system.slice/docker-"+cid+".scope", cid)
 
 	const initEventNs = 20_003_000_000 // inside tick 2000 (20.000s..20.010s)
-	gotG, outcome := s.resolveEventGeneration(700, initEventNs, 7)
+	gotG, outcome := s.resolveEventGeneration(700, initEventNs, 7, 0)
 
 	if outcome != routeResolved || gotG != g {
 		t.Fatalf("resolveEventGeneration = (%v, %v), want (g, routeResolved) -- init's own exec/mmap event, same TGID and same starttime tick as its own generation's init, must resolve outright", gotG, outcome)
@@ -1174,9 +1674,9 @@ func TestResolveEventGeneration_InitItselfProvenWithinOwnStartTick(t *testing.T)
 // itself already records a gap's own loss (scoped to that one container's
 // own generations) the moment it produces that outcome, so re-resolving an
 // evicted oldest item and finding routeGapLoss again must never charge a
-// second, separate unattributable loss, and must never spread partial to
-// every generation this session holds via recordUnattributableEventLoss's
-// own global downgrade.
+// second, separate unattributable loss (routeGapLoss is excluded from
+// queuePendingRouteEvent's own classifyUnattributedExpiry call entirely,
+// for exactly this reason).
 func TestQueuePendingRouteEvent_GapLossEvictionNotDoubleCounted(t *testing.T) {
 	s := newTestSessionForEvents()
 	cid := strings64('c')
@@ -1211,7 +1711,7 @@ func TestQueuePendingRouteEvent_GapLossEvictionNotDoubleCounted(t *testing.T) {
 	}
 
 	if s.unattributedEventsLost != 1 {
-		t.Errorf("unattributedEventsLost = %d, want exactly 1 -- gapItem's own loss is recorded once, by resolveEventGeneration itself, at the moment the eviction path re-resolves it and gets routeGapLoss back; the eviction path's own recordUnattributableEventLoss call must not also fire for that same outcome", s.unattributedEventsLost)
+		t.Errorf("unattributedEventsLost = %d, want exactly 1 -- gapItem's own loss is recorded once, by resolveEventGeneration itself, at the moment the eviction path re-resolves it and gets routeGapLoss back; the eviction path's own classifyUnattributedExpiry call must not also fire for that same outcome", s.unattributedEventsLost)
 	}
 	if a.eventsCoverage != evidence.CoveragePartial || c.eventsCoverage != evidence.CoveragePartial {
 		t.Error("a and c (the gap's own bounding generations) must still be marked partial")
@@ -1368,5 +1868,118 @@ func TestFormatCapEffMatchesProcfsWidth(t *testing.T) {
 	}
 	if got != "0000001fffffffff" {
 		t.Errorf("formatCapEff(0x1FFFFFFFFF) = %q, want %q", got, "0000001fffffffff")
+	}
+}
+
+// TestApplyUsageEvent_HostRootEventNeverCountsAsGapLoss covers container
+// runtime setup: a process in the container's own cgroup, started inside the
+// container init's own starttime tick but not the init itself, whose root is
+// still the host's own root (runc's setup stages before pivot_root). Its
+// events can never be evidence for the container, so they must be dropped
+// outright rather than counted as an unprovable gap loss that downgrades the
+// generation to partial. The same event from a process whose root is not the
+// host's still counts as a gap loss.
+func TestApplyUsageEvent_HostRootEventNeverCountsAsGapLoss(t *testing.T) {
+	s := newTestSessionForEvents()
+	s.hostRootDev, s.hostRootIno = "08:30", 2
+	cid := strings64('8')
+
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cid}, InitProcess{PID: 10, Starttime: 1000}, s.now(), evidence.CoverageSinceStart)
+	s.generations[g.key()] = g
+	s.cgroupRoute.set(300, "/system.slice/docker-"+cid+".scope", cid)
+
+	ev := ebpf.Event{
+		Kind:            ebpf.EventMmapSuccess,
+		CgroupID:        300,
+		TGID:            11,
+		StartBoottimeNs: 1000*nsPerClockTick + 5,
+		RootDev:         8<<20 | 0x30,
+		RootIno:         2,
+	}
+	s.applyUsageEvent(ev, evidence.KindLibraryLoadEvent, false)
+	if s.unattributedEventsLost != 0 {
+		t.Fatalf("unattributedEventsLost = %d after a host-root event, want 0", s.unattributedEventsLost)
+	}
+	if g.eventsCoverage != evidence.CoverageSinceStart {
+		t.Fatalf("eventsCoverage = %q after a host-root event, want since_start", g.eventsCoverage)
+	}
+
+	ev.RootDev, ev.RootIno = 0x54, 972938
+	s.applyUsageEvent(ev, evidence.KindLibraryLoadEvent, false)
+	if s.unattributedEventsLost != 1 {
+		t.Fatalf("unattributedEventsLost = %d after a container-root event in the init's own start tick, want 1", s.unattributedEventsLost)
+	}
+	if g.eventsCoverage != evidence.CoveragePartial {
+		t.Fatalf("eventsCoverage = %q after an unprovable container-root event, want partial", g.eventsCoverage)
+	}
+}
+
+// TestApplyFallbackLoss_DowngradesEveryLiveGenerationAndSetsWatermark covers
+// loss the kernel could only count in its Sensor-wide fallback counter (the
+// per-cgroup map was full): nothing names an owner, so every live
+// generation, confirmed mount view or not, must stop claiming complete
+// coverage, and a generation discovered later that started before now must
+// be protected by the watermark. A zero delta changes nothing.
+func TestApplyFallbackLoss_DowngradesEveryLiveGenerationAndSetsWatermark(t *testing.T) {
+	s := newTestSessionForEvents()
+	confirmed := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('q')}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
+	confirmed.mntNsID = 42
+	s.generations[confirmed.key()] = confirmed
+
+	s.applyFallbackLoss(0, time.Time{})
+	if confirmed.eventsCoverage != evidence.CoverageSinceStart || confirmed.incomplete || s.forcedGapWatermarkSet {
+		t.Fatalf("zero fallback delta changed state: coverage=%q incomplete=%v watermarkSet=%v", confirmed.eventsCoverage, confirmed.incomplete, s.forcedGapWatermarkSet)
+	}
+
+	s.applyFallbackLoss(3, time.Time{})
+	if confirmed.eventsCoverage != evidence.CoveragePartial || !confirmed.incomplete {
+		t.Errorf("confirmed = {coverage=%q incomplete=%v}, want {partial, true}", confirmed.eventsCoverage, confirmed.incomplete)
+	}
+	if !s.forcedGapWatermarkSet {
+		t.Errorf("forcedGapWatermarkSet = false, want true so a not-yet-discovered generation is protected")
+	}
+	if s.eventsUnclassified != 3 {
+		t.Errorf("eventsUnclassified = %d, want 3", s.eventsUnclassified)
+	}
+}
+
+// TestApplyFallbackLoss_EndedGenerationAliveDuringLossIsDowngraded covers a
+// generation whose end was applied between two loss-counter reads: it was
+// alive while the loss could have happened and stays in the published
+// evidence, so it must not keep claiming since_start. The discovery pass
+// that ended it started before the previous read, which is what endedAt
+// records; the decision must rest on when the end was applied instead. A
+// generation whose end was applied before the previous read cannot own the
+// loss and is left alone.
+func TestApplyFallbackLoss_EndedGenerationAliveDuringLossIsDowngraded(t *testing.T) {
+	s := newTestSessionForEvents()
+	base := s.now()
+	discoveryStart := base
+	prevRead := base.Add(5 * time.Second)
+
+	endedAfter := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('r')}, InitProcess{PID: 1, Starttime: 1}, base, evidence.CoverageSinceStart)
+	endedBefore := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('s')}, InitProcess{PID: 2, Starttime: 2}, base, evidence.CoverageSinceStart)
+	s.generations[endedAfter.key()] = endedAfter
+	s.generations[endedBefore.key()] = endedBefore
+
+	// endedBefore: its end is applied before the previous counter read.
+	s.now = func() time.Time { return base.Add(2 * time.Second) }
+	s.endGeneration(endedBefore, discoveryStart)
+	// endedAfter: the same discovery pass (started before the previous
+	// read) is applied only after it.
+	s.now = func() time.Time { return base.Add(10 * time.Second) }
+	s.endGeneration(endedAfter, discoveryStart)
+
+	if !endedAfter.endedAt.Before(prevRead) {
+		t.Fatalf("test setup: endedAt = %v, want before the previous read %v to exercise the ordering", endedAfter.endedAt, prevRead)
+	}
+
+	s.applyFallbackLoss(2, prevRead)
+
+	if endedAfter.eventsCoverage != evidence.CoveragePartial || !endedAfter.incomplete {
+		t.Errorf("endedAfter = {coverage=%q incomplete=%v}, want {partial, true} -- its end was applied after the previous counter read", endedAfter.eventsCoverage, endedAfter.incomplete)
+	}
+	if endedBefore.eventsCoverage != evidence.CoverageSinceStart || endedBefore.incomplete {
+		t.Errorf("endedBefore = {coverage=%q incomplete=%v}, want unchanged -- its end was applied before the loss interval began", endedBefore.eventsCoverage, endedBefore.incomplete)
 	}
 }

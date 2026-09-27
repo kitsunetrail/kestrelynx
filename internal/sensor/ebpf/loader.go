@@ -8,6 +8,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
+	"golang.org/x/sys/unix"
 )
 
 // excludedCgroupSlot and lostEventsSlot are the single index each of
@@ -15,7 +16,38 @@ import (
 const (
 	excludedCgroupSlot uint32 = 0
 	lostEventsSlot     uint32 = 0
+	hostMntNSSlot      uint32 = 0
+	pidNSSlot          uint32 = 0
 )
+
+// DefaultRingBufferBytes is kl_events' own compiled-in size (2 MiB, 512
+// pages on a 4 KiB page): a starting size, to be revisited once real drop
+// counts are measured under load — see bpf/kestrelynx.c's own comment on the
+// kl_events map definition. Load always uses this value;
+// LoadWithRingBufferBytes lets a caller override it.
+const DefaultRingBufferBytes uint32 = 1 << 21
+
+// ValidateRingBufferBytes reports whether n is an acceptable kl_events ring
+// buffer size for LoadWithRingBufferBytes: nonzero, representable in the
+// 32-bit field the BPF map spec itself uses, a multiple of the host's own
+// page size, and a power of two. The last two are not this package's own
+// preference — BPF_MAP_TYPE_RINGBUF rejects any other max_entries value
+// in-kernel — so callers (in particular, a command-line flag) should call
+// this before Load/LoadWithRingBufferBytes ever runs, to turn a bad value
+// into a startup error rather than a Load-time one.
+func ValidateRingBufferBytes(n uint64) error {
+	if n == 0 || uint64(uint32(n)) != n {
+		return fmt.Errorf("ebpf: ring buffer size %d is out of range", n)
+	}
+	pageSize := uint64(unix.Getpagesize())
+	if n%pageSize != 0 {
+		return fmt.Errorf("ebpf: ring buffer size %d is not a multiple of the page size (%d)", n, pageSize)
+	}
+	if n&(n-1) != 0 {
+		return fmt.Errorf("ebpf: ring buffer size %d is not a power of two", n)
+	}
+	return nil
+}
 
 // attachPoint pairs a loaded program with the attach type its SEC() prefix
 // in bpf/kestrelynx.c compiles to. link.AttachTracing needs this explicitly:
@@ -117,11 +149,12 @@ func (h *Handle) Close() error {
 }
 
 // Load creates the Sensor's BPF maps and ring buffer, writes
-// excludedCgroupID into the self-exclusion map, then loads and attaches all
-// five programs in bpf/kestrelynx.c, in that order: the exclusion map must
-// hold its value before any program can run, or the Sensor's own early file
-// opens (reading its own package DB, etc.) could be captured before any
-// program is told to ignore them.
+// excludedCgroupID into the self-exclusion map and hostMntNSID into the
+// host-mount-namespace filter map, then loads and attaches all five
+// programs in bpf/kestrelynx.c, in that order: both maps must hold their
+// values before any program can run, or the Sensor's own early file opens
+// (reading its own package DB, etc.) could be captured before any program
+// is told to ignore them.
 //
 // excludedCgroupID is the cgroup ID the observer and parser processes share
 // (they run in the same container, hence the same cgroup). It must be
@@ -129,11 +162,38 @@ func (h *Handle) Close() error {
 // forgotten call site fails open to "excludes nothing" rather than to
 // "excludes cgroup 0", which could be a real cgroup.
 //
-// If any step fails, Load closes everything it created so far — the
-// exclusion map, any objects loaded before the failing step, the ring
-// buffer reader, any links already attached — and returns the error. It
-// never leaves maps, programs or links behind on failure.
-func Load(excludedCgroupID uint64) (_ *Handle, err error) {
+// hostMntNSID is the real host's own (PID 1's) mount namespace inode number
+// (session.go's own s.hostMntNSID, resolved once at startup) — kl_file_open
+// drops a file open reporting this exact mount namespace before doing any
+// further work at all (see kl_host_mnt_ns's own doc comment). Unlike
+// excludedCgroupID, 0 is accepted here (never rejected as a caller error):
+// resolving the host's own mount namespace can fail for reasons that should
+// not themselves prevent the Sensor from starting at all (see
+// kl_is_host_mnt_ns's own doc comment on 0 meaning "no filter configured,
+// fail open" — this hook still runs normally, just without this one
+// optimization).
+//
+// If any step fails, Load closes everything it created so far — both maps,
+// any objects loaded before the failing step, the ring buffer reader, any
+// links already attached — and returns the error. It never leaves maps,
+// programs or links behind on failure.
+//
+// Load always sizes kl_events at DefaultRingBufferBytes; LoadWithRingBufferBytes
+// is the same sequence with that size overridable, for a caller (the
+// Sensor's own --ring-buffer-bytes flag, and the integration test that
+// deliberately forces ring-buffer overflow) that needs a different one.
+func Load(excludedCgroupID uint64, hostMntNSID uint64) (*Handle, error) {
+	return LoadWithRingBufferBytes(excludedCgroupID, hostMntNSID, DefaultRingBufferBytes)
+}
+
+// LoadWithRingBufferBytes is Load with kl_events' own ring buffer size, in
+// bytes, overridable rather than fixed at DefaultRingBufferBytes.
+// ringBufferBytes must already satisfy ValidateRingBufferBytes — this
+// function does not itself validate it, since by the time a caller holds a
+// value it wants loaded, that value should already have been rejected at
+// startup if it were bad; an invalid value here just surfaces as whatever
+// error the kernel itself returns for a malformed BPF_MAP_TYPE_RINGBUF spec.
+func LoadWithRingBufferBytes(excludedCgroupID uint64, hostMntNSID uint64, ringBufferBytes uint32) (_ *Handle, err error) {
 	if excludedCgroupID == 0 {
 		return nil, errors.New("ebpf: excludedCgroupID must be nonzero")
 	}
@@ -142,6 +202,13 @@ func Load(excludedCgroupID uint64) (_ *Handle, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("ebpf: load collection spec: %w", err)
 	}
+	// Overridden on this same spec instance, before it is ever loaded below
+	// (via spec.LoadAndAssign, not the generated loadKestrelynxebpfObjects
+	// helper, which would silently reload its own fresh copy of the spec and
+	// discard this override): kl_events is not one of the maps replaced via
+	// MapReplacements, so its MaxEntries is whatever this spec's own
+	// MapSpec says at load time.
+	spec.Maps[kestrelynxebpfMapKlEvents].MaxEntries = ringBufferBytes
 
 	excludedMap, err := ebpf.NewMap(spec.Maps[kestrelynxebpfMapKlExcludedCgroup])
 	if err != nil {
@@ -156,13 +223,42 @@ func Load(excludedCgroupID uint64) (_ *Handle, err error) {
 		return nil, fmt.Errorf("ebpf: write excluded cgroup ID: %w", err)
 	}
 
+	hostMntNSMap, err := ebpf.NewMap(spec.Maps[kestrelynxebpfMapKlHostMntNs])
+	if err != nil {
+		return nil, fmt.Errorf("ebpf: create host mount namespace map: %w", err)
+	}
+	defer hostMntNSMap.Close()
+
+	if err := hostMntNSMap.Put(hostMntNSSlot, hostMntNSID); err != nil {
+		return nil, fmt.Errorf("ebpf: write host mount namespace ID: %w", err)
+	}
+
+	pidNS, err := ownPIDNamespace()
+	if err != nil {
+		return nil, err
+	}
+	pidNSMap, err := ebpf.NewMap(spec.Maps[kestrelynxebpfMapKlPidNs])
+	if err != nil {
+		return nil, fmt.Errorf("ebpf: create PID namespace map: %w", err)
+	}
+	defer pidNSMap.Close()
+
+	if err := pidNSMap.Put(pidNSSlot, pidNS); err != nil {
+		return nil, fmt.Errorf("ebpf: write PID namespace ID: %w", err)
+	}
+
 	var objs kestrelynxebpfObjects
 	opts := &ebpf.CollectionOptions{
 		MapReplacements: map[string]*ebpf.Map{
 			kestrelynxebpfMapKlExcludedCgroup: excludedMap,
+			kestrelynxebpfMapKlHostMntNs:      hostMntNSMap,
+			kestrelynxebpfMapKlPidNs:          pidNSMap,
 		},
 	}
-	if err := loadKestrelynxebpfObjects(&objs, opts); err != nil {
+	// spec.LoadAndAssign, not loadKestrelynxebpfObjects: the latter reloads
+	// its own fresh CollectionSpec internally and would silently discard the
+	// kl_events MaxEntries override made on this spec above.
+	if err := spec.LoadAndAssign(&objs, opts); err != nil {
 		return nil, fmt.Errorf("ebpf: load objects: %w", err)
 	}
 	defer func() {
@@ -224,4 +320,15 @@ func attachAllWith[T io.Closer](points []attachPoint, attach func(attachPoint) (
 	}
 
 	return created, nil
+}
+
+// ownPIDNamespace returns the inode number of this process's own PID
+// namespace. Events then report tgids in the same namespace this process
+// reads /proc from.
+func ownPIDNamespace() (uint64, error) {
+	var st unix.Stat_t
+	if err := unix.Stat("/proc/self/ns/pid", &st); err != nil {
+		return 0, fmt.Errorf("ebpf: stat own PID namespace: %w", err)
+	}
+	return st.Ino, nil
 }

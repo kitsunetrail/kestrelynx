@@ -33,7 +33,7 @@ const unprivilegedTestUID = 65534
 // available to root, or a process with CAP_SETUID) for the low-privilege
 // half; skipped if either is unavailable.
 func TestUsageKeyPrivilegeClassLetsOneTimeHighPrivilegeThrough(t *testing.T) {
-	h, err := Load(1)
+	h, err := Load(1, 0)
 	if err != nil {
 		skipIfUnprivileged(t, err)
 		t.Fatalf("Load: %v", err)

@@ -169,7 +169,7 @@ func TestSensorIntegration(t *testing.T) {
 	// container is removed, not after — fetching logs from an already-
 	// removed container would always fail.
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	snap, err := waitForGenerations(t, evidenceDir, len(targets), 150*time.Second)
 	if err != nil {
@@ -199,9 +199,63 @@ func TestSensorIntegration(t *testing.T) {
 		if !found {
 			t.Errorf("%s: executables = %v, want one containing %q", tg.name, paths, tg.wantExeSubstr)
 		}
-		if tg.wantOSPackage && len(gen.OSPackages) == 0 {
-			t.Errorf("%s: os_packages is empty, want at least one (package_db=%+v, state=%v)", tg.name, gen.PackageDB, gen.State)
+		if !tg.wantOSPackage {
+			continue
 		}
+		// A generation existing (which byContainer/gen already confirm) says
+		// nothing about whether its package-database index has finished
+		// building and had a sample attribute against it yet — that happens
+		// asynchronously, well after discovery first notices the container
+		// (see generationState's own idxState/postIndexConfirmed doc
+		// comments). Checking gen.OSPackages directly here, as an earlier
+		// version of this test did, races that build; waitForPackageDBReady
+		// instead polls until state=observing specifically confirms it.
+		ready, err := waitForPackageDBReady(t, evidenceDir, id, 150*time.Second)
+		if err != nil {
+			t.Errorf("%s: %v", tg.name, err)
+			continue
+		}
+		if len(ready.OSPackages) == 0 {
+			t.Errorf("%s: os_packages is empty, want at least one (package_db=%+v, state=%v)", tg.name, ready.PackageDB, ready.State)
+		}
+	}
+}
+
+// waitForPackageDBReady polls the evidence file until containerID's own
+// generation reaches state=observing — the one published state that
+// actually promises its OSPackages reflect a complete, attributed build
+// (idxState ready AND postIndexConfirmed; see derivePublishedState's own doc
+// comment for the full priority order). A generation merely existing yet
+// (waitForGenerations' own condition) says nothing about whether its
+// package-database build has even started, let alone finished and had a
+// sample's own candidates attributed against it — that is exactly the gap
+// this function exists to wait out, rather than a caller racing it by
+// reading OSPackages the moment a generation first appears.
+func waitForPackageDBReady(t *testing.T, evidenceDir, containerID string, timeout time.Duration) (evidence.Generation, error) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	r := evidence.NewReader(evidenceDir)
+	var last evidence.Generation
+	var found bool
+	for {
+		snap, err := r.Read(time.Now(), nil)
+		if err == nil {
+			if gens := generationsByContainer(snap)[containerID]; len(gens) > 0 {
+				g := gens[len(gens)-1]
+				last = g
+				found = true
+				if g.State == evidence.StateObserving {
+					return g, nil
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			if !found {
+				return evidence.Generation{}, fmt.Errorf("no generation ever appeared for container %s while waiting for its package database", containerID)
+			}
+			return last, fmt.Errorf("container %s never reached state=observing (last state=%q, package_db=%+v)", containerID, last.State, last.PackageDB)
+		}
+		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -251,4 +305,27 @@ func dockerBestEffortOutput(t *testing.T, args ...string) string {
 		return ""
 	}
 	return string(out)
+}
+
+// dumpContainerLogsOnFailure writes id's own `docker logs` output via
+// t.Logf, but only once t.Failed() is already true — used in place of an
+// unconditional `dockerBestEffort(t, "logs", id)` call, which never actually
+// surfaces a container's stdout/stderr at all (dockerBestEffort only logs on
+// a non-zero exit from the docker CLI itself, not the content of a
+// successful `docker logs`). label distinguishes which container id names in
+// a test that starts more than one (e.g. "sensor" vs. "target"). Deferred
+// immediately after a container starts, before its own removal — the same
+// LIFO ordering every call site already relies on for a later
+// `dockerBestEffort(t, "rm", "-f", id)` defer.
+func dumpContainerLogsOnFailure(t *testing.T, label, id string) {
+	t.Helper()
+	if !t.Failed() {
+		return
+	}
+	out, err := exec.Command("docker", "logs", id).CombinedOutput()
+	if err != nil {
+		t.Logf("%s container %s: docker logs failed: %v", label, id, err)
+		return
+	}
+	t.Logf("%s container %s logs:\n%s", label, id, out)
 }

@@ -305,3 +305,37 @@ func TestNextRetryTime_PicksEarliest(t *testing.T) {
 		t.Errorf("nextRetryTime = %v, want %v (the earliest of the two)", got, want)
 	}
 }
+
+// TestToEvidence_PendingEventsAloneDoesNotForceIncomplete covers this
+// round's own change to Incomplete: an item only ever sits in
+// g.pendingEvents while idxState != indexReady (see recordPendingEvent's own
+// callers), which is exactly the window derivePublishedState reports
+// StateInitializing for — already enough on its own to block an OS-class
+// not_observed verdict (evidence.GenerationEligibleForNotObserved) — so a
+// nonzero pendingEvents count no longer needs its own separate Incomplete
+// term (see that field's own doc comment for the full reasoning). Past its
+// own TTL, though, expirePendingEvents still drops it as a real, counted
+// loss (recordEventLoss), untouched by this change, and that does set
+// Incomplete — this time sticky.
+func TestToEvidence_PendingEventsAloneDoesNotForceIncomplete(t *testing.T) {
+	g := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: strings64('a')}, InitProcess{PID: 1, Starttime: 1}, time.Unix(0, 0), evidence.CoverageSinceStart)
+	g.pendingEvents = []pendingEventItem{{seq: 1, path: "/usr/bin/true", receivedAt: time.Unix(1000, 0)}}
+
+	if derivePublishedState(g) != evidence.StateInitializing {
+		t.Fatalf("state = %q with idxState not yet ready, want initializing", derivePublishedState(g))
+	}
+	if g.toEvidence(false).Incomplete {
+		t.Errorf("Incomplete = true purely from a nonzero pendingEvents count, want false")
+	}
+
+	g.expirePendingEvents(time.Unix(1000, 0).Add(pendingEventTTL + time.Second))
+	if len(g.pendingEvents) != 0 {
+		t.Fatalf("pendingEvents = %+v after exceeding its own TTL, want empty", g.pendingEvents)
+	}
+	if !g.toEvidence(false).Incomplete {
+		t.Errorf("Incomplete = false after the pending event expired as a loss, want true")
+	}
+	if g.eventsLost != 1 {
+		t.Errorf("eventsLost = %d after one pending event expired, want 1", g.eventsLost)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/kitsunetrail/kestrelynx/internal/evidence"
+	"github.com/kitsunetrail/kestrelynx/internal/sensor/ebpf"
 )
 
 // indexState is one container generation's own package-database index
@@ -49,10 +50,15 @@ const (
 // loop instead (see sampleJob/sampleResult and dbJob/dbResult) — so nothing
 // in this type needs its own synchronization.
 type generationState struct {
-	container      evidence.ContainerRef
-	init           InitProcess
-	startedAt      time.Time
-	endedAt        *time.Time
+	container evidence.ContainerRef
+	init      InitProcess
+	startedAt time.Time
+	endedAt   *time.Time
+	// endAppliedAt is when the loop applied this generation's end (see
+	// Session.endGeneration). Unlike endedAt, it never precedes the
+	// process's actual exit, so it is what decides whether this generation
+	// could own loss counted after some instant (couldOwnLossSince).
+	endAppliedAt   time.Time
 	lastVerifiedAt time.Time
 	// lastAliveNs is the highest boot-relative CLOCK_BOOTTIME *nanosecond*
 	// (never rounded to a clock tick — see bootNsNow's own doc comment) this
@@ -222,21 +228,46 @@ type generationState struct {
 	// queue is held to, and sampleworker.go's own pending-event
 	// verification (piggybacked onto this generation's regular sample
 	// worker once idxState reaches indexReady) for how it eventually
-	// drains. Included in toEvidence's own Incomplete computation: an
-	// executable or OS-package fact this generation has already received
-	// but not yet finished attributing must never let a not_observed
-	// verdict be published in the meantime.
+	// drains. Not included in toEvidence's own Incomplete computation: an
+	// item only ever sits here while idxState != indexReady, which is
+	// exactly the window derivePublishedState reports StateInitializing for
+	// — already enough on its own to block an OS-class not_observed verdict
+	// (see evidence.GenerationEligibleForNotObserved), and an exec event's
+	// own executable fact (recordExecutable) is recorded unconditionally at
+	// dispatch time regardless of index readiness (see dispatchUsageEvent's
+	// own doc comment), never held back here at all. A bare library-load
+	// event queued here has nothing recorded about it yet either way, so
+	// there is nothing an extra Incomplete term could withdraw that is not
+	// already withheld by StateInitializing or by never having been
+	// recorded in the first place.
 	pendingEvents []pendingEventItem
 	// nextEventSeq allocates pendingEventItem.seq, one higher each call —
 	// never reused within this generation's lifetime.
 	nextEventSeq uint64
+	// pendingMountViewEvents holds every eBPF usage event
+	// (dispatchUsageEvent's own caller) received before this generation's
+	// own mount view (mntNsID/rootDev/rootIno) had been confirmed by any
+	// sample at all — a container discovered from an already-running
+	// process can have its very first exec/mmap arrive before the sample
+	// that would confirm matchesMountView's own two sides ever runs, which
+	// is not the same fact as "confirmed to be a different mount view" (see
+	// matchesMountView's own doc comment): the latter is a real, informed
+	// mismatch; the former is simply not yet known. Drained the moment
+	// applySampleResult confirms this generation's own mount view for the
+	// first time (each item is replayed through dispatchUsageEvent again,
+	// which by then can actually decide instead of guessing) — see
+	// recordPendingMountViewEvent's own doc comment for the cap/expiry this
+	// queue is held to. Included in toEvidence's own Incomplete computation:
+	// a "was this file used" answer that could still resolve either way
+	// must never be preempted by a not_observed verdict in the meantime.
+	pendingMountViewEvents []pendingMountViewEvent
 	// pendingMapsLookups counts outstanding resolvePathAsync calls
 	// dispatched against this generation (pathresolve.go) that have not yet
 	// answered — an eBPF success event whose path-correlation lookup missed
 	// and is now waiting on a live /proc/<pid>/maps read. Included in
-	// toEvidence's own Incomplete computation for the same reason
-	// pendingEvents is: a "was this file used" answer that could still
-	// resolve to "yes" must never be preempted by a not_observed verdict.
+	// toEvidence's own Incomplete computation: a "was this file used" answer
+	// that could still resolve to "yes" must never be preempted by a
+	// not_observed verdict.
 	pendingMapsLookups int
 	// pendingConfirms is 1 while a genConfirmRequest (genconfirm.go) is
 	// outstanding (in flight or queued) against this generation — a
@@ -287,6 +318,14 @@ type generationState struct {
 	// comment for why package attribution happens only after that answer
 	// arrives, never inside the sample worker itself.
 	pendingLookup *pendingLookup
+	// nextLookupSeq allocates pendingLookup.seq/dbJob.seq, one higher each
+	// call (submitCandidateBatches) — never reused within this generation's
+	// lifetime. What lets applyLookupResult tell a lookup's own delayed
+	// answer, arriving after pendingLookupTTL already gave up on it and a
+	// fresh lookup was submitted in its place, apart from that fresh one's
+	// own answer — see dbJob.seq's own doc comment for why epoch alone
+	// cannot do this.
+	nextLookupSeq uint64
 	// queuedCandidates holds every sample's own candidateBatch that arrived
 	// while pendingLookup was already outstanding — merged into it (never
 	// discarded) once that lookup answers, so it can be submitted as the
@@ -366,6 +405,13 @@ const maxQueuedCandidateBatches = 32
 // applyLookupResult).
 type pendingLookup struct {
 	batches []candidateBatch
+	// seq is this exact lookup request's own identity, from
+	// generationState.nextLookupSeq at the moment submitCandidateBatches
+	// submitted it — echoed back on the dbJob this lookup becomes and its
+	// own dbResult, so applyLookupResult can refuse an answer that does not
+	// name the lookup currently outstanding (see dbJob.seq's own doc
+	// comment).
+	seq uint64
 	// epoch is the one idxEpoch every batch in batches was confirmed to
 	// share before this lookup was ever submitted (see
 	// submitCandidateBatches) — carried on the dbJob this lookup becomes
@@ -374,6 +420,41 @@ type pendingLookup struct {
 	// from under it (see runDBWorker's own epoch check) even if that
 	// rebuild finishes before this lookup is actually processed.
 	epoch int
+	// submittedAt is when this lookup job was actually handed to the
+	// dbworker's own channel (submitCandidateBatches) — expirePendingLookup
+	// compares it against pendingLookupTTL to tell a lookup whose answer is
+	// never coming back at all (the dbworker goroutine itself died, or its
+	// result was otherwise lost) apart from one that is merely still
+	// running.
+	submittedAt time.Time
+}
+
+// pendingLookupTTL bounds how long a generation waits for a package-database
+// lookup answer before giving up on it for good — much longer than
+// lookupWriteWaitBudget (which only bounds how long a *write* is held back
+// waiting for one, not how long the lookup itself may still legitimately
+// take): a lookup still outstanding after this long has almost certainly
+// lost its answer for good, not merely been slow to receive it.
+const pendingLookupTTL = 60 * time.Second
+
+// expirePendingLookup gives up on g's own outstanding package-database
+// lookup once it has been waiting longer than pendingLookupTTL: nothing this
+// session does will make that answer arrive now, so pendingLookup is
+// cleared (an answer that does eventually arrive is silently discarded, the
+// same way applyLookupResult already discards one with no matching
+// pendingLookup at all) and every batch still queued behind it is marked
+// lost for good, exactly the way flushQueuedCandidates already treats a
+// batch whose own index was rebuilt out from under it while queued — see
+// candidatesLostPermanently's own doc comment. Called once per discovery
+// pass (dispatchWork), alongside expirePendingEvents/
+// expirePendingMountViewEvents.
+func (g *generationState) expirePendingLookup(now time.Time) {
+	if g.pendingLookup == nil || now.Sub(g.pendingLookup.submittedAt) <= pendingLookupTTL {
+		return
+	}
+	g.pendingLookup = nil
+	g.queuedCandidates = nil
+	g.candidatesLostPermanently = true
 }
 
 // pkgKey identifies one OS package entity within a generation, by exact name
@@ -404,15 +485,31 @@ type pendingEventItem struct {
 	receivedAt time.Time
 }
 
+// pendingMountViewEvent is one usage event (dispatchUsageEvent's own
+// arguments) held because this generation's own mount view was not yet
+// confirmed by any sample when it arrived — see
+// generationState.pendingMountViewEvents' own doc comment.
+type pendingMountViewEvent struct {
+	path       string
+	ev         ebpf.Event
+	kind       evidence.EvidenceKind
+	isExec     bool
+	receivedAt time.Time
+}
+
 // matchesMountView reports whether an event's own mount namespace
 // (eventMntNsID) AND root filesystem identity (eventRootDev, eventRootIno)
 // both match this generation's own confirmed ones (g.mntNsID/g.rootDev/
 // g.rootIno, populated once a real sample resolves them — see
 // applySampleResult). Zero on either side of either pair means "not yet
-// confirmed" and is treated the same as a mismatch: an event is never used
-// to attribute anything — recording an executable or submitting an
+// confirmed" and is treated the same as a mismatch here — an event is never
+// used to attribute anything — recording an executable or submitting an
 // OS-package candidate alike — without a positive confirmation that it
-// describes init's own filesystem view.
+// describes init's own filesystem view. dispatchUsageEvent's own caller is
+// what actually tells the two "not yet confirmed" and "confirmed, but
+// genuinely a different view" cases apart (by checking g.mntNsID itself
+// before calling this), since only the caller knows which of the two
+// warrants holding the event for a later retry versus deciding now.
 //
 // Mount namespace alone is not enough: chroot(2) replaces a task's own root
 // without changing which mount namespace it is in, so a process chrooted
@@ -483,6 +580,57 @@ func (g *generationState) expirePendingEvents(now time.Time) {
 	}
 }
 
+// maxPendingMountViewEvents and pendingMountViewEventTTL bound
+// generationState.pendingMountViewEvents the same way
+// maxPendingEventsPerGeneration/pendingEventTTL bound pendingEvents:
+// deliberately generous (a container's own startup burst of short-lived
+// execs, arriving before this generation's own first sample has even had a
+// chance to run, is exactly the case this queue exists for), but not
+// unbounded, and not held any longer than a generation whose first sample
+// simply never completes at all deserves — a generation is expected to have
+// its own mount view confirmed within one ordinary sample cycle of being
+// discovered.
+const (
+	maxPendingMountViewEvents = 4096
+	pendingMountViewEventTTL  = 60 * time.Second
+)
+
+// recordPendingMountViewEvent appends item to g.pendingMountViewEvents,
+// dropping and counting it as lost immediately if the queue is already at
+// its cap — never blocking or growing past maxPendingMountViewEvents.
+func (g *generationState) recordPendingMountViewEvent(item pendingMountViewEvent) {
+	if len(g.pendingMountViewEvents) >= maxPendingMountViewEvents {
+		g.recordEventLoss(1)
+		return
+	}
+	g.pendingMountViewEvents = append(g.pendingMountViewEvents, item)
+}
+
+// expirePendingMountViewEvents removes every pendingMountViewEvents entry
+// older than pendingMountViewEventTTL as of now, counting each as lost —
+// called once per discovery pass (dispatchWork), alongside
+// expirePendingEvents, so a generation whose first sample never actually
+// completes (e.g. every one of its own processes stays denied) does not
+// hold onto these indefinitely.
+func (g *generationState) expirePendingMountViewEvents(now time.Time) {
+	if len(g.pendingMountViewEvents) == 0 {
+		return
+	}
+	kept := g.pendingMountViewEvents[:0]
+	var expired int64
+	for _, item := range g.pendingMountViewEvents {
+		if now.Sub(item.receivedAt) > pendingMountViewEventTTL {
+			expired++
+			continue
+		}
+		kept = append(kept, item)
+	}
+	g.pendingMountViewEvents = kept
+	if expired > 0 {
+		g.recordEventLoss(expired)
+	}
+}
+
 // recordEventLoss counts n eBPF events this generation could not attribute
 // with confidence (a path-unknown success event, an expired or
 // failed-re-verification pendingEventItem, or this generation's own share
@@ -497,6 +645,34 @@ func (g *generationState) recordEventLoss(n int64) {
 		return
 	}
 	g.eventsLost += n
+	g.incomplete = true
+	if g.eventsCoverage == evidence.CoverageSinceStart {
+		g.eventsCoverage = evidence.CoveragePartial
+	}
+}
+
+// markCoveragePartial downgrades g's own eventsCoverage from since_start to
+// partial and sets incomplete, exactly like recordEventLoss's own two side
+// effects, but deliberately never advances eventsLost — used by
+// classifyUnattributedExpiry's own tier 2, where an event's own mount
+// namespace matches g's own confirmed one closely enough to treat g as a
+// plausible candidate worth expressing real doubt about, but not closely
+// enough (no cgroup-ID proof at all) to also claim it as a specific,
+// countable loss against g the way tier 1 does.
+// couldOwnLossSince reports whether g was alive at some point after since,
+// and so could own loss that happened after since: still live, or its end
+// applied at or after since (endAppliedAt, never earlier than the actual
+// exit). An ended generation stays in the published evidence, so
+// loss it may own must still downgrade it. A zero since means the loss's
+// start is unknown, which every retained generation could own.
+func (g *generationState) couldOwnLossSince(since time.Time) bool {
+	if !g.ended || since.IsZero() || g.endAppliedAt.IsZero() {
+		return true
+	}
+	return !g.endAppliedAt.Before(since)
+}
+
+func (g *generationState) markCoveragePartial() {
 	g.incomplete = true
 	if g.eventsCoverage == evidence.CoverageSinceStart {
 		g.eventsCoverage = evidence.CoveragePartial
@@ -645,7 +821,24 @@ func derivePublishedState(g *generationState) evidence.GenerationState {
 		return evidence.StateDenied
 	case len(g.parseFailed) > 0 || g.forceParseFailed:
 		return evidence.StateParseFailed
-	case g.idxState != indexReady || !g.postIndexConfirmed:
+	case g.idxState != indexReady || !g.postIndexConfirmed || len(g.pendingEvents) > 0:
+		// len(g.pendingEvents) > 0 alongside idxState==indexReady is a real,
+		// reachable combination, not defensive redundancy: postIndexConfirmed
+		// is set the moment ANY post-ready lookup answers (applyLookupResult),
+		// regardless of which generation's own pendingEvents that lookup's own
+		// candidates came from — an event queued in pendingEvents while the
+		// index was still building is only ever verified later, piggybacked
+		// onto this generation's own next sample worker once idxState reaches
+		// ready (dispatchWork), which can easily run after some other,
+		// unrelated event's own lookup has already confirmed the index. A
+		// package pendingEvents' own queued item was the sole evidence for
+		// must not be judged not_observed in the gap between those two
+		// moments. See evidence.GenerationEligibleForNotObserved:
+		// StateInitializing already blocks exactly the OS-class not_observed
+		// verdict this needs, without pendingEvents ever needing its own
+		// Incomplete term (which would instead make a plain, ordinary case —
+		// nothing wrong, just an item still queued — flicker Incomplete true
+		// and false as pendingEvents fills and drains).
 		return evidence.StateInitializing
 	default:
 		return evidence.StateObserving
@@ -997,19 +1190,29 @@ func (g *generationState) toEvidence(hasPendingRouteEvent bool) evidence.Generat
 		// g.incomplete and g.candidatesLostPermanently are both sticky
 		// (once true, this generation never claims full confidence again
 		// this session); g.pendingLookup != nil, len(g.queuedCandidates) > 0,
-		// len(g.pendingEvents) > 0, g.pendingMapsLookups > 0 and
+		// len(g.pendingMountViewEvents) > 0, g.pendingMapsLookups > 0 and
 		// g.pendingConfirms > 0 are all transient, but only clear once every
 		// sample's own candidates (or every outstanding eBPF event) have
 		// actually been looked up/verified/confirmed and had their answer
 		// applied — a batch queued behind an outstanding lookup is folded
 		// into the next one rather than dropped (see queuedCandidates' own
-		// doc comment), and an event still sitting in pendingEvents, still
-		// in flight via a maps fallback lookup, or still waiting on its own
-		// candidate generation's liveness to be confirmed (genconfirm.go) is
-		// exactly a "was this file used" answer that could still resolve to
-		// "yes" — so this write must not claim full attribution confidence
-		// while any of these seven still holds, even though one may already
-		// have cleared by the time the *next* snapshot is built.
+		// doc comment), and an event still sitting in pendingMountViewEvents,
+		// still in flight via a maps fallback lookup, or still waiting on its
+		// own candidate generation's liveness to be confirmed (genconfirm.go)
+		// is exactly a "was this file used" answer that could still resolve
+		// to "yes" — so this write must not claim full attribution
+		// confidence while any of these seven still holds, even though one
+		// may already have cleared by the time the *next* snapshot is built.
+		// (g.pendingEvents is deliberately not one of them — see its own doc
+		// comment for why.)
+		//
+		// g.pendingLookup != nil in particular only ever reaches this point
+		// once loop's own requestWrite has already given that lookup every
+		// chance the write-wait budget allows (see that method's own doc
+		// comment) — this is never simply "a lookup happened to still be in
+		// flight the instant this write was built" the way an earlier
+		// version of this Sensor let it be, which is what previously made
+		// this term true on essentially every sample-triggered write.
 		//
 		// hasPendingRouteEvent (pendingRouteEventGating, computed once per
 		// snapshot in buildSnapshot) covers the one gap none of g's own
@@ -1025,8 +1228,8 @@ func (g *generationState) toEvidence(hasPendingRouteEvent bool) evidence.Generat
 		// would understate what this generation may yet turn out to have
 		// used.
 		Incomplete: g.incomplete || g.pendingLookup != nil || len(g.queuedCandidates) > 0 ||
-			g.candidatesLostPermanently || len(g.pendingEvents) > 0 || g.pendingMapsLookups > 0 ||
-			g.pendingConfirms > 0 || hasPendingRouteEvent,
+			g.candidatesLostPermanently || len(g.pendingMountViewEvents) > 0 ||
+			g.pendingMapsLookups > 0 || g.pendingConfirms > 0 || hasPendingRouteEvent,
 		Truncated:      g.truncated,
 		EventsCoverage: g.eventsCoverage,
 		EventsLost:     g.eventsLost,

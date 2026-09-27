@@ -67,6 +67,7 @@ func startSensorContainer(t *testing.T, imageTag, runID, evidenceMount string, e
 		"--entrypoint", "kestrelynx-sensor",
 		"--user", "65532:65532",
 		"--pid", "host",
+		"--cgroupns", "host",
 		"--network", "none",
 		"--cap-drop", "ALL",
 		"--cap-add", "SYS_PTRACE",
@@ -86,6 +87,18 @@ func startSensorContainer(t *testing.T, imageTag, runID, evidenceMount string, e
 func runTarget(t *testing.T, runID, image string, cmd ...string) string {
 	t.Helper()
 	args := []string{"run", "-d", "--label", integrationLabelKey + "=" + runID, image}
+	args = append(args, cmd...)
+	return dockerT(t, args...)
+}
+
+// runPrivilegedTarget is runTarget but with --privileged: for a target that
+// needs real write access to its own /sys/fs/cgroup mount, which this Docker
+// Engine mounts read-only for an ordinary container regardless of any
+// individual --cap-add (confirmed directly against it: neither --cap-add
+// SYS_ADMIN nor --cgroupns=host makes it writable; only --privileged does).
+func runPrivilegedTarget(t *testing.T, runID, image string, cmd ...string) string {
+	t.Helper()
+	args := []string{"run", "-d", "--label", integrationLabelKey + "=" + runID, "--privileged", image}
 	args = append(args, cmd...)
 	return dockerT(t, args...)
 }
@@ -116,7 +129,7 @@ func TestSensorIntegration_ContainerAddedAfterStart(t *testing.T) {
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	// Let the Sensor complete at least one sample pass with nothing to see
 	// yet before the target container exists at all.
@@ -156,7 +169,7 @@ func TestSensorIntegration_SameIDContainerRestart(t *testing.T) {
 
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	if _, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second); err != nil {
 		t.Fatalf("waiting for the initial generation: %v", err)
@@ -226,7 +239,7 @@ func TestSensorIntegration_ContainerRecreation(t *testing.T) {
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	if _, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second); err != nil {
 		t.Fatalf("waiting for the first container's own generation: %v", err)
@@ -291,31 +304,52 @@ func TestSensorIntegration_SensorRestartPersistsEvidence(t *testing.T) {
 			dockerBestEffort(t, "rm", "-f", sensorID)
 		}
 	}()
+	// Captured just before this first Sensor is removed below (rather than
+	// deferring a `docker logs` call the way every other test here does),
+	// since its own logs would otherwise be gone by the time a deferred call
+	// could read them — this container is deliberately removed mid-test, not
+	// only in a defer. Printed only if the test ends up failing, whether that
+	// happens before or after the restart below.
+	var firstSensorLogs string
+	defer func() {
+		if t.Failed() {
+			t.Logf("sensor container %s (pre-restart) logs:\n%s", sensorID, firstSensorLogs)
+		}
+	}()
 
 	snap, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second)
 	if err != nil {
-		dockerBestEffort(t, "logs", sensorID)
 		t.Fatalf("waiting for the initial generation: %v", err)
 	}
 	before, ok := generationsByContainer(snap)[targetID]
 	if !ok || len(before) != 1 {
 		t.Fatalf("unexpected generations for %s before restart: %+v", targetID, before)
 	}
-	if len(before[0].OSPackages) == 0 {
-		t.Fatalf("expected at least one OS package recorded for a debian:12-slim target before restarting the Sensor")
+	// The initial generation existing is not enough on its own: this
+	// container's package-database index needs its own time to build and be
+	// confirmed (state observing) before OSPackages can be trusted to be
+	// non-empty at all — see waitForPackageDBReady's own doc comment for why
+	// checking this immediately after waitForGenerations' own first success,
+	// as an earlier version of this test did, is a race against that build.
+	before0, err := waitForPackageDBReady(t, evidenceDir, targetID, 150*time.Second)
+	if err != nil {
+		t.Fatalf("waiting for the initial package database to become ready: %v", err)
 	}
-	wantPackageCount := len(before[0].OSPackages)
-	wantStartedAt := before[0].StartedAt
-	wantInit := before[0].Init
+	if len(before0.OSPackages) == 0 {
+		t.Fatalf("expected at least one OS package recorded for a debian:12-slim target before restarting the Sensor (package_db=%+v)", before0.PackageDB)
+	}
+	wantPackageCount := len(before0.OSPackages)
+	wantStartedAt := before0.StartedAt
+	wantInit := before0.Init
 	oldSessionID := snap.Sensor.SessionID
 
-	dockerBestEffort(t, "logs", sensorID)
+	firstSensorLogs = dockerBestEffortOutput(t, "logs", sensorID)
 	dockerT(t, "rm", "-f", sensorID)
 	cleanedUpFirstSensor = true
 
 	sensorID2 := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID2)
-	defer dockerBestEffort(t, "logs", sensorID2)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID2)
 
 	// A session_id that has actually changed is what proves this is reading
 	// the NEW session's own write, not a stale file the old session
@@ -379,7 +413,7 @@ func TestSensorIntegration_ExcludedContainerNeverObserved(t *testing.T) {
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir, "--exclude-id", excludePrefix)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	snap, err := waitForGenerations(t, evidenceDir, 1, 150*time.Second)
 	if err != nil {
@@ -407,6 +441,7 @@ func startSensorContainerWithCaps(t *testing.T, imageTag, runID, evidenceMount s
 		"--entrypoint", "kestrelynx-sensor",
 		"--user", "65532:65532",
 		"--pid", "host",
+		"--cgroupns", "host",
 		"--network", "none",
 		"--cap-drop", "ALL",
 	}
@@ -451,7 +486,7 @@ func TestSensorIntegration_SensorMissingSysPtraceBecomesPermissionDenied(t *test
 	}
 	sensorID := startSensorContainerWithCaps(t, imageTag, runID, evidenceDir, []string{"DAC_READ_SEARCH", "BPF", "PERFMON"})
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	deadline := time.Now().Add(150 * time.Second)
 	var status evidence.SensorStatus
@@ -506,7 +541,7 @@ func TestSensorIntegration_PermissionInsufficientContainerBecomesDenied(t *testi
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	deadline := time.Now().Add(150 * time.Second)
 	var gen evidence.Generation
@@ -568,7 +603,7 @@ func TestSensorIntegration_FIFOInPackageDatabaseDoesNotBlock(t *testing.T) {
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	// A generous but still bounded deadline: if the FIFO ever did block the
 	// observer the way it must not, this simply times out instead of
@@ -581,8 +616,17 @@ func TestSensorIntegration_FIFOInPackageDatabaseDoesNotBlock(t *testing.T) {
 	if len(gens) != 1 {
 		t.Fatalf("generations for %s = %+v, want exactly one", targetID, gens)
 	}
-	if len(gens[0].OSPackages) == 0 {
-		t.Errorf("OSPackages is empty for a debian:12-slim target with a FIFO among its .list files; want the container's other, real packages still resolved")
+	// A generation existing is not enough: the package database itself still
+	// needs its own time to build and be confirmed (state observing) before
+	// OSPackages can be trusted to be non-empty — see waitForPackageDBReady's
+	// own doc comment for why checking OSPackages immediately here, as an
+	// earlier version of this test did, races that build.
+	ready, err := waitForPackageDBReady(t, evidenceDir, targetID, 150*time.Second)
+	if err != nil {
+		t.Fatalf("waiting for the package database to become ready despite the FIFO: %v", err)
+	}
+	if len(ready.OSPackages) == 0 {
+		t.Errorf("OSPackages is empty for a debian:12-slim target with a FIFO among its .list files; want the container's other, real packages still resolved (package_db=%+v)", ready.PackageDB)
 	}
 }
 
@@ -624,7 +668,7 @@ func TestSensorIntegration_ConcurrentContainersSampledTogether(t *testing.T) {
 	}
 	sensorID := startSensorContainer(t, imageTag, runID, evidenceDir)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	// Poll until the light container's own last_verified_at appears, then
 	// compare it against sensor.session_started_at — not against "now" at
@@ -700,7 +744,7 @@ func TestSensorIntegration_FreshNamedVolumeIsWritable(t *testing.T) {
 
 	sensorID := startSensorContainer(t, imageTag, runID, volumeName)
 	defer dockerBestEffort(t, "rm", "-f", sensorID)
-	defer dockerBestEffort(t, "logs", sensorID)
+	defer dumpContainerLogsOnFailure(t, "sensor", sensorID)
 
 	// Read the evidence file back out of the named volume via a disposable,
 	// throwaway reader container rather than trying to resolve the volume's

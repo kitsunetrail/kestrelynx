@@ -26,7 +26,7 @@ import (
 // CAP_SYS_ADMIN (or cgroup delegation not ordinarily available to a test
 // process); skipped, not failed, if that is unavailable.
 func TestCgroupMkdirTruncatesLongPath(t *testing.T) {
-	h, err := Load(1)
+	h, err := Load(1, 0)
 	if err != nil {
 		skipIfUnprivileged(t, err)
 		t.Fatalf("Load: %v", err)

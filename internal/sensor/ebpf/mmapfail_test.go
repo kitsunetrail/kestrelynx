@@ -32,7 +32,7 @@ import (
 // actually be exercising what it claims to.
 // Needs real privilege (CAP_BPF/CAP_PERFMON); skipped without it.
 func TestFailedMmapNeverBecomesUsageEvidence(t *testing.T) {
-	h, err := Load(1)
+	h, err := Load(1, 0)
 	if err != nil {
 		skipIfUnprivileged(t, err)
 		t.Fatalf("Load: %v", err)

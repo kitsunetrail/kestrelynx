@@ -142,20 +142,15 @@ type pendingRouteEvent struct {
 }
 
 // maxPendingRouteEvents and pendingRouteEventTTL bound the Session-wide
-// pending-route queue: past either, an event still in the routeUnresolved or
-// routeUnconfirmed state (see eventRouteOutcome) is dropped and counted via
-// recordUnattributableEventLoss — which generation it belongs to is exactly
-// the fact that never resolved, so the loss is folded into the Sensor-wide
-// total and every generation observed at that point is downgraded to
-// partial, but no single generation's own events_lost is advanced: guessing
-// which one to charge would risk being wrong in exactly the restart case
-// this queue exists to get right. An event stuck in the routePending state
-// (a real, non-excluded container this session has simply never registered
-// a generation for at all) is instead discarded with no loss counted at
-// all once its own TTL passes — seeing an event for a container this
-// session never once discovered is treated as that container having been
-// too short-lived for this stage to observe at all (the main body does not
-// scan such a container's own image either), not as a Sensor-side failure.
+// pending-route queue: past either, an event still unresolved is decided by
+// classifyUnattributedExpiry's own three-tier rule (events.go) — charged to
+// a specific, already-known generation if one is available (tier 1), scoped
+// to one plausible candidate by mount namespace if not (tier 2), or, only
+// once a discovery pass that started after this event arrived has actually
+// completed, folded into the Sensor-wide s.eventsUnclassified total without
+// downgrading any generation's own coverage at all (tier 3). Never guessed
+// wrong the way charging an arbitrary generation's own events_lost would
+// risk being in exactly the restart case this queue exists to get right.
 // ASSUMED values: generous enough for the startup race (a discovery pass
 // completing, a cgroup_mkdir being processed, or this generation's own
 // candidate being confirmed alive by genconfirm.go, all ordinarily well
@@ -166,30 +161,84 @@ const (
 	pendingRouteEventTTL  = 30 * time.Second
 )
 
+// pendingLossDelta is one eBPF ring-buffer loss-counter increase
+// (attributeEventLossDeltas' own per-cgroup delta) whose cgroup ID this
+// session could not resolve to a specific, live generation at the moment it
+// was observed — held at the Session level exactly the way a
+// pendingRouteEvent is (see that type's own doc comment), so a container
+// this session simply has not discovered yet gets the same fair chance a
+// specific event's own pendingRouteEvent already gets, rather than being
+// folded into eventsUnclassified the instant it is first seen. Resolved by
+// retryPendingLossDeltas, or forced out early by queuePendingLossDelta's own
+// cap (see applyForcedGapEviction).
+type pendingLossDelta struct {
+	cgroupID   uint64
+	delta      int64
+	receivedAt time.Time
+	// lostSince is the previous counter read: the loss in delta happened
+	// after it (see Session.lastLossCounterReadAt).
+	lostSince time.Time
+}
+
+// maxPendingLossDeltas bounds the Session-wide pendingLossDeltas queue, the
+// same way maxPendingRouteEvents bounds pendingRouteEvents — deliberately
+// the same value: both queues exist for the same reason (a cgroup this
+// session cannot yet classify), just fed by different sources (a specific
+// eBPF event vs. an aggregate per-cgroup ring-buffer counter).
+const maxPendingLossDeltas = maxPendingRouteEvents
+
 // initialEventsCoverage reports the events_coverage value a generation
 // discovered right now, with the given init starttime (boot-relative clock
-// ticks — InitProcess.Starttime's own unit), should start at:
+// ticks — InitProcess.Starttime's own unit), should start at, and whether
+// that value is CoveragePartial specifically because of
+// s.forcedGapWatermarkTicks rather than the ordinary since_start/partial
+// split (watermarkProtected) — the caller (reconcileGenerations) uses this
+// to also mark the new generation Incomplete, sticky, from the moment it is
+// created: CoveragePartial alone does not itself block a not_observed
+// verdict once this generation's own index and a post-ready sample both
+// complete (see evidence.GenerationEligibleForNotObserved, which only
+// blocks the OS class on StateInitializing/StateParseFailed, never on
+// EventsCoverage), so without this, a package the watermark-protected loss
+// was itself evidence for could still end up judged not_observed once this
+// generation looks otherwise fully observed.
 //
 //   - CoverageNone when this session's own eBPF never attached at all.
+//   - CoveragePartial (watermarkProtected) when s.forcedGapWatermarkTicks
+//     (see applyForcedGapEviction) has ever been set and initStarttime is
+//     at or before it: this container was not even discovered yet at the
+//     moment some other, unclassifiable loss had to be forced out of a
+//     pending queue without waiting for discovery — it is exactly as
+//     unprovably innocent of that loss as a live generation
+//     applyForcedGapEviction already downgrades directly, and gets the
+//     same treatment the instant it is finally discovered. Checked before
+//     the ordinary since_start/partial split below, since a container can
+//     satisfy both this and that split's own since_start condition at once
+//     (started after eBPF attached, but also at or before a later
+//     forced-eviction watermark) — the watermark's own protection must win
+//     in that case.
 //   - CoverageSinceStart when eBPF is attached and this container's own
 //     init started *after* the boot-relative instant eBPF attached
 //     (s.attachedAtBootTicks, captured once at startup — see that field's
 //     own doc comment): eBPF was already watching before this container
 //     could have done anything at all.
-//   - CoveragePartial when eBPF is attached but this container's own init
-//     started at or before that instant: the container was already running
-//     when eBPF attached, so whatever it did between its own real start and
-//     eBPF's attach could not have been observed — discovery merely
-//     noticing the container just now (which is when this function actually
-//     runs) says nothing about when it actually started.
-func (s *Session) initialEventsCoverage(initStarttime int64) evidence.EventsCoverage {
+//   - CoveragePartial (not watermarkProtected) when eBPF is attached but
+//     this container's own init started at or before that instant: the
+//     container was already running when eBPF attached, so whatever it did
+//     between its own real start and eBPF's attach could not have been
+//     observed — discovery merely noticing the container just now (which is
+//     when this function actually runs) says nothing about when it
+//     actually started.
+func (s *Session) initialEventsCoverage(initStarttime int64) (coverage evidence.EventsCoverage, watermarkProtected bool) {
 	if s.eventsStatus != evidence.EventsOK {
-		return evidence.CoverageNone
+		return evidence.CoverageNone, false
+	}
+	if s.forcedGapWatermarkSet && initStarttime <= s.forcedGapWatermarkTicks {
+		return evidence.CoveragePartial, true
 	}
 	if initStarttime > s.attachedAtBootTicks {
-		return evidence.CoverageSinceStart
+		return evidence.CoverageSinceStart, false
 	}
-	return evidence.CoveragePartial
+	return evidence.CoveragePartial, false
 }
 
 // applyEvent is the sole entry point loop uses to fold one decoded eBPF
@@ -239,7 +288,8 @@ func (s *Session) applyCgroupMkdirEvent(ev ebpf.Event) {
 	if ev.Path == "" || ev.PathTruncated {
 		return
 	}
-	if _, known := s.cgroupRoute.applyCgroupMkdir(ev.CgroupID, ev.Path); known {
+	_, known := s.cgroupRoute.applyCgroupMkdir(ev.CgroupID, ev.Path)
+	if known {
 		s.retryPendingRouteEvents(s.now())
 	}
 }
@@ -249,8 +299,11 @@ func (s *Session) applyCgroupMkdirEvent(ev ebpf.Event) {
 // dispatching a liveness confirmation, dispatching it outright, or
 // discarding it, depending on eventRouteOutcome.
 func (s *Session) applyUsageEvent(ev ebpf.Event, kind evidence.EvidenceKind, isExec bool) {
+	if s.isHostRootEvent(ev) {
+		return
+	}
 	item := pendingRouteEvent{ev: ev, kind: kind, isExec: isExec, receivedAt: s.now()}
-	g, outcome := s.resolveEventGeneration(ev.CgroupID, ev.StartBoottimeNs, ev.TGID)
+	g, outcome := s.resolveEventGeneration(ev.CgroupID, ev.StartBoottimeNs, ev.TGID, uint32(ev.MountNamespaceID))
 	s.routeEvent(g, outcome, item)
 }
 
@@ -280,6 +333,71 @@ func (s *Session) routeEvent(g *generationState, outcome eventRouteOutcome, item
 	}
 }
 
+// classifyUnattributedExpiry decides, for a pendingRouteEvent whose own
+// pendingRouteEventTTL has elapsed (finalizeRoutedItem), or for a
+// pendingLossDelta being retried (retryPendingLossDeltas, wrapped as a
+// pendingRouteEvent carrying only a cgroup ID — see that type's own doc
+// comment), without resolveEventGeneration ever proving it belongs to a
+// specific generation, which of three tiers applies:
+//
+//  1. outcome is routeResolved or routeUnconfirmed and g is non-nil: this
+//     event's own cgroup already resolves to a real, live, already-known
+//     generation right now (whether or not a fresh liveness check has
+//     confirmed it) — chargeable to that generation specifically
+//     (generationState.recordEventLoss), exactly as an already-fully-proven
+//     loss already is.
+//  2. Otherwise (the cgroup is still unclassified, or names a container
+//     this session has never registered a generation for at all —
+//     routePending): if this event's own mount namespace matches exactly
+//     one currently-live generation's own already-confirmed mount view
+//     (generationState.mntNsID), that generation is a plausible enough
+//     candidate to narrow this event's own uncertainty to just it, without
+//     ever claiming it as a provable loss the way tier 1 is — see
+//     generationState.markCoveragePartial's own doc comment on why this
+//     never advances eventsLost.
+//  3. Neither: this event genuinely cannot be tied to anything this session
+//     currently knows about. Counted via recordUnclassifiedEventLoss rather
+//     than silently discarded, but never before a discovery pass that
+//     started after this event's own receivedAt has actually completed
+//     (ready reports false until then) — a container's own cgroup is very
+//     often classified only once a discovery pass actually reseeds it (see
+//     cgroupRoute's own doc comment on why tp_btf/cgroup_mkdir's own event
+//     delivery cannot be relied on alone), so giving up before that pass has
+//     even run once since this event arrived would risk permanently
+//     miscounting a real, live container's own event as noise purely
+//     because discovery had not yet had its first chance to see it.
+//
+// A caller that cannot itself keep waiting for readiness at all (queuePendingRouteEvent's
+// own eviction path, and pendingLossDeltas' own equivalent cap) never calls
+// this function — see applyForcedGapEviction instead, which is what forcing
+// a decision before readiness actually requires: not a worse guess at these
+// same three tiers, but downgrading every live generation this loss could
+// still possibly belong to, plus a watermark protecting one not even
+// discovered yet.
+func (s *Session) classifyUnattributedExpiry(g *generationState, outcome eventRouteOutcome, item pendingRouteEvent) (target *generationState, tier int, ready bool) {
+	if (outcome == routeResolved || outcome == routeUnconfirmed) && g != nil {
+		return g, 1, true
+	}
+	if mnt := uint32(item.ev.MountNamespaceID); mnt != 0 {
+		var match *generationState
+		matches := 0
+		for _, cand := range s.generations {
+			if cand.ended || cand.mntNsID == 0 || cand.mntNsID != mnt {
+				continue
+			}
+			match = cand
+			matches++
+		}
+		if matches == 1 {
+			return match, 2, true
+		}
+	}
+	if s.lastCompletedDiscoveryStartedAt.After(item.receivedAt) {
+		return nil, 3, true
+	}
+	return nil, 3, false
+}
+
 // finalizeRoutedItem is the TTL-aware wrapper every call site acting on an
 // already-queued pendingRouteEvent or an already-answered async result
 // (genconfirm.go's applyGenConfirmResult, pathresolve.go's
@@ -304,17 +422,23 @@ func (s *Session) finalizeRoutedItem(g *generationState, outcome eventRouteOutco
 	// Expired. Age is checked regardless of whether resolution itself would
 	// have succeeded this round — an item is not kept alive, or dispatched,
 	// indefinitely purely because it happens to resolve on whichever async
-	// answer or retry finally notices it is already too old.
-	switch outcome {
-	case routeResolved:
-		// The correct generation is actually known; charge the loss to it
-		// specifically rather than treating it as unattributable.
-		g.recordEventLoss(1)
-	case routeUnresolved, routeUnconfirmed:
-		s.recordUnattributableEventLoss(1)
-	case routePending:
-		// Discarded silently, out of this stage's own scope — see
-		// pendingRouteEvent's own doc comment.
+	// answer or retry finally notices it is already too old. What happens
+	// next is classifyUnattributedExpiry's own three-tier classification:
+	// tier 3 without a qualifying discovery pass yet is "not ready", not
+	// "expired" — this item keeps waiting exactly as if its own TTL had not
+	// elapsed at all.
+	target, tier, ready := s.classifyUnattributedExpiry(g, outcome, item)
+	if !ready {
+		s.routeEvent(g, outcome, item)
+		return
+	}
+	switch tier {
+	case 1:
+		target.recordEventLoss(1)
+	case 2:
+		target.markCoveragePartial()
+	case 3:
+		s.recordUnclassifiedEventLoss(1)
 	}
 }
 
@@ -504,9 +628,45 @@ const (
 // aggregate ring-buffer counter increase is already an approximate signal,
 // not a specific process's own usage evidence, so the same precision this
 // function otherwise insists on would buy nothing here.
-func (s *Session) resolveEventGeneration(cgroupID uint64, startBoottimeNs uint64, tgid uint64) (*generationState, eventRouteOutcome) {
+// mntNSID is the event's own mount namespace ID, or 0 when the caller has no
+// single event to take one from at all (reconcileEventLossCounters' own
+// per-cgroup aggregate — see its own call site). A nonzero mntNSID equal to
+// s.hostMntNSID (this observer's own host/PID-1 mount namespace, resolved
+// once at startup — see Run's own doc comment) is routeDiscard, checked
+// before even the cgroup lookup below: a real Docker container's own
+// workload always execs inside a mount namespace that container's own
+// creation already unshared away from the host's — see
+// docker-compose.sensor.yml's own pid: host, which shares only the PID
+// namespace, never the mount one — so an event reporting the host's own
+// mount namespace can never be a container's own usage evidence, regardless
+// of which cgroup it happens to carry. This is what a short-lived host-side
+// helper process (runc/containerd's own namespace-setup stages, an
+// unrelated system service, a `docker build` intermediate container's own
+// toolchain churn — none of them ever becoming a cgroup this session's own
+// cgroupRoute can classify as a tracked container, since none of them are
+// one) would otherwise route through: routeUnresolved/routePending, queued,
+// and — once its own pendingRouteEventTTL expires with the cgroup still
+// unclassified — folded into every currently-tracked container's own
+// events_coverage as an unattributable, global downgrade to partial, despite
+// having nothing to do with any of them (confirmed directly: a lone Sensor
+// against a lone, otherwise idle target container observes exactly this
+// churn, entirely host-mount-namespace-scoped, well within the first
+// several seconds of the session).
+func (s *Session) resolveEventGeneration(cgroupID uint64, startBoottimeNs uint64, tgid uint64, mntNSID uint32) (*generationState, eventRouteOutcome) {
+	if mntNSID != 0 && s.hostMntNSID != 0 && mntNSID == s.hostMntNSID {
+		return nil, routeDiscard
+	}
 	containerID, known := s.cgroupRoute.lookup(cgroupID)
 	if !known {
+		// Worth an early discovery pass, not just waiting for the next
+		// regular one: reconcileCgroupRoute's own stat-based reseeding
+		// (computeCgroupSeeds) is what actually classifies most cgroups on
+		// a host where tp_btf/cgroup_mkdir's own event delivery cannot be
+		// relied on alone (see cgroupRoute's own doc comment) — the sooner
+		// that runs, the sooner an event genuinely worth classifying (a
+		// real, just-started container) gets its chance, rather than
+		// waiting out this cgroup's own pendingRouteEventTTL for nothing.
+		s.requestEarlyDiscovery(s.now())
 		return nil, routeUnresolved
 	}
 	if containerID == "" || matchesExcludedID(containerID, s.cfg.ExcludeIDs) {
@@ -641,20 +801,52 @@ func (s *Session) resolveEventGeneration(cgroupID uint64, startBoottimeNs uint64
 	return nil, routeGapLoss
 }
 
+// isHostRootEvent reports whether ev came from a process whose root
+// directory is still the real host's own (see Session.hostRootDev): runtime
+// setup that has not entered the container's root filesystem yet, never
+// usage evidence for any container. Such an event is dropped outright, the
+// same as an event from the host's own mount namespace, and is never
+// counted as a loss: it could not have attributed anything to begin with.
+func (s *Session) isHostRootEvent(ev ebpf.Event) bool {
+	return s.hostRootDev != "" && ev.RootIno == s.hostRootIno && formatKernelDev(ev.RootDev) == s.hostRootDev
+}
+
 // recordContainerGapLoss counts one event lost to a routeGapLoss gap (see
 // resolveEventGeneration's own doc comment): added to the Sensor-wide
 // unattributable total, same as any other unattributable loss, but
 // downgrading only gens — every generation this session has ever held for
 // the one container ID the gap belongs to (its current live one, if any,
 // and every one observed spanning the gap) — to partial, never every
-// generation this session holds the way markAllGenerationsPartial's own
-// global downgrade does: no other container's own events are in question
-// here at all.
+// generation this session holds: no other container's own events are in
+// question here at all. Unlike downgradeContainerPartial (used by
+// genconfirm.go's own pool-capacity paths), this never sets Incomplete: a
+// routeGapLoss is a proven, permanent fact about a specific gap, not a
+// still-open doubt.
 func (s *Session) recordContainerGapLoss(gens []*generationState) {
 	s.unattributedEventsLost++
 	for _, g := range gens {
 		if g.eventsCoverage == evidence.CoverageSinceStart {
 			g.eventsCoverage = evidence.CoveragePartial
+		}
+	}
+}
+
+// downgradeContainerPartial marks every generation this session holds for
+// containerID (live or ended) partial and Incomplete — the same
+// containerID-only scope recordContainerGapLoss already uses, but also
+// setting Incomplete (recordContainerGapLoss deliberately does not: a
+// routeGapLoss is a proven, permanent fact about a specific gap, never
+// resolvable differently on a later retry, whereas this is a genuine,
+// still-open doubt). Used by genconfirm.go's own three pool-capacity-
+// exhaustion paths: req.g (or res.g) is already a real, known candidate for
+// a real container, so a Sensor-side capacity failure to confirm it in time
+// is scoped to that one container's own generations, never every
+// generation this session holds — see markCoveragePartial, which this is
+// a per-generation, containerID-scoped application of.
+func (s *Session) downgradeContainerPartial(containerID string) {
+	for _, g := range s.generations {
+		if g.container.ID == containerID {
+			g.markCoveragePartial()
 		}
 	}
 }
@@ -687,6 +879,25 @@ func (s *Session) recordContainerGapLoss(gens []*generationState) {
 // ready yet, submitted immediately otherwise.
 func (s *Session) dispatchUsageEvent(g *generationState, path string, ev ebpf.Event, kind evidence.EvidenceKind, isExec bool) {
 	if !g.matchesMountView(uint32(ev.MountNamespaceID), formatKernelDev(ev.RootDev), ev.RootIno) {
+		if g.mntNsID == 0 {
+			// Not yet confirmed at all — never actually checked mismatch,
+			// since a generation discovered from an already-running process
+			// can have its very first usage event arrive before the sample
+			// that would confirm matchesMountView's own two sides ever runs
+			// (see recordPendingMountViewEvent's own doc comment). Held for
+			// a later retry instead of guessed at now; applySampleResult
+			// replays every held item through this same function once this
+			// generation's own mount view is actually confirmed, at which
+			// point this branch can genuinely decide instead of assuming a
+			// mismatch.
+			g.recordPendingMountViewEvent(pendingMountViewEvent{path: path, ev: ev, kind: kind, isExec: isExec, receivedAt: s.now()})
+			return
+		}
+		// g.mntNsID != 0: this generation's own mount view is already
+		// confirmed, and it genuinely does not match this event's own — a
+		// real cross-mount-namespace/cross-root event (see
+		// matchesMountView's own doc comment), not merely an unconfirmed
+		// one, so there is nothing further to wait for here.
 		g.incomplete = true
 		return
 	}
@@ -708,6 +919,26 @@ func (s *Session) dispatchUsageEvent(g *generationState, path string, ev ebpf.Ev
 	}
 
 	s.submitEventCandidate(g, path, dev, ev.Ino, kind, obs, now)
+}
+
+// drainPendingMountViewEvents replays every item g.pendingMountViewEvents
+// holds through dispatchUsageEvent again, now that this generation's own
+// mount view has just been confirmed for the first time (see
+// applySampleResult's own call site) — each one gets a genuine
+// matchesMountView decision this time, never a repeat of the same "not yet
+// confirmed" branch (g.mntNsID is nonzero by the time this runs). Clears the
+// queue unconditionally: whatever each item's own outcome turns out to be
+// (attributed normally, or now genuinely marked incomplete), it is not
+// re-queued a second time.
+func (s *Session) drainPendingMountViewEvents(g *generationState) {
+	if len(g.pendingMountViewEvents) == 0 {
+		return
+	}
+	items := g.pendingMountViewEvents
+	g.pendingMountViewEvents = nil
+	for _, item := range items {
+		s.dispatchUsageEvent(g, item.path, item.ev, item.kind, item.isExec)
+	}
 }
 
 // submitEventCandidate builds the one-path candidateBatch a single eBPF
@@ -821,33 +1052,114 @@ func parseNSLinkInode(prefix, link string) (uint32, bool) {
 
 // queuePendingRouteEvent appends item to s.pendingRouteEvents, evicting the
 // oldest entry first if the queue is already at maxPendingRouteEvents. The
-// evicted entry is re-resolved before deciding whether it counts as a loss
-// at all: one that would resolve to routePending (a real, non-excluded
-// container this session has simply never registered a generation for) or
-// routeDiscard (a host cgroup, or an operator-excluded container) is
-// discarded silently, exactly as either already is everywhere else in this
-// file (see pendingRouteEvent's own doc comment and retryPendingRouteEvents)
-// — an eviction happening early, under queue pressure, rather than late, at
-// its own TTL, is not itself a reason to treat these two differently.
-// routeGapLoss is likewise excluded here, but for a different reason: unlike
-// routePending/routeDiscard, it is *not* loss-free — but resolveEventGeneration
-// itself already recorded that loss (scoped to only the one container's own
-// generations — see recordContainerGapLoss) the moment it produced this
-// outcome, so counting it again here would both double the loss and, via
-// recordUnattributableEventLoss's own global downgrade, incorrectly spread
-// partial to every generation this session holds rather than just that one
-// container's own. Everything else evicted this way is counted via
-// recordUnattributableEventLoss, same as before.
+// evicted entry is re-resolved before deciding what its own eviction counts
+// as: routeDiscard (a host cgroup, or an operator-excluded container) is
+// never counted at all — not this session's own observation being affected.
+// routeGapLoss is likewise excluded, but for a different reason: unlike
+// routeDiscard, it is *not* loss-free — but resolveEventGeneration itself
+// already recorded that loss, scoped to only the one container's own
+// generations (recordContainerGapLoss), the moment it produced this
+// outcome, so counting it again here would double it. An outcome
+// classifyUnattributedExpiry's own tier 1 would recognize (the cgroup
+// already resolves to a real, live generation right now) is charged to it
+// directly, exactly as an ordinary retry would. Everything else is forced
+// out before this queue slot can wait for a qualifying discovery pass the
+// way an ordinary TTL expiry (finalizeRoutedItem) would — see
+// applyForcedGapEviction for why that case cannot simply reuse
+// classifyUnattributedExpiry's own tier 2/3 the way a patient retry can.
 func (s *Session) queuePendingRouteEvent(item pendingRouteEvent) {
 	if len(s.pendingRouteEvents) >= maxPendingRouteEvents {
 		oldest := s.pendingRouteEvents[0]
 		s.pendingRouteEvents = s.pendingRouteEvents[1:]
-		_, outcome := s.resolveEventGeneration(oldest.ev.CgroupID, oldest.ev.StartBoottimeNs, oldest.ev.TGID)
-		if outcome != routePending && outcome != routeDiscard && outcome != routeGapLoss {
-			s.recordUnattributableEventLoss(1)
+		g, outcome := s.resolveEventGeneration(oldest.ev.CgroupID, oldest.ev.StartBoottimeNs, oldest.ev.TGID, uint32(oldest.ev.MountNamespaceID))
+		switch {
+		case outcome == routeDiscard || outcome == routeGapLoss:
+			// Neither counted — see this function's own doc comment.
+		case (outcome == routeResolved || outcome == routeUnconfirmed) && g != nil:
+			g.recordEventLoss(1)
+		default:
+			// The event happened before it was received; a generation that
+			// ended within one pending-route TTL before that could still
+			// have produced it and been marked ended by a discovery pass
+			// the loop applied first.
+			s.applyForcedGapEviction(uint32(oldest.ev.MountNamespaceID), 1, oldest.receivedAt.Add(-pendingRouteEventTTL))
 		}
 	}
 	s.pendingRouteEvents = append(s.pendingRouteEvents, item)
+}
+
+// applyFallbackLoss settles loss counted by the kernel's Sensor-wide
+// fallback counter (kl_lost_events): loss that happened while the per-cgroup
+// counter map was full, or with no cgroup ID at all. Nothing identifies
+// whose events were lost, not even a mount namespace, so it is treated
+// exactly like a forced eviction of an event with no known owner: every live
+// generation is downgraded and the watermark protects generations not
+// discovered yet.
+func (s *Session) applyFallbackLoss(delta int64, lostSince time.Time) {
+	if delta <= 0 {
+		return
+	}
+	s.applyForcedGapEviction(0, delta, lostSince)
+}
+
+// applyForcedGapEviction handles one usage-evidence loss forced out of a
+// pending queue (queuePendingRouteEvent's own cap above, and
+// pendingLossDeltas' own equivalent cap in queuePendingLossDelta) before a
+// discovery pass that started after it arrived has ever had a chance to
+// run — the one case classifyUnattributedExpiry's own tier-3 readiness gate
+// exists to prevent, forced open anyway because a queue slot must be freed
+// right now. Silently folding it into eventsUnclassified alone (the old
+// behavior) is not safe here: the usage evidence this loss represents can
+// only ever belong to one of two things — a live generation whose own mount
+// view either already matches it or has not yet been confirmed at all, or a
+// container this session has not even discovered yet — and every one of
+// those is protected instead of guessed away:
+//
+//   - "Live" below also covers a generation that has ended but was alive
+//     at some point after lostSince (see couldOwnLossSince): it stays in
+//     the published evidence, so loss it may own must downgrade it too.
+//   - mntNSID == 0 (the loss being evicted carries no single event's own
+//     mount namespace at all — an aggregate kernel loss-counter delta, from
+//     pendingLossDeltas): there is nothing at all to narrow by, so every
+//     live generation is downgraded, confirmed mount view or not — an
+//     already-confirmed generation is exactly as unprovably innocent of an
+//     unattributed kernel-wide counter as one whose own view is still
+//     unconfirmed.
+//   - mntNSID != 0 (a specific event's own mount namespace is known):
+//     every live generation whose own confirmed mount view
+//     (generationState.mntNsID) matches mntNSID is downgraded, and every
+//     live generation whose own mount view is not yet confirmed at all is
+//     downgraded too — this loss's own mount namespace, once that
+//     generation's view is confirmed, could still turn out to be exactly
+//     it, so not yet knowing rules nothing out. A confirmed generation
+//     whose own mount namespace demonstrably does not match is left alone.
+//   - this exact instant (in boot ticks) is recorded as
+//     s.forcedGapWatermarkTicks (a high-water mark, never decreased): a
+//     container not even discovered yet is invisible to both rules above
+//     (there is no generationState for it to mark), but if it turns out,
+//     once finally discovered, to have started at or before this
+//     watermark, it gets the exact same downgrade from the moment it is
+//     created — see initialEventsCoverage's own watermark check.
+//   - delta is also counted in s.eventsUnclassified, independent of
+//     whichever of the above did or did not apply: that bookkeeping is
+//     deliberately separate from any coverage downgrade (see
+//     recordUnclassifiedEventLoss's own doc comment).
+func (s *Session) applyForcedGapEviction(mntNSID uint32, delta int64, lostSince time.Time) {
+	for _, cand := range s.generations {
+		if !cand.couldOwnLossSince(lostSince) {
+			continue
+		}
+		if mntNSID == 0 || cand.mntNsID == 0 || cand.mntNsID == mntNSID {
+			cand.markCoveragePartial()
+		}
+	}
+
+	if ticks, err := bootTicksNow(); err == nil && ticks > s.forcedGapWatermarkTicks {
+		s.forcedGapWatermarkTicks = ticks
+		s.forcedGapWatermarkSet = true
+	}
+
+	s.recordUnclassifiedEventLoss(delta)
 }
 
 // retryPendingRouteEvents attempts to resolve every still-queued
@@ -860,16 +1172,10 @@ func (s *Session) queuePendingRouteEvent(item pendingRouteEvent) {
 // item is never dispatched purely because it happens to resolve (or even
 // become confirmable) on whichever retry finally notices it is already past
 // pendingRouteEventTTL — age is checked regardless of the resolution outcome
-// that same round. Once expired, routeResolved charges the loss to the
-// now-known generation specifically (its identity is not in doubt, only
-// whether attributing to it this late is still warranted); routeUnresolved
-// and routeUnconfirmed (a container this session does know of, but could not
-// yet confirm the right, still-alive generation for) are counted via
-// recordUnattributableEventLoss instead; routePending (a real, non-excluded
-// container this session has never once registered a generation for) is
-// discarded with no loss counted at all — see pendingRouteEvent's own doc
-// comment. Everything still within its own TTL and not yet resolved or
-// confirmable stays queued for the next retry.
+// that same round. Once expired, finalizeRoutedItem's own call to
+// classifyUnattributedExpiry decides what happens (see that function's own
+// doc comment for the three-tier rule). Everything still within its own TTL
+// and not yet resolved or confirmable stays queued for the next retry.
 func (s *Session) retryPendingRouteEvents(now time.Time) {
 	if len(s.pendingRouteEvents) == 0 {
 		return
@@ -877,29 +1183,91 @@ func (s *Session) retryPendingRouteEvents(now time.Time) {
 	pending := s.pendingRouteEvents
 	s.pendingRouteEvents = nil
 	for _, item := range pending {
-		g, outcome := s.resolveEventGeneration(item.ev.CgroupID, item.ev.StartBoottimeNs, item.ev.TGID)
+		g, outcome := s.resolveEventGeneration(item.ev.CgroupID, item.ev.StartBoottimeNs, item.ev.TGID, uint32(item.ev.MountNamespaceID))
 		s.finalizeRoutedItem(g, outcome, item, now)
 	}
 }
 
-// recordUnattributableEventLoss counts n eBPF events lost without ever
-// having been attributed to any specific generation at all — a
-// pendingRouteEvent dropped for exceeding maxPendingRouteEvents, or one that
-// expired still in the routeUnresolved state (see retryPendingRouteEvents'
-// own doc comment; a routePending expiry is not counted at all). This still
-// counts toward the Sensor-wide total (folded into s.eventsLost by
-// buildSnapshot) and downgrades every generation this session currently
-// holds (live or recently ended — see markAllGenerationsPartial) to
-// partial, since which generation(s) this loss actually belongs to is
-// exactly the fact that never resolved, and guessing wrongly would
-// misattribute it worse than not attributing it at all. Deliberately never
-// advances any one generation's own events_lost.
-func (s *Session) recordUnattributableEventLoss(n int64) {
+// queuePendingLossDelta appends item to s.pendingLossDeltas, evicting the
+// oldest entry first if the queue is already at maxPendingLossDeltas —
+// exactly like queuePendingRouteEvent, but for an aggregate per-cgroup
+// ring-buffer loss delta (attributeEventLossDeltas) rather than a specific
+// event. An eviction this queue is forced into before a discovery pass that
+// started after it arrived has ever had a chance to run goes through
+// applyForcedGapEviction (mntNSID=0: an aggregate counter carries no single
+// event's own mount namespace at all), never a bare, ungated unclassified
+// count.
+func (s *Session) queuePendingLossDelta(item pendingLossDelta) {
+	if len(s.pendingLossDeltas) >= maxPendingLossDeltas {
+		oldest := s.pendingLossDeltas[0]
+		s.pendingLossDeltas = s.pendingLossDeltas[1:]
+		g, outcome := s.resolveEventGeneration(oldest.cgroupID, 0, 0, 0)
+		switch {
+		case outcome == routeDiscard:
+			// Not this session's own observation at all — see
+			// attributeEventLossDeltas' own doc comment.
+		case outcome == routeResolved && g != nil:
+			g.recordEventLoss(oldest.delta)
+		default:
+			s.applyForcedGapEviction(0, oldest.delta, oldest.lostSince)
+		}
+	}
+	s.pendingLossDeltas = append(s.pendingLossDeltas, item)
+}
+
+// retryPendingLossDeltas attempts to resolve every still-queued
+// pendingLossDelta again, exactly the three-tier way retryPendingRouteEvents/
+// finalizeRoutedItem resolve a pendingRouteEvent once its own TTL elapses —
+// reused directly via classifyUnattributedExpiry, wrapping each delta as a
+// pendingRouteEvent carrying only its own cgroup ID (MountNamespaceID stays
+// its zero value, so tier 2's own mount-namespace match never applies here,
+// exactly as attributeEventLossDeltas' own doc comment already notes for
+// this aggregate, no-single-event data). Unlike pendingRouteEvent's own TTL,
+// there is no age limit here at all: a loss delta with no cgroup ID this
+// session can resolve at all only ever advances via tier 3's own readiness
+// gate (a discovery pass that started after it arrived completing), which
+// this retries on every call rather than waiting out a fixed duration first.
+func (s *Session) retryPendingLossDeltas(now time.Time) {
+	if len(s.pendingLossDeltas) == 0 {
+		return
+	}
+	pending := s.pendingLossDeltas
+	s.pendingLossDeltas = nil
+	for _, item := range pending {
+		g, outcome := s.resolveEventGeneration(item.cgroupID, 0, 0, 0)
+		routeItem := pendingRouteEvent{ev: ebpf.Event{CgroupID: item.cgroupID}, receivedAt: item.receivedAt}
+		target, tier, ready := s.classifyUnattributedExpiry(g, outcome, routeItem)
+		if !ready {
+			s.pendingLossDeltas = append(s.pendingLossDeltas, item)
+			continue
+		}
+		switch tier {
+		case 1:
+			target.recordEventLoss(item.delta)
+		case 2:
+			target.markCoveragePartial()
+		case 3:
+			s.recordUnclassifiedEventLoss(item.delta)
+		}
+	}
+}
+
+// recordUnclassifiedEventLoss counts n eBPF events (or aggregate kernel
+// loss-counter deltas) classifyUnattributedExpiry's own tier 3 gave up on:
+// genuinely unclassifiable, and only after a discovery pass that started
+// after each one arrived has already completed. Deliberately never folded
+// into s.eventsLost and never downgrades any generation's own
+// eventsCoverage at all — see eventsUnclassified's own doc comment on why
+// mixing the two would make an otherwise fully-observed generation's own
+// since_start/lost=0 evidence self-contradictory. A high value here is
+// itself the operator-visible signal that this session's own cgroup
+// classification (cgroup_mkdir and/or discovery's own reseeding) is not
+// keeping up, without corrupting any generation's own coverage over it.
+func (s *Session) recordUnclassifiedEventLoss(n int64) {
 	if n <= 0 {
 		return
 	}
-	s.unattributedEventsLost += n
-	markAllGenerationsPartial(s.generations)
+	s.eventsUnclassified += n
 }
 
 // reconcileEventLossCounters reads the eBPF ring buffer's own loss counters
@@ -911,20 +1279,13 @@ func (s *Session) recordUnattributableEventLoss(n int64) {
 // confirms is discardable (routeDiscard — a host process's own cgroup, or an
 // operator-excluded container) is not this session's own observation being
 // affected at all, so it is not counted anywhere at all. Every other
-// increase (genuinely unresolved, still-unconfirmed, or naming a container
-// this session has never registered a generation for) is folded into
-// s.unattributedEventsLost — the same running total a stuck
-// pendingRouteEvent or pendingEventItem already contributes to — and
-// downgrades every generation this session currently holds to partial.
-//
-// Unlike an earlier version of this method, there is no return value: the
-// Sensor-wide total (SensorInfo.Events.Lost) is never derived from the
-// kernel's own counters directly. See buildSnapshot, which instead sums
-// every generation's own events_lost plus s.unattributedEventsLost once this
-// call returns — so a path-resolution failure, a pending-route TTL expiry
-// and a maps-fallback queue overflow all count toward the same total a
-// ring-buffer reservation failure does, rather than two parallel,
-// occasionally-mismatched totals.
+// increase (no cgroup ID to even attempt tier 1 with, or a cgroup this
+// session still cannot resolve to a live generation) is folded into
+// s.eventsUnclassified instead — deliberately never s.eventsLost and never
+// a coverage downgrade for any generation at all (see
+// recordUnclassifiedEventLoss's own doc comment) — since there is no
+// specific event here to try classifyUnattributedExpiry's own tier 2
+// (mount-namespace) fallback against, only a bare cgroup ID.
 func (s *Session) reconcileEventLossCounters() {
 	if s.ebpfHandle == nil {
 		return
@@ -944,9 +1305,27 @@ func (s *Session) reconcileEventLossCounters() {
 	// simpler live-generation fallback, not the tick-based disambiguation a
 	// specific process's own start time would otherwise support.
 	resolve := func(cgroupID uint64) (*generationState, eventRouteOutcome) {
-		return s.resolveEventGeneration(cgroupID, 0, 0)
+		return s.resolveEventGeneration(cgroupID, 0, 0, 0)
 	}
-	s.unattributedEventsLost += attributeEventLossDeltas(byCgroup, fallback, s.lastLostByCgroup, s.lastLostFallback, resolve, s.generations)
+	now := s.now()
+	// Every delta still queued from an earlier call gets its own retry
+	// first, using whatever classification progress has happened since —
+	// before this round's own freshly-observed deltas (unclassifiedNow,
+	// pending) are folded in below.
+	s.retryPendingLossDeltas(now)
+	unclassifiedNow, pending := attributeEventLossDeltas(byCgroup, fallback, s.lastLostByCgroup, s.lastLostFallback, resolve)
+	s.applyFallbackLoss(unclassifiedNow, s.lastLossCounterReadAt)
+	for _, p := range pending {
+		s.queuePendingLossDelta(pendingLossDelta{cgroupID: p.cgroupID, delta: p.delta, receivedAt: now, lostSince: s.lastLossCounterReadAt})
+		// A discovery pass sooner than sampleTicker's own cadence would
+		// provide one is what actually has a chance of classifying this
+		// delta's own cgroup at all — every generation this session holds
+		// publishes Incomplete for as long as anything sits in
+		// pendingLossDeltas (see buildSnapshot's own doc comment), so
+		// shortening that exposure window matters here the same way it does
+		// for resolveEventGeneration's own unresolved-cgroup case.
+		s.requestEarlyDiscovery(now)
+	}
 
 	// Logged only when either counter's own current value has actually
 	// changed since the last call — the evidence file's own events_lost is
@@ -967,7 +1346,6 @@ func (s *Session) reconcileEventLossCounters() {
 	if byCgroupTotal != prevByCgroupTotal || fallback != s.lastLostFallback {
 		fmt.Fprintf(os.Stderr, "kestrelynx sensor: ebpf kernel loss counters: by_cgroup_total=%d fallback=%d\n", byCgroupTotal, fallback)
 	}
-
 	if s.lastLostByCgroup == nil && len(byCgroup) > 0 {
 		s.lastLostByCgroup = map[uint64]uint64{}
 	}
@@ -975,6 +1353,18 @@ func (s *Session) reconcileEventLossCounters() {
 		s.lastLostByCgroup[cgroupID] = count
 	}
 	s.lastLostFallback = fallback
+	s.lastLossCounterReadAt = now
+}
+
+// pendingCgroupLoss is one attributeEventLossDeltas' own per-cgroup delta
+// that could not be attributed to a specific generation immediately —
+// returned to the caller (reconcileEventLossCounters) to hold as a
+// pendingLossDelta rather than being finalized as unclassified on the spot;
+// see attributeEventLossDeltas' own doc comment for why immediate
+// finalization is exactly the bug this type exists to avoid.
+type pendingCgroupLoss struct {
+	cgroupID uint64
+	delta    int64
 }
 
 // attributeEventLossDeltas is reconcileEventLossCounters' own pure
@@ -982,22 +1372,29 @@ func (s *Session) reconcileEventLossCounters() {
 // fabricated counters and a fake resolve function, without a real
 // *ebpf.Handle (which needs CAP_BPF/CAP_PERFMON to construct at all). See
 // reconcileEventLossCounters' own doc comment for what it computes and why.
-// Returns the total delta that could not be attributed to any specific
-// generation this round (for the caller to add to its own running
-// s.unattributedEventsLost) — never the sum of the counters' own raw current
-// values, which would double-count everything already attributed via
-// recordEventLoss above. A routeDiscard delta contributes to neither this
-// return value nor markAllGenerationsPartial: it is deliberately excluded
-// from both, since it is not this session's own observation being affected
-// at all, and must not make an otherwise-healthy container's own evidence
-// look less complete than it actually is.
+//
+// Returns two things. unclassifiedNow is the fallback counter's own delta
+// (kl_lost_events, which carries no cgroup ID breakdown at all, so it can
+// never become classifiable no matter how long this session waits) —
+// finalized immediately, for the caller to fold into its own running
+// s.eventsUnclassified via recordUnclassifiedEventLoss, same as before.
+// pending is every per-cgroup delta that resolve could not attribute to a
+// specific generation outright (routeResolved) this round: rather than also
+// being finalized here on the spot (the previous behavior, and the bug this
+// signature change fixes — a cgroup this session simply has not discovered
+// yet was given no chance at all to become classified before being folded
+// into eventsUnclassified permanently), the caller queues each one as a
+// pendingLossDelta and gives it the same discovery-wait retryPendingRouteEvents
+// already gives a specific event's own pendingRouteEvent. A routeDiscard
+// delta appears in neither return value: it is deliberately excluded, since
+// it is not this session's own observation being affected at all, and must
+// not make an otherwise-healthy container's own evidence look less complete
+// than it actually is.
 func attributeEventLossDeltas(
 	byCgroup map[uint64]uint64, fallback uint64,
 	prevByCgroup map[uint64]uint64, prevFallback uint64,
 	resolve func(cgroupID uint64) (*generationState, eventRouteOutcome),
-	generations map[string]*generationState,
-) int64 {
-	var unattributed int64
+) (unclassifiedNow int64, pending []pendingCgroupLoss) {
 	for cgroupID, count := range byCgroup {
 		prev := prevByCgroup[cgroupID]
 		if count <= prev {
@@ -1012,17 +1409,17 @@ func attributeEventLossDeltas(
 			// Not this session's own observation at all — see this
 			// function's own doc comment.
 		default:
-			unattributed += delta
+			pending = append(pending, pendingCgroupLoss{cgroupID: cgroupID, delta: delta})
 		}
 	}
 
 	if fallback > prevFallback {
-		unattributed += int64(fallback - prevFallback)
+		// kl_lost_events carries no cgroup ID breakdown at all — it can
+		// never become classifiable, so it is returned for the caller to
+		// settle immediately (see applyFallbackLoss) rather than queued.
+		unclassifiedNow += int64(fallback - prevFallback)
 	}
-	if unattributed > 0 {
-		markAllGenerationsPartial(generations)
-	}
-	return unattributed
+	return unclassifiedNow, pending
 }
 
 // applyEventVerificationResult folds one sample worker's own
@@ -1108,21 +1505,4 @@ func (s *Session) applyEventVerificationResult(g *generationState, res sampleRes
 		}
 	}
 	g.pendingEvents = kept
-}
-
-// markAllGenerationsPartial downgrades eventsCoverage (never events_lost
-// itself — see reconcileEventLossCounters' own doc comment on why an
-// unattributable loss cannot advance any one generation's own counter) for
-// every generation this session currently holds, live or recently ended
-// (within the 7-day retention window; see endedRetention) — an
-// unattributable loss's own interval could have included a generation that
-// ended moments before this reconciliation ran, and its own evidence is
-// still shown (and therefore still able to overstate its own confidence)
-// until it is pruned.
-func markAllGenerationsPartial(generations map[string]*generationState) {
-	for _, g := range generations {
-		if g.eventsCoverage == evidence.CoverageSinceStart {
-			g.eventsCoverage = evidence.CoveragePartial
-		}
-	}
 }

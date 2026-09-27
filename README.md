@@ -213,6 +213,18 @@ Preview the Japanese documentation in a separate process:
 mkdocs serve --config-file mkdocs.ja.yml
 ```
 
+Each build generates 1200 × 630 Open Graph images and X cards for all English
+and Japanese pages using the title and description metadata. The layout is in
+[`overrides/social/kestrelynx.yml`](overrides/social/kestrelynx.yml); no logo is
+required. The label below the service name is DEVELOPMENT LOG for `development/`,
+TECHNICAL ARTICLES for `articles/`, and DOCUMENTATION elsewhere, using the same
+English labels on both language sites. To add a logo later, put the image in `overrides/social/` and set
+`plugins.social.cards_layout_options.logo` in `mkdocs.yml` to its repository-relative
+path (for example, `overrides/social/logo.png`). Both languages share this setting.
+The first build downloads Noto Sans JP from Google Fonts into `.cache/`.
+Image generation also requires Cairo; on Debian/Ubuntu, install `libcairo2`
+with `sudo apt-get install libcairo2` before building.
+
 Documentation changes pushed to `main` are built and deployed by
 [`docs.yml`](.github/workflows/docs.yml). Before the first deployment, select
 **GitHub Actions** under **Settings → Pages → Build and deployment → Source**.

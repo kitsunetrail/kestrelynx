@@ -76,6 +76,15 @@ nav:
 
 plugins:
   - search
+  - social:
+      cards_layout_dir: overrides/social
+      cards_layout: kestrelynx
+      cards_layout_options:
+        font_family: Noto Sans JP
+        # Add logo: path/to/logo.png here once the logo is ready.
+
+watch:
+  - overrides/social
 
 hooks:
   # Generate per-page hreflang and language-selector links when building HTML.

@@ -213,6 +213,15 @@ mkdocs serve
 mkdocs serve --config-file mkdocs.ja.yml
 ```
 
+ビルド時に、英語・日本語の全ページで1200 × 630のOG画像とX向けのカード情報を自動生成します。
+画像にはページタイトルを、メタタグにはタイトルと説明文を使用します。
+サービス名の下のラベルは、日英共通で`development/`では「DEVELOPMENT LOG」、`articles/`では「TECHNICAL ARTICLES」、その他では「DOCUMENTATION」を表示します。
+レイアウトは[`overrides/social/kestrelynx.yml`](overrides/social/kestrelynx.yml)にあり、ロゴなしで利用できます。
+後からロゴを追加する場合は、画像を`overrides/social/`に配置し、`mkdocs.yml`の
+`plugins.social.cards_layout_options.logo`にリポジトリ相対パス（例：`overrides/social/logo.png`）を指定します。
+この設定は両言語で共通です。初回ビルドではGoogle FontsからNoto Sans JPを`.cache/`にダウンロードします。
+画像生成にはCairoも必要です。Debian/Ubuntuではビルド前に`sudo apt-get install libcairo2`で導入してください。
+
 `main` へプッシュされたドキュメントの変更は、[`docs.yml`](.github/workflows/docs.yml)によってビルドおよびデプロイされます。初回デプロイ前に、**Settings → Pages → Build and deployment → Source** で **GitHub Actions** を選択してください。
 
 ## ライセンス

@@ -1,0 +1,114 @@
+# Selected A2 layout with a section label below the service name.
+definitions:
+- '{{ page.meta.get(''title'', page.title) }}'
+- '{{ page.meta.get(''description'', config.site_description) }}'
+tags:
+  og:type: website
+  og:site_name: '{{ config.site_name }}'
+  og:title: '{{ page.meta.get(''title'', page.title) }}'
+  og:description: '{{ page.meta.get(''description'', config.site_description) }}'
+  og:url: '{{ page.canonical_url }}'
+  og:image: '{{ image.url }}'
+  og:image:type: '{{ image.type }}'
+  og:image:width: '{{ image.width }}'
+  og:image:height: '{{ image.height }}'
+  og:image:alt: '{{ page.meta.get(''title'', page.title) }}'
+  twitter:card: summary_large_image
+  twitter:title: '{{ page.meta.get(''title'', page.title) }}'
+  twitter:description: '{{ page.meta.get(''description'', config.site_description) }}'
+  twitter:image: '{{ image.url }}'
+  twitter:image:alt: '{{ page.meta.get(''title'', page.title) }}'
+size:
+  width: 1200
+  height: 630
+layers:
+- background:
+    color: '#263b46'
+- size:
+    width: 12
+    height: 630
+  background:
+    color: '#4dd0b8'
+- size:
+    width: 880
+    height: 48
+  offset:
+    x: 64
+    y: 64
+  typography:
+    content: KestreLynx
+    color: '#ffffff'
+    font:
+      family: '{{ layout.font_family }}'
+      style: Bold
+- size:
+    width: 96
+    height: 96
+  offset:
+    x: 1040
+    y: 40
+  background:
+    image: '{{ layout.logo | default('''') }}'
+- size:
+    width: 1072
+    height: 274
+  offset:
+    x: 64
+    y: 228
+  typography:
+    content: '{% set title = layout.title | default(page.meta.get(''title'', page.title), true) %}{{ title | wordwrap(16,
+      true, '' '') if config.theme.language == ''ja'' else title }}'
+    color: '#ffffff'
+    align: start center
+    overflow: shrink
+    line:
+      amount: 4
+      height: 1.25
+    font:
+      family: '{{ layout.font_family }}'
+      style: Bold
+- size:
+    width: 1072
+    height: 2
+  offset:
+    x: 64
+    y: 142
+  background:
+    color: '#617a83'
+- size:
+    width: 1000
+    height: 22
+  offset:
+    x: 64
+    y: 177
+  typography:
+    content: >-
+      {%- set section = page.file.src_uri.split('/')[0] -%}
+      {%- if section == 'development' -%}
+        DEVELOPMENT LOG
+      {%- elif section == 'articles' -%}
+        TECHNICAL ARTICLES
+      {%- else -%}
+        DOCUMENTATION
+      {%- endif -%}
+    color: '#4dd0b8'
+    align: start center
+    overflow: shrink
+    line:
+      amount: 1
+      height: 1.25
+    font:
+      family: '{{ layout.font_family }}'
+      style: Bold
+- size:
+    width: 1072
+    height: 28
+  offset:
+    x: 64
+    y: 548
+  typography:
+    content: kestrelynx.dev
+    color: '#b9cbd2'
+    font:
+      family: '{{ layout.font_family }}'
+      style: Regular

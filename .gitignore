@@ -6,6 +6,7 @@
 /out/
 /site/
 /.venv/
+/.cache/
 
 # Runtime discovery measurement output (never commit collected observations)
 /experiments/runtime-discovery/out/

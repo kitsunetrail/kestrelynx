@@ -325,3 +325,35 @@ func TestRunningContainers_DeterministicSortOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestRunningContainers_RuntimeExcludeLabel covers the exact literal value
+// contract: only "true" excludes, and any near-miss (missing, empty, "1",
+// wrong case) leaves the container included.
+func TestRunningContainers_RuntimeExcludeLabel(t *testing.T) {
+	cases := []struct {
+		name   string
+		labels map[string]string
+		want   bool
+	}{
+		{"exact true", map[string]string{runtimeExcludeLabel: "true"}, true},
+		{"missing", nil, false},
+		{"empty value", map[string]string{runtimeExcludeLabel: ""}, false},
+		{"truthy but not the exact literal", map[string]string{runtimeExcludeLabel: "1"}, false},
+		{"wrong case", map[string]string{runtimeExcludeLabel: "True"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := serveContainers(t, []rawContainer{{Id: "a", Image: "web:1", Labels: c.labels}})
+			cs, err := newTestClient(srv).RunningContainers(context.Background())
+			if err != nil {
+				t.Fatalf("RunningContainers: %v", err)
+			}
+			if len(cs) != 1 {
+				t.Fatalf("got %d containers, want 1", len(cs))
+			}
+			if cs[0].RuntimeExcluded != c.want {
+				t.Errorf("RuntimeExcluded = %v, want %v", cs[0].RuntimeExcluded, c.want)
+			}
+		})
+	}
+}

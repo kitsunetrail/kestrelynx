@@ -134,6 +134,13 @@ const (
 	composeServiceLabel = "com.docker.compose.service"
 )
 
+// runtimeExcludeLabel opts a container out of the runtime-usage overlay
+// entirely. Unlike the compose labels above it takes exactly one literal
+// value ("true"); anything else (missing, empty, "1", "True") is not
+// excluded — the label is a deliberate, explicit opt-out, not a general
+// truthy flag, so a near-miss value is never guessed at as meaning yes.
+const runtimeExcludeLabel = "io.kestrelynx.runtime.exclude"
+
 // maxLabelValueBytes mirrors Docker Compose's own project/service name
 // limit; a value over this is treated as unusable rather than truncated.
 const maxLabelValueBytes = 253
@@ -228,10 +235,11 @@ func (c *Client) RunningContainers(ctx context.Context) ([]inventory.Container, 
 			id = ""
 		}
 		containers = append(containers, inventory.Container{
-			ID:       id,
-			Name:     containerName(ct.Names),
-			Workload: workloadFromLabels(ct.Labels),
-			Image:    img,
+			ID:              id,
+			Name:            containerName(ct.Names),
+			Workload:        workloadFromLabels(ct.Labels),
+			Image:           img,
+			RuntimeExcluded: ct.Labels[runtimeExcludeLabel] == "true",
 		})
 	}
 

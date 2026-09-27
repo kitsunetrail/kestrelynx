@@ -225,6 +225,12 @@ func TestStartSampleWorker_StalledWorkerBlocksNeitherOthersNorHeartbeat_Determin
 		sampleResCh:    make(chan sampleEnvelope, 8),
 		writerCh:       make(chan writerJob, 1),
 		writerReportCh: make(chan writeReport, 1),
+		// This test drives sampling/heartbeat itself rather than through
+		// run()'s own eBPF-attach step, so eventsStatus is set directly to
+		// what that step would have left it at on a host with no real
+		// attach attempted.
+		eventsStatus: evidence.EventsUnavailable,
+		eventsReason: evidence.EventsReasonKernelUnsupported,
 		sampleFn: func(job sampleJob) sampleResult {
 			if job.genKey == realSlowKey {
 				atomic.AddInt32(&slowStarted, 1)
@@ -411,6 +417,15 @@ func TestLoop_StalledGenerationDoesNotBlockAnothersResultsOrRepeatedHeartbeats(t
 		writerReportCh:   make(chan writeReport, 1),
 		heartbeatEvery:   heartbeatFast,
 		sampleTimeout:    sampleTimeout,
+		// This test drives loop() directly, skipping run()'s own startup
+		// self-check and eBPF-attach steps, so isolationStatus/eventsStatus
+		// are set here to what a clean, fully-isolated run with no eBPF
+		// attach attempted would have left them at (computeStatus()
+		// otherwise treats isolationStatus's zero value as "not ok" and
+		// reports it verbatim).
+		isolationStatus: evidence.SensorOK,
+		eventsStatus:    evidence.EventsUnavailable,
+		eventsReason:    evidence.EventsReasonKernelUnsupported,
 		discoverFn: func() (map[string]containerGroup, error) {
 			return groups, nil
 		},

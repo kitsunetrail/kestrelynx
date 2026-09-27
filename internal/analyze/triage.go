@@ -7,6 +7,7 @@ package analyze
 import (
 	"sort"
 
+	"github.com/kitsunetrail/kestrelynx/internal/evidence"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
@@ -237,24 +238,91 @@ func (r Report) ByPriority() PriorityView {
 			}
 		}
 	}
+	// runtimeEnabled gates whether bucketSection calls the runtime-aware sort
+	// functions at all. Report.Runtime is nil exactly when AttachRuntime was
+	// never called (runtime.enabled is false, every caller before this
+	// field existed) — this is the one place that fact reaches ByPriority,
+	// so a disabled deployment never even executes runtimeSortPackages/
+	// runtimeSortImages' own comparisons, not merely receives an unchanged
+	// order from them.
+	runtimeEnabled := r.Runtime != nil
 	return PriorityView{
-		ActNow: bucketSection(buckets[PriorityActNow], containers, meta),
-		Watch:  bucketSection(buckets[PriorityWatch], containers, meta),
-		Low:    bucketSection(buckets[PriorityLow], containers, meta),
+		ActNow: bucketSection(buckets[PriorityActNow], containers, meta, runtimeEnabled),
+		Watch:  bucketSection(buckets[PriorityWatch], containers, meta, runtimeEnabled),
+		Low:    bucketSection(buckets[PriorityLow], containers, meta, runtimeEnabled),
 	}
 }
 
 // bucketSection finalizes one priority bucket into sorted ImageFindings.
-func bucketSection(images map[imgKey][]PackageGroup, containers map[imgKey][]inventory.Container, meta map[imgKey]entityMeta) []ImageFindings {
+// This is the only place runtime usage affects display order: the canonical
+// status sections (analyze.go's buildSection) call sortPackages/sortImages
+// directly and never runtimeSortPackages/runtimeSortImages, so the priority
+// buckets alone re-order within a bucket without moving anything across a
+// priority boundary, a count, or a Status section. runtimeEnabled, not just
+// the sort functions' own stable-tie behavior, is what keeps a disabled
+// deployment from running the runtime-aware comparisons at all.
+func bucketSection(images map[imgKey][]PackageGroup, containers map[imgKey][]inventory.Container, meta map[imgKey]entityMeta, runtimeEnabled bool) []ImageFindings {
 	if len(images) == 0 {
 		return nil
 	}
 	out := make([]ImageFindings, 0, len(images))
 	for k, groups := range images {
 		sortPackages(groups)
+		if runtimeEnabled {
+			runtimeSortPackages(groups)
+		}
 		m := meta[k]
 		out = append(out, ImageFindings{Image: k.ref, Subject: m.subject, Pinned: m.pinned, Packages: groups, Containers: containers[k]})
 	}
 	sortImages(out)
+	if runtimeEnabled {
+		runtimeSortImages(out)
+	}
 	return out
+}
+
+// runtimeSortPackages re-orders one priority bucket's already-sorted
+// packages (sortPackages) so an in-use package (OS and language packages
+// alike) comes before one that is not, then by exposure stage
+// (strongest first) and high privilege (true first) among the in-use ones.
+// It is a stable sort on top of sortPackages' own order, so two packages
+// tied on every runtime key keep exactly the order sortPackages gave them.
+// bucketSection only calls this when runtime is enabled at all — the
+// disabled case skips the call entirely rather than relying on this
+// function's own comparisons happening to be inert.
+func runtimeSortPackages(g []PackageGroup) {
+	sort.SliceStable(g, func(i, j int) bool {
+		ui, uj := g[i].Runtime.Usage == evidence.UsageInUse, g[j].Runtime.Usage == evidence.UsageInUse
+		if ui != uj {
+			return ui
+		}
+		if !ui {
+			return false
+		}
+		ei, ej := exposureRank[g[i].Runtime.Exposure], exposureRank[g[j].Runtime.Exposure]
+		if ei != ej {
+			return ei > ej
+		}
+		return g[i].Runtime.HighPrivilege && !g[j].Runtime.HighPrivilege
+	})
+}
+
+// runtimeSortImages re-orders one priority bucket's already-sorted images
+// (sortImages) so an image with at least one in-use package comes first.
+// Stable on top of sortImages' own order. Like runtimeSortPackages,
+// bucketSection only calls this when runtime is enabled.
+func runtimeSortImages(imgs []ImageFindings) {
+	sort.SliceStable(imgs, func(i, j int) bool {
+		return anyPackageInUse(imgs[i].Packages) && !anyPackageInUse(imgs[j].Packages)
+	})
+}
+
+// anyPackageInUse reports whether any of groups is judged in use.
+func anyPackageInUse(groups []PackageGroup) bool {
+	for _, g := range groups {
+		if g.Runtime.Usage == evidence.UsageInUse {
+			return true
+		}
+	}
+	return false
 }

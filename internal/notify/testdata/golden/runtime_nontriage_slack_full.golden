@@ -1,0 +1,20 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+2 images scanned, 2 affected
+*Priority:* 🔴 1 CRITICAL
+
+*✅ Actionable now (fixed)*
+🔴 web:1.0  CRITICAL 1 / HIGH 0
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch · ▶ in use (running)
+
+*ℹ️ No fix yet (affected / waiting on upstream)*
+🟠 api:2.0  CRITICAL 0 / HIGH 1
+   • setuptools 53.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [python-pkg] · ▶ in use (running)
+🟠 web:1.0  CRITICAL 0 / HIGH 1
+   • curl 8.0.0 (no fix available) (CRITICAL 0 / HIGH 1)
+
+*🔕 Upstream won't fix (will_not_fix)*
+🟠 api:2.0  CRITICAL 0 / HIGH 1
+   • leftpad 1.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [node-pkg]
+
+🔎 Runtime: ▶ 2 in use · 2 not observed · 0 unavailable
+_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._

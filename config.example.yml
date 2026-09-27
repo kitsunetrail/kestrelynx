@@ -101,3 +101,16 @@ triage:
   # for zero CVE egress; advisory links from the KEV notes still work (they
   # come from the bulk feed).
   discussion_links: true
+
+runtime:
+  # Show which packages an optional, separately-privileged Sensor companion
+  # process (`kestrelynx sensor`, deploy/docker/docker-compose.sensor.yml)
+  # actually observed running, alongside the ordinary vulnerability
+  # findings. Requires deploying the Sensor and sharing its evidence volume
+  # with this container (read-only) — see the Sensor compose file's own
+  # comments for both steps. With no Sensor deployed, leave this false: the
+  # main body never opens evidence_dir and every notification is unaffected.
+  enabled: false
+  # Where the Sensor's evidence volume is mounted into this container. Must
+  # match the Sensor's own --evidence-dir (same default on both sides).
+  evidence_dir: "/var/lib/kestrelynx-runtime"

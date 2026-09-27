@@ -1,0 +1,20 @@
+📊 *Full report — 2026-06-24 09:00*
+
+*🚨 ACT NOW (1) — exploited or likely to be*
+• web:1.0
+   • openssl 3.0.7 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a — no fix yet, consider mitigation
+       📎 <https://avd.example/CVE-OPENSSL|advisory>
+     ▶ in use (running as `/usr/sbin/nginx`) · published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+
+*👀 WATCH (2) — not urgent, keep an eye on*
+• api:2.0
+   • setuptools 53.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [python-pkg]
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> HIGH · EPSS 2% — no fix yet, consider mitigation
+     ▶ in use (runtime is running `/usr/bin/python3.11`) · last confirmed 06-24 09:00
+• web:1.0
+   • curl 8.0.0 (no fix available) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> HIGH · EPSS 2% — no fix yet, consider mitigation
+     ▷ not observed
+
+*🔕 LOW (2)* — no exploitation signal; details in the weekly full report or the webhook payload

@@ -1,0 +1,303 @@
+{
+  "generated_at": "2026-06-24T09:00:00Z",
+  "environment": {
+    "kind": ""
+  },
+  "summary": {
+    "images_total": 2,
+    "images_affected": 2
+  },
+  "eosl_images": null,
+  "actionable": [
+    {
+      "image": "web:1.0",
+      "severity_counts": {
+        "CRITICAL": 1,
+        "HIGH": 0
+      },
+      "findings": [
+        {
+          "package": "openssl",
+          "installed": "3.0.7",
+          "fixed": "3.0.11",
+          "status": "fixed",
+          "severity_counts": {
+            "CRITICAL": 1,
+            "HIGH": 0
+          },
+          "upgrade_risk": "distro_update",
+          "vuln_ids": [
+            "CVE-OPENSSL"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-OPENSSL",
+              "severity": "CRITICAL",
+              "kev": false,
+              "epss": null
+            }
+          ],
+          "class": "os",
+          "ecosystem": "",
+          "runtime": {
+            "usage": "in_use",
+            "evidence_kinds": [
+              "exe"
+            ],
+            "exposure": "host_published_all",
+            "high_privilege": true,
+            "containers": [
+              {
+                "name": "web-1",
+                "container_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "generation_started_at": "2026-06-24T08:00:00Z",
+                "usage": "in_use",
+                "last_seen": "2026-06-24T09:00:00Z",
+                "ports": [
+                  "0.0.0.0:443/tcp"
+                ],
+                "process": {
+                  "exe": "/usr/sbin/nginx",
+                  "effective_uid": 0,
+                  "userns": false,
+                  "privileged": false
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "containers": [
+        {
+          "name": "web-1",
+          "workload": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "content_id": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
+  "watch": [
+    {
+      "image": "api:2.0",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 1
+      },
+      "findings": [
+        {
+          "package": "setuptools",
+          "installed": "53.0.0",
+          "fixed": "",
+          "status": "affected",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-SETUP"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-SETUP",
+              "severity": "HIGH",
+              "kev": false,
+              "epss": null
+            }
+          ],
+          "class": "lang",
+          "ecosystem": "python-pkg",
+          "runtime": {
+            "usage": "in_use",
+            "evidence_kinds": [
+              "runtime_running"
+            ],
+            "exposure": "unknown",
+            "containers": [
+              {
+                "name": "api-1",
+                "container_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "generation_started_at": "2026-06-24T08:00:00Z",
+                "usage": "in_use",
+                "last_seen": "2026-06-24T09:00:00Z",
+                "process": {
+                  "exe": "/usr/bin/python3.11",
+                  "effective_uid": 1000,
+                  "userns": false,
+                  "privileged": false
+                },
+                "instances": [
+                  {
+                    "type": "python-pkg",
+                    "usage": "in_use"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "containers": [
+        {
+          "name": "api-1",
+          "workload": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "content_id": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    },
+    {
+      "image": "web:1.0",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 1
+      },
+      "findings": [
+        {
+          "package": "curl",
+          "installed": "8.0.0",
+          "fixed": "",
+          "status": "affected",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-CURL"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-CURL",
+              "severity": "HIGH",
+              "kev": false,
+              "epss": null
+            }
+          ],
+          "class": "os",
+          "ecosystem": "",
+          "runtime": {
+            "usage": "not_observed",
+            "events_coverage": "since_start",
+            "exposure": "unknown",
+            "containers": [
+              {
+                "name": "web-1",
+                "container_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "generation_started_at": "2026-06-24T08:00:00Z",
+                "usage": "not_observed",
+                "last_seen": "2026-06-24T09:00:00Z"
+              }
+            ]
+          }
+        }
+      ],
+      "containers": [
+        {
+          "name": "web-1",
+          "workload": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "content_id": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
+  "wont_fix": [
+    {
+      "image": "api:2.0",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 1
+      },
+      "findings": [
+        {
+          "package": "leftpad",
+          "installed": "1.0.0",
+          "fixed": "",
+          "status": "will_not_fix",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "vuln_ids": [
+            "CVE-LEFTPAD"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-LEFTPAD",
+              "severity": "HIGH",
+              "kev": false,
+              "epss": null
+            }
+          ],
+          "class": "lang",
+          "ecosystem": "node-pkg",
+          "runtime": {
+            "usage": "not_observed",
+            "events_coverage": "since_start",
+            "exposure": "unknown",
+            "containers": [
+              {
+                "name": "api-1",
+                "container_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "generation_started_at": "2026-06-24T08:00:00Z",
+                "usage": "not_observed",
+                "last_seen": "2026-06-24T09:00:00Z",
+                "instances": [
+                  {
+                    "type": "node-pkg",
+                    "usage": "not_observed"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "containers": [
+        {
+          "name": "api-1",
+          "workload": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "content_id": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
+  "eol_packages": [],
+  "scan_errors": [],
+  "runtime": {
+    "sensor_status": "ok",
+    "heartbeat_at": "2026-06-24T09:00:00Z",
+    "interval_seconds": 30,
+    "rules": {
+      "os_packages": "executed_or_loaded_by_running_process",
+      "lang_packages_binary": "in_running_binary",
+      "lang_packages_runtime": "runtime_process_running"
+    },
+    "events_status": "ok",
+    "counts": {
+      "in_use": 2,
+      "not_observed": 2,
+      "unavailable": 0
+    }
+  }
+}

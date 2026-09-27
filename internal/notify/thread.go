@@ -99,9 +99,11 @@ func triageThreadSections(r analyze.Report, byRef map[string]analyze.ImageObserv
 		secs = append(secs, threadBucket(r, byRef, fmt.Sprintf("*👀 WATCH (%d) — not urgent, keep an eye on*", n), pv.Watch, ages))
 	}
 	if n := analyze.GroupCount(pv.Low); n > 0 {
-		secs = append(secs, threadSection{blocks: []string{
-			fmt.Sprintf("\n*🔕 LOW (%d)* — no exploitation signal; details in the weekly full report or the webhook payload\n", n),
-		}})
+		low := fmt.Sprintf("\n*🔕 LOW (%d)* — no exploitation signal; details in the weekly full report or the webhook payload\n", n)
+		if inUse := countInUse(pv.Low); inUse > 0 {
+			low += fmt.Sprintf("▶ in use among low: %d\n", inUse)
+		}
+		secs = append(secs, threadSection{blocks: []string{low}})
 	}
 	return secs
 }
@@ -135,6 +137,7 @@ func threadBucket(r analyze.Report, byRef map[string]analyze.ImageObservation, t
 		for _, g := range img.Packages {
 			writePackage(&b, g, g.Status == scanner.StatusFixed, "")
 			writeThreadDetail(&b, r, img.Image, g, ages.forGroup(g))
+			writeRuntimeThreadLine(&b, g.Runtime)
 		}
 		s.blocks = append(s.blocks, b.String())
 	}
@@ -156,6 +159,7 @@ func eolThreadSection(r analyze.Report, byRef map[string]analyze.ImageObservatio
 			}
 			writePackage(&b, g, false, "")
 			writeThreadDetail(&b, r, img.Image, g, ages.forGroup(g))
+			writeRuntimeThreadLine(&b, g.Runtime)
 		}
 		s.blocks = append(s.blocks, b.String())
 	}

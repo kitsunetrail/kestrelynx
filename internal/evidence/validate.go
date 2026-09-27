@@ -60,6 +60,22 @@ func validateSnapshot(snap *Snapshot, now time.Time) error {
 	if snap.Sensor.Events.Status == EventsOK && isFuture(snap.Sensor.Events.AttachedAt, now, maxFutureSkew) {
 		return fmt.Errorf("%w: sensor.events.attached_at is in the future", ErrInvalid)
 	}
+	// sensor.status, sensor.events.status and sensor.events.reason are
+	// Sensor-wide, not per-record: like session_id above, none of them has a
+	// single generation or package record it could be dropped from instead,
+	// so an unrecognized value rejects the whole file rather than being
+	// silently trusted or guessed at. A compromised or buggy Sensor could
+	// otherwise smuggle an arbitrary string into these fields, which
+	// notify's display layer would have no per-record way to quarantine.
+	if !validSensorStatuses[snap.Sensor.Status] {
+		return fmt.Errorf("%w: unknown sensor.status %q", ErrInvalid, snap.Sensor.Status)
+	}
+	if !validEventsStatuses[snap.Sensor.Events.Status] {
+		return fmt.Errorf("%w: unknown sensor.events.status %q", ErrInvalid, snap.Sensor.Events.Status)
+	}
+	if !validEventsReasons[snap.Sensor.Events.Reason] {
+		return fmt.Errorf("%w: unknown sensor.events.reason %q", ErrInvalid, snap.Sensor.Events.Reason)
+	}
 	if len(snap.Generations) > maxGenerations {
 		return fmt.Errorf("%w: %d generations exceeds limit %d", ErrInvalid, len(snap.Generations), maxGenerations)
 	}
@@ -114,8 +130,110 @@ func validateSnapshot(snap *Snapshot, now time.Time) error {
 		gen.Unavailable, gen.Incomplete = filterUnavailableStrings(gen.Unavailable, gen.Incomplete)
 		gen.Executables, gen.Incomplete = filterExecutableStrings(gen.Executables, gen.Incomplete)
 		gen.ParseFailed, gen.Incomplete = filterParseFailedStrings(gen.ParseFailed, gen.Incomplete)
+
+		// events_coverage has a per-generation home but no "drop this record"
+		// analogue (there is no list to remove a generation from mid-read), so
+		// an unrecognized value is normalized to the most conservative member
+		// (CoverageNone: "no claim of coverage") rather than rejecting the
+		// whole file over one generation's cosmetic field, or letting a
+		// fabricated string reach the webhook's events_coverage key verbatim.
+		gen.EventsCoverage = normalizeEventsCoverage(gen.EventsCoverage)
 	}
 	return nil
+}
+
+// validSensorStatuses and validEventsStatuses are the closed sets
+// snap.Sensor.Status and snap.Sensor.Events.Status must belong to. The zero
+// value ("") is deliberately excluded from both: Session.buildSnapshot
+// (internal/sensor) always sets both fields from a real classification
+// before any snapshot is ever written, so a file whose sensor.status or
+// sensor.events.status reads "" is either torn/malformed or written by
+// something other than this Sensor — either way not one whose silence about
+// its own state this reader should paper over. Rejecting "" here is a
+// distinct case from RuntimeInfo's own zero value (analyze/runtime.go): that
+// one represents "no snapshot was available to read at all"
+// (Provider.Load itself failed), never a value this validator accepted.
+var validSensorStatuses = map[SensorStatus]bool{
+	SensorOK: true, SensorDegraded: true, SensorPermissionDenied: true,
+	SensorIsolationFailed: true, SensorIsolationDegraded: true,
+}
+
+var validEventsStatuses = map[EventsStatus]bool{
+	EventsOK: true, EventsUnavailable: true,
+}
+
+var validEventsReasons = map[EventsReason]bool{
+	EventsReasonNone: true, EventsReasonKernelUnsupported: true, EventsReasonBTFMissing: true,
+	EventsReasonPermission: true, EventsReasonAttachFailed: true, EventsReasonCgroupV1: true,
+}
+
+// validUnavailableReasons is every UnavailableReason a Sensor may legitimately
+// write into an UnavailablePackage record on disk. Reasons analyze computes
+// itself from a matched generation's own content (ReasonVersionMismatch,
+// ReasonNoFileList, everything GenerationEligibleForNotObserved returns, and
+// so on) are included too: the Sensor is free to report any of them as its
+// own verdict for a package it already judged unavailable itself, and the
+// reader has no way to tell those apart from the ones analyze would have
+// derived independently.
+var validUnavailableReasons = map[UnavailableReason]bool{
+	ReasonSensorNotReporting: true, ReasonSensorStale: true, ReasonEvidenceInvalid: true,
+	ReasonIsolationFailed: true, ReasonPermissionDenied: true, ReasonInitializing: true,
+	ReasonStalled: true, ReasonParseFailed: true, ReasonTruncated: true, ReasonIncomplete: true,
+	ReasonGenerationUnverified: true, ReasonContainerNotObserved: true, ReasonDBAbsent: true,
+	ReasonDBError: true, ReasonDBUnsupported: true, ReasonNoFileList: true,
+	ReasonAttributionAmbiguous: true, ReasonFileReplaced: true, ReasonVersionMismatch: true,
+	ReasonEcosystemUnmapped: true, ReasonBinaryPathUnknown: true,
+}
+
+// validRecordedKinds is the closed set of EvidenceKind values a Sensor may
+// persist in an OSPackageEvidence or ExecutableEvidence record's Kinds map.
+// The four language-package display kinds (binary_running and friends) are
+// never written to disk — package.go's langKinds derives them in memory from
+// these same four when judging a language package — so they are not valid
+// input here even though they are valid EvidenceKind values in general.
+var validRecordedKinds = map[EvidenceKind]bool{
+	KindExe: true, KindMappedLibrary: true, KindExecEvent: true, KindLibraryLoadEvent: true,
+}
+
+// validEventsCoverages is the closed set normalizeEventsCoverage folds
+// anything else into CoverageNone.
+var validEventsCoverages = map[EventsCoverage]bool{
+	CoverageSinceStart: true, CoveragePartial: true, CoverageNone: true,
+}
+
+func normalizeEventsCoverage(c EventsCoverage) EventsCoverage {
+	if validEventsCoverages[c] {
+		return c
+	}
+	return CoverageNone
+}
+
+// filterKinds drops any Kinds map entry whose key is not one of
+// validRecordedKinds, so a fabricated kind can never reach a Verdict's
+// EvidenceKinds (and from there, a Slack or webhook rendering) as literal
+// text. Returns the filtered map (nil, matching this format's omitempty
+// contract, if everything was dropped) and whether anything was.
+func filterKinds(kinds map[EvidenceKind]KindObservation) (map[EvidenceKind]KindObservation, bool) {
+	dropped := false
+	for k := range kinds {
+		if !validRecordedKinds[k] {
+			dropped = true
+			break
+		}
+	}
+	if !dropped {
+		return kinds, false
+	}
+	out := make(map[EvidenceKind]KindObservation, len(kinds))
+	for k, v := range kinds {
+		if validRecordedKinds[k] {
+			out[k] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil, true
+	}
+	return out, true
 }
 
 // isFuture reports whether t is more than skew ahead of now. A zero t (a
@@ -221,6 +339,15 @@ func validContainerID(id string) bool {
 // — a package's record having an untrustworthy string withdraws its own
 // verdict, not every other package's. Count and timestamp violations were
 // already rejected outright by validateSnapshot before this runs.
+// filterOSPackageStrings drops a record whose Name/Version/Observations
+// fail validString, or whose Kinds map — after filterKinds strips any
+// unrecognized key — has no valid kind left at all. That second case matters
+// on its own, not just as a string-content check: JudgeOSPackage returns
+// in_use on a name/version match regardless of whether the matched record's
+// Kinds is populated, so a record that named this exact package but carried
+// no evidence a reader can trust at all must not survive filtering to still
+// be that match — keeping it would manufacture an in_use verdict from
+// nothing.
 func filterOSPackageStrings(pkgs []OSPackageEvidence, incomplete bool) ([]OSPackageEvidence, bool) {
 	out := pkgs[:0]
 	for _, p := range pkgs {
@@ -228,6 +355,15 @@ func filterOSPackageStrings(pkgs []OSPackageEvidence, incomplete bool) ([]OSPack
 			incomplete = true
 			continue
 		}
+		kinds, dropped := filterKinds(p.Kinds)
+		if dropped {
+			incomplete = true
+		}
+		if len(kinds) == 0 {
+			incomplete = true
+			continue
+		}
+		p.Kinds = kinds
 		out = append(out, p)
 	}
 	if len(out) == 0 {
@@ -236,10 +372,16 @@ func filterOSPackageStrings(pkgs []OSPackageEvidence, incomplete bool) ([]OSPack
 	return out, incomplete
 }
 
+// filterUnavailableStrings drops a record whose Name/Version fails
+// validString, or whose Reason is not one of validUnavailableReasons — the
+// same per-record treatment: an untrustworthy value withdraws this one
+// package's verdict, not every other one's, and it is what keeps a
+// fabricated Reason (JudgeOSPackage returns it verbatim as a Verdict.Reason)
+// from ever reaching a rendering as literal text.
 func filterUnavailableStrings(list []UnavailablePackage, incomplete bool) ([]UnavailablePackage, bool) {
 	out := list[:0]
 	for _, u := range list {
-		if !validString(u.Name) || !validString(u.Version) {
+		if !validString(u.Name) || !validString(u.Version) || !validUnavailableReasons[u.Reason] {
 			incomplete = true
 			continue
 		}
@@ -251,6 +393,32 @@ func filterUnavailableStrings(list []UnavailablePackage, incomplete bool) ([]Una
 	return out, incomplete
 }
 
+// hasExecutionEvidence reports whether kinds contains at least one kind that
+// is itself proof this executable path was actually run — exe (still
+// resident in a running process) or exec_event (an execution the eBPF
+// observer recorded) — as opposed to mapped_library/library_load_event,
+// which only prove some other running process loaded the file as a shared
+// library and never that this path itself executed. Unlike an OS package
+// (where mapped_library alone remains valid evidence the package is in
+// use), a language package's in-use judgement specifically means a binary
+// embedding it, or its runtime, ran — so an executable record surviving
+// with only load-kinds would manufacture that claim from evidence that
+// never supported it.
+func hasExecutionEvidence(kinds map[EvidenceKind]KindObservation) bool {
+	_, exe := kinds[KindExe]
+	_, exec := kinds[KindExecEvent]
+	return exe || exec
+}
+
+// filterExecutableStrings is filterOSPackageStrings' counterpart for
+// executables: the same "no valid kind survives filtering" case is dropped
+// here too, since JudgeEmbeddedBinary/JudgeRuntimeLoaded return in_use on a
+// path/name match alone, independent of whether Kinds carries anything —
+// and, specific to executables, a record whose surviving kinds are only
+// mapped_library/library_load_event is dropped as well (see
+// hasExecutionEvidence); filterOSPackageStrings does not apply this second
+// check, since mapped_library alone is valid evidence an OS package is in
+// use.
 func filterExecutableStrings(list []ExecutableEvidence, incomplete bool) ([]ExecutableEvidence, bool) {
 	out := list[:0]
 	for _, e := range list {
@@ -258,6 +426,15 @@ func filterExecutableStrings(list []ExecutableEvidence, incomplete bool) ([]Exec
 			incomplete = true
 			continue
 		}
+		kinds, dropped := filterKinds(e.Kinds)
+		if dropped {
+			incomplete = true
+		}
+		if len(kinds) == 0 || !hasExecutionEvidence(kinds) {
+			incomplete = true
+			continue
+		}
+		e.Kinds = kinds
 		out = append(out, e)
 	}
 	if len(out) == 0 {

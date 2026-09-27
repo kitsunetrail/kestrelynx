@@ -1,0 +1,20 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+2 images scanned, 2 affected
+
+*🆕 New since last scan (5)*
+🚨 web:1.0
+   • openssl 3.0.7 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a — no fix yet, consider mitigation
+       📎 <https://avd.example/CVE-OPENSSL|advisory>
+     ▶ in use (running as `/usr/sbin/nginx`) · published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+👀 api:2.0
+   • setuptools 53.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [python-pkg] — <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · EPSS 2% · ▶ in use (running)
+👀 web:1.0
+   • curl 8.0.0 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · EPSS 2%
+🔕 api:2.0
+   • leftpad 1.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [node-pkg] — <https://nvd.nist.gov/vuln/detail/CVE-LEFTPAD|CVE-LEFTPAD> · EPSS 0.1%
+🔕 web:1.0
+   • libfoo 1.0.0 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-LIBFOO|CVE-LIBFOO> · EPSS 0.1%
+
+📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 2 low
+_Details in the generic webhook payload, or in the weekly full report._

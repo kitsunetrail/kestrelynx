@@ -58,6 +58,17 @@ type PackageGroup struct {
 	// place can end up with its own runtime usage verdict later. Sorted for
 	// determinism; never rendered directly in Slack or the webhook.
 	Instances []Instance
+
+	// Runtime is this package's projected runtime-usage verdict: its
+	// Instances judged against the current evidence.Snapshot's matched
+	// container generations, then folded by evidence.ProjectGroup — see
+	// AttachRuntime (runtime.go). The zero value (Usage == "") means runtime
+	// evidence was never attached, which is either runtime.enabled being
+	// false or AttachRuntime simply never having been called. Every notify
+	// rendering that shows runtime information gates on this being non-zero
+	// first, so a disabled deployment's output is byte-identical to a build
+	// that never linked this field at all.
+	Runtime Runtime
 }
 
 // Instance is one raw Trivy Result a PackageGroup's Instances collects,
@@ -264,6 +275,11 @@ type Report struct {
 	// never sets it (it has no scan-derived meaning to interpret); the caller
 	// copies it in from config/composition-root state.
 	Environment inventory.Environment
+	// Runtime is this cycle's Sensor-wide runtime status: set only by
+	// AttachRuntime (runtime.go), nil whenever runtime.enabled is false. See
+	// RuntimeInfo's own doc comment for why this carries the Sensor's raw
+	// self-report rather than a display-ready status string.
+	Runtime *RuntimeInfo
 }
 
 // AffectedImageCount is the number of distinct images with any issue (findings

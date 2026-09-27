@@ -57,4 +57,14 @@ type Container struct {
 	Name     string // adapter-normalized display name; "" when it couldn't be determined.
 	Workload Workload
 	Image    RunningImage
+	// RuntimeExcluded is true when this container carries the Docker label
+	// io.kestrelynx.runtime.exclude=true. A container with this label is
+	// still scanned and shown normally in every other section, but it is
+	// never judged, sorted on, or shown by the runtime-usage overlay
+	// (analyze.AttachRuntime skips it outright, before any generation
+	// matching is attempted) — for a container an operator does not want a
+	// Sensor's observations about at all, e.g. one running something
+	// sensitive enough that even an in-use/not-observed verdict on it is
+	// unwelcome.
+	RuntimeExcluded bool
 }

@@ -74,6 +74,10 @@ func FormatSlackText(r analyze.Report) string {
 	var b strings.Builder
 	writeHeader(&b, r)
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
+	// Before either early return below: a Sensor/eBPF warning must reach
+	// every kind of message this function can produce, all clear included,
+	// not just the full open-findings body.
+	writeRuntimeWarning(&b, r, r.GeneratedAt)
 
 	if !r.HasIssues() {
 		b.WriteString("\n✅ All clear (no HIGH/CRITICAL vulnerabilities found)\n")
@@ -103,6 +107,7 @@ func writeFullBody(b *strings.Builder, r analyze.Report) {
 	writeSection(b, "ℹ️ No fix yet (affected / waiting on upstream)", r.Watch, false, byRef)
 	writeSection(b, "🔕 Upstream won't fix (will_not_fix)", r.WontFix, false, byRef)
 	writeScanErrors(b, r.ScanErrors, byRef)
+	writeRuntimeSummary(b, r)
 	writeUnresolvedRefs(b, r)
 
 	if collapsed > 0 {
@@ -126,6 +131,9 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holdin
 	var b strings.Builder
 	writeHeader(&b, r)
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
+	// Before the "No changes" early return: a Sensor/eBPF warning must reach
+	// every diff-mode message, changed or not.
+	writeRuntimeWarning(&b, r, r.GeneratedAt)
 
 	byRef := imagesByRef(r)
 
@@ -382,7 +390,7 @@ func writeChanges(b *strings.Builder, r analyze.Report, changes []state.Change, 
 			lastImage = c.Image
 		}
 		for _, g := range c.Groups {
-			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, c, g))
+			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, c, g)+runtimeWatchSuffix(g.Runtime))
 		}
 	}
 }
@@ -683,7 +691,10 @@ func needsAttention(g analyze.PackageGroup) bool {
 
 // writeActionable renders the fixable section, showing packages that need
 // attention in full and collapsing the rest into one summary line per image.
-// Returns the total number of packages collapsed.
+// Each expanded package line gets the same compact runtime-usage suffix the
+// triage watch bucket uses (runtimeWatchSuffix) when it is in use; the
+// triage-off view never reorders on it, only annotates. Returns the total
+// number of packages collapsed.
 func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation) int {
 	if len(imgs) == 0 {
 		return 0
@@ -695,7 +706,7 @@ func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings, byRef map
 		var rest []analyze.PackageGroup
 		for _, g := range img.Packages {
 			if needsAttention(g) {
-				writePackage(b, g, true, "")
+				writePackage(b, g, true, runtimeWatchSuffix(g.Runtime))
 			} else {
 				rest = append(rest, g)
 			}
@@ -710,7 +721,8 @@ func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings, byRef map
 
 // writeSection renders an image section with every package shown in full. Used
 // for the watch / won't-fix sections, which are not actionable now and are
-// typically short.
+// typically short. Each line gets the same runtime-usage suffix
+// writeActionable does.
 func writeSection(b *strings.Builder, title string, imgs []analyze.ImageFindings, fixed bool, byRef map[string]analyze.ImageObservation) {
 	if len(imgs) == 0 {
 		return
@@ -719,7 +731,7 @@ func writeSection(b *strings.Builder, title string, imgs []analyze.ImageFindings
 	for _, img := range imgs {
 		fmt.Fprintf(b, "%s %s  CRITICAL %d / HIGH %d\n", imageEmoji(img), imageLabel(img, byRef), img.CriticalCount(), img.TotalCount()-img.CriticalCount())
 		for _, g := range img.Packages {
-			writePackage(b, g, fixed, "")
+			writePackage(b, g, fixed, runtimeWatchSuffix(g.Runtime))
 		}
 	}
 }
@@ -816,6 +828,35 @@ type webhookPayload struct {
 	EOLPackages []imagePayload      `json:"eol_packages"` // every end-of-life package group, folded and act_now ones included
 	ScanErrors  []errorPayload      `json:"scan_errors"`
 	Diff        *diffPayload        `json:"diff,omitempty"`
+	// Runtime is the Sensor-wide runtime status, present only when
+	// runtime.enabled is true (analyze.Report.Runtime != nil).
+	Runtime *runtimePayload `json:"runtime,omitempty"`
+}
+
+// runtimePayload mirrors analyze.RuntimeInfo for the webhook's top-level
+// "runtime" object. Rules is fixed prose describing how usage is judged —
+// it never varies per-report — included so a receiver never has to
+// hard-code the same wording this codebase decided on.
+type runtimePayload struct {
+	SensorStatus    string               `json:"sensor_status"`
+	HeartbeatAt     string               `json:"heartbeat_at,omitempty"`
+	IntervalSeconds int                  `json:"interval_seconds,omitempty"`
+	Rules           runtimeRulesPayload  `json:"rules"`
+	EventsStatus    string               `json:"events_status"`
+	EventsReason    string               `json:"events_reason,omitempty"`
+	Counts          runtimeCountsPayload `json:"counts"`
+}
+
+type runtimeRulesPayload struct {
+	OSPackages          string `json:"os_packages"`
+	LangPackagesBinary  string `json:"lang_packages_binary"`
+	LangPackagesRuntime string `json:"lang_packages_runtime"`
+}
+
+type runtimeCountsPayload struct {
+	InUse       int `json:"in_use"`
+	NotObserved int `json:"not_observed"`
+	Unavailable int `json:"unavailable"`
 }
 
 // environmentPayload mirrors inventory.Environment. Kind is always present —
@@ -858,6 +899,11 @@ type eolChangePayload struct {
 	// Ecosystems mirrors changePayload.Ecosystems: the deduplicated, sorted
 	// set across every merged analyze.PackageGroup.
 	Ecosystems []string `json:"ecosystems"`
+
+	// RuntimeUsage mirrors changePayload.RuntimeUsage: the projected usage
+	// across every merged analyze.PackageGroup. "" (omitted) when
+	// runtime.enabled is false.
+	RuntimeUsage string `json:"runtime_usage,omitempty"`
 }
 
 // eolResolvedPayload mirrors state.ResolvedEOL.
@@ -893,6 +939,14 @@ type changePayload struct {
 	// same-named language package, or two installed versions, can land in
 	// the same change). "" (unknown/OS-without-a-parsed-type) sorts first.
 	Ecosystems []string `json:"ecosystems"`
+
+	// RuntimeUsage is this (image, package) change's projected runtime
+	// usage: in_use if any merged analyze.PackageGroup is, else unavailable
+	// if any is, else not_observed — the same order
+	// evidence.ProjectUsages/analyze.Runtime's own projection uses. ""
+	// (omitted) when runtime.enabled is false, i.e. none of the merged
+	// groups ever had AttachRuntime judge them.
+	RuntimeUsage string `json:"runtime_usage,omitempty"`
 }
 
 type resolvedPayload struct {
@@ -983,6 +1037,64 @@ type findingPayload struct {
 	// unrecognized.
 	Class     string `json:"class"`
 	Ecosystem string `json:"ecosystem"`
+
+	// Runtime is this package's runtime-usage verdict, present only when
+	// runtime.enabled is true (analyze.PackageGroup.Runtime.Usage != "").
+	Runtime *findingRuntimePayload `json:"runtime,omitempty"`
+}
+
+// findingRuntimePayload mirrors analyze.Runtime.
+type findingRuntimePayload struct {
+	Usage          string                           `json:"usage"`
+	Reason         string                           `json:"reason,omitempty"`
+	EvidenceKinds  []string                         `json:"evidence_kinds,omitempty"`
+	EventsCoverage string                           `json:"events_coverage,omitempty"`
+	Exposure       string                           `json:"exposure,omitempty"`
+	HighPrivilege  bool                             `json:"high_privilege,omitempty"`
+	Containers     []findingRuntimeContainerPayload `json:"containers,omitempty"`
+}
+
+// findingRuntimeContainerPayload mirrors analyze.ContainerRuntime.
+type findingRuntimeContainerPayload struct {
+	Name                string   `json:"name"`
+	ContainerID         string   `json:"container_id"`
+	GenerationStartedAt string   `json:"generation_started_at,omitempty"`
+	Usage               string   `json:"usage"`
+	Reason              string   `json:"reason,omitempty"`
+	LastSeen            string   `json:"last_seen,omitempty"`
+	Ports               []string `json:"ports,omitempty"`
+	// KindsAmbiguous and ProcessExes mirror analyze.ContainerRuntime's own
+	// fields: KindsAmbiguous true means evidence_kinds cannot be paired with
+	// process.exe (an OS package record aggregated more than one kind
+	// across more than one process), and ProcessExes then names every
+	// process actually observed instead, unabridged.
+	KindsAmbiguous bool                          `json:"kinds_ambiguous,omitempty"`
+	ProcessExes    []string                      `json:"process_exes,omitempty"`
+	Process        *findingRuntimeProcessPayload `json:"process,omitempty"`
+	// Instances is this language package's per-Instance (per-Target)
+	// verdict within this one container: a package embedded
+	// in two binaries, e.g. /app/api and /app/tool, can be in use through
+	// one and not the other. Nil for an OS package (analyze.ContainerRuntime.
+	// Instances' own doc comment).
+	Instances []findingRuntimeInstancePayload `json:"instances,omitempty"`
+}
+
+// findingRuntimeInstancePayload mirrors analyze.InstanceRuntime.
+type findingRuntimeInstancePayload struct {
+	Type    string `json:"type,omitempty"`
+	Target  string `json:"target,omitempty"`
+	PkgPath string `json:"pkg_path,omitempty"`
+	Usage   string `json:"usage"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// findingRuntimeProcessPayload mirrors analyze.ContainerProcess.
+type findingRuntimeProcessPayload struct {
+	Exe           string   `json:"exe,omitempty"`
+	EffectiveUID  int      `json:"effective_uid"`
+	Userns        bool     `json:"userns"`
+	DangerousCaps []string `json:"dangerous_caps,omitempty"`
+	Privileged    bool     `json:"privileged"`
 }
 
 // vulnPayload is the per-CVE record: id and severity always; the triage fields
@@ -1048,10 +1160,43 @@ func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
 			StaleDays: r.Intel.StaleDays,
 		}
 	}
+	if r.Runtime != nil {
+		p.Runtime = runtimePayloadOf(r)
+	}
 	if d != nil {
 		p.Diff = buildDiffPayload(r, *d)
 	}
 	return p
+}
+
+// runtimePayloadOf builds the webhook's top-level "runtime" object from
+// r.Runtime. Only called when r.Runtime != nil.
+func runtimePayloadOf(r analyze.Report) *runtimePayload {
+	rt := r.Runtime
+	inUse, notObserved, unavailable := runtimeCounts(r)
+	return &runtimePayload{
+		SensorStatus:    runtimeDisplayStatus(rt, r.GeneratedAt),
+		HeartbeatAt:     formatTimeOrEmpty(rt.Sensor.HeartbeatAt),
+		IntervalSeconds: rt.Sensor.IntervalSeconds,
+		Rules: runtimeRulesPayload{
+			OSPackages:          "executed_or_loaded_by_running_process",
+			LangPackagesBinary:  "in_running_binary",
+			LangPackagesRuntime: "runtime_process_running",
+		},
+		EventsStatus: string(rt.Sensor.Events.Status),
+		EventsReason: string(rt.Sensor.Events.Reason),
+		Counts:       runtimeCountsPayload{InUse: inUse, NotObserved: notObserved, Unavailable: unavailable},
+	}
+}
+
+// formatTimeOrEmpty formats t as RFC3339, or "" for the zero value — used
+// for the runtime payload's optional timestamps, which are meaningless (and
+// so omitted via omitempty) before a Sensor has ever reported.
+func formatTimeOrEmpty(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }
 
 func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
@@ -1072,15 +1217,16 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			high += g.High
 		}
 		cp := changePayload{
-			Image:      c.Image,
-			Package:    c.Package,
-			Kind:       string(c.Kind),
-			NewCVEs:    c.NewCVEs,
-			NewIDs:     c.NewIDs,
-			Critical:   crit,
-			High:       high,
-			Priority:   string(analyze.MaxPriority(c.Groups)),
-			Ecosystems: ecosystemsOf(c.Groups),
+			Image:        c.Image,
+			Package:      c.Package,
+			Kind:         string(c.Kind),
+			NewCVEs:      c.NewCVEs,
+			NewIDs:       c.NewIDs,
+			Critical:     crit,
+			High:         high,
+			Priority:     string(analyze.MaxPriority(c.Groups)),
+			Ecosystems:   ecosystemsOf(c.Groups),
+			RuntimeUsage: runtimeUsageOf(c.Groups),
 		}
 		if c.Kind == state.KindEscalated {
 			cp.Reason = changeEvidence(r, c)
@@ -1104,14 +1250,15 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			high += g.High
 		}
 		cp := eolChangePayload{
-			Image:      c.Image,
-			Package:    c.Package,
-			Kind:       string(c.Kind),
-			NewIDs:     c.NewIDs,
-			Critical:   crit,
-			High:       high,
-			Priority:   string(analyze.MaxPriority(c.Groups)),
-			Ecosystems: ecosystemsOf(c.Groups),
+			Image:        c.Image,
+			Package:      c.Package,
+			Kind:         string(c.Kind),
+			NewIDs:       c.NewIDs,
+			Critical:     crit,
+			High:         high,
+			Priority:     string(analyze.MaxPriority(c.Groups)),
+			Ecosystems:   ecosystemsOf(c.Groups),
+			RuntimeUsage: runtimeUsageOf(c.Groups),
 		}
 		if c.Kind == state.EOLKindEscalated {
 			cp.Reason = changeEvidence(r, eolAsChange(c))
@@ -1191,6 +1338,7 @@ func imagePayloads(imgs []analyze.ImageFindings, byRef map[string]analyze.ImageO
 				Vulns:          vulns,
 				Class:          string(g.Class),
 				Ecosystem:      string(g.Ecosystem),
+				Runtime:        runtimeFindingPayload(g.Runtime),
 			})
 		}
 		// scan_target_kind and identity_resolved are both entity-level (this

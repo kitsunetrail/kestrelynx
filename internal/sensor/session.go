@@ -278,17 +278,16 @@ func (s *Session) run(ctx context.Context) error {
 		return fmt.Errorf("sensor: create evidence dir: %w", err)
 	}
 	evidencePath := s.cfg.EvidenceDir + "/" + evidence.FileName
-	// 0644 (world-readable), not merely group-readable: the evidence
-	// directory is a volume shared with the main body's own container,
-	// which runs as a UID this Sensor has no way to coordinate with today
-	// (nothing ties the two containers to a shared UID or GID). This mode
-	// is a placeholder, not a settled choice — whether "readable by any
-	// user on the host that can reach this volume" is acceptable, as
-	// opposed to something narrower coordinated with the main body's own
-	// UID/GID, is a decision the main body's own read side and the shared
-	// volume's own permissions need to settle together, not this package
-	// alone. It is still only writable by the Sensor's own UID, and the
-	// file carries nothing secret the way config.yml's token does.
+	// 0644 (world-readable), not merely group-readable: the main body's own
+	// container is not given a coordinated UID or GID with this one (its own
+	// compose service sets no `user:` at all, so it runs as whatever its
+	// image's default is), and the shared volume is mounted only into the
+	// Sensor and, opt-in, the main body — nothing else. Given that, 0644
+	// lets the main body read regardless of which UID it runs as, and the
+	// volume's own mount list is what actually bounds who else can reach the
+	// file, not its mode. The file is still only writable by the Sensor's
+	// own UID, and it carries nothing secret the way config.yml's token
+	// does.
 	fd, err := unix.Open(evidencePath, unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC, 0o644)
 	if err != nil {
 		return fmt.Errorf("sensor: open evidence file: %w", err)

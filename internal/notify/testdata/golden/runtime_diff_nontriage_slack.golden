@@ -1,0 +1,15 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+2 images scanned, 2 affected
+
+*🆕 New since last scan (4)*
+🔴 web:1.0
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> CRITICAL · ▶ in use (running)
+🟠 api:2.0
+   • setuptools 53.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [python-pkg] — <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> HIGH · ▶ in use (running)
+🟠 web:1.0
+   • curl 8.0.0 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> HIGH
+🟠 api:2.0
+   • leftpad 1.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [node-pkg] — <https://nvd.nist.gov/vuln/detail/CVE-LEFTPAD|CVE-LEFTPAD> HIGH
+
+📌 Open now: CRITICAL 1 / HIGH 3 across 2 image(s)
+_Details in the generic webhook payload, or in the weekly full report._

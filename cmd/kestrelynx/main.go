@@ -17,6 +17,7 @@ import (
 
 	"github.com/kitsunetrail/kestrelynx/internal/config"
 	"github.com/kitsunetrail/kestrelynx/internal/docker"
+	"github.com/kitsunetrail/kestrelynx/internal/evidence"
 	"github.com/kitsunetrail/kestrelynx/internal/intel"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/kubernetes"
@@ -95,6 +96,19 @@ func main() {
 		r.ActNowEPSS = cfg.Triage.ActNowEPSS
 		r.WatchEPSS = cfg.Triage.WatchEPSS
 		r.DiscussionLinks = cfg.Triage.DiscussionLinks
+	}
+	if cfg.Runtime.Enabled {
+		r.Evidence = evidence.NewFileProvider(cfg.Runtime.EvidenceDir)
+		// Config validation already rejects runtime.enabled alongside
+		// kubernetes.enabled, so lister is always the Docker adapter here;
+		// the type assertion just avoids widening ContainerLister itself
+		// with an Inspect method every other adapter would also need to
+		// implement.
+		if dc, ok := lister.(*docker.Client); ok {
+			r.Inspector = dc
+		} else {
+			log.Warn("runtime.enabled is set but the current runtime adapter cannot inspect containers; runtime usage will show as unavailable")
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

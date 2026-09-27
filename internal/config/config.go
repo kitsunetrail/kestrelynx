@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ type Config struct {
 	State       StateConfig
 	Triage      TriageConfig
 	Environment EnvironmentConfig
+	Runtime     RuntimeConfig
 }
 
 // EnvironmentConfig names the environment this instance is watching
@@ -113,6 +115,23 @@ type TriageConfig struct {
 	DiscussionLinks bool
 }
 
+// RuntimeConfig controls the optional runtime-usage overlay: an opt-in
+// Sensor companion process observes which packages are actually exercised
+// by a running container, and this main body reads what it wrote to show
+// usage alongside the ordinary vulnerability findings. Disabled by
+// default — with no Sensor deployed there is nothing at EvidenceDir to read,
+// and the main body must not fail a scan cycle over a directory nobody asked
+// it to look at.
+type RuntimeConfig struct {
+	Enabled bool
+	// EvidenceDir is where the Sensor writes its evidence file
+	// (evidence.FileName inside it). Always an absolute path — Load resolves
+	// it once at startup, and it is shared with the Sensor container only
+	// through a mounted volume, never a relative path meaningful to just one
+	// of the two containers.
+	EvidenceDir string
+}
+
 // rawConfig mirrors the YAML shape. Pointers are used where "absent" must be
 // distinguished from a zero value (booleans whose default is true).
 type rawConfig struct {
@@ -162,6 +181,10 @@ type rawConfig struct {
 	Environment struct {
 		Name string `yaml:"name"`
 	} `yaml:"environment"`
+	Runtime struct {
+		Enabled     *bool  `yaml:"enabled"`
+		EvidenceDir string `yaml:"evidence_dir"`
+	} `yaml:"runtime"`
 }
 
 const (
@@ -172,6 +195,11 @@ const (
 	// exploitation probability is act_now territory, 1% is worth watching.
 	defaultActNowEPSS = 0.10
 	defaultWatchEPSS  = 0.01
+	// defaultEvidenceDir mirrors the Sensor's own --evidence-dir default
+	// (internal/sensor), so an unconfigured runtime.evidence_dir and an
+	// unconfigured Sensor flag agree on the volume path without either side
+	// having to spell it out.
+	defaultEvidenceDir = "/var/lib/kestrelynx-runtime"
 )
 
 var validSeverities = map[string]bool{
@@ -228,6 +256,10 @@ func Parse(data []byte) (Config, error) {
 			DiscussionLinks: boolOr(raw.Triage.DiscussionLinks, true),
 		},
 		Environment: EnvironmentConfig{Name: raw.Environment.Name},
+		Runtime: RuntimeConfig{
+			Enabled:     boolOr(raw.Runtime.Enabled, false),
+			EvidenceDir: raw.Runtime.EvidenceDir,
+		},
 	}
 
 	applyDefaults(&c)
@@ -254,6 +286,9 @@ func applyDefaults(c *Config) {
 	}
 	if c.State.Path == "" {
 		c.State.Path = defaultStatePath
+	}
+	if c.Runtime.EvidenceDir == "" {
+		c.Runtime.EvidenceDir = defaultEvidenceDir
 	}
 }
 
@@ -313,6 +348,14 @@ func validate(c *Config, dockerSocketExplicit bool) error {
 	}
 	if err := inventory.ValidateEnvironmentName(c.Environment.Name); err != nil {
 		return fmt.Errorf("config: environment.name: %w", err)
+	}
+	if c.Runtime.Enabled {
+		if c.Kubernetes.Enabled {
+			return fmt.Errorf("config: runtime.enabled is not supported with kubernetes.enabled")
+		}
+		if !filepath.IsAbs(c.Runtime.EvidenceDir) {
+			return fmt.Errorf("config: runtime.evidence_dir %q must be an absolute path", c.Runtime.EvidenceDir)
+		}
 	}
 	return nil
 }

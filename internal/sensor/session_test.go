@@ -367,6 +367,16 @@ func TestLoop_HeartbeatTickerUpdatesWithoutSampling(t *testing.T) {
 		writerCh:         make(chan writerJob, 1),
 		writerReportCh:   make(chan writeReport, 1),
 		heartbeatEvery:   20 * time.Millisecond,
+		// This test drives loop() directly, skipping run()'s own startup
+		// self-check and eBPF-attach steps that a real session always
+		// performs first (they set isolationStatus and eventsStatus
+		// respectively) — both are set here to what a clean, fully-isolated
+		// run with no eBPF attach attempted would have left them at, since
+		// computeStatus() otherwise treats the zero value of isolationStatus
+		// as "not ok" and reports it verbatim.
+		isolationStatus: evidence.SensorOK,
+		eventsStatus:    evidence.EventsUnavailable,
+		eventsReason:    evidence.EventsReasonKernelUnsupported,
 	}
 	go runWriter(s.evidenceFD, s.writerCh, s.writerReportCh)
 
@@ -462,7 +472,11 @@ func TestLoadPreviousEvidence_CarriesOverIncompleteAndTruncated(t *testing.T) {
 	dir := t.TempDir()
 	snap := evidence.Snapshot{
 		Schema: evidence.Schema,
-		Sensor: evidence.SensorInfo{SessionID: "prev", HeartbeatAt: time.Unix(100, 0), IntervalSeconds: 30},
+		Sensor: evidence.SensorInfo{
+			SessionID: "prev", HeartbeatAt: time.Unix(100, 0), IntervalSeconds: 30,
+			Status: evidence.SensorOK,
+			Events: evidence.EventsInfo{Status: evidence.EventsUnavailable, Reason: evidence.EventsReasonKernelUnsupported},
+		},
 		Generations: []evidence.Generation{
 			{
 				Container:      evidence.ContainerRef{Runtime: "docker", ID: strings64('a')},

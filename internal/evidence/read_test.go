@@ -536,15 +536,15 @@ func TestRead_InvalidUTF8InPackageVersionDropsOnlyThatRecord(t *testing.T) {
 			Container: ContainerRef{Runtime: "docker", ID: genAID}, Init: InitProcess{PID: 1},
 			State: StateObserving, PackageDB: PackageDBInfo{Status: DBStatusOK},
 			OSPackages: []OSPackageEvidence{
-				{Name: "good-pkg", Version: "1.0.0"},
-				{Name: "bad-pkg", Version: "zzzMARKERzzz"},
+				{Name: "good-pkg", Version: "1.0.0", Kinds: map[EvidenceKind]KindObservation{KindExe: {LastSeen: testNow}}},
+				{Name: "bad-pkg", Version: "zzzMARKERzzz", Kinds: map[EvidenceKind]KindObservation{KindExe: {LastSeen: testNow}}},
 			},
 		},
 		{
 			Container: ContainerRef{Runtime: "docker", ID: genBID}, Init: InitProcess{PID: 2},
 			State: StateObserving, PackageDB: PackageDBInfo{Status: DBStatusOK},
 			OSPackages: []OSPackageEvidence{
-				{Name: "other-pkg", Version: "2.0.0"},
+				{Name: "other-pkg", Version: "2.0.0", Kinds: map[EvidenceKind]KindObservation{KindExe: {LastSeen: testNow}}},
 			},
 		},
 	}
@@ -718,6 +718,7 @@ func TestReadWrite_ObservationsPreserveDistinctSameSampleCombos(t *testing.T) {
 		State:     StateObserving, PackageDB: PackageDBInfo{Status: DBStatusOK},
 		OSPackages: []OSPackageEvidence{{
 			Name: "nginx", Version: "1.25.0",
+			Kinds:        map[EvidenceKind]KindObservation{KindExe: {LastSeen: testNow}},
 			Observations: []ProcessObservation{beforeDrop, afterDrop},
 		}},
 	}}

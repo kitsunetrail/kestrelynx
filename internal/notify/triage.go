@@ -16,7 +16,9 @@ import (
 )
 
 // writeTriageBody renders the complete open-findings view in priority order.
-// It is the triage-mode counterpart of writeFullBody.
+// It is the triage-mode counterpart of writeFullBody. The Sensor/eBPF
+// warning is written once, centrally, by the entry points that call into
+// this (FormatSlackText, FormatSlackDiffText) — not repeated here.
 func writeTriageBody(b *strings.Builder, r analyze.Report) {
 	pv := r.ByPriority()
 	byRef := imagesByRef(r)
@@ -30,6 +32,7 @@ func writeTriageBody(b *strings.Builder, r analyze.Report) {
 	writeLow(b, pv.Low)
 	writeScanErrors(b, r.ScanErrors, byRef)
 	writeIntelStale(b, r)
+	writeRuntimeSummary(b, r)
 	writeUnresolvedRefs(b, r)
 }
 
@@ -94,6 +97,9 @@ func writeActNow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindi
 		for _, g := range img.Packages {
 			writePackage(b, g, g.Status == scanner.StatusFixed, "")
 			writeEvidence(b, r, g)
+			if runtimeInUse(g.Runtime) {
+				fmt.Fprintf(b, "     %s\n", runtimeInUsePhrase(g.Runtime))
+			}
 		}
 	}
 }
@@ -112,6 +118,7 @@ func writeWatch(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindin
 			if ev := shortEvidence(r, g.TopVuln()); ev != "" {
 				suffix = " — " + ev
 			}
+			suffix += runtimeWatchSuffix(g.Runtime)
 			writePackage(b, g, g.Status == scanner.StatusFixed, suffix)
 		}
 	}
@@ -125,8 +132,11 @@ func writeLow(b *strings.Builder, imgs []analyze.ImageFindings) {
 	if n == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*🔕 Low priority (%d)* — %d finding(s) across %d image(s), no exploitation signal (not in KEV, EPSS below threshold).\n", n, n, len(imgs))
-	b.WriteString("_Details in the generic webhook payload or the weekly full report._\n")
+	fmt.Fprintf(b, "\n*🔕 Low priority (%d)* — %d finding(s) across %d image(s), no exploitation signal (not in KEV, EPSS below threshold).", n, n, len(imgs))
+	if inUse := countInUse(imgs); inUse > 0 {
+		fmt.Fprintf(b, " · ▶ %d in use", inUse)
+	}
+	b.WriteString("\n_Details in the generic webhook payload or the weekly full report._\n")
 }
 
 // writeEvidence renders the "why act now" line under a package: the strongest
@@ -278,9 +288,12 @@ func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Ch
 			lastImage = c.Image
 		}
 		for _, g := range c.Groups {
-			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, c, g))
+			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, c, g)+runtimeChangeSuffix(g))
 			if g.Priority == analyze.PriorityActNow {
 				writeEvidence(b, r, g)
+				if runtimeInUse(g.Runtime) {
+					fmt.Fprintf(b, "     %s\n", runtimeInUsePhrase(g.Runtime))
+				}
 			}
 		}
 	}

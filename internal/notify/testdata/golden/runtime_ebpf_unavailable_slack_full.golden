@@ -1,0 +1,23 @@
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+2 images scanned, 2 affected
+⚠️ Short-lived programs are not observed (eBPF unavailable: BTF missing); using sampling only
+*Priority:* 🚨 1 act now · 👀 2 watch · 🔕 2 low
+
+*🚨 Act now (1) — exploited or likely to be*
+• web:1.0
+   • openssl 3.0.7 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a — no fix yet, consider mitigation
+       📎 <https://avd.example/CVE-OPENSSL|advisory>
+     ▶ in use (running as `/usr/sbin/nginx`) · published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+
+*👀 Watch (2) — not urgent, keep an eye on*
+• api:2.0
+   • setuptools 53.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [python-pkg] — <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · EPSS 2% · ▶ in use (running)
+• web:1.0
+   • curl 8.0.0 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · EPSS 2%
+
+*🔕 Low priority (2)* — 2 finding(s) across 2 image(s), no exploitation signal (not in KEV, EPSS below threshold).
+_Details in the generic webhook payload or the weekly full report._
+
+🔎 Runtime: ▶ 2 in use · 2 not observed · 1 unavailable
+_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._

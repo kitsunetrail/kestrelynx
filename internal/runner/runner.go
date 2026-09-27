@@ -5,6 +5,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
 	"github.com/kitsunetrail/kestrelynx/internal/config"
+	"github.com/kitsunetrail/kestrelynx/internal/docker"
+	"github.com/kitsunetrail/kestrelynx/internal/evidence"
 	"github.com/kitsunetrail/kestrelynx/internal/intel"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/notify"
@@ -27,6 +30,15 @@ type ContainerLister interface {
 // ImageScanner scans one image target (implemented by scanner.Trivy).
 type ImageScanner interface {
 	Scan(ctx context.Context, target scanner.ScanTarget) scanner.ImageScan
+}
+
+// Inspector reads one container's current identity and exposure by ID
+// (implemented by docker.Client.Inspect). Only ever consulted when Evidence
+// is set (runtime.enabled) — it is what lets AttachRuntime confirm a Sensor
+// evidence generation is still the generation actually running (analyze/
+// runtime.go's matchGeneration) and judge its exposure.
+type Inspector interface {
+	Inspect(ctx context.Context, id string) (docker.InspectResult, error)
 }
 
 // Notifier delivers a message (implemented by notify.Notifier).
@@ -74,6 +86,26 @@ type Runner struct {
 	Source scanner.ScanSource
 	Now    func() time.Time
 	Log    *slog.Logger
+
+	// Evidence supplies the current runtime-usage snapshot from an optional
+	// Sensor companion process. nil (the default) means runtime.enabled is
+	// false: no evidence is ever read, Inspect is never called, and
+	// analyze.AttachRuntime is never called either — Report.Runtime and
+	// every PackageGroup.Runtime stay at their zero value, which is what
+	// keeps a disabled deployment's notifications byte-identical.
+	Evidence evidence.Provider
+	// Inspector reads a container's current identity/exposure by ID. Only
+	// consulted when Evidence is set; nil with Evidence set means no
+	// container can be corroborated (every group judges
+	// container_not_observed), which is a safe, inert degradation rather
+	// than a panic.
+	Inspector Inspector
+	// BootTime returns the host's boot time, used to convert a Sensor
+	// evidence generation's boot-relative InitProcess.Starttime into a
+	// wall-clock instant comparable with Docker's own StartedAt (analyze.
+	// GenerationInspect.BootTime). nil uses hostBootTime (reads
+	// /proc/stat's "btime" line); only ever called when Evidence is set.
+	BootTime func() (time.Time, error)
 }
 
 // NoFullReport disables the weekly full report in diff mode.
@@ -119,6 +151,9 @@ func (r Runner) RunOnce(ctx context.Context) error {
 
 	report := analyze.Build(scans, containers, r.triage(ctx, scans), r.now())
 	report.Environment = r.Environment
+	if r.Evidence != nil {
+		r.attachRuntime(ctx, &report, containers)
+	}
 	if r.Store == nil {
 		return r.sendFull(ctx, report)
 	}
@@ -266,6 +301,60 @@ func (r Runner) discussionRefs(ctx context.Context, tr analyze.Triage) map[strin
 		}}
 	}
 	return refs
+}
+
+// attachRuntime reads this cycle's runtime evidence and inspects every
+// running container once (one GET /containers/{id}/json per scanned
+// container), then folds both into report via analyze.AttachRuntime.
+// A failure to read evidence or to inspect a specific container never fails
+// the cycle — it degrades to the corresponding "unavailable" reason
+// (RuntimeInfo.LoadFailed/NotReporting, or a container simply missing from
+// GenerationInspect.ByContainer, which analyze/runtime.go's matchGeneration
+// treats as container_not_observed) and the scan/notify pipeline continues
+// exactly as it does for any other partial failure this Runner already
+// tolerates.
+func (r Runner) attachRuntime(ctx context.Context, report *analyze.Report, containers []inventory.Container) {
+	log := r.log()
+
+	snap, err := r.Evidence.Load(ctx)
+	rt := analyze.RuntimeInfo{Sensor: snap.Sensor}
+	if err != nil {
+		rt.LoadFailed = true
+		rt.NotReporting = errors.Is(err, evidence.ErrNotReporting)
+		log.Warn("runtime evidence unavailable", "err", err)
+	}
+
+	insp := analyze.GenerationInspect{ByContainer: map[string]docker.InspectResult{}}
+	if bt, btErr := r.bootTime(); btErr == nil {
+		insp.BootTime = bt
+	} else {
+		log.Warn("runtime: host boot time unavailable; evidence generations cannot be matched", "err", btErr)
+	}
+	if r.Inspector != nil {
+		seen := map[string]bool{}
+		for _, c := range containers {
+			if c.ID == "" || seen[c.ID] {
+				continue
+			}
+			seen[c.ID] = true
+			result, iErr := r.Inspector.Inspect(ctx, c.ID)
+			if iErr != nil {
+				log.Warn("runtime: inspect container failed", "id", c.ID, "err", iErr)
+				continue
+			}
+			insp.ByContainer[c.ID] = result
+		}
+	}
+
+	analyze.AttachRuntime(report, rt, snap, insp, r.now())
+}
+
+// bootTime resolves r.BootTime, defaulting to hostBootTime.
+func (r Runner) bootTime() (time.Time, error) {
+	if r.BootTime != nil {
+		return r.BootTime()
+	}
+	return hostBootTime()
 }
 
 // sendFull is the stateless full mode: re-send everything whenever there is

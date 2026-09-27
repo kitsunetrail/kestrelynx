@@ -36,6 +36,7 @@ func writeAndReadBack(t *testing.T, gens []evidence.Generation) (evidence.Snapsh
 		Sensor: evidence.SensorInfo{
 			SessionID: "test", HeartbeatAt: time.Now(), IntervalSeconds: 30,
 			Status: evidence.SensorOK,
+			Events: evidence.EventsInfo{Status: evidence.EventsOK},
 		},
 		Generations: trimmed,
 	}

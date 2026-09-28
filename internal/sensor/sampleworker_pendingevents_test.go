@@ -136,6 +136,15 @@ func TestRunSampleWorker_PendingEventLostWhenFileDeletedAndRecreated(t *testing.
 	defer os.Remove(path)
 	originalDev, originalIno := statForPendingEventTest(t, path)
 
+	// Keep the original inode alive through a second hard link, so the
+	// filesystem cannot hand the very same inode number straight back to the
+	// recreated file (ext4 readily reuses a just-freed inode).
+	keep := path + ".keep"
+	if err := os.Link(path, keep); err != nil {
+		t.Fatalf("Link: %v", err)
+	}
+	defer os.Remove(keep)
+
 	// Delete the original file and recreate a new one at the exact same
 	// path — a genuinely different inode, the same shape unlink+recreate
 	// (or an atomic rename-over-path) produces.

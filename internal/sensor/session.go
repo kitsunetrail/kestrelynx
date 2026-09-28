@@ -1303,7 +1303,7 @@ func (s *Session) applySampleResult(g *generationState, res sampleResult) {
 		// via flushQueuedCandidates), unless the queue is already at its
 		// own cap, in which case this batch is the one that does not fit
 		// and is lost for good (candidatesLostPermanently).
-		if len(g.queuedCandidates) >= maxQueuedCandidateBatches {
+		if !g.canQueueCandidateBatch(batch) {
 			g.candidatesLostPermanently = true
 			return
 		}

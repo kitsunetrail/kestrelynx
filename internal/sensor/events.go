@@ -964,7 +964,7 @@ func (s *Session) submitEventCandidate(g *generationState, path, dev string, ino
 		basis:         g.idxBasis,
 	}
 	if g.pendingLookup != nil {
-		if len(g.queuedCandidates) >= maxQueuedCandidateBatches {
+		if !g.canQueueCandidateBatch(batch) {
 			g.candidatesLostPermanently = true
 			return
 		}

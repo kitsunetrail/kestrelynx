@@ -383,16 +383,40 @@ type candidateBatch struct {
 	basis mountBasis
 }
 
-// maxQueuedCandidateBatches bounds how many samples' worth of candidates
-// this Sensor holds in generationState.queuedCandidates while a lookup for
-// an earlier one is still outstanding — a lookup round trip normally
-// resolves within a small fraction of one sample interval, so queuing more
-// than a handful of samples' worth at once means something is genuinely
-// stuck (the dbworker itself stalled, most likely), not merely a slow
-// round trip. Once exceeded, the newest batch is dropped outright and
-// candidatesLostPermanently is set — recorded as an unrecoverable gap
-// rather than let the queue itself grow without bound.
-const maxQueuedCandidateBatches = 32
+// maxQueuedCandidateBatches and maxQueuedCandidatePaths bound what this
+// Sensor holds in generationState.queuedCandidates while a lookup for an
+// earlier batch is still outstanding. Every eBPF usage event contributes its
+// own one-path batch, and a container's startup (an entrypoint script
+// running dozens of short-lived commands) can produce hundreds of them while
+// the first lookup still waits behind a package-database build in the
+// dbworker's queue — so the bound is sized for that burst, and counted
+// mainly in candidate paths, which is what actually costs memory. Once
+// exceeded, the newest batch is dropped outright and
+// candidatesLostPermanently is set — recorded as an unrecoverable gap rather
+// than let the queue itself grow without bound. A single batch larger than
+// the path budget is still accepted into an empty queue, so one large
+// sample is never lost merely for being large.
+const (
+	maxQueuedCandidateBatches = 4096
+	maxQueuedCandidatePaths   = 16384
+)
+
+// canQueueCandidateBatch reports whether b still fits in g's queue of
+// candidate batches waiting behind an outstanding lookup (see
+// maxQueuedCandidateBatches).
+func (g *generationState) canQueueCandidateBatch(b candidateBatch) bool {
+	if len(g.queuedCandidates) >= maxQueuedCandidateBatches {
+		return false
+	}
+	if len(g.queuedCandidates) == 0 {
+		return true
+	}
+	total := len(b.candidates)
+	for _, q := range g.queuedCandidates {
+		total += len(q.candidates)
+	}
+	return total <= maxQueuedCandidatePaths
+}
 
 // pendingLookup is what a generationState.pendingLookup holds between one
 // or more samples' own candidateBatch arriving (each resolves its own

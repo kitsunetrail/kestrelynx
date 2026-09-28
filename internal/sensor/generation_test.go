@@ -1,6 +1,7 @@
 package sensor
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -337,5 +338,51 @@ func TestToEvidence_PendingEventsAloneDoesNotForceIncomplete(t *testing.T) {
 	}
 	if g.eventsLost != 1 {
 		t.Errorf("eventsLost = %d after one pending event expired, want 1", g.eventsLost)
+	}
+}
+
+// TestCanQueueCandidateBatch_StartupBurstFitsAndPathBudgetBounds covers the
+// queue of candidate batches waiting behind an outstanding lookup: a
+// container's startup burst of one-path event batches (hundreds of them)
+// must all fit, the total number of queued candidate paths must stay
+// bounded, and a single batch larger than the path budget must still be
+// accepted into an empty queue.
+func TestCanQueueCandidateBatch_StartupBurstFitsAndPathBudgetBounds(t *testing.T) {
+	onePath := func(i int) candidateBatch {
+		return candidateBatch{candidates: map[string][]sampleCandidate{fmt.Sprintf("/usr/bin/p%d", i): {{}}}}
+	}
+	manyPaths := func(n int) candidateBatch {
+		b := candidateBatch{candidates: map[string][]sampleCandidate{}}
+		for i := 0; i < n; i++ {
+			b.candidates[fmt.Sprintf("/usr/lib/l%d", i)] = []sampleCandidate{{}}
+		}
+		return b
+	}
+
+	g := &generationState{}
+	for i := 0; i < 1000; i++ {
+		b := onePath(i)
+		if !g.canQueueCandidateBatch(b) {
+			t.Fatalf("event batch %d rejected; a startup burst of 1000 one-path batches must fit", i)
+		}
+		g.queuedCandidates = append(g.queuedCandidates, b)
+	}
+
+	g = &generationState{}
+	big := manyPaths(maxQueuedCandidatePaths + 10)
+	if !g.canQueueCandidateBatch(big) {
+		t.Fatalf("a single batch larger than the path budget was rejected by an empty queue")
+	}
+	g.queuedCandidates = append(g.queuedCandidates, big)
+	if g.canQueueCandidateBatch(onePath(0)) {
+		t.Errorf("a further batch was accepted although the queued paths already exceed the budget")
+	}
+
+	g = &generationState{}
+	for i := 0; i < maxQueuedCandidateBatches; i++ {
+		g.queuedCandidates = append(g.queuedCandidates, candidateBatch{})
+	}
+	if g.canQueueCandidateBatch(candidateBatch{}) {
+		t.Errorf("a batch was accepted past maxQueuedCandidateBatches")
 	}
 }

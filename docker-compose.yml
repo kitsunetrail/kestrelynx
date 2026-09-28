@@ -16,7 +16,8 @@ services:
       # Set it to your local zone, e.g. Asia/Tokyo, America/New_York.
       - TZ=UTC
     volumes:
-      # KestreLynx only performs GET /containers/json to list running containers.
+      # KestreLynx only performs GET requests: /containers/json to list running
+      # containers, plus /containers/{id}/json when runtime.enabled is set.
       # Note: :ro makes the filesystem mount read-only but does NOT restrict
       # Docker API operations — mount docker.sock only into images you trust.
       - /var/run/docker.sock:/var/run/docker.sock:ro

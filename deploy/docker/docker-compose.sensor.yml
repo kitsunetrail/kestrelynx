@@ -2,17 +2,15 @@
 # `kestrelynx` service, run from the same image under a distinct
 # entrypoint/command. It walks the host's /proc, samples running processes
 # and their listening sockets, indexes each container's OS package database,
-# and writes runtime evidence to a volume the main service can read.
+# observes program executions and library loads with eBPF, and writes
+# runtime evidence to a volume the main service reads.
 #
-# The main body does not read this evidence yet; starting this service
-# today only produces the evidence file itself, which you can inspect
-# directly under the kestrelynx-runtime volume's procfs.json.
-#
-# Usage:
+# Usage (from this directory, next to sensor-seccomp.json):
 #   docker compose -f docker-compose.sensor.yml up -d
 #
-# To let the main `kestrelynx` service read the evidence once it reads
-# runtime evidence at all, add this to its own compose file (not this one):
+# Then let the main `kestrelynx` service read the evidence: add this to its
+# own compose file (not this one), set `runtime.enabled: true` in its
+# config.yml, and recreate it:
 #
 #   services:
 #     kestrelynx:
@@ -22,25 +20,39 @@
 #     kestrelynx-runtime:
 #       external: true
 #
-# and set `runtime.enabled: true` / `runtime.evidence_dir` in config.yml.
-#
 # Deployment notes:
 #   - This file never touches the main kestrelynx service or its own
 #     docker-compose.yml; the two are meant to run side by side.
-#   - Copy sensor-seccomp.json (this directory) to
-#     /etc/kestrelynx/sensor-seccomp.json on the host running this compose
-#     file first. security_opt's seccomp= path is resolved by the Docker
-#     CLI/daemon, not relative to this file, so it has to be an absolute,
-#     known host path rather than a path relative to here.
+#   - The seccomp profile path below is relative to this file; Compose reads
+#     the profile and hands its contents to the daemon. Keep
+#     sensor-seccomp.json next to this file.
+#   - The evidence volume has a fixed name (kestrelynx-runtime) so the main
+#     service's compose file can refer to it as an external volume
+#     regardless of this project's name.
 #   - The Sensor never gets a Docker socket, a network, or config.yml: it
 #     only ever reads /proc (via pid: host) and writes to its own volume.
+#   - Without BPF/PERFMON (or on a kernel without BTF, or on a cgroup v1
+#     host) the Sensor keeps running with sampling only and reports why;
+#     short-lived programs are then not observed.
 #   - user: 65532:65532 is not guaranteed to be free of other containers on
 #     the host; the Sensor's own containment (seccomp, capability drops,
-#     no-new-privileges, read-only root) does not depend on UID uniqueness.
+#     no-new-privileges set by the Sensor itself, read-only root) does not
+#     depend on UID uniqueness.
+#   - The Sensor has no Docker socket, so it cannot read labels. To keep a
+#     container out of observation altogether, pass its ID with
+#     --exclude-id (repeatable) in `command`. The main service separately
+#     ignores the evidence of any container labelled
+#     io.kestrelynx.runtime.exclude=true.
 services:
   kestrelynx-sensor:
     image: ghcr.io/kitsunetrail/kestrelynx:latest
     container_name: kestrelynx-sensor
+    labels:
+      # The Sensor never observes its own container, so without this label
+      # the main service would report this image's findings as "container
+      # not observed". The label tells the main service to leave this
+      # container out of the runtime-usage judgement.
+      io.kestrelynx.runtime.exclude: "true"
     entrypoint: ["kestrelynx-sensor"]
     command: ["sensor", "--evidence-dir", "/var/lib/kestrelynx-runtime"]
     user: "65532:65532"
@@ -64,3 +76,4 @@ services:
 
 volumes:
   kestrelynx-runtime:
+    name: kestrelynx-runtime

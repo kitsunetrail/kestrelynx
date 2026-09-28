@@ -16,6 +16,7 @@
 - **イメージスキャン**：[Trivy](https://github.com/aquasecurity/trivy)によるHIGH／CRITICALの検出（既定）
 - **重複スキャンの抑制**：同一と確認できたイメージの結果共有
 - **優先順位付け**：深刻度・CISA KEV・EPSSに基づく今すぐ対応／要監視／低優先度の分類
+- **稼働時の使用状況**：Docker向けの任意のSensorで使用中のパッケージの所見に印を付け、優先度を変えずに同じ区分内で先に表示（[稼働時の使用状況](docs-ja/documentation/runtime-usage.md)）
 - **パッケージ単位の集約**：修正版の有無・バージョン・アップグレード時の注意度
 - **未修正の脆弱性**：修正版がない項目も通知対象
 - **ベースOS・パッケージのEOL**：サポート終了したベースOS（EOL base）と、ベンダーがこのリリースではサポート対象外と報告したCVEを持つパッケージ（EOL package）を、CVEの優先度とは別に最上部で強調して通知
@@ -52,7 +53,7 @@
      ↳ CVE-2023-44487 HIGH · CISA KEV (exploited in the wild) · EPSS >99%
        📎 advisory · vendor advisory · 💬 HN (166 pts)
 🔕 myapp:latest
-   • webpack 4.46.0 → 5.89.0 (HIGH 1)  🟠 upgrade: major version bump — needs care [lang] — CVE-2024-37890 · EPSS 0.1%
+   • webpack 4.46.0 → 5.89.0 (HIGH 1)  🟠 upgrade: major version bump — needs care [npm-pkg] — CVE-2024-37890 · EPSS 0.1%
 
 ✅ Resolved since last scan (1)
 • myapp:latest: postcss

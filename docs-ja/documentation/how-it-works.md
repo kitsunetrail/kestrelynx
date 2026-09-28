@@ -284,7 +284,7 @@ Slackのチャンネルでは変化を、Botのスレッドでは現在の詳細
 
 脅威情報源が利用できない警告は、現在状態レポートのPriority行直後、EOL区分より前に表示する。
 
-通常の新規・変化項目は、優先度、イメージ名、パッケージ名の順に並ぶ。`New since last scan (N)`は、通常側で変化したイメージ参照とパッケージの組み合わせ数である。
+通常の新規・変化項目は、優先度、イメージ名、パッケージ名の順に並ぶ。使用状況とトリアージが有効な場合は、優先度を変えずに、同じ優先度の中で使用中のパッケージと、それを含むイメージを先に並べる。`New since last scan (N)`は、通常側で変化したイメージ参照とパッケージの組み合わせ数である。
 
 EOLのAct nowの変化は個別に表示し、それ以外は既存のEOLベースOS参照ごとに件数へまとめる。ベースOSとパッケージが同時に新規EOLとなった場合、Act now以外はベースOSの行へ畳み込み、EOLパッケージの差分見出し件数から除外する。
 
@@ -365,7 +365,8 @@ CRITICAL・HIGHは、パッケージと修正状態のグループ内で重複�
 | `🟢 upgrade: low-risk` | 言語パッケージのメジャーバージョンが増えない変更 |
 | `🟠 upgrade: major version bump — needs care` | 言語パッケージのメジャーバージョンが増え、互換性を壊す可能性がある変更 |
 | `⚪ upgrade: risk unknown` | バージョンを確実に解析できない状態 |
-| `[lang]` | Trivyが言語依存パッケージと分類した項目 |
+| `[<ecosystem>]` | Trivyの言語パッケージのエコシステム名（例：`[python-pkg]`・`[npm-pkg]`・`[gobinary]`・`[jar]`）で、Sensorと関係なく適用し、OSパッケージにはタグなし |
+| `[lang]` | Trivyの種類が不明な言語パッケージだけに使う代替ラベル |
 | `(no fix available)` | 通常の修正状態で修正版なし |
 | `⬆️ escalated to ACT NOW/WATCH` | 既知パッケージの最大優先度が上昇 |
 | `new: CVE-…, CVE-… (+N more)` | 追加CVEのリンクを1行最大3件、残りは件数で表示 |
@@ -390,6 +391,92 @@ CRITICAL・HIGHは、パッケージと修正状態のグループ内で重複�
 | `📎 advisory` | Trivyの主要アドバイザリー |
 | `vendor advisory` | KEVのnotesにあるベンダーまたはCISAの参照 |
 | `💬 HN (N pts)` | 条件を満たすHacker Newsの議論とポイント数 |
+
+### 稼働時の使用状況
+
+`runtime.enabled: true`では、使用を確認できたパッケージの所見に印を付ける。
+使用状況は優先度を変えない。同じ優先度の中で、使用中のパッケージと、
+それを含むイメージを先に並べる。トリアージが無効の場合は並べ替えない。
+
+全量ビューでは、Act nowは根拠行の下に使用状況を1行追加し、
+Watchなどのパッケージ行では行末に表示する。
+
+```text
+*🚨 Act now (1) — exploited or likely to be*
+• web:1.0
+   • openssl 3.0.7 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ CVE-OPENSSL CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a — no fix yet, consider mitigation
+     ▶ in use (running as `/usr/sbin/nginx`) · published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+
+*👀 Watch (2) — not urgent, keep an eye on*
+• api:2.0
+   • setuptools 53.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [python-pkg] — CVE-SETUP · EPSS 2% · ▶ in use (running)
+
+🔎 Runtime: ▶ 2 in use · 2 not observed · 1 unavailable
+_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._
+```
+
+- Lowの件数行は、N > 0の場合に末尾へ` · ▶ N in use`を付加
+- 差分モードの新規行にも同じ行末表示を付け、`act_now`は根拠行の下に1行追加
+- トリアージ無効の全量ビューでは、各パッケージ行の末尾に` · ▶ in use (running)`などの付加のみ
+
+| 稼働時のラベル | 意味 |
+| --- | --- |
+| `published on all interfaces` | ホストのすべてのインターフェースに公開 |
+| `published on loopback only` | ホストのループバックだけに公開 |
+| `listening (not published)` | ポートを公開せずに待ち受け |
+| `runs with elevated privilege` | UID 0かつuser namespaceなし、危険なcapability、privilegedのいずれか |
+| `last confirmed 06-24 09:00` | 使用を最後に確認した時刻 |
+
+1つのOSパッケージを複数のプログラムが使う場合は、次のように表示する。
+
+```text
+▶ in use (running; loaded as a library; processes: `/usr/bin/helper`, `/app/server`) · ...
+```
+
+Slack Web APIのスレッドでは、ACT NOW・WATCHの各パッケージの詳細の後に
+使用状況を1行追加する。表示例は次のとおりである。
+
+```text
+▶ in use (runtime is running `/usr/bin/python3.11`) · last confirmed 06-24 09:00
+▷ not observed
+▷ not observed — short-lived programs not fully observed
+▷ runtime evidence unavailable (<理由>)
+```
+
+短命なプログラムの注記は、Sensorの起動より前から動いていたコンテナなど、
+起動時からの観測でない場合に付く。not observedは観測期間に使用を確認できなかった
+ことだけを意味し、使われていないことは意味しない。unavailableは証拠が足りず
+判定できない状態である。理由の一覧は後述のWebhookの節に記載している。
+LOW区分には`▶ in use among low: N`を表示する。
+
+Sensorに問題がある場合は、先頭に警告を1行表示する。
+
+```text
+⚠️ Runtime evidence unavailable: <理由>
+```
+
+| Sensorの状態 | 警告の理由 |
+| --- | --- |
+| `not_reporting` | `the Sensor has not reported yet` |
+| `evidence_invalid` | `the evidence file failed validation` |
+| `stale` | `the Sensor's last report is stale` |
+| `permission_denied` | `the Sensor's reads are being denied` |
+| `isolation_failed` | `the Sensor's sandbox failed to start` |
+| `isolation_degraded` | `the Sensor's sandbox is running degraded` |
+| `degraded` | `the Sensor is degraded` |
+
+eBPFが利用できない場合は、次の警告を表示する。
+
+```text
+⚠️ Short-lived programs are not observed (eBPF unavailable: <理由>); using sampling only
+```
+
+理由は`kernel unsupported`、`permission denied`、`attach failed`、
+`cgroup v1`のいずれかである。サンプリングは続けるが、短命なプログラムは観測できない。
+
+使用中とみなす条件、Sensorの導入、状態の意味、観測の限界は
+[稼働時の使用状況](runtime-usage.md)に記載している。
 
 ### 詳細とスレッド
 
@@ -461,6 +548,7 @@ Low、Slackで畳み込むEOLパッケージ、コンテナ、Workloadも確認�
 | `scan_errors[].image` | string | イメージ参照 |
 | `scan_errors[].error` | string | エラー内容 |
 | `diff` | object | 今回の差分で、fullモードでは省略 |
+| `runtime` | object | `runtime.enabled`がtrueの場合のSensorの状態と使用状況の件数で、省略可能 |
 
 ### サマリー
 
@@ -510,6 +598,9 @@ Low、Slackで畳み込むEOLパッケージ、コンテナ、Workloadも確認�
 | 検出結果のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
 | `package` | string | パッケージ名 |
+| `class` | string | `os`または`lang`で、Sensorと関係なく付加 |
+| `ecosystem` | string | `debian`・`python-pkg`などのTrivyの種類で、不明なら空文字、Sensorと関係なく付加 |
+| `runtime` | object | `runtime.enabled`がtrueの場合の稼働時の証拠で、省略可能 |
 | `installed` | string | インストール済みバージョン |
 | `fixed` | string | 修正版バージョンで、なければ`""` |
 | `status` | string | `fixed`、`affected`、`will_not_fix`、`end_of_life` |
@@ -535,6 +626,127 @@ Low、Slackで畳み込むEOLパッケージ、コンテナ、Workloadも確認�
 | `refs[].label` | string | 表示ラベル |
 | `refs[].url` | string | 参照URL |
 
+### 稼働時の証拠
+
+稼働時のフィールドは、`runtime.enabled`がtrueの場合だけ追加する。
+この節のキーはすべて省略可能である。トップレベルの`runtime`は、
+Sensorの状態、観測の判定方法、使用状況の件数を表す。
+
+```json
+{
+  "runtime": {
+    "sensor_status": "ok",
+    "heartbeat_at": "RFC3339",
+    "interval_seconds": 30,
+    "rules": {
+      "os_packages": "executed_or_loaded_by_running_process",
+      "lang_packages_binary": "in_running_binary",
+      "lang_packages_runtime": "runtime_process_running"
+    },
+    "events_status": "ok",
+    "events_reason": "",
+    "counts": { "in_use": 0, "not_observed": 0, "unavailable": 0 }
+  }
+}
+```
+
+| `runtime`のフィールド名 | 型 | 意味 |
+| --- | --- | --- |
+| `sensor_status` | string | `ok`、`degraded`、`stale`、`not_reporting`、`permission_denied`、`evidence_invalid`、`isolation_failed`、`isolation_degraded` |
+| `heartbeat_at` | string | RFC 3339形式のSensorの報告時刻 |
+| `interval_seconds` | integer | 秒単位のサンプリング間隔 |
+| `rules` | object | 上記のOSパッケージ、実行ファイルに組み込まれる言語パッケージ、実行環境が読み込む言語パッケージの判定方法 |
+| `events_status` | string | `ok`または`unavailable`で、Sensorの報告がなければ空 |
+| `events_reason` | string | イベント観測の状態に伴う理由 |
+| `counts` | object | `in_use`、`not_observed`、`unavailable`の件数 |
+
+各`findings[].runtime`は、パッケージの使用状況とコンテナの証拠を表す。
+次の抜粋はフィールドの例である。`process`は観測がある場合だけ、
+`instances`は言語パッケージの場合だけ含む。
+
+```json
+{
+  "runtime": {
+    "usage": "in_use",
+    "reason": "",
+    "evidence_kinds": ["exe"],
+    "events_coverage": "since_start",
+    "exposure": "host_published_all",
+    "high_privilege": true,
+    "containers": [{
+      "name": "web-1",
+      "container_id": "<64hex>",
+      "generation_started_at": "RFC3339",
+      "usage": "in_use",
+      "reason": "",
+      "last_seen": "RFC3339",
+      "ports": ["0.0.0.0:443/tcp"],
+      "process": {
+        "exe": "/usr/sbin/nginx",
+        "effective_uid": 0,
+        "userns": false,
+        "dangerous_caps": [],
+        "privileged": false
+      },
+      "instances": [{
+        "type": "gobinary",
+        "target": "app/api",
+        "usage": "in_use"
+      }]
+    }]
+  }
+}
+```
+
+| `findings[].runtime`のフィールド名 | 型 | 意味 |
+| --- | --- | --- |
+| `usage` | string | `in_use`、`not_observed`、`unavailable` |
+| `reason` | string | 後述の`unavailable`の理由 |
+| `evidence_kinds` | 文字列の配列 | `exe`はサンプリングで実行中を確認、`mapped_library`はサンプリングで読み込みを確認、`exec_event`はeBPFで実行を観測、`library_load_event`はeBPFで読み込みを観測 |
+| `events_coverage` | string | `since_start`はeBPFがコンテナ起動前から欠落なく観測、`partial`は一部の観測、`none`はeBPFが動いていない状態 |
+| `exposure` | string | `host_published_all`、`host_published_loopback`、`container_listening`、`unknown` |
+| `high_privilege` | boolean | UID 0かつuser namespaceなし、危険なcapability、privilegedのいずれか |
+| `containers` | オブジェクトの配列 | コンテナの証拠で、`in_use`の場合は公開の範囲、権限の順で最も強いコンテナを先頭に配置 |
+| `containers[].name` | string | コンテナ名 |
+| `containers[].container_id` | string | 64桁の16進数のコンテナID |
+| `containers[].generation_started_at` | string | RFC 3339形式のコンテナの世代の起動時刻 |
+| `containers[].usage` / `containers[].reason` | string | コンテナの使用状況と判定できない理由 |
+| `containers[].last_seen` | string | RFC 3339形式の最後に確認した時刻 |
+| `containers[].ports` | 文字列の配列 | `0.0.0.0:443/tcp`などのポートの証拠 |
+| `containers[].process` | object | 観測した`exe`、`effective_uid`、`userns`、`dangerous_caps`、`privileged`で、観測がある場合だけ付加 |
+| `containers[].instances` | オブジェクトの配列 | `type`、`target`、`usage`を持つ言語パッケージのインスタンスで、言語パッケージだけに付加 |
+
+`kinds_ambiguous`と`process_exes`は、1つのOSパッケージを複数のプログラムが使い、
+種類とプログラムを結び付けられない場合だけ出力する。
+
+判定できない理由のコードと、スレッドの文言は次のように対応する。
+
+| Webhookの`reason` | スレッドの理由 |
+| --- | --- |
+| `sensor_not_reporting` | `sensor not reporting` |
+| `sensor_stale` | `sensor report is stale` |
+| `evidence_invalid` | `evidence invalid` |
+| `isolation_failed` | `sensor isolation failed` |
+| `permission_denied` | `permission denied` |
+| `initializing` | `index not built yet` |
+| `stalled` | `worker stalled` |
+| `parse_failed` | `package database parse failed` |
+| `truncated` | `evidence truncated` |
+| `incomplete` | `evidence incomplete` |
+| `generation_unverified` | `container generation unverified` |
+| `container_not_observed` | `container not observed` |
+| `db_absent` | `package database absent` |
+| `db_error` | `package database error` |
+| `db_unsupported` | `package database unsupported` |
+| `no_file_list` | `no file list for this package` |
+| `attribution_ambiguous` | `multiple owners` |
+| `file_replaced` | `file replaced` |
+| `version_mismatch` | `version mismatch` |
+| `ecosystem_unmapped` | `ecosystem not mapped` |
+| `binary_path_unknown` | `binary path unknown` |
+
+Sensorの状態の意味と観測の限界は[稼働時の使用状況](runtime-usage.md)に記載している。
+
 ### 差分
 
 `diff`では、前回からの変化を種類別に確認できる。diffモードだけに含み、空の配列は`null`ではなく`[]`を返す。
@@ -556,6 +768,8 @@ Low、Slackで畳み込むEOLパッケージ、コンテナ、Workloadも確認�
 
 | `new[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
+| `ecosystems` | 文字列の配列 | その変化にまとめた全グループのエコシステム名の、重複のない並べ替え済みの配列で、Sensorと関係なく付加 |
+| `runtime_usage` | string | 使用状況が有効な場合の`in_use`、`not_observed`、`unavailable`で、判定がなければ省略 |
 | `image` | string | イメージ参照 |
 | `package` | string | パッケージ名 |
 | `kind` | string | `new`、`escalated`、`new_cves`、`now_fixable` |
@@ -568,6 +782,8 @@ Low、Slackで畳み込むEOLパッケージ、コンテナ、Workloadも確認�
 
 | `new_eol_packages[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
+| `ecosystems` | 文字列の配列 | その変化にまとめた全グループのエコシステム名の、重複のない並べ替え済みの配列で、Sensorと関係なく付加 |
+| `runtime_usage` | string | 使用状況が有効な場合の`in_use`、`not_observed`、`unavailable`で、判定がなければ省略 |
 | `image` | string | イメージ参照 |
 | `package` | string | パッケージ名 |
 | `kind` | string | 新規EOLの`eol_new`、CVE追加の`eol_new_cves`、Act nowへの上昇の`eol_escalated` |
@@ -592,6 +808,10 @@ EOL変化には`new_cve_count`がないため、追加件数は`new_cve_ids`の�
 | `content_ids` | 文字列の配列 | 並べ替え済みの今回の確認済みcontent-ID集合 |
 
 ### 後方互換
+
+エコシステムと稼働時のフィールドは追加のみで、既存のフィールドは変更しない。
+エコシステム関連のフィールドはSensorと関係なく付加し、稼働時のフィールドは
+`runtime.enabled: true`の場合だけ付加する。
 
 既存のフィールドと修正状態別の構造は維持する。修正状態の区分と`priority`は分けて扱う。
 

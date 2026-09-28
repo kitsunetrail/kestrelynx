@@ -9,6 +9,8 @@ This section covers installing, configuring, and operating KestreLynx.
 - [Configuration](configuration.md) — configure the schedule, notification
   destinations, Kubernetes, environment name, state management, and vulnerability
   prioritization.
+- [Runtime usage](runtime-usage.md) — add the optional Docker Sensor to mark
+  packages in use without changing their priority.
 - [How KestreLynx works](how-it-works.md) — learn about scanning,
   prioritization, change detection, and notification processing.
 

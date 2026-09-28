@@ -284,7 +284,7 @@ Diff notifications show changes since the previous scan, while current-state rep
 
 Warnings about unavailable intelligence sources appear immediately after the current-state report's Priority line, before the EOL sections.
 
-Ordinary new and changed entries are sorted by priority, image name, and package name. `New since last scan (N)` counts ordinary image reference and package combinations that changed.
+Ordinary new and changed entries are sorted by priority, image name, and package name. When runtime usage and triage are enabled, packages in use and their images appear first within the same priority; usage does not change priority. `New since last scan (N)` counts ordinary image reference and package combinations that changed.
 
 Act now EOL changes are shown individually. Other EOL changes are summarized as counts for each existing EOL base-OS reference. When a base OS and its packages become newly EOL in the same cycle, packages other than Act now are folded into the base-OS line and excluded from the EOL package diff heading's count.
 
@@ -365,7 +365,8 @@ CRITICAL and HIGH count distinct CVE IDs within each package and fix-status grou
 | `🟢 upgrade: low-risk` | A language-package change that does not increase the major version. |
 | `🟠 upgrade: major version bump — needs care` | A language-package change that increases the major version and may break compatibility. |
 | `⚪ upgrade: risk unknown` | Versions could not be parsed reliably. |
-| `[lang]` | Trivy classified the package as a language dependency. |
+| `[<ecosystem>]` | Language-package ecosystem from Trivy, such as `[python-pkg]`, `[npm-pkg]`, `[gobinary]`, or `[jar]`; applies independently of the Sensor. OS packages have no tag. |
+| `[lang]` | Language-package fallback only when the Trivy type is unknown. |
 | `(no fix available)` | No fixed version is available for an ordinary fix status. |
 | `⬆️ escalated to ACT NOW/WATCH` | A known package's maximum priority increased. |
 | `new: CVE-…, CVE-… (+N more)` | Added CVEs are linked, with up to 3 per line and the remainder shown as a count. |
@@ -390,6 +391,92 @@ CRITICAL and HIGH count distinct CVE IDs within each package and fix-status grou
 | `📎 advisory` | Trivy's primary advisory. |
 | `vendor advisory` | A vendor or CISA reference from KEV notes. |
 | `💬 HN (N pts)` | A qualifying Hacker News discussion and its point count. |
+
+### Runtime usage
+
+With `runtime.enabled: true`, Slack marks findings for packages observed in use.
+Usage does not change priority. Within each priority, packages in use and images
+containing them appear first. With triage disabled, results are not reordered.
+
+In the full view, Act now has a usage line below its evidence line; Watch and
+other package rows show usage at the end of the row.
+
+```text
+*🚨 Act now (1) — exploited or likely to be*
+• web:1.0
+   • openssl 3.0.7 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ CVE-OPENSSL CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a — no fix yet, consider mitigation
+     ▶ in use (running as `/usr/sbin/nginx`) · published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+
+*👀 Watch (2) — not urgent, keep an eye on*
+• api:2.0
+   • setuptools 53.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [python-pkg] — CVE-SETUP · EPSS 2% · ▶ in use (running)
+
+🔎 Runtime: ▶ 2 in use · 2 not observed · 1 unavailable
+_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._
+```
+
+- Low's count line ends with ` · ▶ N in use` when N > 0.
+- New rows in diff mode use the same suffix, with a separate line below the evidence for `act_now`.
+- With triage disabled, the full view only appends usage such as ` · ▶ in use (running)` to each package row.
+
+| Runtime label | Meaning |
+| --- | --- |
+| `published on all interfaces` | Published on all host interfaces. |
+| `published on loopback only` | Published only on host loopback. |
+| `listening (not published)` | Listening without a published port. |
+| `runs with elevated privilege` | UID 0 without a user namespace, dangerous capabilities, or privileged mode. |
+| `last confirmed 06-24 09:00` | Time use was last confirmed. |
+
+When several programs use one OS package, the display can read:
+
+```text
+▶ in use (running; loaded as a library; processes: `/usr/bin/helper`, `/app/server`) · ...
+```
+
+Slack Web API threads add one usage line after each package's details in ACT NOW
+and WATCH. Examples include:
+
+```text
+▶ in use (runtime is running `/usr/bin/python3.11`) · last confirmed 06-24 09:00
+▷ not observed
+▷ not observed — short-lived programs not fully observed
+▷ runtime evidence unavailable (<reason>)
+```
+
+The short-lived-program annotation applies when observation does not cover the
+container from startup, including containers already running before the Sensor
+started. Not observed describes only the observation window and does not mean
+unused. Unavailable means evidence is insufficient; the reason values are listed
+in the webhook section below. The LOW section shows `▶ in use among low: N`.
+
+Sensor problems add a warning line at the beginning:
+
+```text
+⚠️ Runtime evidence unavailable: <reason>
+```
+
+| Sensor status | Warning reason |
+| --- | --- |
+| `not_reporting` | `the Sensor has not reported yet` |
+| `evidence_invalid` | `the evidence file failed validation` |
+| `stale` | `the Sensor's last report is stale` |
+| `permission_denied` | `the Sensor's reads are being denied` |
+| `isolation_failed` | `the Sensor's sandbox failed to start` |
+| `isolation_degraded` | `the Sensor's sandbox is running degraded` |
+| `degraded` | `the Sensor is degraded` |
+
+When eBPF is unavailable, the warning reads:
+
+```text
+⚠️ Short-lived programs are not observed (eBPF unavailable: <reason>); using sampling only
+```
+
+The reason is `kernel unsupported`, `permission denied`, `attach failed`,
+or `cgroup v1`. Sampling continues, but short-lived programs are not observed.
+
+See [Runtime usage](runtime-usage.md) for package usage rules, Sensor setup,
+status meanings, and observation limits.
 
 ### Details and threads
 
@@ -461,6 +548,7 @@ Top-level fields provide the scan time, environment, findings by fix status, fai
 | `scan_errors[].image` | string | Image reference. |
 | `scan_errors[].error` | string | Error details. |
 | `diff` | object | Current changes; omitted in full mode. |
+| `runtime` | object | Optional Sensor status and usage counts when `runtime.enabled` is true. |
 
 ### Summary
 
@@ -510,6 +598,9 @@ When `vulns[].status` is omitted, it has the same value as the finding's `status
 | Finding field | Type | Meaning |
 | --- | --- | --- |
 | `package` | string | Package name. |
+| `class` | string | `os` or `lang`; independent of the Sensor. |
+| `ecosystem` | string | Trivy type, such as `debian` or `python-pkg`; empty when unknown, independent of the Sensor. |
+| `runtime` | object | Optional runtime evidence when `runtime.enabled` is true. |
 | `installed` | string | Installed version. |
 | `fixed` | string | Fixed version, or `""` when none is available. |
 | `status` | string | `fixed`, `affected`, `will_not_fix`, or `end_of_life`. |
@@ -535,6 +626,128 @@ When `vulns[].status` is omitted, it has the same value as the finding's `status
 | `refs[].label` | string | Display label. |
 | `refs[].url` | string | Reference URL. |
 
+### Runtime evidence
+
+Runtime fields are added only when `runtime.enabled` is true. All keys in this
+section are optional. The top-level `runtime` object describes Sensor status,
+observation rules, and usage counts:
+
+```json
+{
+  "runtime": {
+    "sensor_status": "ok",
+    "heartbeat_at": "RFC3339",
+    "interval_seconds": 30,
+    "rules": {
+      "os_packages": "executed_or_loaded_by_running_process",
+      "lang_packages_binary": "in_running_binary",
+      "lang_packages_runtime": "runtime_process_running"
+    },
+    "events_status": "ok",
+    "events_reason": "",
+    "counts": { "in_use": 0, "not_observed": 0, "unavailable": 0 }
+  }
+}
+```
+
+| `runtime` field | Type | Meaning |
+| --- | --- | --- |
+| `sensor_status` | string | `ok`, `degraded`, `stale`, `not_reporting`, `permission_denied`, `evidence_invalid`, `isolation_failed`, or `isolation_degraded`. |
+| `heartbeat_at` | string | Sensor heartbeat time in RFC 3339 format. |
+| `interval_seconds` | integer | Sampling interval in seconds. |
+| `rules` | object | OS-package, compiled-language-package, and runtime-language-package rules shown above. |
+| `events_status` | string | `ok` or `unavailable`; empty if the Sensor has not reported. |
+| `events_reason` | string | Reason associated with event-observation status. |
+| `counts` | object | Counts named `in_use`, `not_observed`, and `unavailable`. |
+
+Each `findings[].runtime` describes package usage and container evidence.
+The following fragment shows the fields; `process` requires an observation,
+and `instances` is included only for language packages.
+
+```json
+{
+  "runtime": {
+    "usage": "in_use",
+    "reason": "",
+    "evidence_kinds": ["exe"],
+    "events_coverage": "since_start",
+    "exposure": "host_published_all",
+    "high_privilege": true,
+    "containers": [{
+      "name": "web-1",
+      "container_id": "<64hex>",
+      "generation_started_at": "RFC3339",
+      "usage": "in_use",
+      "reason": "",
+      "last_seen": "RFC3339",
+      "ports": ["0.0.0.0:443/tcp"],
+      "process": {
+        "exe": "/usr/sbin/nginx",
+        "effective_uid": 0,
+        "userns": false,
+        "dangerous_caps": [],
+        "privileged": false
+      },
+      "instances": [{
+        "type": "gobinary",
+        "target": "app/api",
+        "usage": "in_use"
+      }]
+    }]
+  }
+}
+```
+
+| `findings[].runtime` field | Type | Meaning |
+| --- | --- | --- |
+| `usage` | string | `in_use`, `not_observed`, or `unavailable`. |
+| `reason` | string | Reason for `unavailable`, listed below. |
+| `evidence_kinds` | array of strings | `exe`: execution confirmed by sampling; `mapped_library`: library loading confirmed by sampling; `exec_event`: execution observed by eBPF; `library_load_event`: library loading observed by eBPF. |
+| `events_coverage` | string | `since_start`: eBPF observation began before container startup with no gaps; `partial`: partial coverage; `none`: eBPF is not running. |
+| `exposure` | string | `host_published_all`, `host_published_loopback`, `container_listening`, or `unknown`. |
+| `high_privilege` | boolean | UID 0 without a user namespace, dangerous capabilities, or privileged mode. |
+| `containers` | array of objects | Container evidence. For `in_use`, the strongest container is first, comparing exposure before privilege. |
+| `containers[].name` | string | Container name. |
+| `containers[].container_id` | string | Container ID, 64 hexadecimal characters. |
+| `containers[].generation_started_at` | string | Container generation start time in RFC 3339 format. |
+| `containers[].usage` / `containers[].reason` | string | Container usage and reason for unavailable evidence. |
+| `containers[].last_seen` | string | Last confirmation time in RFC 3339 format. |
+| `containers[].ports` | array of strings | Port evidence, such as `0.0.0.0:443/tcp`. |
+| `containers[].process` | object | Observed `exe`, `effective_uid`, `userns`, `dangerous_caps`, and `privileged`; included only when observed. |
+| `containers[].instances` | array of objects | Language-package instances with `type`, `target`, and `usage`; language packages only. |
+
+`kinds_ambiguous` and `process_exes` appear only when multiple programs use one
+OS package and evidence kinds cannot be associated with individual programs.
+
+Unavailable reason codes correspond to the following thread text.
+
+| Webhook `reason` | Thread reason |
+| --- | --- |
+| `sensor_not_reporting` | `sensor not reporting` |
+| `sensor_stale` | `sensor report is stale` |
+| `evidence_invalid` | `evidence invalid` |
+| `isolation_failed` | `sensor isolation failed` |
+| `permission_denied` | `permission denied` |
+| `initializing` | `index not built yet` |
+| `stalled` | `worker stalled` |
+| `parse_failed` | `package database parse failed` |
+| `truncated` | `evidence truncated` |
+| `incomplete` | `evidence incomplete` |
+| `generation_unverified` | `container generation unverified` |
+| `container_not_observed` | `container not observed` |
+| `db_absent` | `package database absent` |
+| `db_error` | `package database error` |
+| `db_unsupported` | `package database unsupported` |
+| `no_file_list` | `no file list for this package` |
+| `attribution_ambiguous` | `multiple owners` |
+| `file_replaced` | `file replaced` |
+| `version_mismatch` | `version mismatch` |
+| `ecosystem_unmapped` | `ecosystem not mapped` |
+| `binary_path_unknown` | `binary path unknown` |
+
+Sensor status meanings and observation limits are described in
+[Runtime usage](runtime-usage.md).
+
 ### Diff
 
 `diff` provides changes since the previous scan by type. It is present only in diff mode, and empty arrays are returned as `[]` rather than `null`.
@@ -556,6 +769,8 @@ When `vulns[].status` is omitted, it has the same value as the finding's `status
 
 | `new[]` field | Type | Meaning |
 | --- | --- | --- |
+| `ecosystems` | array of strings | Sorted, deduplicated ecosystem names across all groups combined into this change; independent of the Sensor. |
+| `runtime_usage` | string | `in_use`, `not_observed`, or `unavailable`, only when runtime usage is enabled; omitted without an assessment. |
 | `image` | string | Image reference. |
 | `package` | string | Package name. |
 | `kind` | string | `new`, `escalated`, `new_cves`, or `now_fixable`. |
@@ -568,6 +783,8 @@ When `vulns[].status` is omitted, it has the same value as the finding's `status
 
 | `new_eol_packages[]` field | Type | Meaning |
 | --- | --- | --- |
+| `ecosystems` | array of strings | Sorted, deduplicated ecosystem names across all groups combined into this change; independent of the Sensor. |
+| `runtime_usage` | string | `in_use`, `not_observed`, or `unavailable`, only when runtime usage is enabled; omitted without an assessment. |
 | `image` | string | Image reference. |
 | `package` | string | Package name. |
 | `kind` | string | `eol_new` for newly detected EOL, `eol_new_cves` for added CVEs, or `eol_escalated` for escalation to Act now. |
@@ -592,6 +809,10 @@ EOL changes have no `new_cve_count` field. Use the length of `new_cve_ids` to ob
 | `content_ids` | array of strings | Sorted current verified content-ID set. |
 
 ### Backward compatibility
+
+Ecosystem and runtime fields are additions only; existing fields are unchanged.
+Ecosystem fields apply independently of the Sensor, while runtime fields require
+`runtime.enabled: true`.
 
 Existing fields and the structure organized by fix status are preserved. Fix-status sections and `priority` are handled separately.
 

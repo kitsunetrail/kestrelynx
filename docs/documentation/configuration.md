@@ -65,6 +65,28 @@ Persist the directory containing `state.path` with a Docker volume, or a
 persistent volume in Kubernetes. The intel feed cache lives in an `intel`
 directory beside `state.path`, by default `/var/lib/kestrelynx/intel`.
 
+## Runtime usage
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `runtime.enabled` | `false` | Read Sensor evidence and include runtime usage in notifications. Leave disabled when no Sensor is installed. |
+| `runtime.evidence_dir` | `/var/lib/kestrelynx-runtime` | Absolute path where the Sensor evidence volume is mounted. Must match the Sensor's `--evidence-dir`. |
+
+With `runtime.enabled: false`, KestreLynx does not open the evidence directory
+or add runtime information to notifications. Ecosystem labels and webhook
+ecosystem fields apply independently of this setting.
+
+Setting both `runtime.enabled: true` and `kubernetes.enabled: true` is a
+configuration error. Runtime usage is available only for Docker.
+
+When enabled, KestreLynx also uses Docker API `GET /containers/{id}/json`,
+in addition to `GET /containers/json`. Containers with the label
+`io.kestrelynx.runtime.exclude=true` are excluded from runtime usage
+assessment; only the lowercase value `true` matches.
+
+See [Runtime usage](runtime-usage.md) for Sensor setup, observation rules,
+and permissions.
+
 ## Kubernetes
 
 | Option | Default | Description |

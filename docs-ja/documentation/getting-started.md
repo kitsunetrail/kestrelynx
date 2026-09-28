@@ -51,6 +51,10 @@ docker run -d --name kestrelynx \
   ghcr.io/kitsunetrail/kestrelynx:latest
 ```
 
+Dockerでは、任意のSensorを追加すると使用中のパッケージの所見に印が付き、
+優先度を変えずに同じ区分内で先に並びます。導入手順と観測の限界は
+[稼働時の使用状況](runtime-usage.md)に記載しています。
+
 ## Kubernetesで実行
 
 リポジトリをダウンロードまたはcloneしてください。`deploy/kubernetes/`ディレクトリには、

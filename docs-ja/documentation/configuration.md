@@ -65,6 +65,25 @@ diffモードでは、新規検出、解消、修正可能化、緊急度上昇�
 永続化してください。脅威情報フィードのキャッシュは、`state.path`と同じディレクトリ内の
 `intel`ディレクトリに保存します。既定のパスは`/var/lib/kestrelynx/intel`です。
 
+## 稼働時の使用状況
+
+| 設定項目 | 既定値 | 説明 |
+| --- | --- | --- |
+| `runtime.enabled` | `false` | Sensorの証拠を読み、使用状況を通知に反映します。Sensorを置かない場合は無効のままにします。 |
+| `runtime.evidence_dir` | `/var/lib/kestrelynx-runtime` | Sensorの証拠ボリュームをマウントした絶対パスです。Sensorの`--evidence-dir`と一致させます。 |
+
+`runtime.enabled: false`では、証拠ディレクトリを開かず、通知に稼働時の情報を追加しません。
+エコシステム名のラベルとWebhookのエコシステム関連フィールドは、この設定に関係なく適用されます。
+
+`runtime.enabled: true`と`kubernetes.enabled: true`の併用は設定エラーです。
+稼働時の使用状況はDockerだけで利用できます。
+
+有効時は、本体がDocker APIの`GET /containers/json`に加えて
+`GET /containers/{id}/json`も使用します。`io.kestrelynx.runtime.exclude=true`の
+ラベルを持つコンテナは使用状況の判定から外します。値は小文字の`true`だけが該当します。
+
+Sensorの導入手順、観測の判定方法、権限は[稼働時の使用状況](runtime-usage.md)に記載しています。
+
 ## Kubernetes
 
 | 設定項目 | 既定値 | 説明 |

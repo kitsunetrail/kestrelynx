@@ -87,7 +87,7 @@ func TestSlackAPINotifier_PostsThreadAndReportsRef(t *testing.T) {
 	if len(f.posts) < 2 {
 		t.Fatalf("expected summary + thread reply, got %d post(s)", len(f.posts))
 	}
-	if !strings.Contains(f.text(0), "Full report in this message's thread") {
+	if !strings.Contains(f.text(0), "Everything open now is in this message's thread") {
 		t.Errorf("summary missing thread pointer:\n%s", f.text(0))
 	}
 	summaryTS := tsFor(1)
@@ -96,7 +96,7 @@ func TestSlackAPINotifier_PostsThreadAndReportsRef(t *testing.T) {
 			t.Errorf("reply %d thread_ts = %v, want %s", i, p["thread_ts"], summaryTS)
 		}
 	}
-	if !strings.Contains(f.text(1), "Full report —") {
+	if !strings.Contains(f.text(1), "Everything open now —") {
 		t.Errorf("thread reply missing report header:\n%s", f.text(1))
 	}
 	want := state.ReportRef{Channel: "C1", TS: summaryTS, Permalink: "https://example.slack.com/archives/C1/p" + summaryTS}
@@ -116,7 +116,7 @@ func TestSlackAPINotifier_QuietDayLinksLastReport(t *testing.T) {
 	if len(f.posts) != 1 {
 		t.Fatalf("quiet day must not post a thread, got %d post(s)", len(f.posts))
 	}
-	if !strings.Contains(f.text(0), "Last full report → <"+ref.Permalink) {
+	if !strings.Contains(f.text(0), "Everything open as of the last report → <"+ref.Permalink) {
 		t.Errorf("summary missing last-report link:\n%s", f.text(0))
 	}
 	if res.Ref.TS != "" {
@@ -149,7 +149,7 @@ func TestSlackAPINotifier_ChannelChangeInvalidatesRef(t *testing.T) {
 	if len(f.posts) < 2 {
 		t.Fatalf("stale-channel ref must force a thread post, got %d post(s)", len(f.posts))
 	}
-	if strings.Contains(f.text(0), "Last full report") {
+	if strings.Contains(f.text(0), "Everything open as of the last report") {
 		t.Errorf("summary must not link a report in another channel:\n%s", f.text(0))
 	}
 }

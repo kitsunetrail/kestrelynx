@@ -297,7 +297,8 @@
     "counts": {
       "in_use": 2,
       "not_observed": 2,
-      "unavailable": 0
+      "unavailable": 0,
+      "accepted": 0
     }
   }
 }

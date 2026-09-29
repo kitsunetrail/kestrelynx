@@ -1,5 +1,5 @@
-// Tests for the Phase 2 identity model's notify wiring: Replaced on the
-// Slack diff and the webhook payload, the extra imagePayload identity
+// Tests for the content-digest identity model's notify wiring: Replaced on
+// the Slack diff and the webhook payload, the extra imagePayload identity
 // fields, and the Slack annotations for unresolved / ambiguous entities.
 package notify
 

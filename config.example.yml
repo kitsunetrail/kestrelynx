@@ -114,3 +114,13 @@ runtime:
   # Where the Sensor's evidence volume is mounted into this container. Must
   # match the Sensor's own --evidence-dir (same default on both sides).
   evidence_dir: "/var/lib/kestrelynx-runtime"
+  # Once runtime evidence is available, additionally hide from Slack (rows
+  # only — the generic webhook always keeps every finding, with an added
+  # accepted/accepted_reason marker) a package finding with no fix coming
+  # (affected or will_not_fix; never fixed, and never end-of-life, which is
+  # always shown) that nothing has used for at least 7 days of observation
+  # and that isn't act now. Hidden findings are replaced by a single
+  # "✅ Accepted" count; one that becomes used, gets a fix, or turns act now
+  # reappears immediately as an ordinary change. Has no effect unless
+  # enabled above is also true.
+  accept_unfixable_not_in_use: false

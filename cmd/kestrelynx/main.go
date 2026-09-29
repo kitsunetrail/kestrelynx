@@ -68,15 +68,16 @@ func main() {
 	env := inventory.Environment{Name: cfg.Environment.Name, Kind: envKind}
 
 	r := runner.Runner{
-		Lister:        lister,
-		Scanner:       scanner.Trivy{Severity: cfg.Scan.Severity},
-		Notifier:      notifier,
-		NotifyOnClean: cfg.Notify.NotifyOnClean,
-		FullReportDay: runner.NoFullReport,
-		Environment:   env,
-		Source:        scanSource,
-		Now:           time.Now,
-		Log:           log,
+		Lister:                   lister,
+		Scanner:                  scanner.Trivy{Severity: cfg.Scan.Severity},
+		Notifier:                 notifier,
+		NotifyOnClean:            cfg.Notify.NotifyOnClean,
+		FullReportDay:            runner.NoFullReport,
+		Environment:              env,
+		Source:                   scanSource,
+		Now:                      time.Now,
+		Log:                      log,
+		GenericWebhookConfigured: cfg.Notify.GenericWebhookURL != "",
 	}
 	if cfg.Notify.Mode == "diff" {
 		r.Store = state.FileStore{Path: cfg.State.Path, Env: env}
@@ -99,6 +100,7 @@ func main() {
 	}
 	if cfg.Runtime.Enabled {
 		r.Evidence = evidence.NewFileProvider(cfg.Runtime.EvidenceDir)
+		r.AcceptUnfixableNotInUse = cfg.Runtime.AcceptUnfixableNotInUse
 		// Config validation already rejects runtime.enabled alongside
 		// kubernetes.enabled, so lister is always the Docker adapter here;
 		// the type assertion just avoids widening ContainerLister itself

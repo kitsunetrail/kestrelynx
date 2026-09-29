@@ -1,5 +1,6 @@
 🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
 3 images scanned, 3 affected
+_Changes since the last scan._
 
 *⛔ New: base OS end-of-life (top priority)*
 • old:3 — base OS is EOL (no more security updates coming) · includes 1 newly end-of-life package(s)
@@ -19,4 +20,3 @@
 • app:2.1: sqlite-libs — no longer end-of-life
 
 📌 Open now: ⛔ 2 EOL base / ⛔ 4 EOL package / CRITICAL 2 / HIGH 9 across 3 image(s) — ⏰ oldest unresolved 20 day(s)
-_Details in the generic webhook payload, or in the weekly full report._

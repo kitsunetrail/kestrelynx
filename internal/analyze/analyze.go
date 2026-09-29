@@ -69,7 +69,29 @@ type PackageGroup struct {
 	// first, so a disabled deployment's output is byte-identical to a build
 	// that never linked this field at all.
 	Runtime Runtime
+
+	// Accepted and AcceptedReason are set by ApplyAcceptance
+	// (runtime.accept_unfixable_not_in_use): notify hides this group's row
+	// from its Slack rendering and shows it only in a count instead, because
+	// no fix is coming and nothing has used the package for the whole
+	// observation window. Both stay at their zero value (false, "") whenever
+	// the setting is off or the group was never eligible, and neither one
+	// ever changes Priority or a VulnRef's own Priority — acceptance changes
+	// what notify shows, never the triage verdict underneath it.
+	Accepted       bool
+	AcceptedReason AcceptedReason
 }
+
+// AcceptedReason names why ApplyAcceptance judged a PackageGroup accepted.
+// Kept as its own type rather than a bare string literal so a future second
+// acceptance rule has an established place to add its own value without
+// disturbing this one's wire representation.
+type AcceptedReason string
+
+// AcceptedNoFixNotInUse7d is ApplyAcceptance's one current judgment: the
+// canonical Status has no fix coming, and nothing has used the package
+// during at least 7 days of Sensor observation.
+const AcceptedNoFixNotInUse7d AcceptedReason = "no_fix_not_in_use_7d"
 
 // Instance is one raw Trivy Result a PackageGroup's Instances collects,
 // deduplicated by (Type, Target, PkgPath): the same triple reported twice
@@ -280,6 +302,14 @@ type Report struct {
 	// RuntimeInfo's own doc comment for why this carries the Sensor's raw
 	// self-report rather than a display-ready status string.
 	Runtime *RuntimeInfo
+	// GenericWebhookConfigured mirrors whether notify.generic_webhook_url is
+	// set. Build never sets it (it has no scan-derived meaning to interpret,
+	// same as Environment above) — the caller copies it in from
+	// config/composition-root state. It exists only so notify's guidance
+	// text can point at the one destination that actually carries full
+	// per-package detail (the generic webhook) without ever naming it to a
+	// deployment that never configured one.
+	GenericWebhookConfigured bool
 }
 
 // AffectedImageCount is the number of distinct images with any issue (findings

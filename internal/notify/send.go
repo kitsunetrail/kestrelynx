@@ -82,8 +82,8 @@ func summaryText(m Message) string {
 }
 
 // WebhookNotifier posts the structured JSON payload to a generic endpoint. It
-// always carries the full data regardless of mode (docs/NOTIFICATION_SPEC.md §5:
-// Slack is the summary, the webhook is the record).
+// always carries the full data regardless of mode: Slack is the summary, the
+// webhook is the record.
 type WebhookNotifier struct {
 	URL    string
 	Client *http.Client

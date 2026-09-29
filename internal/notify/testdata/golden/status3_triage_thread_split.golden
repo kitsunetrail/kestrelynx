@@ -1,4 +1,4 @@
-📊 *Full report — 2026-06-24 09:00*
+📊 *Everything open now — 2026-06-24 09:00*
 
 *🚨 ACT NOW (3) — exploited or likely to be*
 • web:1.0
@@ -29,6 +29,6 @@
        e2fsprogs: out-of-bounds write
      ⏱ open 20 day(s) — first seen 2026-06-04
 
-*🔕 LOW (4)* — no exploitation signal; details in the weekly full report or the webhook payload
+*🔕 LOW (4)* — no exploitation signal
 ===== next thread message =====
 ⚠️ identity unconfirmed: scanned by reference — broken:1

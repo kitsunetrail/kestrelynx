@@ -131,9 +131,9 @@ func TestFileStore_UnnamedEnvironmentOutputByteIdenticalToPreEnvironmentFormat(t
 		},
 		EOSL: map[string]time.Time{"old:1": legacyEOSLSeen},
 		// Images carries one entry per scanned reference regardless of
-		// findings (the Phase 2 identity model): old:1 is scanned too (it's
-		// the EOSL image in unchangedCycleReport), so it gets a fresh
-		// LastSeen here alongside web:1.
+		// findings: old:1 is scanned too (it's the EOSL image in
+		// unchangedCycleReport), so it gets a fresh LastSeen here alongside
+		// web:1.
 		Images:         map[string]ImageMeta{"web:1": {LastSeen: cycleTime}, "old:1": {LastSeen: cycleTime}},
 		LastFullReport: legacyLastFull,
 	}, "", "  ")

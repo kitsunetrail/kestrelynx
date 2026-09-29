@@ -1,5 +1,6 @@
 🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
 3 images scanned, 3 affected
+_Everything currently open._
 *Priority:* ⛔ 2 EOL base · ⛔ 4 EOL package · 🚨 2 act now · 👀 1 watch · 🔕 1 low
 
 *⛔ Base OS end-of-life (top priority)*
@@ -28,4 +29,3 @@
    • curl 7.61.1-34 (no fix available) (CRITICAL 0 / HIGH 2) — <https://nvd.nist.gov/vuln/detail/CVE-2033-0011|CVE-2033-0011> · EPSS 2%
 
 *🔕 Low priority (1)* — 1 finding(s) across 1 image(s), no exploitation signal (not in KEV, EPSS below threshold).
-_Details in the generic webhook payload or the weekly full report._

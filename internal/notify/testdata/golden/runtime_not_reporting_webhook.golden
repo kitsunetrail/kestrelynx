@@ -229,7 +229,8 @@
     "counts": {
       "in_use": 0,
       "not_observed": 0,
-      "unavailable": 5
+      "unavailable": 5,
+      "accepted": 0
     }
   }
 }

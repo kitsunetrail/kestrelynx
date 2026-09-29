@@ -1,0 +1,9 @@
+📊 *Everything open now — 2026-06-24 09:00*
+
+*🚨 ACT NOW (1) — exploited or likely to be*
+• web:1.0
+   • openssl 3.0.7 (no fix available) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a — no fix yet, consider mitigation
+     ▶ in use (running as `/usr/sbin/nginx`) · published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+
+✅ Accepted — no fix available and not in use for 7+ days: 1

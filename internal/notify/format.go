@@ -60,6 +60,16 @@ func writeHeader(b *strings.Builder, r analyze.Report) {
 	fmt.Fprintf(b, "🛡️ *KestreLynx* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
 }
 
+// writeRoleLine states, right under the header, what the message's body
+// represents when the line right after it wouldn't already say so: full
+// mode always shows everything currently open, and an ordinary diff-mode
+// cycle with changes is framed as such. A quiet cycle and the weekly digest
+// day both skip this line entirely — their own next line already carries
+// the framing — so no caller ever prints two lines making the same claim.
+func writeRoleLine(b *strings.Builder, text string) {
+	fmt.Fprintf(b, "_%s_\n", text)
+}
+
 // FormatSlackText renders a report as a Slack message body (mrkdwn). It leads
 // with a one-line priority summary, then shows the findings that need a human
 // decision — EOL base images, CRITICALs, and major-version bumps — in full,
@@ -74,6 +84,9 @@ func FormatSlackText(r analyze.Report) string {
 	var b strings.Builder
 	writeHeader(&b, r)
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
+	// Full mode never shows a diff — every message is the complete picture —
+	// so this framing line never varies with the report's contents.
+	writeRoleLine(&b, "Everything currently open.")
 	// Before either early return below: a Sensor/eBPF warning must reach
 	// every kind of message this function can produce, all clear included,
 	// not just the full open-findings body.
@@ -92,7 +105,7 @@ func FormatSlackText(r analyze.Report) string {
 // writeFullBody renders the complete open-findings view (headline, EOSL,
 // sections, scan failures). Shared by full mode and the diff-mode weekly
 // full report. With triage on, the view is organized by priority instead of
-// fix status (docs/TRIAGE_SPEC.md §6).
+// fix status.
 func writeFullBody(b *strings.Builder, r analyze.Report) {
 	if r.Triage {
 		writeTriageBody(b, r)
@@ -103,24 +116,33 @@ func writeFullBody(b *strings.Builder, r analyze.Report) {
 
 	writeEOSLSection(b, r, byRef)
 	writeEOLPackages(b, r, byRef)
+	// r.Actionable is never filtered: only affected/will_not_fix findings are
+	// ever eligible for acceptance (fixed and end-of-life never are).
 	collapsed := writeActionable(b, r.Actionable, byRef)
-	writeSection(b, "ℹ️ No fix yet (affected / waiting on upstream)", r.Watch, false, byRef)
-	writeSection(b, "🔕 Upstream won't fix (will_not_fix)", r.WontFix, false, byRef)
+	writeSection(b, "ℹ️ No fix yet (affected / waiting on upstream)", filterAccepted(r.Watch), false, byRef)
+	writeSection(b, "🔕 Upstream won't fix (will_not_fix)", filterAccepted(r.WontFix), false, byRef)
+	writeAcceptedCount(b, r)
 	writeScanErrors(b, r.ScanErrors, byRef)
 	writeRuntimeSummary(b, r)
 	writeUnresolvedRefs(b, r)
 
 	if collapsed > 0 {
-		fmt.Fprintf(b, "\n_%d lower-risk fix(es) summarized — full list in the generic webhook payload._\n", collapsed)
+		// The generic webhook is the only destination with the full,
+		// uncollapsed list, and only when one is actually configured.
+		if r.GenericWebhookConfigured {
+			fmt.Fprintf(b, "\n_%d lower-risk fix(es) summarized — full list in the generic webhook payload._\n", collapsed)
+		} else {
+			fmt.Fprintf(b, "\n_%d lower-risk fix(es) summarized._\n", collapsed)
+		}
 	}
 }
 
 // FormatSlackDiffText renders the diff-mode Slack message: what is new or
 // resolved since the previous scan, then a one-line "open now" summary with the
-// age of the oldest unresolved finding (docs/NOTIFICATION_SPEC.md §7). Repeating
-// the same list daily trains the reader to ignore it; age does the reminding
-// instead. When fullReport is true (weekly digest day) the one-liner is replaced
-// by the complete open-findings view.
+// age of the oldest unresolved finding. Repeating the same list daily trains
+// the reader to ignore it; age does the reminding instead. When fullReport is
+// true (weekly digest day) the one-liner is replaced by the complete
+// open-findings view.
 //
 // holding tells the "open now" heartbeat not to assert "all clear" when the
 // current cycle looks clean only because a reference that could not be
@@ -131,6 +153,18 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holdin
 	var b strings.Builder
 	writeHeader(&b, r)
 	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
+	// A role line only earns its place when it says something the very next
+	// line doesn't already: a quiet cycle prints "No changes since last
+	// scan." right below (or, on the weekly digest day, the
+	// "Weekly full report — everything currently open" heading), so neither
+	// case repeats itself here. It also never names a specific destination
+	// (a previous thread, a weekly digest): this pure function has no way to
+	// know whether either actually exists for this deployment, and guessing
+	// wrong would repeat the very mistake the generic-webhook guidance
+	// elsewhere in this file was fixed to avoid.
+	if !fullReport && d.HasChanges() {
+		writeRoleLine(&b, "Changes since the last scan.")
+	}
 	// Before the "No changes" early return: a Sensor/eBPF warning must reach
 	// every diff-mode message, changed or not.
 	writeRuntimeWarning(&b, r, r.GeneratedAt)
@@ -147,6 +181,7 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holdin
 		b.WriteString("\nNo changes since last scan.\n")
 		writeScanErrors(&b, r.ScanErrors, byRef)
 		writeAnyOpenNow(&b, r, d, holding)
+		writeAcceptedCount(&b, r)
 		// A clean, unresolved (reference-fallback) image must not go
 		// unmentioned just because it has no changes/findings to report —
 		// silence here would read as "confirmed clean".
@@ -183,6 +218,7 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holdin
 	} else {
 		writeScanErrors(&b, r.ScanErrors, byRef)
 		writeAnyOpenNow(&b, r, d, holding)
+		writeAcceptedCount(&b, r)
 		writeUnresolvedRefs(&b, r)
 	}
 	return b.String()
@@ -376,21 +412,56 @@ func writeAnyOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding
 	writeOpenNow(b, r, d, holding)
 }
 
+// visibleChange pairs a state.Change with the subset of its Groups notify
+// actually renders a row for.
+type visibleChange struct {
+	change state.Change
+	groups []analyze.PackageGroup
+}
+
+// visibleChanges filters changes down to the ones with at least one
+// non-Accepted group, and each one's Groups down to that subset: Compute
+// never drops an accepted key's Change from the diff (the generic webhook
+// needs the full record, and Kind/priority are never touched by
+// acceptance), so notify is where the row itself is hidden instead — the
+// same policy filterAccepted already applies to the status-section views.
+// analyze.ApplyAcceptance only ever marks every group of a key Accepted
+// together, so in practice a Change's Groups are either all Accepted or
+// none are; filtering per group here is just the defensive form of that. A
+// Change left with no visible groups at all is dropped entirely: no image
+// heading line, and no count in the header above it. Order is preserved.
+func visibleChanges(changes []state.Change) []visibleChange {
+	var out []visibleChange
+	for _, c := range changes {
+		var groups []analyze.PackageGroup
+		for _, g := range c.Groups {
+			if !g.Accepted {
+				groups = append(groups, g)
+			}
+		}
+		if len(groups) > 0 {
+			out = append(out, visibleChange{change: c, groups: groups})
+		}
+	}
+	return out
+}
+
 // writeChanges renders the new/changed findings grouped per image, in report
 // priority order, each package line in full detail.
 func writeChanges(b *strings.Builder, r analyze.Report, changes []state.Change, byRef map[string]analyze.ImageObservation) {
-	if len(changes) == 0 {
+	visible := visibleChanges(changes)
+	if len(visible) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*🆕 New since last scan (%d)*\n", len(changes))
+	fmt.Fprintf(b, "\n*🆕 New since last scan (%d)*\n", len(visible))
 	lastImage := ""
-	for _, c := range changes {
-		if c.Image != lastImage {
-			fmt.Fprintf(b, "%s %s\n", changesEmoji(c), refLabel(c.Image, byRef))
-			lastImage = c.Image
+	for _, vc := range visible {
+		if vc.change.Image != lastImage {
+			fmt.Fprintf(b, "%s %s\n", groupsEmoji(vc.groups), refLabel(vc.change.Image, byRef))
+			lastImage = vc.change.Image
 		}
-		for _, g := range c.Groups {
-			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, c, g)+runtimeWatchSuffix(g.Runtime))
+		for _, g := range vc.groups {
+			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, vc.change, g)+runtimeWatchSuffix(g.Runtime))
 		}
 	}
 }
@@ -426,6 +497,13 @@ func changeSuffixParts(r analyze.Report, c state.Change, g analyze.PackageGroup)
 		parts = append(parts, "⬆️ escalated to "+priorityLabel(analyze.MaxPriority(c.Groups)))
 	case state.KindNowFixable:
 		parts = append(parts, "fix now available")
+	case state.KindAcceptanceLost:
+		// Acceptance is decided for the whole (image, package) key at once
+		// (analyze.ApplyAcceptance), so every group on record for the key
+		// shares the same story — the reason is read from all of them,
+		// ordinary and end-of-life alike (changeReasonGroups), not from g
+		// alone.
+		parts = append(parts, "↩️ No longer accepted ("+acceptanceLostReason(changeReasonGroups(c))+")")
 	}
 	return parts
 }
@@ -490,10 +568,6 @@ func compactEvidence(r analyze.Report, v analyze.VulnRef) string {
 		return shortEvidence(r, v)
 	}
 	return vulnIDLink(v.ID) + " " + string(v.Severity)
-}
-
-func changesEmoji(c state.Change) string {
-	return groupsEmoji(c.Groups)
 }
 
 // groupsEmoji is the severity marker of a set of package groups.
@@ -616,7 +690,14 @@ func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bo
 			fmt.Fprintf(b, " — oldest unresolved %d day(s)", days)
 		}
 	}
-	b.WriteString("\n_Details in the generic webhook payload, or in the weekly full report._\n")
+	b.WriteString("\n")
+	// The generic webhook is the only destination with per-package detail
+	// beyond this count-only heartbeat, and only when one is actually
+	// configured — a weekly full report never carries more than this same
+	// heartbeat's own detail level either.
+	if r.GenericWebhookConfigured {
+		b.WriteString("_Details in the generic webhook payload._\n")
+	}
 }
 
 func writeScanErrors(b *strings.Builder, errs []analyze.ScanError, byRef map[string]analyze.ImageObservation) {
@@ -640,9 +721,18 @@ type priority struct {
 // collapsed.
 func summarize(r analyze.Report) priority {
 	p := priority{eol: len(r.EOSLImages), eolPackages: analyze.GroupCount(r.EOLPackageAlerts())}
+	// Summed per group, skipping Accepted ones, so this total agrees with the
+	// per-image counts the body actually shows (writeSection/writeActionable
+	// already hide an accepted group's row and, with it, its CVEs).
+	// Mathematically identical to summing img.CriticalCount() whenever
+	// nothing is accepted.
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
-			p.critical += img.CriticalCount()
+			for _, g := range img.Packages {
+				if !g.Accepted {
+					p.critical += g.Critical
+				}
+			}
 		}
 	}
 	for _, img := range r.Actionable {
@@ -857,6 +947,11 @@ type runtimeCountsPayload struct {
 	InUse       int `json:"in_use"`
 	NotObserved int `json:"not_observed"`
 	Unavailable int `json:"unavailable"`
+	// Accepted overlaps NotObserved by construction (analyze.ApplyAcceptance
+	// only ever accepts a not-observed group) rather than being mutually
+	// exclusive with it. Always 0 when runtime.accept_unfixable_not_in_use
+	// is off.
+	Accepted int `json:"accepted"`
 }
 
 // environmentPayload mirrors inventory.Environment. Kind is always present —
@@ -947,6 +1042,15 @@ type changePayload struct {
 	// (omitted) when runtime.enabled is false, i.e. none of the merged
 	// groups ever had AttachRuntime judge them.
 	RuntimeUsage string `json:"runtime_usage,omitempty"`
+
+	// Accepted is true when every analyze.PackageGroup this change merged is
+	// Accepted under runtime.accept_unfixable_not_in_use — the webhook's
+	// counterpart to notify hiding this change's row entirely in Slack.
+	// analyze.ApplyAcceptance only ever marks every group of a key Accepted
+	// together (a fixed or otherwise-ineligible sibling group blocks the
+	// whole key), so in practice this is never true for only some of a
+	// change's groups.
+	Accepted bool `json:"accepted,omitempty"`
 }
 
 type resolvedPayload struct {
@@ -1043,7 +1147,8 @@ type findingPayload struct {
 	Runtime *findingRuntimePayload `json:"runtime,omitempty"`
 }
 
-// findingRuntimePayload mirrors analyze.Runtime.
+// findingRuntimePayload mirrors analyze.Runtime, plus the PackageGroup-level
+// Accepted verdict it travels alongside.
 type findingRuntimePayload struct {
 	Usage          string                           `json:"usage"`
 	Reason         string                           `json:"reason,omitempty"`
@@ -1052,6 +1157,12 @@ type findingRuntimePayload struct {
 	Exposure       string                           `json:"exposure,omitempty"`
 	HighPrivilege  bool                             `json:"high_privilege,omitempty"`
 	Containers     []findingRuntimeContainerPayload `json:"containers,omitempty"`
+	// Accepted and AcceptedReason mirror analyze.PackageGroup.Accepted/
+	// AcceptedReason: true only under runtime.accept_unfixable_not_in_use.
+	// The generic webhook always carries the finding either way — this is a
+	// marker, never an omission.
+	Accepted       bool   `json:"accepted,omitempty"`
+	AcceptedReason string `json:"accepted_reason,omitempty"`
 }
 
 // findingRuntimeContainerPayload mirrors analyze.ContainerRuntime.
@@ -1173,7 +1284,7 @@ func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
 // r.Runtime. Only called when r.Runtime != nil.
 func runtimePayloadOf(r analyze.Report) *runtimePayload {
 	rt := r.Runtime
-	inUse, notObserved, unavailable := runtimeCounts(r)
+	inUse, notObserved, unavailable, accepted := runtimeCounts(r)
 	return &runtimePayload{
 		SensorStatus:    runtimeDisplayStatus(rt, r.GeneratedAt),
 		HeartbeatAt:     formatTimeOrEmpty(rt.Sensor.HeartbeatAt),
@@ -1185,7 +1296,7 @@ func runtimePayloadOf(r analyze.Report) *runtimePayload {
 		},
 		EventsStatus: string(rt.Sensor.Events.Status),
 		EventsReason: string(rt.Sensor.Events.Reason),
-		Counts:       runtimeCountsPayload{InUse: inUse, NotObserved: notObserved, Unavailable: unavailable},
+		Counts:       runtimeCountsPayload{InUse: inUse, NotObserved: notObserved, Unavailable: unavailable, Accepted: accepted},
 	}
 }
 
@@ -1227,9 +1338,13 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			Priority:     string(analyze.MaxPriority(c.Groups)),
 			Ecosystems:   ecosystemsOf(c.Groups),
 			RuntimeUsage: runtimeUsageOf(c.Groups),
+			Accepted:     allAccepted(c.Groups),
 		}
-		if c.Kind == state.KindEscalated {
+		switch c.Kind {
+		case state.KindEscalated:
 			cp.Reason = changeEvidence(r, c)
+		case state.KindAcceptanceLost:
+			cp.Reason = acceptanceLostReason(changeReasonGroups(c))
 		}
 		dp.New = append(dp.New, cp)
 	}
@@ -1338,7 +1453,7 @@ func imagePayloads(imgs []analyze.ImageFindings, byRef map[string]analyze.ImageO
 				Vulns:          vulns,
 				Class:          string(g.Class),
 				Ecosystem:      string(g.Ecosystem),
-				Runtime:        runtimeFindingPayload(g.Runtime),
+				Runtime:        runtimeFindingPayload(g),
 			})
 		}
 		// scan_target_kind and identity_resolved are both entity-level (this

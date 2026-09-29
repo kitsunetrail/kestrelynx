@@ -21,7 +21,8 @@ import (
 const threadMsgLimit = 2900
 
 // alsoIDsMax caps how many secondary CVE ids are listed per package before
-// falling back to a count (the full list is always in the webhook payload).
+// falling back to a count (the full list is in the generic webhook payload,
+// when one is configured).
 const alsoIDsMax = 8
 
 // threadSection is one titled chunk of the report. Blocks are the preferred
@@ -60,7 +61,7 @@ func BuildThreadMessages(r analyze.Report, ages Ages, limit int) []string {
 	if limit <= 0 {
 		limit = threadMsgLimit
 	}
-	title := fmt.Sprintf("📊 *Full report — %s*", r.GeneratedAt.Format(timeLayout))
+	title := fmt.Sprintf("📊 *Everything open now — %s*", r.GeneratedAt.Format(timeLayout))
 	byRef := imagesByRef(r)
 
 	var secs []threadSection
@@ -79,6 +80,9 @@ func BuildThreadMessages(r analyze.Report, ages Ages, limit int) []string {
 	} else {
 		secs = append(secs, statusThreadSections(r, byRef, ages)...)
 	}
+	if n := acceptedCount(r); n > 0 {
+		secs = append(secs, threadSection{blocks: []string{"\n" + fmt.Sprintf(acceptedLineText, n)}})
+	}
 	// Same cross-cutting "identity unconfirmed" summary as the Slack messages,
 	// wired into the thread report too.
 	if line := unresolvedRefsLine(r); line != "" {
@@ -91,6 +95,10 @@ func BuildThreadMessages(r analyze.Report, ages Ages, limit int) []string {
 // detail, low as a count-only line.
 func triageThreadSections(r analyze.Report, byRef map[string]analyze.ImageObservation, ages Ages) []threadSection {
 	pv := r.ByPriority()
+	// ActNow is never filtered: a group eligible for acceptance is never
+	// act_now by construction.
+	pv.Watch = filterAccepted(pv.Watch)
+	pv.Low = filterAccepted(pv.Low)
 	var secs []threadSection
 	if n := analyze.GroupCount(pv.ActNow); n > 0 {
 		secs = append(secs, threadBucket(r, byRef, fmt.Sprintf("*🚨 ACT NOW (%d) — exploited or likely to be*", n), pv.ActNow, ages))
@@ -99,7 +107,15 @@ func triageThreadSections(r analyze.Report, byRef map[string]analyze.ImageObserv
 		secs = append(secs, threadBucket(r, byRef, fmt.Sprintf("*👀 WATCH (%d) — not urgent, keep an eye on*", n), pv.Watch, ages))
 	}
 	if n := analyze.GroupCount(pv.Low); n > 0 {
-		low := fmt.Sprintf("\n*🔕 LOW (%d)* — no exploitation signal; details in the weekly full report or the webhook payload\n", n)
+		low := fmt.Sprintf("\n*🔕 LOW (%d)* — no exploitation signal", n)
+		// The generic webhook is the only destination with per-package
+		// detail beyond this count, and only when one is actually
+		// configured — a weekly full report shows this same count-only
+		// line, never more.
+		if r.GenericWebhookConfigured {
+			low += "; details in the generic webhook payload"
+		}
+		low += "\n"
 		if inUse := countInUse(pv.Low); inUse > 0 {
 			low += fmt.Sprintf("▶ in use among low: %d\n", inUse)
 		}
@@ -116,13 +132,15 @@ func statusThreadSections(r analyze.Report, byRef map[string]analyze.ImageObserv
 	}
 	var secs []threadSection
 	if len(r.Actionable) > 0 {
+		// Never filtered: only affected/will_not_fix findings are ever
+		// eligible for acceptance.
 		secs = append(secs, section("✅ Actionable now (fixed)", r.Actionable))
 	}
-	if len(r.Watch) > 0 {
-		secs = append(secs, section("ℹ️ No fix yet (affected / waiting on upstream)", r.Watch))
+	if watch := filterAccepted(r.Watch); len(watch) > 0 {
+		secs = append(secs, section("ℹ️ No fix yet (affected / waiting on upstream)", watch))
 	}
-	if len(r.WontFix) > 0 {
-		secs = append(secs, section("🔕 Upstream won't fix (will_not_fix)", r.WontFix))
+	if wontFix := filterAccepted(r.WontFix); len(wontFix) > 0 {
+		secs = append(secs, section("🔕 Upstream won't fix (will_not_fix)", wontFix))
 	}
 	return secs
 }

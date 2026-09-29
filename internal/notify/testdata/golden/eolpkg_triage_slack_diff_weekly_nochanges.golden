@@ -30,4 +30,3 @@
    • curl 7.61.1-34 (no fix available) (CRITICAL 0 / HIGH 2) — <https://nvd.nist.gov/vuln/detail/CVE-2033-0011|CVE-2033-0011> · EPSS 2%
 
 *🔕 Low priority (1)* — 1 finding(s) across 1 image(s), no exploitation signal (not in KEV, EPSS below threshold).
-_Details in the generic webhook payload or the weekly full report._

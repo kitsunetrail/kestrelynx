@@ -130,6 +130,14 @@ type RuntimeConfig struct {
 	// through a mounted volume, never a relative path meaningful to just one
 	// of the two containers.
 	EvidenceDir string
+	// AcceptUnfixableNotInUse hides (from Slack rows only — the generic
+	// webhook always keeps everything) a package finding with no fix coming
+	// (affected or will_not_fix) that nothing has used for at least 7 days
+	// of Sensor observation and that isn't act_now, replacing it with a
+	// single count. Meaningful only when Enabled is also true; false is
+	// simply inert otherwise (no runtime verdict exists to judge against),
+	// not a configuration error.
+	AcceptUnfixableNotInUse bool
 }
 
 // rawConfig mirrors the YAML shape. Pointers are used where "absent" must be
@@ -182,8 +190,9 @@ type rawConfig struct {
 		Name string `yaml:"name"`
 	} `yaml:"environment"`
 	Runtime struct {
-		Enabled     *bool  `yaml:"enabled"`
-		EvidenceDir string `yaml:"evidence_dir"`
+		Enabled                 *bool  `yaml:"enabled"`
+		EvidenceDir             string `yaml:"evidence_dir"`
+		AcceptUnfixableNotInUse *bool  `yaml:"accept_unfixable_not_in_use"`
 	} `yaml:"runtime"`
 }
 
@@ -257,8 +266,9 @@ func Parse(data []byte) (Config, error) {
 		},
 		Environment: EnvironmentConfig{Name: raw.Environment.Name},
 		Runtime: RuntimeConfig{
-			Enabled:     boolOr(raw.Runtime.Enabled, false),
-			EvidenceDir: raw.Runtime.EvidenceDir,
+			Enabled:                 boolOr(raw.Runtime.Enabled, false),
+			EvidenceDir:             raw.Runtime.EvidenceDir,
+			AcceptUnfixableNotInUse: boolOr(raw.Runtime.AcceptUnfixableNotInUse, false),
 		},
 	}
 

@@ -1,5 +1,6 @@
 🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
 2 images scanned, 2 affected
+_Changes since the last scan._
 
 *🆕 New since last scan (4)*
 🔴 web:1.0
@@ -12,4 +13,3 @@
    • leftpad 1.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [node-pkg] — <https://nvd.nist.gov/vuln/detail/CVE-LEFTPAD|CVE-LEFTPAD> HIGH
 
 📌 Open now: CRITICAL 1 / HIGH 3 across 2 image(s)
-_Details in the generic webhook payload, or in the weekly full report._

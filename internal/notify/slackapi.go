@@ -1,8 +1,8 @@
 // Slack Web API delivery. An incoming
 // webhook cannot thread: it never returns the posted message's ts and cannot
 // reply to one. The bot-token path can — posting returns ts, replies target
-// it as thread_ts, and chat.getPermalink turns it into the "Last full report"
-// link shown on the days the thread is skipped.
+// it as thread_ts, and chat.getPermalink turns it into the "everything open
+// as of the last report" link shown on the days the thread is skipped.
 package notify
 
 import (
@@ -59,9 +59,9 @@ func (n SlackAPINotifier) Send(ctx context.Context, m Message) error {
 
 	text := summaryText(m)
 	if len(thread) > 0 {
-		text += "\n_📊 Full report in this message's thread ↓_\n"
+		text += "\n_📊 Everything open now is in this message's thread ↓_\n"
 	} else if m.LastReport.ValidFor(n.Channel) {
-		text += fmt.Sprintf("\n🔗 Last full report → <%s|thread>\n", m.LastReport.Permalink)
+		text += fmt.Sprintf("\n🔗 Everything open as of the last report → <%s|thread>\n", m.LastReport.Permalink)
 	}
 
 	ts, err := n.postMessage(ctx, text, "")

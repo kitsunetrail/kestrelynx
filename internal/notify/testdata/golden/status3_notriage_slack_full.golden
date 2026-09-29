@@ -1,5 +1,6 @@
 🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
 3 images scanned, 2 affected
+_Everything currently open._
 *Priority:* 🔴 3 CRITICAL · 🟠 1 need care · 🟢 1 safe
 
 *✅ Actionable now (fixed)*
@@ -27,4 +28,4 @@
 
 ⚠️ identity unconfirmed: scanned by reference — broken:1
 
-_1 lower-risk fix(es) summarized — full list in the generic webhook payload._
+_1 lower-risk fix(es) summarized._

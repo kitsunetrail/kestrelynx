@@ -26,7 +26,7 @@ func TestBuildThreadMessages_TriageLayout(t *testing.T) {
 	out := msgs[0]
 
 	mustContain := []string{
-		"📊 *Full report — 2026-06-24 09:00*",
+		"📊 *Everything open now — 2026-06-24 09:00*",
 		"*⛔ EOL base images (1)*",
 		"*🚨 ACT NOW (1) — exploited or likely to be*",
 		"• web:1.0", // image lines are plain bullets in triage mode
@@ -43,7 +43,7 @@ func TestBuildThreadMessages_TriageLayout(t *testing.T) {
 			t.Errorf("thread missing %q\n---\n%s", s, out)
 		}
 	}
-	// Low priority is a count, never a listing (spec §2).
+	// Low priority is a count, never a listing.
 	if strings.Contains(out, "dpkg 1.19.7") {
 		t.Errorf("low-priority package must not be expanded:\n%s", out)
 	}

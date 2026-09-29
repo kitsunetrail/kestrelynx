@@ -1,5 +1,6 @@
 🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
 2 images scanned, 2 affected
+_Changes since the last scan._
 
 *🆕 New since last scan (5)*
 🚨 web:1.0
@@ -17,4 +18,3 @@
    • libfoo 1.0.0 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-LIBFOO|CVE-LIBFOO> · EPSS 0.1%
 
 📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 2 low
-_Details in the generic webhook payload, or in the weekly full report._

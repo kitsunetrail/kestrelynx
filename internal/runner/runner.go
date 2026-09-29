@@ -106,6 +106,18 @@ type Runner struct {
 	// GenerationInspect.BootTime). nil uses hostBootTime (reads
 	// /proc/stat's "btime" line); only ever called when Evidence is set.
 	BootTime func() (time.Time, error)
+	// AcceptUnfixableNotInUse enables runtime.accept_unfixable_not_in_use:
+	// once true, analyze.ApplyAcceptance runs right after AttachRuntime every
+	// cycle (only reached at all when Evidence is set), so a group's
+	// Accepted always reflects this cycle's own status/priority/runtime
+	// verdict, never a value carried over from before.
+	AcceptUnfixableNotInUse bool
+	// GenericWebhookConfigured mirrors config.NotifyConfig.GenericWebhookURL
+	// != "", stamped onto every Report (RunOnce) the same way Environment is:
+	// notify has no other way to know whether the generic webhook guidance
+	// it shows in place of a hidden low-priority/accepted row is actually
+	// true for this deployment.
+	GenericWebhookConfigured bool
 }
 
 // NoFullReport disables the weekly full report in diff mode.
@@ -151,8 +163,12 @@ func (r Runner) RunOnce(ctx context.Context) error {
 
 	report := analyze.Build(scans, containers, r.triage(ctx, scans), r.now())
 	report.Environment = r.Environment
+	report.GenericWebhookConfigured = r.GenericWebhookConfigured
 	if r.Evidence != nil {
 		r.attachRuntime(ctx, &report, containers)
+		if r.AcceptUnfixableNotInUse {
+			analyze.ApplyAcceptance(&report, r.now())
+		}
 	}
 	if r.Store == nil {
 		return r.sendFull(ctx, report)

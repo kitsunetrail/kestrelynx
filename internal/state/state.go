@@ -1,7 +1,7 @@
 // Package state persists per-finding first-seen timestamps between scan cycles
-// and computes the cycle-over-cycle diff that drives diff-mode notifications
-// (docs/NOTIFICATION_SPEC.md §7). Repeating an identical report every day trains
-// the reader to ignore it; the diff surfaces what changed and ages what didn't.
+// and computes the cycle-over-cycle diff that drives diff-mode notifications.
+// Repeating an identical report every day trains the reader to ignore it; the
+// diff surfaces what changed and ages what didn't.
 package state
 
 import (
@@ -25,13 +25,13 @@ const version = 1
 // Entry is the persisted memory of one finding (one package within one image,
 // across all Trivy statuses).
 //
-// Priority was added for Phase 1+ (docs/TRIAGE_SPEC.md §5.3) without a version
-// bump: state written before the upgrade simply decodes with an empty
-// Priority, which suppresses escalation detection for one cycle instead of
-// re-announcing every known finding as new.
+// Priority was added later, for triage, without a version bump: state
+// written before that addition simply decodes with an empty Priority, which
+// suppresses escalation detection for one cycle instead of re-announcing
+// every known finding as new.
 //
-// ContentID was added for the Phase 2 identity model without a version
-// bump, for the same reason: it is the single verified entity confirmed
+// ContentID was added later, for a content-digest identity model, without a
+// version bump, for the same reason: it is the single verified entity confirmed
 // running under the entry's reference as of this cycle. It is left empty
 // whenever that isn't a safe claim to make this cycle — the reference is
 // Ambiguous (more than one distinct entity) or partially failed to scan (a
@@ -89,9 +89,10 @@ type EnvironmentRecord struct {
 // bump: older state decodes with a nil ref, which simply forces one fresh
 // full-report post.
 //
-// Images was added for the Phase 2 identity model without a version bump:
-// older state decodes with a nil map, and the first cycle on the new binary
-// simply records the current identity information as a fresh baseline.
+// Images was added later, for a content-digest identity model, without a
+// version bump: older state decodes with a nil map, and the first cycle on
+// the new binary simply records the current identity information as a fresh
+// baseline.
 //
 // Environment was added for the Environment/Workload model without a
 // version bump, for the same reason as Images: older state decodes with a
@@ -108,6 +109,20 @@ type State struct {
 	EOLPackages    map[string]EOLEntry  `json:"eol_packages,omitempty"` // keyed by image \t package, like Findings
 	Images         map[string]ImageMeta `json:"images,omitempty"`       // keyed by reference
 	LastFullReport *ReportRef           `json:"last_full_report,omitempty"`
+	// Accepted is the set of (image, package) keys currently accepted under
+	// runtime.accept_unfixable_not_in_use, added without a version bump the
+	// same way EOLPackages was: older state decodes with a nil map, and the
+	// first cycle on a binary with the setting on simply starts recording it
+	// fresh. The unit is the whole key, never a single PackageGroup within
+	// it: analyze.ApplyAcceptance only ever marks every group of a key
+	// Accepted when every one of them qualifies (a fixed or end-of-life
+	// sibling, or any other disqualified group under the same key, blocks
+	// the whole key), so "was this key accepted last cycle" is a single,
+	// unambiguous fact. Acceptance itself is judged fresh every cycle from
+	// the current groups' own Runtime/Status/Priority — this map exists only
+	// so Compute can notice a key that was accepted last cycle no longer
+	// being accepted this cycle, the transition KindAcceptanceLost reports.
+	Accepted map[string]bool `json:"accepted,omitempty"`
 	// Environment records which environment this file belongs to, for
 	// self-description and diagnostics only. It is nil for the unnamed
 	// default environment (FileStore.Env.Name == "") so that an unconfigured
@@ -141,6 +156,7 @@ func empty() State {
 		EOSL:        map[string]time.Time{},
 		EOLPackages: map[string]EOLEntry{},
 		Images:      map[string]ImageMeta{},
+		Accepted:    map[string]bool{},
 	}
 }
 
@@ -237,6 +253,9 @@ func (s FileStore) Load() (State, error) {
 	if st.Images == nil {
 		st.Images = map[string]ImageMeta{}
 	}
+	if st.Accepted == nil {
+		st.Accepted = map[string]bool{}
+	}
 	return st, nil
 }
 
@@ -277,6 +296,14 @@ const (
 	KindEscalated  ChangeKind = "escalated"   // known package's priority rose (e.g. a CVE entered KEV)
 	KindNewCVEs    ChangeKind = "new_cves"    // known package gained CVEs
 	KindNowFixable ChangeKind = "now_fixable" // known package's fix became available
+	// KindAcceptanceLost marks a package that was accepted under
+	// runtime.accept_unfixable_not_in_use last cycle and no longer is this
+	// cycle, for a reason no other Kind above already covers (it became
+	// in use, or its observation window reset) — Compute only ever assigns
+	// this when none of the other four Kinds fired, so a fallout that also
+	// happens to be, say, now_fixable is reported as now_fixable instead of
+	// duplicating the story.
+	KindAcceptanceLost ChangeKind = "acceptance_lost"
 )
 
 // Change is one finding that is new or changed since the previous scan. Groups
@@ -289,6 +316,15 @@ type Change struct {
 	NewCVEs int      // for KindNewCVEs: how many CVE IDs are new (len(NewIDs); kept for webhook compatibility)
 	NewIDs  []string // for KindNewCVEs: the new CVE IDs themselves, sorted (same order as analyze.PackageGroup.VulnIDs)
 	Groups  []analyze.PackageGroup
+	// EOLGroups is this key's end-of-life groups this cycle (Report.
+	// EOLPackages), kept apart from Groups because end-of-life lives in its
+	// own Report section and its own mergeSections pass, never merged into
+	// the three ordinary ones. It exists so a KindAcceptanceLost transition
+	// caused by the package additionally becoming end-of-life — Fixable,
+	// VulnIDs and Priority on the ordinary side can all stay exactly the
+	// same — has somewhere to point notify's reason text at; nil whenever
+	// the key has no end-of-life groups this cycle.
+	EOLGroups []analyze.PackageGroup
 }
 
 // Resolved is a finding present in the previous scan but gone now: fixed,
@@ -468,6 +504,16 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 	// Report order: sections are already priority-sorted.
 	cur, order := mergeSections(r.Actionable, r.Watch, r.WontFix)
 	curEOL, eolOrder := mergeSections(r.EOLPackages)
+	// heldKey marks every key whose stored Findings entry this cycle carries
+	// (fully or partially) a held contribution rather than a fresh judgment
+	// — set both by the main loop below (partial failure with a live
+	// sibling) and by the full/partial carry-over loop further down (no
+	// live sibling at all). The "open now" heartbeat and OldestUrgent must
+	// never exclude a held key's contribution just because its Accepted flag
+	// happens to still read true from before: that flag was carried over
+	// unchanged, not re-judged, so a held act_now can never quietly
+	// disappear from the count.
+	heldKey := map[string]bool{}
 
 	for _, k := range order {
 		ref := keyImage(k)
@@ -516,10 +562,15 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		}
 
 		change := Change{Image: ref, Package: keyPackage(k), Groups: c.groups}
+		if eolC := curEOL[k]; eolC != nil {
+			change.EOLGroups = eolC.groups
+		}
 		added := newIDs(ids, baseIDs)
+
+		var kind ChangeKind
 		switch {
 		case !known:
-			change.Kind = KindNew
+			kind = KindNew
 		// Escalation outranks the other kinds: "this got urgent" is the news,
 		// whatever caused it. An empty stored priority (state written before
 		// the triage upgrade, or triage previously off) never escalates —
@@ -528,15 +579,58 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		// announcing that en masse would turn a feed outage into a false alarm
 		// storm (the header warning carries the news instead).
 		case !r.Intel.Degraded() && basePrio != analyze.PriorityNone && prio.Rank() > basePrio.Rank():
-			change.Kind = KindEscalated
+			kind = KindEscalated
 		case len(added) > 0:
-			change.Kind = KindNewCVEs
-			change.NewIDs = added
-			change.NewCVEs = len(added)
+			kind = KindNewCVEs
 		case c.fixable && !prevE.Fixable:
-			change.Kind = KindNowFixable
+			kind = KindNowFixable
+		}
+
+		// Acceptance never removes a Change from the diff — the generic
+		// webhook needs the full record, and even an accepted key's row is
+		// only ever hidden by notify's rendering, not by Compute. What
+		// acceptance does affect: whether this key is recorded into
+		// State.Accepted, and whether it just lost that status.
+		//
+		// held is true exactly when this key's stored Priority/Fixable/
+		// VulnIDs above were merged with (rather than freshly replacing)
+		// last cycle's record — a scan failure is never evidence that a
+		// finding stopped being accepted, so the key's accepted flag is
+		// carried over unchanged in that case, the same as every other held
+		// field on this Entry, and no acceptance_lost notice can fire from
+		// data this cycle never actually re-judged.
+		held := partiallyFailedRef[ref] && knownE
+		if held {
+			heldKey[k] = true
+		}
+		wasAccepted := prev.Accepted[k]
+		acceptedNow := wasAccepted
+		if !held {
+			acceptedNow = allAccepted(c.groups)
+		}
+		if acceptedNow {
+			next.Accepted[k] = true
+		}
+		lostAcceptance := wasAccepted && !held && !acceptedNow
+
+		switch {
+		case kind != "":
+			change.Kind = kind
+		case lostAcceptance:
+			// No ordinary Kind fired (same CVEs, same fix status, same
+			// priority), so this is the only news: the key no longer
+			// qualifies for acceptance — some group under it is now in use,
+			// act_now, fixed, or otherwise no longer eligible. A fallout
+			// that also happens to be, say, now_fixable took the case above
+			// instead, reusing that more specific label rather than
+			// duplicating it.
+			change.Kind = KindAcceptanceLost
 		default:
 			continue // unchanged
+		}
+		if change.Kind == KindNewCVEs {
+			change.NewIDs = added
+			change.NewCVEs = len(added)
 		}
 		d.Changes = append(d.Changes, change)
 	}
@@ -552,6 +646,8 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			// it was, ContentID included — there is no sibling entity whose
 			// success could make a stale ContentID misleading here.
 			next.Findings[k] = e
+			carryAccepted(next.Accepted, prev.Accepted, k)
+			heldKey[k] = true
 			continue
 		case partiallyFailedRef[ref]:
 			// This finding belonged to the one entity that failed to scan
@@ -564,6 +660,8 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			// findings.
 			e.ContentID = ""
 			next.Findings[k] = e
+			carryAccepted(next.Accepted, prev.Accepted, k)
+			heldKey[k] = true
 			continue
 		case curEOL[k] != nil:
 			// Every CVE left for end-of-life: the package is not resolved,
@@ -642,19 +740,31 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 	// Priority buckets count each (image, package) once: act_now on either
 	// side wins; otherwise the ordinary side's priority counts. An
 	// end-of-life record's watch/low is represented by the end-of-life
-	// segment (OpenEOLPackages) alone, so it never adds a second bucket.
+	// segment (OpenEOLPackages) alone, so it never adds a second bucket. A
+	// key excluded here (next.Accepted[k] true and not heldKey) never
+	// contributes its own bucket or ages the "oldest urgent" heartbeat —
+	// that heartbeat exists to nag about work still needing a decision, and
+	// an accepted key is exactly the opposite of that by construction (never
+	// act_now, so eolActNow alone can still count it here, unaffected). A
+	// heldKey key is never excluded even if its Accepted flag still reads
+	// true, since that flag was carried over unchanged rather than
+	// re-judged this cycle — a held act_now can never disappear from this
+	// count just because its accepted flag happens to predate the failure.
+	// OldestOpen is deliberately left unfiltered: it also backs the generic
+	// webhook's oldest_open_days, which stays a raw, unabridged figure.
 	for k, e := range next.Findings {
+		accepted := next.Accepted[k] && !heldKey[k]
 		older(&d.OldestOpen, e.FirstSeen)
-		if urgent(e.Priority) {
+		if urgent(e.Priority) && !accepted {
 			older(&d.OldestUrgent, e.FirstSeen)
 		}
 		eolActNow := analyze.Priority(next.EOLPackages[k].Priority) == analyze.PriorityActNow
 		switch {
-		case analyze.Priority(e.Priority) == analyze.PriorityActNow || eolActNow:
+		case (analyze.Priority(e.Priority) == analyze.PriorityActNow && !accepted) || eolActNow:
 			d.OpenActNow++
-		case analyze.Priority(e.Priority) == analyze.PriorityWatch:
+		case analyze.Priority(e.Priority) == analyze.PriorityWatch && !accepted:
 			d.OpenWatch++
-		case analyze.Priority(e.Priority) == analyze.PriorityLow:
+		case analyze.Priority(e.Priority) == analyze.PriorityLow && !accepted:
 			d.OpenLow++
 		}
 	}
@@ -678,10 +788,20 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		older(&d.OldestUrgent, t)
 	}
 	d.AnyOpen = len(next.Findings) > 0 || len(next.EOLPackages) > 0 || len(next.EOSL) > 0
+	// Summed per group rather than via img.CriticalCount()/TotalCount() so an
+	// accepted group's CVEs can be left out — otherwise the triage-off
+	// heartbeat's CRITICAL/HIGH total would count vulnerabilities from rows
+	// the body never shows. Mathematically identical to the whole-image sum
+	// whenever nothing is accepted.
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
-			d.OpenCritical += img.CriticalCount()
-			d.OpenHigh += img.TotalCount() - img.CriticalCount()
+			for _, g := range img.Packages {
+				if g.Accepted {
+					continue
+				}
+				d.OpenCritical += g.Critical
+				d.OpenHigh += g.High
+			}
 		}
 	}
 	return d, next
@@ -762,6 +882,39 @@ func computeEOL(prev, next State, curEOL map[string]*current, order []string, pa
 		changes = append(changes, change)
 	}
 	return changes
+}
+
+// carryAccepted preserves a key's accepted flag across a cycle where no
+// entity contributing to it was observed at all (full or partial reference
+// failure with no successful sibling for this specific package): a scan
+// failure is never evidence that a finding stopped being accepted, so the
+// same holding rule already applied to Findings/EOSL/EOLPackages applies
+// here too.
+func carryAccepted(next, prev map[string]bool, k string) {
+	if prev[k] {
+		next[k] = true
+	}
+}
+
+// allAccepted reports whether every one of groups is Accepted (analyze.
+// PackageGroup.Accepted). analyze.ApplyAcceptance only ever sets Accepted on
+// every group of a key when every one of them individually qualifies (a
+// fixed or end-of-life sibling, or any other disqualified group under the
+// same key, blocks the whole key — see its own doc comment), so this is
+// equivalent to asking whether the key itself, as observed this cycle, is
+// accepted. Always false when groups is empty, or when
+// runtime.accept_unfixable_not_in_use is off (Accepted is then always false
+// on every group).
+func allAccepted(groups []analyze.PackageGroup) bool {
+	if len(groups) == 0 {
+		return false
+	}
+	for _, g := range groups {
+		if !g.Accepted {
+			return false
+		}
+	}
+	return true
 }
 
 // sortedIDs returns the members of an ID set, sorted.

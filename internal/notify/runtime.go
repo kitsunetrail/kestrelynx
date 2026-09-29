@@ -18,6 +18,8 @@ import (
 	// in the package — importing the evidence package under its own name
 	// anywhere in notify would collide with it.
 	rtevidence "github.com/kitsunetrail/kestrelynx/internal/evidence"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 // runtimeTextMaxLen bounds a Sensor-evidence-derived string (an executable
@@ -458,12 +460,16 @@ func runtimeChangeSuffix(g analyze.PackageGroup) string {
 
 // runtimeCounts tallies every package group's Runtime.Usage across every
 // status section of r — the full-view summary line's "N in use / N not
-// observed / N unavailable". A group whose Runtime was never
-// attached (Usage == "") counts toward none of the three, which is what
-// keeps this a no-op tally when runtime is disabled (writeRuntimeSummary
-// never calls it in that case regardless, since it also gates on
-// r.Runtime == nil, but the tally itself is correct either way).
-func runtimeCounts(r analyze.Report) (inUse, notObserved, unavailable int) {
+// observed / N unavailable" — plus, separately, how many of those groups are
+// Accepted. A group whose Runtime was never attached (Usage == "") counts
+// toward none of the first three, which is what keeps this a no-op tally
+// when runtime is disabled (writeRuntimeSummary never calls it in that case
+// regardless, since it also gates on r.Runtime == nil, but the tally itself
+// is correct either way). accepted overlaps notObserved by construction
+// (analyze.ApplyAcceptance only ever accepts a not-observed group) rather
+// than being mutually exclusive with it — the same kind of overlap the
+// end-of-life/act-now segments already have elsewhere in this codebase.
+func runtimeCounts(r analyze.Report) (inUse, notObserved, unavailable, accepted int) {
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			for _, g := range img.Packages {
@@ -475,10 +481,155 @@ func runtimeCounts(r analyze.Report) (inUse, notObserved, unavailable int) {
 				case rtevidence.UsageUnavailable:
 					unavailable++
 				}
+				if g.Accepted {
+					accepted++
+				}
 			}
 		}
 	}
-	return inUse, notObserved, unavailable
+	return inUse, notObserved, unavailable, accepted
+}
+
+// acceptedCount tallies every Accepted PackageGroup in r — the single number
+// every rendering's "✅ Accepted" line shows in place of the rows it hides.
+// 0 whenever runtime.accept_unfixable_not_in_use is off, since
+// analyze.ApplyAcceptance then never runs and every group's Accepted stays
+// at its zero value.
+func acceptedCount(r analyze.Report) int {
+	_, _, _, accepted := runtimeCounts(r)
+	return accepted
+}
+
+// acceptedLine is the wording every Slack rendering (channel body, thread,
+// full view) shows in place of an accepted finding's own row.
+const acceptedLineText = "✅ Accepted — no fix available and not in use for 7+ days: %d\n"
+
+// writeAcceptedCount appends the accepted-findings summary line: the one
+// place an accepted finding's existence still shows once its own row has
+// been hidden. No-op when nothing is accepted this cycle.
+func writeAcceptedCount(b *strings.Builder, r analyze.Report) {
+	if n := acceptedCount(r); n > 0 {
+		fmt.Fprintf(b, "\n"+acceptedLineText, n)
+	}
+}
+
+// filterAccepted returns imgs with every Accepted PackageGroup removed, and
+// any image left with no packages dropped entirely. Every Slack rendering of
+// the open-findings view calls this before laying out rows — an accepted
+// finding's row is never shown there, only acceptedCount's tally represents
+// it. It never mutates its input: each ImageFindings is copied before its
+// Packages field is replaced. The generic webhook never calls this —
+// BuildWebhookPayload keeps every group, accepted or not.
+func filterAccepted(imgs []analyze.ImageFindings) []analyze.ImageFindings {
+	out := make([]analyze.ImageFindings, 0, len(imgs))
+	for _, img := range imgs {
+		var kept []analyze.PackageGroup
+		for _, g := range img.Packages {
+			if !g.Accepted {
+				kept = append(kept, g)
+			}
+		}
+		if len(kept) == 0 {
+			continue
+		}
+		img.Packages = kept
+		out = append(out, img)
+	}
+	return out
+}
+
+// allAccepted reports whether every one of groups is Accepted — used by the
+// generic webhook's diff.new[].accepted, the coarsest-possible summary of a
+// (image, package) change that can merge more than one PackageGroup. Always
+// false for an empty slice.
+func allAccepted(groups []analyze.PackageGroup) bool {
+	if len(groups) == 0 {
+		return false
+	}
+	for _, g := range groups {
+		if !g.Accepted {
+			return false
+		}
+	}
+	return true
+}
+
+// changeReasonGroups is every group state.Compute recorded for a change's
+// key this cycle, ordinary and end-of-life alike: end-of-life lives in its
+// own Report section (and its own mergeSections pass), never merged into
+// c.Groups, but it is exactly as disqualifying for acceptance as any
+// ordinary group — analyze.ApplyAcceptance already blocks a key's
+// acceptance over an end-of-life sibling — so acceptanceLostReason must see
+// it too, or it names the wrong fact for that exact transition. Both
+// notify's Slack rendering (changeSuffixParts) and BuildWebhookPayload
+// (buildDiffPayload) call this before calling acceptanceLostReason, so the
+// two destinations can never disagree on the reason shown for the same
+// change.
+func changeReasonGroups(c state.Change) []analyze.PackageGroup {
+	if len(c.EOLGroups) == 0 {
+		return c.Groups
+	}
+	out := make([]analyze.PackageGroup, 0, len(c.Groups)+len(c.EOLGroups))
+	out = append(out, c.Groups...)
+	out = append(out, c.EOLGroups...)
+	return out
+}
+
+// acceptanceLostReason names, for display and for the webhook's diff
+// reason, why a (image, package) key that was accepted under
+// runtime.accept_unfixable_not_in_use last cycle no longer is this cycle.
+// Acceptance is decided for the whole key at once (analyze.ApplyAcceptance
+// only ever marks every one of a key's groups Accepted together), so the
+// reason is read from every group currently on record for the key —
+// ordinary and end-of-life alike; callers pass changeReasonGroups(c), never
+// c.Groups alone — the first fact that applies, checked in this fixed
+// order: any group now in use, any group now act_now (only reachable when
+// degraded intel suppressed the escalated Kind that would ordinarily
+// announce it instead), any group now fixed (only reachable via the same
+// kind of suppression, or a sibling group's own transition —
+// state.Compute already prefers the more specific now_fixable/escalated
+// Kind whenever one fires on its own), any group now end-of-life (the base
+// OS or the package itself aging out from under an otherwise-unchanged
+// finding), any group whose runtime evidence is no longer trustworthy, and
+// any group whose canonical status is none of the above (defensive — every
+// status sectionOf produces is covered by one of the cases above it). The
+// fallback covers the group actually judged not-observed but too recently:
+// its own container generation reset (e.g. a redeploy) and hasn't yet run
+// long enough to qualify again.
+func acceptanceLostReason(groups []analyze.PackageGroup) string {
+	for _, g := range groups {
+		if g.Runtime.Usage == rtevidence.UsageInUse {
+			return "now in use"
+		}
+	}
+	for _, g := range groups {
+		if g.Priority == analyze.PriorityActNow {
+			return "act now"
+		}
+	}
+	for _, g := range groups {
+		if g.Status == scanner.StatusFixed {
+			return "fix available"
+		}
+	}
+	for _, g := range groups {
+		if g.Status == scanner.StatusEndOfLife {
+			return "now end-of-life"
+		}
+	}
+	for _, g := range groups {
+		if g.Runtime.Usage == rtevidence.UsageUnavailable {
+			return "insufficient observation"
+		}
+	}
+	for _, g := range groups {
+		switch g.Status {
+		case scanner.StatusAffected, scanner.StatusWontFix:
+		default:
+			return "not an eligible status"
+		}
+	}
+	return "insufficient observation"
 }
 
 // countInUse is runtimeCounts' first return value restricted to imgs (a
@@ -502,7 +653,7 @@ func writeRuntimeSummary(b *strings.Builder, r analyze.Report) {
 	if r.Runtime == nil {
 		return
 	}
-	inUse, notObserved, unavailable := runtimeCounts(r)
+	inUse, notObserved, unavailable, _ := runtimeCounts(r)
 	fmt.Fprintf(b, "\n🔎 Runtime: ▶ %d in use · %d not observed · %d unavailable\n", inUse, notObserved, unavailable)
 	b.WriteString("_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._\n")
 }
@@ -540,12 +691,14 @@ func evidenceKindStrings(kinds []rtevidence.EvidenceKind) []string {
 	return out
 }
 
-// runtimeFindingPayload converts one PackageGroup's Runtime to the webhook's
-// findings[].runtime object, or nil when it was never attached (Usage ==
-// "") — the omitempty on findingPayload.Runtime then drops the key entirely,
-// which is what keeps a disabled deployment's webhook payload identical to
-// one built before this field existed.
-func runtimeFindingPayload(rt analyze.Runtime) *findingRuntimePayload {
+// runtimeFindingPayload converts one PackageGroup's Runtime (plus its
+// Accepted verdict) to the webhook's findings[].runtime object, or nil when
+// Runtime was never attached (Usage == "") — the omitempty on
+// findingPayload.Runtime then drops the key entirely, which is what keeps a
+// disabled deployment's webhook payload identical to one built before this
+// field existed.
+func runtimeFindingPayload(g analyze.PackageGroup) *findingRuntimePayload {
+	rt := g.Runtime
 	if rt.Usage == "" {
 		return nil
 	}
@@ -556,6 +709,10 @@ func runtimeFindingPayload(rt analyze.Runtime) *findingRuntimePayload {
 		EventsCoverage: string(rt.EventsCoverage),
 		Exposure:       string(rt.Exposure),
 		HighPrivilege:  rt.HighPrivilege,
+	}
+	if g.Accepted {
+		p.Accepted = true
+		p.AcceptedReason = string(g.AcceptedReason)
 	}
 	for _, c := range rt.Containers {
 		p.Containers = append(p.Containers, containerRuntimePayload(c))

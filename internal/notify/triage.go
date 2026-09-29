@@ -1,5 +1,5 @@
-// Triage-mode Slack rendering (Phase 1+, docs/TRIAGE_SPEC.md §6): the message
-// is organized by priority — act now / watch / low — instead of by fix status.
+// Triage-mode Slack rendering: the message is organized by priority — act
+// now / watch / low — instead of by fix status.
 // Every act-now item carries its evidence (KEV, EPSS) inline: the product's
 // promise is "fix this one tonight, ignore the rest", and an unexplained order
 // would be indistinguishable from the severity walls it replaces.
@@ -21,6 +21,10 @@ import (
 // this (FormatSlackText, FormatSlackDiffText) — not repeated here.
 func writeTriageBody(b *strings.Builder, r analyze.Report) {
 	pv := r.ByPriority()
+	// ActNow is never filtered: a group eligible for acceptance is never
+	// act_now by construction.
+	pv.Watch = filterAccepted(pv.Watch)
+	pv.Low = filterAccepted(pv.Low)
 	byRef := imagesByRef(r)
 	writeTriageHeadline(b, r, pv)
 	writeIntelWarning(b, r)
@@ -29,7 +33,8 @@ func writeTriageBody(b *strings.Builder, r analyze.Report) {
 	writeEOLPackages(b, r, byRef)
 	writeActNow(b, r, pv.ActNow, byRef)
 	writeWatch(b, r, pv.Watch, byRef)
-	writeLow(b, pv.Low)
+	writeLow(b, r, pv.Low)
+	writeAcceptedCount(b, r)
 	writeScanErrors(b, r.ScanErrors, byRef)
 	writeIntelStale(b, r)
 	writeRuntimeSummary(b, r)
@@ -78,7 +83,8 @@ func writeIntelWarning(b *strings.Builder, r analyze.Report) {
 }
 
 // writeIntelStale annotates a message built from cached feeds that could not
-// be refreshed (fail-open window, docs/TRIAGE_SPEC.md §3).
+// be refreshed (a fail-open window: a stale cache is used rather than
+// blocking or discarding triage).
 func writeIntelStale(b *strings.Builder, r analyze.Report) {
 	if r.Intel.StaleDays > 0 && !r.Intel.Degraded() {
 		fmt.Fprintf(b, "\n_Intel data is %d day(s) old (feeds unreachable)._\n", r.Intel.StaleDays)
@@ -125,9 +131,10 @@ func writeWatch(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindin
 }
 
 // writeLow collapses the low bucket to a count: these are the findings the
-// triage layer exists to keep out of the reader's way. The full list is always
-// in the webhook payload and the weekly report.
-func writeLow(b *strings.Builder, imgs []analyze.ImageFindings) {
+// triage layer exists to keep out of the reader's way. The full list is
+// always in the generic webhook payload, when one is configured — the
+// weekly report shows this same count-only line, never more.
+func writeLow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings) {
 	n := analyze.GroupCount(imgs)
 	if n == 0 {
 		return
@@ -136,7 +143,13 @@ func writeLow(b *strings.Builder, imgs []analyze.ImageFindings) {
 	if inUse := countInUse(imgs); inUse > 0 {
 		fmt.Fprintf(b, " · ▶ %d in use", inUse)
 	}
-	b.WriteString("\n_Details in the generic webhook payload or the weekly full report._\n")
+	b.WriteString("\n")
+	// The generic webhook is the only destination with per-package detail
+	// beyond this count, and only when one is actually configured — a
+	// weekly full report shows this same count-only line, never more.
+	if r.GenericWebhookConfigured {
+		b.WriteString("_Details in the generic webhook payload._\n")
+	}
 }
 
 // writeEvidence renders the "why act now" line under a package: the strongest
@@ -165,8 +178,7 @@ func writeEvidence(b *strings.Builder, r analyze.Report, g analyze.PackageGroup)
 
 // writeRefs renders the reference links under an act-now evidence line: the
 // scanner's advisory, the vendor advisory from the KEV notes, and the HN
-// discussion when one exists. Links only — verifiable facts, no summaries
-// (docs/TRIAGE_SPEC.md §8).
+// discussion when one exists. Links only — verifiable facts, no summaries.
 func writeRefs(b *strings.Builder, v analyze.VulnRef) {
 	var parts []string
 	if v.URL != "" {
@@ -266,9 +278,11 @@ func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Ch
 	if len(changes) == 0 {
 		return
 	}
-	byRef := imagesByRef(r)
 	sorted := make([]state.Change, len(changes))
 	copy(sorted, changes)
+	// Sorted by the change's full priority (all groups, accepted or not) —
+	// priority is never touched by acceptance, so this order must not be
+	// either.
 	sort.SliceStable(sorted, func(i, j int) bool {
 		pi, pj := analyze.MaxPriority(sorted[i].Groups), analyze.MaxPriority(sorted[j].Groups)
 		if pi.Rank() != pj.Rank() {
@@ -280,15 +294,20 @@ func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Ch
 		return sorted[i].Package < sorted[j].Package
 	})
 
-	fmt.Fprintf(b, "\n*🆕 New since last scan (%d)*\n", len(sorted))
+	visible := visibleChanges(sorted)
+	if len(visible) == 0 {
+		return
+	}
+	byRef := imagesByRef(r)
+	fmt.Fprintf(b, "\n*🆕 New since last scan (%d)*\n", len(visible))
 	lastImage := ""
-	for _, c := range sorted {
-		if c.Image != lastImage {
-			fmt.Fprintf(b, "%s %s\n", priorityEmoji(analyze.MaxPriority(c.Groups)), refLabel(c.Image, byRef))
-			lastImage = c.Image
+	for _, vc := range visible {
+		if vc.change.Image != lastImage {
+			fmt.Fprintf(b, "%s %s\n", priorityEmoji(analyze.MaxPriority(vc.change.Groups)), refLabel(vc.change.Image, byRef))
+			lastImage = vc.change.Image
 		}
-		for _, g := range c.Groups {
-			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, c, g)+runtimeChangeSuffix(g))
+		for _, g := range vc.groups {
+			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, vc.change, g)+runtimeChangeSuffix(g))
 			if g.Priority == analyze.PriorityActNow {
 				writeEvidence(b, r, g)
 				if runtimeInUse(g.Runtime) {
@@ -330,7 +349,10 @@ func writeTriageOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, hold
 			fmt.Fprintf(b, " — oldest act-now/watch unresolved %d day(s)", days)
 		}
 	}
-	b.WriteString("\n_Details in the generic webhook payload, or in the weekly full report._\n")
+	b.WriteString("\n")
+	if r.GenericWebhookConfigured {
+		b.WriteString("_Details in the generic webhook payload._\n")
+	}
 }
 
 func priorityEmoji(p analyze.Priority) string {

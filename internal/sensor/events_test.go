@@ -39,10 +39,16 @@ const (
 // testRoot/testRootB are two distinct, fixed root identities most
 // pathIndex-related tests use as a neutral placeholder (testRoot on both
 // sides of a record/lookup pair, unless a test is specifically exercising
-// root-distinction — see TestPathIndexDistinguishesRoots).
+// root-distinction — see TestPathIndexDistinguishesRoots). testRootBDevRaw is
+// testRootB's own raw counterpart, the same way testRootDevRaw is testRoot's
+// (formatKernelDev(testRootBDevRaw) == testRootB) — needed wherever a test
+// calls pathIndex.record under testRootB, which now takes the root's raw
+// kernel encoding alongside its formatted form (see pathIndexEntry's own doc
+// comment).
 const (
-	testRoot  = "01:01"
-	testRootB = "02:02"
+	testRoot        = "01:01"
+	testRootB       = "02:02"
+	testRootBDevRaw = uint64(2)<<kernelDevMinorBits | 2
 )
 
 func TestPathIndexRecordAndLookup(t *testing.T) {
@@ -50,7 +56,7 @@ func TestPathIndexRecordAndLookup(t *testing.T) {
 	if _, ok := idx.lookup(1, testRoot, 1, 2, 3); ok {
 		t.Fatal("lookup on empty index found something")
 	}
-	idx.record(1, testRoot, 1, 2, 3, "/usr/bin/example")
+	idx.record(1, testRoot, testRootDevRaw, 1, 2, 3, "/usr/bin/example")
 	got, ok := idx.lookup(1, testRoot, 1, 2, 3)
 	if !ok || got != "/usr/bin/example" {
 		t.Errorf("lookup(1,2,3) = (%q, %v), want (\"/usr/bin/example\", true)", got, ok)
@@ -71,8 +77,8 @@ func TestPathIndexRecordAndLookup(t *testing.T) {
 // physical file.
 func TestPathIndexDistinguishesRoots(t *testing.T) {
 	var idx pathIndex
-	idx.record(1, testRoot, 1, 5, 6, "/bin/tool")
-	idx.record(1, testRootB, 1, 5, 6, "/jail/bin/tool")
+	idx.record(1, testRoot, testRootDevRaw, 1, 5, 6, "/bin/tool")
+	idx.record(1, testRootB, testRootBDevRaw, 1, 5, 6, "/jail/bin/tool")
 
 	if got, ok := idx.lookup(1, testRoot, 1, 5, 6); !ok || got != "/bin/tool" {
 		t.Errorf("lookup under testRoot = (%q, %v), want (\"/bin/tool\", true)", got, ok)
@@ -90,7 +96,7 @@ func TestPathIndexDistinguishesRoots(t *testing.T) {
 func TestPathIndexEviction(t *testing.T) {
 	var idx pathIndex
 	for i := 0; i < maxPathIndexEntries+10; i++ {
-		idx.record(1, testRoot, 1, uint64(i), 1, "/x")
+		idx.record(1, testRoot, testRootDevRaw, 1, uint64(i), 1, "/x")
 	}
 	if len(idx.byKey) > maxPathIndexEntries {
 		t.Errorf("pathIndex size = %d, want <= %d", len(idx.byKey), maxPathIndexEntries)
@@ -106,9 +112,9 @@ func TestPathIndexEviction(t *testing.T) {
 
 func TestPathIndexPruneMountNamespace(t *testing.T) {
 	var idx pathIndex
-	idx.record(1, testRoot, 1, 10, 1, "/a")
-	idx.record(1, testRoot, 1, 20, 2, "/b")
-	idx.record(2, testRoot, 1, 10, 1, "/c") // same (dev, ino) as the first, different mnt ns
+	idx.record(1, testRoot, testRootDevRaw, 1, 10, 1, "/a")
+	idx.record(1, testRoot, testRootDevRaw, 1, 20, 2, "/b")
+	idx.record(2, testRoot, testRootDevRaw, 1, 10, 1, "/c") // same (dev, ino) as the first, different mnt ns
 
 	idx.pruneMountNamespace(1)
 
@@ -121,11 +127,145 @@ func TestPathIndexPruneMountNamespace(t *testing.T) {
 	if got, ok := idx.lookup(2, testRoot, 1, 10, 1); !ok || got != "/c" {
 		t.Errorf("lookup(2,10,1) = (%q, %v), want (\"/c\", true) -- a different mount namespace must survive pruning", got, ok)
 	}
-	for _, key := range idx.insertOrder {
-		if key.mntNsID == 1 {
-			t.Errorf("insertOrder still references pruned mount namespace 1: %+v", key)
+	for el := idx.order.Front(); el != nil; el = el.Next() {
+		if entry := el.Value.(*pathIndexEntry); entry.key.mntNsID == 1 {
+			t.Errorf("order still references pruned mount namespace 1: %+v", entry.key)
 		}
 	}
+}
+
+// TestPathIndexLRU_FrequentlyUsedPathSurvivesChurn confirms pathIndex is a
+// true LRU, not the plain-FIFO cap cgroupRoute's own maxCgroupRouteEntries
+// uses: a path this table is repeatedly asked about (a shared library
+// mmap'd again and again) must outlive a steady stream of once-only,
+// never-looked-up-again entries around it (a container opening many on-disk
+// segments, say), even with a capacity small enough that a plain FIFO would
+// have evicted it almost immediately.
+func TestPathIndexLRU_FrequentlyUsedPathSurvivesChurn(t *testing.T) {
+	var idx pathIndex
+	idx.maxEntries = 2
+	idx.record(1, testRoot, testRootDevRaw, testRootIno, 100, 100, "/usr/lib/libused.so")
+
+	for i := uint64(0); i < 50; i++ {
+		if _, ok := idx.lookup(1, testRoot, testRootIno, 100, 100); !ok {
+			t.Fatalf("frequently used entry evicted after %d unrelated insertions", i)
+		}
+		// One unrelated, once-only data-file open, filling this index's only
+		// other slot -- with a true LRU, this can never be what evicts the
+		// entry just looked up above, since that lookup just made it the
+		// most recently used one.
+		idx.record(1, testRoot, testRootDevRaw, testRootIno, 1000+i, 1, "/data/segment")
+	}
+
+	if got, ok := idx.lookup(1, testRoot, testRootIno, 100, 100); !ok || got != "/usr/lib/libused.so" {
+		t.Errorf("lookup(100,100) = (%q, %v), want (\"/usr/lib/libused.so\", true)", got, ok)
+	}
+}
+
+// TestPathIndexEviction_CallsOnEvictWithRawKernelValues confirms pathIndex's
+// own eviction path hands onEvict exactly the raw values needed to delete
+// the matching bpf/kestrelynx.c kl_dedup_path entry (see
+// Session.deletePathSeenKey, this hook's own production caller) -- never
+// pathKey's own Go-formatted rootDev string, which the kernel's own map key
+// cannot be built from.
+func TestPathIndexEviction_CallsOnEvictWithRawKernelValues(t *testing.T) {
+	var idx pathIndex
+	idx.maxEntries = 1
+	var evicted []evictedPathKey
+	idx.onEvict = func(k evictedPathKey) { evicted = append(evicted, k) }
+
+	idx.record(1, testRoot, testRootDevRaw, testRootIno, 100, 100, "/usr/lib/liba.so")
+	if len(evicted) != 0 {
+		t.Fatalf("onEvict called before any entry was actually evicted: %+v", evicted)
+	}
+
+	idx.record(1, testRoot, testRootDevRaw, testRootIno, 200, 200, "/usr/lib/libb.so")
+
+	if len(evicted) != 1 {
+		t.Fatalf("len(evicted) = %d, want 1", len(evicted))
+	}
+	want := evictedPathKey{mntNsID: 1, rawRootDev: testRootDevRaw, rootIno: testRootIno, dev: 100, ino: 100}
+	if evicted[0] != want {
+		t.Errorf("evicted[0] = %+v, want %+v", evicted[0], want)
+	}
+}
+
+// TestPathIndexEvictionHypothesis_KernelDedupSurvivesUserspaceEviction
+// reproduces, at this package's own level (no real kernel, no real
+// container), the incomplete=true failure mode a real host was observed
+// producing: a file whose own path pathIndex has since evicted (an unrelated
+// burst of other opens crossed its own capacity) can still be within the
+// kernel's own bpf/kestrelynx.c KL_DEDUP_WINDOW_NS suppression for its own
+// FILE_OPEN record, so a later open of that exact file is never resent at
+// all -- the mmap_success event that follows it then has no path anywhere to
+// resolve to, is counted as a loss, and marks its own generation incomplete,
+// sticky, even though the file itself was opened again perfectly normally.
+//
+// kernelSuppressed stands in for kl_dedup_path itself: openFile only
+// actually delivers a FILE_OPEN event (and so only actually records a path)
+// the first time a given key is not already marked suppressed, mirroring
+// kl_path_seen/kl_path_mark's own real behavior.
+func TestPathIndexEvictionHypothesis_KernelDedupSurvivesUserspaceEviction(t *testing.T) {
+	const targetDev, targetIno = uint64(100), uint64(100)
+
+	run := func(t *testing.T, deleteKernelKeyOnEvict bool) *generationState {
+		s := newTestSessionForEvents()
+		g := newReadyGeneration(s, 1, strings64('a'))
+		s.pathIdx.maxEntries = 2
+
+		kernelSuppressed := map[evictedPathKey]bool{}
+		openFile := func(dev, ino uint64) {
+			k := evictedPathKey{mntNsID: 1, rawRootDev: testRootDevRaw, rootIno: testRootIno, dev: dev, ino: ino}
+			if kernelSuppressed[k] {
+				return // the kernel's own suppression window is still open
+			}
+			s.applyEvent(ebpf.Event{
+				Kind: ebpf.EventFileOpen, MountNamespaceID: 1,
+				RootDev: testRootDevRaw, RootIno: testRootIno,
+				Dev: dev, Ino: ino, Path: "/usr/lib/libtarget.so",
+			})
+			kernelSuppressed[k] = true
+		}
+		if deleteKernelKeyOnEvict {
+			s.pathIdx.onEvict = func(k evictedPathKey) { delete(kernelSuppressed, k) }
+		}
+
+		openFile(targetDev, targetIno) // the library this generation will later mmap
+		openFile(200, 200)             // an unrelated once-only data-file open ...
+		openFile(300, 300)             // ... and another, evicting the library's own entry (least recently used)
+
+		// The container's real workload opens the exact same library again
+		// (a second worker process, say) -- whether this reaches userspace
+		// at all depends entirely on whether the kernel still thinks it has
+		// already sent this exact path.
+		openFile(targetDev, targetIno)
+
+		s.applyEvent(ebpf.Event{
+			Kind: ebpf.EventMmapSuccess, CgroupID: 1, MountNamespaceID: 1,
+			RootDev: testRootDevRaw, RootIno: testRootIno, Dev: targetDev, Ino: targetIno,
+		})
+		return g
+	}
+
+	t.Run("without deleting the kernel key: repeat open stays suppressed, path lost", func(t *testing.T) {
+		g := run(t, false)
+		if !g.incomplete {
+			t.Error("incomplete = false, want true")
+		}
+		if g.eventsLost != 1 {
+			t.Errorf("eventsLost = %d, want 1", g.eventsLost)
+		}
+	})
+
+	t.Run("deleting the kernel key on eviction: repeat open resends the path, no loss", func(t *testing.T) {
+		g := run(t, true)
+		if g.incomplete {
+			t.Error("incomplete = true, want false")
+		}
+		if g.eventsLost != 0 {
+			t.Errorf("eventsLost = %d, want 0", g.eventsLost)
+		}
+	})
 }
 
 func TestParseMntNSInode(t *testing.T) {
@@ -150,8 +290,8 @@ func TestReconcileGenerations_ContainerRemovalPrunesRouteTablesNotRestart(t *tes
 
 	s.cgroupRoute.set(100, "/system.slice/docker-"+cidRemoved+".scope", cidRemoved)
 	s.cgroupRoute.set(200, "/system.slice/docker-"+cidRestarted+".scope", cidRestarted)
-	s.pathIdx.record(1, testRoot, 1, 1, 1, "/removed")
-	s.pathIdx.record(2, testRoot, 1, 2, 2, "/restarted")
+	s.pathIdx.record(1, testRoot, testRootDevRaw, 1, 1, 1, "/removed")
+	s.pathIdx.record(2, testRoot, testRootDevRaw, 1, 2, 2, "/restarted")
 
 	removedGen := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cidRemoved}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
 	removedGen.mntNsID = 1

@@ -189,6 +189,16 @@ type Session struct {
 	// current attribution is wrong (the newest seed's own classification is
 	// always adopted regardless).
 	cgroupRouteContradictions int64
+	// pathIndexKernelDeleteFailures counts how many times
+	// deletePathSeenKey's own ebpf.Handle.DeletePathSeen call returned an
+	// error other than "key not found" (already-evicted-by-the-kernel-itself
+	// is expected and not counted here — see that method's own doc
+	// comment). Purely diagnostic (not part of the evidence schema): a
+	// failure here only means one evicted path's own kernel-side suppression
+	// entry was not cleared early, which self-corrects once
+	// bpf/kestrelynx.c's own KL_DEDUP_WINDOW_NS elapses regardless, not that
+	// this session's own current attribution is wrong.
+	pathIndexKernelDeleteFailures int64
 	// ownUserNSInode is this observer's own user namespace's inode number,
 	// resolved once at startup (parseNSInode on s.ownUserNS) — the event-
 	// derived equivalent of ownUserNS itself, which a sampled process's own
@@ -442,7 +452,10 @@ func (s *Session) run(ctx context.Context) error {
 
 	// This observer's own cgroup ID (needed for eBPF self-exclusion) and
 	// container ID (to exclude the Sensor's own container from discovery).
-	_, cgID, cgErr := OwnCgroupInfo()
+	cgInfo, cgID, cgErr := OwnCgroupInfo()
+	if err := hostCgroupNamespaceError(cgInfo); err != nil {
+		return err
+	}
 	s.ownContainerID = ownContainerID()
 	s.ownUserNS, _ = ownNamespaceLink("user")
 	s.ownUserNSInode, _ = parseUserNSInode(s.ownUserNS)
@@ -514,6 +527,11 @@ func (s *Session) run(ctx context.Context) error {
 		}
 	}
 	if s.eventsStatus == evidence.EventsOK {
+		// Wired only once eBPF is actually attached: s.pathIdx starts
+		// recording FILE_OPEN/EXEC_OPEN paths (and therefore evicting them)
+		// the moment applyEvent runs at all, which never happens without a
+		// live s.ebpfHandle to read events from in the first place.
+		s.pathIdx.onEvict = s.deletePathSeenKey
 		go runEventReader(s.ebpfHandle, s.eventCh)
 	} else {
 		// Whether Load itself failed (s.ebpfHandle already nil), or it
@@ -620,6 +638,27 @@ func (s *Session) closeEBPFHandle() {
 	}
 	s.ebpfHandle.Close()
 	s.ebpfHandle = nil
+}
+
+// deletePathSeenKey is s.pathIdx's own onEvict hook once eBPF is attached
+// (see run's own wiring above): it asks the kernel to forget the
+// kl_dedup_path entry matching k, so the next open of that exact file
+// resends its own path record instead of staying suppressed under a
+// since-forgotten pathIndex entry for the rest of bpf/kestrelynx.c's own
+// KL_DEDUP_WINDOW_NS — see pathIndex's own doc comment for why this matters.
+// s.ebpfHandle being nil (closeEBPFHandle already ran, or Load itself never
+// produced one) is handled defensively, even though onEvict is never wired
+// at all in that case, since nothing else forbids pathIndex eviction from
+// racing a concurrent close. Any error DeletePathSeen itself does not
+// already treat as expected (ebpf.ErrKeyNotExist) is counted, never acted on
+// further — see s.pathIndexKernelDeleteFailures' own doc comment for why.
+func (s *Session) deletePathSeenKey(k evictedPathKey) {
+	if s.ebpfHandle == nil {
+		return
+	}
+	if err := s.ebpfHandle.DeletePathSeen(k.mntNsID, k.rawRootDev, k.rootIno, k.dev, k.ino); err != nil {
+		s.pathIndexKernelDeleteFailures++
+	}
 }
 
 // installObserverFilter builds and installs the observer's own seccomp

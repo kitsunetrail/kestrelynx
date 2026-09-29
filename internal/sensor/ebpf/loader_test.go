@@ -7,6 +7,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/cilium/ebpf"
 )
 
 func TestLoadRejectsZeroExcludedCgroupID(t *testing.T) {
@@ -125,5 +127,48 @@ func TestLoadAttachAndReceiveEvent(t *testing.T) {
 	}
 	if !strings.HasSuffix(execOpen.Path, "true") {
 		t.Errorf("EventExecOpen.Path = %q, want it to end in %q", execOpen.Path, "true")
+	}
+}
+
+// TestDeletePathSeen_RemovesRealKernelEntry confirms Handle.DeletePathSeen
+// actually deletes the matching kl_dedup_path entry from a real kernel map —
+// the one part of sensor.pathIndex's own onEvict wiring (see events.go's
+// pathIndex and session.go's deletePathSeenKey) that no unprivileged,
+// no-kernel unit test elsewhere in this repository can exercise. It never
+// attaches any program (a bare Load is enough to create the map), so it
+// needs no target process or event to actually observe — just the same
+// CAP_BPF/CAP_PERFMON privilege every other test in this file already
+// requires and self-skips without (skipIfUnprivileged).
+func TestDeletePathSeen_RemovesRealKernelEntry(t *testing.T) {
+	h, err := Load(1, 0)
+	if err != nil {
+		skipIfUnprivileged(t, err)
+		t.Fatalf("Load: %v", err)
+	}
+	defer h.Close()
+
+	key := kestrelynxebpfKlPathKey{MntNsId: 1, RootDev: 2, RootIno: 3, Dev: 4, Ino: 5}
+	if err := h.objs.KlDedupPath.Update(key, uint64(1), ebpf.UpdateAny); err != nil {
+		t.Fatalf("seed kl_dedup_path entry: %v", err)
+	}
+	var got uint64
+	if err := h.objs.KlDedupPath.Lookup(key, &got); err != nil {
+		t.Fatalf("lookup seeded entry: %v", err)
+	}
+
+	if err := h.DeletePathSeen(1, 2, 3, 4, 5); err != nil {
+		t.Fatalf("DeletePathSeen: %v", err)
+	}
+	if err := h.objs.KlDedupPath.Lookup(key, &got); !errors.Is(err, ebpf.ErrKeyNotExist) {
+		t.Errorf("lookup after DeletePathSeen = %v, want ebpf.ErrKeyNotExist", err)
+	}
+
+	// A second delete of the same, now-absent key must not be treated as an
+	// error — see DeletePathSeen's own doc comment on why ErrKeyNotExist
+	// specifically is expected, not a failure (the kernel's own LRU_HASH
+	// eviction, or a caller racing its own earlier delete, can produce
+	// exactly this).
+	if err := h.DeletePathSeen(1, 2, 3, 4, 5); err != nil {
+		t.Errorf("second DeletePathSeen on an already-absent key = %v, want nil", err)
 	}
 }

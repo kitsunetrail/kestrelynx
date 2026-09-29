@@ -9,6 +9,7 @@
 package sensor
 
 import (
+	"container/list"
 	"fmt"
 	"os"
 	"strconv"
@@ -40,12 +41,14 @@ type pathKey struct {
 	ino     uint64
 }
 
-// maxPathIndexEntries bounds pathIndex's size the same way
-// maxCgroupRouteEntries bounds cgroupRoute's: a defensive cap against
-// unbounded growth over a long session, evicting the oldest-inserted entry
-// first (a plain FIFO — see cgroupRoute's own doc comment on why that is
-// an acceptable trade for this purpose). ASSUMED, same basis as
-// maxCgroupRouteEntries.
+// maxPathIndexEntries bounds pathIndex's size: a defensive cap against
+// unbounded growth over a long session, evicting the least-recently-used
+// entry once crossed (see pathIndex's own doc comment for why this must be a
+// true LRU, unlike cgroupRoute's own plain-FIFO maxCgroupRouteEntries cap).
+// ASSUMED: large enough that a legitimately still-in-use path (a shared
+// library actively being mmap'd, say) is never pushed out by an unrelated
+// burst of once-only opens on a real container; revisit once real-world
+// dogfooding shows otherwise.
 const maxPathIndexEntries = 65_536
 
 // pathIndex is loop's own correlation table from pathKey to the path a
@@ -54,56 +57,171 @@ const maxPathIndexEntries = 65_536
 // but never a path; see bpf/kestrelynx.c's own header comment) be resolved
 // to a container-relative path at all. Read and written only by loop's own
 // goroutine.
+//
+// Capacity is enforced as a true LRU, not a plain FIFO the way cgroupRoute's
+// own maxCgroupRouteEntries cap is (see that field's own doc comment on why
+// a FIFO is an acceptable trade there): every lookup promotes the entry it
+// hits to most-recently-used, so a library actually being mmap'd again and
+// again survives a burst of once-only opens on unrelated files around it (a
+// container indexing many on-disk segments, say), and it is exactly those
+// once-only entries that get pushed out first instead.
+//
+// A container that opens far more distinct files than this table's own
+// capacity within one bpf/kestrelynx.c KL_DEDUP_WINDOW_NS window can still
+// evict a path this table needs again before the kernel's own kl_dedup_path
+// suppression for that same file has expired — the kernel would then go on
+// suppressing a resend of a path this table has already forgotten, for the
+// rest of that window, with no way for either side to notice the other has
+// moved on. onEvict exists to close exactly that gap: set (by
+// Session.deletePathSeenKey) once eBPF is actually attached, it deletes the
+// matching kl_dedup_path entry the moment this table forgets a path, so the
+// kernel resends it the very next time that file is opened instead of
+// staying silent for the rest of its own suppression window. Left nil in a
+// test that never exercises eviction.
 type pathIndex struct {
-	byKey       map[pathKey]string
-	insertOrder []pathKey
+	byKey map[pathKey]*list.Element // Element.Value is always *pathIndexEntry
+	order *list.List                // most-recently-used at Front, least at Back
+	// maxEntries overrides maxPathIndexEntries when nonzero — a unit test's
+	// own way of forcing eviction after only a handful of insertions, the
+	// same purpose LoadWithRingBufferBytes's own ring-buffer-size override
+	// serves for kl_events.
+	maxEntries int
+	onEvict    func(evictedPathKey)
 }
 
-func (p *pathIndex) record(mntNsID uint32, rootDev string, rootIno, dev, ino uint64, path string) {
+// pathIndexEntry is one pathIndex.byKey element's own list.Element.Value.
+// rawRootDev is the one raw kernel value pathKey itself cannot supply back:
+// pathKey.rootDev is already rendered into its own human-readable
+// "major:minor" form (formatKernelDev) for Go-side lookup identity, but
+// deleting the matching bpf/kestrelynx.c kl_dedup_path entry needs the exact
+// kernel-internal dev_t encoding that map's own key was built from instead
+// (kestrelynxebpfKlPathKey.RootDev) — kept here, alongside the key's own
+// already-raw mntNsID/rootIno/dev/ino, rather than reconstructed from the
+// formatted string.
+type pathIndexEntry struct {
+	key        pathKey
+	path       string
+	rawRootDev uint64
+}
+
+// evictedPathKey is what pathIndex's own onEvict hook receives once an entry
+// is pushed out: every raw value bpf/kestrelynx.c's own kl_path_key needs, so
+// the caller (Session.deletePathSeenKey) can delete the matching
+// kl_dedup_path entry without needing to know anything about pathIndex's own
+// internal layout.
+type evictedPathKey struct {
+	mntNsID    uint32
+	rawRootDev uint64
+	rootIno    uint64
+	dev        uint64
+	ino        uint64
+}
+
+// limit returns p's own effective capacity: maxEntries if a test has
+// overridden it, maxPathIndexEntries otherwise.
+func (p *pathIndex) limit() int {
+	if p.maxEntries > 0 {
+		return p.maxEntries
+	}
+	return maxPathIndexEntries
+}
+
+// record stores path for the given (mount namespace, root identity, dev,
+// inode) tuple, promoting it to most-recently-used whether this is a fresh
+// insert or an update of an already-recorded key. rawRootDev is the same
+// tuple's root device in the kernel's own encoding (an eBPF event's own
+// RootDev field, unformatted) — see pathIndexEntry's own doc comment for why
+// this table keeps it at all.
+func (p *pathIndex) record(mntNsID uint32, rootDev string, rawRootDev, rootIno, dev, ino uint64, path string) {
 	if path == "" {
 		return
 	}
-	if p.byKey == nil {
-		p.byKey = map[pathKey]string{}
-	}
 	key := pathKey{mntNsID: mntNsID, rootDev: rootDev, rootIno: rootIno, dev: dev, ino: ino}
-	if _, exists := p.byKey[key]; !exists {
-		p.insertOrder = append(p.insertOrder, key)
+	if p.byKey == nil {
+		p.byKey = map[pathKey]*list.Element{}
+		p.order = list.New()
 	}
-	p.byKey[key] = path
-	for len(p.byKey) > maxPathIndexEntries && len(p.insertOrder) > 0 {
-		oldest := p.insertOrder[0]
-		p.insertOrder = p.insertOrder[1:]
-		delete(p.byKey, oldest)
+	if el, exists := p.byKey[key]; exists {
+		entry := el.Value.(*pathIndexEntry)
+		entry.path = path
+		entry.rawRootDev = rawRootDev
+		p.order.MoveToFront(el)
+		return
+	}
+	el := p.order.PushFront(&pathIndexEntry{key: key, path: path, rawRootDev: rawRootDev})
+	p.byKey[key] = el
+	for len(p.byKey) > p.limit() {
+		p.evictLeastRecentlyUsed()
 	}
 }
 
+// evictLeastRecentlyUsed removes p.order's own back element (the least
+// recently inserted-or-looked-up entry) and, if p.onEvict is set, hands it
+// the raw values needed to delete the matching kernel-side suppression entry
+// too — see pathIndex's own doc comment for why that second step matters.
+func (p *pathIndex) evictLeastRecentlyUsed() {
+	back := p.order.Back()
+	if back == nil {
+		return
+	}
+	p.order.Remove(back)
+	entry := back.Value.(*pathIndexEntry)
+	delete(p.byKey, entry.key)
+	if p.onEvict != nil {
+		p.onEvict(evictedPathKey{
+			mntNsID:    entry.key.mntNsID,
+			rawRootDev: entry.rawRootDev,
+			rootIno:    entry.key.rootIno,
+			dev:        entry.key.dev,
+			ino:        entry.key.ino,
+		})
+	}
+}
+
+// lookup resolves (mntNsID, rootDev, rootIno, dev, ino) to the path most
+// recently recorded for it, promoting that entry to most-recently-used in
+// the same step — a hit here is exactly the "this path is still in active
+// use" signal pathIndex's own LRU eviction relies on.
 func (p *pathIndex) lookup(mntNsID uint32, rootDev string, rootIno, dev, ino uint64) (string, bool) {
-	path, ok := p.byKey[pathKey{mntNsID: mntNsID, rootDev: rootDev, rootIno: rootIno, dev: dev, ino: ino}]
-	return path, ok
+	el, ok := p.byKey[pathKey{mntNsID: mntNsID, rootDev: rootDev, rootIno: rootIno, dev: dev, ino: ino}]
+	if !ok {
+		return "", false
+	}
+	p.order.MoveToFront(el)
+	return el.Value.(*pathIndexEntry).path, true
 }
 
-// pruneMountNamespace removes every entry keyed under mntNsID, along with
-// their insertOrder bookkeeping — this table's own routine cleanup once a
-// generation whose mount namespace this is has ended (see
-// reconcileGenerations' own call site), working alongside (not replacing)
-// maxPathIndexEntries' own safety-net cap.
+// pruneMountNamespace removes every entry keyed under mntNsID — this table's
+// own routine cleanup once a generation whose mount namespace this is has
+// ended (see reconcileGenerations' own call site), working alongside (not
+// replacing) maxPathIndexEntries' own safety-net cap.
+//
+// Deliberately never calls onEvict, unlike evictLeastRecentlyUsed: by the
+// time this runs, mntNsID's own generation is confirmed gone and its mount
+// namespace will never produce another FILE_OPEN/EXEC_OPEN/exec_success/
+// mmap_success event again (a fresh container gets a fresh mount namespace
+// of its own), so nothing could ever benefit from forcing the kernel to
+// resend a path under one of these exact keys — unlike an entry
+// evictLeastRecentlyUsed pushes out, which a still-live container can go on
+// opening at any time. The kernel's own kl_dedup_path is itself an
+// LRU_HASH map, already bounded and already self-evicting regardless of
+// what this call does or does not delete. Calling onEvict here too would
+// only add one extra bpf_map_delete_elem syscall per surviving entry to
+// every container's own exit — for a container that opened many thousands
+// of distinct files (an index with many segments, say — exactly the load
+// this table's own eviction bug was found under), for no observable
+// benefit.
 func (p *pathIndex) pruneMountNamespace(mntNsID uint32) {
 	if len(p.byKey) == 0 {
 		return
 	}
-	for key := range p.byKey {
-		if key.mntNsID == mntNsID {
-			delete(p.byKey, key)
+	for key, el := range p.byKey {
+		if key.mntNsID != mntNsID {
+			continue
 		}
+		p.order.Remove(el)
+		delete(p.byKey, key)
 	}
-	kept := p.insertOrder[:0]
-	for _, key := range p.insertOrder {
-		if _, ok := p.byKey[key]; ok {
-			kept = append(kept, key)
-		}
-	}
-	p.insertOrder = kept
 }
 
 // pendingRouteEvent is one usage-evidence eBPF event (exec_success or
@@ -249,7 +367,7 @@ func (s *Session) applyEvent(ev ebpf.Event) {
 	case ebpf.EventCgroupMkdir:
 		s.applyCgroupMkdirEvent(ev)
 	case ebpf.EventFileOpen, ebpf.EventExecOpen:
-		s.pathIdx.record(uint32(ev.MountNamespaceID), formatKernelDev(ev.RootDev), ev.RootIno, ev.Dev, ev.Ino, ev.Path)
+		s.pathIdx.record(uint32(ev.MountNamespaceID), formatKernelDev(ev.RootDev), ev.RootDev, ev.RootIno, ev.Dev, ev.Ino, ev.Path)
 	case ebpf.EventMmapOpen:
 		// An attempt, not usage evidence, and it carries no path
 		// (security_mmap_file cannot call bpf_d_path) — nothing to

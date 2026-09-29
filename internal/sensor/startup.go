@@ -14,6 +14,7 @@
 package sensor
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -123,6 +124,25 @@ func OwnCgroupInfo() (CgroupInfo, uint64, error) {
 		return CgroupInfo{CgroupV2: true, Path: rel, Err: err}, 0, err
 	}
 	return CgroupInfo{CgroupV2: true, Path: rel, KernfsID: ino}, ino, nil
+}
+
+// hostCgroupNamespaceError reports a Sensor started in its own cgroup
+// namespace rather than the host's (compose `cgroup: host`, docker run
+// `--cgroupns host`). In a private cgroup namespace the Sensor's own cgroup
+// reads as the namespace root ("/"), and every other container's
+// /proc/<pid>/cgroup reads relative to it ("/../<id>"), so no container can
+// be identified and no event's cgroup can be mapped: the Sensor would keep
+// reporting ok while observing nothing. It refuses to start instead. A
+// cgroup v1 host or an unreadable /proc/self/cgroup is reported separately
+// (info.Err) and is not this error.
+func hostCgroupNamespaceError(info CgroupInfo) error {
+	if info.Err != nil || !info.CgroupV2 {
+		return nil
+	}
+	if info.Path == "/" || info.Path == "" {
+		return errors.New("sensor: this container is not in the host's cgroup namespace; run it with `cgroup: host` (compose) or `--cgroupns host` (docker run)")
+	}
+	return nil
 }
 
 // cgroupFSTypeError reports whether magic (a statfs(2) f_type value) names

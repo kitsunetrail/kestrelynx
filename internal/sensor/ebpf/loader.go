@@ -132,6 +132,31 @@ func (h *Handle) LostEventsByCgroup() (map[uint64]uint64, error) {
 	return out, nil
 }
 
+// DeletePathSeen removes one entry from kl_dedup_path — the kernel's own
+// (mount namespace, root identity, dev, inode)-keyed suppression window for
+// fentry/security_file_open's own FILE_OPEN/EXEC_OPEN records (see
+// bpf/kestrelynx.c's kl_path_key/kl_path_seen). Called once the Sensor's own
+// userspace correlation table evicts the path it had recorded for this exact
+// tuple (sensor.pathIndex's own onEvict hook), so a later open of the same
+// file is not left suppressed, silently, for the rest of that window purely
+// because userspace has already forgotten the path it would have resolved
+// to — without this, the kernel's own suppression state and userspace's own
+// correlation table are free to disagree about whether a path is still
+// "known" for up to that window's own duration.
+//
+// rootDev, rootIno, dev, ino are all in the kernel's own encoding — the same
+// raw values an ebpf.Event's own RootDev/RootIno/Dev/Ino fields carry,
+// never formatted or reinterpreted. A missing key (ebpf.ErrKeyNotExist) is
+// not treated as an error: kl_dedup_path is itself a BPF_MAP_TYPE_LRU_HASH
+// map that may have already evicted this exact key on its own, under its
+// own memory pressure, which leaves this call with nothing left to do but
+// already satisfies its whole purpose (no stale suppression left behind for
+// this tuple).
+func (h *Handle) DeletePathSeen(mntNsID uint32, rootDev, rootIno, dev, ino uint64) error {
+	key := kestrelynxebpfKlPathKey{MntNsId: mntNsID, RootDev: rootDev, RootIno: rootIno, Dev: dev, Ino: ino}
+	return ignoreKeyNotExist(h.objs.KlDedupPath.Delete(key))
+}
+
 // Close releases the ring buffer reader, every attached link, and every map
 // and program file descriptor. It is safe to call more than once; later
 // calls return the error(s) from closing already-closed resources, which

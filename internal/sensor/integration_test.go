@@ -144,6 +144,7 @@ func TestSensorIntegration(t *testing.T) {
 		"--entrypoint", "kestrelynx-sensor",
 		"--user", "65532:65532",
 		"--pid", "host",
+		"--cgroupns", "host",
 		"--network", "none",
 		"--cap-drop", "ALL",
 		"--cap-add", "SYS_PTRACE",

@@ -1564,17 +1564,21 @@ func TestRetryPendingRouteEvents_PostRestartEventAttributesToNewGeneration(t *te
 	s := newTestSessionForEvents()
 	s.genConfirmFn = func(int, int64) bool { return true } // see the sibling test's own comment on why
 	cid := strings64('p')
-	oldGen := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cid}, InitProcess{PID: 1, Starttime: 1000}, s.now(), evidence.CoverageSinceStart)
+	oldGen := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cid}, InitProcess{PID: 1, Starttime: 1}, s.now(), evidence.CoverageSinceStart)
 	s.generations[oldGen.key()] = oldGen
 	s.endGeneration(oldGen, s.now())
-	newGen := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cid}, InitProcess{PID: 2, Starttime: 5000}, s.now(), evidence.CoverageSinceStart)
+	newGen := newGenerationState(evidence.ContainerRef{Runtime: "docker", ID: cid}, InitProcess{PID: 2, Starttime: 5}, s.now(), evidence.CoverageSinceStart)
 	newGen.idxState = indexReady
 	newGen.packageDB.Status = evidence.DBStatusOK
 	newGen.lastVerifiedAt = s.now()
 	s.generations[newGen.key()] = newGen
 
-	// This process started at tick 6000 — after newGen's own init.
-	ev := ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 53, StartBoottimeNs: uint64(6000) * nsPerClockTick}
+	// This process started at tick 6 — after newGen's own init. The ticks
+	// are kept tiny because the confirmation below reads the real
+	// CLOCK_BOOTTIME: its answer only covers this event once the host has
+	// been up longer than the event's own start time.
+	ev := ebpf.Event{Kind: ebpf.EventExecSuccess, CgroupID: 53, StartBoottimeNs: uint64(6) * nsPerClockTick}
+	waitUntilBootNsPast(t, ev.StartBoottimeNs)
 	s.applyEvent(ev)
 	if len(s.pendingRouteEvents) != 1 {
 		t.Fatalf("len(pendingRouteEvents) = %d, want 1", len(s.pendingRouteEvents))

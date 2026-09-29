@@ -50,8 +50,15 @@ RUN apk add --no-cache libcap && \
 # already has content (a second `docker compose up`, or one reused from a
 # previous version) is never touched by this: Docker only copies the
 # image's content into a target that is still completely empty at mount
-# time.
-RUN mkdir -p /var/lib/kestrelynx-runtime && chown 65532:65532 /var/lib/kestrelynx-runtime
+# time. The directory is also world-writable (sticky): on a daemon with
+# userns-remap, the copied ownership lands on the remapped UID rather than
+# the host UID 65532 the Sensor runs as (userns_mode: host), and the Sensor
+# must still be able to create its evidence file there. This relies on
+# only the Sensor (read-write) and the main service (read-only) mounting
+# this volume: never mount it read-write into any other container, since
+# anything that can write here could pre-create or replace the evidence
+# file.
+RUN mkdir -p /var/lib/kestrelynx-runtime && chown 65532:65532 /var/lib/kestrelynx-runtime && chmod 1777 /var/lib/kestrelynx-runtime
 # The base image's entrypoint is trivy; run kestrelynx instead.
 ENTRYPOINT ["kestrelynx"]
 CMD ["--config", "/etc/kestrelynx/config.yml"]

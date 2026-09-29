@@ -52,7 +52,9 @@ BPF・PERFMONがない場合、BTFがない場合、cgroup v1のホストでは�
 | --- | --- |
 | Ubuntu 26.04 | Linux 7.0、AppArmor有効、Docker 29.5.1で確認済みです。x86_64、cgroup v2のsystemdドライバです。 |
 | WSL2 | Linux 6.6、Docker Engine 29.1.3で確認済みです。x86_64、cgroup v2のsystemdドライバです。 |
-| arm64、cgroupfsドライバ、userns-remap | 未確認です。 |
+| WSL2(cgroupfsドライバ) | Linux 6.6、Docker Engine 29.1.3で確認済みです。x86_64、cgroup v2のcgroupfsドライバです。 |
+| WSL2(userns-remap) | Linux 6.6、Docker Engine 29.1.3で確認済みです。x86_64、cgroup v2のsystemdドライバです。 |
+| arm64 | 未確認です。 |
 
 AppArmor有効のホストでは、unconfined・privilegedのコンテナのファイルの読み取りが
 拒否され、そのコンテナは`permission denied`になります。

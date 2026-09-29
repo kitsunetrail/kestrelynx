@@ -53,7 +53,9 @@ with sampling only. Short-lived processes cannot be observed in that mode.
 | --- | --- |
 | Ubuntu 26.04 | Linux 7.0, AppArmor enabled, Docker 29.5.1; x86_64, cgroup v2 with the systemd driver. |
 | WSL2 | Linux 6.6, Docker Engine 29.1.3; x86_64, cgroup v2 with the systemd driver. |
-| arm64, cgroupfs driver, userns-remap | Unverified. |
+| WSL2 (cgroupfs driver) | Linux 6.6, Docker Engine 29.1.3; x86_64, cgroup v2 with the cgroupfs driver. |
+| WSL2 (userns-remap) | Linux 6.6, Docker Engine 29.1.3; x86_64, cgroup v2 with the systemd driver. |
+| arm64 | Unverified. |
 
 On hosts with AppArmor enabled, reads of files in unconfined or privileged
 containers are denied, and those containers receive `permission denied`.

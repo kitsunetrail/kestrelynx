@@ -58,6 +58,9 @@ services:
     user: "65532:65532"
     pid: host
     cgroup: host
+    # Required on a daemon with userns-remap (sharing the host PID namespace
+    # is refused otherwise); it is already the default everywhere else.
+    userns_mode: host
     network_mode: none
     cap_drop: [ALL]
     # BPF/PERFMON are only ever effective during startup (loading and

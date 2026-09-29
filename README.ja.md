@@ -21,6 +21,7 @@
 - **未修正の脆弱性**：修正版がない項目も通知対象
 - **ベースOS・パッケージのEOL**：サポート終了したベースOS（EOL base）と、ベンダーがこのリリースではサポート対象外と報告したCVEを持つパッケージ（EOL package）を、CVEの優先度とは別に最上部で強調して通知
 - **差分通知**：新規検出・CVE追加・修正版公開・優先度上昇・解消
+- **日本語のSlack通知**：`notify.language: ja`でチャンネル本文とスレッドの定型文を日本語表示（汎用WebhookのJSONは英語のまま）
 - **環境の識別**：Slack見出しへの任意の環境名の表示
 - **対象コンテナの識別**：汎用Webhookへのコンテナ名・Composeプロジェクト／サービス・Kubernetes Workload情報の付加
 - **稼働イメージの検証**：digestなどによるスキャン対象の固定と実体の一致確認
@@ -125,7 +126,7 @@ docker compose logs -f
 
 ### Dockerソケットへのアクセス
 
-- **対象取得**：`GET /containers/json`による稼働中コンテナの一覧取得
+- **対象取得**：`GET /containers/json`による稼働中コンテナの一覧取得、`runtime.enabled: true`では本体が`GET /containers/{id}/json`も使用
 - **イメージ読み取り**：TrivyからDocker APIへのアクセス
 - **コンテナ操作**：起動・停止・変更機能なし
 - **`:ro`の制約**：Docker APIの操作権限は制限対象外
@@ -163,6 +164,7 @@ kubectl logs -n kestrelynx deployment/kestrelynx -f
 | `schedule.daily_at` | 毎日の実行時刻（設定例：`09:00`、省略・空文字列：24時間間隔） |
 | `schedule.run_on_start` | 起動直後のスキャン（既定：`true`） |
 | `scan.severity` | 対象の深刻度（既定：`[HIGH, CRITICAL]`） |
+| `notify.language` | Slack通知の言語：`en`（既定）または`ja`、それ以外は設定エラー |
 | `notify.mode` | `diff`：差分通知（既定）、`full`：毎回全体レポート |
 | `notify.full_report_day` | diffモードの週次レポートの曜日（既定：`monday`、無効化：`never`） |
 | `notify.notify_on_clean` | 問題・変更のない場合の通知（既定：`false`） |

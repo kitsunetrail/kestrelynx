@@ -25,7 +25,7 @@ SlackとWebhookの通知に反映します。トリアージが無効の場合�
 関数の呼び出しやモジュールの読み込みは判定しません。
 データファイルの読み取りは使用の根拠にしません。
 
-Slackでは、観測した動作とともに`▶ in use`を表示します。スレッドでは
+`notify.language: en`では、Slackに観測した動作とともに`▶ in use`を表示します。スレッドでは
 `▷ not observed`や`▷ runtime evidence unavailable (<理由>)`も表示します。
 通知の文言、並び順、Webhookのフィールドは[KestreLynxの仕組み](how-it-works.md)に記載しています。
 
@@ -117,6 +117,53 @@ Sensorを置かない場合は`runtime.enabled`を`false`のままにします�
 本体を再起動した直後のスキャンでは、Sensorがまだ新しいコンテナを観測していないため、
 そのイメージが一時的に`container not observed`になることがあります。
 次のスキャンで解消します。
+
+### 修正版がない所見の通知オフ {#muting-findings-without-a-fix}
+
+`runtime.mute_unfixable_not_in_use`の既定値は`false`です。
+`runtime.enabled: true`のときだけ有効になります。
+
+```yaml
+runtime:
+  enabled: true
+  mute_unfixable_not_in_use: true
+```
+
+同じイメージの同じパッケージについて、今回のすべてのグループが
+次の条件をすべて満たす場合に通知オフにします。
+
+- 修正版がない状態：`affected`（`fix_deferred`・`unknown`などを含む）または`will_not_fix`
+- 稼働時の判定が「使用が確認されない」（`not_observed`）で、「判定できない」（`unavailable`）は対象外
+- 週1回の処理を含めるため、判定に使ったすべてのコンテナをSensorが7日以上観測
+- Act now以外の優先度
+
+修正版のあるもの（`fixed`）やEOLのものが混ざるパッケージは通知オフにしません。
+EOLは常に通知します。スキャンに失敗した・実体を確認できなかったイメージの参照は、
+そのサイクルでは通知オフにしません。
+
+優先度は変えません。Slackでは該当する行を出さず、Priority行とOpen nowの
+優先度の件数からも除き、件数の1行を表示します。`notify.language: ja`の場合は次の表示です。
+
+```text
+🔇 通知オフ — 修正版がなく7日以上使用が確認されない: N件
+```
+
+汎用Webhookには、通知オフの所見も全件残ります。
+追加のフィールドは[KestreLynxの仕組み](how-it-works.md)に記載しています。
+
+通知オフの条件を満たさなくなった場合は、変化として通知を再開します。
+修正版が出た・Act nowになった・CVEが追加された場合は、既存の変化の表示
+（`fix now available`・`escalated`・`new: CVE…`）を使います。
+それ以外は`↩️ Unmuted (<理由>)`（日本語では`↩️ 通知を再開 (<理由>)`）を付けます。
+
+| 理由 | 日本語の通知 |
+| --- | --- |
+| `now in use` | 使用中になった |
+| `act now` | 今すぐ対応 |
+| `fix available` | 修正版あり |
+| `now end-of-life` | サポート終了(EOL)となった |
+| `insufficient observation` | 観測不足 |
+| `not an eligible status` | 対象外の状態 |
 
 ### 観測のオプション
 

@@ -199,12 +199,13 @@ Ordinary and EOL package state can coexist for the same image reference and pack
 
 ### Changes included in the diff
 
-For ordinary packages, notifications cover new findings, priority escalations, added CVEs, and newly available fixes. If multiple changes apply at once, only one reason is reported.
+For ordinary packages, notifications cover new findings, priority escalations, added CVEs, newly available fixes, and resumption after muting. If multiple changes apply at once, only one reason is reported.
 
 - New means that the image reference and package combination was absent from the previous state.
 - Escalated means that the priority rose above the saved maximum priority.
 - New CVEs means that new CVE IDs were added to a known package.
 - Now fixable means that no fix was previously available and at least 1 fix is now available.
+- Unmuted means that a muted package no longer meets the muting conditions; newly available fixes, escalation to Act now, and added CVEs use their existing change labels.
 
 Priority decreases are saved without notification, and later escalations use the saved value as their baseline. Moving from EOL back to ordinary findings alone does not count as New or New CVEs.
 
@@ -240,7 +241,7 @@ The first run, a missing or corrupt state file, or a state-format version mismat
     - Base-OS EOL first-seen timestamps are stored separately from ordinary package state.
     - EOL package first-seen-as-EOL timestamps, CVE ID sets, and maximum priorities are stored separately from ordinary package state.
     - The state-format version remains `1`.
-    - Ordinary package changes are evaluated in the order New, Escalated, New CVEs, and Now fixable, with only the highest-precedence reason reported when several apply.
+    - Ordinary package changes are evaluated in the order New, Escalated, New CVEs, Now fixable, and Unmuted, with only the highest-precedence reason reported when several apply.
     - Ordinary comparisons also use previous EOL history.
     - EOL package changes are evaluated in the order newly detected EOL, escalation to Act now, and new EOL CVEs.
     - Retention caused by fully or partially failed scans or unconfirmed Kubernetes identities takes precedence over transitions between ordinary and EOL state.
@@ -265,7 +266,7 @@ With `notify.mode: full`, diff state is not used, and every cycle with findings 
 
 ## 6. Slack presentation
 
-Slack channels show changes, and Bot threads show current details. Empty sections are omitted, and Low remains count-only even in a full report. The generic webhook provides the complete per-CVE data.
+In diff mode, Slack channels show changes; in full mode, they show current unresolved findings. Bot threads show the current unresolved findings under `Everything open now`. Empty sections are omitted, and Low remains count-only even in a full report. The generic webhook provides the complete per-CVE data.
 
 The image counts in the header have the following meanings.
 
@@ -273,6 +274,41 @@ The image counts in the header have the following meanings.
 - `affected` counts images with a selected vulnerability or an EOL base OS and excludes images with only a scan failure.
 
 Times use the process's local timezone, configured through `TZ` in a container. `environment.name` appears only in the channel header.
+
+### Notification language {#notification-language}
+
+`notify.language` accepts `en` (default) or `ja`; other values are configuration
+errors. `notify.language: ja` translates all fixed text in Slack channel
+messages and threads: headings, section descriptions, upgrade-risk labels,
+change types, Open now, warnings, runtime usage, muting, thread structure,
+and guidance lines.
+
+CVE IDs, package names and versions, image names, severity words such as
+CRITICAL and HIGH, Trivy CVE descriptions (Title), scan-failure error messages,
+and Hacker News discussion link names remain unchanged. Generic webhook JSON
+remains in English regardless of this setting.
+
+| English | Japanese notification |
+| --- | --- |
+| Act now | 今すぐ対応 |
+| Watch | 要監視 |
+| Low | 低優先度 |
+| in use | 使用中 |
+| not observed | 使用が確認されない |
+| unavailable | 判定できない |
+| Muted | 通知オフ |
+
+A Japanese diff notification:
+
+```text
+🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果
+イメージ3件をスキャン、2件に影響あり
+_前回のスキャンからの変化_
+
+*🆕 前回のスキャンからの新規検出 (4件)*
+🚨 web:1.0
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 アップグレード: ディストリのセキュリティパッチ — ⬆️ 今すぐ対応に優先度昇格
+```
 
 ### Section order
 
@@ -299,6 +335,12 @@ Open now shows unresolved state after the latest scan, including retained record
 EOL Watch and Low findings do not contribute to priority counts. EOL package and Act now counts can overlap.
 
 The current-state report's Priority line counts package groups by fix status, so one package may contribute more than once.
+
+With `runtime.mute_unfixable_not_in_use: true`, eligible findings are omitted
+from Slack lines and from priority counts in the Priority line and Open now.
+A `🔇 Muted — no fix available and not in use for 7+ days: N` line shows the muted
+count without changing priority. Conditions and resumption reasons are described
+in [Runtime usage](runtime-usage.md#muting-findings-without-a-fix).
 
 Open now varies with current findings and retained state.
 
@@ -354,9 +396,12 @@ CRITICAL and HIGH count distinct CVE IDs within each package and fix-status grou
 | `⚠️ EPSS data unavailable — triage is using KEV and severity only` | Triage uses KEV and severity. |
 | `_Intel data is N day(s) old (feeds unreachable)._` | Refresh failed, and a validated stale cache is in use. |
 | `📋 Weekly full report` | Current-state report for the configured weekday. |
-| `📊 *Full report — YYYY-MM-DD HH:MM*` | Heading for the current-state report in a Bot thread. |
-| `📊 Full report in this message's thread` | The Bot posted the current state in this message's thread. |
-| `🔗 Last full report` | Link to the most recent successful report. |
+| `_Changes since the last scan._` | Italic line immediately after `N images scanned, N affected` in diff-mode channel messages with changes; omitted on unchanged and weekly-full-report days. |
+| `_Everything currently open._` | Italic line in the same position in full-mode channel messages (`notify.mode: full`). |
+| `📊 *Everything open now — YYYY-MM-DD HH:MM*` | Heading for current unresolved findings in a Bot thread. |
+| `_📊 Everything open now is in this message's thread ↓_` | Channel message footer on days when a thread is posted. |
+| `🔗 Everything open as of the last report → thread` | Footer on days without a new thread; the linked findings are from the time of the last report. |
+| `_Details in the generic webhook payload._` | LOW detail guidance shown only when a generic webhook is configured; weekly full reports do not contain LOW details. |
 | `✅ Actionable now (fixed)` | Fix-available section when triage is disabled, separate from Act now. |
 
 | Package or change label | Meaning |
@@ -371,6 +416,7 @@ CRITICAL and HIGH count distinct CVE IDs within each package and fix-status grou
 | `⬆️ escalated to ACT NOW/WATCH` | A known package's maximum priority increased. |
 | `new: CVE-…, CVE-… (+N more)` | Added CVEs are linked, with up to 3 per line and the remainder shown as a count. |
 | `fix now available` | No fix was previously available, and at least 1 fix is now available. |
+| `↩️ Unmuted (<reason>)` | Notification resumed after muting, unless a newly available fix, escalation to Act now, or added CVEs use an existing change label. |
 | `(end-of-life: no fix planned for this release)` | The selected CVEs are out of support for this release. |
 | `🚨 see Act now` | The EOL package's details appear in Act now. |
 | `includes N end-of-life package(s)` | Count of EOL groups folded into the base-OS line. |
@@ -498,13 +544,13 @@ The following settings configure delivery methods and destinations.
 
 The Bot posts current state in a thread when findings change or the weekly report is due, and links to the latest report on unchanged days. It also creates a new thread on the first notification, after a channel change, or when no valid previous permalink exists.
 
-A typical unchanged-day message is:
+A typical unchanged-day message with a generic webhook configured is:
 
 ```text
 No changes since last scan.
 📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 8 low
-_Details in the generic webhook payload, or in the weekly full report._
-🔗 Last full report → thread
+_Details in the generic webhook payload._
+🔗 Everything open as of the last report → thread
 ```
 
 An Act now evidence line reads as follows:
@@ -524,7 +570,7 @@ An Act now evidence line reads as follows:
 
 The generic webhook provides the complete current report as structured JSON. It sends to `notify.generic_webhook_url` only when a cycle meets the notification conditions and includes changes in `diff` mode.
 
-The payload includes Low findings, EOL packages folded in Slack, containers, and workloads. It can be used alongside either Slack delivery method, but it does not convert the payload into a Discord- or Teams-specific message format.
+The payload includes Low findings, muted findings, EOL packages folded in Slack, containers, and workloads. It can be used alongside either Slack delivery method, but it does not convert the payload into a Discord- or Teams-specific message format.
 
 The top-level `watch` array is a fix-status section, separate from the Watch priority. `not_affected` is excluded from every finding section.
 
@@ -658,7 +704,8 @@ observation rules, and usage counts:
 | `rules` | object | OS-package, compiled-language-package, and runtime-language-package rules shown above. |
 | `events_status` | string | `ok` or `unavailable`; empty if the Sensor has not reported. |
 | `events_reason` | string | Reason associated with event-observation status. |
-| `counts` | object | Counts named `in_use`, `not_observed`, and `unavailable`. |
+| `counts` | object | Counts named `in_use`, `not_observed`, `unavailable`, and `muted`. |
+| `counts.muted` | integer | Muted count. |
 
 Each `findings[].runtime` describes package usage and container evidence.
 The following fragment shows the fields; `process` requires an observation,
@@ -700,6 +747,8 @@ and `instances` is included only for language packages.
 
 | `findings[].runtime` field | Type | Meaning |
 | --- | --- | --- |
+| `muted` | boolean | `true` when muted; otherwise omitted. |
+| `muted_reason` | string | `no_fix_not_in_use_7d` for muted findings. |
 | `usage` | string | `in_use`, `not_observed`, or `unavailable`. |
 | `reason` | string | Reason for `unavailable`, listed below. |
 | `evidence_kinds` | array of strings | `exe`: execution confirmed by sampling; `mapped_library`: library loading confirmed by sampling; `exec_event`: execution observed by eBPF; `library_load_event`: library loading observed by eBPF. |
@@ -773,13 +822,14 @@ Sensor status meanings and observation limits are described in
 | `runtime_usage` | string | `in_use`, `not_observed`, or `unavailable`, only when runtime usage is enabled; omitted without an assessment. |
 | `image` | string | Image reference. |
 | `package` | string | Package name. |
-| `kind` | string | `new`, `escalated`, `new_cves`, or `now_fixable`. |
+| `kind` | string | `new`, `escalated`, `new_cves`, `now_fixable`, or `unmuted`. |
+| `muted` | boolean | `true` when every group in this change is muted; otherwise omitted. |
 | `new_cve_count` | integer | Added CVE count; included only for `new_cves`. |
 | `new_cve_ids` | array of strings | Added IDs without Slack link markup, included only for `new_cves`; the length matches `new_cve_count`. |
 | `critical` | integer | CRITICAL count. |
 | `high` | integer | HIGH count. |
 | `priority` | string | `act_now`, `watch`, or `low`; omitted when unavailable. |
-| `reason` | string | Plain-text evidence for an escalation; omitted otherwise. |
+| `reason` | string | Plain-text evidence for an escalation, or the reason for `unmuted`; omitted otherwise. |
 
 | `new_eol_packages[]` field | Type | Meaning |
 | --- | --- | --- |
@@ -821,7 +871,7 @@ Existing fields and the structure organized by fix status are preserved. Fix-sta
 - `wont_fix` represents `will_not_fix`.
 - `eol_packages` represents `end_of_life`.
 
-`diff.new[].kind` remains `new`, `escalated`, `new_cves`, or `now_fixable`.
+`diff.new[].kind` also supports `unmuted`, with its reason in `diff.new[].reason`.
 
 EOL changes use separate arrays and `kind` values. `diff.new_eol_packages` and `diff.resolved_eol_packages` return `[]` even when empty. EOL support preserves existing fields and adds new arrays and the optional `vulns[].status` field.
 
@@ -833,4 +883,7 @@ Slack uses this order: EOL base → EOL package → fix available → waiting fo
 
 Open now starts with EOL counts, including retained records. The following CRITICAL, HIGH, and affected-image counts come from current findings. If there are no current findings and only retained records remain, the same holding display is used as with triage enabled.
 
-New, New CVEs, Now fixable, Resolved, newly detected EOL, new EOL CVEs, and EOL clearances are still detected. Ordinary priority escalations and EOL package escalations to Act now are not detected.
+New, New CVEs, Now fixable, Unmuted, Resolved, newly detected EOL, new EOL CVEs, and EOL clearances are still detected. Ordinary priority escalations and EOL package escalations to Act now are not detected.
+
+In the full view, the line grouping low-risk fixes includes
+`— full list in the generic webhook payload` only when a generic webhook is configured.

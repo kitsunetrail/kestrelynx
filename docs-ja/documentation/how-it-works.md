@@ -199,12 +199,13 @@ EPSSスコアがない場合は0として扱わず、EPSS条件を判定から�
 
 ### 差分になる変化
 
-通常のパッケージでは、新規検出、優先度上昇、CVE追加、修正版が利用可能になった変化を通知する。複数の変化が同時に成立した場合は、1つの理由だけを通知する。
+通常のパッケージでは、新規検出、優先度上昇、CVE追加、修正版が利用可能になった変化、通知オフからの再開を通知する。複数の変化が同時に成立した場合は、1つの理由だけを通知する。
 
 - 新規は、前回にイメージ参照とパッケージの組み合わせがない場合
 - 優先度上昇は、保存済みの最大優先度より高くなった場合
 - CVE追加は、既知のパッケージに新しいCVE IDが加わった場合
 - 修正版が利用可能は、前回は修正版がなく、今回は1つ以上ある場合
+- 通知の再開は、通知オフの条件を満たさなくなった場合で、修正版の公開・Act nowへの上昇・CVE追加には既存の変化の表示を使用
 
 優先度低下は通知せず保存し、その後の上昇は保存した値を基準に判定する。EOLから通常へ戻っただけでは、新規やCVE追加として扱わない。
 
@@ -240,7 +241,7 @@ EOLパッケージの変化は、通常側とは独立して通知する。
     - ベースOSのEOL初回検出日時は、通常のパッケージ状態とは別に保存する
     - EOLパッケージの初回EOL検出日時・CVE ID集合・最大優先度は、通常のパッケージ状態とは別に保存する
     - 状態ファイルの形式バージョンは`1`のままとする
-    - 通常のパッケージの変化は、新規、優先度上昇、CVE追加、修正版が利用可能の順に判定し、同時成立なら最上位の理由だけを通知する
+    - 通常のパッケージの変化は、新規、優先度上昇、CVE追加、修正版が利用可能、通知の再開の順に判定し、同時成立なら最上位の理由だけを通知する
     - 通常側の比較には前回のEOL履歴も使う
     - EOLパッケージの変化は、新たなEOL検出、Act nowへの上昇、EOLのCVE追加の順に判定する
     - 全面・一部スキャン失敗やKubernetesの実体未確認による保持は、通常側とEOL側の移動処理より優先する
@@ -265,7 +266,7 @@ Kubernetesの実体未確認で以前のパッケージ検出結果を保持中�
 
 ## 6. Slackでの表示
 
-Slackのチャンネルでは変化を、Botのスレッドでは現在の詳細を確認できる。空の区分は表示せず、完全レポートでもLowは件数だけを示す。CVEごとの全データは汎用Webhookで確認する。
+Slackのチャンネルでは、diffモードは変化を、fullモードは現在の未解決の所見を表示する。Botのスレッドは`Everything open now`（未解決の所見の全体）として現在の未解決の所見を表示する。空の区分は表示せず、完全レポートでもLowは件数だけを示す。CVEごとの全データは汎用Webhookで確認する。
 
 ヘッダーのイメージ件数は、次の意味である。
 
@@ -273,6 +274,40 @@ Slackのチャンネルでは変化を、Botのスレッドでは現在の詳細
 - `affected`は対象脆弱性またはEOLベースOSがあるイメージ数で、失敗だけのイメージは含めない
 
 時刻はプロセスのローカルタイムゾーンを使い、コンテナでは`TZ`で指定する。`environment.name`はチャンネルのヘッダーだけに表示する。
+
+### 通知の言語 {#notification-language}
+
+`notify.language`は`en`（既定）か`ja`を指定し、それ以外は設定エラーになる。
+`notify.language: ja`では、Slackのチャンネル本文とスレッドの定型文すべてを日本語で表示する。
+対象は、見出し、区分の説明、アップグレードの注意度、変化の種類、Open now、警告、
+稼働時の使用状況の文言、通知オフの文言、スレッドの構成、案内の行である。
+
+CVEの番号、パッケージ名・版・イメージ名、深刻度の語（CRITICAL・HIGHなど）、
+Trivyが出すCVEの説明文（Title）、スキャン失敗のエラーメッセージ、
+Hacker Newsの議論のリンク名は英語のまま残る。
+汎用WebhookのJSONも、言語の設定に関係なく英語のままである。
+
+| 英語 | 日本語の通知 |
+| --- | --- |
+| Act now | 今すぐ対応 |
+| Watch | 要監視 |
+| Low | 低優先度 |
+| in use | 使用中 |
+| not observed | 使用が確認されない |
+| unavailable | 判定できない |
+| Muted | 通知オフ |
+
+日本語の差分通知の例は次のとおりである。
+
+```text
+🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果
+イメージ3件をスキャン、2件に影響あり
+_前回のスキャンからの変化_
+
+*🆕 前回のスキャンからの新規検出 (4件)*
+🚨 web:1.0
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 アップグレード: ディストリのセキュリティパッチ — ⬆️ 今すぐ対応に優先度昇格
+```
 
 ### 区分の順序
 
@@ -299,6 +334,12 @@ Open nowは最新スキャン後の未解決状態を示し、保持中の記録
 EOL側のWatch・Lowは優先度件数へ加算しない。EOL packageとAct nowの件数は重なる場合がある。
 
 現在状態レポートのPriority行は、修正状態別のパッケージグループ数を示すため、同じパッケージが複数件になる場合がある。
+
+`runtime.mute_unfixable_not_in_use: true`では、条件を満たす所見の行をSlackに出さず、
+Priority行とOpen nowの優先度の件数からも除く。優先度は変えず、
+`🔇 Muted — no fix available and not in use for 7+ days: N`（日本語では
+`🔇 通知オフ — 修正版がなく7日以上使用が確認されない: N件`）の1行で件数を表示する。
+条件と通知を再開する理由は[稼働時の使用状況](runtime-usage.md#muting-findings-without-a-fix)に記載している。
 
 Open nowの表示は、今回の検出結果と保持状態によって異なる。
 
@@ -354,9 +395,12 @@ CRITICAL・HIGHは、パッケージと修正状態のグループ内で重複�
 | `⚠️ EPSS data unavailable — triage is using KEV and severity only` | KEVと深刻度で判定 |
 | `_Intel data is N day(s) old (feeds unreachable)._` | 更新できず検証済みの古いキャッシュを使用中 |
 | `📋 Weekly full report` | 設定曜日の現在状態レポート |
-| `📊 *Full report — YYYY-MM-DD HH:MM*` | Botスレッドの現在状態レポートの見出し |
-| `📊 Full report in this message's thread` | Botが今回のスレッドへ現在状態を投稿済み |
-| `🔗 Last full report` | 直近の成功済みレポートへのリンク |
+| `_Changes since the last scan._` / `_前回のスキャンからの変化_` | diffモードで変化がある日のチャンネル本文に、`N images scanned, N affected`の直後に置く斜体の1行で、変化がない日と週次全量の日は非表示 |
+| `_Everything currently open._` / `_未解決の所見の全体_` | fullモード（`notify.mode: full`）のチャンネル本文の同じ位置に置く斜体の1行 |
+| `📊 *Everything open now — YYYY-MM-DD HH:MM*` / `📊 *未解決の所見の全体 — YYYY-MM-DD HH:MM*` | Botスレッドの現在の未解決の所見の見出し |
+| `_📊 Everything open now is in this message's thread ↓_` / `_📊 未解決の所見の全体はこのメッセージのスレッド ↓_` | スレッドを投稿した日のチャンネル本文の末尾 |
+| `🔗 Everything open as of the last report → thread` / `🔗 前回のレポート時点の未解決の所見の全体 → スレッド` | スレッドを投稿しない日の末尾で、リンク先は前回のレポート時点の所見 |
+| `_Details in the generic webhook payload._` | 汎用Webhookを設定しているときだけ出すLOWの詳細の案内で、週次全量にもLOWの詳細は非表示 |
 | `✅ Actionable now (fixed)` | トリアージ無効時の修正版あり区分で、Act nowとは別 |
 
 | パッケージ・変化のラベル | 意味 |
@@ -371,6 +415,7 @@ CRITICAL・HIGHは、パッケージと修正状態のグループ内で重複�
 | `⬆️ escalated to ACT NOW/WATCH` | 既知パッケージの最大優先度が上昇 |
 | `new: CVE-…, CVE-… (+N more)` | 追加CVEのリンクを1行最大3件、残りは件数で表示 |
 | `fix now available` | 前回は修正版なし、今回は1つ以上あり |
+| `↩️ Unmuted (<理由>)` / `↩️ 通知を再開 (<理由>)` | 通知オフからの再開で、修正版の公開・Act nowへの上昇・CVE追加には既存の変化の表示を使用 |
 | `(end-of-life: no fix planned for this release)` | このリリースでは対象CVEがサポート対象外 |
 | `🚨 see Act now` | EOLパッケージの詳細はAct now区分に表示 |
 | `includes N end-of-life package(s)` | ベースOSの行へ畳み込んだEOLグループ件数 |
@@ -498,13 +543,13 @@ Act now以外の変化には`CVE-ID · KEV/EPSS`を付け、情報を使えな�
 
 Botは変化があった日と週次レポートの日に現在状態をスレッドへ投稿し、変化がない日は直近のレポートへリンクする。初回通知、チャンネル変更、有効な前回パーマリンクがない場合も、新しいスレッドを作る。
 
-変化がない日の代表例は次のとおりである。
+汎用Webhookを設定している場合の、変化がない日の代表例は次のとおりである。
 
 ```text
 No changes since last scan.
 📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 8 low
-_Details in the generic webhook payload, or in the weekly full report._
-🔗 Last full report → thread
+_Details in the generic webhook payload._
+🔗 Everything open as of the last report → thread
 ```
 
 Act nowの判定根拠は次のように読む。
@@ -524,7 +569,7 @@ Act nowの判定根拠は次のように読む。
 
 汎用Webhookでは、現在の完全なレポートを構造化JSONで取得できる。`notify.generic_webhook_url`へ通知条件を満たした回だけ送り、`diff`モードでは差分も含める。
 
-Low、Slackで畳み込むEOLパッケージ、コンテナ、Workloadも確認できる。Slackのどちらの方式とも併用できるが、DiscordやTeams専用のメッセージ形式には変換しない。
+Low、通知オフの所見、Slackで畳み込むEOLパッケージ、コンテナ、Workloadも全件含む。Slackのどちらの方式とも併用できるが、DiscordやTeams専用のメッセージ形式には変換しない。
 
 トップレベルの`watch`は修正状態の区分であり、優先度のWatchとは別である。`not_affected`は、どの検出セクションにも含めない。
 
@@ -658,7 +703,8 @@ Sensorの状態、観測の判定方法、使用状況の件数を表す。
 | `rules` | object | 上記のOSパッケージ、実行ファイルに組み込まれる言語パッケージ、実行環境が読み込む言語パッケージの判定方法 |
 | `events_status` | string | `ok`または`unavailable`で、Sensorの報告がなければ空 |
 | `events_reason` | string | イベント観測の状態に伴う理由 |
-| `counts` | object | `in_use`、`not_observed`、`unavailable`の件数 |
+| `counts` | object | `in_use`、`not_observed`、`unavailable`、`muted`の件数 |
+| `counts.muted` | integer | 通知オフの件数 |
 
 各`findings[].runtime`は、パッケージの使用状況とコンテナの証拠を表す。
 次の抜粋はフィールドの例である。`process`は観測がある場合だけ、
@@ -700,6 +746,8 @@ Sensorの状態、観測の判定方法、使用状況の件数を表す。
 
 | `findings[].runtime`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
+| `muted` | boolean | 通知オフの場合は`true`、それ以外は省略 |
+| `muted_reason` | string | 通知オフの所見では`no_fix_not_in_use_7d` |
 | `usage` | string | `in_use`、`not_observed`、`unavailable` |
 | `reason` | string | 後述の`unavailable`の理由 |
 | `evidence_kinds` | 文字列の配列 | `exe`はサンプリングで実行中を確認、`mapped_library`はサンプリングで読み込みを確認、`exec_event`はeBPFで実行を観測、`library_load_event`はeBPFで読み込みを観測 |
@@ -772,13 +820,14 @@ Sensorの状態の意味と観測の限界は[稼働時の使用状況](runtime-
 | `runtime_usage` | string | 使用状況が有効な場合の`in_use`、`not_observed`、`unavailable`で、判定がなければ省略 |
 | `image` | string | イメージ参照 |
 | `package` | string | パッケージ名 |
-| `kind` | string | `new`、`escalated`、`new_cves`、`now_fixable` |
+| `kind` | string | `new`、`escalated`、`new_cves`、`now_fixable`、`unmuted` |
+| `muted` | boolean | その変化のすべてのグループが通知オフのときは`true`、それ以外は省略 |
 | `new_cve_count` | integer | `new_cves`の場合だけ含む追加CVE件数 |
 | `new_cve_ids` | 文字列の配列 | `new_cves`の場合だけ含む追加IDで、Slackリンク表記なし、長さは`new_cve_count`と同じ |
 | `critical` | integer | CRITICAL件数 |
 | `high` | integer | HIGH件数 |
 | `priority` | string | `act_now`、`watch`、`low`で、利用できなければ省略 |
-| `reason` | string | 優先度上昇の根拠を示すプレーンテキストで、それ以外は省略 |
+| `reason` | string | 優先度上昇の根拠を示すプレーンテキスト、または`unmuted`の理由で、それ以外は省略 |
 
 | `new_eol_packages[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
@@ -820,7 +869,7 @@ EOL変化には`new_cve_count`がないため、追加件数は`new_cve_ids`の�
 - `wont_fix`は`will_not_fix`を表す
 - `eol_packages`は`end_of_life`を表す
 
-`diff.new[].kind`は、`new`、`escalated`、`new_cves`、`now_fixable`のまま変更しない。
+`diff.new[].kind`には`unmuted`も含み、その理由は`diff.new[].reason`で表す。
 
 EOL変化は別配列と別の`kind`で表し、`diff.new_eol_packages`と`diff.resolved_eol_packages`は空でも`[]`を返す。EOL対応は既存フィールドを維持し、新しい配列と省略可能な`vulns[].status`の追加で表す。
 
@@ -832,4 +881,7 @@ Slackの表示順は、EOL base → EOL package → 修正版あり → 上流�
 
 Open nowは、保持中の記録を含むEOL件数を先に表示する。続くCRITICAL・HIGH・影響イメージ数は今回の検出結果から数え、今回の検出項目がなく保持だけがある場合は、有効時と同じ保持表示を使う。
 
-新規、CVE追加、修正版が利用可能、解消、EOLの新規・CVE追加・解除は引き続き検出する。通常の優先度上昇とEOLパッケージのAct nowへの上昇は検出しない。
+新規、CVE追加、修正版が利用可能、通知の再開、解消、EOLの新規・CVE追加・解除は引き続き検出する。通常の優先度上昇とEOLパッケージのAct nowへの上昇は検出しない。
+
+全量ビューで低リスクの修正をまとめる行には、汎用Webhookを設定しているときだけ
+`— full list in the generic webhook payload`を付ける。

@@ -21,6 +21,7 @@
 - **Unpatched vulnerabilities**: inclusion of findings without available fixes
 - **Base-OS and package EOL**: prominent reporting at the top, separately from CVE priority, of unsupported base operating systems (EOL base) and packages with CVEs reported by vendors as out of support for this release (EOL package)
 - **Change tracking**: new findings, added CVEs, newly available fixes, priority escalations, and resolutions
+- **Japanese Slack notifications**: `notify.language: ja` for channel and thread text; generic webhook JSON remains in English
 - **Environment identification**: optional environment name in Slack headers
 - **Container identification**: container names, Compose project/service, and Kubernetes workload information in the generic webhook
 - **Running-image verification**: scan pinning to observed identifiers such as digests, with identity matching
@@ -125,7 +126,7 @@ docker compose logs -f
 
 ### Docker socket access
 
-- **Discovery**: running-container listing through `GET /containers/json`
+- **Discovery**: running-container listing through `GET /containers/json`; the main agent also uses `GET /containers/{id}/json` when `runtime.enabled: true`
 - **Image access**: Docker API reads by Trivy
 - **Container operations**: no start, stop, or modification functionality
 - **`:ro` limitation**: no restriction on Docker API permissions
@@ -163,6 +164,7 @@ See [config.example.yml](config.example.yml) for all configuration options and t
 | `schedule.daily_at` | Daily scan time (`09:00` in the example; 24-hour interval if omitted or empty) |
 | `schedule.run_on_start` | Startup scan (default: `true`) |
 | `scan.severity` | Included severities (default: `[HIGH, CRITICAL]`) |
+| `notify.language` | Slack notification language: `en` (default) or `ja`; other values are configuration errors |
 | `notify.mode` | `diff`: change notifications (default); `full`: full report every scan |
 | `notify.full_report_day` | Weekly report day in diff mode (default: `monday`; disabled: `never`) |
 | `notify.notify_on_clean` | Notifications with no issues or changes (default: `false`) |

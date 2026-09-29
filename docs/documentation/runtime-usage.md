@@ -25,7 +25,7 @@ still shown, but results are not reordered.
 Function calls and module imports are not checked. Reading a data file does not
 count as evidence of use.
 
-Slack shows `▶ in use` with the observed activity. Threads also show
+With `notify.language: en`, Slack shows `▶ in use` with the observed activity. Threads also show
 `▷ not observed` or `▷ runtime evidence unavailable (<reason>)`.
 The notification text, ordering, and webhook fields are described in
 [How KestreLynx works](how-it-works.md).
@@ -121,6 +121,57 @@ See [Configuration](configuration.md) for the settings.
 On the scan immediately after the main container restarts, the Sensor may not
 yet have observed a new container. Its image can temporarily show
 `container not observed`; this clears on the next scan.
+
+### Muting findings without a fix {#muting-findings-without-a-fix}
+
+`runtime.mute_unfixable_not_in_use` defaults to `false` and takes effect only
+with `runtime.enabled: true`:
+
+```yaml
+runtime:
+  enabled: true
+  mute_unfixable_not_in_use: true
+```
+
+A package is muted only when all current groups for the same image and package
+meet every condition below.
+
+- No fix is available: the status is `affected` (including `fix_deferred`, `unknown`, and related statuses) or `will_not_fix`.
+- Runtime usage is `not_observed`; `unavailable` is not eligible.
+- The Sensor has observed every container used in the assessment for at least 7 days, to cover weekly activity.
+- Priority is not Act now.
+
+Packages with any `fixed` or EOL groups are not muted. EOL is always
+notified. Image references with failed scans or unconfirmed identities are not
+muted for that cycle.
+
+Muting does not change priority. Slack omits the matching lines and excludes
+them from priority counts in the Priority line and Open now. It shows a count:
+
+```text
+🔇 Muted — no fix available and not in use for 7+ days: N
+```
+
+The generic webhook retains all muted findings. Its additional fields are
+described in [How KestreLynx works](how-it-works.md).
+
+When the muting conditions no longer hold, notification resumes as a change.
+Newly available fixes, escalation to Act now, and added CVEs use the existing
+`fix now available`, `escalated`, and `new: CVE…` labels. Other changes show
+`↩️ Unmuted (<reason>)` (`↩️ 通知を再開 (<理由>)` in Japanese).
+
+| Reason | Japanese notification |
+| --- | --- |
+| `now in use` | 使用中になった |
+| `act now` | 今すぐ対応 |
+| `fix available` | 修正版あり |
+| `now end-of-life` | サポート終了(EOL)となった |
+| `insufficient observation` | 観測不足 |
+| `not an eligible status` | 対象外の状態 |
+
+```text
+• curl 8.0.0 (no fix available) (CRITICAL 0 / HIGH 1) — CVE-CURL · EPSS n/a — ↩️ Unmuted (now in use) · ▶ in use (running)
+```
 
 ### Observation options
 

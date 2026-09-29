@@ -34,14 +34,26 @@ YAML設定ファイルについて説明します。コンテナイメージで�
 | `notify.slack_bot_token` | 空 | `chat:write`権限を持つSlack Bot Tokenです。`slack_channel`と一緒に設定します。 |
 | `notify.slack_channel` | 空 | Botで通知するSlackチャンネルIDです。 |
 | `notify.generic_webhook_url` | 空 | 構造化JSONを受け取るエンドポイントです。 |
+| `notify.language` | `en` | Slack通知の言語です。`en`か`ja`を指定し、それ以外は設定エラーです。汎用WebhookのJSONは英語のままです。 |
 | `notify.notify_on_clean` | `false` | 脆弱性がない場合にも通知します。 |
 
 `slack_webhook_url`とBot Tokenの組み合わせを同時には設定できません。
 汎用Webhookは、どちらのSlack通知方式とも併用できます。
 
-Botによる通知では、サマリーメッセージのスレッドに未解決項目の完全なレポートを
-追加します。変化がない日はレポートを再投稿せず、直近の完全なレポートへのリンクを
-表示します。
+Botのスレッドの見出しは`Everything open now`（日本語では`未解決の所見の全体`）です。
+スレッドを投稿した日は、チャンネル本文の末尾に
+`_📊 Everything open now is in this message's thread ↓_`を表示します。
+投稿しない日のリンクは`🔗 Everything open as of the last report → thread`で、
+前回のレポート時点の未解決の所見を示します。
+
+日本語のSlack通知は、次のように設定します。
+
+```yaml
+notify:
+  language: ja
+```
+
+翻訳する定型文と英語のまま残る内容は、[KestreLynxの仕組み](how-it-works.md#notification-language)に記載しています。
 
 ## 通知モード
 
@@ -50,7 +62,7 @@ Botによる通知では、サマリーメッセージのスレッドに未解�
 | `notify.mode` | `diff` | `diff`は変化を通知し、`full`はスキャンごとに現在の全項目を通知します。 |
 | `notify.full_report_day` | `monday` | diffモードで完全なレポートを送る曜日です。`never`で無効化します。 |
 
-diffモードでは、新規検出、解消、修正可能化、緊急度上昇を通知します。未解決項目が
+diffモードでは、新規検出、解消、修正可能化、緊急度上昇、通知オフからの再開を通知します。未解決項目が
 残っていても変化がない場合、完全なレポートを繰り返さず、短いハートビート通知を
 送信します。
 
@@ -70,6 +82,7 @@ diffモードでは、新規検出、解消、修正可能化、緊急度上昇�
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
 | `runtime.enabled` | `false` | Sensorの証拠を読み、使用状況を通知に反映します。Sensorを置かない場合は無効のままにします。 |
+| `runtime.mute_unfixable_not_in_use` | `false` | 修正版がなく7日以上使用が確認されない所見のうち、条件を満たすものをSlackで通知オフにします。`runtime.enabled: true`のときだけ有効です。優先度は変えず、汎用Webhookには全件残します。 |
 | `runtime.evidence_dir` | `/var/lib/kestrelynx-runtime` | Sensorの証拠ボリュームをマウントした絶対パスです。Sensorの`--evidence-dir`と一致させます。 |
 
 `runtime.enabled: false`では、証拠ディレクトリを開かず、通知に稼働時の情報を追加しません。
@@ -82,7 +95,7 @@ diffモードでは、新規検出、解消、修正可能化、緊急度上昇�
 `GET /containers/{id}/json`も使用します。`io.kestrelynx.runtime.exclude=true`の
 ラベルを持つコンテナは使用状況の判定から外します。値は小文字の`true`だけが該当します。
 
-Sensorの導入手順、観測の判定方法、権限は[稼働時の使用状況](runtime-usage.md)に記載しています。
+Sensorの導入手順、観測の判定方法、通知オフの条件と通知の再開、権限は[稼働時の使用状況](runtime-usage.md)に記載しています。
 
 ## Kubernetes
 

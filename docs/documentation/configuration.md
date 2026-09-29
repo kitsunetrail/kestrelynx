@@ -34,14 +34,27 @@ At least one destination is required.
 | `notify.slack_bot_token` | empty | Slack bot token with `chat:write`. Set together with `slack_channel`. |
 | `notify.slack_channel` | empty | Destination Slack channel ID for bot delivery. |
 | `notify.generic_webhook_url` | empty | Endpoint that receives structured JSON. |
+| `notify.language` | `en` | Slack notification language: `en` or `ja`. Any other value is a configuration error. Generic webhook JSON remains in English. |
 | `notify.notify_on_clean` | `false` | Send a notification when no vulnerabilities are found. |
 
 Configure either `slack_webhook_url` or the bot-token pair, not both. A generic
 webhook can be used alongside either Slack delivery method.
 
-Bot delivery adds a full open-findings report in the summary message's thread.
-On quiet days, the summary links back to the last full report instead of
-reposting it.
+Bot threads are headed `Everything open now`. When a thread is posted, the
+channel message ends with `_📊 Everything open now is in this message's thread ↓_`.
+On days without a new thread, the link reads
+`🔗 Everything open as of the last report → thread` and refers to the state
+at the time of that report.
+
+To use Japanese Slack notifications:
+
+```yaml
+notify:
+  language: ja
+```
+
+The translated text and unchanged content are described in
+[How KestreLynx works](how-it-works.md#notification-language).
 
 ## Notification mode
 
@@ -51,7 +64,7 @@ reposting it.
 | `notify.full_report_day` | `monday` | Weekday for a full report in diff mode. Use `never` to disable it. |
 
 Diff mode reports new findings, resolved findings, changes in fix availability,
-and priority escalations. When findings remain open but nothing changed,
+priority escalations, and resumption after muting. When findings remain open but nothing changed,
 KestreLynx sends a short heartbeat instead of repeating the entire report.
 
 ## State and Docker
@@ -70,6 +83,7 @@ directory beside `state.path`, by default `/var/lib/kestrelynx/intel`.
 | Option | Default | Description |
 | --- | --- | --- |
 | `runtime.enabled` | `false` | Read Sensor evidence and include runtime usage in notifications. Leave disabled when no Sensor is installed. |
+| `runtime.mute_unfixable_not_in_use` | `false` | Mute eligible findings with no fix and no observed use for 7+ days in Slack. Requires `runtime.enabled: true`; priority is unchanged and all findings remain in the generic webhook. |
 | `runtime.evidence_dir` | `/var/lib/kestrelynx-runtime` | Absolute path where the Sensor evidence volume is mounted. Must match the Sensor's `--evidence-dir`. |
 
 With `runtime.enabled: false`, KestreLynx does not open the evidence directory
@@ -85,7 +99,7 @@ in addition to `GET /containers/json`. Containers with the label
 assessment; only the lowercase value `true` matches.
 
 See [Runtime usage](runtime-usage.md) for Sensor setup, observation rules,
-and permissions.
+muting conditions, notification resumption, and permissions.
 
 ## Kubernetes
 

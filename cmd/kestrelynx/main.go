@@ -100,7 +100,7 @@ func main() {
 	}
 	if cfg.Runtime.Enabled {
 		r.Evidence = evidence.NewFileProvider(cfg.Runtime.EvidenceDir)
-		r.AcceptUnfixableNotInUse = cfg.Runtime.AcceptUnfixableNotInUse
+		r.MuteUnfixableNotInUse = cfg.Runtime.MuteUnfixableNotInUse
 		// Config validation already rejects runtime.enabled alongside
 		// kubernetes.enabled, so lister is always the Docker adapter here;
 		// the type assertion just avoids widening ContainerLister itself
@@ -162,13 +162,14 @@ func buildLister(cfg config.Config, log *slog.Logger) (runner.ContainerLister, i
 // buildNotifier assembles the configured notify targets into one Notifier.
 func buildNotifier(c config.NotifyConfig) runner.Notifier {
 	var notifiers []notify.Notifier
+	lang := notify.Language(c.Language)
 	// Config validation guarantees the token and webhook are mutually
 	// exclusive; the API path adds the thread report the webhook can't do.
 	if c.SlackBotToken != "" {
-		notifiers = append(notifiers, notify.SlackAPINotifier{Token: c.SlackBotToken, Channel: c.SlackChannel})
+		notifiers = append(notifiers, notify.SlackAPINotifier{Token: c.SlackBotToken, Channel: c.SlackChannel, Language: lang})
 	}
 	if c.SlackWebhookURL != "" {
-		notifiers = append(notifiers, notify.SlackNotifier{WebhookURL: c.SlackWebhookURL})
+		notifiers = append(notifiers, notify.SlackNotifier{WebhookURL: c.SlackWebhookURL, Language: lang})
 	}
 	if c.GenericWebhookURL != "" {
 		notifiers = append(notifiers, notify.WebhookNotifier{URL: c.GenericWebhookURL})

@@ -124,6 +124,77 @@ func TestSlackAPINotifier_QuietDayLinksLastReport(t *testing.T) {
 	}
 }
 
+// TestSlackAPINotifier_PostsThreadAndReportsRef_Japanese is
+// TestSlackAPINotifier_PostsThreadAndReportsRef's Language: ja counterpart —
+// the thread-posted-day scenario. It exists because the two lines
+// SlackAPINotifier.Send appends to the summary after FormatSlackText has
+// already run (the thread pointer here, the last-report link in the sibling
+// test below) sit outside every notify function a language-switch test
+// exercised before this one: a golden test would never have caught them
+// staying hardcoded in English, since none of the ja goldens go through
+// SlackAPINotifier.Send at all.
+func TestSlackAPINotifier_PostsThreadAndReportsRef_Japanese(t *testing.T) {
+	f := newSlackFake(t)
+	res := &ThreadResult{}
+	m := Message{Report: triageReport(), Thread: true, Result: res}
+	n := f.notifier()
+	n.Language = LanguageJA
+	if err := n.Send(context.Background(), m); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(f.posts) < 2 {
+		t.Fatalf("expected summary + thread reply, got %d post(s)", len(f.posts))
+	}
+	if !strings.Contains(f.text(0), jaMessages.ThreadPostedNotice) {
+		t.Errorf("summary missing the Japanese thread pointer:\n%s", f.text(0))
+	}
+	for _, english := range []string{
+		"Everything open now is in this message's thread",
+		"Everything currently open",
+		"images scanned",
+		"scan results for",
+	} {
+		if strings.Contains(f.text(0), english) {
+			t.Errorf("summary leaked English text %q:\n%s", english, f.text(0))
+		}
+	}
+	if strings.Contains(f.text(1), "Everything open now —") {
+		t.Errorf("thread reply leaked the English report header:\n%s", f.text(1))
+	}
+}
+
+// TestSlackAPINotifier_QuietDayLinksLastReport_Japanese is
+// TestSlackAPINotifier_QuietDayLinksLastReport's Language: ja counterpart —
+// the last-report-link day scenario, including the link label ("thread" /
+// "スレッド") itself.
+func TestSlackAPINotifier_QuietDayLinksLastReport_Japanese(t *testing.T) {
+	f := newSlackFake(t)
+	res := &ThreadResult{}
+	ref := &state.ReportRef{Channel: "C1", TS: "999.1", Permalink: "https://example.slack.com/archives/C1/p9991"}
+	m := Message{Report: triageReport(), Diff: &state.Diff{}, LastReport: ref, Result: res}
+	n := f.notifier()
+	n.Language = LanguageJA
+	if err := n.Send(context.Background(), m); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(f.posts) != 1 {
+		t.Fatalf("quiet day must not post a thread, got %d post(s)", len(f.posts))
+	}
+	if !strings.Contains(f.text(0), "→ <"+ref.Permalink+"|スレッド>") {
+		t.Errorf("summary missing the Japanese last-report link:\n%s", f.text(0))
+	}
+	for _, english := range []string{
+		"Everything open as of the last report",
+		"|thread>",
+		"Everything currently open",
+		"scan results for",
+	} {
+		if strings.Contains(f.text(0), english) {
+			t.Errorf("summary leaked English text %q:\n%s", english, f.text(0))
+		}
+	}
+}
+
 func TestSlackAPINotifier_MissingRefForcesThread(t *testing.T) {
 	// First run in diff mode (no stored ref): even a no-changes day posts the
 	// full thread so a link exists afterwards (spec edge case 1).

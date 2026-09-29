@@ -19,26 +19,26 @@ import (
 // It is the triage-mode counterpart of writeFullBody. The Sensor/eBPF
 // warning is written once, centrally, by the entry points that call into
 // this (FormatSlackText, FormatSlackDiffText) — not repeated here.
-func writeTriageBody(b *strings.Builder, r analyze.Report) {
+func writeTriageBody(b *strings.Builder, r analyze.Report, msg messages) {
 	pv := r.ByPriority()
-	// ActNow is never filtered: a group eligible for acceptance is never
+	// ActNow is never filtered: a group eligible for muting is never
 	// act_now by construction.
-	pv.Watch = filterAccepted(pv.Watch)
-	pv.Low = filterAccepted(pv.Low)
+	pv.Watch = filterMuted(pv.Watch)
+	pv.Low = filterMuted(pv.Low)
 	byRef := imagesByRef(r)
-	writeTriageHeadline(b, r, pv)
-	writeIntelWarning(b, r)
+	writeTriageHeadline(b, r, pv, msg)
+	writeIntelWarning(b, r, msg)
 
-	writeEOSLSection(b, r, byRef)
-	writeEOLPackages(b, r, byRef)
-	writeActNow(b, r, pv.ActNow, byRef)
-	writeWatch(b, r, pv.Watch, byRef)
-	writeLow(b, r, pv.Low)
-	writeAcceptedCount(b, r)
-	writeScanErrors(b, r.ScanErrors, byRef)
-	writeIntelStale(b, r)
-	writeRuntimeSummary(b, r)
-	writeUnresolvedRefs(b, r)
+	writeEOSLSection(b, r, byRef, msg)
+	writeEOLPackages(b, r, byRef, msg)
+	writeActNow(b, r, pv.ActNow, byRef, msg)
+	writeWatch(b, r, pv.Watch, byRef, msg)
+	writeLow(b, r, pv.Low, msg)
+	writeMutedCount(b, r, msg)
+	writeScanErrors(b, r.ScanErrors, byRef, msg)
+	writeIntelStale(b, r, msg)
+	writeRuntimeSummary(b, r, msg)
+	writeUnresolvedRefs(b, r, msg)
 }
 
 // writeTriageHeadline is the one-line summary that replaces the severity
@@ -47,64 +47,64 @@ func writeTriageBody(b *strings.Builder, r analyze.Report) {
 // omitted. The end-of-life package segment counts fix status and act now
 // counts exploitation priority, so an act_now end-of-life package is counted
 // in both.
-func writeTriageHeadline(b *strings.Builder, r analyze.Report, pv analyze.PriorityView) {
+func writeTriageHeadline(b *strings.Builder, r analyze.Report, pv analyze.PriorityView, msg messages) {
 	var seg []string
 	if n := len(r.EOSLImages); n > 0 {
-		seg = append(seg, fmt.Sprintf("⛔ %d EOL base", n))
+		seg = append(seg, fmt.Sprintf(msg.SegEOLBase, n))
 	}
 	if n := analyze.GroupCount(r.EOLPackageAlerts()); n > 0 {
-		seg = append(seg, fmt.Sprintf("⛔ %d EOL package", n))
+		seg = append(seg, fmt.Sprintf(msg.SegEOLPackage, n))
 	}
 	if n := analyze.GroupCount(pv.ActNow); n > 0 {
-		seg = append(seg, fmt.Sprintf("🚨 %d act now", n))
+		seg = append(seg, fmt.Sprintf(msg.SegActNow, n))
 	}
 	if n := analyze.GroupCount(pv.Watch); n > 0 {
-		seg = append(seg, fmt.Sprintf("👀 %d watch", n))
+		seg = append(seg, fmt.Sprintf(msg.SegWatch, n))
 	}
 	if n := analyze.GroupCount(pv.Low); n > 0 {
-		seg = append(seg, fmt.Sprintf("🔕 %d low", n))
+		seg = append(seg, fmt.Sprintf(msg.SegLow, n))
 	}
 	if len(seg) > 0 {
-		fmt.Fprintf(b, "*Priority:* %s\n", strings.Join(seg, " · "))
+		fmt.Fprintf(b, msg.PriorityLine, strings.Join(seg, " · "))
 	}
 }
 
 // writeIntelWarning surfaces missing intel right under the headline: the
 // triage verdicts below are only as good as the data behind them.
-func writeIntelWarning(b *strings.Builder, r analyze.Report) {
+func writeIntelWarning(b *strings.Builder, r analyze.Report, msg messages) {
 	switch {
 	case r.Intel.Degraded():
-		b.WriteString("⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low\n")
+		b.WriteString(msg.IntelDegradedWarning)
 	case !r.Intel.KEVOK:
-		b.WriteString("⚠️ CISA KEV data unavailable — act-now detection may be incomplete\n")
+		b.WriteString(msg.IntelKEVUnavailable)
 	case !r.Intel.EPSSOK:
-		b.WriteString("⚠️ EPSS data unavailable — triage is using KEV and severity only\n")
+		b.WriteString(msg.IntelEPSSUnavailable)
 	}
 }
 
 // writeIntelStale annotates a message built from cached feeds that could not
 // be refreshed (a fail-open window: a stale cache is used rather than
 // blocking or discarding triage).
-func writeIntelStale(b *strings.Builder, r analyze.Report) {
+func writeIntelStale(b *strings.Builder, r analyze.Report, msg messages) {
 	if r.Intel.StaleDays > 0 && !r.Intel.Degraded() {
-		fmt.Fprintf(b, "\n_Intel data is %d day(s) old (feeds unreachable)._\n", r.Intel.StaleDays)
+		fmt.Fprintf(b, msg.IntelStale, r.Intel.StaleDays)
 	}
 }
 
 // writeActNow renders the act-now bucket in full: package line plus an
 // evidence line per package.
-func writeActNow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation) {
+func writeActNow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation, msg messages) {
 	if len(imgs) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*🚨 Act now (%d) — exploited or likely to be*\n", analyze.GroupCount(imgs))
+	fmt.Fprintf(b, msg.ActNowHeading, analyze.GroupCount(imgs))
 	for _, img := range imgs {
-		fmt.Fprintf(b, "• %s\n", imageLabel(img, byRef))
+		fmt.Fprintf(b, msg.ImageBullet, imageLabel(img, byRef, msg))
 		for _, g := range img.Packages {
-			writePackage(b, g, g.Status == scanner.StatusFixed, "")
-			writeEvidence(b, r, g)
+			writePackage(b, g, g.Status == scanner.StatusFixed, "", msg)
+			writeEvidence(b, r, g, msg)
 			if runtimeInUse(g.Runtime) {
-				fmt.Fprintf(b, "     %s\n", runtimeInUsePhrase(g.Runtime))
+				fmt.Fprintf(b, "     %s\n", runtimeInUsePhrase(g.Runtime, msg))
 			}
 		}
 	}
@@ -112,20 +112,20 @@ func writeActNow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindi
 
 // writeWatch renders the watch bucket compactly: one package line with a short
 // reason, no separate evidence line.
-func writeWatch(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation) {
+func writeWatch(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation, msg messages) {
 	if len(imgs) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*👀 Watch (%d) — not urgent, keep an eye on*\n", analyze.GroupCount(imgs))
+	fmt.Fprintf(b, msg.WatchHeading, analyze.GroupCount(imgs))
 	for _, img := range imgs {
-		fmt.Fprintf(b, "• %s\n", imageLabel(img, byRef))
+		fmt.Fprintf(b, msg.ImageBullet, imageLabel(img, byRef, msg))
 		for _, g := range img.Packages {
 			suffix := ""
-			if ev := shortEvidence(r, g.TopVuln()); ev != "" {
+			if ev := shortEvidence(r, g.TopVuln(), msg); ev != "" {
 				suffix = " — " + ev
 			}
-			suffix += runtimeWatchSuffix(g.Runtime)
-			writePackage(b, g, g.Status == scanner.StatusFixed, suffix)
+			suffix += runtimeWatchSuffix(g.Runtime, msg)
+			writePackage(b, g, g.Status == scanner.StatusFixed, suffix, msg)
 		}
 	}
 }
@@ -134,59 +134,65 @@ func writeWatch(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindin
 // triage layer exists to keep out of the reader's way. The full list is
 // always in the generic webhook payload, when one is configured — the
 // weekly report shows this same count-only line, never more.
-func writeLow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings) {
+func writeLow(b *strings.Builder, r analyze.Report, imgs []analyze.ImageFindings, msg messages) {
 	n := analyze.GroupCount(imgs)
 	if n == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*🔕 Low priority (%d)* — %d finding(s) across %d image(s), no exploitation signal (not in KEV, EPSS below threshold).", n, n, len(imgs))
+	fmt.Fprintf(b, msg.LowHeading, n, n, len(imgs))
 	if inUse := countInUse(imgs); inUse > 0 {
-		fmt.Fprintf(b, " · ▶ %d in use", inUse)
+		fmt.Fprintf(b, msg.TriageLowInUseCount, inUse)
 	}
 	b.WriteString("\n")
 	// The generic webhook is the only destination with per-package detail
 	// beyond this count, and only when one is actually configured — a
 	// weekly full report shows this same count-only line, never more.
 	if r.GenericWebhookConfigured {
-		b.WriteString("_Details in the generic webhook payload._\n")
+		b.WriteString(msg.DetailsInWebhook)
 	}
 }
 
 // writeEvidence renders the "why act now" line under a package: the strongest
 // CVE with its KEV/EPSS facts, a hint when the fix status limits the response,
 // and the count of further CVEs folded into the group.
-func writeEvidence(b *strings.Builder, r analyze.Report, g analyze.PackageGroup) {
+func writeEvidence(b *strings.Builder, r analyze.Report, g analyze.PackageGroup, msg messages) {
 	top := g.TopVuln()
 	if top.ID == "" {
 		return
 	}
-	fmt.Fprintf(b, "     ↳ %s", evidence(r, top))
+	fmt.Fprintf(b, "     ↳ %s", evidence(r, top, msg))
 	if rest := len(g.Vulns) - 1; rest > 0 {
-		fmt.Fprintf(b, " (+%d more CVE(s) in this package)", rest)
+		fmt.Fprintf(b, msg.EvidenceMoreCVEs, rest)
 	}
 	switch g.Status {
 	case scanner.StatusAffected:
-		b.WriteString(" — no fix yet, consider mitigation")
+		b.WriteString(msg.NoFixYetMitigation)
 	case scanner.StatusWontFix:
-		b.WriteString(" — upstream won't fix, consider replacing")
+		b.WriteString(msg.WontFixReplace)
 	case scanner.StatusEndOfLife:
-		b.WriteString(eolEvidenceMark)
+		b.WriteString(msg.EOLEvidenceMark)
 	}
 	b.WriteString("\n")
-	writeRefs(b, top)
+	writeRefs(b, top, msg)
 }
 
 // writeRefs renders the reference links under an act-now evidence line: the
 // scanner's advisory, the vendor advisory from the KEV notes, and the HN
 // discussion when one exists. Links only — verifiable facts, no summaries.
-func writeRefs(b *strings.Builder, v analyze.VulnRef) {
+func writeRefs(b *strings.Builder, v analyze.VulnRef, msg messages) {
 	var parts []string
 	if v.URL != "" {
-		parts = append(parts, fmt.Sprintf("<%s|advisory>", v.URL))
+		parts = append(parts, fmt.Sprintf(msg.AdvisoryLink, v.URL, msg.AdvisoryLinkLabel))
 	}
 	for _, ref := range v.Refs {
 		label := ref.Label
-		if ref.Kind == "discussion" {
+		switch ref.Kind {
+		case "vendor":
+			// analyze.Ref.Label and the webhook payload keep their own
+			// English "vendor advisory" text (analyze/triage.go, format.go's
+			// refPayload) — this substitution is Slack-display-only.
+			label = msg.VendorAdvisoryLinkLabel
+		case "discussion":
 			label = "💬 " + label
 		}
 		parts = append(parts, fmt.Sprintf("<%s|%s>", ref.URL, label))
@@ -194,7 +200,7 @@ func writeRefs(b *strings.Builder, v analyze.VulnRef) {
 	if len(parts) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "       📎 %s\n", strings.Join(parts, " · "))
+	fmt.Fprintf(b, msg.RefsLine, strings.Join(parts, " · "))
 }
 
 // vulnIDLink renders a vulnerability ID as a Slack link to its official
@@ -210,41 +216,41 @@ func vulnIDLink(id string) string {
 // evidence states the facts behind a verdict for Slack rendering: linked ID,
 // severity, then exploitation intel. In degraded mode there is no intel to
 // cite and the header warning already explains why.
-func evidence(r analyze.Report, v analyze.VulnRef) string {
-	return evidenceLine(r, v, vulnIDLink(v.ID))
+func evidence(r analyze.Report, v analyze.VulnRef, msg messages) string {
+	return evidenceLine(r, v, vulnIDLink(v.ID), msg)
 }
 
 // plainEvidence is the mrkdwn-free variant for the webhook payload, which is
 // consumed outside Slack and must not carry <url|label> markup.
-func plainEvidence(r analyze.Report, v analyze.VulnRef) string {
-	return evidenceLine(r, v, v.ID)
+func plainEvidence(r analyze.Report, v analyze.VulnRef, msg messages) string {
+	return evidenceLine(r, v, v.ID, msg)
 }
 
-func evidenceLine(r analyze.Report, v analyze.VulnRef, id string) string {
+func evidenceLine(r analyze.Report, v analyze.VulnRef, id string, msg messages) string {
 	parts := []string{id + " " + string(v.Severity)}
 	if r.Intel.Degraded() {
-		parts = append(parts, "severity only (intel unavailable)")
+		parts = append(parts, msg.EvidenceSeverityOnly)
 		return strings.Join(parts, " · ")
 	}
 	if v.KEV {
-		parts = append(parts, "CISA KEV (exploited in the wild)")
+		parts = append(parts, msg.EvidenceKEV)
 	}
-	parts = append(parts, "EPSS "+epssString(v))
+	parts = append(parts, fmt.Sprintf(msg.EvidenceEPSSPrefix, epssString(v)))
 	if v.Ransomware {
-		parts = append(parts, "🧨 ransomware campaign")
+		parts = append(parts, msg.EvidenceRansomware)
 	}
 	return strings.Join(parts, " · ")
 }
 
 // shortEvidence is the compact reason used inline in the watch bucket.
-func shortEvidence(r analyze.Report, v analyze.VulnRef) string {
+func shortEvidence(r analyze.Report, v analyze.VulnRef, msg messages) string {
 	if v.ID == "" || r.Intel.Degraded() {
 		return ""
 	}
 	if v.KEV {
-		return vulnIDLink(v.ID) + " · CISA KEV"
+		return vulnIDLink(v.ID) + msg.ShortEvidenceKEV
 	}
-	return vulnIDLink(v.ID) + " · EPSS " + epssString(v)
+	return vulnIDLink(v.ID) + fmt.Sprintf(msg.ShortEvidenceEPSSPrefix, epssString(v))
 }
 
 // epssString formats a probability for reading in a chat message: whole
@@ -274,14 +280,14 @@ func epssString(v analyze.VulnRef) string {
 // first, with evidence lines for act-now items and the escalation callout that
 // is diff mode's payoff: "this got urgent overnight" is exactly the news a
 // daily digest exists to carry.
-func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Change) {
+func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Change, msg messages) {
 	if len(changes) == 0 {
 		return
 	}
 	sorted := make([]state.Change, len(changes))
 	copy(sorted, changes)
-	// Sorted by the change's full priority (all groups, accepted or not) —
-	// priority is never touched by acceptance, so this order must not be
+	// Sorted by the change's full priority (all groups, muted or not) —
+	// priority is never touched by muting, so this order must not be
 	// either.
 	sort.SliceStable(sorted, func(i, j int) bool {
 		pi, pj := analyze.MaxPriority(sorted[i].Groups), analyze.MaxPriority(sorted[j].Groups)
@@ -299,19 +305,19 @@ func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Ch
 		return
 	}
 	byRef := imagesByRef(r)
-	fmt.Fprintf(b, "\n*🆕 New since last scan (%d)*\n", len(visible))
+	fmt.Fprintf(b, msg.NewSinceLastScanHeading, len(visible))
 	lastImage := ""
 	for _, vc := range visible {
 		if vc.change.Image != lastImage {
-			fmt.Fprintf(b, "%s %s\n", priorityEmoji(analyze.MaxPriority(vc.change.Groups)), refLabel(vc.change.Image, byRef))
+			fmt.Fprintf(b, "%s %s\n", priorityEmoji(analyze.MaxPriority(vc.change.Groups)), refLabel(vc.change.Image, byRef, msg))
 			lastImage = vc.change.Image
 		}
 		for _, g := range vc.groups {
-			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, vc.change, g)+runtimeChangeSuffix(g))
+			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, vc.change, g, msg)+runtimeChangeSuffix(g, msg), msg)
 			if g.Priority == analyze.PriorityActNow {
-				writeEvidence(b, r, g)
+				writeEvidence(b, r, g, msg)
 				if runtimeInUse(g.Runtime) {
-					fmt.Fprintf(b, "     %s\n", runtimeInUsePhrase(g.Runtime))
+					fmt.Fprintf(b, "     %s\n", runtimeInUsePhrase(g.Runtime, msg))
 				}
 			}
 		}
@@ -323,35 +329,35 @@ func writeTriageChanges(b *strings.Builder, r analyze.Report, changes []state.Ch
 // holding is the same signal writeOpenNow honors: it must not assert "all
 // clear" when the current cycle looks clean only because an unpinned scan is
 // having a previous finding held rather than resolved.
-func writeTriageOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool) {
+func writeTriageOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool, msg messages) {
 	if !r.HasFindings() {
-		writeNothingOpenNow(b, d, holding)
+		writeNothingOpenNow(b, d, holding, msg)
 		return
 	}
-	seg := openNowEOLSegments(d, true)
+	seg := openNowEOLSegments(d, true, msg)
 	if d.OpenActNow > 0 {
-		seg = append(seg, fmt.Sprintf("🚨 %d act-now", d.OpenActNow))
+		seg = append(seg, fmt.Sprintf(msg.OpenNowActNow, d.OpenActNow))
 	}
 	if d.OpenWatch > 0 {
-		seg = append(seg, fmt.Sprintf("👀 %d watch", d.OpenWatch))
+		seg = append(seg, fmt.Sprintf(msg.SegWatch, d.OpenWatch))
 	}
 	if d.OpenLow > 0 {
-		seg = append(seg, fmt.Sprintf("🔕 %d low", d.OpenLow))
+		seg = append(seg, fmt.Sprintf(msg.SegLow, d.OpenLow))
 	}
-	fmt.Fprintf(b, "\n📌 Open now: %s", strings.Join(seg, " / "))
+	fmt.Fprintf(b, msg.OpenNowPrefix, strings.Join(seg, " / "))
 	// "act-now/watch", not "urgent": the age covers both buckets (an old low
 	// is the triage doing its job), and calling a watch-only backlog "urgent"
 	// misreads as act-now debt when the act-now count is zero.
 	if days := d.OldestUrgentDays(r.GeneratedAt); days > 0 {
 		if days >= staleDays {
-			fmt.Fprintf(b, " — ⏰ oldest act-now/watch unresolved %d day(s)", days)
+			fmt.Fprintf(b, msg.OldestActNowWatchStale, days)
 		} else {
-			fmt.Fprintf(b, " — oldest act-now/watch unresolved %d day(s)", days)
+			fmt.Fprintf(b, msg.OldestActNowWatch, days)
 		}
 	}
 	b.WriteString("\n")
 	if r.GenericWebhookConfigured {
-		b.WriteString("_Details in the generic webhook payload._\n")
+		b.WriteString(msg.DetailsInWebhook)
 	}
 }
 
@@ -366,20 +372,20 @@ func priorityEmoji(p analyze.Priority) string {
 	}
 }
 
-func priorityLabel(p analyze.Priority) string {
+func priorityLabel(p analyze.Priority, msg messages) string {
 	switch p {
 	case analyze.PriorityActNow:
-		return "ACT NOW"
+		return msg.PriorityLabelActNow
 	case analyze.PriorityWatch:
-		return "WATCH"
+		return msg.PriorityLabelWatch
 	default:
-		return "LOW"
+		return msg.PriorityLabelLow
 	}
 }
 
 // changeEvidence is the webhook "reason" for an escalated change: the facts of
 // the strongest CVE in the change's strongest group.
-func changeEvidence(r analyze.Report, c state.Change) string {
+func changeEvidence(r analyze.Report, c state.Change, msg messages) string {
 	var best analyze.PackageGroup
 	for _, g := range c.Groups {
 		if g.Priority.Rank() >= best.Priority.Rank() {
@@ -389,5 +395,5 @@ func changeEvidence(r analyze.Report, c state.Change) string {
 	if best.TopVuln().ID == "" {
 		return ""
 	}
-	return plainEvidence(r, best.TopVuln())
+	return plainEvidence(r, best.TopVuln(), msg)
 }

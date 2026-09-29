@@ -43,6 +43,42 @@ func TestSlackNotifier_Send(t *testing.T) {
 	}
 }
 
+// TestSlackNotifier_Send_Japanese confirms SlackNotifier (the Incoming
+// Webhook path, which can never thread or link a last report — see
+// slackapi.go's own doc comment) forwards Language all the way into the
+// body it posts.
+func TestSlackNotifier_Send_Japanese(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	n := SlackNotifier{WebhookURL: srv.URL, Language: LanguageJA}
+	if err := n.Send(context.Background(), Message{Report: sampleReport()}); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	var payload struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(gotBody), &payload); err != nil {
+		t.Fatalf("body not JSON: %v\n%s", err, gotBody)
+	}
+	if !strings.Contains(payload.Text, "KestreLynx") {
+		t.Errorf("text missing header: %q", payload.Text)
+	}
+	// "affected" is deliberately excluded: it's the scanner's own status
+	// vocabulary (scanner.StatusAffected), shown verbatim like "will_not_fix"
+	// — see messages.go's own doc comment on what stays untranslated.
+	for _, english := range []string{"scan results for", "images scanned", "All clear"} {
+		if strings.Contains(payload.Text, english) {
+			t.Errorf("text leaked English wording %q: %q", english, payload.Text)
+		}
+	}
+}
+
 func TestSlackNotifier_HTTPError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

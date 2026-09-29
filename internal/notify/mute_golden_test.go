@@ -11,17 +11,17 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
-// Accept golden fixture: runtime.accept_unfixable_not_in_use scenarios,
+// Mute golden fixture: runtime.mute_unfixable_not_in_use scenarios,
 // built on the same web:1.0/openssl/curl shapes runtime_golden_test.go
-// already uses. openssl stays act_now and in use (never accepted, and always
+// already uses. openssl stays act_now and in use (never muted, and always
 // shown) side by side with curl, an affected, not-observed, low-priority OS
 // package whose container has been running for well over the 7-day
-// observation window — the one finding these scenarios accept.
+// observation window — the one finding these scenarios mute.
 
-// acceptGoldenReport builds the report before runtime evidence is attached:
+// muteGoldenReport builds the report before runtime evidence is attached:
 // one act_now finding (openssl) that must never be hidden, and one
-// acceptance-eligible finding (curl).
-func acceptGoldenReport(t *testing.T) analyze.Report {
+// muting-eligible finding (curl).
+func muteGoldenReport(t *testing.T) analyze.Report {
 	t.Helper()
 	web := rtGoldenScan(t, "web:1.0", rtGoldenWebDigest,
 		scanner.Finding{Image: "web:1.0", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "3.0.7", Status: scanner.StatusAffected, Severity: scanner.SeverityCritical, VulnID: "CVE-OPENSSL"},
@@ -33,25 +33,25 @@ func acceptGoldenReport(t *testing.T) analyze.Report {
 	}), genTime)
 }
 
-// acceptGoldenGenWeb is rtGoldenGenWeb with its container generation's
+// muteGoldenGenWeb is rtGoldenGenWeb with its container generation's
 // StartedAt pushed back 8 days — past the 7-day observation window —
 // leaving everything else (the PID/starttime pair matchGeneration checks,
 // openssl's in-use evidence) untouched. curl has no OSPackages/Unavailable
 // entry of its own, so it judges not_observed exactly as it already does in
 // runtime_golden_test.go's healthy-Sensor fixture.
-func acceptGoldenGenWeb() rtevidence.Generation {
+func muteGoldenGenWeb() rtevidence.Generation {
 	gen := rtGoldenGenWeb()
 	gen.StartedAt = genTime.Add(-8 * 24 * time.Hour)
 	return gen
 }
 
-// acceptGoldenAttach attaches runtime evidence built from
-// acceptGoldenGenWeb and, when accept is true, runs ApplyAcceptance —
-// mirroring runner.RunOnce's own order (AttachRuntime, then ApplyAcceptance
-// only when runtime.accept_unfixable_not_in_use is on).
-func acceptGoldenAttach(t *testing.T, r *analyze.Report, accept bool) {
+// muteGoldenAttach attaches runtime evidence built from
+// muteGoldenGenWeb and, when mute is true, runs ApplyMuting —
+// mirroring runner.RunOnce's own order (AttachRuntime, then ApplyMuting
+// only when runtime.mute_unfixable_not_in_use is on).
+func muteGoldenAttach(t *testing.T, r *analyze.Report, mute bool) {
 	t.Helper()
-	gen := acceptGoldenGenWeb()
+	gen := muteGoldenGenWeb()
 	snap := rtevidence.Snapshot{Schema: rtevidence.Schema, Sensor: rtGoldenSensorInfo(), Generations: []rtevidence.Generation{gen}}
 	insp := analyze.GenerationInspect{
 		ByContainer: map[string]docker.InspectResult{
@@ -60,40 +60,40 @@ func acceptGoldenAttach(t *testing.T, r *analyze.Report, accept bool) {
 		BootTime: rtGoldenBoot,
 	}
 	analyze.AttachRuntime(r, analyze.RuntimeInfo{Sensor: snap.Sensor}, snap, insp, genTime)
-	if accept {
-		analyze.ApplyAcceptance(r, genTime)
+	if mute {
+		analyze.ApplyMuting(r, genTime)
 	}
 }
 
-// TestGolden_AcceptUnfixableNotInUse pins the channel full view, the diff
+// TestGolden_MuteUnfixableNotInUse pins the channel full view, the diff
 // (first-cycle) channel body, the thread, and the webhook payload for a
-// report with one accepted finding (curl) and one act_now finding (openssl)
+// report with one muted finding (curl) and one act_now finding (openssl)
 // that stays fully visible alongside it.
-func TestGolden_AcceptUnfixableNotInUse(t *testing.T) {
-	r := acceptGoldenReport(t)
-	acceptGoldenAttach(t, &r, true)
+func TestGolden_MuteUnfixableNotInUse(t *testing.T) {
+	r := muteGoldenReport(t)
+	muteGoldenAttach(t, &r, true)
 
-	checkGolden(t, "accept_slack_full", FormatSlackText(r))
-	checkGolden(t, "accept_thread", goldenThread(r, state.State{}, 0))
+	checkGolden(t, "mute_slack_full", FormatSlackText(r))
+	checkGolden(t, "mute_thread", goldenThread(r, state.State{}, 0))
 
 	d, _ := state.Compute(state.State{}, r)
-	checkGolden(t, "accept_slack_diff", FormatSlackDiffText(r, d, false, false))
-	checkGolden(t, "accept_webhook", mustIndentJSON(t, BuildWebhookPayload(r, &d)))
+	checkGolden(t, "mute_slack_diff", FormatSlackDiffText(r, d, false, false))
+	checkGolden(t, "mute_webhook", mustIndentJSON(t, BuildWebhookPayload(r, &d)))
 }
 
-// TestAcceptUnfixableNotInUse_Disabled proves that leaving
-// runtime.accept_unfixable_not_in_use off (analyze.ApplyAcceptance is then
+// TestMuteUnfixableNotInUse_Disabled proves that leaving
+// runtime.mute_unfixable_not_in_use off (analyze.ApplyMuting is then
 // never called — the exact path every deployment used before this setting
 // existed) still produces the byte-identical output runtime_golden_test.go
 // already pinned for the plain runtime-enabled fixture. Comparing two fresh
-// calls that both skip ApplyAcceptance would only prove the code is
+// calls that both skip ApplyMuting would only prove the code is
 // deterministic, not that disabling the setting reproduces pre-existing
 // behavior — the goldens here were captured before this feature's own
 // tests existed, so this is a real compatibility check against them.
-func TestAcceptUnfixableNotInUse_Disabled(t *testing.T) {
+func TestMuteUnfixableNotInUse_Disabled(t *testing.T) {
 	r := rtGoldenReport(t)
 	rtGoldenAttach(t, &r)
-	// accept_unfixable_not_in_use off: analyze.ApplyAcceptance is
+	// mute_unfixable_not_in_use off: analyze.ApplyMuting is
 	// deliberately never called, mirroring runner.RunOnce's own gating.
 
 	checkGolden(t, "runtime_healthy_slack_full", FormatSlackText(r))
@@ -103,31 +103,31 @@ func TestAcceptUnfixableNotInUse_Disabled(t *testing.T) {
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			for _, g := range img.Packages {
-				if g.Accepted {
-					t.Errorf("%s/%s: Accepted = true with accept_unfixable_not_in_use off, want false", img.Image, g.Package)
+				if g.Muted {
+					t.Errorf("%s/%s: Muted = true with mute_unfixable_not_in_use off, want false", img.Image, g.Package)
 				}
 			}
 		}
 	}
 }
 
-// TestAcceptUnfixableNotInUse_NoLongerAccepted drives the two-cycle
-// "fell out of acceptance" transition: curl is accepted on cycle 1 (not
+// TestMuteUnfixableNotInUse_Unmuted drives the two-cycle
+// "fell out of muting" transition: curl is muted on cycle 1 (not
 // observed, container generation 8 days old), then becomes in use on cycle
 // 2 — a change no ordinary Kind (new/escalated/new_cves/now_fixable) would
 // otherwise report, since neither its CVEs, its fix status, nor its
-// priority changed. state.Compute must synthesize KindAcceptanceLost, and
-// the rendered line must read "↩️ No longer accepted (now in use)".
-func TestAcceptUnfixableNotInUse_NoLongerAccepted(t *testing.T) {
-	cycle1 := acceptGoldenReport(t)
-	acceptGoldenAttach(t, &cycle1, true)
+// priority changed. state.Compute must synthesize KindUnmuted, and
+// the rendered line must read "↩️ Unmuted (now in use)".
+func TestMuteUnfixableNotInUse_Unmuted(t *testing.T) {
+	cycle1 := muteGoldenReport(t)
+	muteGoldenAttach(t, &cycle1, true)
 	_, prev := state.Compute(state.State{}, cycle1)
-	if !prev.Accepted["web:1.0\tcurl"] {
-		t.Fatalf("cycle 1: curl not recorded as accepted in state: %+v", prev.Accepted)
+	if !prev.Muted["web:1.0\tcurl"] {
+		t.Fatalf("cycle 1: curl not recorded as muted in state: %+v", prev.Muted)
 	}
 
-	cycle2 := acceptGoldenReport(t)
-	gen := acceptGoldenGenWeb()
+	cycle2 := muteGoldenReport(t)
+	gen := muteGoldenGenWeb()
 	// curl is now actually running: JudgeOSPackage matches it and the group
 	// becomes in_use, the same as openssl already is.
 	gen.OSPackages = append(gen.OSPackages, rtevidence.OSPackageEvidence{
@@ -145,19 +145,19 @@ func TestAcceptUnfixableNotInUse_NoLongerAccepted(t *testing.T) {
 		BootTime: rtGoldenBoot,
 	}
 	analyze.AttachRuntime(&cycle2, analyze.RuntimeInfo{Sensor: snap.Sensor}, snap, insp, genTime)
-	analyze.ApplyAcceptance(&cycle2, genTime)
+	analyze.ApplyMuting(&cycle2, genTime)
 
 	curl := findPkgGroup(t, cycle2.Watch, "web:1.0", "curl")
 	if curl.Runtime.Usage != rtevidence.UsageInUse {
 		t.Fatalf("cycle 2: curl.Runtime.Usage = %q, want in_use", curl.Runtime.Usage)
 	}
-	if curl.Accepted {
-		t.Fatalf("cycle 2: curl.Accepted = true, want false (in use is never accepted)")
+	if curl.Muted {
+		t.Fatalf("cycle 2: curl.Muted = true, want false (in use is never muted)")
 	}
 
 	diff, next := state.Compute(prev, cycle2)
-	if next.Accepted["web:1.0\tcurl"] {
-		t.Errorf("cycle 2: curl still recorded as accepted in next state")
+	if next.Muted["web:1.0\tcurl"] {
+		t.Errorf("cycle 2: curl still recorded as muted in next state")
 	}
 	var found *state.Change
 	for i, c := range diff.Changes {
@@ -168,19 +168,19 @@ func TestAcceptUnfixableNotInUse_NoLongerAccepted(t *testing.T) {
 	if found == nil {
 		t.Fatalf("cycle 2: no diff.Changes entry for web:1.0/curl:\n%+v", diff.Changes)
 	}
-	if found.Kind != state.KindAcceptanceLost {
-		t.Errorf("cycle 2: Kind = %q, want %q", found.Kind, state.KindAcceptanceLost)
+	if found.Kind != state.KindUnmuted {
+		t.Errorf("cycle 2: Kind = %q, want %q", found.Kind, state.KindUnmuted)
 	}
 
-	checkGolden(t, "accept_lost_slack_diff", FormatSlackDiffText(cycle2, diff, false, false))
+	checkGolden(t, "mute_lost_slack_diff", FormatSlackDiffText(cycle2, diff, false, false))
 }
 
-// acceptGoldenReportWithCurlEOL is acceptGoldenReport's cycle-2 counterpart
+// muteGoldenReportWithCurlEOL is muteGoldenReport's cycle-2 counterpart
 // for the end-of-life transition: the identical scan, plus a second CVE
 // against curl reported end-of-life — the base OS or the package itself
 // aging out from under an otherwise unchanged finding. curl's own CVE-CURL,
 // fix status and priority never change.
-func acceptGoldenReportWithCurlEOL(t *testing.T) analyze.Report {
+func muteGoldenReportWithCurlEOL(t *testing.T) analyze.Report {
 	t.Helper()
 	web := rtGoldenScan(t, "web:1.0", rtGoldenWebDigest,
 		scanner.Finding{Image: "web:1.0", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "3.0.7", Status: scanner.StatusAffected, Severity: scanner.SeverityCritical, VulnID: "CVE-OPENSSL"},
@@ -193,36 +193,36 @@ func acceptGoldenReportWithCurlEOL(t *testing.T) analyze.Report {
 	}), genTime)
 }
 
-// TestAcceptUnfixableNotInUse_EOLLostAcceptance drives the "de-accepted by
+// TestMuteUnfixableNotInUse_EOLUnmuted drives the "unmuted by
 // becoming end-of-life" transition, checking that the reported reason names
 // the actual cause rather than defaulting to something unrelated: curl is
-// accepted on cycle 1, then on cycle 2 the exact same CVE-CURL is joined by
+// muted on cycle 1, then on cycle 2 the exact same CVE-CURL is joined by
 // a second, end-of-life CVE for the same package —
 // curl's own CVEs, fix status and priority never change, so no ordinary
-// Kind fires and only KindAcceptanceLost can carry the news. The reason
+// Kind fires and only KindUnmuted can carry the news. The reason
 // must read "now end-of-life", not "insufficient observation": Change.
 // Groups alone (the three ordinary sections) never sees the new
 // end-of-life group, which is exactly the gap Change.EOLGroups and
 // changeReasonGroups close.
-func TestAcceptUnfixableNotInUse_EOLLostAcceptance(t *testing.T) {
-	cycle1 := acceptGoldenReport(t)
-	acceptGoldenAttach(t, &cycle1, true)
+func TestMuteUnfixableNotInUse_EOLUnmuted(t *testing.T) {
+	cycle1 := muteGoldenReport(t)
+	muteGoldenAttach(t, &cycle1, true)
 	_, prev := state.Compute(state.State{}, cycle1)
-	if !prev.Accepted["web:1.0\tcurl"] {
-		t.Fatalf("cycle 1: curl not recorded as accepted in state: %+v", prev.Accepted)
+	if !prev.Muted["web:1.0\tcurl"] {
+		t.Fatalf("cycle 1: curl not recorded as muted in state: %+v", prev.Muted)
 	}
 
-	cycle2 := acceptGoldenReportWithCurlEOL(t)
-	acceptGoldenAttach(t, &cycle2, true)
+	cycle2 := muteGoldenReportWithCurlEOL(t)
+	muteGoldenAttach(t, &cycle2, true)
 
 	curl := findPkgGroup(t, cycle2.Watch, "web:1.0", "curl")
-	if curl.Accepted {
-		t.Fatalf("cycle 2: curl.Accepted = true, want false (an end-of-life sibling blocks the whole key)")
+	if curl.Muted {
+		t.Fatalf("cycle 2: curl.Muted = true, want false (an end-of-life sibling blocks the whole key)")
 	}
 
 	diff, next := state.Compute(prev, cycle2)
-	if next.Accepted["web:1.0\tcurl"] {
-		t.Errorf("cycle 2: curl still recorded as accepted in next state")
+	if next.Muted["web:1.0\tcurl"] {
+		t.Errorf("cycle 2: curl still recorded as muted in next state")
 	}
 	var found *state.Change
 	for i, c := range diff.Changes {
@@ -233,24 +233,24 @@ func TestAcceptUnfixableNotInUse_EOLLostAcceptance(t *testing.T) {
 	if found == nil {
 		t.Fatalf("cycle 2: no diff.Changes entry for web:1.0/curl:\n%+v", diff.Changes)
 	}
-	if found.Kind != state.KindAcceptanceLost {
-		t.Errorf("cycle 2: Kind = %q, want %q", found.Kind, state.KindAcceptanceLost)
+	if found.Kind != state.KindUnmuted {
+		t.Errorf("cycle 2: Kind = %q, want %q", found.Kind, state.KindUnmuted)
 	}
 	if len(found.EOLGroups) == 0 {
 		t.Fatalf("cycle 2: Change.EOLGroups is empty, want curl's end-of-life group attached")
 	}
 
-	checkGolden(t, "accept_lost_eol_slack_diff", FormatSlackDiffText(cycle2, diff, false, false))
-	checkGolden(t, "accept_lost_eol_webhook", mustIndentJSON(t, BuildWebhookPayload(cycle2, &diff)))
+	checkGolden(t, "mute_lost_eol_slack_diff", FormatSlackDiffText(cycle2, diff, false, false))
+	checkGolden(t, "mute_lost_eol_webhook", mustIndentJSON(t, BuildWebhookPayload(cycle2, &diff)))
 }
 
-// TestAcceptanceLostReason_PicksTheRightFactInPriorityOrder checks
-// acceptanceLostReason's fixed precedence — in use, then act_now, then a
+// TestUnmutedReason_PicksTheRightFactInPriorityOrder checks
+// unmutedReason's fixed precedence — in use, then act_now, then a
 // fix, then end-of-life, then unreliable runtime evidence, then a
 // no-longer-eligible status, falling back to "insufficient observation" —
 // reading from every group a key carries this cycle, not attributing one
 // group's own state to another.
-func TestAcceptanceLostReason_PicksTheRightFactInPriorityOrder(t *testing.T) {
+func TestUnmutedReason_PicksTheRightFactInPriorityOrder(t *testing.T) {
 	inUse := analyze.PackageGroup{Status: scanner.StatusAffected, Runtime: analyze.Runtime{Usage: rtevidence.UsageInUse}}
 	actNow := analyze.PackageGroup{Status: scanner.StatusAffected, Priority: analyze.PriorityActNow, Runtime: analyze.Runtime{Usage: rtevidence.UsageNotObserved}}
 	fixed := analyze.PackageGroup{Status: scanner.StatusFixed}
@@ -272,23 +272,23 @@ func TestAcceptanceLostReason_PicksTheRightFactInPriorityOrder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := acceptanceLostReason(tt.groups); got != tt.want {
-				t.Errorf("acceptanceLostReason(%+v) = %q, want %q", tt.groups, got, tt.want)
+			if got := unmutedReason(tt.groups, enMessages); got != tt.want {
+				t.Errorf("unmutedReason(%+v) = %q, want %q", tt.groups, got, tt.want)
 			}
 		})
 	}
 }
 
 // TestChangeReasonGroups_IncludesEOLGroups verifies that
-// acceptanceLostReason sees a key's end-of-life groups, not just its
-// ordinary ones — otherwise a de-acceptance caused by the package
+// unmutedReason sees a key's end-of-life groups, not just its
+// ordinary ones — otherwise an unmute caused by the package
 // becoming end-of-life reads as "insufficient observation" instead of
 // naming the actual cause.
 func TestChangeReasonGroups_IncludesEOLGroups(t *testing.T) {
 	ordinary := analyze.PackageGroup{Status: scanner.StatusWontFix, Runtime: analyze.Runtime{Usage: rtevidence.UsageNotObserved}}
 	eol := analyze.PackageGroup{Status: scanner.StatusEndOfLife, Runtime: analyze.Runtime{Usage: rtevidence.UsageNotObserved}}
 	c := state.Change{
-		Kind:      state.KindAcceptanceLost,
+		Kind:      state.KindUnmuted,
 		Groups:    []analyze.PackageGroup{ordinary},
 		EOLGroups: []analyze.PackageGroup{eol},
 	}
@@ -296,10 +296,10 @@ func TestChangeReasonGroups_IncludesEOLGroups(t *testing.T) {
 	if len(combined) != 2 {
 		t.Fatalf("changeReasonGroups returned %d groups, want 2 (ordinary + end-of-life)", len(combined))
 	}
-	if got := acceptanceLostReason(combined); got != "now end-of-life" {
-		t.Errorf("acceptanceLostReason(changeReasonGroups(c)) = %q, want %q", got, "now end-of-life")
+	if got := unmutedReason(combined, enMessages); got != "now end-of-life" {
+		t.Errorf("unmutedReason(changeReasonGroups(c)) = %q, want %q", got, "now end-of-life")
 	}
-	if got := acceptanceLostReason(c.Groups); got == "now end-of-life" {
-		t.Error("acceptanceLostReason(c.Groups) alone unexpectedly saw the end-of-life group — Groups must not include EOLGroups")
+	if got := unmutedReason(c.Groups, enMessages); got == "now end-of-life" {
+		t.Error("unmutedReason(c.Groups, enMessages) alone unexpectedly saw the end-of-life group — Groups must not include EOLGroups")
 	}
 }

@@ -230,7 +230,7 @@
       "in_use": 0,
       "not_observed": 0,
       "unavailable": 5,
-      "accepted": 0
+      "muted": 0
     }
   }
 }

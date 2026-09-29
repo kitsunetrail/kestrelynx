@@ -21,7 +21,7 @@ func TestWriteUnresolvedRefs_UnconfirmedRefsNilAddsNoBytes(t *testing.T) {
 		t.Fatal("test premise broken: want a nil UnconfirmedRefs report")
 	}
 	var b strings.Builder
-	writeUnresolvedRefs(&b, r)
+	writeUnresolvedRefs(&b, r, enMessages)
 	if strings.Contains(b.String(), "⏳") {
 		t.Errorf("unconfirmedRefsLine must contribute nothing when UnconfirmedRefs is nil:\n%s", b.String())
 	}
@@ -31,7 +31,7 @@ func TestWriteOpenNow_HoldingFalseUnchanged(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{{Image: "ok:1"}}, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(state.State{}, r)
 	var b strings.Builder
-	writeOpenNow(&b, r, d, false)
+	writeOpenNow(&b, r, d, false, enMessages)
 	want := "\n🎉 Open now: none — all clear\n"
 	if b.String() != want {
 		t.Errorf("writeOpenNow(holding=false) = %q, want %q (byte-identical to pre-holding output)", b.String(), want)
@@ -100,7 +100,7 @@ func TestImageLabel_AmbiguousRegistryDigestCarriesPlatform(t *testing.T) {
 		Pinned: true,
 	}
 	byRef := map[string]analyze.ImageObservation{"app:1": {Ref: "app:1", Ambiguous: true}}
-	got := imageLabel(img, byRef)
+	got := imageLabel(img, byRef, enMessages)
 	want := "app:1 (" + strings.Repeat("a", 12) + " linux/arm64)"
 	if got != want {
 		t.Errorf("imageLabel = %q, want %q", got, want)
@@ -114,7 +114,7 @@ func TestWriteTriageOpenNow_HoldingFalseUnchanged(t *testing.T) {
 	}
 	d, _ := state.Compute(state.State{}, r)
 	var b strings.Builder
-	writeTriageOpenNow(&b, r, d, false)
+	writeTriageOpenNow(&b, r, d, false, enMessages)
 	want := "\n🎉 Open now: none — all clear\n"
 	if b.String() != want {
 		t.Errorf("writeTriageOpenNow(holding=false) = %q, want %q", b.String(), want)

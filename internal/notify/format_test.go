@@ -57,7 +57,7 @@ func TestRiskLabel(t *testing.T) {
 		analyze.RiskUnknown:      "⚪ upgrade: risk unknown",
 	}
 	for r, want := range cases {
-		if got := riskLabel(r); got != want {
+		if got := riskLabel(r, enMessages); got != want {
 			t.Errorf("riskLabel(%q) = %q, want %q", r, got, want)
 		}
 	}

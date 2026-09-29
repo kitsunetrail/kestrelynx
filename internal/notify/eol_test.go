@@ -248,7 +248,7 @@ func TestWriteEOLChanges_FoldWordings(t *testing.T) {
 	r := analyze.Report{Triage: true, Intel: analyze.IntelStatus{KEVOK: true, EPSSOK: true}}
 	var b strings.Builder
 	v := splitEOLChanges(d)
-	writeEOLChanges(&b, r, v, nil)
+	writeEOLChanges(&b, r, v, nil, enMessages)
 	out := b.String()
 	mustContainAll(t, out,
 		"*⛔ New: package end-of-life (6) —", // d:1's newly end-of-life package is noted on its new base-OS line instead

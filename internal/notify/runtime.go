@@ -94,26 +94,26 @@ func runtimeDisplayStatus(rt *analyze.RuntimeInfo, now time.Time) string {
 // called with is named here explicitly; anything else — reachable only if
 // that guarantee were ever broken by a future change — reads as "unknown"
 // rather than surfacing whatever string happened to arrive.
-func runtimeStatusText(status string) string {
+func runtimeStatusText(status string, msg messages) string {
 	switch status {
 	case "not_reporting":
-		return "the Sensor has not reported yet"
+		return msg.StatusTextNotReporting
 	case "evidence_invalid":
-		return "the evidence file failed validation"
+		return msg.StatusTextEvidenceInvalid
 	case "stale":
-		return "the Sensor's last report is stale"
+		return msg.StatusTextStale
 	case "permission_denied":
-		return "the Sensor's reads are being denied"
+		return msg.StatusTextPermissionDenied
 	case "isolation_failed":
-		return "the Sensor's sandbox failed to start"
+		return msg.StatusTextIsolationFailed
 	case "isolation_degraded":
-		return "the Sensor's sandbox is running degraded"
+		return msg.StatusTextIsolationDegraded
 	case "degraded":
-		return "the Sensor is degraded"
+		return msg.StatusTextDegraded
 	case "ok":
-		return "ok"
+		return msg.StatusTextOK
 	default:
-		return "unknown"
+		return msg.StatusTextUnknown
 	}
 }
 
@@ -126,52 +126,52 @@ func runtimeStatusText(status string) string {
 // layer on top of that — a reason outside the set named here (which should
 // not be reachable at all) reads as "unknown" rather than as whatever string
 // arrived.
-func reasonText(r rtevidence.UnavailableReason) string {
+func reasonText(r rtevidence.UnavailableReason, msg messages) string {
 	switch r {
 	case rtevidence.ReasonSensorNotReporting:
-		return "sensor not reporting"
+		return msg.ReasonSensorNotReporting
 	case rtevidence.ReasonSensorStale:
-		return "sensor report is stale"
+		return msg.ReasonSensorStale
 	case rtevidence.ReasonEvidenceInvalid:
-		return "evidence invalid"
+		return msg.ReasonEvidenceInvalid
 	case rtevidence.ReasonIsolationFailed:
-		return "sensor isolation failed"
+		return msg.ReasonIsolationFailed
 	case rtevidence.ReasonPermissionDenied:
-		return "permission denied"
+		return msg.ReasonPermissionDenied
 	case rtevidence.ReasonInitializing:
-		return "index not built yet"
+		return msg.ReasonInitializing
 	case rtevidence.ReasonStalled:
-		return "worker stalled"
+		return msg.ReasonStalled
 	case rtevidence.ReasonParseFailed:
-		return "package database parse failed"
+		return msg.ReasonParseFailed
 	case rtevidence.ReasonTruncated:
-		return "evidence truncated"
+		return msg.ReasonTruncated
 	case rtevidence.ReasonIncomplete:
-		return "evidence incomplete"
+		return msg.ReasonIncomplete
 	case rtevidence.ReasonGenerationUnverified:
-		return "container generation unverified"
+		return msg.ReasonGenerationUnverified
 	case rtevidence.ReasonContainerNotObserved:
-		return "container not observed"
+		return msg.ReasonContainerNotObserved
 	case rtevidence.ReasonDBAbsent:
-		return "package database absent"
+		return msg.ReasonDBAbsent
 	case rtevidence.ReasonDBError:
-		return "package database error"
+		return msg.ReasonDBError
 	case rtevidence.ReasonDBUnsupported:
-		return "package database unsupported"
+		return msg.ReasonDBUnsupported
 	case rtevidence.ReasonNoFileList:
-		return "no file list for this package"
+		return msg.ReasonNoFileList
 	case rtevidence.ReasonAttributionAmbiguous:
-		return "multiple owners"
+		return msg.ReasonAttributionAmbiguous
 	case rtevidence.ReasonFileReplaced:
-		return "file replaced"
+		return msg.ReasonFileReplaced
 	case rtevidence.ReasonVersionMismatch:
-		return "version mismatch"
+		return msg.ReasonVersionMismatch
 	case rtevidence.ReasonEcosystemUnmapped:
-		return "ecosystem not mapped"
+		return msg.ReasonEcosystemUnmapped
 	case rtevidence.ReasonBinaryPathUnknown:
-		return "binary path unknown"
+		return msg.ReasonBinaryPathUnknown
 	default:
-		return "unknown"
+		return msg.ReasonUnknown
 	}
 }
 
@@ -180,20 +180,20 @@ func reasonText(r rtevidence.UnavailableReason) string {
 // two-layer guarantee applies: evidence.Reader's read-time validation
 // (validEventsReasons) already restricts it to this set before analyze or
 // notify ever sees it.
-func eventsReasonText(r rtevidence.EventsReason) string {
+func eventsReasonText(r rtevidence.EventsReason, msg messages) string {
 	switch r {
 	case rtevidence.EventsReasonKernelUnsupported:
-		return "kernel unsupported"
+		return msg.EventsReasonKernelUnsupported
 	case rtevidence.EventsReasonBTFMissing:
-		return "BTF missing"
+		return msg.EventsReasonBTFMissing
 	case rtevidence.EventsReasonPermission:
-		return "permission denied"
+		return msg.EventsReasonPermission
 	case rtevidence.EventsReasonAttachFailed:
-		return "attach failed"
+		return msg.EventsReasonAttachFailed
 	case rtevidence.EventsReasonCgroupV1:
-		return "cgroup v1"
+		return msg.EventsReasonCgroupV1
 	default:
-		return "unknown"
+		return msg.EventsReasonUnknown
 	}
 }
 
@@ -203,16 +203,16 @@ func eventsReasonText(r rtevidence.EventsReason) string {
 // its eBPF event collection specifically is not — the narrower warning that
 // short-lived programs are not being observed. No-op when runtime evidence
 // was never attached at all.
-func writeRuntimeWarning(b *strings.Builder, r analyze.Report, now time.Time) {
+func writeRuntimeWarning(b *strings.Builder, r analyze.Report, now time.Time, msg messages) {
 	if r.Runtime == nil {
 		return
 	}
 	status := runtimeDisplayStatus(r.Runtime, now)
 	switch {
 	case status != "ok":
-		fmt.Fprintf(b, "⚠️ Runtime evidence unavailable: %s\n", runtimeStatusText(status))
+		fmt.Fprintf(b, msg.RuntimeWarningUnavailable, runtimeStatusText(status, msg))
 	case r.Runtime.Sensor.Events.Status == rtevidence.EventsUnavailable:
-		fmt.Fprintf(b, "⚠️ Short-lived programs are not observed (eBPF unavailable: %s); using sampling only\n", eventsReasonText(r.Runtime.Sensor.Events.Reason))
+		fmt.Fprintf(b, msg.RuntimeWarningEventsUnavailable, eventsReasonText(r.Runtime.Sensor.Events.Reason, msg))
 	}
 }
 
@@ -242,28 +242,28 @@ func representativeContainer(rt analyze.Runtime) (analyze.ContainerRuntime, bool
 
 // runtimeKindLabel is one evidence kind's human phrase, naming the
 // representative executable when one is known.
-func runtimeKindLabel(k rtevidence.EvidenceKind, exe string) string {
+func runtimeKindLabel(k rtevidence.EvidenceKind, exe string, msg messages) string {
 	suffix := ""
 	if exe != "" {
 		suffix = " " + escapeRuntimeText(exe)
 	}
 	switch k {
 	case rtevidence.KindExe:
-		return "running as" + suffix
+		return msg.KindRunningAs + suffix
 	case rtevidence.KindMappedLibrary:
-		return "loaded by" + suffix
+		return msg.KindLoadedBy + suffix
 	case rtevidence.KindExecEvent:
-		return "executed" + suffix
+		return msg.KindExecutedEvt + suffix
 	case rtevidence.KindLibraryLoadEvent:
-		return "library loaded" + suffix
+		return msg.KindLibraryLoadEvent + suffix
 	case rtevidence.KindBinaryRunning:
-		return "in running binary" + suffix
+		return msg.KindBinaryRunning + suffix
 	case rtevidence.KindBinaryExecuted:
-		return "binary executed" + suffix
+		return msg.KindBinaryExecuted + suffix
 	case rtevidence.KindRuntimeRunning:
-		return "runtime is running" + suffix
+		return msg.KindRuntimeRunning + suffix
 	case rtevidence.KindRuntimeExecuted:
-		return "runtime executed" + suffix
+		return msg.KindRuntimeExecuted + suffix
 	default:
 		// Unreachable in practice: evidence.Reader's read-time validation
 		// (validRecordedKinds) already strips any Kinds map entry outside
@@ -271,20 +271,20 @@ func runtimeKindLabel(k rtevidence.EvidenceKind, exe string) string {
 		// evidence.Verdict from it, and the other four (the language-package
 		// display kinds) are all named above. Kept as a safe fallback rather
 		// than a panic, and never echoes k itself.
-		return "in use" + suffix
+		return msg.RuntimeInUseFallback + suffix
 	}
 }
 
 // runtimeExposureText is the display phrase for an in-use verdict's
 // Exposure. "" for ExposureUnknown — nothing worth a claim either way.
-func runtimeExposureText(e analyze.Exposure) string {
+func runtimeExposureText(e analyze.Exposure, msg messages) string {
 	switch e {
 	case analyze.ExposureHostPublishedAll:
-		return "published on all interfaces"
+		return msg.ExposurePublishedAll
 	case analyze.ExposureHostPublishedLoopback:
-		return "published on loopback only"
+		return msg.ExposurePublishedLoopback
 	case analyze.ExposureContainerListening:
-		return "listening (not published)"
+		return msg.ExposureListening
 	default:
 		return ""
 	}
@@ -297,11 +297,11 @@ func runtimeExposureText(e analyze.Exposure) string {
 // (should not occur for an in-use container — buildContainerRuntime always
 // sets LastSeen alongside a chosen combination — but a renderer must not
 // print a zero date over a missing one).
-func lastSeenText(t time.Time) string {
+func lastSeenText(t time.Time, msg messages) string {
 	if t.IsZero() {
 		return ""
 	}
-	return "last confirmed " + t.Format("01-02 15:04")
+	return fmt.Sprintf(msg.LastConfirmedPrefix, t.Format("01-02 15:04"))
 }
 
 // runtimeKindPhraseUnattributed is one evidence kind's standalone phrase —
@@ -312,20 +312,20 @@ func lastSeenText(t time.Time) string {
 // (!HasProcess). Every phrase here reads correctly with nothing appended,
 // unlike runtimeKindLabel's "running as"/"loaded by", which expect a name to
 // follow.
-func runtimeKindPhraseUnattributed(k rtevidence.EvidenceKind) string {
+func runtimeKindPhraseUnattributed(k rtevidence.EvidenceKind, msg messages) string {
 	switch k {
 	case rtevidence.KindExe, rtevidence.KindBinaryRunning, rtevidence.KindRuntimeRunning:
-		return "running"
+		return msg.UnattrRunning
 	case rtevidence.KindMappedLibrary:
-		return "loaded as a library"
+		return msg.UnattrLoadedAsLibrary
 	case rtevidence.KindExecEvent, rtevidence.KindBinaryExecuted, rtevidence.KindRuntimeExecuted:
-		return "executed"
+		return msg.UnattrExecuted
 	case rtevidence.KindLibraryLoadEvent:
-		return "library load observed"
+		return msg.UnattrLibraryLoadObserved
 	default:
 		// See runtimeKindLabel's own default branch: unreachable in
 		// practice, kept as a safe fallback rather than a panic.
-		return "in use"
+		return msg.RuntimeInUseFallback
 	}
 }
 
@@ -340,7 +340,7 @@ const runtimeProcessesPhraseMax = 3
 // clause shown alongside an ambiguous kind list, naming the processes
 // actually observed without claiming any one of them produced any one kind.
 // "" when exes is empty.
-func runtimeProcessesPhrase(exes []string) string {
+func runtimeProcessesPhrase(exes []string, msg messages) string {
 	if len(exes) == 0 {
 		return ""
 	}
@@ -352,9 +352,9 @@ func runtimeProcessesPhrase(exes []string) string {
 	for i := 0; i < n; i++ {
 		shown[i] = escapeRuntimeText(exes[i])
 	}
-	s := "processes: " + strings.Join(shown, ", ")
+	s := fmt.Sprintf(msg.ProcessesPrefix, strings.Join(shown, ", "))
 	if extra := len(exes) - n; extra > 0 {
-		s += fmt.Sprintf(" (+%d more)", extra)
+		s += fmt.Sprintf(msg.MoreCount, extra)
 	}
 	return s
 }
@@ -367,23 +367,23 @@ func runtimeProcessesPhrase(exes []string) string {
 // KindsAmbiguous's own doc comment for why an OS package's aggregated
 // record cannot always support the pairing, and buildContainerRuntime's for
 // why a container can be in_use with kinds but !HasProcess at all.
-func runtimeKindsPhrase(c analyze.ContainerRuntime) string {
+func runtimeKindsPhrase(c analyze.ContainerRuntime, msg messages) string {
 	if len(c.EvidenceKinds) == 0 {
-		return "in use"
+		return msg.RuntimeInUseFallback
 	}
 	if c.HasProcess && !c.KindsAmbiguous {
 		labels := make([]string, 0, len(c.EvidenceKinds))
 		for _, k := range c.EvidenceKinds {
-			labels = append(labels, runtimeKindLabel(k, c.Process.Exe))
+			labels = append(labels, runtimeKindLabel(k, c.Process.Exe, msg))
 		}
 		return strings.Join(labels, ", ")
 	}
 	labels := make([]string, 0, len(c.EvidenceKinds))
 	for _, k := range c.EvidenceKinds {
-		labels = append(labels, runtimeKindPhraseUnattributed(k))
+		labels = append(labels, runtimeKindPhraseUnattributed(k, msg))
 	}
 	phrase := strings.Join(labels, "; ")
-	if procs := runtimeProcessesPhrase(c.ProcessExes); procs != "" {
+	if procs := runtimeProcessesPhrase(c.ProcessExes, msg); procs != "" {
 		phrase += "; " + procs
 	}
 	return phrase
@@ -396,22 +396,22 @@ func runtimeKindsPhrase(c analyze.ContainerRuntime) string {
 // (representativeContainer), never mixed across containers. Only ever
 // called on an in-use Runtime — callers check rt.Usage ==
 // rtevidence.UsageInUse first.
-func runtimeInUsePhrase(rt analyze.Runtime) string {
+func runtimeInUsePhrase(rt analyze.Runtime, msg messages) string {
 	c, ok := representativeContainer(rt)
 	if !ok {
 		// Unreachable for a well-formed in-use Runtime (AttachRuntime always
 		// records the container(s) it judged in use); kept as a safe,
 		// non-panicking fallback.
-		return "▶ in use"
+		return msg.InUseFallbackArrow
 	}
-	parts := []string{"▶ in use (" + runtimeKindsPhrase(c) + ")"}
-	if s := runtimeExposureText(c.Exposure); s != "" {
+	parts := []string{fmt.Sprintf(msg.InUsePrefix, runtimeKindsPhrase(c, msg))}
+	if s := runtimeExposureText(c.Exposure, msg); s != "" {
 		parts = append(parts, s)
 	}
 	if c.HighPrivilege {
-		parts = append(parts, "runs with elevated privilege")
+		parts = append(parts, msg.HighPrivilegeNote)
 	}
-	if s := lastSeenText(c.LastSeen); s != "" {
+	if s := lastSeenText(c.LastSeen, msg); s != "" {
 		parts = append(parts, s)
 	}
 	return strings.Join(parts, " · ")
@@ -421,29 +421,29 @@ func runtimeInUsePhrase(rt analyze.Runtime) string {
 // the thread's compact lines use: "running"/"loaded" when the process is
 // still present (a sampling-derived kind), "executed" when the only
 // evidence is a past event.
-func runtimeShortWord(kinds []rtevidence.EvidenceKind) string {
+func runtimeShortWord(kinds []rtevidence.EvidenceKind, msg messages) string {
 	set := make(map[rtevidence.EvidenceKind]bool, len(kinds))
 	for _, k := range kinds {
 		set[k] = true
 	}
 	switch {
 	case set[rtevidence.KindExe] || set[rtevidence.KindBinaryRunning] || set[rtevidence.KindRuntimeRunning]:
-		return "running"
+		return msg.ShortWordRunning
 	case set[rtevidence.KindMappedLibrary]:
-		return "loaded"
+		return msg.ShortWordLoaded
 	default:
-		return "executed"
+		return msg.ShortWordExecuted
 	}
 }
 
 // runtimeWatchSuffix is the compact " · ▶ in use (running / executed /
 // loaded)" suffix appended to a watch-bucket package line. "" when rt is not
 // in use (including runtime disabled, where Usage is always "").
-func runtimeWatchSuffix(rt analyze.Runtime) string {
+func runtimeWatchSuffix(rt analyze.Runtime, msg messages) string {
 	if rt.Usage != rtevidence.UsageInUse {
 		return ""
 	}
-	return " · ▶ in use (" + runtimeShortWord(rt.EvidenceKinds) + ")"
+	return fmt.Sprintf(msg.WatchInUseSuffix, runtimeShortWord(rt.EvidenceKinds, msg))
 }
 
 // runtimeChangeSuffix is the diff-mode change list's runtime annotation for
@@ -451,25 +451,25 @@ func runtimeWatchSuffix(rt analyze.Runtime) string {
 // for an act_now group, where the caller shows the full "▶ in use (...)"
 // phrase right under the evidence line instead (mirroring the act-now bucket
 // itself) — so this returns "" there rather than duplicating the note.
-func runtimeChangeSuffix(g analyze.PackageGroup) string {
+func runtimeChangeSuffix(g analyze.PackageGroup, msg messages) string {
 	if g.Priority == analyze.PriorityActNow {
 		return ""
 	}
-	return runtimeWatchSuffix(g.Runtime)
+	return runtimeWatchSuffix(g.Runtime, msg)
 }
 
 // runtimeCounts tallies every package group's Runtime.Usage across every
 // status section of r — the full-view summary line's "N in use / N not
 // observed / N unavailable" — plus, separately, how many of those groups are
-// Accepted. A group whose Runtime was never attached (Usage == "") counts
+// Muted. A group whose Runtime was never attached (Usage == "") counts
 // toward none of the first three, which is what keeps this a no-op tally
 // when runtime is disabled (writeRuntimeSummary never calls it in that case
 // regardless, since it also gates on r.Runtime == nil, but the tally itself
-// is correct either way). accepted overlaps notObserved by construction
-// (analyze.ApplyAcceptance only ever accepts a not-observed group) rather
+// is correct either way). muted overlaps notObserved by construction
+// (analyze.ApplyMuting only ever mutes a not-observed group) rather
 // than being mutually exclusive with it — the same kind of overlap the
 // end-of-life/act-now segments already have elsewhere in this codebase.
-func runtimeCounts(r analyze.Report) (inUse, notObserved, unavailable, accepted int) {
+func runtimeCounts(r analyze.Report) (inUse, notObserved, unavailable, muted int) {
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			for _, g := range img.Packages {
@@ -481,51 +481,47 @@ func runtimeCounts(r analyze.Report) (inUse, notObserved, unavailable, accepted 
 				case rtevidence.UsageUnavailable:
 					unavailable++
 				}
-				if g.Accepted {
-					accepted++
+				if g.Muted {
+					muted++
 				}
 			}
 		}
 	}
-	return inUse, notObserved, unavailable, accepted
+	return inUse, notObserved, unavailable, muted
 }
 
-// acceptedCount tallies every Accepted PackageGroup in r — the single number
-// every rendering's "✅ Accepted" line shows in place of the rows it hides.
-// 0 whenever runtime.accept_unfixable_not_in_use is off, since
-// analyze.ApplyAcceptance then never runs and every group's Accepted stays
+// mutedCount tallies every Muted PackageGroup in r — the single number
+// every rendering's "🔇 Muted" line shows in place of the rows it hides.
+// 0 whenever runtime.mute_unfixable_not_in_use is off, since
+// analyze.ApplyMuting then never runs and every group's Muted stays
 // at its zero value.
-func acceptedCount(r analyze.Report) int {
-	_, _, _, accepted := runtimeCounts(r)
-	return accepted
+func mutedCount(r analyze.Report) int {
+	_, _, _, muted := runtimeCounts(r)
+	return muted
 }
 
-// acceptedLine is the wording every Slack rendering (channel body, thread,
-// full view) shows in place of an accepted finding's own row.
-const acceptedLineText = "✅ Accepted — no fix available and not in use for 7+ days: %d\n"
-
-// writeAcceptedCount appends the accepted-findings summary line: the one
-// place an accepted finding's existence still shows once its own row has
-// been hidden. No-op when nothing is accepted this cycle.
-func writeAcceptedCount(b *strings.Builder, r analyze.Report) {
-	if n := acceptedCount(r); n > 0 {
-		fmt.Fprintf(b, "\n"+acceptedLineText, n)
+// writeMutedCount appends the muted-findings summary line: the one
+// place a muted finding's existence still shows once its own row has
+// been hidden. No-op when nothing is muted this cycle.
+func writeMutedCount(b *strings.Builder, r analyze.Report, msg messages) {
+	if n := mutedCount(r); n > 0 {
+		fmt.Fprintf(b, "\n"+msg.MutedLine, n)
 	}
 }
 
-// filterAccepted returns imgs with every Accepted PackageGroup removed, and
+// filterMuted returns imgs with every Muted PackageGroup removed, and
 // any image left with no packages dropped entirely. Every Slack rendering of
-// the open-findings view calls this before laying out rows — an accepted
-// finding's row is never shown there, only acceptedCount's tally represents
+// the open-findings view calls this before laying out rows — a muted
+// finding's row is never shown there, only mutedCount's tally represents
 // it. It never mutates its input: each ImageFindings is copied before its
 // Packages field is replaced. The generic webhook never calls this —
-// BuildWebhookPayload keeps every group, accepted or not.
-func filterAccepted(imgs []analyze.ImageFindings) []analyze.ImageFindings {
+// BuildWebhookPayload keeps every group, muted or not.
+func filterMuted(imgs []analyze.ImageFindings) []analyze.ImageFindings {
 	out := make([]analyze.ImageFindings, 0, len(imgs))
 	for _, img := range imgs {
 		var kept []analyze.PackageGroup
 		for _, g := range img.Packages {
-			if !g.Accepted {
+			if !g.Muted {
 				kept = append(kept, g)
 			}
 		}
@@ -538,16 +534,16 @@ func filterAccepted(imgs []analyze.ImageFindings) []analyze.ImageFindings {
 	return out
 }
 
-// allAccepted reports whether every one of groups is Accepted — used by the
-// generic webhook's diff.new[].accepted, the coarsest-possible summary of a
+// allMuted reports whether every one of groups is Muted — used by the
+// generic webhook's diff.new[].muted, the coarsest-possible summary of a
 // (image, package) change that can merge more than one PackageGroup. Always
 // false for an empty slice.
-func allAccepted(groups []analyze.PackageGroup) bool {
+func allMuted(groups []analyze.PackageGroup) bool {
 	if len(groups) == 0 {
 		return false
 	}
 	for _, g := range groups {
-		if !g.Accepted {
+		if !g.Muted {
 			return false
 		}
 	}
@@ -557,12 +553,12 @@ func allAccepted(groups []analyze.PackageGroup) bool {
 // changeReasonGroups is every group state.Compute recorded for a change's
 // key this cycle, ordinary and end-of-life alike: end-of-life lives in its
 // own Report section (and its own mergeSections pass), never merged into
-// c.Groups, but it is exactly as disqualifying for acceptance as any
-// ordinary group — analyze.ApplyAcceptance already blocks a key's
-// acceptance over an end-of-life sibling — so acceptanceLostReason must see
+// c.Groups, but it is exactly as disqualifying for muting as any
+// ordinary group — analyze.ApplyMuting already blocks a key's
+// muting over an end-of-life sibling — so unmutedReason must see
 // it too, or it names the wrong fact for that exact transition. Both
 // notify's Slack rendering (changeSuffixParts) and BuildWebhookPayload
-// (buildDiffPayload) call this before calling acceptanceLostReason, so the
+// (buildDiffPayload) call this before calling unmutedReason, so the
 // two destinations can never disagree on the reason shown for the same
 // change.
 func changeReasonGroups(c state.Change) []analyze.PackageGroup {
@@ -575,11 +571,11 @@ func changeReasonGroups(c state.Change) []analyze.PackageGroup {
 	return out
 }
 
-// acceptanceLostReason names, for display and for the webhook's diff
-// reason, why a (image, package) key that was accepted under
-// runtime.accept_unfixable_not_in_use last cycle no longer is this cycle.
-// Acceptance is decided for the whole key at once (analyze.ApplyAcceptance
-// only ever marks every one of a key's groups Accepted together), so the
+// unmutedReason names, for display and for the webhook's diff
+// reason, why a (image, package) key that was muted under
+// runtime.mute_unfixable_not_in_use last cycle no longer is this cycle.
+// Muting is decided for the whole key at once (analyze.ApplyMuting
+// only ever marks every one of a key's groups Muted together), so the
 // reason is read from every group currently on record for the key —
 // ordinary and end-of-life alike; callers pass changeReasonGroups(c), never
 // c.Groups alone — the first fact that applies, checked in this fixed
@@ -596,40 +592,40 @@ func changeReasonGroups(c state.Change) []analyze.PackageGroup {
 // fallback covers the group actually judged not-observed but too recently:
 // its own container generation reset (e.g. a redeploy) and hasn't yet run
 // long enough to qualify again.
-func acceptanceLostReason(groups []analyze.PackageGroup) string {
+func unmutedReason(groups []analyze.PackageGroup, msg messages) string {
 	for _, g := range groups {
 		if g.Runtime.Usage == rtevidence.UsageInUse {
-			return "now in use"
+			return msg.UnmutedNowInUse
 		}
 	}
 	for _, g := range groups {
 		if g.Priority == analyze.PriorityActNow {
-			return "act now"
+			return msg.UnmutedActNow
 		}
 	}
 	for _, g := range groups {
 		if g.Status == scanner.StatusFixed {
-			return "fix available"
+			return msg.UnmutedFixAvailable
 		}
 	}
 	for _, g := range groups {
 		if g.Status == scanner.StatusEndOfLife {
-			return "now end-of-life"
+			return msg.UnmutedNowEndOfLife
 		}
 	}
 	for _, g := range groups {
 		if g.Runtime.Usage == rtevidence.UsageUnavailable {
-			return "insufficient observation"
+			return msg.UnmutedInsufficientObservation
 		}
 	}
 	for _, g := range groups {
 		switch g.Status {
 		case scanner.StatusAffected, scanner.StatusWontFix:
 		default:
-			return "not an eligible status"
+			return msg.UnmutedNotEligible
 		}
 	}
-	return "insufficient observation"
+	return msg.UnmutedInsufficientObservation
 }
 
 // countInUse is runtimeCounts' first return value restricted to imgs (a
@@ -649,13 +645,13 @@ func countInUse(imgs []analyze.ImageFindings) int {
 // writeRuntimeSummary appends the full-view tail line: the three usage
 // counts, plus the fixed explanatory note that "not observed" only covers
 // the observation window. No-op when runtime evidence was never attached.
-func writeRuntimeSummary(b *strings.Builder, r analyze.Report) {
+func writeRuntimeSummary(b *strings.Builder, r analyze.Report, msg messages) {
 	if r.Runtime == nil {
 		return
 	}
 	inUse, notObserved, unavailable, _ := runtimeCounts(r)
-	fmt.Fprintf(b, "\n🔎 Runtime: ▶ %d in use · %d not observed · %d unavailable\n", inUse, notObserved, unavailable)
-	b.WriteString("_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._\n")
+	fmt.Fprintf(b, msg.RuntimeSummaryCounts, inUse, notObserved, unavailable)
+	b.WriteString(msg.RuntimeSummaryNote)
 }
 
 // runtimeUsageOf is the webhook diff's projected runtime usage across a set
@@ -692,7 +688,7 @@ func evidenceKindStrings(kinds []rtevidence.EvidenceKind) []string {
 }
 
 // runtimeFindingPayload converts one PackageGroup's Runtime (plus its
-// Accepted verdict) to the webhook's findings[].runtime object, or nil when
+// Muted verdict) to the webhook's findings[].runtime object, or nil when
 // Runtime was never attached (Usage == "") — the omitempty on
 // findingPayload.Runtime then drops the key entirely, which is what keeps a
 // disabled deployment's webhook payload identical to one built before this
@@ -710,9 +706,9 @@ func runtimeFindingPayload(g analyze.PackageGroup) *findingRuntimePayload {
 		Exposure:       string(rt.Exposure),
 		HighPrivilege:  rt.HighPrivilege,
 	}
-	if g.Accepted {
-		p.Accepted = true
-		p.AcceptedReason = string(g.AcceptedReason)
+	if g.Muted {
+		p.Muted = true
+		p.MutedReason = string(g.MutedReason)
 	}
 	for _, c := range rt.Containers {
 		p.Containers = append(p.Containers, containerRuntimePayload(c))
@@ -761,17 +757,17 @@ func containerRuntimePayload(c analyze.ContainerRuntime) findingRuntimeContainer
 // (with a short-lived-programs caveat when event coverage did not span the
 // whole generation), or the unavailable reason. No-op when rt was never
 // attached.
-func writeRuntimeThreadLine(b *strings.Builder, rt analyze.Runtime) {
+func writeRuntimeThreadLine(b *strings.Builder, rt analyze.Runtime, msg messages) {
 	switch rt.Usage {
 	case rtevidence.UsageInUse:
-		fmt.Fprintf(b, "     %s\n", runtimeInUsePhrase(rt))
+		fmt.Fprintf(b, "     %s\n", runtimeInUsePhrase(rt, msg))
 	case rtevidence.UsageNotObserved:
-		line := "▷ not observed"
+		line := msg.ThreadNotObserved
 		if rt.EventsCoverage != rtevidence.CoverageSinceStart {
-			line += " — short-lived programs not fully observed"
+			line += msg.ThreadNotObservedShortLived
 		}
 		fmt.Fprintf(b, "     %s\n", line)
 	case rtevidence.UsageUnavailable:
-		fmt.Fprintf(b, "     ▷ runtime evidence unavailable (%s)\n", reasonText(rt.Reason))
+		fmt.Fprintf(b, "     %s\n", fmt.Sprintf(msg.ThreadRuntimeUnavailable, reasonText(rt.Reason, msg)))
 	}
 }

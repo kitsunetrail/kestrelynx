@@ -66,19 +66,22 @@ var defaultClient = &http.Client{Timeout: 15 * time.Second}
 type SlackNotifier struct {
 	WebhookURL string
 	Client     *http.Client
+	// Language selects the wording dictionary the message body renders
+	// from. The zero value is LanguageEN.
+	Language Language
 }
 
 func (n SlackNotifier) Send(ctx context.Context, m Message) error {
-	body := map[string]string{"text": summaryText(m)}
+	body := map[string]string{"text": summaryText(m, n.Language)}
 	return postJSON(ctx, client(n.Client), "slack webhook", n.WebhookURL, body)
 }
 
 // summaryText renders the channel message body for the message's mode.
-func summaryText(m Message) string {
+func summaryText(m Message, lang Language) string {
 	if m.Diff != nil {
-		return FormatSlackDiffText(m.Report, *m.Diff, m.FullReport, m.Holding)
+		return FormatSlackDiffText(m.Report, *m.Diff, m.FullReport, m.Holding, lang)
 	}
-	return FormatSlackText(m.Report)
+	return FormatSlackText(m.Report, lang)
 }
 
 // WebhookNotifier posts the structured JSON payload to a generic endpoint. It

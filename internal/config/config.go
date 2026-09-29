@@ -69,6 +69,11 @@ type NotifyConfig struct {
 	NotifyOnClean     bool   // also notify when nothing was found
 	Mode              string // "diff" (default) or "full"
 	FullReportDay     string // diff mode: weekday of the weekly full report; "never" disables
+	// Language selects the wording dictionary the Slack channel message and
+	// thread report render from ("en" or "ja"). Never affects the generic
+	// webhook payload, which is always English (it's consumed
+	// programmatically, not read in Slack). Defaults to "en".
+	Language string
 }
 
 // FullReportWeekday parses FullReportDay into a time.Weekday. ok is false when
@@ -130,14 +135,14 @@ type RuntimeConfig struct {
 	// through a mounted volume, never a relative path meaningful to just one
 	// of the two containers.
 	EvidenceDir string
-	// AcceptUnfixableNotInUse hides (from Slack rows only — the generic
+	// MuteUnfixableNotInUse hides (from Slack rows only — the generic
 	// webhook always keeps everything) a package finding with no fix coming
 	// (affected or will_not_fix) that nothing has used for at least 7 days
 	// of Sensor observation and that isn't act_now, replacing it with a
 	// single count. Meaningful only when Enabled is also true; false is
 	// simply inert otherwise (no runtime verdict exists to judge against),
 	// not a configuration error.
-	AcceptUnfixableNotInUse bool
+	MuteUnfixableNotInUse bool
 }
 
 // rawConfig mirrors the YAML shape. Pointers are used where "absent" must be
@@ -158,6 +163,7 @@ type rawConfig struct {
 		NotifyOnClean     bool   `yaml:"notify_on_clean"`
 		Mode              string `yaml:"mode"`
 		FullReportDay     string `yaml:"full_report_day"`
+		Language          string `yaml:"language"`
 	} `yaml:"notify"`
 	Docker struct {
 		// Socket is a pointer so validate can tell "explicitly set" (including
@@ -190,9 +196,9 @@ type rawConfig struct {
 		Name string `yaml:"name"`
 	} `yaml:"environment"`
 	Runtime struct {
-		Enabled                 *bool  `yaml:"enabled"`
-		EvidenceDir             string `yaml:"evidence_dir"`
-		AcceptUnfixableNotInUse *bool  `yaml:"accept_unfixable_not_in_use"`
+		Enabled               *bool  `yaml:"enabled"`
+		EvidenceDir           string `yaml:"evidence_dir"`
+		MuteUnfixableNotInUse *bool  `yaml:"mute_unfixable_not_in_use"`
 	} `yaml:"runtime"`
 }
 
@@ -200,6 +206,9 @@ const (
 	defaultSocket        = "/var/run/docker.sock"
 	defaultStatePath     = "/var/lib/kestrelynx/state.json"
 	defaultFullReportDay = "monday"
+	// defaultNotifyLanguage is the wording every deployment saw before
+	// notify.language existed.
+	defaultNotifyLanguage = "en"
 	// Default EPSS thresholds (docs/TRIAGE_SPEC.md §4): 10% predicted
 	// exploitation probability is act_now territory, 1% is worth watching.
 	defaultActNowEPSS = 0.10
@@ -266,9 +275,9 @@ func Parse(data []byte) (Config, error) {
 		},
 		Environment: EnvironmentConfig{Name: raw.Environment.Name},
 		Runtime: RuntimeConfig{
-			Enabled:                 boolOr(raw.Runtime.Enabled, false),
-			EvidenceDir:             raw.Runtime.EvidenceDir,
-			AcceptUnfixableNotInUse: boolOr(raw.Runtime.AcceptUnfixableNotInUse, false),
+			Enabled:               boolOr(raw.Runtime.Enabled, false),
+			EvidenceDir:           raw.Runtime.EvidenceDir,
+			MuteUnfixableNotInUse: boolOr(raw.Runtime.MuteUnfixableNotInUse, false),
 		},
 	}
 
@@ -293,6 +302,9 @@ func applyDefaults(c *Config) {
 	}
 	if c.Notify.FullReportDay == "" {
 		c.Notify.FullReportDay = defaultFullReportDay
+	}
+	if c.Notify.Language == "" {
+		c.Notify.Language = defaultNotifyLanguage
 	}
 	if c.State.Path == "" {
 		c.State.Path = defaultStatePath
@@ -351,6 +363,11 @@ func validate(c *Config, dockerSocketExplicit bool) error {
 			return fmt.Errorf("config: invalid notify.full_report_day %q (a weekday name or \"never\")", c.Notify.FullReportDay)
 		}
 	}
+	lang := strings.ToLower(c.Notify.Language)
+	if lang != "en" && lang != "ja" {
+		return fmt.Errorf("config: invalid notify.language %q (allowed: en, ja)", c.Notify.Language)
+	}
+	c.Notify.Language = lang
 	if c.Triage.Enabled {
 		if c.Triage.WatchEPSS <= 0 || c.Triage.WatchEPSS > c.Triage.ActNowEPSS || c.Triage.ActNowEPSS > 1 {
 			return fmt.Errorf("config: triage thresholds must satisfy 0 < watch_epss (%v) <= act_now_epss (%v) <= 1", c.Triage.WatchEPSS, c.Triage.ActNowEPSS)

@@ -117,9 +117,7 @@
                 "usage": "not_observed",
                 "last_seen": "2026-06-24T09:00:00Z"
               }
-            ],
-            "accepted": true,
-            "accepted_reason": "no_fix_not_in_use_7d"
+            ]
           }
         }
       ],
@@ -138,34 +136,84 @@
     }
   ],
   "wont_fix": [],
-  "eol_packages": [],
+  "eol_packages": [
+    {
+      "image": "web:1.0",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 1
+      },
+      "findings": [
+        {
+          "package": "curl",
+          "installed": "8.0.0",
+          "fixed": "",
+          "status": "end_of_life",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "priority": "low",
+          "vuln_ids": [
+            "CVE-CURL-EOL"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-CURL-EOL",
+              "severity": "HIGH",
+              "kev": false,
+              "epss": null,
+              "priority": "low"
+            }
+          ],
+          "class": "os",
+          "ecosystem": "",
+          "runtime": {
+            "usage": "not_observed",
+            "events_coverage": "since_start",
+            "exposure": "unknown",
+            "containers": [
+              {
+                "name": "web-1",
+                "container_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "generation_started_at": "2026-06-16T09:00:00Z",
+                "usage": "not_observed",
+                "last_seen": "2026-06-24T09:00:00Z"
+              }
+            ]
+          }
+        }
+      ],
+      "containers": [
+        {
+          "name": "web-1",
+          "workload": {
+            "kind": "unknown"
+          }
+        }
+      ],
+      "content_id": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
   "scan_errors": [],
   "diff": {
     "new": [
       {
         "image": "web:1.0",
-        "package": "openssl",
-        "kind": "new",
-        "critical": 1,
-        "high": 0,
-        "priority": "act_now",
-        "ecosystems": [
-          ""
-        ],
-        "runtime_usage": "in_use"
-      },
-      {
-        "image": "web:1.0",
         "package": "curl",
-        "kind": "new",
+        "kind": "unmuted",
         "critical": 0,
         "high": 1,
         "priority": "low",
+        "reason": "now end-of-life",
         "ecosystems": [
           ""
         ],
-        "runtime_usage": "not_observed",
-        "accepted": true
+        "runtime_usage": "not_observed"
       }
     ],
     "resolved": [],
@@ -173,7 +221,20 @@
     "new_eosl": [],
     "resolved_eosl": [],
     "oldest_open_days": 0,
-    "new_eol_packages": [],
+    "new_eol_packages": [
+      {
+        "image": "web:1.0",
+        "package": "curl",
+        "kind": "eol_new",
+        "critical": 0,
+        "high": 1,
+        "priority": "low",
+        "ecosystems": [
+          ""
+        ],
+        "runtime_usage": "not_observed"
+      }
+    ],
     "resolved_eol_packages": []
   },
   "runtime": {
@@ -188,9 +249,9 @@
     "events_status": "ok",
     "counts": {
       "in_use": 1,
-      "not_observed": 1,
+      "not_observed": 2,
       "unavailable": 0,
-      "accepted": 1
+      "muted": 0
     }
   }
 }

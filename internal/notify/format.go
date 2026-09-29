@@ -31,20 +31,6 @@ const staleDays = 14
 // regardless; this switch only covers the base-OS segment.
 const openNowEOLBaseWithoutTriage = true
 
-// Wording for end-of-life package groups: the vendor reports the detected
-// CVEs as out of support for the installed release. It deliberately makes
-// no claim about the package or the release as a whole.
-const (
-	eolPackageText   = "end-of-life: no fix planned for this release"
-	eolSectionReason = "vendor reports these CVEs as out of support for this release"
-	// eolEvidenceMark follows the evidence line of an end-of-life group.
-	eolEvidenceMark = " — end-of-life: no fix planned for this release, consider a supported version"
-	// eolSeeActNow replaces the details of an act_now group in an
-	// end-of-life section that sits next to an Act now section showing
-	// them in full.
-	eolSeeActNow = " — 🚨 see Act now"
-)
-
 // writeHeader renders the product header line shared by full and diff-mode
 // Slack messages. A named environment gets inserted once, right after the
 // product name; the unnamed default environment renders exactly the text
@@ -52,12 +38,12 @@ const (
 // never set environment.name sees byte-identical output. Renderers with no
 // header line of their own (e.g. the thread report) do not call this and are
 // unaffected.
-func writeHeader(b *strings.Builder, r analyze.Report) {
+func writeHeader(b *strings.Builder, r analyze.Report, msg messages) {
 	if r.Environment.Name != "" {
-		fmt.Fprintf(b, "🛡️ *KestreLynx* [%s] — scan results for %s\n", r.Environment.Name, r.GeneratedAt.Format(timeLayout))
+		fmt.Fprintf(b, msg.HeaderNamed, r.Environment.Name, r.GeneratedAt.Format(timeLayout))
 		return
 	}
-	fmt.Fprintf(b, "🛡️ *KestreLynx* — scan results for %s\n", r.GeneratedAt.Format(timeLayout))
+	fmt.Fprintf(b, msg.HeaderDefault, r.GeneratedAt.Format(timeLayout))
 }
 
 // writeRoleLine states, right under the header, what the message's body
@@ -80,25 +66,29 @@ func writeRoleLine(b *strings.Builder, text string) {
 // from a scan that never confirmed which entity it scanned is not the same
 // claim as "confirmed clean", and the short-circuit below must not silently
 // swallow that distinction.
-func FormatSlackText(r analyze.Report) string {
+func FormatSlackText(r analyze.Report, lang ...Language) string {
+	return formatSlackText(r, messagesFor(resolveLanguage(lang)))
+}
+
+func formatSlackText(r analyze.Report, msg messages) string {
 	var b strings.Builder
-	writeHeader(&b, r)
-	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
+	writeHeader(&b, r, msg)
+	fmt.Fprintf(&b, msg.ImagesScannedAffected, r.ImagesTotal, r.AffectedImageCount())
 	// Full mode never shows a diff — every message is the complete picture —
 	// so this framing line never varies with the report's contents.
-	writeRoleLine(&b, "Everything currently open.")
+	writeRoleLine(&b, msg.RoleEverythingOpen)
 	// Before either early return below: a Sensor/eBPF warning must reach
 	// every kind of message this function can produce, all clear included,
 	// not just the full open-findings body.
-	writeRuntimeWarning(&b, r, r.GeneratedAt)
+	writeRuntimeWarning(&b, r, r.GeneratedAt, msg)
 
 	if !r.HasIssues() {
-		b.WriteString("\n✅ All clear (no HIGH/CRITICAL vulnerabilities found)\n")
-		writeUnresolvedRefs(&b, r)
+		b.WriteString(msg.AllClear)
+		writeUnresolvedRefs(&b, r, msg)
 		return b.String()
 	}
 
-	writeFullBody(&b, r)
+	writeFullBody(&b, r, msg)
 	return b.String()
 }
 
@@ -106,33 +96,33 @@ func FormatSlackText(r analyze.Report) string {
 // sections, scan failures). Shared by full mode and the diff-mode weekly
 // full report. With triage on, the view is organized by priority instead of
 // fix status.
-func writeFullBody(b *strings.Builder, r analyze.Report) {
+func writeFullBody(b *strings.Builder, r analyze.Report, msg messages) {
 	if r.Triage {
-		writeTriageBody(b, r)
+		writeTriageBody(b, r, msg)
 		return
 	}
-	writeHeadline(b, summarize(r))
+	writeHeadline(b, summarize(r), msg)
 	byRef := imagesByRef(r)
 
-	writeEOSLSection(b, r, byRef)
-	writeEOLPackages(b, r, byRef)
+	writeEOSLSection(b, r, byRef, msg)
+	writeEOLPackages(b, r, byRef, msg)
 	// r.Actionable is never filtered: only affected/will_not_fix findings are
-	// ever eligible for acceptance (fixed and end-of-life never are).
-	collapsed := writeActionable(b, r.Actionable, byRef)
-	writeSection(b, "ℹ️ No fix yet (affected / waiting on upstream)", filterAccepted(r.Watch), false, byRef)
-	writeSection(b, "🔕 Upstream won't fix (will_not_fix)", filterAccepted(r.WontFix), false, byRef)
-	writeAcceptedCount(b, r)
-	writeScanErrors(b, r.ScanErrors, byRef)
-	writeRuntimeSummary(b, r)
-	writeUnresolvedRefs(b, r)
+	// ever eligible for muting (fixed and end-of-life never are).
+	collapsed := writeActionable(b, r.Actionable, byRef, msg)
+	writeSection(b, msg.WatchSectionTitle, filterMuted(r.Watch), false, byRef, msg)
+	writeSection(b, msg.WontFixSectionTitle, filterMuted(r.WontFix), false, byRef, msg)
+	writeMutedCount(b, r, msg)
+	writeScanErrors(b, r.ScanErrors, byRef, msg)
+	writeRuntimeSummary(b, r, msg)
+	writeUnresolvedRefs(b, r, msg)
 
 	if collapsed > 0 {
 		// The generic webhook is the only destination with the full,
 		// uncollapsed list, and only when one is actually configured.
 		if r.GenericWebhookConfigured {
-			fmt.Fprintf(b, "\n_%d lower-risk fix(es) summarized — full list in the generic webhook payload._\n", collapsed)
+			fmt.Fprintf(b, msg.LowerRiskSummarizedWebhook, collapsed)
 		} else {
-			fmt.Fprintf(b, "\n_%d lower-risk fix(es) summarized._\n", collapsed)
+			fmt.Fprintf(b, msg.LowerRiskSummarized, collapsed)
 		}
 	}
 }
@@ -149,10 +139,14 @@ func writeFullBody(b *strings.Builder, r analyze.Report) {
 // pinned this cycle (Report.UnconfirmedRefs) is having a previous finding
 // held rather than resolved (runner computes this against the previous
 // state, which this pure formatting layer never sees).
-func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holding bool) string {
+func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holding bool, lang ...Language) string {
+	return formatSlackDiffText(r, d, fullReport, holding, messagesFor(resolveLanguage(lang)))
+}
+
+func formatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holding bool, msg messages) string {
 	var b strings.Builder
-	writeHeader(&b, r)
-	fmt.Fprintf(&b, "%d images scanned, %d affected\n", r.ImagesTotal, r.AffectedImageCount())
+	writeHeader(&b, r, msg)
+	fmt.Fprintf(&b, msg.ImagesScannedAffected, r.ImagesTotal, r.AffectedImageCount())
 	// A role line only earns its place when it says something the very next
 	// line doesn't already: a quiet cycle prints "No changes since last
 	// scan." right below (or, on the weekly digest day, the
@@ -163,11 +157,11 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holdin
 	// wrong would repeat the very mistake the generic-webhook guidance
 	// elsewhere in this file was fixed to avoid.
 	if !fullReport && d.HasChanges() {
-		writeRoleLine(&b, "Changes since the last scan.")
+		writeRoleLine(&b, msg.RoleChangesSinceLastScan)
 	}
 	// Before the "No changes" early return: a Sensor/eBPF warning must reach
 	// every diff-mode message, changed or not.
-	writeRuntimeWarning(&b, r, r.GeneratedAt)
+	writeRuntimeWarning(&b, r, r.GeneratedAt, msg)
 
 	byRef := imagesByRef(r)
 
@@ -175,51 +169,51 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holdin
 	// change (state.Diff.HasChanges() includes it), so it must never be
 	// silently absorbed into a heartbeat that only looks at findings. A clean
 	// image's replacement is news too.
-	writeReplaced(&b, d.Replaced)
+	writeReplaced(&b, d.Replaced, msg)
 
 	if !d.HasChanges() && !fullReport {
-		b.WriteString("\nNo changes since last scan.\n")
-		writeScanErrors(&b, r.ScanErrors, byRef)
-		writeAnyOpenNow(&b, r, d, holding)
-		writeAcceptedCount(&b, r)
+		b.WriteString(msg.NoChangesSinceLastScan)
+		writeScanErrors(&b, r.ScanErrors, byRef, msg)
+		writeAnyOpenNow(&b, r, d, holding, msg)
+		writeMutedCount(&b, r, msg)
 		// A clean, unresolved (reference-fallback) image must not go
 		// unmentioned just because it has no changes/findings to report —
 		// silence here would read as "confirmed clean".
-		writeUnresolvedRefs(&b, r)
+		writeUnresolvedRefs(&b, r, msg)
 		return b.String()
 	}
 
 	eol := splitEOLChanges(d)
 	if len(d.NewEOSL) > 0 {
-		b.WriteString("\n*⛔ New: base OS end-of-life (top priority)*\n")
+		b.WriteString(msg.HeadingNewEOSL)
 		for _, img := range d.NewEOSL {
 			note := ""
 			if n := eol.newEOSLNote[img]; n > 0 {
-				note = fmt.Sprintf(" · includes %d newly end-of-life package(s)", n)
+				note = fmt.Sprintf(msg.NewEOSLNote, n)
 			}
-			fmt.Fprintf(&b, "• %s — base OS is EOL (no more security updates coming)%s\n", refLabel(img, byRef), note)
+			fmt.Fprintf(&b, msg.EOSLLine, refLabel(img, byRef, msg), note)
 		}
 	}
-	writeEOLChanges(&b, r, eol, byRef)
+	writeEOLChanges(&b, r, eol, byRef, msg)
 
 	if r.Triage {
-		writeIntelWarning(&b, r)
-		writeTriageChanges(&b, r, d.Changes)
+		writeIntelWarning(&b, r, msg)
+		writeTriageChanges(&b, r, d.Changes, msg)
 	} else {
-		writeChanges(&b, r, d.Changes, byRef)
+		writeChanges(&b, r, d.Changes, byRef, msg)
 	}
-	writeResolved(&b, d, byRef)
+	writeResolved(&b, d, byRef, msg)
 
 	if fullReport {
-		b.WriteString("\n*📋 Weekly full report — everything currently open*\n")
+		b.WriteString(msg.WeeklyFullReportHeading)
 		// writeFullBody (via writeTriageBody or its own tail) carries its own
 		// writeUnresolvedRefs call, so it is not repeated here.
-		writeFullBody(&b, r)
+		writeFullBody(&b, r, msg)
 	} else {
-		writeScanErrors(&b, r.ScanErrors, byRef)
-		writeAnyOpenNow(&b, r, d, holding)
-		writeAcceptedCount(&b, r)
-		writeUnresolvedRefs(&b, r)
+		writeScanErrors(&b, r.ScanErrors, byRef, msg)
+		writeAnyOpenNow(&b, r, d, holding, msg)
+		writeMutedCount(&b, r, msg)
+		writeUnresolvedRefs(&b, r, msg)
 	}
 	return b.String()
 }
@@ -229,13 +223,13 @@ func FormatSlackDiffText(r analyze.Report, d state.Diff, fullReport bool, holdin
 // vs current.
 // Fires independently of findings — even a clean image's replacement is news
 // the diff exists to carry.
-func writeReplaced(b *strings.Builder, replaced []state.ImageReplacement) {
+func writeReplaced(b *strings.Builder, replaced []state.ImageReplacement, msg messages) {
 	if len(replaced) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*🔄 Image content changed (%d)*\n", len(replaced))
+	fmt.Fprintf(b, msg.ReplacedHeading, len(replaced))
 	for _, rep := range replaced {
-		fmt.Fprintf(b, "• %s: image updated (%s → %s)\n", rep.Ref, joinShortDigests(rep.PrevContentIDs), joinShortDigests(rep.ContentIDs))
+		fmt.Fprintf(b, msg.ReplacedLine, rep.Ref, joinShortDigests(rep.PrevContentIDs), joinShortDigests(rep.ContentIDs))
 	}
 }
 
@@ -289,13 +283,6 @@ func imagesByRef(r analyze.Report) map[string]analyze.ImageObservation {
 	return out
 }
 
-// identityUnconfirmedText is the single wording for "this identity could not
-// be pinned this cycle", shared by every rendering context so a future
-// wording change cannot silently drift between them: the entity-level
-// heading annotation (imageLabel), the reference-level line annotation
-// (refLabel), and the cross-cutting summary list (writeUnresolvedRefs).
-const identityUnconfirmedText = "identity unconfirmed: scanned by reference"
-
 // imageLabel is the display name for one ImageFindings entry, annotated per
 // the identity model: not pinned this cycle (a reference-fallback scan, or a
 // resolved entity this cycle failed to confirm) gets an explicit warning
@@ -306,10 +293,10 @@ const identityUnconfirmedText = "identity unconfirmed: scanned by reference"
 // carries its platform, since unlike a config digest it doesn't pin one on
 // its own. The ordinary single-entity case (the vast majority) renders
 // exactly as before.
-func imageLabel(img analyze.ImageFindings, byRef map[string]analyze.ImageObservation) string {
+func imageLabel(img analyze.ImageFindings, byRef map[string]analyze.ImageObservation, msg messages) string {
 	switch {
 	case !img.Pinned:
-		return img.Image + " — " + identityUnconfirmedText
+		return img.Image + " — " + msg.IdentityUnconfirmed
 	case byRef[img.Image].Ambiguous:
 		digest := shortDigest(img.Subject.Key.Digest.String())
 		if img.Subject.Key.Digest.Kind == inventory.DigestRegistry {
@@ -346,9 +333,9 @@ func platformString(p inventory.Platform) string {
 // reference absent from byRef — not scanned this cycle, e.g. a Resolved/gone
 // image — is left unannotated: no data is not the same claim as
 // "unconfirmed".
-func refLabel(ref string, byRef map[string]analyze.ImageObservation) string {
+func refLabel(ref string, byRef map[string]analyze.ImageObservation, msg messages) string {
 	if obs, ok := byRef[ref]; ok && !obs.IdentityResolved {
-		return ref + " — " + identityUnconfirmedText
+		return ref + " — " + msg.IdentityUnconfirmed
 	}
 	return ref
 }
@@ -361,7 +348,7 @@ func refLabel(ref string, byRef map[string]analyze.ImageObservation) string {
 // "" when every reference resolved this cycle. Sorted for stable output.
 // Shared by writeUnresolvedRefs (the Slack messages) and the thread report,
 // so the two never drift apart.
-func unresolvedRefsLine(r analyze.Report) string {
+func unresolvedRefsLine(r analyze.Report, msg messages) string {
 	var refs []string
 	for _, o := range r.Images {
 		if !o.IdentityResolved {
@@ -372,7 +359,7 @@ func unresolvedRefsLine(r analyze.Report) string {
 		return ""
 	}
 	sort.Strings(refs)
-	return fmt.Sprintf("⚠️ %s — %s\n", identityUnconfirmedText, strings.Join(refs, ", "))
+	return fmt.Sprintf(msg.UnresolvedRefsLine, msg.IdentityUnconfirmed, strings.Join(refs, ", "))
 }
 
 // unconfirmedRefsLine renders the cross-cutting summary of every reference
@@ -382,11 +369,11 @@ func unresolvedRefsLine(r analyze.Report) string {
 // distinguishable from one that quietly stopped matching what's actually
 // running. "" when nothing is unconfirmed — always the case for Docker,
 // which never falls back this way, so this line never appears for it.
-func unconfirmedRefsLine(r analyze.Report) string {
+func unconfirmedRefsLine(r analyze.Report, msg messages) string {
 	if len(r.UnconfirmedRefs) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("⏳ unconfirmed this cycle, holding previous findings — %s\n", strings.Join(r.UnconfirmedRefs, ", "))
+	return fmt.Sprintf(msg.UnconfirmedRefsLine, strings.Join(r.UnconfirmedRefs, ", "))
 }
 
 // writeUnresolvedRefs appends unresolvedRefsLine and unconfirmedRefsLine to a
@@ -394,22 +381,22 @@ func unconfirmedRefsLine(r analyze.Report) string {
 // errors. Doubling up with a heading-level annotation (imageLabel/refLabel)
 // elsewhere in the same message is expected and fine — both draw from
 // identityUnconfirmedText, so the wording never drifts between the two.
-func writeUnresolvedRefs(b *strings.Builder, r analyze.Report) {
-	if line := unresolvedRefsLine(r); line != "" {
+func writeUnresolvedRefs(b *strings.Builder, r analyze.Report, msg messages) {
+	if line := unresolvedRefsLine(r, msg); line != "" {
 		b.WriteString("\n" + line)
 	}
-	if line := unconfirmedRefsLine(r); line != "" {
+	if line := unconfirmedRefsLine(r, msg); line != "" {
 		b.WriteString("\n" + line)
 	}
 }
 
 // writeAnyOpenNow picks the heartbeat style for the report's mode.
-func writeAnyOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool) {
+func writeAnyOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool, msg messages) {
 	if r.Triage {
-		writeTriageOpenNow(b, r, d, holding)
+		writeTriageOpenNow(b, r, d, holding, msg)
 		return
 	}
-	writeOpenNow(b, r, d, holding)
+	writeOpenNow(b, r, d, holding, msg)
 }
 
 // visibleChange pairs a state.Change with the subset of its Groups notify
@@ -420,13 +407,13 @@ type visibleChange struct {
 }
 
 // visibleChanges filters changes down to the ones with at least one
-// non-Accepted group, and each one's Groups down to that subset: Compute
-// never drops an accepted key's Change from the diff (the generic webhook
+// non-Muted group, and each one's Groups down to that subset: Compute
+// never drops a muted key's Change from the diff (the generic webhook
 // needs the full record, and Kind/priority are never touched by
-// acceptance), so notify is where the row itself is hidden instead — the
-// same policy filterAccepted already applies to the status-section views.
-// analyze.ApplyAcceptance only ever marks every group of a key Accepted
-// together, so in practice a Change's Groups are either all Accepted or
+// muting), so notify is where the row itself is hidden instead — the
+// same policy filterMuted already applies to the status-section views.
+// analyze.ApplyMuting only ever marks every group of a key Muted
+// together, so in practice a Change's Groups are either all Muted or
 // none are; filtering per group here is just the defensive form of that. A
 // Change left with no visible groups at all is dropped entirely: no image
 // heading line, and no count in the header above it. Order is preserved.
@@ -435,7 +422,7 @@ func visibleChanges(changes []state.Change) []visibleChange {
 	for _, c := range changes {
 		var groups []analyze.PackageGroup
 		for _, g := range c.Groups {
-			if !g.Accepted {
+			if !g.Muted {
 				groups = append(groups, g)
 			}
 		}
@@ -448,20 +435,20 @@ func visibleChanges(changes []state.Change) []visibleChange {
 
 // writeChanges renders the new/changed findings grouped per image, in report
 // priority order, each package line in full detail.
-func writeChanges(b *strings.Builder, r analyze.Report, changes []state.Change, byRef map[string]analyze.ImageObservation) {
+func writeChanges(b *strings.Builder, r analyze.Report, changes []state.Change, byRef map[string]analyze.ImageObservation, msg messages) {
 	visible := visibleChanges(changes)
 	if len(visible) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*🆕 New since last scan (%d)*\n", len(visible))
+	fmt.Fprintf(b, msg.NewSinceLastScanHeading, len(visible))
 	lastImage := ""
 	for _, vc := range visible {
 		if vc.change.Image != lastImage {
-			fmt.Fprintf(b, "%s %s\n", groupsEmoji(vc.groups), refLabel(vc.change.Image, byRef))
+			fmt.Fprintf(b, "%s %s\n", groupsEmoji(vc.groups), refLabel(vc.change.Image, byRef, msg))
 			lastImage = vc.change.Image
 		}
 		for _, g := range vc.groups {
-			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, vc.change, g)+runtimeWatchSuffix(g.Runtime))
+			writePackage(b, g, g.Status == scanner.StatusFixed, changeSuffix(r, vc.change, g, msg)+runtimeWatchSuffix(g.Runtime, msg), msg)
 		}
 	}
 }
@@ -470,8 +457,8 @@ func writeChanges(b *strings.Builder, r analyze.Report, changes []state.Change, 
 // the group's headline CVE (compactEvidence), then the kind-specific label.
 // Shared with writeTriageChanges (triage.go) so the two never drift apart —
 // see changeSuffixParts for the rule each kind follows.
-func changeSuffix(r analyze.Report, c state.Change, g analyze.PackageGroup) string {
-	parts := changeSuffixParts(r, c, g)
+func changeSuffix(r analyze.Report, c state.Change, g analyze.PackageGroup, msg messages) string {
+	parts := changeSuffixParts(r, c, g, msg)
 	if len(parts) == 0 {
 		return ""
 	}
@@ -482,28 +469,28 @@ func changeSuffix(r analyze.Report, c state.Change, g analyze.PackageGroup) stri
 // A group that carries new CVE ids lists them (that listing is its headline);
 // otherwise the headline CVE is shown unless the group is act-now, where
 // writeEvidence already renders it right below. The kind's own label follows.
-func changeSuffixParts(r analyze.Report, c state.Change, g analyze.PackageGroup) []string {
+func changeSuffixParts(r analyze.Report, c state.Change, g analyze.PackageGroup, msg messages) []string {
 	var parts []string
 	switch {
 	case len(groupNewIDs(c, g)) > 0:
-		parts = append(parts, newCVEsSuffix(groupNewIDs(c, g)))
+		parts = append(parts, newCVEsSuffix(groupNewIDs(c, g), msg))
 	case g.Priority != analyze.PriorityActNow:
-		if ev := compactEvidence(r, g.TopVuln()); ev != "" {
+		if ev := compactEvidence(r, g.TopVuln(), msg); ev != "" {
 			parts = append(parts, ev)
 		}
 	}
 	switch c.Kind {
 	case state.KindEscalated:
-		parts = append(parts, "⬆️ escalated to "+priorityLabel(analyze.MaxPriority(c.Groups)))
+		parts = append(parts, fmt.Sprintf(msg.EscalatedTo, priorityLabel(analyze.MaxPriority(c.Groups), msg)))
 	case state.KindNowFixable:
-		parts = append(parts, "fix now available")
-	case state.KindAcceptanceLost:
-		// Acceptance is decided for the whole (image, package) key at once
-		// (analyze.ApplyAcceptance), so every group on record for the key
+		parts = append(parts, msg.FixNowAvailable)
+	case state.KindUnmuted:
+		// Muting is decided for the whole (image, package) key at once
+		// (analyze.ApplyMuting), so every group on record for the key
 		// shares the same story — the reason is read from all of them,
 		// ordinary and end-of-life alike (changeReasonGroups), not from g
 		// alone.
-		parts = append(parts, "↩️ No longer accepted ("+acceptanceLostReason(changeReasonGroups(c))+")")
+		parts = append(parts, fmt.Sprintf(msg.Unmuted, unmutedReason(changeReasonGroups(c), msg)))
 	}
 	return parts
 }
@@ -536,7 +523,7 @@ const newIDsMax = 3
 
 // newCVEsSuffix renders the linked list of CVE ids new to a known package —
 // the id-bearing replacement for the previous bare added-CVE count.
-func newCVEsSuffix(ids []string) string {
+func newCVEsSuffix(ids []string, msg messages) string {
 	if len(ids) == 0 {
 		return ""
 	}
@@ -548,9 +535,9 @@ func newCVEsSuffix(ids []string) string {
 	for i, id := range shown {
 		linked[i] = vulnIDLink(id)
 	}
-	s := "new: " + strings.Join(linked, ", ")
+	s := fmt.Sprintf(msg.NewCVEsPrefix, strings.Join(linked, ", "))
 	if extra > 0 {
-		s += fmt.Sprintf(" (+%d more)", extra)
+		s += fmt.Sprintf(msg.MoreCount, extra)
 	}
 	return s
 }
@@ -560,12 +547,12 @@ func newCVEsSuffix(ids []string) string {
 // triage is on and the intel behind it is trustworthy, or plain id+severity
 // otherwise (triage off, or degraded intel where the KEV/EPSS parts of
 // shortEvidence would misreport a data outage as a verdict).
-func compactEvidence(r analyze.Report, v analyze.VulnRef) string {
+func compactEvidence(r analyze.Report, v analyze.VulnRef, msg messages) string {
 	if v.ID == "" {
 		return ""
 	}
 	if r.Triage && !r.Intel.Degraded() {
-		return shortEvidence(r, v)
+		return shortEvidence(r, v, msg)
 	}
 	return vulnIDLink(v.ID) + " " + string(v.Severity)
 }
@@ -589,7 +576,7 @@ func groupsEmoji(groups []analyze.PackageGroup) string {
 // Resolved and the end-of-life clearances that left nothing behind. A
 // package that left end-of-life but still has ordinary findings gets its
 // own "no longer end-of-life" line instead.
-func writeResolved(b *strings.Builder, d state.Diff, byRef map[string]analyze.ImageObservation) {
+func writeResolved(b *strings.Builder, d state.Diff, byRef map[string]analyze.ImageObservation, msg messages) {
 	type pkgKey struct{ image, pkg string }
 	seen := map[pkgKey]bool{}
 	var gone []pkgKey
@@ -620,9 +607,9 @@ func writeResolved(b *strings.Builder, d state.Diff, byRef map[string]analyze.Im
 		}
 		return gone[i].pkg < gone[j].pkg
 	})
-	fmt.Fprintf(b, "\n*✅ Resolved since last scan (%d)*\n", len(gone)+len(leftEOL)+len(d.ResolvedEOSL))
+	fmt.Fprintf(b, msg.ResolvedHeading, len(gone)+len(leftEOL)+len(d.ResolvedEOSL))
 	for _, img := range d.ResolvedEOSL {
-		fmt.Fprintf(b, "• %s — base OS no longer EOL\n", refLabel(img, byRef))
+		fmt.Fprintf(b, msg.BaseOSNoLongerEOL, refLabel(img, byRef, msg))
 	}
 	byImage := map[string][]string{}
 	var imgOrder []string
@@ -633,10 +620,10 @@ func writeResolved(b *strings.Builder, d state.Diff, byRef map[string]analyze.Im
 		byImage[k.image] = append(byImage[k.image], k.pkg)
 	}
 	for _, img := range imgOrder {
-		fmt.Fprintf(b, "• %s: %s\n", refLabel(img, byRef), strings.Join(byImage[img], ", "))
+		fmt.Fprintf(b, msg.ResolvedImagePackages, refLabel(img, byRef, msg), strings.Join(byImage[img], ", "))
 	}
 	for _, res := range leftEOL {
-		fmt.Fprintf(b, "• %s: %s — no longer end-of-life\n", refLabel(res.Image, byRef), res.Package)
+		fmt.Fprintf(b, msg.NoLongerEndOfLife, refLabel(res.Image, byRef, msg), res.Package)
 	}
 }
 
@@ -644,14 +631,14 @@ func writeResolved(b *strings.Builder, d state.Diff, byRef map[string]analyze.Im
 // findings. "All clear" is only claimed when state holds nothing either:
 // findings held for an unpinned scan (holding) or for a failed scan
 // (d.AnyOpen) are still open, just not re-scanned.
-func writeNothingOpenNow(b *strings.Builder, d state.Diff, holding bool) {
+func writeNothingOpenNow(b *strings.Builder, d state.Diff, holding bool, msg messages) {
 	switch {
 	case holding:
-		b.WriteString("\n📌 Open now: unconfirmed — holding previous findings until re-confirmed\n")
+		b.WriteString(msg.OpenNowUnconfirmedHolding)
 	case d.AnyOpen:
-		b.WriteString("\n📌 Open now: not re-scanned — holding previous findings until the next successful scan\n")
+		b.WriteString(msg.OpenNowNotRescanned)
 	default:
-		b.WriteString("\n🎉 Open now: none — all clear\n")
+		b.WriteString(msg.OpenNowAllClear)
 	}
 }
 
@@ -660,13 +647,13 @@ func writeNothingOpenNow(b *strings.Builder, d state.Diff, holding bool) {
 // base-OS count agrees with the fold (d.OpenEOSL). The package segment is
 // independent of triage; the base-OS one follows openNowEOLBaseWithoutTriage
 // when triage is off.
-func openNowEOLSegments(d state.Diff, triage bool) []string {
+func openNowEOLSegments(d state.Diff, triage bool, msg messages) []string {
 	var seg []string
 	if n := len(d.OpenEOSL); n > 0 && (triage || openNowEOLBaseWithoutTriage) {
-		seg = append(seg, fmt.Sprintf("⛔ %d EOL base", n))
+		seg = append(seg, fmt.Sprintf(msg.SegEOLBase, n))
 	}
 	if d.OpenEOLPackages > 0 {
-		seg = append(seg, fmt.Sprintf("⛔ %d EOL package", d.OpenEOLPackages))
+		seg = append(seg, fmt.Sprintf(msg.SegEOLPackage, d.OpenEOLPackages))
 	}
 	return seg
 }
@@ -676,18 +663,18 @@ func openNowEOLSegments(d state.Diff, triage bool) []string {
 // no findings only because an unpinned scan is having a previous finding
 // held (holding), it must not assert "all clear" — that would flatly
 // contradict the fact that state is still carrying something over.
-func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool) {
+func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bool, msg messages) {
 	if !r.HasFindings() {
-		writeNothingOpenNow(b, d, holding)
+		writeNothingOpenNow(b, d, holding, msg)
 		return
 	}
-	seg := append(openNowEOLSegments(d, false), fmt.Sprintf("CRITICAL %d / HIGH %d across %d image(s)", d.OpenCritical, d.OpenHigh, d.OpenImages))
-	fmt.Fprintf(b, "\n📌 Open now: %s", strings.Join(seg, " / "))
+	seg := append(openNowEOLSegments(d, false, msg), fmt.Sprintf(msg.OpenNowCriticalHigh, d.OpenCritical, d.OpenHigh, d.OpenImages))
+	fmt.Fprintf(b, msg.OpenNowPrefix, strings.Join(seg, " / "))
 	if days := d.OldestOpenDays(r.GeneratedAt); days > 0 {
 		if days >= staleDays {
-			fmt.Fprintf(b, " — ⏰ oldest unresolved %d day(s)", days)
+			fmt.Fprintf(b, msg.OldestUnresolvedStale, days)
 		} else {
-			fmt.Fprintf(b, " — oldest unresolved %d day(s)", days)
+			fmt.Fprintf(b, msg.OldestUnresolved, days)
 		}
 	}
 	b.WriteString("\n")
@@ -696,17 +683,17 @@ func writeOpenNow(b *strings.Builder, r analyze.Report, d state.Diff, holding bo
 	// configured — a weekly full report never carries more than this same
 	// heartbeat's own detail level either.
 	if r.GenericWebhookConfigured {
-		b.WriteString("_Details in the generic webhook payload._\n")
+		b.WriteString(msg.DetailsInWebhook)
 	}
 }
 
-func writeScanErrors(b *strings.Builder, errs []analyze.ScanError, byRef map[string]analyze.ImageObservation) {
+func writeScanErrors(b *strings.Builder, errs []analyze.ScanError, byRef map[string]analyze.ImageObservation, msg messages) {
 	if len(errs) == 0 {
 		return
 	}
-	b.WriteString("\n*⚠️ Scan failures*\n")
+	b.WriteString(msg.ScanFailuresHeading)
 	for _, e := range errs {
-		fmt.Fprintf(b, "• %s — %s\n", refLabel(e.Image, byRef), e.Err)
+		fmt.Fprintf(b, msg.ScanFailureLine, refLabel(e.Image, byRef, msg), e.Err)
 	}
 }
 
@@ -721,15 +708,15 @@ type priority struct {
 // collapsed.
 func summarize(r analyze.Report) priority {
 	p := priority{eol: len(r.EOSLImages), eolPackages: analyze.GroupCount(r.EOLPackageAlerts())}
-	// Summed per group, skipping Accepted ones, so this total agrees with the
+	// Summed per group, skipping Muted ones, so this total agrees with the
 	// per-image counts the body actually shows (writeSection/writeActionable
-	// already hide an accepted group's row and, with it, its CVEs).
+	// already hide a muted group's row and, with it, its CVEs).
 	// Mathematically identical to summing img.CriticalCount() whenever
-	// nothing is accepted.
+	// nothing is muted.
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			for _, g := range img.Packages {
-				if !g.Accepted {
+				if !g.Muted {
 					p.critical += g.Critical
 				}
 			}
@@ -750,25 +737,25 @@ func summarize(r analyze.Report) priority {
 	return p
 }
 
-func writeHeadline(b *strings.Builder, p priority) {
+func writeHeadline(b *strings.Builder, p priority, msg messages) {
 	var seg []string
 	if p.eol > 0 {
-		seg = append(seg, fmt.Sprintf("⛔ %d EOL base", p.eol))
+		seg = append(seg, fmt.Sprintf(msg.SegEOLBase, p.eol))
 	}
 	if p.eolPackages > 0 {
-		seg = append(seg, fmt.Sprintf("⛔ %d EOL package", p.eolPackages))
+		seg = append(seg, fmt.Sprintf(msg.SegEOLPackage, p.eolPackages))
 	}
 	if p.critical > 0 {
-		seg = append(seg, fmt.Sprintf("🔴 %d CRITICAL", p.critical))
+		seg = append(seg, fmt.Sprintf(msg.SegCritical, p.critical))
 	}
 	if p.care > 0 {
-		seg = append(seg, fmt.Sprintf("🟠 %d need care", p.care))
+		seg = append(seg, fmt.Sprintf(msg.SegNeedCare, p.care))
 	}
 	if p.safe > 0 {
-		seg = append(seg, fmt.Sprintf("🟢 %d safe", p.safe))
+		seg = append(seg, fmt.Sprintf(msg.SegSafe, p.safe))
 	}
 	if len(seg) > 0 {
-		fmt.Fprintf(b, "*Priority:* %s\n", strings.Join(seg, " · "))
+		fmt.Fprintf(b, msg.PriorityLine, strings.Join(seg, " · "))
 	}
 }
 
@@ -785,25 +772,25 @@ func needsAttention(g analyze.PackageGroup) bool {
 // triage watch bucket uses (runtimeWatchSuffix) when it is in use; the
 // triage-off view never reorders on it, only annotates. Returns the total
 // number of packages collapsed.
-func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation) int {
+func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings, byRef map[string]analyze.ImageObservation, msg messages) int {
 	if len(imgs) == 0 {
 		return 0
 	}
-	b.WriteString("\n*✅ Actionable now (fixed)*\n")
+	fmt.Fprintf(b, msg.SectionHeading, msg.ActionableTitle)
 	collapsed := 0
 	for _, img := range imgs {
-		fmt.Fprintf(b, "%s %s  CRITICAL %d / HIGH %d\n", imageEmoji(img), imageLabel(img, byRef), img.CriticalCount(), img.TotalCount()-img.CriticalCount())
+		fmt.Fprintf(b, msg.ImageCritHighLine, imageEmoji(img), imageLabel(img, byRef, msg), img.CriticalCount(), img.TotalCount()-img.CriticalCount())
 		var rest []analyze.PackageGroup
 		for _, g := range img.Packages {
 			if needsAttention(g) {
-				writePackage(b, g, true, runtimeWatchSuffix(g.Runtime))
+				writePackage(b, g, true, runtimeWatchSuffix(g.Runtime, msg), msg)
 			} else {
 				rest = append(rest, g)
 			}
 		}
 		if len(rest) > 0 {
 			collapsed += len(rest)
-			writeCollapsed(b, rest)
+			writeCollapsed(b, rest, msg)
 		}
 	}
 	return collapsed
@@ -813,31 +800,31 @@ func writeActionable(b *strings.Builder, imgs []analyze.ImageFindings, byRef map
 // for the watch / won't-fix sections, which are not actionable now and are
 // typically short. Each line gets the same runtime-usage suffix
 // writeActionable does.
-func writeSection(b *strings.Builder, title string, imgs []analyze.ImageFindings, fixed bool, byRef map[string]analyze.ImageObservation) {
+func writeSection(b *strings.Builder, title string, imgs []analyze.ImageFindings, fixed bool, byRef map[string]analyze.ImageObservation, msg messages) {
 	if len(imgs) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*%s*\n", title)
+	fmt.Fprintf(b, msg.SectionHeading, title)
 	for _, img := range imgs {
-		fmt.Fprintf(b, "%s %s  CRITICAL %d / HIGH %d\n", imageEmoji(img), imageLabel(img, byRef), img.CriticalCount(), img.TotalCount()-img.CriticalCount())
+		fmt.Fprintf(b, msg.ImageCritHighLine, imageEmoji(img), imageLabel(img, byRef, msg), img.CriticalCount(), img.TotalCount()-img.CriticalCount())
 		for _, g := range img.Packages {
-			writePackage(b, g, fixed, runtimeWatchSuffix(g.Runtime))
+			writePackage(b, g, fixed, runtimeWatchSuffix(g.Runtime, msg), msg)
 		}
 	}
 }
 
-func writePackage(b *strings.Builder, g analyze.PackageGroup, fixed bool, suffix string) {
+func writePackage(b *strings.Builder, g analyze.PackageGroup, fixed bool, suffix string, msg messages) {
 	b.WriteString("   • ")
 	switch {
 	case fixed:
-		fmt.Fprintf(b, "%s %s → %s", g.Package, g.InstalledVer, g.FixedVer)
+		fmt.Fprintf(b, msg.PackageFixedLine, g.Package, g.InstalledVer, g.FixedVer)
 	case analyze.IsEOL(g):
-		fmt.Fprintf(b, "%s %s (%s)", g.Package, g.InstalledVer, eolPackageText)
+		fmt.Fprintf(b, msg.PackageEOLLine, g.Package, g.InstalledVer, msg.EOLPackageText)
 	default:
-		fmt.Fprintf(b, "%s %s (no fix available)", g.Package, g.InstalledVer)
+		fmt.Fprintf(b, msg.PackageNoFixLine, g.Package, g.InstalledVer)
 	}
-	fmt.Fprintf(b, " (CRITICAL %d / HIGH %d)", g.Critical, g.High)
-	if label := riskLabel(g.Risk); label != "" {
+	fmt.Fprintf(b, msg.PackageSeverityCounts, g.Critical, g.High)
+	if label := riskLabel(g.Risk, msg); label != "" {
 		fmt.Fprintf(b, "  %s", label)
 	}
 	if g.Class == "lang" {
@@ -860,7 +847,7 @@ func langTag(eco inventory.Ecosystem) string {
 
 // writeCollapsed renders one summary line for the lower-risk fixes hidden from
 // the detailed view, listing up to collapsePreview package names.
-func writeCollapsed(b *strings.Builder, rest []analyze.PackageGroup) {
+func writeCollapsed(b *strings.Builder, rest []analyze.PackageGroup, msg messages) {
 	var crit, high int
 	names := make([]string, 0, len(rest))
 	for _, g := range rest {
@@ -876,9 +863,9 @@ func writeCollapsed(b *strings.Builder, rest []analyze.PackageGroup) {
 	if len(names) > collapsePreview {
 		shown, extra = names[:collapsePreview], len(names)-collapsePreview
 	}
-	fmt.Fprintf(b, "   • +%d lower-risk fixes (%s): %s", len(rest), sev, strings.Join(shown, ", "))
+	fmt.Fprintf(b, msg.CollapsedLine, len(rest), sev, strings.Join(shown, ", "))
 	if extra > 0 {
-		fmt.Fprintf(b, " (+%d more)", extra)
+		fmt.Fprintf(b, msg.MoreCount, extra)
 	}
 	b.WriteString("\n")
 }
@@ -890,16 +877,16 @@ func imageEmoji(img analyze.ImageFindings) string {
 	return "🟠"
 }
 
-func riskLabel(r analyze.Risk) string {
+func riskLabel(r analyze.Risk, msg messages) string {
 	switch r {
 	case analyze.RiskDistroUpdate:
-		return "🟢 upgrade: distro security patch"
+		return msg.RiskDistroUpdate
 	case analyze.RiskSafe:
-		return "🟢 upgrade: low-risk"
+		return msg.RiskSafe
 	case analyze.RiskCaution:
-		return "🟠 upgrade: major version bump — needs care"
+		return msg.RiskCaution
 	case analyze.RiskUnknown:
-		return "⚪ upgrade: risk unknown"
+		return msg.RiskUnknown
 	default:
 		return ""
 	}
@@ -947,11 +934,11 @@ type runtimeCountsPayload struct {
 	InUse       int `json:"in_use"`
 	NotObserved int `json:"not_observed"`
 	Unavailable int `json:"unavailable"`
-	// Accepted overlaps NotObserved by construction (analyze.ApplyAcceptance
-	// only ever accepts a not-observed group) rather than being mutually
-	// exclusive with it. Always 0 when runtime.accept_unfixable_not_in_use
+	// Muted overlaps NotObserved by construction (analyze.ApplyMuting
+	// only ever mutes a not-observed group) rather than being mutually
+	// exclusive with it. Always 0 when runtime.mute_unfixable_not_in_use
 	// is off.
-	Accepted int `json:"accepted"`
+	Muted int `json:"muted"`
 }
 
 // environmentPayload mirrors inventory.Environment. Kind is always present —
@@ -1043,14 +1030,14 @@ type changePayload struct {
 	// groups ever had AttachRuntime judge them.
 	RuntimeUsage string `json:"runtime_usage,omitempty"`
 
-	// Accepted is true when every analyze.PackageGroup this change merged is
-	// Accepted under runtime.accept_unfixable_not_in_use — the webhook's
+	// Muted is true when every analyze.PackageGroup this change merged is
+	// Muted under runtime.mute_unfixable_not_in_use — the webhook's
 	// counterpart to notify hiding this change's row entirely in Slack.
-	// analyze.ApplyAcceptance only ever marks every group of a key Accepted
+	// analyze.ApplyMuting only ever marks every group of a key Muted
 	// together (a fixed or otherwise-ineligible sibling group blocks the
 	// whole key), so in practice this is never true for only some of a
 	// change's groups.
-	Accepted bool `json:"accepted,omitempty"`
+	Muted bool `json:"muted,omitempty"`
 }
 
 type resolvedPayload struct {
@@ -1148,7 +1135,7 @@ type findingPayload struct {
 }
 
 // findingRuntimePayload mirrors analyze.Runtime, plus the PackageGroup-level
-// Accepted verdict it travels alongside.
+// Muted verdict it travels alongside.
 type findingRuntimePayload struct {
 	Usage          string                           `json:"usage"`
 	Reason         string                           `json:"reason,omitempty"`
@@ -1157,12 +1144,12 @@ type findingRuntimePayload struct {
 	Exposure       string                           `json:"exposure,omitempty"`
 	HighPrivilege  bool                             `json:"high_privilege,omitempty"`
 	Containers     []findingRuntimeContainerPayload `json:"containers,omitempty"`
-	// Accepted and AcceptedReason mirror analyze.PackageGroup.Accepted/
-	// AcceptedReason: true only under runtime.accept_unfixable_not_in_use.
+	// Muted and MutedReason mirror analyze.PackageGroup.Muted/
+	// MutedReason: true only under runtime.mute_unfixable_not_in_use.
 	// The generic webhook always carries the finding either way — this is a
 	// marker, never an omission.
-	Accepted       bool   `json:"accepted,omitempty"`
-	AcceptedReason string `json:"accepted_reason,omitempty"`
+	Muted       bool   `json:"muted,omitempty"`
+	MutedReason string `json:"muted_reason,omitempty"`
 }
 
 // findingRuntimeContainerPayload mirrors analyze.ContainerRuntime.
@@ -1284,7 +1271,7 @@ func BuildWebhookPayload(r analyze.Report, d *state.Diff) any {
 // r.Runtime. Only called when r.Runtime != nil.
 func runtimePayloadOf(r analyze.Report) *runtimePayload {
 	rt := r.Runtime
-	inUse, notObserved, unavailable, accepted := runtimeCounts(r)
+	inUse, notObserved, unavailable, muted := runtimeCounts(r)
 	return &runtimePayload{
 		SensorStatus:    runtimeDisplayStatus(rt, r.GeneratedAt),
 		HeartbeatAt:     formatTimeOrEmpty(rt.Sensor.HeartbeatAt),
@@ -1296,7 +1283,7 @@ func runtimePayloadOf(r analyze.Report) *runtimePayload {
 		},
 		EventsStatus: string(rt.Sensor.Events.Status),
 		EventsReason: string(rt.Sensor.Events.Reason),
-		Counts:       runtimeCountsPayload{InUse: inUse, NotObserved: notObserved, Unavailable: unavailable, Accepted: accepted},
+		Counts:       runtimeCountsPayload{InUse: inUse, NotObserved: notObserved, Unavailable: unavailable, Muted: muted},
 	}
 }
 
@@ -1338,13 +1325,17 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			Priority:     string(analyze.MaxPriority(c.Groups)),
 			Ecosystems:   ecosystemsOf(c.Groups),
 			RuntimeUsage: runtimeUsageOf(c.Groups),
-			Accepted:     allAccepted(c.Groups),
+			Muted:        allMuted(c.Groups),
 		}
 		switch c.Kind {
 		case state.KindEscalated:
-			cp.Reason = changeEvidence(r, c)
-		case state.KindAcceptanceLost:
-			cp.Reason = acceptanceLostReason(changeReasonGroups(c))
+			// The generic webhook payload is never translated (it's
+			// consumed programmatically, not read in Slack), so its reason
+			// text always uses the English dictionary regardless of
+			// notify.language.
+			cp.Reason = changeEvidence(r, c, enMessages)
+		case state.KindUnmuted:
+			cp.Reason = unmutedReason(changeReasonGroups(c), enMessages)
 		}
 		dp.New = append(dp.New, cp)
 	}
@@ -1376,7 +1367,8 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			RuntimeUsage: runtimeUsageOf(c.Groups),
 		}
 		if c.Kind == state.EOLKindEscalated {
-			cp.Reason = changeEvidence(r, eolAsChange(c))
+			// Same rule as above: the webhook payload always uses English.
+			cp.Reason = changeEvidence(r, eolAsChange(c), enMessages)
 		}
 		dp.NewEOLPackages = append(dp.NewEOLPackages, cp)
 	}

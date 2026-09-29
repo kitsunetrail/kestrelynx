@@ -1,0 +1,30 @@
+📊 *未解決の所見の全体 — 2026-06-24 09:00*
+
+*🚨 今すぐ対応 (3件) — 悪用あり、または悪用の可能性が高い*
+• web:1.0
+   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 アップグレード: ディストリのセキュリティパッチ
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> CRITICAL · CISA KEV (実際の攻撃で悪用あり) · EPSS 94% · 🧨 ランサムウェア攻撃
+       openssl: buffer overread
+       📎 <https://avd.example/CVE-2031-0001|アドバイザリ> · <https://vendor.example/advisory/1|ベンダーのアドバイザリ>
+     ⏱ 未解決20日 — 初回検出2026-06-04
+• api:2.0
+   • libxml2 2.9.14 (修正版なし) (CRITICAL 0 / HIGH 2)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0006|CVE-2031-0006> HIGH · EPSS 20% — 修正版なし、緩和策を検討
+       libxml2: use-after-free
+       📎 <https://avd.example/CVE-2031-0006|アドバイザリ>
+     ほか: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
+     ⏱ 未解決20日 — 初回検出2026-06-04
+   • zlib 1.2.13 (修正版なし) (CRITICAL 0 / HIGH 1)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> HIGH · CISA KEV (実際の攻撃で悪用あり) · EPSS 50% — 上流では修正予定なし、置き換えを検討
+     ⏱ 本日初検出
+
+*👀 要監視 (1件) — 緊急性は低いが継続監視*
+• web:1.0
+   • e2fsprogs 1.47.0-2 (修正版なし) (CRITICAL 1 / HIGH 0)
+     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> CRITICAL · EPSS 3% — 修正版なし、緩和策を検討
+       e2fsprogs: out-of-bounds write
+     ⏱ 未解決20日 — 初回検出2026-06-04
+
+*🔕 低優先度 (4件)* — 悪用の兆候なし
+
+⚠️ 実体未確認: 参照によるスキャン — broken:1

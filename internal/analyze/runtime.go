@@ -226,45 +226,45 @@ func AttachRuntime(r *Report, rt RuntimeInfo, snap evidence.Snapshot, insp Gener
 	}
 }
 
-// acceptObservationWindow is how long a not-observed verdict's own container
-// generation must have been running before ApplyAcceptance treats "not
+// muteObservationWindow is how long a not-observed verdict's own container
+// generation must have been running before ApplyMuting treats "not
 // observed" as "safe to stop reporting": long enough to cover a week's worth
 // of weekly-cadence activity (a cron job that only runs once every seven
 // days must not look unused just because it hasn't fired yet).
-const acceptObservationWindow = 7 * 24 * time.Hour
+const muteObservationWindow = 7 * 24 * time.Hour
 
-// ApplyAcceptance marks Accepted on every PackageGroup of a (image, package)
-// key under runtime.accept_unfixable_not_in_use, but only when every single
+// ApplyMuting marks Muted on every PackageGroup of a (image, package)
+// key under runtime.mute_unfixable_not_in_use, but only when every single
 // group this cycle's Report carries for that key is individually eligible
-// (eligibleForAcceptance) — including its end-of-life groups, which are
+// (eligibleForMuting) — including its end-of-life groups, which are
 // never themselves eligible (end-of-life is a problem with the release
 // itself and is always reported) and so always block the whole key while
-// present. A key is deliberately never partially accepted: a fixed group
+// present. A key is deliberately never partially muted: a fixed group
 // alongside an eligible unfixed one, say, blocks the unfixed one too, since
 // that fixed group already puts a row in front of the reader regardless —
 // hiding only the other one would still leave the key's own heartbeat/
 // priority contribution keyed off a mix notify never fully hides, which is
 // exactly the miscount this all-or-nothing rule avoids.
 //
-// A key is also never accepted while its own reference has a scan failure,
+// A key is also never muted while its own reference has a scan failure,
 // partial failure or unconfirmed entity this cycle (the exact same
 // conditions state.Compute's own holding rules key off — ScanFailed,
 // PartialFailure, Unconfirmed on the matching analyze.ImageObservation):
 // state carries a held reference's previous record over unchanged rather
 // than re-judging it, so a group this cycle's incomplete Report happens to
-// look individually eligible for must not be accepted here either — doing
+// look individually eligible for must not be muted here either — doing
 // so would make notify hide a row state itself still considers open, and
-// would leave state's own accepted flag unset, so a later, genuinely
+// would leave state's own muted flag unset, so a later, genuinely
 // disqualifying change (that group coming back in use, say) would go
-// unreported as acceptance_lost — nothing was ever recorded as accepted to
+// unreported as unmuted — nothing was ever recorded as muted to
 // lose.
 //
 // It must run after AttachRuntime — eligibility depends entirely on the
 // Runtime verdict AttachRuntime just computed — and it never touches
-// Priority or a VulnRef's own Priority: acceptance changes what notify
+// Priority or a VulnRef's own Priority: muting changes what notify
 // shows, never the triage verdict underneath it. A no-op when Runtime was
 // never attached at all (runtime.enabled is false).
-func ApplyAcceptance(r *Report, now time.Time) {
+func ApplyMuting(r *Report, now time.Time) {
 	if r.Runtime == nil {
 		return
 	}
@@ -272,7 +272,7 @@ func ApplyAcceptance(r *Report, now time.Time) {
 
 	// heldRef is every reference with a scan failure, partial failure or
 	// unconfirmed entity this cycle — see the doc comment above for why a
-	// key under one of these references is never accepted regardless of how
+	// key under one of these references is never muted regardless of how
 	// individually eligible its own groups look.
 	heldRef := map[string]bool{}
 	for _, o := range r.Images {
@@ -291,11 +291,11 @@ func ApplyAcceptance(r *Report, now time.Time) {
 		for i := range section {
 			img := &section[i]
 			for j := range img.Packages {
-				k := acceptanceKey(img.Image, img.Packages[j].Package)
+				k := muteKey(img.Image, img.Packages[j].Package)
 				if _, seen := keyEligible[k]; !seen {
 					keyEligible[k] = true
 				}
-				if heldRef[img.Image] || !eligibleForAcceptance(img.Packages[j], now) {
+				if heldRef[img.Image] || !eligibleForMuting(img.Packages[j], now) {
 					keyEligible[k] = false
 				}
 			}
@@ -306,39 +306,39 @@ func ApplyAcceptance(r *Report, now time.Time) {
 		for i := range section {
 			img := &section[i]
 			for j := range img.Packages {
-				k := acceptanceKey(img.Image, img.Packages[j].Package)
+				k := muteKey(img.Image, img.Packages[j].Package)
 				if keyEligible[k] {
-					img.Packages[j].Accepted = true
-					img.Packages[j].AcceptedReason = AcceptedNoFixNotInUse7d
+					img.Packages[j].Muted = true
+					img.Packages[j].MutedReason = MutedNoFixNotInUse7d
 				}
 			}
 		}
 	}
 }
 
-// acceptanceKey identifies a PackageGroup's (image, package) key for
-// ApplyAcceptance's all-or-nothing rule — the same key shape
-// state.State.Accepted uses ("image\tpackage"), kept as its own tiny
+// muteKey identifies a PackageGroup's (image, package) key for
+// ApplyMuting's all-or-nothing rule — the same key shape
+// state.State.Muted uses ("image\tpackage"), kept as its own tiny
 // function here rather than imported from state (which itself depends on
 // this package) to avoid a cyclic dependency.
-func acceptanceKey(image, pkg string) string { return image + "\t" + pkg }
+func muteKey(image, pkg string) string { return image + "\t" + pkg }
 
-// eligibleForAcceptance reports whether g qualifies for
-// runtime.accept_unfixable_not_in_use: the canonical Status has no fix
+// eligibleForMuting reports whether g qualifies for
+// runtime.mute_unfixable_not_in_use: the canonical Status has no fix
 // coming (fixed and end_of_life are never eligible — end-of-life is a
 // problem with the release itself and is always reported), the runtime
 // verdict is not_observed (an unavailable verdict is "we don't know", never
 // "unused"), the group is not act_now (an exploited or likely-to-be-
 // exploited finding is never quietly hidden), and every container
 // generation behind the verdict has been running for at least
-// acceptObservationWindow. Usage == UsageNotObserved implies, by
+// muteObservationWindow. Usage == UsageNotObserved implies, by
 // evidence.ProjectGroup's own ordering (in_use wins, then unavailable, then
 // not_observed, with an empty container list projecting to unavailable
 // rather than a vacuous not_observed), that g.Runtime.Containers is
 // non-empty and every one of them matched a generation — so
 // GenerationStartedAt is always set here; the IsZero check below is a
 // defensive fallback, not a case this function expects to hit.
-func eligibleForAcceptance(g PackageGroup, now time.Time) bool {
+func eligibleForMuting(g PackageGroup, now time.Time) bool {
 	switch g.Status {
 	case scanner.StatusAffected, scanner.StatusWontFix:
 	default:
@@ -354,7 +354,7 @@ func eligibleForAcceptance(g PackageGroup, now time.Time) bool {
 		return false
 	}
 	for _, c := range g.Runtime.Containers {
-		if c.GenerationStartedAt.IsZero() || now.Sub(c.GenerationStartedAt) < acceptObservationWindow {
+		if c.GenerationStartedAt.IsZero() || now.Sub(c.GenerationStartedAt) < muteObservationWindow {
 			return false
 		}
 	}

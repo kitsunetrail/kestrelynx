@@ -42,6 +42,9 @@ type SlackAPINotifier struct {
 	BaseURL string              // test override; empty = https://slack.com/api
 	Sleep   func(time.Duration) // test override; nil = time.Sleep
 	Limit   int                 // max chars per thread message; 0 = threadMsgLimit
+	// Language selects the wording dictionary the summary message and
+	// thread report render from. The zero value is LanguageEN.
+	Language Language
 }
 
 func (n SlackAPINotifier) Send(ctx context.Context, m Message) error {
@@ -54,14 +57,15 @@ func (n SlackAPINotifier) Send(ctx context.Context, m Message) error {
 	}
 	var thread []string
 	if postThread {
-		thread = BuildThreadMessages(m.Report, Ages{Finding: m.FirstSeen, EOL: m.EOLFirstSeen}, n.Limit)
+		thread = BuildThreadMessages(m.Report, Ages{Finding: m.FirstSeen, EOL: m.EOLFirstSeen}, n.Limit, n.Language)
 	}
 
-	text := summaryText(m)
+	msg := messagesFor(n.Language)
+	text := summaryText(m, n.Language)
 	if len(thread) > 0 {
-		text += "\n_📊 Everything open now is in this message's thread ↓_\n"
+		text += msg.ThreadPostedNotice
 	} else if m.LastReport.ValidFor(n.Channel) {
-		text += fmt.Sprintf("\n🔗 Everything open as of the last report → <%s|thread>\n", m.LastReport.Permalink)
+		text += fmt.Sprintf(msg.LastReportLink, m.LastReport.Permalink)
 	}
 
 	ts, err := n.postMessage(ctx, text, "")

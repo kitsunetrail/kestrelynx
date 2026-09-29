@@ -70,28 +70,28 @@ type PackageGroup struct {
 	// that never linked this field at all.
 	Runtime Runtime
 
-	// Accepted and AcceptedReason are set by ApplyAcceptance
-	// (runtime.accept_unfixable_not_in_use): notify hides this group's row
+	// Muted and MutedReason are set by ApplyMuting
+	// (runtime.mute_unfixable_not_in_use): notify hides this group's row
 	// from its Slack rendering and shows it only in a count instead, because
 	// no fix is coming and nothing has used the package for the whole
 	// observation window. Both stay at their zero value (false, "") whenever
 	// the setting is off or the group was never eligible, and neither one
-	// ever changes Priority or a VulnRef's own Priority — acceptance changes
+	// ever changes Priority or a VulnRef's own Priority — muting changes
 	// what notify shows, never the triage verdict underneath it.
-	Accepted       bool
-	AcceptedReason AcceptedReason
+	Muted       bool
+	MutedReason MutedReason
 }
 
-// AcceptedReason names why ApplyAcceptance judged a PackageGroup accepted.
+// MutedReason names why ApplyMuting judged a PackageGroup muted.
 // Kept as its own type rather than a bare string literal so a future second
-// acceptance rule has an established place to add its own value without
+// muting rule has an established place to add its own value without
 // disturbing this one's wire representation.
-type AcceptedReason string
+type MutedReason string
 
-// AcceptedNoFixNotInUse7d is ApplyAcceptance's one current judgment: the
+// MutedNoFixNotInUse7d is ApplyMuting's one current judgment: the
 // canonical Status has no fix coming, and nothing has used the package
 // during at least 7 days of Sensor observation.
-const AcceptedNoFixNotInUse7d AcceptedReason = "no_fix_not_in_use_7d"
+const MutedNoFixNotInUse7d MutedReason = "no_fix_not_in_use_7d"
 
 // Instance is one raw Trivy Result a PackageGroup's Instances collects,
 // deduplicated by (Type, Target, PkgPath): the same triple reported twice

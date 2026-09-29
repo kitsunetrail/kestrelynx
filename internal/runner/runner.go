@@ -106,16 +106,16 @@ type Runner struct {
 	// GenerationInspect.BootTime). nil uses hostBootTime (reads
 	// /proc/stat's "btime" line); only ever called when Evidence is set.
 	BootTime func() (time.Time, error)
-	// AcceptUnfixableNotInUse enables runtime.accept_unfixable_not_in_use:
-	// once true, analyze.ApplyAcceptance runs right after AttachRuntime every
+	// MuteUnfixableNotInUse enables runtime.mute_unfixable_not_in_use:
+	// once true, analyze.ApplyMuting runs right after AttachRuntime every
 	// cycle (only reached at all when Evidence is set), so a group's
-	// Accepted always reflects this cycle's own status/priority/runtime
+	// Muted always reflects this cycle's own status/priority/runtime
 	// verdict, never a value carried over from before.
-	AcceptUnfixableNotInUse bool
+	MuteUnfixableNotInUse bool
 	// GenericWebhookConfigured mirrors config.NotifyConfig.GenericWebhookURL
 	// != "", stamped onto every Report (RunOnce) the same way Environment is:
 	// notify has no other way to know whether the generic webhook guidance
-	// it shows in place of a hidden low-priority/accepted row is actually
+	// it shows in place of a hidden low-priority/muted row is actually
 	// true for this deployment.
 	GenericWebhookConfigured bool
 }
@@ -166,8 +166,8 @@ func (r Runner) RunOnce(ctx context.Context) error {
 	report.GenericWebhookConfigured = r.GenericWebhookConfigured
 	if r.Evidence != nil {
 		r.attachRuntime(ctx, &report, containers)
-		if r.AcceptUnfixableNotInUse {
-			analyze.ApplyAcceptance(&report, r.now())
+		if r.MuteUnfixableNotInUse {
+			analyze.ApplyMuting(&report, r.now())
 		}
 	}
 	if r.Store == nil {

@@ -34,6 +34,11 @@ notify:
   # In diff mode, the weekday to send the complete report as a weekly digest,
   # so details are never more than a week away. Set to "never" to disable.
   full_report_day: "monday"
+  # Wording language for the Slack channel message and thread report. "en"
+  # (default) or "ja". The generic webhook payload is always English (it's
+  # consumed programmatically, not read in Slack) and is never affected by
+  # this setting.
+  language: "en"
 
 docker:
   # Path to docker.sock. KestreLynx only performs GET /containers/json.
@@ -116,11 +121,11 @@ runtime:
   evidence_dir: "/var/lib/kestrelynx-runtime"
   # Once runtime evidence is available, additionally hide from Slack (rows
   # only — the generic webhook always keeps every finding, with an added
-  # accepted/accepted_reason marker) a package finding with no fix coming
+  # muted/muted_reason marker) a package finding with no fix coming
   # (affected or will_not_fix; never fixed, and never end-of-life, which is
   # always shown) that nothing has used for at least 7 days of observation
   # and that isn't act now. Hidden findings are replaced by a single
-  # "✅ Accepted" count; one that becomes used, gets a fix, or turns act now
+  # "🔇 Muted" count; one that becomes used, gets a fix, or turns act now
   # reappears immediately as an ordinary change. Has no effect unless
   # enabled above is also true.
-  accept_unfixable_not_in_use: false
+  mute_unfixable_not_in_use: false

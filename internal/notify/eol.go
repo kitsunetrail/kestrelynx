@@ -16,26 +16,26 @@ import (
 
 // foldedEOLNote annotates a base-OS end-of-life line with the number of
 // end-of-life packages it stands for.
-func foldedEOLNote(n int) string {
+func foldedEOLNote(n int, msg messages) string {
 	if n == 0 {
 		return ""
 	}
-	return fmt.Sprintf(" · includes %d end-of-life package(s)", n)
+	return fmt.Sprintf(msg.FoldedEOLNote, n)
 }
 
 // eosLine is one base-OS end-of-life line of a report-derived view.
-func eosLine(r analyze.Report, img string, byRef map[string]analyze.ImageObservation) string {
-	return fmt.Sprintf("• %s — base OS is EOL (no more security updates coming)%s\n", refLabel(img, byRef), foldedEOLNote(r.FoldedEOLCount(img)))
+func eosLine(r analyze.Report, img string, byRef map[string]analyze.ImageObservation, msg messages) string {
+	return fmt.Sprintf(msg.EOSLLine, refLabel(img, byRef, msg), foldedEOLNote(r.FoldedEOLCount(img), msg))
 }
 
 // writeEOSLSection renders the base-OS end-of-life section of the full view.
-func writeEOSLSection(b *strings.Builder, r analyze.Report, byRef map[string]analyze.ImageObservation) {
+func writeEOSLSection(b *strings.Builder, r analyze.Report, byRef map[string]analyze.ImageObservation, msg messages) {
 	if len(r.EOSLImages) == 0 {
 		return
 	}
-	b.WriteString("\n*⛔ Base OS end-of-life (top priority)*\n")
+	b.WriteString(msg.EOSLHeading)
 	for _, img := range r.EOSLImages {
-		b.WriteString(eosLine(r, img, byRef))
+		b.WriteString(eosLine(r, img, byRef, msg))
 	}
 }
 
@@ -44,34 +44,34 @@ func writeEOSLSection(b *strings.Builder, r analyze.Report, byRef map[string]ana
 // priority. With triage on, an act_now group only points at Act now, which
 // shows it in full; the others carry their short evidence like Watch rows.
 // With triage off it is laid out like the status sections.
-func writeEOLPackages(b *strings.Builder, r analyze.Report, byRef map[string]analyze.ImageObservation) {
+func writeEOLPackages(b *strings.Builder, r analyze.Report, byRef map[string]analyze.ImageObservation, msg messages) {
 	imgs := r.EOLPackageAlerts()
 	n := analyze.GroupCount(imgs)
 	if n == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*⛔ Package end-of-life (%d) — %s*\n", n, eolSectionReason)
+	fmt.Fprintf(b, msg.EOLPackageHeading, n, msg.EOLSectionReason)
 	for _, img := range imgs {
 		if r.Triage {
-			fmt.Fprintf(b, "• %s\n", imageLabel(img, byRef))
+			fmt.Fprintf(b, msg.ImageBullet, imageLabel(img, byRef, msg))
 		} else {
-			fmt.Fprintf(b, "%s %s  CRITICAL %d / HIGH %d\n", imageEmoji(img), imageLabel(img, byRef), img.CriticalCount(), img.TotalCount()-img.CriticalCount())
+			fmt.Fprintf(b, msg.ImageCritHighLine, imageEmoji(img), imageLabel(img, byRef, msg), img.CriticalCount(), img.TotalCount()-img.CriticalCount())
 		}
 		for _, g := range img.Packages {
-			writePackage(b, g, false, eolRowSuffix(r, g))
+			writePackage(b, g, false, eolRowSuffix(r, g, msg), msg)
 		}
 	}
 }
 
 // eolRowSuffix is the suffix of an end-of-life package row in the full view.
-func eolRowSuffix(r analyze.Report, g analyze.PackageGroup) string {
+func eolRowSuffix(r analyze.Report, g analyze.PackageGroup, msg messages) string {
 	if !r.Triage {
 		return ""
 	}
 	if g.Priority == analyze.PriorityActNow {
-		return eolSeeActNow
+		return msg.EOLSeeActNow
 	}
-	if ev := shortEvidence(r, g.TopVuln()); ev != "" {
+	if ev := shortEvidence(r, g.TopVuln(), msg); ev != "" {
 		return " — " + ev
 	}
 	return ""
@@ -152,12 +152,12 @@ func splitEOLChanges(d state.Diff) eolChangeView {
 // writeEOLChanges renders the diff's end-of-life package changes. Rows are
 // laid out like the 🆕 section of the same mode; an act_now row carries its
 // evidence line (there is no Act now section in the diff to point at).
-func writeEOLChanges(b *strings.Builder, r analyze.Report, v eolChangeView, byRef map[string]analyze.ImageObservation) {
+func writeEOLChanges(b *strings.Builder, r analyze.Report, v eolChangeView, byRef map[string]analyze.ImageObservation, msg messages) {
 	n := v.count()
 	if n == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n*⛔ New: package end-of-life (%d) — %s*\n", n, eolSectionReason)
+	fmt.Fprintf(b, msg.EOLPackagesChangedHeading, n, msg.EOLSectionReason)
 	rows := v.rows
 	if r.Triage {
 		rows = append([]state.EOLChange(nil), v.rows...)
@@ -179,26 +179,26 @@ func writeEOLChanges(b *strings.Builder, r analyze.Report, v eolChangeView, byRe
 			if r.Triage {
 				marker = priorityEmoji(analyze.MaxPriority(c.Groups))
 			}
-			fmt.Fprintf(b, "%s %s\n", marker, refLabel(c.Image, byRef))
+			fmt.Fprintf(b, "%s %s\n", marker, refLabel(c.Image, byRef, msg))
 			lastImage = c.Image
 		}
 		asChange := eolAsChange(c)
 		for _, g := range c.Groups {
-			writePackage(b, g, false, changeSuffix(r, asChange, g))
+			writePackage(b, g, false, changeSuffix(r, asChange, g, msg), msg)
 			if g.Priority == analyze.PriorityActNow {
-				writeEvidence(b, r, g)
+				writeEvidence(b, r, g, msg)
 			}
 		}
 	}
 	for _, f := range v.folds {
 		var parts []string
 		if f.newPackages > 0 {
-			parts = append(parts, fmt.Sprintf("%d package(s) newly end-of-life", f.newPackages))
+			parts = append(parts, fmt.Sprintf(msg.EOLFoldNewPackages, f.newPackages))
 		}
 		if f.withNewCVEs > 0 {
-			parts = append(parts, fmt.Sprintf("%d end-of-life package(s) with new CVEs", f.withNewCVEs))
+			parts = append(parts, fmt.Sprintf(msg.EOLFoldWithNewCVEs, f.withNewCVEs))
 		}
-		fmt.Fprintf(b, "• %s — %s (base OS already EOL)\n", refLabel(f.ref, byRef), strings.Join(parts, ", "))
+		fmt.Fprintf(b, msg.EOLFoldLine, refLabel(f.ref, byRef, msg), strings.Join(parts, ", "))
 	}
 }
 

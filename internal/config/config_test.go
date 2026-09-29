@@ -119,6 +119,36 @@ func TestParse_InvalidModeAndDay(t *testing.T) {
 	}
 }
 
+func TestParse_NotifyLanguageDefault(t *testing.T) {
+	c, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if c.Notify.Language != "en" {
+		t.Errorf("default Notify.Language = %q, want en", c.Notify.Language)
+	}
+}
+
+func TestParse_NotifyLanguageJA(t *testing.T) {
+	c, err := Parse([]byte(`
+notify:
+  slack_webhook_url: "https://x.test"
+  language: "JA"
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if c.Notify.Language != "ja" {
+		t.Errorf("Notify.Language = %q, want normalized ja", c.Notify.Language)
+	}
+}
+
+func TestParse_InvalidNotifyLanguageRejected(t *testing.T) {
+	if _, err := Parse([]byte("notify: { slack_webhook_url: \"https://x.test\", language: \"fr\" }")); err == nil {
+		t.Fatal("expected error for invalid notify.language")
+	}
+}
+
 func TestParse_FullOverride(t *testing.T) {
 	yaml := `
 schedule:

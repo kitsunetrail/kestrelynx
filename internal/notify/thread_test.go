@@ -92,7 +92,7 @@ func TestWriteThreadDetail_TitleLine(t *testing.T) {
 	g := findPkgGroup(t, r.Actionable, "app:1", "libx")
 
 	var b strings.Builder
-	writeThreadDetail(&b, r, "app:1", g, nil)
+	writeThreadDetail(&b, r, "app:1", g, nil, enMessages)
 	out := b.String()
 
 	if !strings.Contains(out, "\n       libx: headline vulnerability title\n") {
@@ -116,7 +116,7 @@ func TestWriteThreadDetail_NoTitleLineWhenEmpty(t *testing.T) {
 	g := findPkgGroup(t, r.Actionable, "app:1", "libx")
 
 	var b strings.Builder
-	writeThreadDetail(&b, r, "app:1", g, nil)
+	writeThreadDetail(&b, r, "app:1", g, nil, enMessages)
 	out := b.String()
 
 	wantEvidence := "     ↳ <https://nvd.nist.gov/vuln/detail/CVE-A|CVE-A> CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a\n"

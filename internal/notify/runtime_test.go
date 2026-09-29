@@ -52,7 +52,7 @@ func TestEscapeRuntimeText_Truncates(t *testing.T) {
 // when runtime is off.
 func TestWriteRuntimeWarning_GatesOnRuntime(t *testing.T) {
 	var b strings.Builder
-	writeRuntimeWarning(&b, analyze.Report{}, time.Now())
+	writeRuntimeWarning(&b, analyze.Report{}, time.Now(), enMessages)
 	if b.String() != "" {
 		t.Errorf("writeRuntimeWarning with Report.Runtime == nil wrote %q, want nothing", b.String())
 	}
@@ -62,7 +62,7 @@ func TestWriteRuntimeWarning_GatesOnRuntime(t *testing.T) {
 // check for the full-view tail line.
 func TestWriteRuntimeSummary_GatesOnRuntime(t *testing.T) {
 	var b strings.Builder
-	writeRuntimeSummary(&b, analyze.Report{})
+	writeRuntimeSummary(&b, analyze.Report{}, enMessages)
 	if b.String() != "" {
 		t.Errorf("writeRuntimeSummary with Report.Runtime == nil wrote %q, want nothing", b.String())
 	}
@@ -106,7 +106,7 @@ func TestRuntimeInUsePhrase_KindNeverMixedWithWrongExecutable(t *testing.T) {
 			Process:       analyze.ContainerProcess{Exe: "/app/tool"},
 		}},
 	}
-	got := runtimeInUsePhrase(rt)
+	got := runtimeInUsePhrase(rt, enMessages)
 	if strings.Contains(got, "/app/api") {
 		t.Errorf("runtimeInUsePhrase = %q, must never mention /app/api (not this container's executable)", got)
 	}
@@ -162,11 +162,11 @@ func TestRuntimeUsageOf_ProjectsAcrossMergedGroups(t *testing.T) {
 // annotation at all for those.
 func TestRuntimeWatchSuffix_EmptyWhenNotInUse(t *testing.T) {
 	for _, usage := range []rtevidence.Usage{"", rtevidence.UsageNotObserved, rtevidence.UsageUnavailable} {
-		if got := runtimeWatchSuffix(analyze.Runtime{Usage: usage}); got != "" {
+		if got := runtimeWatchSuffix(analyze.Runtime{Usage: usage}, enMessages); got != "" {
 			t.Errorf("runtimeWatchSuffix(Usage=%q) = %q, want empty", usage, got)
 		}
 	}
-	if got := runtimeWatchSuffix(analyze.Runtime{Usage: rtevidence.UsageInUse, EvidenceKinds: []rtevidence.EvidenceKind{rtevidence.KindExe}}); got == "" {
+	if got := runtimeWatchSuffix(analyze.Runtime{Usage: rtevidence.UsageInUse, EvidenceKinds: []rtevidence.EvidenceKind{rtevidence.KindExe}}, enMessages); got == "" {
 		t.Error("runtimeWatchSuffix(in_use) is empty, want a suffix")
 	}
 }
@@ -192,7 +192,7 @@ func TestRuntimeInUsePhrase_AmbiguousKindsListProcessesSeparately(t *testing.T) 
 			Process:        analyze.ContainerProcess{Exe: "/app/server", EffectiveUID: 0},
 		}},
 	}
-	got := runtimeInUsePhrase(rt)
+	got := runtimeInUsePhrase(rt, enMessages)
 	if strings.Contains(got, "running as") || strings.Contains(got, "loaded by") {
 		t.Errorf("runtimeInUsePhrase = %q, must never pair a kind with an executable when KindsAmbiguous", got)
 	}
@@ -218,7 +218,7 @@ func TestRuntimeInUsePhrase_NoObservationShowsKindsWithoutExecutable(t *testing.
 			HasProcess:    false,
 		}},
 	}
-	got := runtimeInUsePhrase(rt)
+	got := runtimeInUsePhrase(rt, enMessages)
 	if strings.Contains(got, "processes:") {
 		t.Errorf("runtimeInUsePhrase = %q, must not list processes when none was observed", got)
 	}
@@ -274,12 +274,12 @@ func TestContainerRuntimePayload_KindsAmbiguousCarriesProcessExes(t *testing.T) 
 // TestRuntimeProcessesPhrase_CapsAndCounts covers the display-only cap on
 // the unattributed "processes: ..." clause.
 func TestRuntimeProcessesPhrase_CapsAndCounts(t *testing.T) {
-	got := runtimeProcessesPhrase([]string{"/a", "/b", "/c", "/d"})
+	got := runtimeProcessesPhrase([]string{"/a", "/b", "/c", "/d"}, enMessages)
 	want := "processes: `/a`, `/b`, `/c` (+1 more)"
 	if got != want {
 		t.Errorf("runtimeProcessesPhrase = %q, want %q", got, want)
 	}
-	if got := runtimeProcessesPhrase(nil); got != "" {
-		t.Errorf("runtimeProcessesPhrase(nil) = %q, want empty", got)
+	if got := runtimeProcessesPhrase(nil, enMessages); got != "" {
+		t.Errorf("runtimeProcessesPhrase(nil, enMessages) = %q, want empty", got)
 	}
 }

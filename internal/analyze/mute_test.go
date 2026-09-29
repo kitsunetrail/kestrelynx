@@ -9,36 +9,36 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
-// acceptTestNow is the fixed "now" every ApplyAcceptance test here judges
-// against; acceptTestOldGen is a container generation well past the 7-day
+// muteTestNow is the fixed "now" every ApplyMuting test here judges
+// against; muteTestOldGen is a container generation well past the 7-day
 // observation window.
 var (
-	acceptTestNow    = time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
-	acceptTestOldGen = acceptTestNow.Add(-8 * 24 * time.Hour)
+	muteTestNow    = time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	muteTestOldGen = muteTestNow.Add(-8 * 24 * time.Hour)
 )
 
 // eligibleRuntime is a not-observed verdict whose one container generation
-// is old enough to qualify for runtime.accept_unfixable_not_in_use on its
+// is old enough to qualify for runtime.mute_unfixable_not_in_use on its
 // own — the baseline every "individually eligible" group in these tests
 // starts from.
 func eligibleRuntime() Runtime {
 	return Runtime{
 		Usage: evidence.UsageNotObserved,
 		Containers: []ContainerRuntime{
-			{ContainerID: testContainerID, GenerationStartedAt: acceptTestOldGen, Usage: evidence.UsageNotObserved},
+			{ContainerID: testContainerID, GenerationStartedAt: muteTestOldGen, Usage: evidence.UsageNotObserved},
 		},
 	}
 }
 
-// countAccepted tallies every Accepted PackageGroup across every section of
-// r, for a single "how many groups did ApplyAcceptance actually accept"
+// countMuted tallies every Muted PackageGroup across every section of
+// r, for a single "how many groups did ApplyMuting actually mute"
 // assertion.
-func countAccepted(r Report) int {
+func countMuted(r Report) int {
 	n := 0
 	for _, section := range [][]ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			for _, g := range img.Packages {
-				if g.Accepted {
+				if g.Muted {
 					n++
 				}
 			}
@@ -47,13 +47,13 @@ func countAccepted(r Report) int {
 	return n
 }
 
-// TestApplyAcceptance_MixedKeyNeverAccepted covers the all-or-nothing rule:
-// a (image, package) key is accepted only when every group the Report
+// TestApplyMuting_MixedKeyNeverMuted covers the all-or-nothing rule:
+// a (image, package) key is muted only when every group the Report
 // carries for it this cycle — across every section, end-of-life included —
 // is individually eligible. Each case pairs one otherwise-eligible group
 // with a disqualifying sibling under the very same key, and neither group
-// may end up Accepted.
-func TestApplyAcceptance_MixedKeyNeverAccepted(t *testing.T) {
+// may end up Muted.
+func TestApplyMuting_MixedKeyNeverMuted(t *testing.T) {
 	tests := []struct {
 		name   string
 		report Report
@@ -92,7 +92,7 @@ func TestApplyAcceptance_MixedKeyNeverAccepted(t *testing.T) {
 			// An OS package and a same-named language package collide under
 			// state's coarser (image, package-name) key even though analyze
 			// keeps them as distinct groups: one is in use, the other looks
-			// eligible on its own — the key must still not be accepted.
+			// eligible on its own — the key must still not be muted.
 			name: "in-use sibling of a different ecosystem blocks an eligible-looking one",
 			report: Report{
 				Runtime: &RuntimeInfo{},
@@ -114,7 +114,7 @@ func TestApplyAcceptance_MixedKeyNeverAccepted(t *testing.T) {
 					{
 						Package: "curl", Class: scanner.ClassLang, Ecosystem: inventory.EcosystemNodePkg, Status: scanner.StatusAffected,
 						Runtime: Runtime{Usage: evidence.UsageNotObserved, Containers: []ContainerRuntime{
-							{ContainerID: testContainerID, GenerationStartedAt: acceptTestNow.Add(-time.Hour), Usage: evidence.UsageNotObserved},
+							{ContainerID: testContainerID, GenerationStartedAt: muteTestNow.Add(-time.Hour), Usage: evidence.UsageNotObserved},
 						}},
 					},
 				}}},
@@ -125,20 +125,20 @@ func TestApplyAcceptance_MixedKeyNeverAccepted(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := tt.report
-			ApplyAcceptance(&r, acceptTestNow)
-			if n := countAccepted(r); n != 0 {
-				t.Errorf("countAccepted = %d, want 0 (a mixed key must never be partially accepted)", n)
+			ApplyMuting(&r, muteTestNow)
+			if n := countMuted(r); n != 0 {
+				t.Errorf("countMuted = %d, want 0 (a mixed key must never be partially muted)", n)
 			}
 		})
 	}
 }
 
-// TestApplyAcceptance_AllEligibleGroupsAccepted is
-// TestApplyAcceptance_MixedKeyNeverAccepted's positive counterpart: when
+// TestApplyMuting_AllEligibleGroupsMuted is
+// TestApplyMuting_MixedKeyNeverMuted's positive counterpart: when
 // every group under a key is individually eligible — including more than
 // one of them, e.g. an affected group and a will_not_fix group for the same
-// package — every one of them is Accepted.
-func TestApplyAcceptance_AllEligibleGroupsAccepted(t *testing.T) {
+// package — every one of them is Muted.
+func TestApplyMuting_AllEligibleGroupsMuted(t *testing.T) {
 	r := Report{
 		Runtime: &RuntimeInfo{},
 		Watch: []ImageFindings{{Image: "web:1", Packages: []PackageGroup{
@@ -148,30 +148,30 @@ func TestApplyAcceptance_AllEligibleGroupsAccepted(t *testing.T) {
 			{Package: "curl", Status: scanner.StatusWontFix, Runtime: eligibleRuntime()},
 		}}},
 	}
-	ApplyAcceptance(&r, acceptTestNow)
-	if n := countAccepted(r); n != 2 {
-		t.Fatalf("countAccepted = %d, want 2 (both groups of a fully-eligible key)", n)
+	ApplyMuting(&r, muteTestNow)
+	if n := countMuted(r); n != 2 {
+		t.Fatalf("countMuted = %d, want 2 (both groups of a fully-eligible key)", n)
 	}
 	for _, img := range r.Watch {
 		for _, g := range img.Packages {
-			if g.AcceptedReason != AcceptedNoFixNotInUse7d {
-				t.Errorf("Watch group AcceptedReason = %q, want %q", g.AcceptedReason, AcceptedNoFixNotInUse7d)
+			if g.MutedReason != MutedNoFixNotInUse7d {
+				t.Errorf("Watch group MutedReason = %q, want %q", g.MutedReason, MutedNoFixNotInUse7d)
 			}
 		}
 	}
 }
 
-// TestApplyAcceptance_HeldReferenceNeverAccepted covers the same holding
+// TestApplyMuting_HeldReferenceNeverMuted covers the same holding
 // condition state.Compute itself keys off (ScanFailed, PartialFailure,
 // Unconfirmed on the matching ImageObservation): a group that looks
-// individually eligible on its own must still never be accepted while its
+// individually eligible on its own must still never be muted while its
 // own reference is in one of these states this cycle. Report.Images for a
 // reference that failed to scan at all would normally carry no groups under
 // it either, but the check must not depend on that — it must hold even when
 // a sibling entity's success still puts an eligible-looking group in front
-// of ApplyAcceptance, since state itself has no fresh, complete picture of
-// the reference to judge acceptance from this cycle.
-func TestApplyAcceptance_HeldReferenceNeverAccepted(t *testing.T) {
+// of ApplyMuting, since state itself has no fresh, complete picture of
+// the reference to judge muting from this cycle.
+func TestApplyMuting_HeldReferenceNeverMuted(t *testing.T) {
 	tests := []struct {
 		name string
 		obs  ImageObservation
@@ -189,9 +189,9 @@ func TestApplyAcceptance_HeldReferenceNeverAccepted(t *testing.T) {
 					{Package: "curl", Status: scanner.StatusAffected, Runtime: eligibleRuntime()},
 				}}},
 			}
-			ApplyAcceptance(&r, acceptTestNow)
-			if n := countAccepted(r); n != 0 {
-				t.Errorf("countAccepted = %d, want 0 (a held reference must never be accepted, however eligible its groups look)", n)
+			ApplyMuting(&r, muteTestNow)
+			if n := countMuted(r); n != 0 {
+				t.Errorf("countMuted = %d, want 0 (a held reference must never be muted, however eligible its groups look)", n)
 			}
 		})
 	}

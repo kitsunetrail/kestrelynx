@@ -542,14 +542,14 @@ func TestCompute_PartialFailureMergeAcrossThreeCycles(t *testing.T) {
 	}
 }
 
-// markAccepted flips Accepted on every PackageGroup matching (image, pkg)
+// markMuted flips Muted on every PackageGroup matching (image, pkg)
 // across every status section of r — a direct-fixture shortcut for a state
 // package test that only needs Compute's own reaction to an
-// already-accepted group, not the full runtime-evidence pipeline
-// analyze.ApplyAcceptance would otherwise judge it from (which needs a
+// already-muted group, not the full runtime-evidence pipeline
+// analyze.ApplyMuting would otherwise judge it from (which needs a
 // Sensor snapshot, Docker inspects and a matched container generation —
 // none of which state.Compute itself ever looks at).
-func markAccepted(t *testing.T, r *analyze.Report, image, pkg string) {
+func markMuted(t *testing.T, r *analyze.Report, image, pkg string) {
 	t.Helper()
 	found := false
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
@@ -561,24 +561,24 @@ func markAccepted(t *testing.T, r *analyze.Report, image, pkg string) {
 				if section[i].Packages[j].Package != pkg {
 					continue
 				}
-				section[i].Packages[j].Accepted = true
-				section[i].Packages[j].AcceptedReason = analyze.AcceptedNoFixNotInUse7d
+				section[i].Packages[j].Muted = true
+				section[i].Packages[j].MutedReason = analyze.MutedNoFixNotInUse7d
 				found = true
 			}
 		}
 	}
 	if !found {
-		t.Fatalf("markAccepted: no group found for %s/%s", image, pkg)
+		t.Fatalf("markMuted: no group found for %s/%s", image, pkg)
 	}
 }
 
-// markAcceptedForEntity is markAccepted's per-entity counterpart: it flips
-// Accepted only on the PackageGroup matching (image, pkg) within the one
+// markMutedForEntity is markMuted's per-entity counterpart: it flips
+// Muted only on the PackageGroup matching (image, pkg) within the one
 // ImageFindings whose Subject.Key resolves from contentID — needed for a
 // test that controls two different entities' groups under the same
 // (image, pkg) state key independently (an Ambiguous reference, or two
 // entities that happen to run the same reference).
-func markAcceptedForEntity(t *testing.T, r *analyze.Report, image, pkg, contentID string, accepted bool) {
+func markMutedForEntity(t *testing.T, r *analyze.Report, image, pkg, contentID string, muted bool) {
 	t.Helper()
 	entity := mustConfigKey(contentID)
 	found := false
@@ -591,45 +591,45 @@ func markAcceptedForEntity(t *testing.T, r *analyze.Report, image, pkg, contentI
 				if section[i].Packages[j].Package != pkg {
 					continue
 				}
-				section[i].Packages[j].Accepted = accepted
-				if accepted {
-					section[i].Packages[j].AcceptedReason = analyze.AcceptedNoFixNotInUse7d
+				section[i].Packages[j].Muted = muted
+				if muted {
+					section[i].Packages[j].MutedReason = analyze.MutedNoFixNotInUse7d
 				}
 				found = true
 			}
 		}
 	}
 	if !found {
-		t.Fatalf("markAcceptedForEntity: no group found for %s/%s@%s", image, pkg, contentID)
+		t.Fatalf("markMutedForEntity: no group found for %s/%s@%s", image, pkg, contentID)
 	}
 }
 
-// TestCompute_PartialFailureRecoveryTriggersAcceptanceLost reproduces the
+// TestCompute_PartialFailureRecoveryTriggersUnmuted reproduces the
 // path a partial-failure carry-over can otherwise lose entirely: entity A's
-// curl group is accepted; A alone fails to scan for one cycle (held over,
-// unchanged, while sibling entity B keeps the key accepted); A then
+// curl group is muted; A alone fails to scan for one cycle (held over,
+// unchanged, while sibling entity B keeps the key muted); A then
 // recovers, but now in use. Because neither the CVEs, the fix status nor
 // the priority ever changed, no ordinary Kind would fire on its own —
-// KindAcceptanceLost is the only way this transition is ever reported.
-func TestCompute_PartialFailureRecoveryTriggersAcceptanceLost(t *testing.T) {
+// KindUnmuted is the only way this transition is ever reported.
+func TestCompute_PartialFailureRecoveryTriggersUnmuted(t *testing.T) {
 	cve := finding("web:1", "curl", "CVE-1", scanner.StatusAffected)
 
-	// Cycle 1: both entities succeed and both are accepted.
+	// Cycle 1: both entities succeed and both are muted.
 	report1 := triaged(day1, nil, resolvedScan("web:1", contentA, cve), resolvedScan("web:1", contentB, cve))
-	markAccepted(t, &report1, "web:1", "curl")
+	markMuted(t, &report1, "web:1", "curl")
 	_, st1 := Compute(empty(), report1)
-	if !st1.Accepted["web:1\tcurl"] {
-		t.Fatalf("cycle1: curl not recorded as accepted: %+v", st1.Accepted)
+	if !st1.Muted["web:1\tcurl"] {
+		t.Fatalf("cycle1: curl not recorded as muted: %+v", st1.Muted)
 	}
 
-	// Cycle 2: A fails to scan; B alone succeeds and is still accepted. The
-	// key's accepted flag must be held over unchanged, not freshly
+	// Cycle 2: A fails to scan; B alone succeeds and is still muted. The
+	// key's muted flag must be held over unchanged, not freshly
 	// recomputed from B's group alone.
 	report2 := triaged(day2, nil, failedResolvedScan("web:1", contentA, errString("pull failed")), resolvedScan("web:1", contentB, cve))
-	markAccepted(t, &report2, "web:1", "curl")
+	markMuted(t, &report2, "web:1", "curl")
 	d2, st2 := Compute(st1, report2)
-	if !st2.Accepted["web:1\tcurl"] {
-		t.Fatalf("cycle2: curl accepted flag not held over during A's failure: %+v", st2.Accepted)
+	if !st2.Muted["web:1\tcurl"] {
+		t.Fatalf("cycle2: curl muted flag not held over during A's failure: %+v", st2.Muted)
 	}
 	for _, c := range d2.Changes {
 		if c.Package == "curl" {
@@ -637,16 +637,16 @@ func TestCompute_PartialFailureRecoveryTriggersAcceptanceLost(t *testing.T) {
 		}
 	}
 
-	// Cycle 3: A recovers, but is now in use (not accepted); B is unchanged
-	// and still individually looks accepted. The whole key must lose its
-	// accepted status, and — since nothing else about it changed — the only
-	// way that shows up is KindAcceptanceLost.
+	// Cycle 3: A recovers, but is now in use (not muted); B is unchanged
+	// and still individually looks muted. The whole key must lose its
+	// muted status, and — since nothing else about it changed — the only
+	// way that shows up is KindUnmuted.
 	report3 := triaged(day2.AddDate(0, 0, 1), nil, resolvedScan("web:1", contentA, cve), resolvedScan("web:1", contentB, cve))
-	markAccepted(t, &report3, "web:1", "curl")
-	markAcceptedForEntity(t, &report3, "web:1", "curl", contentA, false)
+	markMuted(t, &report3, "web:1", "curl")
+	markMutedForEntity(t, &report3, "web:1", "curl", contentA, false)
 	d3, st3 := Compute(st2, report3)
-	if st3.Accepted["web:1\tcurl"] {
-		t.Error("cycle3: curl still recorded as accepted after A's in-use recovery")
+	if st3.Muted["web:1\tcurl"] {
+		t.Error("cycle3: curl still recorded as muted after A's in-use recovery")
 	}
 	var found *Change
 	for i, c := range d3.Changes {
@@ -657,49 +657,49 @@ func TestCompute_PartialFailureRecoveryTriggersAcceptanceLost(t *testing.T) {
 	if found == nil {
 		t.Fatalf("cycle3: no Changes entry for curl's recovery:\n%+v", d3.Changes)
 	}
-	if found.Kind != KindAcceptanceLost {
-		t.Errorf("cycle3: Kind = %q, want %q", found.Kind, KindAcceptanceLost)
+	if found.Kind != KindUnmuted {
+		t.Errorf("cycle3: Kind = %q, want %q", found.Kind, KindUnmuted)
 	}
 }
 
-// TestCompute_PartialFailureDoesNotPrematurelyReportAcceptanceLost shows why
-// a held key's accepted flag must be carried over unchanged rather than
+// TestCompute_PartialFailureDoesNotPrematurelyReportUnmuted shows why
+// a held key's muted flag must be carried over unchanged rather than
 // freshly recomputed from whichever entity happens to still be observable:
 // entity A fails to scan the same cycle entity B's own group independently
 // becomes disqualified (now in use). A fresh computation from B alone would
-// already see a disqualified group and report acceptance_lost one cycle
+// already see a disqualified group and report unmuted one cycle
 // early, off incomplete data; the correct behavior is to defer judgment
 // until both entities are observable again.
-func TestCompute_PartialFailureDoesNotPrematurelyReportAcceptanceLost(t *testing.T) {
+func TestCompute_PartialFailureDoesNotPrematurelyReportUnmuted(t *testing.T) {
 	cve := finding("web:1", "curl", "CVE-1", scanner.StatusAffected)
 
 	report1 := triaged(day1, nil, resolvedScan("web:1", contentA, cve), resolvedScan("web:1", contentB, cve))
-	markAccepted(t, &report1, "web:1", "curl")
+	markMuted(t, &report1, "web:1", "curl")
 	_, st1 := Compute(empty(), report1)
 
 	// Cycle 2: A fails to scan; B succeeds but is no longer individually
 	// eligible (now in use) — incomplete information, since A's own current
 	// state is simply unknown this cycle.
 	report2 := triaged(day2, nil, failedResolvedScan("web:1", contentA, errString("pull failed")), resolvedScan("web:1", contentB, cve))
-	markAcceptedForEntity(t, &report2, "web:1", "curl", contentB, false)
+	markMutedForEntity(t, &report2, "web:1", "curl", contentB, false)
 	d2, st2 := Compute(st1, report2)
-	if !st2.Accepted["web:1\tcurl"] {
-		t.Fatalf("cycle2: curl accepted flag not held over during A's failure: %+v", st2.Accepted)
+	if !st2.Muted["web:1\tcurl"] {
+		t.Fatalf("cycle2: curl muted flag not held over during A's failure: %+v", st2.Muted)
 	}
 	for _, c := range d2.Changes {
 		if c.Package == "curl" {
-			t.Errorf("cycle2: acceptance_lost (or any other change) must not fire from incomplete data during A's failure, got %+v", c)
+			t.Errorf("cycle2: unmuted (or any other change) must not fire from incomplete data during A's failure, got %+v", c)
 		}
 	}
 
 	// Cycle 3: both entities observable again; B is still disqualified. Now
-	// that the full key can actually be judged, acceptance_lost fires.
+	// that the full key can actually be judged, unmuted fires.
 	report3 := triaged(day2.AddDate(0, 0, 1), nil, resolvedScan("web:1", contentA, cve), resolvedScan("web:1", contentB, cve))
-	markAccepted(t, &report3, "web:1", "curl")
-	markAcceptedForEntity(t, &report3, "web:1", "curl", contentB, false)
+	markMuted(t, &report3, "web:1", "curl")
+	markMutedForEntity(t, &report3, "web:1", "curl", contentB, false)
 	d3, st3 := Compute(st2, report3)
-	if st3.Accepted["web:1\tcurl"] {
-		t.Error("cycle3: curl still recorded as accepted once fully observed and disqualified")
+	if st3.Muted["web:1\tcurl"] {
+		t.Error("cycle3: curl still recorded as muted once fully observed and disqualified")
 	}
 	var found *Change
 	for i, c := range d3.Changes {
@@ -710,45 +710,45 @@ func TestCompute_PartialFailureDoesNotPrematurelyReportAcceptanceLost(t *testing
 	if found == nil {
 		t.Fatalf("cycle3: no Changes entry for curl once both entities are observable:\n%+v", d3.Changes)
 	}
-	if found.Kind != KindAcceptanceLost {
-		t.Errorf("cycle3: Kind = %q, want %q", found.Kind, KindAcceptanceLost)
+	if found.Kind != KindUnmuted {
+		t.Errorf("cycle3: Kind = %q, want %q", found.Kind, KindUnmuted)
 	}
 }
 
-// TestCompute_StatusChangeTriggersAcceptanceLost reproduces a de-acceptance
+// TestCompute_StatusChangeTriggersUnmuted reproduces a de-muting
 // that an ordinary status change causes without ever touching Fixable,
 // VulnIDs or Priority in a way any existing Kind would catch on its own: an
-// accepted, will_not_fix-only package additionally becomes end-of-life
+// muted, will_not_fix-only package additionally becomes end-of-life
 // (the base OS ages out from under it) while its own CVEs and fix status
 // stay exactly the same. end-of-life is always reported, so the key's
-// acceptance must be lost — and since the ordinary (non-EOL) view alone
-// shows no CVE/fixable/priority change at all, only KindAcceptanceLost can
+// muting must be lost — and since the ordinary (non-EOL) view alone
+// shows no CVE/fixable/priority change at all, only KindUnmuted can
 // carry that news.
-func TestCompute_StatusChangeTriggersAcceptanceLost(t *testing.T) {
+func TestCompute_StatusChangeTriggersUnmuted(t *testing.T) {
 	cve := finding("web:1", "curl", "CVE-1", scanner.StatusWontFix)
 
 	report1 := triaged(day1, nil, resolvedScan("web:1", contentA, cve))
-	markAccepted(t, &report1, "web:1", "curl")
+	markMuted(t, &report1, "web:1", "curl")
 	_, st1 := Compute(empty(), report1)
-	if !st1.Accepted["web:1\tcurl"] {
-		t.Fatalf("cycle1: curl not recorded as accepted: %+v", st1.Accepted)
+	if !st1.Muted["web:1\tcurl"] {
+		t.Fatalf("cycle1: curl not recorded as muted: %+v", st1.Muted)
 	}
 
 	// Cycle 2: the exact same CVE, same will_not_fix status, same priority —
 	// but the package is now also reported end-of-life (a second group under
-	// the same key, in EOLPackages). A real analyze.ApplyAcceptance run
-	// would never accept either group in this state (end-of-life always
+	// the same key, in EOLPackages). A real analyze.ApplyMuting run
+	// would never mute either group in this state (end-of-life always
 	// blocks the whole key), so — unlike cycle 1 — this fixture leaves the
-	// will_not_fix group's Accepted at its natural false rather than calling
-	// markAccepted for it.
+	// will_not_fix group's Muted at its natural false rather than calling
+	// markMuted for it.
 	scan2 := resolvedScan("web:1", contentA, cve)
 	eolFind := finding("web:1", "curl", "CVE-1", scanner.StatusEndOfLife)
 	scan2.Findings = append(scan2.Findings, eolFind)
 	report2 := triaged(day2, nil, scan2)
 
 	d2, st2 := Compute(st1, report2)
-	if st2.Accepted["web:1\tcurl"] {
-		t.Error("cycle2: curl still recorded as accepted once it also became end-of-life")
+	if st2.Muted["web:1\tcurl"] {
+		t.Error("cycle2: curl still recorded as muted once it also became end-of-life")
 	}
 	var found *Change
 	for i, c := range d2.Changes {
@@ -759,17 +759,17 @@ func TestCompute_StatusChangeTriggersAcceptanceLost(t *testing.T) {
 	if found == nil {
 		t.Fatalf("cycle2: no ordinary Changes entry for curl:\n%+v", d2.Changes)
 	}
-	if found.Kind != KindAcceptanceLost {
-		t.Errorf("cycle2: Kind = %q, want %q (no ordinary CVE/fixable/priority change exists to report this any other way)", found.Kind, KindAcceptanceLost)
+	if found.Kind != KindUnmuted {
+		t.Errorf("cycle2: Kind = %q, want %q (no ordinary CVE/fixable/priority change exists to report this any other way)", found.Kind, KindUnmuted)
 	}
 }
 
 // TestCompute_MixedKeyNeverExcludedFromHeartbeat is the "open now" heartbeat
-// counterpart of TestApplyAcceptance_MixedKeyNeverAccepted: a package with
+// counterpart of TestApplyMuting_MixedKeyNeverMuted: a package with
 // both a fixed CVE and an unfixed one lands as two PackageGroups under one
-// state key (fixed in Actionable, unfixed in Watch). analyze.ApplyAcceptance
-// never accepts either side of a mixed key like this — neither group here is
-// ever marked Accepted — so the heartbeat must count the key at its own true
+// state key (fixed in Actionable, unfixed in Watch). analyze.ApplyMuting
+// never mutes either side of a mixed key like this — neither group here is
+// ever marked Muted — so the heartbeat must count the key at its own true
 // priority (watch) and the diff must still report it as new, never silently
 // dropping or downgrading it because the unfixed side looks individually
 // eligible on its own.
@@ -782,14 +782,14 @@ func TestCompute_MixedKeyNeverExcludedFromHeartbeat(t *testing.T) {
 		finding("web:1", "curl", "CVE-2", scanner.StatusAffected),
 	)
 	report := triaged(day1, enrich, scan)
-	// Neither group is marked Accepted: a real analyze.ApplyAcceptance run
-	// would never accept either side of this mixed key (see
-	// TestApplyAcceptance_MixedKeyNeverAccepted), so this direct fixture
+	// Neither group is marked Muted: a real analyze.ApplyMuting run
+	// would never mute either side of this mixed key (see
+	// TestApplyMuting_MixedKeyNeverMuted), so this direct fixture
 	// simply leaves both at their natural zero value.
 	d, _ := Compute(empty(), report)
 
 	if d.OpenWatch != 1 {
-		t.Errorf("OpenWatch = %d, want 1 (the unfixed CVE's own priority, uncounted as accepted)", d.OpenWatch)
+		t.Errorf("OpenWatch = %d, want 1 (the unfixed CVE's own priority, uncounted as muted)", d.OpenWatch)
 	}
 	if d.OpenLow != 0 || d.OpenActNow != 0 {
 		t.Errorf("OpenLow = %d, OpenActNow = %d, want both 0", d.OpenLow, d.OpenActNow)
@@ -811,13 +811,13 @@ func TestCompute_MixedKeyNeverExcludedFromHeartbeat(t *testing.T) {
 	}
 }
 
-// acceptIntegrationGroups builds one cycle's Watch section for
-// TestApplyAcceptanceAndCompute_HeldReferenceStaysConsistent: aPresent
+// muteIntegrationGroups builds one cycle's Watch section for
+// TestApplyMutingAndCompute_HeldReferenceStaysConsistent: aPresent
 // controls whether entity A's own group is present at all this cycle (a
 // scan failure contributes none), and aInUse/bEligible control each
 // present entity's own Runtime verdict — bEligible's container generation
 // is always well past the 7-day window.
-func acceptIntegrationGroups(now time.Time, aPresent bool, extraBCVE bool) []analyze.ImageFindings {
+func muteIntegrationGroups(now time.Time, aPresent bool, extraBCVE bool) []analyze.ImageFindings {
 	old := now.Add(-8 * 24 * time.Hour)
 	bVulns := []string{"CVE-B"}
 	if extraBCVE {
@@ -854,61 +854,61 @@ func acceptIntegrationGroups(now time.Time, aPresent bool, extraBCVE bool) []ana
 	return out
 }
 
-// TestApplyAcceptanceAndCompute_HeldReferenceStaysConsistent covers, end to
+// TestApplyMutingAndCompute_HeldReferenceStaysConsistent covers, end to
 // end, a path that can otherwise make display and stored state disagree:
-// it chains analyze.ApplyAcceptance and Compute across four cycles the same
+// it chains analyze.ApplyMuting and Compute across four cycles the same
 // way runner.RunOnce and runner.sendDiff do every real cycle:
 //
 //  1. Entity A (in use, blocking) and entity B (individually eligible)
-//     both report "curl" under the same key; the mixed key is not accepted.
+//     both report "curl" under the same key; the mixed key is not muted.
 //  2. A alone fails to scan (a partial failure of the reference); B alone
-//     is left in the Report. Without the fix, ApplyAcceptance would judge
-//     B's group in isolation and accept it — hiding its row while state's
+//     is left in the Report. Without the fix, ApplyMuting would judge
+//     B's group in isolation and mute it — hiding its row while state's
 //     own held value stays false, a display/state mismatch. With the fix,
-//     the reference's PartialFailure blocks acceptance here too, so B's row
+//     the reference's PartialFailure blocks muting here too, so B's row
 //     renders normally and state's stored value doesn't move.
-//  3. A recovers, still in use (still blocking). Nothing was ever accepted,
-//     so state.Accepted for the key stays exactly as it was — no
-//     acceptance_lost fires over a transition that never happened.
-//  4. B gains a new CVE. Because the key was never accepted, this shows up
+//  3. A recovers, still in use (still blocking). Nothing was ever muted,
+//     so state.Muted for the key stays exactly as it was — no
+//     unmuted fires over a transition that never happened.
+//  4. B gains a new CVE. Because the key was never muted, this shows up
 //     as an ordinary KindNewCVEs change, not silently absorbed.
-func TestApplyAcceptanceAndCompute_HeldReferenceStaysConsistent(t *testing.T) {
+func TestApplyMutingAndCompute_HeldReferenceStaysConsistent(t *testing.T) {
 	now := day1
 	st := empty()
 
 	// Cycle 1: A and B both observed, reference healthy. The mixed key must
-	// not be accepted.
+	// not be muted.
 	report1 := analyze.Report{
 		Runtime: &analyze.RuntimeInfo{},
 		Images:  []analyze.ImageObservation{{Ref: "web:1"}},
-		Watch:   acceptIntegrationGroups(now, true, false),
+		Watch:   muteIntegrationGroups(now, true, false),
 	}
-	analyze.ApplyAcceptance(&report1, now)
+	analyze.ApplyMuting(&report1, now)
 	_, st = Compute(st, report1)
-	if st.Accepted["web:1\tcurl"] {
-		t.Fatalf("cycle1: curl recorded as accepted while A (in use) blocks the key")
+	if st.Muted["web:1\tcurl"] {
+		t.Fatalf("cycle1: curl recorded as muted while A (in use) blocks the key")
 	}
 
 	// Cycle 2: A fails to scan (partial failure); only B's group remains in
-	// the Report. B must not be accepted, and its row (via the ordinary
+	// the Report. B must not be muted, and its row (via the ordinary
 	// diff machinery) is unaffected — nothing here was ever hidden.
 	now = now.AddDate(0, 0, 1)
 	report2 := analyze.Report{
 		Runtime: &analyze.RuntimeInfo{},
 		Images:  []analyze.ImageObservation{{Ref: "web:1", PartialFailure: true}},
-		Watch:   acceptIntegrationGroups(now, false, false),
+		Watch:   muteIntegrationGroups(now, false, false),
 	}
-	analyze.ApplyAcceptance(&report2, now)
+	analyze.ApplyMuting(&report2, now)
 	for _, img := range report2.Watch {
 		for _, g := range img.Packages {
-			if g.Accepted {
-				t.Errorf("cycle2: %s/%s Accepted = true during A's failure, want false (the reference is held, not fully observed)", img.Image, g.Package)
+			if g.Muted {
+				t.Errorf("cycle2: %s/%s Muted = true during A's failure, want false (the reference is held, not fully observed)", img.Image, g.Package)
 			}
 		}
 	}
 	d2, st2 := Compute(st, report2)
-	if st2.Accepted["web:1\tcurl"] {
-		t.Fatalf("cycle2: curl recorded as accepted from B's isolated view during A's failure")
+	if st2.Muted["web:1\tcurl"] {
+		t.Fatalf("cycle2: curl recorded as muted from B's isolated view during A's failure")
 	}
 	for _, c := range d2.Changes {
 		if c.Package == "curl" {
@@ -922,29 +922,29 @@ func TestApplyAcceptanceAndCompute_HeldReferenceStaysConsistent(t *testing.T) {
 	report3 := analyze.Report{
 		Runtime: &analyze.RuntimeInfo{},
 		Images:  []analyze.ImageObservation{{Ref: "web:1"}},
-		Watch:   acceptIntegrationGroups(now, true, false),
+		Watch:   muteIntegrationGroups(now, true, false),
 	}
-	analyze.ApplyAcceptance(&report3, now)
+	analyze.ApplyMuting(&report3, now)
 	d3, st3 := Compute(st, report3)
-	if st3.Accepted["web:1\tcurl"] {
-		t.Fatalf("cycle3: curl recorded as accepted after A's in-use recovery")
+	if st3.Muted["web:1\tcurl"] {
+		t.Fatalf("cycle3: curl recorded as muted after A's in-use recovery")
 	}
 	for _, c := range d3.Changes {
 		if c.Package == "curl" {
-			t.Errorf("cycle3: curl must not appear in Changes on A's unchanged recovery (nothing was ever accepted to lose), got %+v", c)
+			t.Errorf("cycle3: curl must not appear in Changes on A's unchanged recovery (nothing was ever muted to lose), got %+v", c)
 		}
 	}
 	st = st3
 
-	// Cycle 4: B gains a new CVE. Since the key was never accepted, this
+	// Cycle 4: B gains a new CVE. Since the key was never muted, this
 	// must show up as an ordinary new_cves change.
 	now = now.AddDate(0, 0, 1)
 	report4 := analyze.Report{
 		Runtime: &analyze.RuntimeInfo{},
 		Images:  []analyze.ImageObservation{{Ref: "web:1"}},
-		Watch:   acceptIntegrationGroups(now, true, true),
+		Watch:   muteIntegrationGroups(now, true, true),
 	}
-	analyze.ApplyAcceptance(&report4, now)
+	analyze.ApplyMuting(&report4, now)
 	d4, _ := Compute(st, report4)
 	var found *Change
 	for i, c := range d4.Changes {
@@ -960,17 +960,17 @@ func TestApplyAcceptanceAndCompute_HeldReferenceStaysConsistent(t *testing.T) {
 	}
 }
 
-// TestCompute_PartialFailureDoesNotHideHeldActNowBehindAcceptedSibling
+// TestCompute_PartialFailureDoesNotHideHeldActNowBehindMutedSibling
 // covers an Ambiguous reference's two entities reporting the same package
 // name under one state key. Entity A's finding is act_now and fails to scan
 // this cycle (held over by the same conservative merge
 // TestCompute_PartialFailureMergeAcrossThreeCycles above exercises), while
-// entity B succeeds with an unrelated, accepted finding for the very same
+// entity B succeeds with an unrelated, muted finding for the very same
 // package name. The merged key's stored Priority must still read act_now, and the
-// "open now" heartbeat must still count it — accepting B's own group must
+// "open now" heartbeat must still count it — muting B's own group must
 // never make a held act_now silently vanish from the count just because
-// today's only live sibling happens to look fully accepted.
-func TestCompute_PartialFailureDoesNotHideHeldActNowBehindAcceptedSibling(t *testing.T) {
+// today's only live sibling happens to look fully muted.
+func TestCompute_PartialFailureDoesNotHideHeldActNowBehindMutedSibling(t *testing.T) {
 	enrich := map[string]analyze.Enrichment{"CVE-A": {KEV: true}} // A's CVE is act_now; B's is not
 	cveA := finding("web:1", "curl", "CVE-A", scanner.StatusAffected)
 	cveB := finding("web:1", "curl", "CVE-B", scanner.StatusAffected)
@@ -985,12 +985,12 @@ func TestCompute_PartialFailureDoesNotHideHeldActNowBehindAcceptedSibling(t *tes
 
 	// Cycle 2: A fails to scan (contributes nothing this cycle; its act_now
 	// finding only survives via the partial-failure merge). B succeeds again
-	// with the same CVE-B, and B's own group is now Accepted — simulating
-	// runtime.accept_unfixable_not_in_use judging it not observed, no fix,
+	// with the same CVE-B, and B's own group is now Muted — simulating
+	// runtime.mute_unfixable_not_in_use judging it not observed, no fix,
 	// non-act_now and old enough.
 	scanAFailed := failedResolvedScan("web:1", contentA, errString("pull failed"))
 	report2 := triaged(day2, enrich, scanAFailed, resolvedScan("web:1", contentB, cveB))
-	markAccepted(t, &report2, "web:1", "curl")
+	markMuted(t, &report2, "web:1", "curl")
 
 	d2, st2 := Compute(st1, report2)
 
@@ -999,7 +999,7 @@ func TestCompute_PartialFailureDoesNotHideHeldActNowBehindAcceptedSibling(t *tes
 		t.Fatalf("cycle2: curl priority = %q, want the merge to preserve act_now (held from the failed entity)", e2.Priority)
 	}
 	if d2.OpenActNow != 1 {
-		t.Errorf("cycle2: OpenActNow = %d, want 1 — a held act_now must not disappear from the heartbeat just because the only live sibling's own group looks accepted", d2.OpenActNow)
+		t.Errorf("cycle2: OpenActNow = %d, want 1 — a held act_now must not disappear from the heartbeat just because the only live sibling's own group looks muted", d2.OpenActNow)
 	}
 	if d2.OpenWatch != 0 || d2.OpenLow != 0 {
 		t.Errorf("cycle2: OpenWatch=%d OpenLow=%d, want both 0 — the key counts once, as act_now", d2.OpenWatch, d2.OpenLow)

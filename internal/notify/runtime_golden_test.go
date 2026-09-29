@@ -305,7 +305,7 @@ func TestNoObservationEvidenceReachesNotifyText(t *testing.T) {
 	if g.Runtime.Usage != rtevidence.UsageInUse {
 		t.Fatalf("Runtime.Usage = %q, want in_use", g.Runtime.Usage)
 	}
-	got := runtimeInUsePhrase(g.Runtime)
+	got := runtimeInUsePhrase(g.Runtime, enMessages)
 	if strings.Contains(got, "in use (in use)") {
 		t.Errorf("runtimeInUsePhrase = %q, the evidence kind was dropped on the no-observation path", got)
 	}

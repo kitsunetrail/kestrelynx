@@ -109,20 +109,20 @@ type State struct {
 	EOLPackages    map[string]EOLEntry  `json:"eol_packages,omitempty"` // keyed by image \t package, like Findings
 	Images         map[string]ImageMeta `json:"images,omitempty"`       // keyed by reference
 	LastFullReport *ReportRef           `json:"last_full_report,omitempty"`
-	// Accepted is the set of (image, package) keys currently accepted under
-	// runtime.accept_unfixable_not_in_use, added without a version bump the
+	// Muted is the set of (image, package) keys currently muted under
+	// runtime.mute_unfixable_not_in_use, added without a version bump the
 	// same way EOLPackages was: older state decodes with a nil map, and the
 	// first cycle on a binary with the setting on simply starts recording it
 	// fresh. The unit is the whole key, never a single PackageGroup within
-	// it: analyze.ApplyAcceptance only ever marks every group of a key
-	// Accepted when every one of them qualifies (a fixed or end-of-life
+	// it: analyze.ApplyMuting only ever marks every group of a key
+	// Muted when every one of them qualifies (a fixed or end-of-life
 	// sibling, or any other disqualified group under the same key, blocks
-	// the whole key), so "was this key accepted last cycle" is a single,
-	// unambiguous fact. Acceptance itself is judged fresh every cycle from
+	// the whole key), so "was this key muted last cycle" is a single,
+	// unambiguous fact. Muting itself is judged fresh every cycle from
 	// the current groups' own Runtime/Status/Priority — this map exists only
-	// so Compute can notice a key that was accepted last cycle no longer
-	// being accepted this cycle, the transition KindAcceptanceLost reports.
-	Accepted map[string]bool `json:"accepted,omitempty"`
+	// so Compute can notice a key that was muted last cycle no longer
+	// being muted this cycle, the transition KindUnmuted reports.
+	Muted map[string]bool `json:"muted,omitempty"`
 	// Environment records which environment this file belongs to, for
 	// self-description and diagnostics only. It is nil for the unnamed
 	// default environment (FileStore.Env.Name == "") so that an unconfigured
@@ -156,7 +156,7 @@ func empty() State {
 		EOSL:        map[string]time.Time{},
 		EOLPackages: map[string]EOLEntry{},
 		Images:      map[string]ImageMeta{},
-		Accepted:    map[string]bool{},
+		Muted:       map[string]bool{},
 	}
 }
 
@@ -253,8 +253,8 @@ func (s FileStore) Load() (State, error) {
 	if st.Images == nil {
 		st.Images = map[string]ImageMeta{}
 	}
-	if st.Accepted == nil {
-		st.Accepted = map[string]bool{}
+	if st.Muted == nil {
+		st.Muted = map[string]bool{}
 	}
 	return st, nil
 }
@@ -296,14 +296,14 @@ const (
 	KindEscalated  ChangeKind = "escalated"   // known package's priority rose (e.g. a CVE entered KEV)
 	KindNewCVEs    ChangeKind = "new_cves"    // known package gained CVEs
 	KindNowFixable ChangeKind = "now_fixable" // known package's fix became available
-	// KindAcceptanceLost marks a package that was accepted under
-	// runtime.accept_unfixable_not_in_use last cycle and no longer is this
+	// KindUnmuted marks a package that was muted under
+	// runtime.mute_unfixable_not_in_use last cycle and no longer is this
 	// cycle, for a reason no other Kind above already covers (it became
 	// in use, or its observation window reset) — Compute only ever assigns
 	// this when none of the other four Kinds fired, so a fallout that also
 	// happens to be, say, now_fixable is reported as now_fixable instead of
 	// duplicating the story.
-	KindAcceptanceLost ChangeKind = "acceptance_lost"
+	KindUnmuted ChangeKind = "unmuted"
 )
 
 // Change is one finding that is new or changed since the previous scan. Groups
@@ -319,7 +319,7 @@ type Change struct {
 	// EOLGroups is this key's end-of-life groups this cycle (Report.
 	// EOLPackages), kept apart from Groups because end-of-life lives in its
 	// own Report section and its own mergeSections pass, never merged into
-	// the three ordinary ones. It exists so a KindAcceptanceLost transition
+	// the three ordinary ones. It exists so a KindUnmuted transition
 	// caused by the package additionally becoming end-of-life — Fixable,
 	// VulnIDs and Priority on the ordinary side can all stay exactly the
 	// same — has somewhere to point notify's reason text at; nil whenever
@@ -509,7 +509,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 	// — set both by the main loop below (partial failure with a live
 	// sibling) and by the full/partial carry-over loop further down (no
 	// live sibling at all). The "open now" heartbeat and OldestUrgent must
-	// never exclude a held key's contribution just because its Accepted flag
+	// never exclude a held key's contribution just because its Muted flag
 	// happens to still read true from before: that flag was carried over
 	// unchanged, not re-judged, so a held act_now can never quietly
 	// disappear from the count.
@@ -586,45 +586,45 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			kind = KindNowFixable
 		}
 
-		// Acceptance never removes a Change from the diff — the generic
-		// webhook needs the full record, and even an accepted key's row is
+		// Muting never removes a Change from the diff — the generic
+		// webhook needs the full record, and even a muted key's row is
 		// only ever hidden by notify's rendering, not by Compute. What
-		// acceptance does affect: whether this key is recorded into
-		// State.Accepted, and whether it just lost that status.
+		// muting does affect: whether this key is recorded into
+		// State.Muted, and whether it just lost that status.
 		//
 		// held is true exactly when this key's stored Priority/Fixable/
 		// VulnIDs above were merged with (rather than freshly replacing)
 		// last cycle's record — a scan failure is never evidence that a
-		// finding stopped being accepted, so the key's accepted flag is
+		// finding stopped being muted, so the key's muted flag is
 		// carried over unchanged in that case, the same as every other held
-		// field on this Entry, and no acceptance_lost notice can fire from
+		// field on this Entry, and no unmuted notice can fire from
 		// data this cycle never actually re-judged.
 		held := partiallyFailedRef[ref] && knownE
 		if held {
 			heldKey[k] = true
 		}
-		wasAccepted := prev.Accepted[k]
-		acceptedNow := wasAccepted
+		wasMuted := prev.Muted[k]
+		mutedNow := wasMuted
 		if !held {
-			acceptedNow = allAccepted(c.groups)
+			mutedNow = allMuted(c.groups)
 		}
-		if acceptedNow {
-			next.Accepted[k] = true
+		if mutedNow {
+			next.Muted[k] = true
 		}
-		lostAcceptance := wasAccepted && !held && !acceptedNow
+		becameUnmuted := wasMuted && !held && !mutedNow
 
 		switch {
 		case kind != "":
 			change.Kind = kind
-		case lostAcceptance:
+		case becameUnmuted:
 			// No ordinary Kind fired (same CVEs, same fix status, same
 			// priority), so this is the only news: the key no longer
-			// qualifies for acceptance — some group under it is now in use,
+			// qualifies for muting — some group under it is now in use,
 			// act_now, fixed, or otherwise no longer eligible. A fallout
 			// that also happens to be, say, now_fixable took the case above
 			// instead, reusing that more specific label rather than
 			// duplicating it.
-			change.Kind = KindAcceptanceLost
+			change.Kind = KindUnmuted
 		default:
 			continue // unchanged
 		}
@@ -646,7 +646,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			// it was, ContentID included — there is no sibling entity whose
 			// success could make a stale ContentID misleading here.
 			next.Findings[k] = e
-			carryAccepted(next.Accepted, prev.Accepted, k)
+			carryMuted(next.Muted, prev.Muted, k)
 			heldKey[k] = true
 			continue
 		case partiallyFailedRef[ref]:
@@ -660,7 +660,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			// findings.
 			e.ContentID = ""
 			next.Findings[k] = e
-			carryAccepted(next.Accepted, prev.Accepted, k)
+			carryMuted(next.Muted, prev.Muted, k)
 			heldKey[k] = true
 			continue
 		case curEOL[k] != nil:
@@ -741,30 +741,30 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 	// side wins; otherwise the ordinary side's priority counts. An
 	// end-of-life record's watch/low is represented by the end-of-life
 	// segment (OpenEOLPackages) alone, so it never adds a second bucket. A
-	// key excluded here (next.Accepted[k] true and not heldKey) never
+	// key excluded here (next.Muted[k] true and not heldKey) never
 	// contributes its own bucket or ages the "oldest urgent" heartbeat —
 	// that heartbeat exists to nag about work still needing a decision, and
-	// an accepted key is exactly the opposite of that by construction (never
+	// a muted key is exactly the opposite of that by construction (never
 	// act_now, so eolActNow alone can still count it here, unaffected). A
-	// heldKey key is never excluded even if its Accepted flag still reads
+	// heldKey key is never excluded even if its Muted flag still reads
 	// true, since that flag was carried over unchanged rather than
 	// re-judged this cycle — a held act_now can never disappear from this
-	// count just because its accepted flag happens to predate the failure.
+	// count just because its muted flag happens to predate the failure.
 	// OldestOpen is deliberately left unfiltered: it also backs the generic
 	// webhook's oldest_open_days, which stays a raw, unabridged figure.
 	for k, e := range next.Findings {
-		accepted := next.Accepted[k] && !heldKey[k]
+		muted := next.Muted[k] && !heldKey[k]
 		older(&d.OldestOpen, e.FirstSeen)
-		if urgent(e.Priority) && !accepted {
+		if urgent(e.Priority) && !muted {
 			older(&d.OldestUrgent, e.FirstSeen)
 		}
 		eolActNow := analyze.Priority(next.EOLPackages[k].Priority) == analyze.PriorityActNow
 		switch {
-		case (analyze.Priority(e.Priority) == analyze.PriorityActNow && !accepted) || eolActNow:
+		case (analyze.Priority(e.Priority) == analyze.PriorityActNow && !muted) || eolActNow:
 			d.OpenActNow++
-		case analyze.Priority(e.Priority) == analyze.PriorityWatch && !accepted:
+		case analyze.Priority(e.Priority) == analyze.PriorityWatch && !muted:
 			d.OpenWatch++
-		case analyze.Priority(e.Priority) == analyze.PriorityLow && !accepted:
+		case analyze.Priority(e.Priority) == analyze.PriorityLow && !muted:
 			d.OpenLow++
 		}
 	}
@@ -788,15 +788,15 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		older(&d.OldestUrgent, t)
 	}
 	d.AnyOpen = len(next.Findings) > 0 || len(next.EOLPackages) > 0 || len(next.EOSL) > 0
-	// Summed per group rather than via img.CriticalCount()/TotalCount() so an
-	// accepted group's CVEs can be left out — otherwise the triage-off
+	// Summed per group rather than via img.CriticalCount()/TotalCount() so a
+	// muted group's CVEs can be left out — otherwise the triage-off
 	// heartbeat's CRITICAL/HIGH total would count vulnerabilities from rows
 	// the body never shows. Mathematically identical to the whole-image sum
-	// whenever nothing is accepted.
+	// whenever nothing is muted.
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
 		for _, img := range section {
 			for _, g := range img.Packages {
-				if g.Accepted {
+				if g.Muted {
 					continue
 				}
 				d.OpenCritical += g.Critical
@@ -884,33 +884,33 @@ func computeEOL(prev, next State, curEOL map[string]*current, order []string, pa
 	return changes
 }
 
-// carryAccepted preserves a key's accepted flag across a cycle where no
+// carryMuted preserves a key's muted flag across a cycle where no
 // entity contributing to it was observed at all (full or partial reference
 // failure with no successful sibling for this specific package): a scan
-// failure is never evidence that a finding stopped being accepted, so the
+// failure is never evidence that a finding stopped being muted, so the
 // same holding rule already applied to Findings/EOSL/EOLPackages applies
 // here too.
-func carryAccepted(next, prev map[string]bool, k string) {
+func carryMuted(next, prev map[string]bool, k string) {
 	if prev[k] {
 		next[k] = true
 	}
 }
 
-// allAccepted reports whether every one of groups is Accepted (analyze.
-// PackageGroup.Accepted). analyze.ApplyAcceptance only ever sets Accepted on
+// allMuted reports whether every one of groups is Muted (analyze.
+// PackageGroup.Muted). analyze.ApplyMuting only ever sets Muted on
 // every group of a key when every one of them individually qualifies (a
 // fixed or end-of-life sibling, or any other disqualified group under the
 // same key, blocks the whole key — see its own doc comment), so this is
 // equivalent to asking whether the key itself, as observed this cycle, is
-// accepted. Always false when groups is empty, or when
-// runtime.accept_unfixable_not_in_use is off (Accepted is then always false
+// muted. Always false when groups is empty, or when
+// runtime.mute_unfixable_not_in_use is off (Muted is then always false
 // on every group).
-func allAccepted(groups []analyze.PackageGroup) bool {
+func allMuted(groups []analyze.PackageGroup) bool {
 	if len(groups) == 0 {
 		return false
 	}
 	for _, g := range groups {
-		if !g.Accepted {
+		if !g.Muted {
 			return false
 		}
 	}

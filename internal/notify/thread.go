@@ -54,70 +54,74 @@ func (a Ages) forGroup(g analyze.PackageGroup) func(image, pkg string) (time.Tim
 // mrkdwn messages to post as replies under the summary message. It returns
 // nil when nothing is open (spec edge case 4: skip the thread entirely).
 // limit <= 0 uses the default per-message budget.
-func BuildThreadMessages(r analyze.Report, ages Ages, limit int) []string {
+func BuildThreadMessages(r analyze.Report, ages Ages, limit int, lang ...Language) []string {
+	return buildThreadMessages(r, ages, limit, messagesFor(resolveLanguage(lang)))
+}
+
+func buildThreadMessages(r analyze.Report, ages Ages, limit int, msg messages) []string {
 	if !r.HasFindings() {
 		return nil
 	}
 	if limit <= 0 {
 		limit = threadMsgLimit
 	}
-	title := fmt.Sprintf("📊 *Everything open now — %s*", r.GeneratedAt.Format(timeLayout))
+	title := fmt.Sprintf(msg.ThreadTitle, r.GeneratedAt.Format(timeLayout))
 	byRef := imagesByRef(r)
 
 	var secs []threadSection
 	if len(r.EOSLImages) > 0 {
-		s := threadSection{title: fmt.Sprintf("*⛔ EOL base images (%d)*", len(r.EOSLImages))}
+		s := threadSection{title: fmt.Sprintf(msg.EOLBaseImagesHeading, len(r.EOSLImages))}
 		for _, img := range r.EOSLImages {
-			s.blocks = append(s.blocks, eosLine(r, img, byRef))
+			s.blocks = append(s.blocks, eosLine(r, img, byRef, msg))
 		}
 		secs = append(secs, s)
 	}
 	if imgs := r.EOLPackageAlerts(); len(imgs) > 0 {
-		secs = append(secs, eolThreadSection(r, byRef, imgs, ages))
+		secs = append(secs, eolThreadSection(r, byRef, imgs, ages, msg))
 	}
 	if r.Triage {
-		secs = append(secs, triageThreadSections(r, byRef, ages)...)
+		secs = append(secs, triageThreadSections(r, byRef, ages, msg)...)
 	} else {
-		secs = append(secs, statusThreadSections(r, byRef, ages)...)
+		secs = append(secs, statusThreadSections(r, byRef, ages, msg)...)
 	}
-	if n := acceptedCount(r); n > 0 {
-		secs = append(secs, threadSection{blocks: []string{"\n" + fmt.Sprintf(acceptedLineText, n)}})
+	if n := mutedCount(r); n > 0 {
+		secs = append(secs, threadSection{blocks: []string{"\n" + fmt.Sprintf(msg.MutedLine, n)}})
 	}
 	// Same cross-cutting "identity unconfirmed" summary as the Slack messages,
 	// wired into the thread report too.
-	if line := unresolvedRefsLine(r); line != "" {
+	if line := unresolvedRefsLine(r, msg); line != "" {
 		secs = append(secs, threadSection{blocks: []string{"\n" + line}})
 	}
-	return packThread(title, secs, limit)
+	return packThread(title, secs, limit, msg)
 }
 
 // triageThreadSections is the priority-ordered body: urgent and watch in full
 // detail, low as a count-only line.
-func triageThreadSections(r analyze.Report, byRef map[string]analyze.ImageObservation, ages Ages) []threadSection {
+func triageThreadSections(r analyze.Report, byRef map[string]analyze.ImageObservation, ages Ages, msg messages) []threadSection {
 	pv := r.ByPriority()
-	// ActNow is never filtered: a group eligible for acceptance is never
+	// ActNow is never filtered: a group eligible for muting is never
 	// act_now by construction.
-	pv.Watch = filterAccepted(pv.Watch)
-	pv.Low = filterAccepted(pv.Low)
+	pv.Watch = filterMuted(pv.Watch)
+	pv.Low = filterMuted(pv.Low)
 	var secs []threadSection
 	if n := analyze.GroupCount(pv.ActNow); n > 0 {
-		secs = append(secs, threadBucket(r, byRef, fmt.Sprintf("*🚨 ACT NOW (%d) — exploited or likely to be*", n), pv.ActNow, ages))
+		secs = append(secs, threadBucket(r, byRef, fmt.Sprintf(msg.ThreadActNowHeading, n), pv.ActNow, ages, msg))
 	}
 	if n := analyze.GroupCount(pv.Watch); n > 0 {
-		secs = append(secs, threadBucket(r, byRef, fmt.Sprintf("*👀 WATCH (%d) — not urgent, keep an eye on*", n), pv.Watch, ages))
+		secs = append(secs, threadBucket(r, byRef, fmt.Sprintf(msg.ThreadWatchHeading, n), pv.Watch, ages, msg))
 	}
 	if n := analyze.GroupCount(pv.Low); n > 0 {
-		low := fmt.Sprintf("\n*🔕 LOW (%d)* — no exploitation signal", n)
+		low := fmt.Sprintf(msg.ThreadLowHeading, n)
 		// The generic webhook is the only destination with per-package
 		// detail beyond this count, and only when one is actually
 		// configured — a weekly full report shows this same count-only
 		// line, never more.
 		if r.GenericWebhookConfigured {
-			low += "; details in the generic webhook payload"
+			low += msg.ThreadLowDetailsSuffix
 		}
 		low += "\n"
 		if inUse := countInUse(pv.Low); inUse > 0 {
-			low += fmt.Sprintf("▶ in use among low: %d\n", inUse)
+			low += fmt.Sprintf(msg.ThreadLowInUseCount, inUse)
 		}
 		secs = append(secs, threadSection{blocks: []string{low}})
 	}
@@ -126,36 +130,36 @@ func triageThreadSections(r analyze.Report, byRef map[string]analyze.ImageObserv
 
 // statusThreadSections is the triage-off fallback: the status-based sections
 // with every package expanded (no low bucket exists to collapse).
-func statusThreadSections(r analyze.Report, byRef map[string]analyze.ImageObservation, ages Ages) []threadSection {
+func statusThreadSections(r analyze.Report, byRef map[string]analyze.ImageObservation, ages Ages, msg messages) []threadSection {
 	section := func(title string, imgs []analyze.ImageFindings) threadSection {
-		return threadBucket(r, byRef, "*"+title+"*", imgs, ages)
+		return threadBucket(r, byRef, "*"+title+"*", imgs, ages, msg)
 	}
 	var secs []threadSection
 	if len(r.Actionable) > 0 {
 		// Never filtered: only affected/will_not_fix findings are ever
-		// eligible for acceptance.
-		secs = append(secs, section("✅ Actionable now (fixed)", r.Actionable))
+		// eligible for muting.
+		secs = append(secs, section(msg.ActionableTitle, r.Actionable))
 	}
-	if watch := filterAccepted(r.Watch); len(watch) > 0 {
-		secs = append(secs, section("ℹ️ No fix yet (affected / waiting on upstream)", watch))
+	if watch := filterMuted(r.Watch); len(watch) > 0 {
+		secs = append(secs, section(msg.WatchSectionTitle, watch))
 	}
-	if wontFix := filterAccepted(r.WontFix); len(wontFix) > 0 {
-		secs = append(secs, section("🔕 Upstream won't fix (will_not_fix)", wontFix))
+	if wontFix := filterMuted(r.WontFix); len(wontFix) > 0 {
+		secs = append(secs, section(msg.WontFixSectionTitle, wontFix))
 	}
 	return secs
 }
 
 // threadBucket renders one bucket, one block per image so message splits fall
 // between images.
-func threadBucket(r analyze.Report, byRef map[string]analyze.ImageObservation, title string, imgs []analyze.ImageFindings, ages Ages) threadSection {
+func threadBucket(r analyze.Report, byRef map[string]analyze.ImageObservation, title string, imgs []analyze.ImageFindings, ages Ages, msg messages) threadSection {
 	s := threadSection{title: title}
 	for _, img := range imgs {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s %s\n", threadImageMarker(r, img), imageLabel(img, byRef))
+		fmt.Fprintf(&b, "%s %s\n", threadImageMarker(r, img), imageLabel(img, byRef, msg))
 		for _, g := range img.Packages {
-			writePackage(&b, g, g.Status == scanner.StatusFixed, "")
-			writeThreadDetail(&b, r, img.Image, g, ages.forGroup(g))
-			writeRuntimeThreadLine(&b, g.Runtime)
+			writePackage(&b, g, g.Status == scanner.StatusFixed, "", msg)
+			writeThreadDetail(&b, r, img.Image, g, ages.forGroup(g), msg)
+			writeRuntimeThreadLine(&b, g.Runtime, msg)
 		}
 		s.blocks = append(s.blocks, b.String())
 	}
@@ -165,19 +169,19 @@ func threadBucket(r analyze.Report, byRef map[string]analyze.ImageObservation, t
 // eolThreadSection renders the end-of-life packages not folded into a
 // base-OS line, one block per image. An act_now group is a one-line pointer:
 // the ACT NOW section below carries its full detail.
-func eolThreadSection(r analyze.Report, byRef map[string]analyze.ImageObservation, imgs []analyze.ImageFindings, ages Ages) threadSection {
-	s := threadSection{title: fmt.Sprintf("*⛔ EOL packages (%d) — %s*", analyze.GroupCount(imgs), eolSectionReason)}
+func eolThreadSection(r analyze.Report, byRef map[string]analyze.ImageObservation, imgs []analyze.ImageFindings, ages Ages, msg messages) threadSection {
+	s := threadSection{title: fmt.Sprintf(msg.EOLPackagesThreadHeading, analyze.GroupCount(imgs), msg.EOLSectionReason)}
 	for _, img := range imgs {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s %s\n", threadImageMarker(r, img), imageLabel(img, byRef))
+		fmt.Fprintf(&b, "%s %s\n", threadImageMarker(r, img), imageLabel(img, byRef, msg))
 		for _, g := range img.Packages {
 			if g.Priority == analyze.PriorityActNow {
-				writePackage(&b, g, false, eolSeeActNow)
+				writePackage(&b, g, false, msg.EOLSeeActNow, msg)
 				continue
 			}
-			writePackage(&b, g, false, "")
-			writeThreadDetail(&b, r, img.Image, g, ages.forGroup(g))
-			writeRuntimeThreadLine(&b, g.Runtime)
+			writePackage(&b, g, false, "", msg)
+			writeThreadDetail(&b, r, img.Image, g, ages.forGroup(g), msg)
+			writeRuntimeThreadLine(&b, g.Runtime, msg)
 		}
 		s.blocks = append(s.blocks, b.String())
 	}
@@ -199,44 +203,44 @@ func threadImageMarker(r analyze.Report, img analyze.ImageFindings) string {
 // writeThreadDetail renders one package's thread detail: the headline CVE's
 // evidence, its Trivy title (a one-line "what is this" the CVE ID alone
 // doesn't convey), references, the remaining CVE ids, and the open age.
-func writeThreadDetail(b *strings.Builder, r analyze.Report, image string, g analyze.PackageGroup, firstSeen func(image, pkg string) (time.Time, bool)) {
+func writeThreadDetail(b *strings.Builder, r analyze.Report, image string, g analyze.PackageGroup, firstSeen func(image, pkg string) (time.Time, bool), msg messages) {
 	if top := g.TopVuln(); top.ID != "" {
 		// With triage off there is no intel to cite (and evidence() would
 		// misreport that as an outage), so the line is just id + severity.
 		line := vulnIDLink(top.ID) + " " + string(top.Severity)
 		if r.Triage {
-			line = evidence(r, top)
+			line = evidence(r, top, msg)
 		}
 		fmt.Fprintf(b, "     ↳ %s", line)
 		switch g.Status {
 		case scanner.StatusAffected:
-			b.WriteString(" — no fix yet, consider mitigation")
+			b.WriteString(msg.NoFixYetMitigation)
 		case scanner.StatusWontFix:
-			b.WriteString(" — upstream won't fix, consider replacing")
+			b.WriteString(msg.WontFixReplace)
 		case scanner.StatusEndOfLife:
-			b.WriteString(eolEvidenceMark)
+			b.WriteString(msg.EOLEvidenceMark)
 		}
 		b.WriteString("\n")
 		if top.Title != "" {
 			fmt.Fprintf(b, "       %s\n", top.Title)
 		}
-		writeRefs(b, top)
-		writeAlsoIDs(b, g)
+		writeRefs(b, top, msg)
+		writeAlsoIDs(b, g, msg)
 	}
 	if firstSeen == nil {
 		return
 	}
 	if t, ok := firstSeen(image, g.Package); ok {
 		if days := openDays(t, r.GeneratedAt); days > 0 {
-			fmt.Fprintf(b, "     ⏱ open %d day(s) — first seen %s\n", days, t.Format("2006-01-02"))
+			fmt.Fprintf(b, msg.ThreadImageAgeLine, days, t.Format("2006-01-02"))
 		} else {
-			b.WriteString("     ⏱ first seen today\n")
+			b.WriteString(msg.ThreadFirstSeenToday)
 		}
 	}
 }
 
 // writeAlsoIDs lists the CVE ids folded behind the headline evidence.
-func writeAlsoIDs(b *strings.Builder, g analyze.PackageGroup) {
+func writeAlsoIDs(b *strings.Builder, g analyze.PackageGroup, msg messages) {
 	if len(g.Vulns) <= 1 {
 		return
 	}
@@ -248,9 +252,9 @@ func writeAlsoIDs(b *strings.Builder, g analyze.PackageGroup) {
 	if len(ids) > alsoIDsMax {
 		ids, extra = ids[:alsoIDsMax], len(ids)-alsoIDsMax
 	}
-	fmt.Fprintf(b, "     also: %s", strings.Join(ids, ", "))
+	fmt.Fprintf(b, msg.ThreadAlsoIDs, strings.Join(ids, ", "))
 	if extra > 0 {
-		fmt.Fprintf(b, " (+%d more)", extra)
+		fmt.Fprintf(b, msg.MoreCount, extra)
 	}
 	b.WriteString("\n")
 }
@@ -270,7 +274,7 @@ func openDays(t, now time.Time) int {
 // count); a section continued on a later message repeats its title with a
 // "(cont.)" marker. A single block larger than the budget is split on line
 // boundaries as a last resort.
-func packThread(title string, secs []threadSection, limit int) []string {
+func packThread(title string, secs []threadSection, limit int, msg messages) []string {
 	blockBudget := limit - 400 // headroom for the title and a repeated section header
 	if blockBudget < 1 {
 		blockBudget = limit
@@ -286,14 +290,14 @@ func packThread(title string, secs []threadSection, limit int) []string {
 			for _, piece := range splitByLines(blk, blockBudget) {
 				head := ""
 				if s.title != "" && s.title != curSection {
-					head = "\n" + sectionHeader(s.title, started[s.title]) + "\n"
+					head = "\n" + sectionHeader(s.title, started[s.title], msg) + "\n"
 				}
 				if cur != "" && len(cur)+len(head)+len(piece) > limit {
 					msgs = append(msgs, strings.Trim(cur, "\n"))
 					cur, curSection = "", ""
 					head = ""
 					if s.title != "" {
-						head = sectionHeader(s.title, started[s.title]) + "\n"
+						head = sectionHeader(s.title, started[s.title], msg) + "\n"
 					}
 				}
 				cur += head + piece
@@ -310,9 +314,9 @@ func packThread(title string, secs []threadSection, limit int) []string {
 	return msgs
 }
 
-func sectionHeader(title string, cont bool) string {
+func sectionHeader(title string, cont bool, msg messages) string {
 	if cont {
-		return title + " _(cont.)_"
+		return title + msg.ThreadContinued
 	}
 	return title
 }

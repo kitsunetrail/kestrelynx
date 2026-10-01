@@ -11,92 +11,78 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
-// wantSlackTextUnnamed is the frozen full-text output of
-// FormatSlackText(sampleReport()) for the unnamed default environment,
-// captured before any environment-model header change could touch it. A
-// full-string comparison (not just the header prefix) catches a regression
-// anywhere in the body, not only in the header line the environment name is
-// inserted into.
-const wantSlackTextUnnamed = "🛡️ *KestreLynx* — scan results for 2026-06-24 09:00\n2 images scanned, 1 affected\n_Everything currently open._\n*Priority:* ⛔ 1 EOL base · 🔴 1 CRITICAL · 🟠 1 need care\n\n*⛔ Base OS end-of-life (top priority)*\n• web:1.0 — identity unconfirmed: scanned by reference — base OS is EOL (no more security updates coming)\n\n*✅ Actionable now (fixed)*\n🔴 web:1.0 — identity unconfirmed: scanned by reference  CRITICAL 1 / HIGH 1\n   • libc-bin 2.28-10 → 2.28-10+deb10u2 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch\n   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [lang]\n\n*ℹ️ No fix yet (affected / waiting on upstream)*\n🟠 web:1.0 — identity unconfirmed: scanned by reference  CRITICAL 0 / HIGH 1\n   • e2fsprogs 1.44 (no fix available) (CRITICAL 0 / HIGH 1)\n\n*🔕 Upstream won't fix (will_not_fix)*\n🟠 web:1.0 — identity unconfirmed: scanned by reference  CRITICAL 0 / HIGH 1\n   • gcc-8-base 8.3 (no fix available) (CRITICAL 0 / HIGH 1)\n\n*⚠️ Scan failures*\n• broken:1 — identity unconfirmed: scanned by reference — pull failed\n\n⚠️ identity unconfirmed: scanned by reference — broken:1, web:1.0\n"
-
-// wantSlackDiffTextUnnamed is the diff-mode counterpart of
-// wantSlackTextUnnamed: the frozen full-text output of
-// FormatSlackDiffText(r, d, false, false) for diffFixture()'s unnamed-environment
-// report. The one deliberate change since it was captured is the "⛔ 1 EOL
-// base" segment leading the triage-off "Open now" line (see
-// openNowEOLBaseWithoutTriage).
-const wantSlackDiffTextUnnamed = "🛡️ *KestreLynx* — scan results for 2026-06-24 09:00\n2 images scanned, 1 affected\n_Changes since the last scan._\n\n*⛔ New: base OS end-of-life (top priority)*\n• web:1.0 — identity unconfirmed: scanned by reference — base OS is EOL (no more security updates coming)\n\n*🆕 New since last scan (4)*\n🔴 web:1.0 — identity unconfirmed: scanned by reference\n   • libc-bin 2.28-10 → 2.28-10+deb10u2 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> CRITICAL\n   • setuptools 53.0.0 → 78.1.1 (CRITICAL 0 / HIGH 1)  🟠 upgrade: major version bump — needs care [lang] — <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2> HIGH\n   • e2fsprogs 1.44 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3> HIGH\n   • gcc-8-base 8.3 (no fix available) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> HIGH\n\n*⚠️ Scan failures*\n• broken:1 — identity unconfirmed: scanned by reference — pull failed\n\n📌 Open now: ⛔ 1 EOL base / CRITICAL 1 / HIGH 3 across 1 image(s)\n\n⚠️ identity unconfirmed: scanned by reference — broken:1, web:1.0\n"
-
-// TestFormatSlackText_UnnamedEnvironmentUnchanged pins the exact,
-// full-message output for the unnamed default environment: a single-host
-// deployment that never set environment.name must see byte-identical output
-// from before the environment model existed, in the header and everywhere
-// else in the message.
-func TestFormatSlackText_UnnamedEnvironmentUnchanged(t *testing.T) {
-	if out := FormatSlackText(sampleReport()); out != wantSlackTextUnnamed {
-		t.Errorf("output changed for the unnamed environment:\ngot:  %q\nwant: %q", out, wantSlackTextUnnamed)
+// TestChannel_UnnamedEnvironmentHeader pins the header section for the unnamed
+// default environment: a single-host deployment that never set
+// environment.name must see no environment marker anywhere in the message.
+func TestChannel_UnnamedEnvironmentHeader(t *testing.T) {
+	msgs := BuildChannelMessages(Message{Report: sampleReport()}, ChannelFooter{}, LanguageEN)
+	want := "🛡️ *KestreLynx* — scan results for 2026-06-24 09:00\n2 images scanned, 1 affected\n_Everything currently open._"
+	if got := msgs[0].Blocks[0].Text; got != want {
+		t.Errorf("header = %q, want %q", got, want)
+	}
+	if strings.Contains(msgs[0].Text, "[") {
+		t.Errorf("fallback text carries an environment marker: %q", msgs[0].Text)
 	}
 }
 
-// TestFormatSlackDiffText_UnnamedEnvironmentUnchanged is the diff-mode
-// counterpart of TestFormatSlackText_UnnamedEnvironmentUnchanged.
-func TestFormatSlackDiffText_UnnamedEnvironmentUnchanged(t *testing.T) {
+// TestChannel_UnnamedEnvironmentDiffHeader is the diff-mode counterpart.
+func TestChannel_UnnamedEnvironmentDiffHeader(t *testing.T) {
 	r, d := diffFixture()
-	if out := FormatSlackDiffText(r, d, false, false); out != wantSlackDiffTextUnnamed {
-		t.Errorf("output changed for the unnamed environment:\ngot:  %q\nwant: %q", out, wantSlackDiffTextUnnamed)
+	msgs := BuildChannelMessages(Message{Report: r, Diff: &d}, ChannelFooter{}, LanguageEN)
+	want := "🛡️ *KestreLynx* — scan results for 2026-06-24 09:00\n2 images scanned, 1 affected\n_Changes since the last scan._"
+	if got := msgs[0].Blocks[0].Text; got != want {
+		t.Errorf("header = %q, want %q", got, want)
 	}
 }
 
-// TestFormatSlackText_NamedEnvironment checks that a named environment is
-// inserted once into the header, and nowhere else in the message.
-func TestFormatSlackText_NamedEnvironment(t *testing.T) {
+// TestChannel_NamedEnvironment checks that a named environment is inserted
+// once into the header, and nowhere else in the message body.
+func TestChannel_NamedEnvironment(t *testing.T) {
 	r := sampleReport()
 	r.Environment = inventory.Environment{Name: "prod-vps", Kind: inventory.KindDocker}
-	out := FormatSlackText(r)
+	msgs := BuildChannelMessages(Message{Report: r}, ChannelFooter{}, LanguageEN)
 
 	want := "🛡️ *KestreLynx* [prod-vps] — scan results for 2026-06-24 09:00\n"
-	if !strings.HasPrefix(out, want) {
-		t.Errorf("header = %q, want prefix %q", out, want)
+	if got := msgs[0].Blocks[0].Text; !strings.HasPrefix(got, want) {
+		t.Errorf("header = %q, want prefix %q", got, want)
 	}
-	if n := strings.Count(out, "prod-vps"); n != 1 {
-		t.Errorf("environment name must appear exactly once, got %d occurrence(s):\n%s", n, out)
+	if n := strings.Count(allBlocksText(msgs), "prod-vps"); n != 1 {
+		t.Errorf("environment name must appear exactly once in the body, got %d", n)
 	}
 }
 
-// TestFormatSlackDiffText_NamedEnvironment is the diff-mode counterpart of
-// TestFormatSlackText_NamedEnvironment.
-func TestFormatSlackDiffText_NamedEnvironment(t *testing.T) {
+// TestChannel_NamedEnvironmentDiff is the diff-mode counterpart of
+// TestChannel_NamedEnvironment.
+func TestChannel_NamedEnvironmentDiff(t *testing.T) {
 	r, d := diffFixture()
 	r.Environment = inventory.Environment{Name: "prod-vps", Kind: inventory.KindDocker}
-	out := FormatSlackDiffText(r, d, false, false)
+	msgs := BuildChannelMessages(Message{Report: r, Diff: &d}, ChannelFooter{}, LanguageEN)
 
 	want := "🛡️ *KestreLynx* [prod-vps] — scan results for 2026-06-24 09:00\n"
-	if !strings.HasPrefix(out, want) {
-		t.Errorf("header = %q, want prefix %q", out, want)
+	if got := msgs[0].Blocks[0].Text; !strings.HasPrefix(got, want) {
+		t.Errorf("header = %q, want prefix %q", got, want)
 	}
-	if n := strings.Count(out, "prod-vps"); n != 1 {
-		t.Errorf("environment name must appear exactly once, got %d occurrence(s):\n%s", n, out)
+	if n := strings.Count(allBlocksText(msgs), "prod-vps"); n != 1 {
+		t.Errorf("environment name must appear exactly once in the body, got %d", n)
 	}
 }
 
-// TestBuildThreadMessages_EnvironmentUnaffected checks that the thread report
-// renderer — which has no header line and is documented (judgment 5 of the
-// environment/workload model) as unaffected by the environment model — really
-// does render identically whether or not the report carries a named
-// environment, and never leaks the name into its output.
-func TestBuildThreadMessages_EnvironmentUnaffected(t *testing.T) {
-	unnamed := BuildThreadMessages(sampleReport(), Ages{Finding: seenDaysAgo(3)}, 0)
+// TestThread_EnvironmentUnaffected checks that the thread report — which has
+// no header line — renders identically whether or not the report carries a
+// named environment, and never leaks the name into its output.
+func TestThread_EnvironmentUnaffected(t *testing.T) {
+	unnamed := BuildThreadBlockMessages(sampleReport(), Ages{Finding: seenDaysAgo(3)}, LanguageEN)
 
 	named := sampleReport()
 	named.Environment = inventory.Environment{Name: "prod-vps", Kind: inventory.KindDocker}
-	withEnv := BuildThreadMessages(named, Ages{Finding: seenDaysAgo(3)}, 0)
+	withEnv := BuildThreadBlockMessages(named, Ages{Finding: seenDaysAgo(3)}, LanguageEN)
 
 	if !reflect.DeepEqual(unnamed, withEnv) {
 		t.Errorf("thread report changed with a named environment:\nunnamed: %#v\nnamed:   %#v", unnamed, withEnv)
 	}
-	for _, msg := range withEnv {
-		if strings.Contains(msg, "prod-vps") {
-			t.Errorf("thread report must never render the environment name:\n%s", msg)
+	for _, m := range withEnv {
+		if strings.Contains(allBlocksText([]SlackMessage{m}), "prod-vps") || strings.Contains(m.Text, "prod-vps") {
+			t.Errorf("thread report must never render the environment name:\n%s", dumpMessages([]SlackMessage{m}))
 		}
 	}
 }

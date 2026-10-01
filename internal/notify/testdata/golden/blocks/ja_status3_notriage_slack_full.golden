@@ -1,0 +1,70 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 未解決の所見の全体 — ✅ 修正版あり3件 · ℹ️ 修正版なし3件 · 🔕 上流の修正予定なし2件
+--- section ---
+🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果
+イメージ3件をスキャン、2件に影響あり
+_未解決の所見の全体_
+--- section ---
+*優先度:* 🔴 CRITICAL 3件 · 🟠 要注意1件 · 🟢 安全1件
+--- divider ---
+--- section ---
+*✅ 今すぐ対応可能 (fixed)*
+--- section ---
+*イメージ: web:1.0*
+🔴 CRITICAL 1 / HIGH 1
+*◆ openssl*
+現在: 3.0.7 · 修正版: 3.0.11 (🟢 ディストリのセキュリティパッチ)
+検出件数: CRITICAL 1 / HIGH 0
+--- section ---
+低リスクの修正 +1件 (HIGH 1): dpkg
+--- section ---
+*イメージ: api:2.0*
+🟠 CRITICAL 0 / HIGH 1
+*◆ setuptools* [python-pkg]
+現在: 53.0.0 · 修正版: 78.1.1 (🟠 メジャーバージョン更新 — 要注意)
+検出件数: CRITICAL 0 / HIGH 1
+--- divider ---
+--- section ---
+*ℹ️ 修正版なし (affected / 上流の対応待ち)*
+--- section ---
+*イメージ: web:1.0*
+🔴 CRITICAL 1 / HIGH 1
+*◆ e2fsprogs*
+現在: 1.47.0-2 · 修正版: なし
+検出件数: CRITICAL 1 / HIGH 0
+--- section ---
+*◆ openssl*
+現在: 3.0.7 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 1
+--- section ---
+*イメージ: api:2.0*
+🟠 CRITICAL 0 / HIGH 2
+*◆ libxml2*
+現在: 2.9.14 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 2
+--- divider ---
+--- section ---
+*🔕 上流では修正予定なし (will_not_fix)*
+--- section ---
+*イメージ: web:1.0*
+🔴 CRITICAL 1 / HIGH 0
+*◆ gcc-12-base*
+現在: 12.2.0-14 · 修正版: なし
+検出件数: CRITICAL 1 / HIGH 0
+--- section ---
+*イメージ: api:2.0*
+🟠 CRITICAL 0 / HIGH 1
+*◆ zlib*
+現在: 1.2.13 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 1
+--- divider ---
+--- section ---
+*⚠️ スキャン失敗*
+• broken:1 — 実体未確認: 参照によるスキャン — pull failed
+--- context ---
+⚠️ 実体未確認: 参照によるスキャン — broken:1
+--- section ---
+_低リスクの修正1件を集約_
+--- divider ---
+--- context ---
+📊 未解決の所見の全体はこのメッセージのスレッド ↓

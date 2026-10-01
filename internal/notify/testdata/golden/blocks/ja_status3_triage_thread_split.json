@@ -1,0 +1,174 @@
+[
+  {
+    "text": "未解決の所見の全体 — 🚨 今すぐ対応 · web:1.0 ほか1イメージ (2パッケージ)",
+    "blocks": [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "📊 *未解決の所見の全体 — 2026-06-24 09:00*\n\n*🚨 今すぐ対応 (3件) — 悪用あり、または悪用の可能性が高い*\n*イメージ: web:1.0*"
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*◆ openssl*\n現在: 3.0.7\n修正版: 3.0.11\n更新の注意度: 🟢 ディストリのセキュリティパッチ\n検出件数: CRITICAL 1 / HIGH 0"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001\u003e · CRITICAL · EPSS 94%\n悪用情報: CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃\n説明: openssl: buffer overread\n参照: \u003chttps://avd.example/CVE-2031-0001|アドバイザリ\u003e · \u003chttps://vendor.example/advisory/1|ベンダーのアドバイザリ\u003e"
+        }
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": "⏱ 未解決20日 · 初回検出2026-06-04"
+          }
+        ]
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*イメージ: api:2.0*"
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*◆ libxml2*\n現在: 2.9.14\n修正版: なし — 緩和策を検討\n検出件数: CRITICAL 0 / HIGH 2"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0006|CVE-2031-0006\u003e · HIGH · EPSS 20%\n説明: libxml2: use-after-free\n参照: \u003chttps://avd.example/CVE-2031-0006|アドバイザリ\u003e\nほかのCVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007\u003e"
+        }
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": "⏱ 未解決20日 · 初回検出2026-06-04"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "text": "未解決の所見の全体 — 🚨 今すぐ対応 (続き) · api:2.0 ほか1イメージ (2パッケージ)",
+    "blocks": [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*🚨 今すぐ対応 (3件) — 悪用あり、または悪用の可能性が高い* _(続き)_\n*イメージ: api:2.0* _(続き)_"
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*◆ zlib*\n現在: 1.2.13\n修正版: なし — 上流では修正予定なし、置き換えを検討\n検出件数: CRITICAL 0 / HIGH 1"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009\u003e · HIGH · EPSS 50%\n悪用情報: CISA KEV (実際の攻撃で悪用あり)"
+        }
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": "⏱ 本日初検出"
+          }
+        ]
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*👀 要監視 (1件) — 緊急性は低いが継続監視*\n*イメージ: web:1.0*"
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*◆ e2fsprogs*\n現在: 1.47.0-2\n修正版: なし — 緩和策を検討\n検出件数: CRITICAL 1 / HIGH 0"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003\u003e · CRITICAL · EPSS 3%\n説明: e2fsprogs: out-of-bounds write"
+        }
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": "⏱ 未解決20日 · 初回検出2026-06-04"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "text": "未解決の所見の全体 — 🔕 低優先度",
+    "blocks": [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*🔕 低優先度 (4件)* — 悪用の兆候なし"
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": "⚠️ 実体未確認: 参照によるスキャン — broken:1"
+          }
+        ]
+      }
+    ]
+  }
+]

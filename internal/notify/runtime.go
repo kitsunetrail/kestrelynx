@@ -12,11 +12,8 @@ import (
 	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
-	// Imported as rtevidence: this package (notify) already declares an
-	// unexported function named "evidence" (triage.go's writeEvidence
-	// helper), which is a package-level identifier shared across every file
-	// in the package — importing the evidence package under its own name
-	// anywhere in notify would collide with it.
+	// Imported as rtevidence to keep it apart from this package's own
+	// evidence-line helpers (triage.go).
 	rtevidence "github.com/kitsunetrail/kestrelynx/internal/evidence"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 	"github.com/kitsunetrail/kestrelynx/internal/state"
@@ -197,31 +194,20 @@ func eventsReasonText(r rtevidence.EventsReason, msg messages) string {
 	}
 }
 
-// writeRuntimeWarning renders the near-the-top warning: a general "runtime
-// evidence unavailable" line whenever the Sensor
-// itself isn't fully healthy, or — when the Sensor is otherwise fine but
-// its eBPF event collection specifically is not — the narrower warning that
-// short-lived programs are not being observed. No-op when runtime evidence
-// was never attached at all.
-func writeRuntimeWarning(b *strings.Builder, r analyze.Report, now time.Time, msg messages) {
+// runtimeWarning is the Sensor warning text ("" when there is nothing to
+// warn about), newline-terminated like every dictionary line.
+func runtimeWarning(r analyze.Report, now time.Time, msg messages) string {
 	if r.Runtime == nil {
-		return
+		return ""
 	}
 	status := runtimeDisplayStatus(r.Runtime, now)
 	switch {
 	case status != "ok":
-		fmt.Fprintf(b, msg.RuntimeWarningUnavailable, runtimeStatusText(status, msg))
+		return fmt.Sprintf(msg.RuntimeWarningUnavailable, runtimeStatusText(status, msg))
 	case r.Runtime.Sensor.Events.Status == rtevidence.EventsUnavailable:
-		fmt.Fprintf(b, msg.RuntimeWarningEventsUnavailable, eventsReasonText(r.Runtime.Sensor.Events.Reason, msg))
+		return fmt.Sprintf(msg.RuntimeWarningEventsUnavailable, eventsReasonText(r.Runtime.Sensor.Events.Reason, msg))
 	}
-}
-
-// runtimeInUse reports whether rt is an in-use verdict. It exists so callers
-// in files that cannot import the evidence package under its own name (this
-// package already declares an unexported "evidence" function — see triage.
-// go's writeEvidence) can still compare against rtevidence.UsageInUse.
-func runtimeInUse(rt analyze.Runtime) bool {
-	return rt.Usage == rtevidence.UsageInUse
+	return ""
 }
 
 // representativeContainer picks the container a package-level "in use"
@@ -240,30 +226,26 @@ func representativeContainer(rt analyze.Runtime) (analyze.ContainerRuntime, bool
 	return analyze.ContainerRuntime{}, false
 }
 
-// runtimeKindLabel is one evidence kind's human phrase, naming the
-// representative executable when one is known.
-func runtimeKindLabel(k rtevidence.EvidenceKind, exe string, msg messages) string {
-	suffix := ""
-	if exe != "" {
-		suffix = " " + escapeRuntimeText(exe)
-	}
+// runtimeKindWord is one evidence kind's human phrase, before any executable
+// name is attached to it.
+func runtimeKindWord(k rtevidence.EvidenceKind, msg messages) string {
 	switch k {
 	case rtevidence.KindExe:
-		return msg.KindRunningAs + suffix
+		return msg.KindRunningAs
 	case rtevidence.KindMappedLibrary:
-		return msg.KindLoadedBy + suffix
+		return msg.KindLoadedBy
 	case rtevidence.KindExecEvent:
-		return msg.KindExecutedEvt + suffix
+		return msg.KindExecutedEvt
 	case rtevidence.KindLibraryLoadEvent:
-		return msg.KindLibraryLoadEvent + suffix
+		return msg.KindLibraryLoadEvent
 	case rtevidence.KindBinaryRunning:
-		return msg.KindBinaryRunning + suffix
+		return msg.KindBinaryRunning
 	case rtevidence.KindBinaryExecuted:
-		return msg.KindBinaryExecuted + suffix
+		return msg.KindBinaryExecuted
 	case rtevidence.KindRuntimeRunning:
-		return msg.KindRuntimeRunning + suffix
+		return msg.KindRuntimeRunning
 	case rtevidence.KindRuntimeExecuted:
-		return msg.KindRuntimeExecuted + suffix
+		return msg.KindRuntimeExecuted
 	default:
 		// Unreachable in practice: evidence.Reader's read-time validation
 		// (validRecordedKinds) already strips any Kinds map entry outside
@@ -271,8 +253,18 @@ func runtimeKindLabel(k rtevidence.EvidenceKind, exe string, msg messages) strin
 		// evidence.Verdict from it, and the other four (the language-package
 		// display kinds) are all named above. Kept as a safe fallback rather
 		// than a panic, and never echoes k itself.
-		return msg.RuntimeInUseFallback + suffix
+		return msg.RuntimeInUseFallback
 	}
+}
+
+// runtimeKindLabel is one evidence kind's human phrase, naming the
+// representative executable when one is known.
+func runtimeKindLabel(k rtevidence.EvidenceKind, exe string, msg messages) string {
+	suffix := ""
+	if exe != "" {
+		suffix = " " + escapeRuntimeText(exe)
+	}
+	return runtimeKindWord(k, msg) + suffix
 }
 
 // runtimeExposureText is the display phrase for an in-use verdict's
@@ -290,8 +282,8 @@ func runtimeExposureText(e analyze.Exposure, msg messages) string {
 	}
 }
 
-// lastSeenText is the "last confirmed" clause runtimeInUsePhrase appends to
-// every in-use evidence line: the point this codebase actually re-observed
+// lastSeenText is the "last confirmed" clause the in-use runtime facts carry:
+// every in-use evidence block shows it: the point this codebase actually re-observed
 // the fact being shown, so an old sampling result or a past execution event
 // is never misread as something happening right now. "" for a zero time
 // (should not occur for an in-use container — buildContainerRuntime always
@@ -368,12 +360,27 @@ func runtimeProcessesPhrase(exes []string, msg messages) string {
 // record cannot always support the pairing, and buildContainerRuntime's for
 // why a container can be in_use with kinds but !HasProcess at all.
 func runtimeKindsPhrase(c analyze.ContainerRuntime, msg messages) string {
+	return kindsPhrase(c, msg, false)
+}
+
+// kindsPhrase is runtimeKindsPhrase; bare drops the trailing colon a kind
+// phrase may carry before the executable name ("実行中: `/bin/x`" becomes
+// "実行中 `/bin/x`"), for views that already put the phrase after a label.
+func kindsPhrase(c analyze.ContainerRuntime, msg messages, bare bool) string {
 	if len(c.EvidenceKinds) == 0 {
 		return msg.RuntimeInUseFallback
 	}
 	if c.HasProcess && !c.KindsAmbiguous {
 		labels := make([]string, 0, len(c.EvidenceKinds))
 		for _, k := range c.EvidenceKinds {
+			if bare {
+				suffix := ""
+				if c.Process.Exe != "" {
+					suffix = " " + escapeRuntimeText(c.Process.Exe)
+				}
+				labels = append(labels, strings.TrimSuffix(runtimeKindWord(k, msg), ":")+suffix)
+				continue
+			}
 			labels = append(labels, runtimeKindLabel(k, c.Process.Exe, msg))
 		}
 		return strings.Join(labels, ", ")
@@ -389,32 +396,34 @@ func runtimeKindsPhrase(c analyze.ContainerRuntime, msg messages) string {
 	return phrase
 }
 
-// runtimeInUsePhrase is the full "▶ in use (...) · ..." line shown under an
-// act-now package's evidence line and in the thread: the evidence kind(s),
-// the exposure stage, a privilege note and the last-confirmed time — all
-// four taken from the single strongest in-use container
-// (representativeContainer), never mixed across containers. Only ever
-// called on an in-use Runtime — callers check rt.Usage ==
-// rtevidence.UsageInUse first.
-func runtimeInUsePhrase(rt analyze.Runtime, msg messages) string {
+// inUseFacts are the separate facts behind an in-use verdict, all taken from
+// the single representative container: the evidence kind(s) (with the
+// executable that produced them, when that pairing is trustworthy), the
+// exposure stage, whether it runs privileged, and the last-confirmed time.
+// A card shows each on its own line.
+type inUseFacts struct {
+	Evidence      string
+	EvidenceBare  string // Evidence without a colon before the executable name
+	Exposure      string // "" when unknown
+	HighPrivilege bool
+	LastSeen      time.Time // zero when unknown
+}
+
+// runtimeInUseFacts collects the facts of an in-use Runtime from its
+// representative container. ok is false when rt carries no such container
+// (unreachable for a well-formed in-use Runtime).
+func runtimeInUseFacts(rt analyze.Runtime, msg messages) (inUseFacts, bool) {
 	c, ok := representativeContainer(rt)
 	if !ok {
-		// Unreachable for a well-formed in-use Runtime (AttachRuntime always
-		// records the container(s) it judged in use); kept as a safe,
-		// non-panicking fallback.
-		return msg.InUseFallbackArrow
+		return inUseFacts{}, false
 	}
-	parts := []string{fmt.Sprintf(msg.InUsePrefix, runtimeKindsPhrase(c, msg))}
-	if s := runtimeExposureText(c.Exposure, msg); s != "" {
-		parts = append(parts, s)
-	}
-	if c.HighPrivilege {
-		parts = append(parts, msg.HighPrivilegeNote)
-	}
-	if s := lastSeenText(c.LastSeen, msg); s != "" {
-		parts = append(parts, s)
-	}
-	return strings.Join(parts, " · ")
+	return inUseFacts{
+		Evidence:      runtimeKindsPhrase(c, msg),
+		EvidenceBare:  kindsPhrase(c, msg, true),
+		Exposure:      runtimeExposureText(c.Exposure, msg),
+		HighPrivilege: c.HighPrivilege,
+		LastSeen:      c.LastSeen,
+	}, true
 }
 
 // runtimeShortWord picks the one-word evidence summary the watch bucket and
@@ -436,34 +445,12 @@ func runtimeShortWord(kinds []rtevidence.EvidenceKind, msg messages) string {
 	}
 }
 
-// runtimeWatchSuffix is the compact " · ▶ in use (running / executed /
-// loaded)" suffix appended to a watch-bucket package line. "" when rt is not
-// in use (including runtime disabled, where Usage is always "").
-func runtimeWatchSuffix(rt analyze.Runtime, msg messages) string {
-	if rt.Usage != rtevidence.UsageInUse {
-		return ""
-	}
-	return fmt.Sprintf(msg.WatchInUseSuffix, runtimeShortWord(rt.EvidenceKinds, msg))
-}
-
-// runtimeChangeSuffix is the diff-mode change list's runtime annotation for
-// one package group: the same compact suffix the watch bucket uses, except
-// for an act_now group, where the caller shows the full "▶ in use (...)"
-// phrase right under the evidence line instead (mirroring the act-now bucket
-// itself) — so this returns "" there rather than duplicating the note.
-func runtimeChangeSuffix(g analyze.PackageGroup, msg messages) string {
-	if g.Priority == analyze.PriorityActNow {
-		return ""
-	}
-	return runtimeWatchSuffix(g.Runtime, msg)
-}
-
 // runtimeCounts tallies every package group's Runtime.Usage across every
 // status section of r — the full-view summary line's "N in use / N not
 // observed / N unavailable" — plus, separately, how many of those groups are
 // Muted. A group whose Runtime was never attached (Usage == "") counts
 // toward none of the first three, which is what keeps this a no-op tally
-// when runtime is disabled (writeRuntimeSummary never calls it in that case
+// when runtime is disabled (the summary line never calls it in that case
 // regardless, since it also gates on r.Runtime == nil, but the tally itself
 // is correct either way). muted overlaps notObserved by construction
 // (analyze.ApplyMuting only ever mutes a not-observed group) rather
@@ -498,15 +485,6 @@ func runtimeCounts(r analyze.Report) (inUse, notObserved, unavailable, muted int
 func mutedCount(r analyze.Report) int {
 	_, _, _, muted := runtimeCounts(r)
 	return muted
-}
-
-// writeMutedCount appends the muted-findings summary line: the one
-// place a muted finding's existence still shows once its own row has
-// been hidden. No-op when nothing is muted this cycle.
-func writeMutedCount(b *strings.Builder, r analyze.Report, msg messages) {
-	if n := mutedCount(r); n > 0 {
-		fmt.Fprintf(b, "\n"+msg.MutedLine, n)
-	}
 }
 
 // filterMuted returns imgs with every Muted PackageGroup removed, and
@@ -642,18 +620,6 @@ func countInUse(imgs []analyze.ImageFindings) int {
 	return n
 }
 
-// writeRuntimeSummary appends the full-view tail line: the three usage
-// counts, plus the fixed explanatory note that "not observed" only covers
-// the observation window. No-op when runtime evidence was never attached.
-func writeRuntimeSummary(b *strings.Builder, r analyze.Report, msg messages) {
-	if r.Runtime == nil {
-		return
-	}
-	inUse, notObserved, unavailable, _ := runtimeCounts(r)
-	fmt.Fprintf(b, msg.RuntimeSummaryCounts, inUse, notObserved, unavailable)
-	b.WriteString(msg.RuntimeSummaryNote)
-}
-
 // runtimeUsageOf is the webhook diff's projected runtime usage across a set
 // of merged analyze.PackageGroups (diff.new[]/new_eol_packages[].
 // runtime_usage): in_use if any is, else unavailable if any is, else
@@ -750,24 +716,4 @@ func containerRuntimePayload(c analyze.ContainerRuntime) findingRuntimeContainer
 		})
 	}
 	return p
-}
-
-// writeRuntimeThreadLine renders the thread's one-line-per-package runtime
-// state: the full "in use" phrase, a "not observed" line
-// (with a short-lived-programs caveat when event coverage did not span the
-// whole generation), or the unavailable reason. No-op when rt was never
-// attached.
-func writeRuntimeThreadLine(b *strings.Builder, rt analyze.Runtime, msg messages) {
-	switch rt.Usage {
-	case rtevidence.UsageInUse:
-		fmt.Fprintf(b, "     %s\n", runtimeInUsePhrase(rt, msg))
-	case rtevidence.UsageNotObserved:
-		line := msg.ThreadNotObserved
-		if rt.EventsCoverage != rtevidence.CoverageSinceStart {
-			line += msg.ThreadNotObservedShortLived
-		}
-		fmt.Fprintf(b, "     %s\n", line)
-	case rtevidence.UsageUnavailable:
-		fmt.Fprintf(b, "     %s\n", fmt.Sprintf(msg.ThreadRuntimeUnavailable, reasonText(rt.Reason, msg)))
-	}
 }

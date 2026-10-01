@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kitsunetrail/kestrelynx/internal/notify"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
@@ -38,7 +37,7 @@ func TestRunOnce_DiffMode_HoldingUnconfirmedEOLOnlyForcesNotification(t *testing
 	if !notif.called || !notif.msg.Holding {
 		t.Fatalf("called = %v, Holding = %v: a held end-of-life record must force a holding notification", notif.called, notif.msg.Holding)
 	}
-	out := notify.FormatSlackDiffText(notif.msg.Report, *notif.msg.Diff, notif.msg.FullReport, notif.msg.Holding)
+	out := channelText(notif.msg)
 	if strings.Contains(out, "all clear") || !strings.Contains(out, "holding previous findings") {
 		t.Errorf("expected the holding line:\n%s", out)
 	}

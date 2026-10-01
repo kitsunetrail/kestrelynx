@@ -1,0 +1,51 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 未解決の所見の全体 — 🚨 今すぐ対応1件 · 👀 要監視2件 · 🔕 低優先度2件
+--- section ---
+🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果
+イメージ2件をスキャン、2件に影響あり
+_未解決の所見の全体_
+--- section ---
+*優先度:* 🚨 今すぐ対応1件 · 👀 要監視2件 · 🔕 低優先度2件
+--- divider ---
+--- section ---
+*🚨 今すぐ対応 (1件) — 悪用あり、または悪用の可能性が高い*
+*イメージ: web:1.0*
+--- section ---
+*◆ openssl*
+現在: 3.0.7
+修正版: なし — 緩和策を検討
+検出件数: CRITICAL 1 / HIGH 0
+--- section ---
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> · CRITICAL · EPSS n/a
+悪用情報: CISA KEV (実際の攻撃で悪用あり)
+参照: <https://avd.example/CVE-OPENSSL|アドバイザリ>
+--- section ---
+使用状況: ▶ 使用中
+観測根拠: 実行中 `/usr/sbin/nginx`
+公開状態: 全インターフェースに公開 · 高い権限で実行 · 最終確認06-24 09:00
+--- divider ---
+--- section ---
+*👀 要監視 (2件) — 緊急性は低いが継続監視*
+--- section ---
+*イメージ: api:2.0*
+*◆ setuptools* [python-pkg]
+現在: 53.0.0 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 1
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · EPSS 2%
+使用状況: ▶ 使用中 (実行中)
+--- section ---
+*イメージ: web:1.0*
+*◆ curl*
+現在: 8.0.0 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 1
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · EPSS 2%
+--- divider ---
+--- section ---
+*🔕 低優先度 (2件)* — イメージ2件で所見2件、悪用の兆候なし (KEV未掲載、EPSSはしきい値未満)
+--- section ---
+🔎 *稼働時の使用状況:* ▶ 使用中2件 · 使用が確認されない2件 · 判定できない1件
+--- context ---
+使用中: OSパッケージは稼働中のプログラムが実行または読み込み。言語パッケージは稼働中のバイナリに含まれるか、その実行環境 (python, node, java, …) が稼働中。使用が確認されないとは観測期間内に限った状態であり、未使用を意味しない。
+--- divider ---
+--- context ---
+📊 未解決の所見の全体はこのメッセージのスレッド ↓

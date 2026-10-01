@@ -29,7 +29,7 @@ const (
 // and any field taking two or more verbs uses positional (%[1]s-style)
 // verbs so a translation can reorder them freely.
 type messages struct {
-	// --- header / role line (format.go: writeHeader, writeRoleLine, FormatSlackText, FormatSlackDiffText) ---
+	// --- header / role line ---
 	HeaderNamed                string // "🛡️ *KestreLynx* [%[1]s] — scan results for %[2]s\n" (environment name, generated-at)
 	HeaderDefault              string // "🛡️ *KestreLynx* — scan results for %s\n" (generated-at)
 	RoleEverythingOpen         string // "Everything currently open."
@@ -39,36 +39,34 @@ type messages struct {
 	LowerRiskSummarizedWebhook string // "\n_%d lower-risk fix(es) summarized — full list in the generic webhook payload._\n"
 	LowerRiskSummarized        string // "\n_%d lower-risk fix(es) summarized._\n"
 
-	// --- diff mode framing (format.go: FormatSlackDiffText) ---
+	// --- diff mode framing ---
 	NoChangesSinceLastScan  string // "\nNo changes since last scan.\n"
 	HeadingNewEOSL          string // "\n*⛔ New: base OS end-of-life (top priority)*\n"
-	NewEOSLNote             string // " · includes %d newly end-of-life package(s)"
 	WeeklyFullReportHeading string // "\n*📋 Weekly full report — everything currently open*\n"
 
-	// --- replaced images (format.go: writeReplaced) ---
+	// --- replaced images ---
 	ReplacedHeading string // "\n*🔄 Image content changed (%d)*\n"
 	ReplacedLine    string // "• %[1]s: image updated (%[2]s → %[3]s)\n" (ref, prev digests, new digests)
 
-	// --- identity / unresolved references (format.go: imageLabel, refLabel, unresolvedRefsLine, unconfirmedRefsLine) ---
+	// --- identity / unresolved references ---
 	IdentityUnconfirmed string // "identity unconfirmed: scanned by reference"
 	UnresolvedRefsLine  string // "⚠️ %[1]s — %[2]s\n" (IdentityUnconfirmed text, comma-joined refs)
 	UnconfirmedRefsLine string // "⏳ unconfirmed this cycle, holding previous findings — %s\n" (comma-joined refs)
 
-	// --- new/changed findings (format.go: writeChanges, changeSuffixParts, newCVEsSuffix; shared with triage.go: writeTriageChanges) ---
+	// --- new/changed findings ---
 	NewSinceLastScanHeading string // "\n*🆕 New since last scan (%d)*\n"
-	NewCVEsPrefix           string // "new: %s" (linked CVE ids)
 	MoreCount               string // " (+%d more)" — shared by the new-CVE-id list, the collapsed lower-risk list, the runtime process list and the thread's "also:" list
 	EscalatedTo             string // "⬆️ escalated to %s" (priority label: ACT NOW/WATCH/LOW)
 	FixNowAvailable         string // "fix now available"
 	Unmuted                 string // "↩️ Unmuted (%s)" (unmutedReason text)
 
-	// --- resolved findings (format.go: writeResolved) ---
+	// --- resolved findings ---
 	ResolvedHeading       string // "\n*✅ Resolved since last scan (%d)*\n"
 	BaseOSNoLongerEOL     string // "• %s — base OS no longer EOL\n" (ref)
 	ResolvedImagePackages string // "• %[1]s: %[2]s\n" (ref, comma-joined packages)
 	NoLongerEndOfLife     string // "• %[1]s: %[2]s — no longer end-of-life\n" (ref, package)
 
-	// --- "open now" heartbeat, triage-off (format.go: writeNothingOpenNow, writeOpenNow) ---
+	// --- "open now" heartbeat, triage-off ---
 	OpenNowUnconfirmedHolding string // "\n📌 Open now: unconfirmed — holding previous findings until re-confirmed\n"
 	OpenNowNotRescanned       string // "\n📌 Open now: not re-scanned — holding previous findings until the next successful scan\n"
 	OpenNowAllClear           string // "\n🎉 Open now: none — all clear\n"
@@ -78,64 +76,51 @@ type messages struct {
 	OldestUnresolved          string // " — oldest unresolved %d day(s)"
 	DetailsInWebhook          string // "_Details in the generic webhook payload._\n"
 
-	// --- EOL/CRITICAL/care/safe segments (format.go: openNowEOLSegments, writeHeadline; shared with triage.go: writeTriageHeadline, writeTriageOpenNow) ---
+	// --- EOL/CRITICAL/care/safe segments ---
 	SegEOLBase    string // "⛔ %d EOL base"
 	SegEOLPackage string // "⛔ %d EOL package"
 	SegCritical   string // "🔴 %d CRITICAL"
 	SegNeedCare   string // "🟠 %d need care"
 	SegSafe       string // "🟢 %d safe"
-	SegWatch      string // "👀 %d watch" — shared by writeTriageHeadline and writeTriageOpenNow
-	SegLow        string // "🔕 %d low" — shared by writeTriageHeadline and writeTriageOpenNow
-	PriorityLine  string // "*Priority:* %s\n" (joined segments) — shared by writeHeadline and writeTriageHeadline
+	SegWatch      string // "👀 %d watch" — shared by the priority line and the open-now line
+	SegLow        string // "🔕 %d low" — shared by the priority line and the open-now line
+	PriorityLine  string // "*Priority:* %s\n" (joined segments)
 
-	// --- scan failures (format.go: writeScanErrors) ---
+	// --- scan failures ---
 	ScanFailuresHeading string // "\n*⚠️ Scan failures*\n"
 	ScanFailureLine     string // "• %[1]s — %[2]s\n" (ref, error text)
 
-	// --- status sections, triage off (format.go: writeActionable, writeSection, writePackage) ---
-	ActionableTitle       string // "✅ Actionable now (fixed)" (bare title; format.go wraps it "\n*%s*\n", thread.go wraps it "*%s*")
-	WatchSectionTitle     string // "ℹ️ No fix yet (affected / waiting on upstream)"
-	WontFixSectionTitle   string // "🔕 Upstream won't fix (will_not_fix)"
-	SectionHeading        string // "\n*%s*\n" (a title above)
-	ImageCritHighLine     string // "%[1]s %[2]s  CRITICAL %[3]d / HIGH %[4]d\n" (emoji, image label, critical count, high count)
-	PackageFixedLine      string // "%[1]s %[2]s → %[3]s" (package, installed version, fixed version)
-	PackageEOLLine        string // "%[1]s %[2]s (%[3]s)" (package, installed version, EOLPackageText)
-	PackageNoFixLine      string // "%[1]s %[2]s (no fix available)" (package, installed version)
-	PackageSeverityCounts string // " (CRITICAL %[1]d / HIGH %[2]d)"
-	CollapsedLine         string // "   • +%[1]d lower-risk fixes (%[2]s): %[3]s" (count, severity summary, comma-joined names)
+	// --- status sections, triage off ---
+	ActionableTitle     string // "✅ Actionable now (fixed)" (bare title; format.go wraps it "\n*%s*\n", thread.go wraps it "*%s*")
+	WatchSectionTitle   string // "ℹ️ No fix yet (affected / waiting on upstream)"
+	WontFixSectionTitle string // "🔕 Upstream won't fix (will_not_fix)"
 
-	// --- upgrade-risk labels (format.go: riskLabel) ---
+	// --- upgrade-risk labels ---
 	RiskDistroUpdate string // "🟢 upgrade: distro security patch"
 	RiskSafe         string // "🟢 upgrade: low-risk"
 	RiskCaution      string // "🟠 upgrade: major version bump — needs care"
 	RiskUnknown      string // "⚪ upgrade: risk unknown"
 
-	// --- end-of-life wording (format.go consts; used across format.go/triage.go/eol.go/thread.go) ---
+	// --- end-of-life wording ---
 	EOLPackageText   string // "end-of-life: no fix planned for this release"
 	EOLSectionReason string // "vendor reports these CVEs as out of support for this release"
-	EOLEvidenceMark  string // " — end-of-life: no fix planned for this release, consider a supported version"
-	EOLSeeActNow     string // " — 🚨 see Act now"
 
-	// --- triage headline / intel warnings (triage.go: writeTriageHeadline, writeIntelWarning, writeIntelStale) ---
-	SegActNow            string // "🚨 %d act now" (writeTriageHeadline only; writeTriageOpenNow uses OpenNowActNow instead)
+	// --- triage headline / intel warnings ---
+	SegActNow            string // "🚨 %d act now" (the priority line only; the open-now line uses OpenNowActNow instead)
 	IntelDegradedWarning string // "⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low\n"
 	IntelKEVUnavailable  string // "⚠️ CISA KEV data unavailable — act-now detection may be incomplete\n"
 	IntelEPSSUnavailable string // "⚠️ EPSS data unavailable — triage is using KEV and severity only\n"
 	IntelStale           string // "\n_Intel data is %d day(s) old (feeds unreachable)._\n"
 
-	// --- act now / watch / low buckets (triage.go: writeActNow, writeWatch, writeLow) ---
+	// --- act now / watch / low buckets ---
 	ActNowHeading       string // "\n*🚨 Act now (%d) — exploited or likely to be*\n"
-	ImageBullet         string // "• %s\n" (image label) — shared by writeActNow and writeWatch
 	WatchHeading        string // "\n*👀 Watch (%d) — not urgent, keep an eye on*\n"
 	LowHeading          string // "\n*🔕 Low priority (%[1]d)* — %[2]d finding(s) across %[3]d image(s), no exploitation signal (not in KEV, EPSS below threshold)."
 	TriageLowInUseCount string // " · ▶ %d in use"
 
-	// --- evidence lines (triage.go: writeEvidence, writeRefs, evidenceLine, shortEvidence) ---
-	EvidenceMoreCVEs   string // " (+%d more CVE(s) in this package)"
-	NoFixYetMitigation string // " — no fix yet, consider mitigation" — shared by triage.go writeEvidence and thread.go writeThreadDetail
-	WontFixReplace     string // " — upstream won't fix, consider replacing" — shared by triage.go writeEvidence and thread.go writeThreadDetail
-	AdvisoryLinkLabel  string // "advisory" (Slack link label text)
-	AdvisoryLink       string // "<%[1]s|%[2]s>" (url, label)
+	// --- evidence lines ---
+	EvidenceMoreCVEs  string // " (+%d more CVE(s) in this package)"
+	AdvisoryLinkLabel string // "advisory" (Slack link label text)
 	// VendorAdvisoryLinkLabel replaces analyze.Ref.Label as the Slack link
 	// text for a "vendor" reference (the KEV note's advisory link) — display
 	// only: analyze.Ref.Label itself and the webhook payload's ref label
@@ -143,15 +128,12 @@ type messages struct {
 	// format.go's refPayload). A "discussion" reference (the HN link) is
 	// unaffected and keeps using ref.Label as-is.
 	VendorAdvisoryLinkLabel string // "vendor advisory"
-	RefsLine                string // "       📎 %s\n" (joined reference links)
 	EvidenceSeverityOnly    string // "severity only (intel unavailable)"
 	EvidenceKEV             string // "CISA KEV (exploited in the wild)"
 	EvidenceEPSSPrefix      string // "EPSS %s" (epssString result)
 	EvidenceRansomware      string // "🧨 ransomware campaign"
-	ShortEvidenceKEV        string // " · CISA KEV"
-	ShortEvidenceEPSSPrefix string // " · EPSS %s" (epssString result)
 
-	// --- diff-mode triage (triage.go: writeTriageOpenNow) ---
+	// --- diff-mode triage ---
 	OpenNowActNow          string // "🚨 %d act-now"
 	OldestActNowWatchStale string // " — ⏰ oldest act-now/watch unresolved %d day(s)"
 	OldestActNowWatch      string // " — oldest act-now/watch unresolved %d day(s)"
@@ -159,36 +141,30 @@ type messages struct {
 	PriorityLabelWatch     string // "WATCH"
 	PriorityLabelLow       string // "LOW"
 
-	// --- end-of-life sections (eol.go) ---
-	FoldedEOLNote             string // " · includes %d end-of-life package(s)"
-	EOSLLine                  string // "• %[1]s — base OS is EOL (no more security updates coming)%[2]s\n" (ref, FoldedEOLNote) — shared by format.go's diff loop and eol.go's eosLine
+	// --- end-of-life sections ---
 	EOSLHeading               string // "\n*⛔ Base OS end-of-life (top priority)*\n"
 	EOLPackageHeading         string // "\n*⛔ Package end-of-life (%[1]d) — %[2]s*\n" (count, EOLSectionReason)
 	EOLPackagesChangedHeading string // "\n*⛔ New: package end-of-life (%[1]d) — %[2]s*\n" (count, EOLSectionReason)
 	EOLFoldNewPackages        string // "%d package(s) newly end-of-life"
 	EOLFoldWithNewCVEs        string // "%d end-of-life package(s) with new CVEs"
-	EOLFoldLine               string // "• %[1]s — %[2]s (base OS already EOL)\n" (ref, joined change descriptions)
 
-	// --- thread report (thread.go) ---
+	// --- thread report ---
 	ThreadTitle              string // "📊 *Everything open now — %s*" (generated-at)
 	EOLBaseImagesHeading     string // "*⛔ EOL base images (%d)*"
-	MutedLine                string // "🔇 Muted — no fix available and not in use for 7+ days: %d\n" — shared by runtime.go's writeMutedCount and thread.go
+	MutedLine                string // "🔇 Muted — no fix available and not in use for 7+ days: %d\n"
 	ThreadActNowHeading      string // "*🚨 ACT NOW (%d) — exploited or likely to be*"
 	ThreadWatchHeading       string // "*👀 WATCH (%d) — not urgent, keep an eye on*"
 	ThreadLowHeading         string // "\n*🔕 LOW (%d)* — no exploitation signal"
 	ThreadLowDetailsSuffix   string // "; details in the generic webhook payload"
 	ThreadLowInUseCount      string // "▶ in use among low: %d\n"
 	EOLPackagesThreadHeading string // "*⛔ EOL packages (%[1]d) — %[2]s*" (count, EOLSectionReason)
-	ThreadImageAgeLine       string // "     ⏱ open %[1]d day(s) — first seen %[2]s\n" (days, formatted date)
-	ThreadFirstSeenToday     string // "     ⏱ first seen today\n"
-	ThreadAlsoIDs            string // "     also: %s" (comma-joined CVE ids)
 	ThreadContinued          string // " _(cont.)_" (appended to a section title repeated on a later message)
 
-	// --- runtime warnings (runtime.go: writeRuntimeWarning) ---
+	// --- runtime warnings ---
 	RuntimeWarningUnavailable       string // "⚠️ Runtime evidence unavailable: %s\n" (status text)
 	RuntimeWarningEventsUnavailable string // "⚠️ Short-lived programs are not observed (eBPF unavailable: %s); using sampling only\n" (events reason text)
 
-	// --- Sensor status text (runtime.go: runtimeStatusText) ---
+	// --- Sensor status text ---
 	StatusTextNotReporting      string // "the Sensor has not reported yet"
 	StatusTextEvidenceInvalid   string // "the evidence file failed validation"
 	StatusTextStale             string // "the Sensor's last report is stale"
@@ -199,7 +175,7 @@ type messages struct {
 	StatusTextOK                string // "ok"
 	StatusTextUnknown           string // "unknown" (runtimeStatusText's own default branch)
 
-	// --- unavailable-package reason text (runtime.go: reasonText) ---
+	// --- unavailable-package reason text ---
 	ReasonSensorNotReporting   string // "sensor not reporting"
 	ReasonSensorStale          string // "sensor report is stale"
 	ReasonEvidenceInvalid      string // "evidence invalid"
@@ -223,7 +199,7 @@ type messages struct {
 	ReasonBinaryPathUnknown    string // "binary path unknown"
 	ReasonUnknown              string // "unknown" (reasonText's own default branch)
 
-	// --- eBPF events-unavailable reason text (runtime.go: eventsReasonText) ---
+	// --- eBPF events-unavailable reason text ---
 	EventsReasonKernelUnsupported string // "kernel unsupported"
 	EventsReasonBTFMissing        string // "BTF missing"
 	EventsReasonPermission        string // "permission denied"
@@ -231,7 +207,7 @@ type messages struct {
 	EventsReasonCgroupV1          string // "cgroup v1"
 	EventsReasonUnknown           string // "unknown" (eventsReasonText's own default branch)
 
-	// --- in-use evidence phrasing (runtime.go: runtimeKindLabel, runtimeKindPhraseUnattributed, runtimeKindsPhrase, runtimeInUsePhrase) ---
+	// --- in-use evidence phrasing ---
 	KindRunningAs        string // "running as" (+ escaped executable path)
 	KindLoadedBy         string // "loaded by" (+ escaped executable path)
 	KindExecutedEvt      string // "executed" (+ escaped executable path)
@@ -246,25 +222,24 @@ type messages struct {
 	HighPrivilegeNote    string // "runs with elevated privilege"
 	LastConfirmedPrefix  string // "last confirmed %s" (formatted timestamp)
 
-	// --- unattributed evidence phrasing (runtime.go: runtimeKindPhraseUnattributed) ---
+	// --- unattributed evidence phrasing ---
 	UnattrRunning             string // "running"
 	UnattrLoadedAsLibrary     string // "loaded as a library"
 	UnattrExecuted            string // "executed"
 	UnattrLibraryLoadObserved string // "library load observed"
 	ProcessesPrefix           string // "processes: %s" (comma-joined executable names)
 
-	// --- compact watch-bucket wording (runtime.go: runtimeShortWord, runtimeWatchSuffix) ---
+	// --- compact watch-bucket wording ---
 	ShortWordRunning  string // "running"
 	ShortWordLoaded   string // "loaded"
 	ShortWordExecuted string // "executed" (runtimeShortWord's own default branch)
-	WatchInUseSuffix  string // " · ▶ in use (%s)" (ShortWord* value)
 
-	// --- exposure phrasing (runtime.go: runtimeExposureText) ---
+	// --- exposure phrasing ---
 	ExposurePublishedAll      string // "published on all interfaces"
 	ExposurePublishedLoopback string // "published on loopback only"
 	ExposureListening         string // "listening (not published)"
 
-	// --- muting (runtime.go: writeMutedCount, unmutedReason, writeRuntimeSummary) ---
+	// --- muting ---
 	UnmutedNowInUse                string // "now in use"
 	UnmutedActNow                  string // "act now"
 	UnmutedFixAvailable            string // "fix available"
@@ -274,18 +249,85 @@ type messages struct {
 	RuntimeSummaryCounts           string // "\n🔎 Runtime: ▶ %[1]d in use · %[2]d not observed · %[3]d unavailable\n"
 	RuntimeSummaryNote             string // "_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._\n"
 
-	// --- thread per-package runtime line (runtime.go: writeRuntimeThreadLine) ---
-	ThreadNotObserved           string // "▷ not observed"
-	ThreadNotObservedShortLived string // " — short-lived programs not fully observed" (appended to ThreadNotObserved)
-	ThreadRuntimeUnavailable    string // "▷ runtime evidence unavailable (%s)" (reason text)
+	// --- thread per-package runtime line ---
+	ThreadNotObserved        string // "▷ not observed"
+	ThreadRuntimeUnavailable string // "▷ runtime evidence unavailable (%s)" (reason text)
 
-	// --- Slack Web API delivery (slackapi.go: SlackAPINotifier.Send) ---
-	// These two lines are appended to the channel summary text after
-	// FormatSlackText/FormatSlackDiffText have already rendered it, so they
-	// live outside those functions' own message tree — this is the only
-	// other place notify appends user-facing text to a Slack message body.
+	// --- Slack Web API delivery ---
+	// These two lines close the first channel message as its footer: the
+	// pointer at the thread, or the link to the last posted one.
 	ThreadPostedNotice string // "\n_📊 Everything open now is in this message's thread ↓_\n"
 	LastReportLink     string // "\n🔗 Everything open as of the last report → <%s|thread>\n" (permalink URL; the link label "thread" is part of this string)
+
+	// --- Block Kit cards ---
+	// Labels are bare words: the renderer adds the ": " separator and the
+	// surrounding mrkdwn.
+	LblImage        string // "Image"
+	LblInstalled    string // "Installed"
+	LblFixed        string // "Fixed in"
+	LblFixedNone    string // "none" (value of the fixed-in line when no fix exists)
+	LblUpgradeRisk  string // "Upgrade risk"
+	LblFindings     string // "Findings"
+	LblTopCVE       string // "Top CVE"
+	LblExploitation string // "Exploitation"
+	LblSummary      string // "Summary"
+	LblReferences   string // "References"
+	LblOtherCVEs    string // "Other CVEs"
+	LblRuntime      string // "Runtime"
+	LblEvidence     string // "Evidence"
+	LblExposure     string // "Exposure"
+	LblPrivilege    string // "Privilege"
+	LblLastSeen     string // "Last seen"
+	LblChange       string // "Change"
+	LblDetails      string // "Details"
+	LblStatus       string // "Status"
+
+	// Upgrade-risk values, without the leading "upgrade:" the RiskXxx labels carry.
+	RiskValueDistroUpdate string // "🟢 distro security patch"
+	RiskValueSafe         string // "🟢 low-risk"
+	RiskValueCaution      string // "🟠 major version bump — needs care"
+	RiskValueUnknown      string // "⚪ risk unknown"
+
+	// What to do when there is no fix, shown after the fixed-in "none".
+	FixNoteMitigate string // "consider mitigation"
+	FixNoteWontFix  string // "upstream won't fix, consider replacing"
+	FixNoteEOL      string // "end-of-life: no fix planned for this release, consider a supported version"
+
+	CardNewCVEs      string // "new CVEs: %s" (linked CVE ids)
+	CardKEVShort     string // "CISA KEV"
+	CardSeeActNow    string // "🚨 see Act now"
+	CardEOSLStatus   string // "base OS is EOL (no more security updates coming)"
+	CardFoldedEOL    string // "includes %d end-of-life package(s)"
+	CardNewEOSLNote  string // "includes %d newly end-of-life package(s)"
+	CardBaseEOL      string // "base OS already EOL"
+	CardCollapsed    string // "+%[1]d lower-risk fixes (%[2]s): %[3]s" (count, severity summary, comma-joined names)
+	CardCounts       string // "CRITICAL %[1]d / HIGH %[2]d"
+	CardAgeLine      string // "⏱ open %[1]d day(s) · first seen %[2]s" (days, formatted date)
+	CardAgeToday     string // "⏱ first seen today"
+	ChannelContinued string // " _(cont. %[1]d/%[2]d)_" (message number, total) appended to the channel header of a continuation message
+
+	// Fallback text (the notification preview / screen-reader text).
+	FbFull               string // "KestreLynx %[1]s %[2]s — %[3]s" (generated-at, role, joined segments)
+	FbPlain              string // "KestreLynx %[1]s %[2]s" (generated-at, role)
+	FbContinued          string // "KestreLynx %[1]s %[2]s (cont. %[3]d/%[4]d)" (generated-at, role, number, total)
+	FbRoleEverythingOpen string // "Everything currently open" (the role phrase of the fallback text, without the role line's period)
+	FbRoleChanges        string // "Changes since the last scan"
+	FbRoleNoChanges      string // "No changes since last scan"
+	FbRoleWeekly         string // "📋 Weekly full report — everything currently open"
+	FbSegNew             string // "🆕 %d new"
+	FbSegResolved        string // "✅ %d resolved"
+	FbSegScanFailed      string // "⚠️ %d scan failure(s)"
+	FbSegEOLNew          string // "⛔ %d new EOL"
+	FbSegReplaced        string // "🔄 %d image(s) updated"
+	FbSegActionable      string // "✅ %d fixable"
+	FbSegNoFix           string // "ℹ️ %d no fix yet"
+	FbSegWontFix         string // "🔕 %d upstream won't fix"
+	FbThread             string // "%[1]s — %[2]s · %[3]s" (role, short section name, first image)
+	FbThreadCont         string // " (cont.)"
+	FbThreadMoreImage    string // " +%d more image(s)"
+	FbThreadPackages     string // " (%d package(s))"
+	ShortEOLBase         string // "⛔ EOL base"
+	ShortEOLPackage      string // "⛔ EOL packages"
 }
 
 // enMessages is the historical English wording, unchanged byte-for-byte from
@@ -305,7 +347,6 @@ var enMessages = messages{
 
 	NoChangesSinceLastScan:  "\nNo changes since last scan.\n",
 	HeadingNewEOSL:          "\n*⛔ New: base OS end-of-life (top priority)*\n",
-	NewEOSLNote:             " · includes %d newly end-of-life package(s)",
 	WeeklyFullReportHeading: "\n*📋 Weekly full report — everything currently open*\n",
 
 	ReplacedHeading: "\n*🔄 Image content changed (%d)*\n",
@@ -316,7 +357,6 @@ var enMessages = messages{
 	UnconfirmedRefsLine: "⏳ unconfirmed this cycle, holding previous findings — %s\n",
 
 	NewSinceLastScanHeading: "\n*🆕 New since last scan (%d)*\n",
-	NewCVEsPrefix:           "new: %s",
 	MoreCount:               " (+%d more)",
 	EscalatedTo:             "⬆️ escalated to %s",
 	FixNowAvailable:         "fix now available",
@@ -348,16 +388,9 @@ var enMessages = messages{
 	ScanFailuresHeading: "\n*⚠️ Scan failures*\n",
 	ScanFailureLine:     "• %[1]s — %[2]s\n",
 
-	ActionableTitle:       "✅ Actionable now (fixed)",
-	WatchSectionTitle:     "ℹ️ No fix yet (affected / waiting on upstream)",
-	WontFixSectionTitle:   "🔕 Upstream won't fix (will_not_fix)",
-	SectionHeading:        "\n*%s*\n",
-	ImageCritHighLine:     "%[1]s %[2]s  CRITICAL %[3]d / HIGH %[4]d\n",
-	PackageFixedLine:      "%[1]s %[2]s → %[3]s",
-	PackageEOLLine:        "%[1]s %[2]s (%[3]s)",
-	PackageNoFixLine:      "%[1]s %[2]s (no fix available)",
-	PackageSeverityCounts: " (CRITICAL %[1]d / HIGH %[2]d)",
-	CollapsedLine:         "   • +%[1]d lower-risk fixes (%[2]s): %[3]s",
+	ActionableTitle:     "✅ Actionable now (fixed)",
+	WatchSectionTitle:   "ℹ️ No fix yet (affected / waiting on upstream)",
+	WontFixSectionTitle: "🔕 Upstream won't fix (will_not_fix)",
 
 	RiskDistroUpdate: "🟢 upgrade: distro security patch",
 	RiskSafe:         "🟢 upgrade: low-risk",
@@ -366,8 +399,6 @@ var enMessages = messages{
 
 	EOLPackageText:   "end-of-life: no fix planned for this release",
 	EOLSectionReason: "vendor reports these CVEs as out of support for this release",
-	EOLEvidenceMark:  " — end-of-life: no fix planned for this release, consider a supported version",
-	EOLSeeActNow:     " — 🚨 see Act now",
 
 	SegActNow:            "🚨 %d act now",
 	IntelDegradedWarning: "⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low\n",
@@ -376,24 +407,17 @@ var enMessages = messages{
 	IntelStale:           "\n_Intel data is %d day(s) old (feeds unreachable)._\n",
 
 	ActNowHeading:       "\n*🚨 Act now (%d) — exploited or likely to be*\n",
-	ImageBullet:         "• %s\n",
 	WatchHeading:        "\n*👀 Watch (%d) — not urgent, keep an eye on*\n",
 	LowHeading:          "\n*🔕 Low priority (%[1]d)* — %[2]d finding(s) across %[3]d image(s), no exploitation signal (not in KEV, EPSS below threshold).",
 	TriageLowInUseCount: " · ▶ %d in use",
 
 	EvidenceMoreCVEs:        " (+%d more CVE(s) in this package)",
-	NoFixYetMitigation:      " — no fix yet, consider mitigation",
-	WontFixReplace:          " — upstream won't fix, consider replacing",
 	AdvisoryLinkLabel:       "advisory",
-	AdvisoryLink:            "<%[1]s|%[2]s>",
 	VendorAdvisoryLinkLabel: "vendor advisory",
-	RefsLine:                "       📎 %s\n",
 	EvidenceSeverityOnly:    "severity only (intel unavailable)",
 	EvidenceKEV:             "CISA KEV (exploited in the wild)",
 	EvidenceEPSSPrefix:      "EPSS %s",
 	EvidenceRansomware:      "🧨 ransomware campaign",
-	ShortEvidenceKEV:        " · CISA KEV",
-	ShortEvidenceEPSSPrefix: " · EPSS %s",
 
 	OpenNowActNow:          "🚨 %d act-now",
 	OldestActNowWatchStale: " — ⏰ oldest act-now/watch unresolved %d day(s)",
@@ -402,14 +426,11 @@ var enMessages = messages{
 	PriorityLabelWatch:     "WATCH",
 	PriorityLabelLow:       "LOW",
 
-	FoldedEOLNote:             " · includes %d end-of-life package(s)",
-	EOSLLine:                  "• %[1]s — base OS is EOL (no more security updates coming)%[2]s\n",
 	EOSLHeading:               "\n*⛔ Base OS end-of-life (top priority)*\n",
 	EOLPackageHeading:         "\n*⛔ Package end-of-life (%[1]d) — %[2]s*\n",
 	EOLPackagesChangedHeading: "\n*⛔ New: package end-of-life (%[1]d) — %[2]s*\n",
 	EOLFoldNewPackages:        "%d package(s) newly end-of-life",
 	EOLFoldWithNewCVEs:        "%d end-of-life package(s) with new CVEs",
-	EOLFoldLine:               "• %[1]s — %[2]s (base OS already EOL)\n",
 
 	ThreadTitle:              "📊 *Everything open now — %s*",
 	EOLBaseImagesHeading:     "*⛔ EOL base images (%d)*",
@@ -420,9 +441,6 @@ var enMessages = messages{
 	ThreadLowDetailsSuffix:   "; details in the generic webhook payload",
 	ThreadLowInUseCount:      "▶ in use among low: %d\n",
 	EOLPackagesThreadHeading: "*⛔ EOL packages (%[1]d) — %[2]s*",
-	ThreadImageAgeLine:       "     ⏱ open %[1]d day(s) — first seen %[2]s\n",
-	ThreadFirstSeenToday:     "     ⏱ first seen today\n",
-	ThreadAlsoIDs:            "     also: %s",
 	ThreadContinued:          " _(cont.)_",
 
 	RuntimeWarningUnavailable:       "⚠️ Runtime evidence unavailable: %s\n",
@@ -491,7 +509,6 @@ var enMessages = messages{
 	ShortWordRunning:  "running",
 	ShortWordLoaded:   "loaded",
 	ShortWordExecuted: "executed",
-	WatchInUseSuffix:  " · ▶ in use (%s)",
 
 	ExposurePublishedAll:      "published on all interfaces",
 	ExposurePublishedLoopback: "published on loopback only",
@@ -506,12 +523,75 @@ var enMessages = messages{
 	RuntimeSummaryCounts:           "\n🔎 Runtime: ▶ %[1]d in use · %[2]d not observed · %[3]d unavailable\n",
 	RuntimeSummaryNote:             "_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._\n",
 
-	ThreadNotObserved:           "▷ not observed",
-	ThreadNotObservedShortLived: " — short-lived programs not fully observed",
-	ThreadRuntimeUnavailable:    "▷ runtime evidence unavailable (%s)",
+	ThreadNotObserved:        "▷ not observed",
+	ThreadRuntimeUnavailable: "▷ runtime evidence unavailable (%s)",
 
 	ThreadPostedNotice: "\n_📊 Everything open now is in this message's thread ↓_\n",
 	LastReportLink:     "\n🔗 Everything open as of the last report → <%s|thread>\n",
+
+	LblImage:        "Image",
+	LblInstalled:    "Installed",
+	LblFixed:        "Fixed in",
+	LblFixedNone:    "none",
+	LblUpgradeRisk:  "Upgrade risk",
+	LblFindings:     "Findings",
+	LblTopCVE:       "Top CVE",
+	LblExploitation: "Exploitation",
+	LblSummary:      "Summary",
+	LblReferences:   "References",
+	LblOtherCVEs:    "Other CVEs",
+	LblRuntime:      "Runtime",
+	LblEvidence:     "Evidence",
+	LblExposure:     "Exposure",
+	LblPrivilege:    "Privilege",
+	LblLastSeen:     "Last seen",
+	LblChange:       "Change",
+	LblDetails:      "Details",
+	LblStatus:       "Status",
+
+	RiskValueDistroUpdate: "🟢 distro security patch",
+	RiskValueSafe:         "🟢 low-risk",
+	RiskValueCaution:      "🟠 major version bump — needs care",
+	RiskValueUnknown:      "⚪ risk unknown",
+
+	FixNoteMitigate: "consider mitigation",
+	FixNoteWontFix:  "upstream won't fix, consider replacing",
+	FixNoteEOL:      "end-of-life: no fix planned for this release, consider a supported version",
+
+	CardNewCVEs:      "new CVEs: %s",
+	CardKEVShort:     "CISA KEV",
+	CardSeeActNow:    "🚨 see Act now",
+	CardEOSLStatus:   "base OS is EOL (no more security updates coming)",
+	CardFoldedEOL:    "includes %d end-of-life package(s)",
+	CardNewEOSLNote:  "includes %d newly end-of-life package(s)",
+	CardBaseEOL:      "base OS already EOL",
+	CardCollapsed:    "+%[1]d lower-risk fixes (%[2]s): %[3]s",
+	CardCounts:       "CRITICAL %[1]d / HIGH %[2]d",
+	CardAgeLine:      "⏱ open %[1]d day(s) · first seen %[2]s",
+	CardAgeToday:     "⏱ first seen today",
+	ChannelContinued: " _(cont. %[1]d/%[2]d)_",
+
+	FbFull:               "KestreLynx %[1]s %[2]s — %[3]s",
+	FbPlain:              "KestreLynx %[1]s %[2]s",
+	FbContinued:          "KestreLynx %[1]s %[2]s (cont. %[3]d/%[4]d)",
+	FbRoleEverythingOpen: "Everything currently open",
+	FbRoleChanges:        "Changes since the last scan",
+	FbRoleNoChanges:      "No changes since last scan",
+	FbRoleWeekly:         "📋 Weekly full report — everything currently open",
+	FbSegNew:             "🆕 %d new",
+	FbSegResolved:        "✅ %d resolved",
+	FbSegScanFailed:      "⚠️ %d scan failure(s)",
+	FbSegEOLNew:          "⛔ %d new EOL",
+	FbSegReplaced:        "🔄 %d image(s) updated",
+	FbSegActionable:      "✅ %d fixable",
+	FbSegNoFix:           "ℹ️ %d no fix yet",
+	FbSegWontFix:         "🔕 %d upstream won't fix",
+	FbThread:             "%[1]s — %[2]s · %[3]s",
+	FbThreadCont:         " (cont.)",
+	FbThreadMoreImage:    " +%d more image(s)",
+	FbThreadPackages:     " (%d package(s))",
+	ShortEOLBase:         "⛔ EOL base",
+	ShortEOLPackage:      "⛔ EOL packages",
 }
 
 // jaMessages is the Japanese dictionary.
@@ -527,7 +607,6 @@ var jaMessages = messages{
 
 	NoChangesSinceLastScan:  "\n前回のスキャンから変化なし\n",
 	HeadingNewEOSL:          "\n*⛔ 新規: ベースOSのサポート終了(EOL) (最優先)*\n",
-	NewEOSLNote:             " · 新たにサポート終了(EOL)となったパッケージ%d件を含む",
 	WeeklyFullReportHeading: "\n*📋 週次全体レポート — 未解決の所見の全体*\n",
 
 	ReplacedHeading: "\n*🔄 イメージの内容が変化 (%d件)*\n",
@@ -538,7 +617,6 @@ var jaMessages = messages{
 	UnconfirmedRefsLine: "⏳ 今回は未確認、前回の所見を保持 — %s\n",
 
 	NewSinceLastScanHeading: "\n*🆕 前回のスキャンからの新規検出 (%d件)*\n",
-	NewCVEsPrefix:           "新規: %s",
 	MoreCount:               " (ほか +%d件)",
 	EscalatedTo:             "⬆️ %sに優先度昇格",
 	FixNowAvailable:         "修正版が利用可能",
@@ -570,16 +648,9 @@ var jaMessages = messages{
 	ScanFailuresHeading: "\n*⚠️ スキャン失敗*\n",
 	ScanFailureLine:     "• %[1]s — %[2]s\n",
 
-	ActionableTitle:       "✅ 今すぐ対応可能 (fixed)",
-	WatchSectionTitle:     "ℹ️ 修正版なし (affected / 上流の対応待ち)",
-	WontFixSectionTitle:   "🔕 上流では修正予定なし (will_not_fix)",
-	SectionHeading:        "\n*%s*\n",
-	ImageCritHighLine:     "%[1]s %[2]s  CRITICAL %[3]d / HIGH %[4]d\n",
-	PackageFixedLine:      "%[1]s %[2]s → %[3]s",
-	PackageEOLLine:        "%[1]s %[2]s (%[3]s)",
-	PackageNoFixLine:      "%[1]s %[2]s (修正版なし)",
-	PackageSeverityCounts: " (CRITICAL %[1]d / HIGH %[2]d)",
-	CollapsedLine:         "   • 低リスクの修正 +%[1]d件 (%[2]s): %[3]s",
+	ActionableTitle:     "✅ 今すぐ対応可能 (fixed)",
+	WatchSectionTitle:   "ℹ️ 修正版なし (affected / 上流の対応待ち)",
+	WontFixSectionTitle: "🔕 上流では修正予定なし (will_not_fix)",
 
 	RiskDistroUpdate: "🟢 アップグレード: ディストリのセキュリティパッチ",
 	RiskSafe:         "🟢 アップグレード: 低リスク",
@@ -588,8 +659,6 @@ var jaMessages = messages{
 
 	EOLPackageText:   "サポート終了(EOL): このリリースでは修正予定なし",
 	EOLSectionReason: "ベンダーがこれらのCVEをこのリリースのサポート対象外と報告",
-	EOLEvidenceMark:  " — サポート終了(EOL): このリリースでは修正予定なし、サポート中のバージョンを検討",
-	EOLSeeActNow:     " — 🚨 今すぐ対応を参照",
 
 	SegActNow:            "🚨 今すぐ対応%d件",
 	IntelDegradedWarning: "⚠️ 脅威情報 (KEV/EPSS) が利用できない — 深刻度のみで優先度を判定、低優先度への引き下げなし\n",
@@ -598,23 +667,16 @@ var jaMessages = messages{
 	IntelStale:           "\n_脅威情報は%d日前のもの (配信元に接続できない)_\n",
 
 	ActNowHeading:       "\n*🚨 今すぐ対応 (%d件) — 悪用あり、または悪用の可能性が高い*\n",
-	ImageBullet:         "• %s\n",
 	WatchHeading:        "\n*👀 要監視 (%d件) — 緊急性は低いが継続監視*\n",
 	LowHeading:          "\n*🔕 低優先度 (%[1]d件)* — イメージ%[3]d件で所見%[2]d件、悪用の兆候なし (KEV未掲載、EPSSはしきい値未満)",
 	TriageLowInUseCount: " · ▶ 使用中%d件",
 
-	EvidenceMoreCVEs:        " (このパッケージにほか +%d件のCVE)",
-	NoFixYetMitigation:      " — 修正版なし、緩和策を検討",
-	WontFixReplace:          " — 上流では修正予定なし、置き換えを検討",
-	AdvisoryLinkLabel:       "アドバイザリ",
-	AdvisoryLink:            "<%[1]s|%[2]s>",
-	RefsLine:                "       📎 %s\n",
-	EvidenceSeverityOnly:    "深刻度のみ (脅威情報が利用できない)",
-	EvidenceKEV:             "CISA KEV (実際の攻撃で悪用あり)",
-	EvidenceEPSSPrefix:      "EPSS %s",
-	EvidenceRansomware:      "🧨 ランサムウェア攻撃",
-	ShortEvidenceKEV:        " · CISA KEV",
-	ShortEvidenceEPSSPrefix: " · EPSS %s",
+	EvidenceMoreCVEs:     " (このパッケージにほか +%d件のCVE)",
+	AdvisoryLinkLabel:    "アドバイザリ",
+	EvidenceSeverityOnly: "深刻度のみ (脅威情報が利用できない)",
+	EvidenceKEV:          "CISA KEV (実際の攻撃で悪用あり)",
+	EvidenceEPSSPrefix:   "EPSS %s",
+	EvidenceRansomware:   "🧨 ランサムウェア攻撃",
 
 	OpenNowActNow:          "🚨 今すぐ対応%d件",
 	OldestActNowWatchStale: " — ⏰ 今すぐ対応/要監視の未解決の最長期間%d日",
@@ -623,14 +685,11 @@ var jaMessages = messages{
 	PriorityLabelWatch:     "要監視",
 	PriorityLabelLow:       "低優先度",
 
-	FoldedEOLNote:             " · サポート終了(EOL)のパッケージ%d件を含む",
-	EOSLLine:                  "• %[1]s — ベースOSがEOL (今後のセキュリティ更新なし)%[2]s\n",
 	EOSLHeading:               "\n*⛔ ベースOSのサポート終了(EOL) (最優先)*\n",
 	EOLPackageHeading:         "\n*⛔ パッケージのサポート終了(EOL) (%[1]d件) — %[2]s*\n",
 	EOLPackagesChangedHeading: "\n*⛔ 新規: パッケージのサポート終了(EOL) (%[1]d件) — %[2]s*\n",
 	EOLFoldNewPackages:        "パッケージ%d件が新たにサポート終了(EOL)",
 	EOLFoldWithNewCVEs:        "新規CVEのあるサポート終了(EOL)のパッケージ%d件",
-	EOLFoldLine:               "• %[1]s — %[2]s (ベースOSは既にEOL)\n",
 
 	ThreadTitle:              "📊 *未解決の所見の全体 — %s*",
 	EOLBaseImagesHeading:     "*⛔ EOLのベースOSのイメージ (%d件)*",
@@ -641,9 +700,6 @@ var jaMessages = messages{
 	ThreadLowDetailsSuffix:   "; 詳細は汎用Webhookのペイロードに記載",
 	ThreadLowInUseCount:      "▶ 低優先度のうち使用中: %d件\n",
 	EOLPackagesThreadHeading: "*⛔ EOLのパッケージ (%[1]d件) — %[2]s*",
-	ThreadImageAgeLine:       "     ⏱ 未解決%[1]d日 — 初回検出%[2]s\n",
-	ThreadFirstSeenToday:     "     ⏱ 本日初検出\n",
-	ThreadAlsoIDs:            "     ほか: %s",
 	ThreadContinued:          " _(続き)_",
 
 	RuntimeWarningUnavailable:       "⚠️ 稼働時の証拠が利用できない: %s\n",
@@ -712,7 +768,6 @@ var jaMessages = messages{
 	ShortWordRunning:  "実行中",
 	ShortWordLoaded:   "読み込み済み",
 	ShortWordExecuted: "実行を観測",
-	WatchInUseSuffix:  " · ▶ 使用中 (%s)",
 
 	ExposurePublishedAll:      "全インターフェースに公開",
 	ExposurePublishedLoopback: "ループバックのみに公開",
@@ -727,14 +782,77 @@ var jaMessages = messages{
 	RuntimeSummaryCounts:           "\n🔎 稼働時の使用状況: ▶ 使用中%[1]d件 · 使用が確認されない%[2]d件 · 判定できない%[3]d件\n",
 	RuntimeSummaryNote:             "_使用中: OSパッケージは稼働中のプログラムが実行または読み込み。言語パッケージは稼働中のバイナリに含まれるか、その実行環境 (python, node, java, …) が稼働中。使用が確認されないとは観測期間内に限った状態であり、未使用を意味しない。_\n",
 
-	ThreadNotObserved:           "▷ 使用が確認されない",
-	ThreadNotObservedShortLived: " — 短命なプログラムは完全には観測できていない",
-	ThreadRuntimeUnavailable:    "▷ 稼働時の使用状況を判定できない (%s)",
+	ThreadNotObserved:        "▷ 使用が確認されない",
+	ThreadRuntimeUnavailable: "▷ 稼働時の使用状況を判定できない (%s)",
 
 	VendorAdvisoryLinkLabel: "ベンダーのアドバイザリ",
 
 	ThreadPostedNotice: "\n_📊 未解決の所見の全体はこのメッセージのスレッド ↓_\n",
 	LastReportLink:     "\n🔗 前回のレポート時点の未解決の所見の全体 → <%s|スレッド>\n",
+
+	LblImage:        "イメージ",
+	LblInstalled:    "現在",
+	LblFixed:        "修正版",
+	LblFixedNone:    "なし",
+	LblUpgradeRisk:  "更新の注意度",
+	LblFindings:     "検出件数",
+	LblTopCVE:       "代表CVE",
+	LblExploitation: "悪用情報",
+	LblSummary:      "説明",
+	LblReferences:   "参照",
+	LblOtherCVEs:    "ほかのCVE",
+	LblRuntime:      "使用状況",
+	LblEvidence:     "観測根拠",
+	LblExposure:     "公開状態",
+	LblPrivilege:    "権限",
+	LblLastSeen:     "最終確認",
+	LblChange:       "変化",
+	LblDetails:      "詳細",
+	LblStatus:       "状態",
+
+	RiskValueDistroUpdate: "🟢 ディストリのセキュリティパッチ",
+	RiskValueSafe:         "🟢 低リスク",
+	RiskValueCaution:      "🟠 メジャーバージョン更新 — 要注意",
+	RiskValueUnknown:      "⚪ リスク不明",
+
+	FixNoteMitigate: "緩和策を検討",
+	FixNoteWontFix:  "上流では修正予定なし、置き換えを検討",
+	FixNoteEOL:      "サポート終了(EOL): このリリースでは修正予定なし、サポート中のバージョンを検討",
+
+	CardNewCVEs:      "新しいCVE %s",
+	CardKEVShort:     "CISA KEV",
+	CardSeeActNow:    "🚨 今すぐ対応を参照",
+	CardEOSLStatus:   "ベースOSがEOL (今後のセキュリティ更新なし)",
+	CardFoldedEOL:    "サポート終了(EOL)のパッケージ%d件を含む",
+	CardNewEOSLNote:  "新たにサポート終了(EOL)となったパッケージ%d件を含む",
+	CardBaseEOL:      "ベースOSは既にEOL",
+	CardCollapsed:    "低リスクの修正 +%[1]d件 (%[2]s): %[3]s",
+	CardCounts:       "CRITICAL %[1]d / HIGH %[2]d",
+	CardAgeLine:      "⏱ 未解決%[1]d日 · 初回検出%[2]s",
+	CardAgeToday:     "⏱ 本日初検出",
+	ChannelContinued: " _(続き %[1]d/%[2]d)_",
+
+	FbFull:               "KestreLynx %[1]s %[2]s — %[3]s",
+	FbPlain:              "KestreLynx %[1]s %[2]s",
+	FbContinued:          "KestreLynx %[1]s %[2]s (続き %[3]d/%[4]d)",
+	FbRoleEverythingOpen: "未解決の所見の全体",
+	FbRoleChanges:        "前回のスキャンからの変化",
+	FbRoleNoChanges:      "前回のスキャンから変化なし",
+	FbRoleWeekly:         "📋 週次全体レポート — 未解決の所見の全体",
+	FbSegNew:             "🆕 新規検出%d件",
+	FbSegResolved:        "✅ 解消%d件",
+	FbSegScanFailed:      "⚠️ スキャン失敗%d件",
+	FbSegEOLNew:          "⛔ 新規EOL%d件",
+	FbSegReplaced:        "🔄 イメージ更新%d件",
+	FbSegActionable:      "✅ 修正版あり%d件",
+	FbSegNoFix:           "ℹ️ 修正版なし%d件",
+	FbSegWontFix:         "🔕 上流の修正予定なし%d件",
+	FbThread:             "%[1]s — %[2]s · %[3]s",
+	FbThreadCont:         " (続き)",
+	FbThreadMoreImage:    " ほか%dイメージ",
+	FbThreadPackages:     " (%dパッケージ)",
+	ShortEOLBase:         "⛔ EOLのベースOS",
+	ShortEOLPackage:      "⛔ EOLのパッケージ",
 }
 
 // messagesFor resolves a Language to its dictionary, defaulting to English
@@ -745,18 +863,4 @@ func messagesFor(lang Language) messages {
 		return jaMessages
 	}
 	return enMessages
-}
-
-// resolveLanguage picks the language a variadic ...Language parameter
-// selects: the first element when one was passed, else LanguageEN. It lets
-// FormatSlackText, FormatSlackDiffText and BuildThreadMessages take an
-// optional trailing language argument without breaking any existing call
-// that only ever passed a Report (or Report/diff/etc.) — the overwhelming
-// majority of call sites, including every golden test — which all keep
-// rendering English exactly as before.
-func resolveLanguage(lang []Language) Language {
-	if len(lang) > 0 {
-		return lang[0]
-	}
-	return LanguageEN
 }

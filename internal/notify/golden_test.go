@@ -5,7 +5,6 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
@@ -39,17 +38,6 @@ func checkGolden(t *testing.T, name, got string) {
 	if got != string(want) {
 		t.Errorf("%s: output differs from golden\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
 	}
-}
-
-// threadSeparator joins the messages of one thread report in a golden file
-// so the split points are pinned along with the text.
-const threadSeparator = "\n===== next thread message =====\n"
-
-// goldenThread renders the thread report for a golden comparison, with the
-// first-seen lookups a diff-mode cycle passes (the state after the cycle).
-// It is the single call site the golden tests use.
-func goldenThread(r analyze.Report, st state.State, limit int) string {
-	return strings.Join(BuildThreadMessages(r, Ages{Finding: st.FirstSeen, EOL: st.EOLFirstSeen}, limit), threadSeparator)
 }
 
 // goldenWebhook marshals the webhook payload, removes the top-level and diff
@@ -195,23 +183,15 @@ func goldenCycle(m goldenMode, eosl bool) (r analyze.Report, changed, unchanged 
 	return r, changed, unchanged, next
 }
 
-// TestGolden_ThreeStatusOutputs pins the complete text of every Slack
-// rendering, every thread message, and the pre-existing webhook fields for
-// a scan carrying only the fixed, affected and will_not_fix statuses and no
+// TestGolden_ThreeStatusOutputs pins the pre-existing webhook fields for a
+// scan carrying only the fixed, affected and will_not_fix statuses and no
 // end-of-life base image. None of these outputs may change when support for
 // further statuses is added.
 func TestGolden_ThreeStatusOutputs(t *testing.T) {
 	for _, m := range goldenModes() {
 		t.Run(m.name, func(t *testing.T) {
-			r, changed, unchanged, next := goldenCycle(m, false)
+			r, changed, _, _ := goldenCycle(m, false)
 			p := "status3_" + m.name + "_"
-			checkGolden(t, p+"slack_full", FormatSlackText(r))
-			checkGolden(t, p+"slack_diff_changes", FormatSlackDiffText(r, changed, false, false))
-			checkGolden(t, p+"slack_diff_nochanges", FormatSlackDiffText(r, unchanged, false, false))
-			checkGolden(t, p+"slack_diff_weekly", FormatSlackDiffText(r, changed, true, false))
-			checkGolden(t, p+"slack_diff_weekly_nochanges", FormatSlackDiffText(r, unchanged, true, false))
-			checkGolden(t, p+"thread", goldenThread(r, next, 0))
-			checkGolden(t, p+"thread_split", goldenThread(r, next, 700))
 			checkGolden(t, p+"webhook_full", goldenWebhook(t, r, nil))
 			checkGolden(t, p+"webhook_diff", goldenWebhook(t, r, &changed))
 		})
@@ -220,48 +200,14 @@ func TestGolden_ThreeStatusOutputs(t *testing.T) {
 
 // TestGolden_EOSLOutputs is the same fixture with web:1.0's base OS marked
 // end-of-life. It is kept apart from TestGolden_ThreeStatusOutputs because
-// the "Open now" heartbeat of this fixture is allowed to change: the base
-// image count moves to the state-held set and appears with triage off too.
+// the heartbeat of this fixture is allowed to change: the base image count
+// moves to the state-held set and appears with triage off too.
 func TestGolden_EOSLOutputs(t *testing.T) {
 	for _, m := range goldenModes() {
 		t.Run(m.name, func(t *testing.T) {
-			r, changed, unchanged, next := goldenCycle(m, true)
+			r, changed, _, _ := goldenCycle(m, true)
 			p := "eosl_" + m.name + "_"
-			checkGolden(t, p+"slack_full", FormatSlackText(r))
-			checkGolden(t, p+"slack_diff_changes", FormatSlackDiffText(r, changed, false, false))
-			checkGolden(t, p+"slack_diff_nochanges", FormatSlackDiffText(r, unchanged, false, false))
-			checkGolden(t, p+"thread", goldenThread(r, next, 0))
 			checkGolden(t, p+"webhook_diff", goldenWebhook(t, r, &changed))
-		})
-	}
-}
-
-// TestGolden_FailureHoldingOutputs pins the heartbeat of cycles where state
-// is holding findings because a scan failed:
-//   - eosl_failed: the end-of-life image's scan fails while another image
-//     still has findings, so its base-OS record is held.
-//   - all_failed_clean: the only image with history fails while a second
-//     image scans clean, so the current report has no findings at all.
-//
-// These are the outputs that later changes are allowed to alter (the held
-// base image is counted, and a report that is empty only because of a
-// failure no longer claims "all clear").
-func TestGolden_FailureHoldingOutputs(t *testing.T) {
-	for _, m := range goldenModes() {
-		t.Run(m.name, func(t *testing.T) {
-			_, _, _, st := goldenCycle(m, true)
-
-			webFailed := pinned(scanner.ImageScan{Image: "web:1.0", Err: errString("pull failed")}, goldenContentWeb)
-			today := goldenTodayScans(true)
-			failedCycle := analyze.Build([]scanner.ImageScan{webFailed, today[1]}, nil, m.triage(goldenTodayEnrich()), genTime.AddDate(0, 0, 1))
-			d, _ := state.Compute(st, failedCycle)
-			checkGolden(t, "failure_"+m.name+"_eosl_failed", FormatSlackDiffText(failedCycle, d, false, false))
-
-			apiClean := pinned(scanner.ImageScan{Image: "api:2.0"}, goldenContentAPI)
-			_, webOnly := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{goldenTodayScans(false)[0]}, nil, m.triage(goldenTodayEnrich()), genTime))
-			cleanCycle := analyze.Build([]scanner.ImageScan{webFailed, apiClean}, nil, m.triage(goldenTodayEnrich()), genTime.AddDate(0, 0, 1))
-			d2, _ := state.Compute(webOnly, cleanCycle)
-			checkGolden(t, "failure_"+m.name+"_all_failed_clean", FormatSlackDiffText(cleanCycle, d2, false, false))
 		})
 	}
 }

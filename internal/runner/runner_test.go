@@ -581,7 +581,7 @@ func TestRunOnce_DiffMode_HoldingUnconfirmedForcesNotification(t *testing.T) {
 	if !notif.msg.Holding {
 		t.Error("Message.Holding should be true")
 	}
-	out := notify.FormatSlackDiffText(notif.msg.Report, *notif.msg.Diff, notif.msg.FullReport, notif.msg.Holding)
+	out := channelText(notif.msg)
 	if strings.Contains(out, "all clear") {
 		t.Errorf("holding must not assert all clear:\n%s", out)
 	}
@@ -591,7 +591,7 @@ func TestRunOnce_DiffMode_HoldingUnconfirmedForcesNotification(t *testing.T) {
 }
 
 // TestRunOnce_DiffMode_HoldingUnconfirmedTriageForcesNotification is the
-// triage-mode counterpart: writeTriageOpenNow must honor holding too.
+// triage-mode counterpart: the triage open-now line must honor holding too.
 func TestRunOnce_DiffMode_HoldingUnconfirmedTriageForcesNotification(t *testing.T) {
 	notif := &fakeNotifier{}
 	store := &fakeStore{st: state.State{
@@ -621,7 +621,7 @@ func TestRunOnce_DiffMode_HoldingUnconfirmedTriageForcesNotification(t *testing.
 	if !notif.msg.Report.Triage {
 		t.Fatal("test premise broken: expected a triaged report")
 	}
-	out := notify.FormatSlackDiffText(notif.msg.Report, *notif.msg.Diff, notif.msg.FullReport, notif.msg.Holding)
+	out := channelText(notif.msg)
 	if strings.Contains(out, "all clear") {
 		t.Errorf("triage mode holding must not assert all clear:\n%s", out)
 	}
@@ -982,4 +982,16 @@ func TestRunOnce_DegradedIntelSkipsDiscussions(t *testing.T) {
 	if src.discussionIDs != nil {
 		t.Errorf("degraded intel must not trigger discussion queries, got %v", src.discussionIDs)
 	}
+}
+
+// channelText is the text of every block of the channel message the runner's
+// notification would render: what a reader of the channel sees.
+func channelText(m notify.Message) string {
+	var parts []string
+	for _, sm := range notify.BuildChannelMessages(m, notify.ChannelFooter{}, notify.LanguageEN) {
+		for _, b := range sm.Blocks {
+			parts = append(parts, b.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
 }

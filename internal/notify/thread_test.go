@@ -18,24 +18,23 @@ func seenDaysAgo(days int) func(image, pkg string) (time.Time, bool) {
 	}
 }
 
-func TestBuildThreadMessages_TriageLayout(t *testing.T) {
-	msgs := BuildThreadMessages(triageReport(), Ages{Finding: seenDaysAgo(3)}, 0)
+func TestThread_TriageLayout(t *testing.T) {
+	msgs := BuildThreadBlockMessages(triageReport(), Ages{Finding: seenDaysAgo(3)}, LanguageEN)
 	if len(msgs) != 1 {
 		t.Fatalf("expected one message, got %d", len(msgs))
 	}
-	out := msgs[0]
+	out := allBlocksText(msgs)
 
 	mustContain := []string{
 		"📊 *Everything open now — 2026-06-24 09:00*",
 		"*⛔ EOL base images (1)*",
 		"*🚨 ACT NOW (1) — exploited or likely to be*",
-		"• web:1.0", // image lines are plain bullets in triage mode
-		"openssl 3.0.7 → 3.0.11",
-		"<https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> CRITICAL · CISA KEV (exploited in the wild) · EPSS 94%",
-		"⏱ open 3 day(s) — first seen 2026-06-21",
+		"*Image: web:1.0 — identity unconfirmed: scanned by reference*",
+		"*◆ openssl*\nInstalled: 3.0.7\nFixed in: 3.0.11",
+		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> · CRITICAL · EPSS 94%\nExploitation: CISA KEV (exploited in the wild)",
+		"⏱ open 3 day(s) · first seen 2026-06-21",
 		"*👀 WATCH (1) — not urgent, keep an eye on*",
-		"e2fsprogs 1.44 (no fix available)",
-		"no fix yet, consider mitigation",
+		"*◆ e2fsprogs*\nInstalled: 1.44\nFixed in: none — consider mitigation",
 		"*🔕 LOW (1)*",
 	}
 	for _, s := range mustContain {
@@ -44,10 +43,10 @@ func TestBuildThreadMessages_TriageLayout(t *testing.T) {
 		}
 	}
 	// Low priority is a count, never a listing.
-	if strings.Contains(out, "dpkg 1.19.7") {
+	if strings.Contains(out, "*◆ dpkg*") {
 		t.Errorf("low-priority package must not be expanded:\n%s", out)
 	}
-	// Triage mode drops the per-image severity emoji: the bucket header
+	// Triage mode shows no per-image severity emoji: the bucket header
 	// already carries the urgency signal.
 	if strings.Contains(out, "🔴") {
 		t.Errorf("triage thread must not show a severity emoji on image lines:\n%s", out)
@@ -77,10 +76,9 @@ func findPkgGroup(t *testing.T, section []analyze.ImageFindings, image, pkg stri
 	return analyze.PackageGroup{}
 }
 
-// The thread detail line shows the headline CVE's Trivy title right after its
-// evidence line, 7-space indented, but only for the headline CVE (not the
-// "also:" ids folded behind it).
-func TestWriteThreadDetail_TitleLine(t *testing.T) {
+// The thread card shows the headline CVE's Trivy title as its own labelled
+// line, but only for the headline CVE (not the other ids folded behind it).
+func TestThread_TitleLine(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "app:1",
 		Findings: []scanner.Finding{
@@ -89,23 +87,19 @@ func TestWriteThreadDetail_TitleLine(t *testing.T) {
 		},
 	}}
 	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
-	g := findPkgGroup(t, r.Actionable, "app:1", "libx")
+	out := renderThread(r, Ages{})
 
-	var b strings.Builder
-	writeThreadDetail(&b, r, "app:1", g, nil, enMessages)
-	out := b.String()
-
-	if !strings.Contains(out, "\n       libx: headline vulnerability title\n") {
-		t.Errorf("expected the headline CVE's title on its own 7-space-indented line:\n%s", out)
+	if !strings.Contains(out, "\nSummary: libx: headline vulnerability title\n") {
+		t.Errorf("expected the headline CVE's title on its own line:\n%s", out)
 	}
 	if strings.Contains(out, "secondary vulnerability title") {
-		t.Errorf("the also: line must not expand the secondary CVE's title:\n%s", out)
+		t.Errorf("the other-CVEs line must not expand the secondary CVE's title:\n%s", out)
 	}
 }
 
-// No Title line at all when the headline CVE has no Title (e.g. Trivy didn't
+// No Summary line at all when the headline CVE has no Title (e.g. Trivy didn't
 // supply one for this CVE).
-func TestWriteThreadDetail_NoTitleLineWhenEmpty(t *testing.T) {
+func TestThread_NoTitleLineWhenEmpty(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "app:1",
 		Findings: []scanner.Finding{
@@ -113,43 +107,42 @@ func TestWriteThreadDetail_NoTitleLineWhenEmpty(t *testing.T) {
 		},
 	}}
 	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
-	g := findPkgGroup(t, r.Actionable, "app:1", "libx")
+	out := renderThread(r, Ages{})
 
-	var b strings.Builder
-	writeThreadDetail(&b, r, "app:1", g, nil, enMessages)
-	out := b.String()
-
-	wantEvidence := "     ↳ <https://nvd.nist.gov/vuln/detail/CVE-A|CVE-A> CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a\n"
-	if out != wantEvidence {
-		t.Errorf("expected only the evidence line (no title line to follow):\nout  = %q\nwant = %q", out, wantEvidence)
+	if strings.Contains(out, "Summary:") {
+		t.Errorf("no summary line expected without a title:\n%s", out)
+	}
+	want := "Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-A|CVE-A> · CRITICAL · EPSS n/a\nExploitation: CISA KEV (exploited in the wild)"
+	if !strings.Contains(out, want) {
+		t.Errorf("expected the evidence lines:\n%s", out)
 	}
 }
 
-func TestBuildThreadMessages_FirstSeenToday(t *testing.T) {
-	msgs := BuildThreadMessages(triageReport(), Ages{Finding: seenDaysAgo(0)}, 0)
-	if !strings.Contains(msgs[0], "⏱ first seen today") {
-		t.Errorf("day-zero findings should read 'first seen today':\n%s", msgs[0])
+func TestThread_FirstSeenToday(t *testing.T) {
+	out := renderThread(triageReport(), Ages{Finding: seenDaysAgo(0)})
+	if !strings.Contains(out, "⏱ first seen today") {
+		t.Errorf("day-zero findings should read 'first seen today':\n%s", out)
 	}
 }
 
-func TestBuildThreadMessages_NilFirstSeen(t *testing.T) {
-	msgs := BuildThreadMessages(triageReport(), Ages{}, 0)
+func TestThread_NilFirstSeen(t *testing.T) {
+	msgs := BuildThreadBlockMessages(triageReport(), Ages{}, LanguageEN)
 	if len(msgs) == 0 {
 		t.Fatal("expected messages without a firstSeen lookup")
 	}
-	if strings.Contains(msgs[0], "⏱") {
-		t.Errorf("age lines must be omitted without a firstSeen lookup:\n%s", msgs[0])
+	if out := allBlocksText(msgs); strings.Contains(out, "⏱") {
+		t.Errorf("age lines must be omitted without a firstSeen lookup:\n%s", out)
 	}
 }
 
-func TestBuildThreadMessages_NothingOpen(t *testing.T) {
+func TestThread_NothingOpen(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{{Image: "clean:1"}}, nil, analyze.Triage{}, genTime)
-	if msgs := BuildThreadMessages(r, Ages{}, 0); msgs != nil {
+	if msgs := BuildThreadBlockMessages(r, Ages{}, LanguageEN); msgs != nil {
 		t.Errorf("no open findings must skip the thread (edge case 4), got %d message(s)", len(msgs))
 	}
 }
 
-func TestBuildThreadMessages_AlsoIDs(t *testing.T) {
+func TestThread_AlsoIDs(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "app:1",
 		Findings: []scanner.Finding{
@@ -159,8 +152,8 @@ func TestBuildThreadMessages_AlsoIDs(t *testing.T) {
 		},
 	}}
 	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
-	out := strings.Join(BuildThreadMessages(r, Ages{}, 0), "\n")
-	if !strings.Contains(out, "also: <https://nvd.nist.gov/vuln/detail/CVE-B|CVE-B>, <https://nvd.nist.gov/vuln/detail/CVE-C|CVE-C>") {
+	out := renderThread(r, Ages{})
+	if !strings.Contains(out, "Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-B|CVE-B>, <https://nvd.nist.gov/vuln/detail/CVE-C|CVE-C>") {
 		t.Errorf("secondary CVE ids must be listed:\n%s", out)
 	}
 }
@@ -186,31 +179,26 @@ func wideReport(images int) analyze.Report {
 	return analyze.Build(scans, nil, triageRules(enrich), genTime)
 }
 
-func TestBuildThreadMessages_SplitsAtLimit(t *testing.T) {
-	limit := 900
-	msgs := BuildThreadMessages(wideReport(12), Ages{Finding: seenDaysAgo(2)}, limit)
+func TestThread_SplitsAtLimit(t *testing.T) {
+	msgs := buildThreadBlockMessages(wideReport(12), Ages{Finding: seenDaysAgo(2)}, enMessages, testSplitLimits)
 	if len(msgs) < 2 {
 		t.Fatalf("expected the report to split, got %d message(s)", len(msgs))
 	}
-	for i, m := range msgs {
-		if len(m) > limit {
-			t.Errorf("message %d exceeds limit: %d > %d\n%s", i, len(m), limit, m)
-		}
-	}
+	checkMessageConstraints(t, "wide thread", msgs, testSplitLimits)
 	// Continuation messages repeat the section header.
-	if !strings.Contains(msgs[1], "*🚨 ACT NOW (12) — exploited or likely to be* _(cont.)_") {
-		t.Errorf("continuation must repeat the section title:\n%s", msgs[1])
+	if !strings.Contains(msgs[1].Blocks[0].Text, "*🚨 ACT NOW (12) — exploited or likely to be* _(cont.)_") {
+		t.Errorf("continuation must repeat the section title:\n%s", msgs[1].Blocks[0].Text)
 	}
 	// Every image appears exactly once across the whole thread.
-	all := strings.Join(msgs, "\n")
+	all := allBlocksText(msgs)
 	for i := 0; i < 12; i++ {
 		img := fmt.Sprintf("svc-%02d:1.0", i)
 		if strings.Count(all, img) != 1 {
 			t.Errorf("image %s should appear exactly once, got %d", img, strings.Count(all, img))
 		}
 	}
-	// Title lines ride in the same block as their package: a split boundary
-	// must neither drop nor duplicate them.
+	// A title rides in the same card as its package: a split boundary must
+	// neither drop nor duplicate it.
 	for i := 0; i < 12; i++ {
 		title := fmt.Sprintf("libfoo: crafted input flaw %04d", i)
 		if strings.Count(all, title) != 1 {
@@ -219,17 +207,18 @@ func TestBuildThreadMessages_SplitsAtLimit(t *testing.T) {
 	}
 }
 
-func TestBuildThreadMessages_TriageOffFallback(t *testing.T) {
-	out := strings.Join(BuildThreadMessages(sampleReport(), Ages{Finding: seenDaysAgo(1)}, 0), "\n")
+func TestThread_TriageOffFallback(t *testing.T) {
+	out := renderThread(sampleReport(), Ages{Finding: seenDaysAgo(1)})
 	mustContain := []string{
 		"*✅ Actionable now (fixed)*",
-		"🔴 web:1.0", // triage off: no bucket signal, severity emoji stays
-		"libc-bin",
-		"setuptools", // low-risk fixes are NOT collapsed in the thread
+		"*Image: web:1.0 — identity unconfirmed: scanned by reference*",
+		"🔴", // triage off: no bucket signal, severity emoji stays
+		"*◆ libc-bin*",
+		"*◆ setuptools*", // low-risk fixes are NOT collapsed in the thread
 		"*ℹ️ No fix yet (affected / waiting on upstream)*",
-		"e2fsprogs",
+		"*◆ e2fsprogs*",
 		"*🔕 Upstream won't fix (will_not_fix)*",
-		"gcc-8-base",
+		"*◆ gcc-8-base*",
 		"⏱ open 1 day(s)",
 	}
 	for _, s := range mustContain {

@@ -46,25 +46,17 @@ func TestEscapeRuntimeText_Truncates(t *testing.T) {
 	}
 }
 
-// TestWriteRuntimeWarning_GatesOnRuntime confirms every warning line is a
-// pure no-op when Report.Runtime is nil (runtime disabled) — the contract
-// every notify rendering in this file depends on for byte-identical output
-// when runtime is off.
-func TestWriteRuntimeWarning_GatesOnRuntime(t *testing.T) {
-	var b strings.Builder
-	writeRuntimeWarning(&b, analyze.Report{}, time.Now(), enMessages)
-	if b.String() != "" {
-		t.Errorf("writeRuntimeWarning with Report.Runtime == nil wrote %q, want nothing", b.String())
+// TestRuntimeWarning_GatesOnRuntime confirms the warning is a pure no-op when
+// Report.Runtime is nil (runtime disabled), and the channel message then shows
+// no runtime summary either: the contract every runtime rendering depends on
+// for unchanged output when runtime is off.
+func TestRuntimeWarning_GatesOnRuntime(t *testing.T) {
+	if got := runtimeWarning(analyze.Report{}, time.Now(), enMessages); got != "" {
+		t.Errorf("runtimeWarning with Report.Runtime == nil = %q, want nothing", got)
 	}
-}
-
-// TestWriteRuntimeSummary_GatesOnRuntime is writeRuntimeWarning's sibling
-// check for the full-view tail line.
-func TestWriteRuntimeSummary_GatesOnRuntime(t *testing.T) {
-	var b strings.Builder
-	writeRuntimeSummary(&b, analyze.Report{}, enMessages)
-	if b.String() != "" {
-		t.Errorf("writeRuntimeSummary with Report.Runtime == nil wrote %q, want nothing", b.String())
+	out := renderFull(sampleReport())
+	if strings.Contains(out, "🔎") || strings.Contains(out, "Runtime evidence unavailable") {
+		t.Errorf("a report with runtime off must show no runtime lines:\n%s", out)
 	}
 }
 
@@ -106,12 +98,12 @@ func TestRuntimeInUsePhrase_KindNeverMixedWithWrongExecutable(t *testing.T) {
 			Process:       analyze.ContainerProcess{Exe: "/app/tool"},
 		}},
 	}
-	got := runtimeInUsePhrase(rt, enMessages)
+	got := inUsePhrase(rt)
 	if strings.Contains(got, "/app/api") {
-		t.Errorf("runtimeInUsePhrase = %q, must never mention /app/api (not this container's executable)", got)
+		t.Errorf("inUsePhrase = %q, must never mention /app/api (not this container's executable)", got)
 	}
 	if !strings.Contains(got, "binary executed") || !strings.Contains(got, "/app/tool") {
-		t.Errorf("runtimeInUsePhrase = %q, want it to name binary executed and /app/tool together", got)
+		t.Errorf("inUsePhrase = %q, want it to name binary executed and /app/tool together", got)
 	}
 }
 
@@ -156,18 +148,18 @@ func TestRuntimeUsageOf_ProjectsAcrossMergedGroups(t *testing.T) {
 	}
 }
 
-// TestRuntimeWatchSuffix_EmptyWhenNotInUse confirms the compact watch-bucket
-// suffix is exactly "" (not, say, a suffix describing not_observed) for
-// every usage other than in_use — the watch bucket shows no runtime
-// annotation at all for those.
-func TestRuntimeWatchSuffix_EmptyWhenNotInUse(t *testing.T) {
+// TestRuntimeShortLine_EmptyWhenNotInUse confirms the compact runtime line is
+// absent (not, say, a line describing not_observed) for every usage other
+// than in_use — compact cards show no runtime annotation at all for those.
+func TestRuntimeShortLine_EmptyWhenNotInUse(t *testing.T) {
 	for _, usage := range []rtevidence.Usage{"", rtevidence.UsageNotObserved, rtevidence.UsageUnavailable} {
-		if got := runtimeWatchSuffix(analyze.Runtime{Usage: usage}, enMessages); got != "" {
-			t.Errorf("runtimeWatchSuffix(Usage=%q) = %q, want empty", usage, got)
+		if got := runtimeLinesOf(rtShort, analyze.Runtime{Usage: usage}); len(got) != 0 {
+			t.Errorf("short runtime lines (Usage=%q) = %q, want none", usage, got)
 		}
 	}
-	if got := runtimeWatchSuffix(analyze.Runtime{Usage: rtevidence.UsageInUse, EvidenceKinds: []rtevidence.EvidenceKind{rtevidence.KindExe}}, enMessages); got == "" {
-		t.Error("runtimeWatchSuffix(in_use) is empty, want a suffix")
+	got := runtimeLinesOf(rtShort, analyze.Runtime{Usage: rtevidence.UsageInUse, EvidenceKinds: []rtevidence.EvidenceKind{rtevidence.KindExe}})
+	if len(got) != 1 || got[0] != "Runtime: ▶ in use (running)" {
+		t.Errorf("short runtime lines (in use) = %q, want the one-line form", got)
 	}
 }
 
@@ -192,13 +184,13 @@ func TestRuntimeInUsePhrase_AmbiguousKindsListProcessesSeparately(t *testing.T) 
 			Process:        analyze.ContainerProcess{Exe: "/app/server", EffectiveUID: 0},
 		}},
 	}
-	got := runtimeInUsePhrase(rt, enMessages)
+	got := inUsePhrase(rt)
 	if strings.Contains(got, "running as") || strings.Contains(got, "loaded by") {
-		t.Errorf("runtimeInUsePhrase = %q, must never pair a kind with an executable when KindsAmbiguous", got)
+		t.Errorf("inUsePhrase = %q, must never pair a kind with an executable when KindsAmbiguous", got)
 	}
 	for _, want := range []string{"running", "loaded as a library", "processes:", "/usr/bin/helper", "/app/server"} {
 		if !strings.Contains(got, want) {
-			t.Errorf("runtimeInUsePhrase = %q, want it to contain %q", got, want)
+			t.Errorf("inUsePhrase = %q, want it to contain %q", got, want)
 		}
 	}
 }
@@ -218,15 +210,15 @@ func TestRuntimeInUsePhrase_NoObservationShowsKindsWithoutExecutable(t *testing.
 			HasProcess:    false,
 		}},
 	}
-	got := runtimeInUsePhrase(rt, enMessages)
+	got := inUsePhrase(rt)
 	if strings.Contains(got, "processes:") {
-		t.Errorf("runtimeInUsePhrase = %q, must not list processes when none was observed", got)
+		t.Errorf("inUsePhrase = %q, must not list processes when none was observed", got)
 	}
 	if !strings.Contains(got, "running") {
-		t.Errorf("runtimeInUsePhrase = %q, want it to still name the kind", got)
+		t.Errorf("inUsePhrase = %q, want it to still name the kind", got)
 	}
 	if strings.Contains(got, "``") {
-		t.Errorf("runtimeInUsePhrase = %q, must never render an empty executable name", got)
+		t.Errorf("inUsePhrase = %q, must never render an empty executable name", got)
 	}
 }
 

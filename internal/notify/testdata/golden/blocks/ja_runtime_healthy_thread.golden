@@ -1,0 +1,53 @@
+===== message 1/1 =====
+TEXT: 未解決の所見の全体 — 🚨 今すぐ対応 · web:1.0 ほか1イメージ (3パッケージ)
+--- section ---
+📊 *未解決の所見の全体 — 2026-06-24 09:00*
+
+*🚨 今すぐ対応 (1件) — 悪用あり、または悪用の可能性が高い*
+*イメージ: web:1.0*
+--- divider ---
+--- section ---
+*◆ openssl*
+現在: 3.0.7
+修正版: なし — 緩和策を検討
+検出件数: CRITICAL 1 / HIGH 0
+--- section ---
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> · CRITICAL · EPSS n/a
+悪用情報: CISA KEV (実際の攻撃で悪用あり)
+参照: <https://avd.example/CVE-OPENSSL|アドバイザリ>
+--- section ---
+使用状況: ▶ 使用中
+観測根拠: 実行中 `/usr/sbin/nginx`
+公開状態: 全インターフェースに公開 · 高い権限で実行 · 最終確認06-24 09:00
+--- divider ---
+--- section ---
+*👀 要監視 (2件) — 緊急性は低いが継続監視*
+*イメージ: api:2.0*
+--- divider ---
+--- section ---
+*◆ setuptools* [python-pkg]
+現在: 53.0.0
+修正版: なし — 緩和策を検討
+検出件数: CRITICAL 0 / HIGH 1
+--- section ---
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · HIGH · EPSS 2%
+--- section ---
+使用状況: ▶ 使用中
+観測根拠: 稼働中の実行環境 `/usr/bin/python3.11`
+最終確認: 06-24 09:00
+--- divider ---
+--- section ---
+*イメージ: web:1.0*
+--- divider ---
+--- section ---
+*◆ curl*
+現在: 8.0.0
+修正版: なし — 緩和策を検討
+検出件数: CRITICAL 0 / HIGH 1
+--- section ---
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · HIGH · EPSS 2%
+--- section ---
+使用状況: ▷ 使用が確認されない
+--- divider ---
+--- section ---
+*🔕 低優先度 (2件)* — 悪用の兆候なし

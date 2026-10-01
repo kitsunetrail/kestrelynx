@@ -1,0 +1,75 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 Changes since the last scan — ⛔ 6 new EOL · 🆕 1 new · ✅ 3 resolved
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 3 affected
+_Changes since the last scan._
+--- divider ---
+--- section ---
+*⛔ New: base OS end-of-life (top priority)*
+--- section ---
+*Image: old:3*
+Status: base OS is EOL (no more security updates coming)
+includes 1 newly end-of-life package(s)
+--- divider ---
+--- section ---
+*⛔ New: package end-of-life (5) — vendor reports these CVEs as out of support for this release*
+*Image: app:2.1*
+--- section ---
+*◆ libxml2*
+Change: ⬆️ escalated to ACT NOW
+Installed: 2.9.7-16
+Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0003|CVE-2033-0003> · HIGH · EPSS 12%
+Exploitation: CISA KEV (exploited in the wild)
+References: <https://avd.example/CVE-2033-0003|advisory>
+--- divider ---
+--- section ---
+*Image: legacy:1*
+--- section ---
+*◆ zlib*
+Change: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0007|CVE-2033-0007>
+Installed: 1.2.11
+Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
+Findings: CRITICAL 1 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL · EPSS 30% (+1 more CVE(s) in this package)
+Exploitation: CISA KEV (exploited in the wild)
+References: <https://avd.example/CVE-2033-0005|advisory>
+--- divider ---
+--- section ---
+*Image: app:2.1*
+*◆ curl*
+Installed: 7.61.1-34 · Fixed in: none — end-of-life: no fix planned for this release
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0004|CVE-2033-0004> · EPSS &lt;0.1%
+--- section ---
+*◆ qt5-qtbase*
+Installed: 5.15.3-1 · Fixed in: none — end-of-life: no fix planned for this release
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> · EPSS &lt;0.1%
+--- section ---
+*Image: legacy:1*
+1 package(s) newly end-of-life (base OS already EOL)
+--- divider ---
+--- section ---
+*🆕 New since last scan (1)*
+--- section ---
+*Image: app:2.1*
+*◆ curl*
+Change: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0012|CVE-2033-0012>
+Installed: 7.61.1-34 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 2
+--- divider ---
+--- section ---
+*✅ Resolved since last scan (3)*
+• app:2.1: old-eol, tar
+• app:2.1: sqlite-libs — no longer end-of-life
+--- divider ---
+--- section ---
+📌 *Open now:* ⛔ 2 EOL base / ⛔ 4 EOL package / 🚨 2 act-now / 👀 1 watch / 🔕 1 low
+⏰ oldest act-now/watch unresolved 20 day(s)
+--- context ---
+📊 Everything open now is in this message's thread ↓

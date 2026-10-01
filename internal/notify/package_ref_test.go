@@ -10,15 +10,14 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
-// TestWritePackage_EcosystemTag pins writePackage's Slack tag: a known
+// TestChannel_EcosystemTag pins the Slack tag of a package card: a known
 // ecosystem replaces the generic "[lang]", an unmapped/unset one keeps it,
 // and an OS package never gets a bracket tag at all (unchanged from before
 // ecosystems existed).
-func TestWritePackage_EcosystemTag(t *testing.T) {
+func TestChannel_EcosystemTag(t *testing.T) {
 	// All three findings are "affected" (no fix yet): the Watch section
-	// (writeSection) renders every package in full, unlike Actionable, which
-	// collapses low-risk fixes into a summary line that shows names only
-	// (writeCollapsed) — using that section here would make the bracket tag
+	// renders every package as a card, unlike Actionable, which collapses
+	// low-risk fixes into a summary line that shows names only — using that section here would make the bracket tag
 	// invisible for reasons unrelated to what this test checks.
 	r := analyze.Build([]scanner.ImageScan{{
 		Image: "demo:1.0",
@@ -29,11 +28,11 @@ func TestWritePackage_EcosystemTag(t *testing.T) {
 		},
 	}}, nil, analyze.Triage{}, genTime)
 
-	out := FormatSlackText(r)
-	if !strings.Contains(out, "pip 21.0.1") || !strings.Contains(out, "[python-pkg]") {
+	out := renderFull(r)
+	if !strings.Contains(out, "*◆ pip* [python-pkg]") {
 		t.Errorf("known ecosystem must render its own tag:\n%s", out)
 	}
-	if !strings.Contains(out, "some-lib 1.0") {
+	if !strings.Contains(out, "*◆ some-lib*") {
 		t.Fatalf("some-lib line missing:\n%s", out)
 	}
 	// The unmapped ecosystem's line must fall back to the generic tag, not

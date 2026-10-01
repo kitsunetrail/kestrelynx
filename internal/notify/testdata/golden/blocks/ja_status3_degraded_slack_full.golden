@@ -1,0 +1,73 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 未解決の所見の全体 — 🚨 今すぐ対応3件 · 👀 要監視5件
+--- section ---
+🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果
+イメージ3件をスキャン、2件に影響あり
+_未解決の所見の全体_
+--- section ---
+*優先度:* 🚨 今すぐ対応3件 · 👀 要監視5件
+--- section ---
+⚠️ 脅威情報 (KEV/EPSS) が利用できない — 深刻度のみで優先度を判定、低優先度への引き下げなし
+--- divider ---
+--- section ---
+*🚨 今すぐ対応 (3件) — 悪用あり、または悪用の可能性が高い*
+*イメージ: web:1.0*
+--- section ---
+*◆ e2fsprogs*
+現在: 1.47.0-2
+修正版: なし — 緩和策を検討
+検出件数: CRITICAL 1 / HIGH 0
+--- section ---
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> · CRITICAL · 深刻度のみ (脅威情報が利用できない)
+--- divider ---
+--- section ---
+*◆ gcc-12-base*
+現在: 12.2.0-14
+修正版: なし — 上流では修正予定なし、置き換えを検討
+検出件数: CRITICAL 1 / HIGH 0
+--- section ---
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0005|CVE-2031-0005> · CRITICAL · 深刻度のみ (脅威情報が利用できない)
+--- divider ---
+--- section ---
+*◆ openssl*
+現在: 3.0.7
+修正版: 3.0.11
+更新の注意度: 🟢 ディストリのセキュリティパッチ
+検出件数: CRITICAL 1 / HIGH 0
+--- section ---
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> · CRITICAL · 深刻度のみ (脅威情報が利用できない)
+参照: <https://avd.example/CVE-2031-0001|アドバイザリ> · <https://vendor.example/advisory/1|ベンダーのアドバイザリ>
+--- divider ---
+--- section ---
+*👀 要監視 (5件) — 緊急性は低いが継続監視*
+--- section ---
+*イメージ: api:2.0*
+*◆ libxml2*
+現在: 2.9.14 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 2
+--- section ---
+*◆ setuptools* [python-pkg]
+現在: 53.0.0 · 修正版: 78.1.1 (🟠 メジャーバージョン更新 — 要注意)
+検出件数: CRITICAL 0 / HIGH 1
+--- section ---
+*◆ zlib*
+現在: 1.2.13 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 1
+--- section ---
+*イメージ: web:1.0*
+*◆ dpkg*
+現在: 1.21.22 · 修正版: 1.21.23 (🟢 ディストリのセキュリティパッチ)
+検出件数: CRITICAL 0 / HIGH 1
+--- section ---
+*◆ openssl*
+現在: 3.0.7 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 1
+--- divider ---
+--- section ---
+*⚠️ スキャン失敗*
+• broken:1 — 実体未確認: 参照によるスキャン — pull failed
+--- context ---
+⚠️ 実体未確認: 参照によるスキャン — broken:1
+--- divider ---
+--- context ---
+📊 未解決の所見の全体はこのメッセージのスレッド ↓

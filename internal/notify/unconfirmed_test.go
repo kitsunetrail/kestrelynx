@@ -15,26 +15,24 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
-func TestWriteUnresolvedRefs_UnconfirmedRefsNilAddsNoBytes(t *testing.T) {
+func TestChannel_UnconfirmedRefsNilAddsNothing(t *testing.T) {
 	r := sampleReport()
 	if r.UnconfirmedRefs != nil {
 		t.Fatal("test premise broken: want a nil UnconfirmedRefs report")
 	}
-	var b strings.Builder
-	writeUnresolvedRefs(&b, r, enMessages)
-	if strings.Contains(b.String(), "⏳") {
-		t.Errorf("unconfirmedRefsLine must contribute nothing when UnconfirmedRefs is nil:\n%s", b.String())
+	if out := renderFull(r); strings.Contains(out, "⏳") {
+		t.Errorf("the unconfirmed note must contribute nothing when UnconfirmedRefs is nil:\n%s", out)
 	}
 }
 
-func TestWriteOpenNow_HoldingFalseUnchanged(t *testing.T) {
+func TestChannelDiff_OpenNowHoldingFalseUnchanged(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{{Image: "ok:1"}}, nil, analyze.Triage{}, genTime)
 	d, _ := state.Compute(state.State{}, r)
-	var b strings.Builder
-	writeOpenNow(&b, r, d, false, enMessages)
-	want := "\n🎉 Open now: none — all clear\n"
-	if b.String() != want {
-		t.Errorf("writeOpenNow(holding=false) = %q, want %q (byte-identical to pre-holding output)", b.String(), want)
+	if out := renderDiff(r, d, false, false); !strings.Contains(out, "🎉 *Open now:* none — all clear") {
+		t.Errorf("holding=false must claim all clear:\n%s", out)
+	}
+	if out := renderDiff(r, d, false, true); strings.Contains(out, "all clear") || !strings.Contains(out, "holding previous findings until re-confirmed") {
+		t.Errorf("holding=true must not claim all clear:\n%s", out)
 	}
 }
 
@@ -107,16 +105,13 @@ func TestImageLabel_AmbiguousRegistryDigestCarriesPlatform(t *testing.T) {
 	}
 }
 
-func TestWriteTriageOpenNow_HoldingFalseUnchanged(t *testing.T) {
+func TestChannelDiff_TriageOpenNowHoldingFalseUnchanged(t *testing.T) {
 	r := analyze.Build(nil, nil, triageRules(nil), genTime)
 	if !r.Triage {
 		t.Fatal("test premise broken: want a triaged report")
 	}
 	d, _ := state.Compute(state.State{}, r)
-	var b strings.Builder
-	writeTriageOpenNow(&b, r, d, false, enMessages)
-	want := "\n🎉 Open now: none — all clear\n"
-	if b.String() != want {
-		t.Errorf("writeTriageOpenNow(holding=false) = %q, want %q", b.String(), want)
+	if out := renderDiff(r, d, false, false); !strings.Contains(out, "🎉 *Open now:* none — all clear") {
+		t.Errorf("holding=false must claim all clear:\n%s", out)
 	}
 }

@@ -1,0 +1,413 @@
+{
+  "generated_at": "2026-06-24T09:00:00Z",
+  "environment": {
+    "kind": ""
+  },
+  "summary": {
+    "images_total": 3,
+    "images_affected": 2,
+    "priority_counts": {
+      "act_now": 3,
+      "low": 4,
+      "watch": 1
+    },
+    "intel": {
+      "degraded": false,
+      "kev_ok": true,
+      "epss_ok": true,
+      "stale_days": 0
+    }
+  },
+  "eosl_images": null,
+  "actionable": [
+    {
+      "image": "web:1.0",
+      "severity_counts": {
+        "CRITICAL": 1,
+        "HIGH": 1
+      },
+      "findings": [
+        {
+          "package": "openssl",
+          "installed": "3.0.7",
+          "fixed": "3.0.11",
+          "status": "fixed",
+          "severity_counts": {
+            "CRITICAL": 1,
+            "HIGH": 0
+          },
+          "upgrade_risk": "distro_update",
+          "priority": "act_now",
+          "vuln_ids": [
+            "CVE-2031-0001"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2031-0001",
+              "severity": "CRITICAL",
+              "url": "https://avd.example/CVE-2031-0001",
+              "title": "openssl: buffer overread",
+              "kev": true,
+              "ransomware": true,
+              "epss": 0.94321,
+              "priority": "act_now",
+              "refs": [
+                {
+                  "kind": "vendor",
+                  "label": "vendor advisory",
+                  "url": "https://vendor.example/advisory/1"
+                }
+              ]
+            }
+          ],
+          "class": "os",
+          "ecosystem": ""
+        },
+        {
+          "package": "dpkg",
+          "installed": "1.21.22",
+          "fixed": "1.21.23",
+          "status": "fixed",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "distro_update",
+          "priority": "low",
+          "vuln_ids": [
+            "CVE-2031-0004"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2031-0004",
+              "severity": "HIGH",
+              "kev": false,
+              "epss": 0.0004,
+              "priority": "low"
+            }
+          ],
+          "class": "os",
+          "ecosystem": ""
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    },
+    {
+      "image": "api:2.0",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 1
+      },
+      "findings": [
+        {
+          "package": "setuptools",
+          "installed": "53.0.0",
+          "fixed": "78.1.1",
+          "status": "fixed",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "caution",
+          "priority": "low",
+          "vuln_ids": [
+            "CVE-2031-0008"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2031-0008",
+              "severity": "HIGH",
+              "kev": false,
+              "epss": null,
+              "priority": "low"
+            }
+          ],
+          "class": "lang",
+          "ecosystem": "python-pkg"
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
+  "watch": [
+    {
+      "image": "web:1.0",
+      "severity_counts": {
+        "CRITICAL": 1,
+        "HIGH": 1
+      },
+      "findings": [
+        {
+          "package": "e2fsprogs",
+          "installed": "1.47.0-2",
+          "fixed": "",
+          "status": "affected",
+          "severity_counts": {
+            "CRITICAL": 1,
+            "HIGH": 0
+          },
+          "upgrade_risk": "",
+          "priority": "watch",
+          "vuln_ids": [
+            "CVE-2031-0003"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2031-0003",
+              "severity": "CRITICAL",
+              "title": "e2fsprogs: out-of-bounds write",
+              "kev": false,
+              "epss": 0.031,
+              "priority": "watch"
+            }
+          ],
+          "class": "os",
+          "ecosystem": ""
+        },
+        {
+          "package": "openssl",
+          "installed": "3.0.7",
+          "fixed": "",
+          "status": "affected",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "priority": "low",
+          "vuln_ids": [
+            "CVE-2031-0002"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2031-0002",
+              "severity": "HIGH",
+              "kev": false,
+              "epss": 0.0004,
+              "priority": "low"
+            }
+          ],
+          "class": "os",
+          "ecosystem": ""
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    },
+    {
+      "image": "api:2.0",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 2
+      },
+      "findings": [
+        {
+          "package": "libxml2",
+          "installed": "2.9.14",
+          "fixed": "",
+          "status": "affected",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 2
+          },
+          "upgrade_risk": "",
+          "priority": "act_now",
+          "vuln_ids": [
+            "CVE-2031-0006",
+            "CVE-2031-0007"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2031-0006",
+              "severity": "HIGH",
+              "url": "https://avd.example/CVE-2031-0006",
+              "title": "libxml2: use-after-free",
+              "kev": false,
+              "epss": 0.2,
+              "priority": "act_now"
+            },
+            {
+              "id": "CVE-2031-0007",
+              "severity": "HIGH",
+              "kev": false,
+              "epss": 0.05,
+              "priority": "watch"
+            }
+          ],
+          "class": "os",
+          "ecosystem": ""
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
+  "wont_fix": [
+    {
+      "image": "web:1.0",
+      "severity_counts": {
+        "CRITICAL": 1,
+        "HIGH": 0
+      },
+      "findings": [
+        {
+          "package": "gcc-12-base",
+          "installed": "12.2.0-14",
+          "fixed": "",
+          "status": "will_not_fix",
+          "severity_counts": {
+            "CRITICAL": 1,
+            "HIGH": 0
+          },
+          "upgrade_risk": "",
+          "priority": "low",
+          "vuln_ids": [
+            "CVE-2031-0005"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2031-0005",
+              "severity": "CRITICAL",
+              "kev": false,
+              "epss": 0.02,
+              "priority": "low"
+            }
+          ],
+          "class": "os",
+          "ecosystem": ""
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    },
+    {
+      "image": "api:2.0",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 1
+      },
+      "findings": [
+        {
+          "package": "zlib",
+          "installed": "1.2.13",
+          "fixed": "",
+          "status": "will_not_fix",
+          "severity_counts": {
+            "CRITICAL": 0,
+            "HIGH": 1
+          },
+          "upgrade_risk": "",
+          "priority": "act_now",
+          "vuln_ids": [
+            "CVE-2031-0009"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2031-0009",
+              "severity": "HIGH",
+              "kev": true,
+              "epss": 0.5,
+              "priority": "act_now"
+            }
+          ],
+          "class": "os",
+          "ecosystem": ""
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
+  "eol_packages": [],
+  "scan_errors": [
+    {
+      "image": "broken:1",
+      "error": "pull failed"
+    }
+  ],
+  "diff": {
+    "new": [
+      {
+        "image": "web:1.0",
+        "package": "openssl",
+        "kind": "escalated",
+        "critical": 1,
+        "high": 1,
+        "priority": "act_now",
+        "reason": "CVE-2031-0001 CRITICAL · CISA KEV (exploited in the wild) · EPSS 94% · 🧨 ransomware campaign",
+        "ecosystems": [
+          ""
+        ]
+      },
+      {
+        "image": "web:1.0",
+        "package": "dpkg",
+        "kind": "now_fixable",
+        "critical": 0,
+        "high": 1,
+        "priority": "low",
+        "ecosystems": [
+          ""
+        ]
+      },
+      {
+        "image": "api:2.0",
+        "package": "libxml2",
+        "kind": "new_cves",
+        "new_cve_count": 1,
+        "new_cve_ids": [
+          "CVE-2031-0007"
+        ],
+        "critical": 0,
+        "high": 2,
+        "priority": "act_now",
+        "ecosystems": [
+          ""
+        ]
+      },
+      {
+        "image": "api:2.0",
+        "package": "zlib",
+        "kind": "new",
+        "critical": 0,
+        "high": 1,
+        "priority": "act_now",
+        "ecosystems": [
+          ""
+        ]
+      }
+    ],
+    "resolved": [
+      {
+        "image": "web:1.0",
+        "package": "old-pkg"
+      }
+    ],
+    "replaced": [],
+    "new_eosl": [],
+    "resolved_eosl": [],
+    "oldest_open_days": 20,
+    "new_eol_packages": [],
+    "resolved_eol_packages": []
+  }
+}

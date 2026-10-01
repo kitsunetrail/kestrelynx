@@ -118,20 +118,13 @@ func goldenWebhookFull(t *testing.T, r analyze.Report, d *state.Diff) string {
 	return string(data) + "\n"
 }
 
-// TestGolden_EOLOutputs pins the complete text of every rendering of the
-// end-of-life fixture in each triage mode.
+// TestGolden_EOLOutputs pins the webhook payload of the end-of-life fixture in
+// each triage mode.
 func TestGolden_EOLOutputs(t *testing.T) {
 	for _, m := range goldenModes() {
 		t.Run(m.name, func(t *testing.T) {
-			r, changed, unchanged, next := eolCycle(m)
-			p := "eolpkg_" + m.name + "_"
-			checkGolden(t, p+"slack_full", FormatSlackText(r))
-			checkGolden(t, p+"slack_diff_changes", FormatSlackDiffText(r, changed, false, false))
-			checkGolden(t, p+"slack_diff_nochanges", FormatSlackDiffText(r, unchanged, false, false))
-			checkGolden(t, p+"slack_diff_weekly_nochanges", FormatSlackDiffText(r, unchanged, true, false))
-			checkGolden(t, p+"thread", goldenThread(r, next, 0))
-			checkGolden(t, p+"thread_split", goldenThread(r, next, 650))
-			checkGolden(t, p+"webhook_diff", goldenWebhookFull(t, r, &changed))
+			r, changed, _, _ := eolCycle(m)
+			checkGolden(t, "eolpkg_"+m.name+"_webhook_diff", goldenWebhookFull(t, r, &changed))
 		})
 	}
 }
@@ -148,17 +141,18 @@ func mustContainAll(t *testing.T, out string, want ...string) {
 // An act_now end-of-life group appears in both the end-of-life section (as a
 // pointer) and Act now (in full, with the end-of-life mark); a folded one
 // appears in Act now only, and the base-OS line counts it.
-func TestFormatSlackText_EOLActNowInBothSections(t *testing.T) {
+func TestChannel_EOLActNowInBothSections(t *testing.T) {
 	r, _, _, _ := eolCycle(goldenModes()[0])
-	out := FormatSlackText(r)
+	out := renderFull(r)
 	mustContainAll(t, out,
 		"*Priority:* ⛔ 2 EOL base · ⛔ 4 EOL package · 🚨 2 act now",
-		"• legacy:1 — base OS is EOL (no more security updates coming) · includes 2 end-of-life package(s)",
+		"*Image: legacy:1*\nStatus: base OS is EOL (no more security updates coming)\nincludes 2 end-of-life package(s)",
 		"*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*",
-		"   • libxml2 2.9.7-16 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — 🚨 see Act now",
-		"   • qt5-qtbase 5.15.3-1 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> · EPSS <0.1%",
+		"*◆ libxml2*\nInstalled: 2.9.7-16 · Fixed in: none — end-of-life: no fix planned for this release\nFindings: CRITICAL 0 / HIGH 1\nDetails: 🚨 see Act now",
+		"*◆ qt5-qtbase*\nInstalled: 5.15.3-1 · Fixed in: none — end-of-life: no fix planned for this release\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> · EPSS &lt;0.1%",
 		"*🚨 Act now (2) — exploited or likely to be*",
-		"• legacy:1\n   • zlib 1.2.11 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 1)\n     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> CRITICAL · CISA KEV (exploited in the wild) · EPSS 30% (+1 more CVE(s) in this package) — end-of-life: no fix planned for this release, consider a supported version",
+		"*◆ zlib*\nInstalled: 1.2.11\nFixed in: none — end-of-life: no fix planned for this release, consider a supported version\nFindings: CRITICAL 1 / HIGH 1",
+		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL · EPSS 30% (+1 more CVE(s) in this package)\nExploitation: CISA KEV (exploited in the wild)",
 	)
 	eolSec := strings.Index(out, "*⛔ Package end-of-life")
 	actNow := strings.Index(out, "*🚨 Act now")
@@ -173,12 +167,12 @@ func TestFormatSlackText_EOLActNowInBothSections(t *testing.T) {
 
 // Triage off: the end-of-life section and the headline segment still
 // appear, laid out like the status sections, before Actionable.
-func TestFormatSlackText_EOLWithoutTriage(t *testing.T) {
+func TestChannel_EOLWithoutTriage(t *testing.T) {
 	r, _, _, _ := eolCycle(goldenModes()[1])
-	out := FormatSlackText(r)
+	out := renderFull(r)
 	mustContainAll(t, out,
 		"*Priority:* ⛔ 2 EOL base · ⛔ 4 EOL package · 🔴 2 CRITICAL",
-		"*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*\n🔴 app:2.1  CRITICAL 1 / HIGH 3\n",
+		"*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*\n*Image: app:2.1*\n🔴 CRITICAL 1 / HIGH 3\n*◆ libwebkit2gtk*",
 	)
 	if strings.Contains(out, "see Act now") {
 		t.Errorf("triage off has no Act now section to point at:\n%s", out)
@@ -193,21 +187,23 @@ func TestFormatSlackText_EOLWithoutTriage(t *testing.T) {
 // and the end-of-life mark but never "see Act now"; a folded image's
 // non-act_now changes collapse into one line; a base OS that became
 // end-of-life notes its newly end-of-life packages.
-func TestFormatSlackDiffText_EOLChanges(t *testing.T) {
+func TestChannel_EOLChanges(t *testing.T) {
 	r, changed, _, _ := eolCycle(goldenModes()[0])
-	out := FormatSlackDiffText(r, changed, false, false)
+	out := renderDiff(r, changed, false, false)
 	mustContainAll(t, out,
-		"• old:3 — base OS is EOL (no more security updates coming) · includes 1 newly end-of-life package(s)",
+		"*Image: old:3*\nStatus: base OS is EOL (no more security updates coming)\nincludes 1 newly end-of-life package(s)",
 		"*⛔ New: package end-of-life (5) — vendor reports these CVEs as out of support for this release*",
-		"   • libxml2 2.9.7-16 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — ⬆️ escalated to ACT NOW\n     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0003|CVE-2033-0003> HIGH · CISA KEV (exploited in the wild) · EPSS 12% — end-of-life: no fix planned for this release, consider a supported version",
-		"   • zlib 1.2.11 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 1) — new: <https://nvd.nist.gov/vuln/detail/CVE-2033-0007|CVE-2033-0007>\n     ↳ <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> CRITICAL",
-		"• legacy:1 — 1 package(s) newly end-of-life (base OS already EOL)",
+		"*◆ libxml2*\nChange: ⬆️ escalated to ACT NOW\nInstalled: 2.9.7-16\nFixed in: none — end-of-life: no fix planned for this release, consider a supported version\nFindings: CRITICAL 0 / HIGH 1",
+		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0003|CVE-2033-0003> · HIGH · EPSS 12%\nExploitation: CISA KEV (exploited in the wild)",
+		"*◆ zlib*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0007|CVE-2033-0007>\nInstalled: 1.2.11",
+		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL",
+		"*Image: legacy:1*\n1 package(s) newly end-of-life (base OS already EOL)",
 		"*🆕 New since last scan (1)*",
-		"   • curl 7.61.1-34 (no fix available) (CRITICAL 0 / HIGH 2) — new: <https://nvd.nist.gov/vuln/detail/CVE-2033-0012|CVE-2033-0012>",
+		"*◆ curl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0012|CVE-2033-0012>\nInstalled: 7.61.1-34 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 2",
 		"• app:2.1: old-eol, tar",
 		"• app:2.1: sqlite-libs — no longer end-of-life",
 		"*✅ Resolved since last scan (3)*",
-		"📌 Open now: ⛔ 2 EOL base / ⛔ 4 EOL package / 🚨 2 act-now / 👀 1 watch",
+		"📌 *Open now:* ⛔ 2 EOL base / ⛔ 4 EOL package / 🚨 2 act-now / 👀 1 watch",
 	)
 	if strings.Contains(out, "see Act now") {
 		t.Errorf("the diff has no Act now section to point at:\n%s", out)
@@ -223,9 +219,9 @@ func TestFormatSlackDiffText_EOLChanges(t *testing.T) {
 	}
 }
 
-// The three fold-line wordings for an image whose base OS was already
-// end-of-life, and the new-base-OS note.
-func TestWriteEOLChanges_FoldWordings(t *testing.T) {
+// The fold-line wordings for an image whose base OS was already end-of-life,
+// and the new-base-OS note.
+func TestChannel_EOLFoldWordings(t *testing.T) {
 	group := analyze.PackageGroup{Package: "p", Status: scanner.StatusEndOfLife, High: 1, Priority: analyze.PriorityLow}
 	change := func(image, pkg string, kind state.EOLChangeKind) state.EOLChange {
 		g := group
@@ -246,25 +242,31 @@ func TestWriteEOLChanges_FoldWordings(t *testing.T) {
 		},
 	}
 	r := analyze.Report{Triage: true, Intel: analyze.IntelStatus{KEVOK: true, EPSSOK: true}}
-	var b strings.Builder
-	v := splitEOLChanges(d)
-	writeEOLChanges(&b, r, v, nil, enMessages)
-	out := b.String()
+	v := &chView{r: r, msg: enMessages, rd: renderer{msg: enMessages, lim: defaultRenderLimits}}
+	ev := splitEOLChanges(d)
+	v.eolChangesCategory(ev)
+	var texts []string
+	for _, u := range v.l.units {
+		for _, b := range u.blocks {
+			texts = append(texts, b.Text)
+		}
+	}
+	out := strings.Join(texts, "\n")
 	mustContainAll(t, out,
 		"*⛔ New: package end-of-life (6) —", // d:1's newly end-of-life package is noted on its new base-OS line instead
-		"• a:1 — 2 package(s) newly end-of-life (base OS already EOL)\n",
-		"• b:1 — 1 end-of-life package(s) with new CVEs (base OS already EOL)\n",
-		"• c:1 — 1 package(s) newly end-of-life, 1 end-of-life package(s) with new CVEs (base OS already EOL)\n",
-		"• d:1 — 1 end-of-life package(s) with new CVEs (base OS already EOL)\n",
+		"*Image: a:1*\n2 package(s) newly end-of-life (base OS already EOL)",
+		"*Image: b:1*\n1 end-of-life package(s) with new CVEs (base OS already EOL)",
+		"*Image: c:1*\n1 package(s) newly end-of-life, 1 end-of-life package(s) with new CVEs (base OS already EOL)",
+		"*Image: d:1*\n1 end-of-life package(s) with new CVEs (base OS already EOL)",
 	)
-	if v.newEOSLNote["d:1"] != 1 {
-		t.Errorf("new base-OS note = %v, want d:1 → 1", v.newEOSLNote)
+	if ev.newEOSLNote["d:1"] != 1 {
+		t.Errorf("new base-OS note = %v, want d:1 → 1", ev.newEOSLNote)
 	}
 }
 
 // An act_now end-of-life package gaining a CVE in the diff: evidence line
 // with the end-of-life mark, no pointer to Act now.
-func TestFormatSlackDiffText_EOLActNowNewCVEs(t *testing.T) {
+func TestChannel_EOLActNowNewCVEs(t *testing.T) {
 	enrich := map[string]analyze.Enrichment{"CVE-K": {KEV: true}}
 	scan1 := pinned(scanner.ImageScan{Image: "app:1", Findings: []scanner.Finding{
 		eolF("app:1", "qt", "5.15", scanner.StatusEndOfLife, scanner.SeverityHigh, "CVE-K"),
@@ -274,12 +276,12 @@ func TestFormatSlackDiffText_EOLActNowNewCVEs(t *testing.T) {
 	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{scan1}, nil, triageRules(enrich), goldenPrevTime))
 	r := analyze.Build([]scanner.ImageScan{scan2}, nil, triageRules(enrich), genTime)
 	d, _ := state.Compute(st, r)
-	out := FormatSlackDiffText(r, d, false, false)
-	want := "*⛔ New: package end-of-life (1) — vendor reports these CVEs as out of support for this release*\n" +
-		"🚨 app:1\n" +
-		"   • qt 5.15 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 2) — new: <https://nvd.nist.gov/vuln/detail/CVE-L|CVE-L>\n" +
-		"     ↳ <https://nvd.nist.gov/vuln/detail/CVE-K|CVE-K> HIGH · CISA KEV (exploited in the wild) · EPSS n/a (+1 more CVE(s) in this package) — end-of-life: no fix planned for this release, consider a supported version\n"
-	mustContainAll(t, out, want)
+	out := renderDiff(r, d, false, false)
+	mustContainAll(t, out,
+		"*⛔ New: package end-of-life (1) — vendor reports these CVEs as out of support for this release*\n*Image: app:1*",
+		"*◆ qt*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-L|CVE-L>\nInstalled: 5.15\nFixed in: none — end-of-life: no fix planned for this release, consider a supported version\nFindings: CRITICAL 0 / HIGH 2",
+		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-K|CVE-K> · HIGH · EPSS n/a (+1 more CVE(s) in this package)\nExploitation: CISA KEV (exploited in the wild)",
+	)
 	if strings.Contains(out, "see Act now") || strings.Contains(out, "🆕") {
 		t.Errorf("unexpected pointer or 🆕 section:\n%s", out)
 	}
@@ -287,7 +289,7 @@ func TestFormatSlackDiffText_EOLActNowNewCVEs(t *testing.T) {
 
 // A package with an end-of-life group and an ordinary group that gets a
 // fix: now_fixable stays in 🆕, the end-of-life side is quiet.
-func TestFormatSlackDiffText_MixedPackageNowFixable(t *testing.T) {
+func TestChannel_MixedPackageNowFixable(t *testing.T) {
 	for _, m := range goldenModes()[:2] {
 		scan := func(status scanner.Status) scanner.ImageScan {
 			return pinned(scanner.ImageScan{Image: "app:1", Findings: []scanner.Finding{
@@ -298,8 +300,8 @@ func TestFormatSlackDiffText_MixedPackageNowFixable(t *testing.T) {
 		_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{scan(scanner.StatusAffected)}, nil, m.triage(nil), goldenPrevTime))
 		r := analyze.Build([]scanner.ImageScan{scan(scanner.StatusFixed)}, nil, m.triage(nil), genTime)
 		d, _ := state.Compute(st, r)
-		out := FormatSlackDiffText(r, d, false, false)
-		mustContainAll(t, out, "*🆕 New since last scan (1)*", "qt 5.15 → 5.15+fix", "fix now available")
+		out := renderDiff(r, d, false, false)
+		mustContainAll(t, out, "*🆕 New since last scan (1)*", "*◆ qt*", "Fixed in: 5.15+fix", "Change: fix now available")
 		if strings.Contains(out, "New: package end-of-life") {
 			t.Errorf("%s: no end-of-life change expected:\n%s", m.name, out)
 		}
@@ -309,7 +311,7 @@ func TestFormatSlackDiffText_MixedPackageNowFixable(t *testing.T) {
 // The heartbeat counts each package once across priority buckets: an
 // ordinary watch or low package whose end-of-life CVE is act_now counts as
 // act-now only.
-func TestFormatSlackDiffText_OpenNowCountsEachPackageOnce(t *testing.T) {
+func TestChannel_OpenNowCountsEachPackageOnce(t *testing.T) {
 	enrich := map[string]analyze.Enrichment{"CVE-KEV": {KEV: true}, "CVE-W": {EPSS: 0.05, EPSSKnown: true}}
 	r := analyze.Build([]scanner.ImageScan{pinned(scanner.ImageScan{Image: "app:1", Findings: []scanner.Finding{
 		eolF("app:1", "a", "1", scanner.StatusAffected, scanner.SeverityHigh, "CVE-W"),
@@ -318,17 +320,17 @@ func TestFormatSlackDiffText_OpenNowCountsEachPackageOnce(t *testing.T) {
 		eolF("app:1", "b", "1", scanner.StatusEndOfLife, scanner.SeverityHigh, "CVE-KEV"),
 	}}, eolContentApp)}, nil, triageRules(enrich), genTime)
 	d, _ := state.Compute(state.State{}, r)
-	out := FormatSlackDiffText(r, d, false, false)
-	mustContainAll(t, out, "📌 Open now: ⛔ 2 EOL package / 🚨 2 act-now\n")
+	out := renderDiff(r, d, false, false)
+	mustContainAll(t, out, "📌 *Open now:* ⛔ 2 EOL package / 🚨 2 act-now")
 }
 
 // "All clear" only when nothing is held: an image with nothing but
 // end-of-life packages, then a failed scan of it (held), then a clean scan.
 // The same for ordinary findings, and for a failed image next to a clean
 // one, in both triage modes.
-func TestFormatSlackDiffText_AllClearOnlyWhenNothingHeld(t *testing.T) {
-	const holdLine = "📌 Open now: not re-scanned — holding previous findings until the next successful scan\n"
-	const clearLine = "🎉 Open now: none — all clear\n"
+func TestChannel_AllClearOnlyWhenNothingHeld(t *testing.T) {
+	const holdLine = "📌 *Open now:* not re-scanned — holding previous findings until the next successful scan"
+	const clearLine = "🎉 *Open now:* none — all clear"
 	for _, m := range goldenModes()[:2] {
 		for _, status := range []scanner.Status{scanner.StatusEndOfLife, scanner.StatusFixed} {
 			name := fmt.Sprintf("%s/%s", m.name, status)
@@ -341,12 +343,12 @@ func TestFormatSlackDiffText_AllClearOnlyWhenNothingHeld(t *testing.T) {
 			_, st1 := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{withFinding}, nil, m.triage(nil), genTime))
 			r2 := analyze.Build([]scanner.ImageScan{failed}, nil, m.triage(nil), genTime.AddDate(0, 0, 1))
 			d2, st2 := state.Compute(st1, r2)
-			if out := FormatSlackDiffText(r2, d2, false, false); !strings.Contains(out, holdLine) || strings.Contains(out, clearLine) {
+			if out := renderDiff(r2, d2, false, false); !strings.Contains(out, holdLine) || strings.Contains(out, clearLine) {
 				t.Errorf("%s cycle 2 (failed, held):\n%s", name, out)
 			}
 			r3 := analyze.Build([]scanner.ImageScan{clean}, nil, m.triage(nil), genTime.AddDate(0, 0, 2))
 			d3, _ := state.Compute(st2, r3)
-			if out := FormatSlackDiffText(r3, d3, false, false); !strings.Contains(out, clearLine) {
+			if out := renderDiff(r3, d3, false, false); !strings.Contains(out, clearLine) {
 				t.Errorf("%s cycle 3 (clean, nothing held):\n%s", name, out)
 			}
 
@@ -354,7 +356,7 @@ func TestFormatSlackDiffText_AllClearOnlyWhenNothingHeld(t *testing.T) {
 			other := pinned(scanner.ImageScan{Image: "web:1"}, goldenContentWeb)
 			r4 := analyze.Build([]scanner.ImageScan{failed, other}, nil, m.triage(nil), genTime.AddDate(0, 0, 1))
 			d4, _ := state.Compute(st1, r4)
-			if out := FormatSlackDiffText(r4, d4, false, false); !strings.Contains(out, holdLine) {
+			if out := renderDiff(r4, d4, false, false); !strings.Contains(out, holdLine) {
 				t.Errorf("%s failed + clean:\n%s", name, out)
 			}
 		}
@@ -365,7 +367,7 @@ func TestFormatSlackDiffText_AllClearOnlyWhenNothingHeld(t *testing.T) {
 // groups as pointers there and in full under ACT NOW, end-of-life ages
 // taken from the end-of-life lookup, and the section header repeated when a
 // small limit splits it.
-func TestBuildThreadMessages_EOLSection(t *testing.T) {
+func TestThread_EOLSection(t *testing.T) {
 	r, _, _, _ := eolCycle(goldenModes()[0])
 	ages := Ages{
 		Finding: seenDaysAgo(30),
@@ -373,14 +375,14 @@ func TestBuildThreadMessages_EOLSection(t *testing.T) {
 			return genTime.AddDate(0, 0, -5), true
 		},
 	}
-	out := strings.Join(BuildThreadMessages(r, ages, 0), "\n")
+	out := renderThread(r, ages)
 	mustContainAll(t, out,
-		"*⛔ EOL base images (2)*\n• legacy:1 — base OS is EOL (no more security updates coming) · includes 2 end-of-life package(s)",
+		"*⛔ EOL base images (2)*\n*Image: legacy:1*\nStatus: base OS is EOL (no more security updates coming)\nincludes 2 end-of-life package(s)",
 		"*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release*",
-		"   • libxml2 2.9.7-16 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — 🚨 see Act now\n",
+		"*◆ libxml2*\nInstalled: 2.9.7-16 · Fixed in: none — end-of-life: no fix planned for this release\nFindings: CRITICAL 0 / HIGH 1\nDetails: 🚨 see Act now",
 		"*🚨 ACT NOW (2) — exploited or likely to be*",
-		"— end-of-life: no fix planned for this release, consider a supported version",
-		"     ⏱ open 5 day(s) — first seen 2026-06-19",
+		"Fixed in: none — end-of-life: no fix planned for this release, consider a supported version",
+		"⏱ open 5 day(s) · first seen 2026-06-19",
 	)
 	eolSec := strings.Index(out, "*⛔ EOL packages")
 	actNow := strings.Index(out, "*🚨 ACT NOW")
@@ -393,28 +395,26 @@ func TestBuildThreadMessages_EOLSection(t *testing.T) {
 		t.Errorf("act_now end-of-life groups must use the end-of-life age:\n%s", out[actNow:])
 	}
 
-	msgs := BuildThreadMessages(r, ages, 500)
-	var cont bool
+	msgs := buildThreadBlockMessages(r, ages, enMessages, testSplitLimits)
+	checkMessageConstraints(t, "eol thread split", msgs, testSplitLimits)
+	cont := false
 	for _, m := range msgs {
-		if len(m) > 500 {
-			t.Errorf("message exceeds limit: %d", len(m))
-		}
-		if strings.Contains(m, "*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release* _(cont.)_") {
+		if strings.Contains(allBlocksText([]SlackMessage{m}), "*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release* _(cont.)_") {
 			cont = true
 		}
 	}
 	if !cont {
-		t.Errorf("a split end-of-life section must repeat its header:\n%s", strings.Join(msgs, "\n=====\n"))
+		t.Errorf("a split end-of-life section must repeat its header:\n%s", dumpMessages(msgs))
 	}
 }
 
 // A report with nothing but end-of-life packages still posts a thread.
-func TestBuildThreadMessages_EOLOnly(t *testing.T) {
+func TestThread_EOLOnly(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{pinned(scanner.ImageScan{Image: "app:1", Findings: []scanner.Finding{
 		eolF("app:1", "qt", "5.15", scanner.StatusEndOfLife, scanner.SeverityHigh, "CVE-A"),
 	}}, eolContentApp)}, nil, analyze.Triage{}, genTime)
-	if msgs := BuildThreadMessages(r, Ages{}, 0); len(msgs) != 1 || !strings.Contains(msgs[0], "*⛔ EOL packages (1)") {
-		t.Errorf("thread = %q", msgs)
+	if msgs := BuildThreadBlockMessages(r, Ages{}, LanguageEN); len(msgs) != 1 || !strings.Contains(allBlocksText(msgs), "*⛔ EOL packages (1)") {
+		t.Errorf("thread = %v", msgs)
 	}
 }
 

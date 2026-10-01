@@ -197,8 +197,6 @@ func TestGolden_RuntimeHealthySensor(t *testing.T) {
 	}
 	analyze.AttachRuntime(&r, analyze.RuntimeInfo{Sensor: snap.Sensor}, snap, insp, genTime)
 
-	checkGolden(t, "runtime_healthy_slack_full", FormatSlackText(r))
-	checkGolden(t, "runtime_healthy_thread", goldenThread(r, state.State{}, 0))
 	checkGolden(t, "runtime_healthy_webhook", mustIndentJSON(t, BuildWebhookPayload(r, nil)))
 }
 
@@ -209,7 +207,6 @@ func TestGolden_RuntimeSensorNotReporting(t *testing.T) {
 	r := rtGoldenReport(t)
 	analyze.AttachRuntime(&r, analyze.RuntimeInfo{NotReporting: true, LoadFailed: true}, rtevidence.Snapshot{}, analyze.GenerationInspect{}, genTime)
 
-	checkGolden(t, "runtime_not_reporting_slack_full", FormatSlackText(r))
 	checkGolden(t, "runtime_not_reporting_webhook", mustIndentJSON(t, BuildWebhookPayload(r, nil)))
 }
 
@@ -233,7 +230,6 @@ func TestGolden_RuntimeEBPFUnavailable(t *testing.T) {
 	}
 	analyze.AttachRuntime(&r, analyze.RuntimeInfo{Sensor: snap.Sensor}, snap, insp, genTime)
 
-	checkGolden(t, "runtime_ebpf_unavailable_slack_full", FormatSlackText(r))
 }
 
 // TestGolden_RuntimeAmbiguousOSPackage pins the display for the exact case
@@ -270,7 +266,6 @@ func TestGolden_RuntimeAmbiguousOSPackage(t *testing.T) {
 	}
 	analyze.AttachRuntime(&r, analyze.RuntimeInfo{Sensor: snap.Sensor}, snap, insp, genTime)
 
-	checkGolden(t, "runtime_ambiguous_os_package_slack", FormatSlackText(r))
 	checkGolden(t, "runtime_ambiguous_os_package_webhook", mustIndentJSON(t, BuildWebhookPayload(r, nil)))
 }
 
@@ -305,12 +300,12 @@ func TestNoObservationEvidenceReachesNotifyText(t *testing.T) {
 	if g.Runtime.Usage != rtevidence.UsageInUse {
 		t.Fatalf("Runtime.Usage = %q, want in_use", g.Runtime.Usage)
 	}
-	got := runtimeInUsePhrase(g.Runtime, enMessages)
+	got := inUsePhrase(g.Runtime)
 	if strings.Contains(got, "in use (in use)") {
-		t.Errorf("runtimeInUsePhrase = %q, the evidence kind was dropped on the no-observation path", got)
+		t.Errorf("inUsePhrase = %q, the evidence kind was dropped on the no-observation path", got)
 	}
 	if !strings.Contains(got, "running") {
-		t.Errorf("runtimeInUsePhrase = %q, want it to still name the kind (running)", got)
+		t.Errorf("inUsePhrase = %q, want it to still name the kind (running)", got)
 	}
 }
 
@@ -363,7 +358,6 @@ func TestGolden_RuntimeNonTriageFullView(t *testing.T) {
 	r := rtGoldenReportNoTriage(t)
 	rtGoldenAttach(t, &r)
 
-	checkGolden(t, "runtime_nontriage_slack_full", FormatSlackText(r))
 	checkGolden(t, "runtime_nontriage_webhook", mustIndentJSON(t, BuildWebhookPayload(r, nil)))
 }
 
@@ -376,13 +370,11 @@ func TestGolden_RuntimeDiffMode(t *testing.T) {
 	triageOn := rtGoldenReport(t)
 	rtGoldenAttach(t, &triageOn)
 	diffOn, _ := state.Compute(state.State{}, triageOn)
-	checkGolden(t, "runtime_diff_triage_slack", FormatSlackDiffText(triageOn, diffOn, false, false))
 	checkGolden(t, "runtime_diff_triage_webhook", mustIndentJSON(t, BuildWebhookPayload(triageOn, &diffOn)))
 
 	triageOff := rtGoldenReportNoTriage(t)
 	rtGoldenAttach(t, &triageOff)
 	diffOff, _ := state.Compute(state.State{}, triageOff)
-	checkGolden(t, "runtime_diff_nontriage_slack", FormatSlackDiffText(triageOff, diffOff, false, false))
 	checkGolden(t, "runtime_diff_nontriage_webhook", mustIndentJSON(t, BuildWebhookPayload(triageOff, &diffOff)))
 }
 

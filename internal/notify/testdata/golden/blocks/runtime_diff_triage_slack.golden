@@ -1,0 +1,54 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 Changes since the last scan — 🆕 5 new
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+2 images scanned, 2 affected
+_Changes since the last scan._
+--- divider ---
+--- section ---
+*🆕 New since last scan (5)*
+*Image: web:1.0*
+--- section ---
+*◆ openssl*
+Installed: 3.0.7
+Fixed in: none — consider mitigation
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> · CRITICAL · EPSS n/a
+Exploitation: CISA KEV (exploited in the wild)
+References: <https://avd.example/CVE-OPENSSL|advisory>
+--- section ---
+Runtime: ▶ in use
+Evidence: running as `/usr/sbin/nginx`
+Exposure: published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+--- divider ---
+--- section ---
+*Image: api:2.0*
+*◆ setuptools* [python-pkg]
+Installed: 53.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · EPSS 2%
+Runtime: ▶ in use (running)
+--- section ---
+*Image: web:1.0*
+*◆ curl*
+Installed: 8.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · EPSS 2%
+--- section ---
+*Image: api:2.0*
+*◆ leftpad* [node-pkg]
+Installed: 1.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-LEFTPAD|CVE-LEFTPAD> · EPSS 0.1%
+--- section ---
+*Image: web:1.0*
+*◆ libfoo*
+Installed: 1.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-LIBFOO|CVE-LIBFOO> · EPSS 0.1%
+--- divider ---
+--- section ---
+📌 *Open now:* 🚨 1 act-now / 👀 2 watch / 🔕 2 low
+--- context ---
+📊 Everything open now is in this message's thread ↓

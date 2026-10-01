@@ -1,0 +1,53 @@
+===== message 1/1 =====
+TEXT: Everything currently open — 🚨 ACT NOW · web:1.0 +1 more image(s) (3 package(s))
+--- section ---
+📊 *Everything open now — 2026-06-24 09:00*
+
+*🚨 ACT NOW (1) — exploited or likely to be*
+*Image: web:1.0*
+--- divider ---
+--- section ---
+*◆ openssl*
+Installed: 3.0.7
+Fixed in: none — consider mitigation
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> · CRITICAL · EPSS n/a
+Exploitation: CISA KEV (exploited in the wild)
+References: <https://avd.example/CVE-OPENSSL|advisory>
+--- section ---
+Runtime: ▶ in use
+Evidence: running as `/usr/sbin/nginx`
+Exposure: published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+--- divider ---
+--- section ---
+*👀 WATCH (2) — not urgent, keep an eye on*
+*Image: api:2.0*
+--- divider ---
+--- section ---
+*◆ setuptools* [python-pkg]
+Installed: 53.0.0
+Fixed in: none — consider mitigation
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · HIGH · EPSS 2%
+--- section ---
+Runtime: ▶ in use
+Evidence: runtime is running `/usr/bin/python3.11`
+Last seen: 06-24 09:00
+--- divider ---
+--- section ---
+*Image: web:1.0*
+--- divider ---
+--- section ---
+*◆ curl*
+Installed: 8.0.0
+Fixed in: none — consider mitigation
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · HIGH · EPSS 2%
+--- section ---
+Runtime: ▷ not observed
+--- divider ---
+--- section ---
+*🔕 LOW (2)* — no exploitation signal

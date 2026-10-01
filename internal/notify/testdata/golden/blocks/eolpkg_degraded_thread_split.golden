@@ -1,0 +1,121 @@
+===== message 1/4 =====
+TEXT: Everything currently open — ⛔ EOL base · legacy:1 +2 more image(s) (1 package(s))
+--- section ---
+📊 *Everything open now — 2026-06-24 09:00*
+
+*⛔ EOL base images (2)*
+*Image: legacy:1*
+Status: base OS is EOL (no more security updates coming)
+includes 2 end-of-life package(s)
+--- divider ---
+--- section ---
+*Image: old:3*
+Status: base OS is EOL (no more security updates coming)
+includes 1 end-of-life package(s)
+--- divider ---
+--- section ---
+*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release*
+*Image: app:2.1*
+--- divider ---
+--- section ---
+*◆ libwebkit2gtk*
+Installed: 2.38.5-1 · Fixed in: none — end-of-life: no fix planned for this release
+Findings: CRITICAL 1 / HIGH 0
+Details: 🚨 see Act now
+--- divider ---
+--- section ---
+*◆ curl*
+Installed: 7.61.1-34
+Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0004|CVE-2033-0004> · HIGH · severity only (intel unavailable)
+References: <https://avd.example/CVE-2033-0004|advisory>
+--- context ---
+⏱ first seen today
+===== message 2/4 =====
+TEXT: Everything currently open — ⛔ EOL packages (cont.) · app:2.1 (2 package(s))
+--- section ---
+*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release* _(cont.)_
+*Image: app:2.1* _(cont.)_
+--- divider ---
+--- section ---
+*◆ libxml2*
+Installed: 2.9.7-16
+Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0003|CVE-2033-0003> · HIGH · severity only (intel unavailable)
+References: <https://avd.example/CVE-2033-0003|advisory>
+--- context ---
+⏱ open 20 day(s) · first seen 2026-06-04
+--- divider ---
+--- section ---
+*◆ qt5-qtbase*
+Installed: 5.15.3-1
+Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> · HIGH · severity only (intel unavailable)
+References: <https://avd.example/CVE-2033-0002|advisory>
+--- context ---
+⏱ first seen today
+===== message 3/4 =====
+TEXT: Everything currently open — 🚨 ACT NOW · legacy:1 +1 more image(s) (2 package(s))
+--- section ---
+*🚨 ACT NOW (2) — exploited or likely to be*
+*Image: legacy:1*
+--- divider ---
+--- section ---
+*◆ zlib*
+Installed: 1.2.11
+Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
+Findings: CRITICAL 1 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL · severity only (intel unavailable)
+References: <https://avd.example/CVE-2033-0005|advisory>
+Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0007|CVE-2033-0007>
+--- context ---
+⏱ open 20 day(s) · first seen 2026-06-04
+--- divider ---
+--- section ---
+*Image: app:2.1*
+--- divider ---
+--- section ---
+*◆ libwebkit2gtk*
+Installed: 2.38.5-1
+Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0001|CVE-2033-0001> · CRITICAL · severity only (intel unavailable)
+References: <https://avd.example/CVE-2033-0001|advisory>
+--- context ---
+⏱ open 20 day(s) · first seen 2026-06-04
+===== message 4/4 =====
+TEXT: Everything currently open — 👀 WATCH · app:2.1 (2 package(s))
+--- section ---
+*👀 WATCH (2) — not urgent, keep an eye on*
+*Image: app:2.1*
+--- divider ---
+--- section ---
+*◆ curl*
+Installed: 7.61.1-34
+Fixed in: none — consider mitigation
+Findings: CRITICAL 0 / HIGH 2
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0011|CVE-2033-0011> · HIGH · severity only (intel unavailable)
+References: <https://avd.example/CVE-2033-0011|advisory>
+Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0012|CVE-2033-0012>
+--- context ---
+⏱ open 20 day(s) · first seen 2026-06-04
+--- divider ---
+--- section ---
+*◆ sqlite-libs*
+Installed: 3.26.0-19
+Fixed in: none — consider mitigation
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0008|CVE-2033-0008> · HIGH · severity only (intel unavailable)
+References: <https://avd.example/CVE-2033-0008|advisory>
+--- context ---
+⏱ open 20 day(s) · first seen 2026-06-04

@@ -1,0 +1,34 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 Everything currently open — 🚨 1 act now
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+1 images scanned, 1 affected
+_Everything currently open._
+--- section ---
+*Priority:* 🚨 1 act now
+--- divider ---
+--- section ---
+*🚨 Act now (1) — exploited or likely to be*
+*Image: web:1.0*
+--- section ---
+*◆ openssl*
+Installed: 3.0.7
+Fixed in: none — consider mitigation
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> · CRITICAL · EPSS n/a
+Exploitation: CISA KEV (exploited in the wild)
+--- section ---
+Runtime: ▶ in use
+Evidence: running as `/usr/sbin/nginx`
+Exposure: published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+--- divider ---
+--- section ---
+🔇 Muted — no fix available and not in use for 7+ days: 1
+--- section ---
+🔎 *Runtime:* ▶ 1 in use · 1 not observed · 0 unavailable
+--- context ---
+In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused.
+--- divider ---
+--- context ---
+📊 Everything open now is in this message's thread ↓

@@ -1,0 +1,22 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 Changes since the last scan — 🆕 1 new
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+1 images scanned, 1 affected
+_Changes since the last scan._
+--- divider ---
+--- section ---
+*🆕 New since last scan (1)*
+--- section ---
+*Image: web:1.0*
+*◆ curl*
+Change: ↩️ Unmuted (now in use)
+Installed: 8.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · EPSS n/a
+Runtime: ▶ in use (running)
+--- divider ---
+--- section ---
+📌 *Open now:* 🚨 1 act-now / 🔕 1 low
+--- context ---
+📊 Everything open now is in this message's thread ↓

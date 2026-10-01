@@ -73,11 +73,7 @@ func TestGolden_MuteUnfixableNotInUse(t *testing.T) {
 	r := muteGoldenReport(t)
 	muteGoldenAttach(t, &r, true)
 
-	checkGolden(t, "mute_slack_full", FormatSlackText(r))
-	checkGolden(t, "mute_thread", goldenThread(r, state.State{}, 0))
-
 	d, _ := state.Compute(state.State{}, r)
-	checkGolden(t, "mute_slack_diff", FormatSlackDiffText(r, d, false, false))
 	checkGolden(t, "mute_webhook", mustIndentJSON(t, BuildWebhookPayload(r, &d)))
 }
 
@@ -96,8 +92,6 @@ func TestMuteUnfixableNotInUse_Disabled(t *testing.T) {
 	// mute_unfixable_not_in_use off: analyze.ApplyMuting is
 	// deliberately never called, mirroring runner.RunOnce's own gating.
 
-	checkGolden(t, "runtime_healthy_slack_full", FormatSlackText(r))
-	checkGolden(t, "runtime_healthy_thread", goldenThread(r, state.State{}, 0))
 	checkGolden(t, "runtime_healthy_webhook", mustIndentJSON(t, BuildWebhookPayload(r, nil)))
 
 	for _, section := range [][]analyze.ImageFindings{r.Actionable, r.Watch, r.WontFix, r.EOLPackages} {
@@ -172,7 +166,6 @@ func TestMuteUnfixableNotInUse_Unmuted(t *testing.T) {
 		t.Errorf("cycle 2: Kind = %q, want %q", found.Kind, state.KindUnmuted)
 	}
 
-	checkGolden(t, "mute_lost_slack_diff", FormatSlackDiffText(cycle2, diff, false, false))
 }
 
 // muteGoldenReportWithCurlEOL is muteGoldenReport's cycle-2 counterpart
@@ -240,7 +233,6 @@ func TestMuteUnfixableNotInUse_EOLUnmuted(t *testing.T) {
 		t.Fatalf("cycle 2: Change.EOLGroups is empty, want curl's end-of-life group attached")
 	}
 
-	checkGolden(t, "mute_lost_eol_slack_diff", FormatSlackDiffText(cycle2, diff, false, false))
 	checkGolden(t, "mute_lost_eol_webhook", mustIndentJSON(t, BuildWebhookPayload(cycle2, &diff)))
 }
 

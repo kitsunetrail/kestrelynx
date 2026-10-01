@@ -1,0 +1,83 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 未解決の所見の全体 — ⛔ EOLのベースOS2件 · ⛔ EOLのパッケージ4件 · 🚨 今すぐ対応2件 · 👀 要監視1件 · 🔕 低優先度1件
+--- section ---
+🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果
+イメージ3件をスキャン、3件に影響あり
+_未解決の所見の全体_
+--- section ---
+*優先度:* ⛔ EOLのベースOS2件 · ⛔ EOLのパッケージ4件 · 🚨 今すぐ対応2件 · 👀 要監視1件 · 🔕 低優先度1件
+--- divider ---
+--- section ---
+*⛔ ベースOSのサポート終了(EOL) (最優先)*
+--- section ---
+*イメージ: legacy:1*
+状態: ベースOSがEOL (今後のセキュリティ更新なし)
+サポート終了(EOL)のパッケージ2件を含む
+--- section ---
+*イメージ: old:3*
+状態: ベースOSがEOL (今後のセキュリティ更新なし)
+サポート終了(EOL)のパッケージ1件を含む
+--- divider ---
+--- section ---
+*⛔ パッケージのサポート終了(EOL) (4件) — ベンダーがこれらのCVEをこのリリースのサポート対象外と報告*
+--- section ---
+*イメージ: app:2.1*
+*◆ libwebkit2gtk*
+現在: 2.38.5-1 · 修正版: なし — サポート終了(EOL): このリリースでは修正予定なし
+検出件数: CRITICAL 1 / HIGH 0
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0001|CVE-2033-0001> · EPSS 0.4%
+--- section ---
+*◆ curl*
+現在: 7.61.1-34 · 修正版: なし — サポート終了(EOL): このリリースでは修正予定なし
+検出件数: CRITICAL 0 / HIGH 1
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0004|CVE-2033-0004> · EPSS &lt;0.1%
+--- section ---
+*◆ libxml2*
+現在: 2.9.7-16 · 修正版: なし — サポート終了(EOL): このリリースでは修正予定なし
+検出件数: CRITICAL 0 / HIGH 1
+詳細: 🚨 今すぐ対応を参照
+--- section ---
+*◆ qt5-qtbase*
+現在: 5.15.3-1 · 修正版: なし — サポート終了(EOL): このリリースでは修正予定なし
+検出件数: CRITICAL 0 / HIGH 1
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> · EPSS &lt;0.1%
+--- divider ---
+--- section ---
+*🚨 今すぐ対応 (2件) — 悪用あり、または悪用の可能性が高い*
+*イメージ: legacy:1*
+--- section ---
+*◆ zlib*
+現在: 1.2.11
+修正版: なし — サポート終了(EOL): このリリースでは修正予定なし、サポート中のバージョンを検討
+検出件数: CRITICAL 1 / HIGH 1
+--- section ---
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL · EPSS 30% (このパッケージにほか +1件のCVE)
+悪用情報: CISA KEV (実際の攻撃で悪用あり)
+参照: <https://avd.example/CVE-2033-0005|アドバイザリ>
+--- divider ---
+--- section ---
+*イメージ: app:2.1*
+--- section ---
+*◆ libxml2*
+現在: 2.9.7-16
+修正版: なし — サポート終了(EOL): このリリースでは修正予定なし、サポート中のバージョンを検討
+検出件数: CRITICAL 0 / HIGH 1
+--- section ---
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0003|CVE-2033-0003> · HIGH · EPSS 12%
+悪用情報: CISA KEV (実際の攻撃で悪用あり)
+参照: <https://avd.example/CVE-2033-0003|アドバイザリ>
+--- divider ---
+--- section ---
+*👀 要監視 (1件) — 緊急性は低いが継続監視*
+--- section ---
+*イメージ: app:2.1*
+*◆ curl*
+現在: 7.61.1-34 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 2
+代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0011|CVE-2033-0011> · EPSS 2%
+--- divider ---
+--- section ---
+*🔕 低優先度 (1件)* — イメージ1件で所見1件、悪用の兆候なし (KEV未掲載、EPSSはしきい値未満)
+--- divider ---
+--- context ---
+📊 未解決の所見の全体はこのメッセージのスレッド ↓

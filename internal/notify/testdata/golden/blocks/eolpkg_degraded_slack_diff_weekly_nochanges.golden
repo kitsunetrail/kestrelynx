@@ -1,0 +1,82 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 📋 Weekly full report — everything currently open — ⛔ 2 EOL base · ⛔ 4 EOL package · 🚨 2 act now · 👀 2 watch
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 3 affected
+--- section ---
+⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low
+--- divider ---
+--- section ---
+*📋 Weekly full report — everything currently open*
+--- section ---
+*Priority:* ⛔ 2 EOL base · ⛔ 4 EOL package · 🚨 2 act now · 👀 2 watch
+--- divider ---
+--- section ---
+*⛔ Base OS end-of-life (top priority)*
+--- section ---
+*Image: legacy:1*
+Status: base OS is EOL (no more security updates coming)
+includes 2 end-of-life package(s)
+--- section ---
+*Image: old:3*
+Status: base OS is EOL (no more security updates coming)
+includes 1 end-of-life package(s)
+--- divider ---
+--- section ---
+*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*
+--- section ---
+*Image: app:2.1*
+*◆ libwebkit2gtk*
+Installed: 2.38.5-1 · Fixed in: none — end-of-life: no fix planned for this release
+Findings: CRITICAL 1 / HIGH 0
+Details: 🚨 see Act now
+--- section ---
+*◆ curl*
+Installed: 7.61.1-34 · Fixed in: none — end-of-life: no fix planned for this release
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+*◆ libxml2*
+Installed: 2.9.7-16 · Fixed in: none — end-of-life: no fix planned for this release
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+*◆ qt5-qtbase*
+Installed: 5.15.3-1 · Fixed in: none — end-of-life: no fix planned for this release
+Findings: CRITICAL 0 / HIGH 1
+--- divider ---
+--- section ---
+*🚨 Act now (2) — exploited or likely to be*
+*Image: legacy:1*
+--- section ---
+*◆ zlib*
+Installed: 1.2.11
+Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
+Findings: CRITICAL 1 / HIGH 1
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL · severity only (intel unavailable) (+1 more CVE(s) in this package)
+References: <https://avd.example/CVE-2033-0005|advisory>
+--- divider ---
+--- section ---
+*Image: app:2.1*
+--- section ---
+*◆ libwebkit2gtk*
+Installed: 2.38.5-1
+Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0001|CVE-2033-0001> · CRITICAL · severity only (intel unavailable)
+References: <https://avd.example/CVE-2033-0001|advisory>
+--- divider ---
+--- section ---
+*👀 Watch (2) — not urgent, keep an eye on*
+--- section ---
+*Image: app:2.1*
+*◆ curl*
+Installed: 7.61.1-34 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 2
+--- section ---
+*◆ sqlite-libs*
+Installed: 3.26.0-19 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+--- divider ---
+--- context ---
+📊 Everything open now is in this message's thread ↓

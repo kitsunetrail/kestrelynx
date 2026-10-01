@@ -46,18 +46,18 @@ func triageReport() analyze.Report {
 	return analyze.Build(triageScans(), nil, triageRules(triageEnrich()), genTime)
 }
 
-func TestFormatSlackText_TriageLayout(t *testing.T) {
-	out := FormatSlackText(triageReport())
+func TestChannel_TriageLayout(t *testing.T) {
+	out := renderFull(triageReport())
 
 	mustContain := []string{
 		"*Priority:* ⛔ 1 EOL base · 🚨 1 act now · 👀 1 watch · 🔕 1 low",
 		"*🚨 Act now (1) — exploited or likely to be*",
-		"• web:1.0", // image lines are plain bullets in triage mode
-		"openssl 3.0.7 → 3.0.11",
-		"<https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> CRITICAL · CISA KEV (exploited in the wild) · EPSS 94% · 🧨 ransomware campaign",
+		"*Image: web:1.0", // image lines carry no severity emoji in triage mode
+		"*◆ openssl*\nInstalled: 3.0.7\nFixed in: 3.0.11",
+		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> · CRITICAL · EPSS 94%\nExploitation: CISA KEV (exploited in the wild) · 🧨 ransomware campaign",
 		"*👀 Watch (1) — not urgent, keep an eye on*",
-		"e2fsprogs 1.44 (no fix available)",
-		"<https://nvd.nist.gov/vuln/detail/CVE-WAIT|CVE-WAIT> · EPSS 3%",
+		"*◆ e2fsprogs*\nInstalled: 1.44 · Fixed in: none",
+		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-WAIT|CVE-WAIT> · EPSS 3%",
 		"*🔕 Low priority (1)*",
 		"end-of-life", // EOSL warning stays top-priority
 		"broken:1",    // scan errors always shown
@@ -68,7 +68,7 @@ func TestFormatSlackText_TriageLayout(t *testing.T) {
 		}
 	}
 	// The low bucket is a count, not a listing.
-	if strings.Contains(out, "dpkg 1.19.7") {
+	if strings.Contains(out, "*◆ dpkg*") {
 		t.Errorf("low-priority package should be collapsed to a count:\n%s", out)
 	}
 	// Triage mode drops the per-image severity emoji: the bucket header
@@ -83,7 +83,7 @@ func TestFormatSlackText_TriageLayout(t *testing.T) {
 	}
 }
 
-func TestFormatSlackText_TriageNoFixActNow(t *testing.T) {
+func TestChannel_TriageNoFixActNow(t *testing.T) {
 	// KEV-listed but no fix available: still act now, with the mitigation hint.
 	scans := []scanner.ImageScan{{
 		Image: "app:1",
@@ -91,11 +91,11 @@ func TestFormatSlackText_TriageNoFixActNow(t *testing.T) {
 			{Image: "app:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "", Status: scanner.StatusAffected, Severity: scanner.SeverityHigh, VulnID: "CVE-K"},
 		},
 	}}
-	out := FormatSlackText(analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-K": {KEV: true}}), genTime))
+	out := renderFull(analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-K": {KEV: true}}), genTime))
 	if !strings.Contains(out, "*🚨 Act now (1) — exploited or likely to be*") {
 		t.Errorf("KEV without fix must stay act now:\n%s", out)
 	}
-	if !strings.Contains(out, "no fix yet, consider mitigation") {
+	if !strings.Contains(out, "Fixed in: none — consider mitigation") {
 		t.Errorf("expected the mitigation hint:\n%s", out)
 	}
 	if !strings.Contains(out, "EPSS n/a") {
@@ -103,10 +103,10 @@ func TestFormatSlackText_TriageNoFixActNow(t *testing.T) {
 	}
 }
 
-func TestFormatSlackText_TriageDegraded(t *testing.T) {
+func TestChannel_TriageDegraded(t *testing.T) {
 	tr := triageRules(nil)
 	tr.Intel = analyze.IntelStatus{} // no usable intel
-	out := FormatSlackText(analyze.Build(triageScans(), nil, tr, genTime))
+	out := renderFull(analyze.Build(triageScans(), nil, tr, genTime))
 
 	if !strings.Contains(out, "⚠️ Vulnerability intel (KEV/EPSS) unavailable") {
 		t.Errorf("degraded mode must be announced:\n%s", out)
@@ -119,16 +119,16 @@ func TestFormatSlackText_TriageDegraded(t *testing.T) {
 	}
 }
 
-func TestFormatSlackText_TriageStaleNote(t *testing.T) {
+func TestChannel_TriageStaleNote(t *testing.T) {
 	tr := triageRules(triageEnrich())
 	tr.Intel.StaleDays = 3
-	out := FormatSlackText(analyze.Build(triageScans(), nil, tr, genTime))
+	out := renderFull(analyze.Build(triageScans(), nil, tr, genTime))
 	if !strings.Contains(out, "Intel data is 3 day(s) old") {
 		t.Errorf("stale intel should be annotated:\n%s", out)
 	}
 }
 
-func TestFormatSlackDiffText_TriageEscalation(t *testing.T) {
+func TestChannelDiff_TriageEscalation(t *testing.T) {
 	scan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
 		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-1"},
 	}}
@@ -136,7 +136,7 @@ func TestFormatSlackDiffText_TriageEscalation(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(map[string]analyze.Enrichment{"CVE-1": {KEV: true}}), genTime.AddDate(0, 0, 1))
 	d, _ := state.Compute(st, r)
 
-	out := FormatSlackDiffText(r, d, false, false)
+	out := renderDiff(r, d, false, false)
 	if !strings.Contains(out, "⬆️ escalated to ACT NOW") {
 		t.Errorf("escalation must be called out:\n%s", out)
 	}
@@ -148,27 +148,27 @@ func TestFormatSlackDiffText_TriageEscalation(t *testing.T) {
 	}
 }
 
-// A triage-mode change item other than act-now carries a compact evidence
-// suffix naming its headline CVE, so "New since last scan" says which CVE is
-// behind the line instead of leaving the reader to open the webhook payload.
-// Act-now already gets its evidence from the writeEvidence line below the
-// package, so the change suffix must not repeat it.
-func TestFormatSlackDiffText_TriageChangeCompactEvidence(t *testing.T) {
+// A triage-mode change item other than act-now carries a compact top-CVE
+// line naming its headline CVE, so "New since last scan" says which CVE is
+// behind the card instead of leaving the reader to open the webhook payload.
+// An act-now change shows its evidence in the card's own evidence section, so
+// its head must not repeat it.
+func TestChannelDiff_TriageChangeCompactEvidence(t *testing.T) {
 	r := triageReport()
 	d, _ := state.Compute(state.State{}, r)
-	out := FormatSlackDiffText(r, d, false, false)
+	out := renderDiff(r, d, false, false)
 
-	if !strings.Contains(out, "e2fsprogs 1.44 (no fix available) (CRITICAL 1 / HIGH 0) — <https://nvd.nist.gov/vuln/detail/CVE-WAIT|CVE-WAIT> · EPSS 3%\n") {
-		t.Errorf("expected compact evidence on the watch change line:\n%s", out)
+	if !strings.Contains(out, "*◆ e2fsprogs*\nInstalled: 1.44 · Fixed in: none\nFindings: CRITICAL 1 / HIGH 0\nTop CVE: <https://nvd.nist.gov/vuln/detail/CVE-WAIT|CVE-WAIT> · EPSS 3%") {
+		t.Errorf("expected the top-CVE line on the watch change card:\n%s", out)
 	}
-	if strings.Contains(out, "openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — ") {
-		t.Errorf("act-now change line must not duplicate the evidence inline (writeEvidence already covers it):\n%s", out)
+	if strings.Contains(out, "Fixed in: 3.0.11 (🟢 distro security patch)") {
+		t.Errorf("an act-now change must be a detail card, not a compact one repeating the evidence:\n%s", out)
 	}
 }
 
-// A known package escalated to WATCH keeps both parts in order: the compact
-// evidence first (the CVE the verdict rests on), then the escalation label.
-func TestFormatSlackDiffText_TriageEscalationToWatchSuffixOrder(t *testing.T) {
+// A known package escalated to WATCH shows the escalation on its change line
+// and the CVE the verdict rests on as its top CVE.
+func TestChannelDiff_TriageEscalationToWatch(t *testing.T) {
 	scan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
 		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-1"},
 	}}
@@ -176,16 +176,16 @@ func TestFormatSlackDiffText_TriageEscalationToWatchSuffixOrder(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(map[string]analyze.Enrichment{"CVE-1": {EPSS: 0.03, EPSSKnown: true}}), genTime.AddDate(0, 0, 1))
 	d, _ := state.Compute(st, r)
 
-	out := FormatSlackDiffText(r, d, false, false)
-	want := "   • openssl 1.0 → 1.1 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> · EPSS 3% — ⬆️ escalated to WATCH\n"
+	out := renderDiff(r, d, false, false)
+	want := "*◆ openssl*\nChange: ⬆️ escalated to WATCH\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> · EPSS 3%"
 	if !strings.Contains(out, want) {
-		t.Errorf("expected evidence then escalation label:\n%s\nin:\n%s", want, out)
+		t.Errorf("expected the escalation and the evidence:\n%s\nin:\n%s", want, out)
 	}
 }
 
 // With intel degraded the compact evidence must not cite KEV/EPSS (there is
 // none to cite); it falls back to the plain id + severity form.
-func TestFormatSlackDiffText_TriageDegradedCompactEvidence(t *testing.T) {
+func TestChannelDiff_TriageDegradedCompactEvidence(t *testing.T) {
 	scan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
 		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-1"},
 	}}
@@ -194,20 +194,20 @@ func TestFormatSlackDiffText_TriageDegradedCompactEvidence(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{scan}, nil, rules, genTime)
 	d, _ := state.Compute(state.State{}, r)
 
-	out := FormatSlackDiffText(r, d, false, false)
-	want := "   • openssl 1.0 → 1.1 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> HIGH\n"
+	out := renderDiff(r, d, false, false)
+	want := "*◆ openssl*\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> · HIGH"
 	if !strings.Contains(out, want) {
 		t.Errorf("expected plain id+severity under degraded intel:\n%s\nin:\n%s", want, out)
 	}
 }
 
 // Vulnerability ids in Slack output link to their NVD record; ids from other
-// schemes (GHSA-, DLA-, ...) have no NVD page and stay plain.
-func TestVulnIDLink(t *testing.T) {
-	if got, want := vulnIDLink("CVE-2026-1234"), "<https://nvd.nist.gov/vuln/detail/CVE-2026-1234|CVE-2026-1234>"; got != want {
-		t.Errorf("vulnIDLink(CVE) = %q, want %q", got, want)
+// schemes (GHSA-, DLA-, ...) have no NVD page and stay plain (escaped) text.
+func TestCardIDLink(t *testing.T) {
+	if got, want := cardIDLink("CVE-2026-1234"), "<https://nvd.nist.gov/vuln/detail/CVE-2026-1234|CVE-2026-1234>"; got != want {
+		t.Errorf("cardIDLink(CVE) = %q, want %q", got, want)
 	}
-	if got := vulnIDLink("GHSA-xxxx-yyyy-zzzz"); got != "GHSA-xxxx-yyyy-zzzz" {
+	if got := cardIDLink("GHSA-xxxx-yyyy-zzzz"); got != "GHSA-xxxx-yyyy-zzzz" {
 		t.Errorf("non-CVE id must stay plain, got %q", got)
 	}
 }
@@ -234,7 +234,7 @@ func TestBuildWebhookPayload_EscalationReasonIsPlain(t *testing.T) {
 	}
 }
 
-func TestFormatSlackDiffText_TriageHeartbeatAgesUrgentOnly(t *testing.T) {
+func TestChannelDiff_TriageHeartbeatAgesUrgentOnly(t *testing.T) {
 	lowScan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
 		{Image: "web:1", Class: scanner.ClassOS, Package: "zlib", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-L"},
 	}}
@@ -243,7 +243,7 @@ func TestFormatSlackDiffText_TriageHeartbeatAgesUrgentOnly(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{lowScan}, nil, triageRules(nil), genTime.AddDate(0, 0, 30))
 	d, _ := state.Compute(st, r)
 
-	out := FormatSlackDiffText(r, d, false, false)
+	out := renderDiff(r, d, false, false)
 	if !strings.Contains(out, "🔕 1 low") {
 		t.Errorf("heartbeat should show the open low count:\n%s", out)
 	}
@@ -255,7 +255,7 @@ func TestFormatSlackDiffText_TriageHeartbeatAgesUrgentOnly(t *testing.T) {
 // The heartbeat age names its subject ("act-now/watch"): an aged watch-only
 // backlog was misread as urgent act-now debt under the old "oldest urgent"
 // wording.
-func TestFormatSlackDiffText_TriageHeartbeatAgeWording(t *testing.T) {
+func TestChannelDiff_TriageHeartbeatAgeWording(t *testing.T) {
 	watchScan := scanner.ImageScan{Image: "web:1", Findings: []scanner.Finding{
 		{Image: "web:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: "CVE-W"},
 	}}
@@ -265,7 +265,7 @@ func TestFormatSlackDiffText_TriageHeartbeatAgeWording(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{watchScan}, nil, triageRules(enrich), genTime.AddDate(0, 0, 20))
 	d, _ := state.Compute(st, r)
 
-	out := FormatSlackDiffText(r, d, false, false)
+	out := renderDiff(r, d, false, false)
 	if !strings.Contains(out, "⏰ oldest act-now/watch unresolved 20 day(s)") {
 		t.Errorf("aged watch finding must age the heartbeat under its own name:\n%s", out)
 	}
@@ -334,7 +334,7 @@ func TestBuildWebhookPayload_NoTriageOmitsTriageFields(t *testing.T) {
 	}
 }
 
-func TestFormatSlackText_TriageRefsLine(t *testing.T) {
+func TestChannel_TriageRefsLine(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "nginx:1",
 		Findings: []scanner.Finding{
@@ -349,9 +349,9 @@ func TestFormatSlackText_TriageRefsLine(t *testing.T) {
 	rules.Refs = map[string][]analyze.Ref{
 		"CVE-KEV": {{Kind: "discussion", Label: "HN (166 pts)", URL: "https://news.ycombinator.com/item?id=1"}},
 	}
-	out := FormatSlackText(analyze.Build(scans, nil, rules, genTime))
+	out := renderFull(analyze.Build(scans, nil, rules, genTime))
 
-	if !strings.Contains(out, "📎 <https://avd.aquasec.com/nvd/cve-kev|advisory> · <https://vendor.test/advisory|vendor advisory> · <https://news.ycombinator.com/item?id=1|💬 HN (166 pts)>") {
+	if !strings.Contains(out, "References: <https://avd.aquasec.com/nvd/cve-kev|advisory> · <https://vendor.test/advisory|vendor advisory> · <https://news.ycombinator.com/item?id=1|💬 HN (166 pts)>") {
 		t.Errorf("expected the refs line with Slack link syntax:\n%s", out)
 	}
 }

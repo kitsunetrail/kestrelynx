@@ -46,32 +46,44 @@ func opensslFinding(id string) scanner.Finding {
 	}
 }
 
-// riskLabel must name its subject ("upgrade:"): a green label next to a
-// CRITICAL count was misread as "this vulnerability is safe". Full-string
-// match so a wording regression cannot hide behind a substring.
-func TestRiskLabel(t *testing.T) {
+// The upgrade risk is shown under its own "Upgrade risk" label: a green value
+// next to a CRITICAL count was misread as "this vulnerability is safe".
+// Full-string match so a wording regression cannot hide behind a substring.
+func TestRiskValue(t *testing.T) {
 	cases := map[analyze.Risk]string{
-		analyze.RiskDistroUpdate: "🟢 upgrade: distro security patch",
-		analyze.RiskSafe:         "🟢 upgrade: low-risk",
-		analyze.RiskCaution:      "🟠 upgrade: major version bump — needs care",
-		analyze.RiskUnknown:      "⚪ upgrade: risk unknown",
+		analyze.RiskDistroUpdate: "🟢 distro security patch",
+		analyze.RiskSafe:         "🟢 low-risk",
+		analyze.RiskCaution:      "🟠 major version bump — needs care",
+		analyze.RiskUnknown:      "⚪ risk unknown",
 	}
 	for r, want := range cases {
-		if got := riskLabel(r, enMessages); got != want {
-			t.Errorf("riskLabel(%q) = %q, want %q", r, got, want)
+		if got := riskValue(r, enMessages); got != want {
+			t.Errorf("riskValue(%q) = %q, want %q", r, got, want)
 		}
+	}
+	// A card whose fix has a risk names it: in the detail card under its
+	// own label, in the compact card in parentheses after the fixed version.
+	r := analyze.Report{}
+	g := analyze.PackageGroup{Package: "p", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Risk: analyze.RiskDistroUpdate, High: 1}
+	rd := renderer{msg: enMessages, lim: defaultRenderLimits}
+	c := newPkgCard(r, "img", g, cardOpts{}, enMessages)
+	if got := strings.Join(rd.detailHeadLines(c), "\n"); !strings.Contains(got, "Upgrade risk: 🟢 distro security patch") {
+		t.Errorf("detail card lacks the labelled risk:\n%s", got)
+	}
+	if got := strings.Join(rd.compactLines(c), "\n"); !strings.Contains(got, "Fixed in: 2 (🟢 distro security patch)") {
+		t.Errorf("compact card lacks the risk after the fixed version:\n%s", got)
 	}
 }
 
-func TestFormatSlackText_Sections(t *testing.T) {
-	out := FormatSlackText(sampleReport())
+func TestChannel_Sections(t *testing.T) {
+	out := renderFull(sampleReport())
 
 	mustContain := []string{
 		"KestreLynx",
 		"2026-06-24",
 		"web:1.0",
 		"libc-bin",
-		"2.28-10 → 2.28-10+deb10u2",
+		"Fixed in: 2.28-10+deb10u2",
 		"setuptools",
 		"distro security patch", // OS distro_update label
 		"needs care",            // lang caution label
@@ -88,8 +100,8 @@ func TestFormatSlackText_Sections(t *testing.T) {
 	}
 }
 
-func TestFormatSlackText_Ordering(t *testing.T) {
-	out := FormatSlackText(sampleReport())
+func TestChannel_Ordering(t *testing.T) {
+	out := renderFull(sampleReport())
 	eosl := strings.Index(out, "end-of-life")
 	actionable := strings.Index(out, "libc-bin")
 	affected := strings.Index(out, "e2fsprogs")
@@ -112,8 +124,8 @@ func collapseReport() analyze.Report {
 	return analyze.Build([]scanner.ImageScan{{Image: "big:1", Findings: finds}}, nil, analyze.Triage{}, genTime)
 }
 
-func TestFormatSlackText_CollapsesLowRisk(t *testing.T) {
-	out := FormatSlackText(collapseReport())
+func TestChannel_CollapsesLowRisk(t *testing.T) {
+	out := renderFull(collapseReport())
 
 	if !strings.Contains(out, "*Priority:*") {
 		t.Errorf("expected a priority headline:\n%s", out)
@@ -133,9 +145,9 @@ func TestFormatSlackText_CollapsesLowRisk(t *testing.T) {
 	}
 }
 
-func TestFormatSlackText_Clean(t *testing.T) {
+func TestChannel_Clean(t *testing.T) {
 	clean := analyze.Build([]scanner.ImageScan{{Image: "ok:1"}}, nil, analyze.Triage{}, genTime)
-	out := FormatSlackText(clean)
+	out := renderFull(clean)
 	if !strings.Contains(out, "All clear") {
 		t.Errorf("clean report should say All clear, got:\n%s", out)
 	}
@@ -149,9 +161,9 @@ func diffFixture() (analyze.Report, state.Diff) {
 	return r, d
 }
 
-func TestFormatSlackDiffText_NewFindings(t *testing.T) {
+func TestChannelDiff_NewFindings(t *testing.T) {
 	r, d := diffFixture()
-	out := FormatSlackDiffText(r, d, false, false)
+	out := renderDiff(r, d, false, false)
 
 	mustContain := []string{
 		"New since last scan",
@@ -159,7 +171,7 @@ func TestFormatSlackDiffText_NewFindings(t *testing.T) {
 		"web:1.0",
 		"libc-bin",
 		"setuptools",
-		"Open now: ⛔ 1 EOL base / CRITICAL 1 / HIGH 3",
+		"📌 *Open now:* ⛔ 1 EOL base / CRITICAL 1 / HIGH 3",
 		"broken:1", // scan errors always shown
 		"pull failed",
 	}
@@ -173,17 +185,17 @@ func TestFormatSlackDiffText_NewFindings(t *testing.T) {
 	}
 }
 
-func TestFormatSlackDiffText_Heartbeat(t *testing.T) {
+func TestChannelDiff_Heartbeat(t *testing.T) {
 	r := sampleReport()
 	_, st := state.Compute(state.State{}, r)
 	// Second scan, same findings: no changes.
 	d, _ := state.Compute(st, r)
-	out := FormatSlackDiffText(r, d, false, false)
+	out := renderDiff(r, d, false, false)
 
 	if !strings.Contains(out, "No changes since last scan") {
 		t.Errorf("expected heartbeat line:\n%s", out)
 	}
-	if !strings.Contains(out, "Open now: ⛔ 1 EOL base / CRITICAL 1 / HIGH 3") {
+	if !strings.Contains(out, "📌 *Open now:* ⛔ 1 EOL base / CRITICAL 1 / HIGH 3") {
 		t.Errorf("heartbeat must keep the open summary:\n%s", out)
 	}
 	if strings.Contains(out, "libc-bin") {
@@ -191,39 +203,39 @@ func TestFormatSlackDiffText_Heartbeat(t *testing.T) {
 	}
 }
 
-func TestFormatSlackDiffText_AgeAndEscalation(t *testing.T) {
+func TestChannelDiff_AgeAndEscalation(t *testing.T) {
 	r := sampleReport()
 	old := genTime.AddDate(0, 0, -20)
 	st := state.State{Version: 1, Findings: map[string]state.Entry{
 		"web:1.0\tlibc-bin": {FirstSeen: old, Fixable: true, VulnIDs: []string{"CVE-1"}},
 	}, EOSL: map[string]time.Time{}}
 	d, _ := state.Compute(st, r)
-	out := FormatSlackDiffText(r, d, false, false)
+	out := renderDiff(r, d, false, false)
 
 	if !strings.Contains(out, "⏰ oldest unresolved 20 day(s)") {
 		t.Errorf("expected escalated age marker for a 20-day-old finding:\n%s", out)
 	}
 }
 
-func TestFormatSlackDiffText_Resolved(t *testing.T) {
+func TestChannelDiff_Resolved(t *testing.T) {
 	r := sampleReport()
 	st := state.State{Version: 1, Findings: map[string]state.Entry{
 		"web:1.0\tlibc-bin": {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-1"}},
 		"gone:1\told-pkg":   {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-9"}},
 	}, EOSL: map[string]time.Time{}}
 	d, _ := state.Compute(st, r)
-	out := FormatSlackDiffText(r, d, false, false)
+	out := renderDiff(r, d, false, false)
 
 	if !strings.Contains(out, "Resolved since last scan") || !strings.Contains(out, "gone:1: old-pkg") {
 		t.Errorf("expected resolved section for gone:1 old-pkg:\n%s", out)
 	}
 }
 
-func TestFormatSlackDiffText_WeeklyFullReport(t *testing.T) {
+func TestChannelDiff_WeeklyFullReport(t *testing.T) {
 	r := sampleReport()
 	_, st := state.Compute(state.State{}, r)
 	d, _ := state.Compute(st, r) // unchanged day
-	out := FormatSlackDiffText(r, d, true, false)
+	out := renderDiff(r, d, true, false)
 
 	if !strings.Contains(out, "Weekly full report") {
 		t.Errorf("expected weekly full report heading:\n%s", out)
@@ -236,38 +248,38 @@ func TestFormatSlackDiffText_WeeklyFullReport(t *testing.T) {
 	}
 }
 
-func TestFormatSlackDiffText_AllResolvedCelebrates(t *testing.T) {
+func TestChannelDiff_AllResolvedCelebrates(t *testing.T) {
 	clean := analyze.Build([]scanner.ImageScan{{Image: "ok:1"}}, nil, analyze.Triage{}, genTime)
 	st := state.State{Version: 1, Findings: map[string]state.Entry{
 		"ok:1\topenssl": {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-1"}},
 	}, EOSL: map[string]time.Time{}}
 	d, _ := state.Compute(st, clean)
-	out := FormatSlackDiffText(clean, d, false, false)
+	out := renderDiff(clean, d, false, false)
 
 	if !strings.Contains(out, "Resolved since last scan") {
 		t.Errorf("expected resolved section:\n%s", out)
 	}
-	if !strings.Contains(out, "Open now: none") {
+	if !strings.Contains(out, "*Open now:* none") {
 		t.Errorf("expected all-clear open line:\n%s", out)
 	}
 }
 
 // A non-triage change line still names its headline CVE: plain "id severity"
-// (compactEvidence's non-triage form), since there is no KEV/EPSS evidence to
+// (the non-triage form), since there is no KEV/EPSS evidence to
 // cite without triage enabled.
-func TestFormatSlackDiffText_ChangeCompactEvidence(t *testing.T) {
+func TestChannelDiff_ChangeCompactEvidence(t *testing.T) {
 	r, d := diffFixture()
-	out := FormatSlackDiffText(r, d, false, false)
-	if !strings.Contains(out, "libc-bin 2.28-10 → 2.28-10+deb10u2 (CRITICAL 1 / HIGH 0)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> CRITICAL\n") {
-		t.Errorf("expected a plain id+severity compact evidence suffix:\n%s", out)
+	out := renderDiff(r, d, false, false)
+	if !strings.Contains(out, "*◆ libc-bin*\nInstalled: 2.28-10 · Fixed in: 2.28-10+deb10u2 (🟢 distro security patch)\nFindings: CRITICAL 1 / HIGH 0\nTop CVE: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> · CRITICAL") {
+		t.Errorf("expected a plain id+severity top-CVE line:\n%s", out)
 	}
 }
 
 // A KindNewCVEs change line lists the new CVE ids themselves (linked), capped
 // at newIDsMax with a "(+N more)" overflow, instead of the old bare count —
-// and does not also carry a compactEvidence suffix (the new-id list is
+// and does not also carry a top-CVE line (the new-id list is
 // already the headline).
-func TestFormatSlackDiffText_NewCVEsSuffixLinksAndOverflows(t *testing.T) {
+func TestChannelDiff_NewCVEsSuffixLinksAndOverflows(t *testing.T) {
 	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{
 		{Image: "web:1", Findings: []scanner.Finding{opensslFinding("CVE-1")}},
 	}, nil, analyze.Triage{}, genTime))
@@ -279,20 +291,22 @@ func TestFormatSlackDiffText_NewCVEsSuffixLinksAndOverflows(t *testing.T) {
 	}, nil, analyze.Triage{}, genTime.AddDate(0, 0, 1))
 	d, _ := state.Compute(st, r)
 
-	out := FormatSlackDiffText(r, d, false, false)
-	// Whole line: the new-id listing is the only suffix, with no compact
-	// evidence in front of it.
-	want := "   • openssl 1.0 → 1.1 (CRITICAL 0 / HIGH 5)  🟢 upgrade: distro security patch — new: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>, <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3>, <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> (+1 more)\n"
+	out := renderDiff(r, d, false, false)
+	// The new-id listing is the change line, with no top-CVE line after it.
+	want := "*◆ openssl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>, <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3>, <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> (+1 more)\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 5"
 	if !strings.Contains(out, want) {
 		t.Errorf("expected the linked new-CVE listing with overflow count:\n%s\nwant substring: %s", out, want)
 	}
+	if strings.Contains(out, "Top CVE") {
+		t.Errorf("a new-id change carries no top-CVE line:\n%s", out)
+	}
 }
 
-// A package with both fixed and unfixed CVEs renders as two lines; a new CVE
+// A package with both fixed and unfixed CVEs renders as two cards; a new CVE
 // is listed only under the line it belongs to. Putting it under the fix line
 // would read as "upgrading to 1.1 fixes CVE-2" when it does not, and the line
 // it does not belong to keeps the plain headline suffix instead.
-func TestFormatSlackDiffText_NewCVEsSuffixPerGroup(t *testing.T) {
+func TestChannelDiff_NewCVEsSuffixPerGroup(t *testing.T) {
 	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{
 		{Image: "web:1", Findings: []scanner.Finding{opensslFinding("CVE-1")}},
 	}, nil, analyze.Triage{}, genTime))
@@ -306,16 +320,16 @@ func TestFormatSlackDiffText_NewCVEsSuffixPerGroup(t *testing.T) {
 		t.Fatalf("fixture must yield one new_cves change with two groups: %+v", d.Changes)
 	}
 
-	out := FormatSlackDiffText(r, d, false, false)
+	out := renderDiff(r, d, false, false)
 	for _, want := range []string{
-		"   • openssl 1.0 → 1.1 (CRITICAL 0 / HIGH 1)  🟢 upgrade: distro security patch — <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> HIGH\n",
-		"   • openssl 1.0 (no fix available) (CRITICAL 0 / HIGH 1) — new: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>\n",
+		"*◆ openssl*\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> · HIGH",
+		"*◆ openssl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>\nInstalled: 1.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1",
 	} {
 		if !strings.Contains(out, want) {
-			t.Errorf("missing line:\n%s\nin output:\n%s", want, out)
+			t.Errorf("missing card:\n%s\nin output:\n%s", want, out)
 		}
 	}
-	if strings.Count(out, "new: ") != 1 {
+	if strings.Count(out, "new CVEs: ") != 1 {
 		t.Errorf("the new id must be listed exactly once:\n%s", out)
 	}
 }

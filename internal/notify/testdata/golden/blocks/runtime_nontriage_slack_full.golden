@@ -1,0 +1,51 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 Everything currently open — ✅ 1 fixable · ℹ️ 2 no fix yet · 🔕 1 upstream won't fix
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+2 images scanned, 2 affected
+_Everything currently open._
+--- section ---
+*Priority:* 🔴 1 CRITICAL
+--- divider ---
+--- section ---
+*✅ Actionable now (fixed)*
+--- section ---
+*Image: web:1.0*
+🔴 CRITICAL 1 / HIGH 0
+*◆ openssl*
+Installed: 3.0.7 · Fixed in: 3.0.11 (🟢 distro security patch)
+Findings: CRITICAL 1 / HIGH 0
+Runtime: ▶ in use (running)
+--- divider ---
+--- section ---
+*ℹ️ No fix yet (affected / waiting on upstream)*
+--- section ---
+*Image: api:2.0*
+🟠 CRITICAL 0 / HIGH 1
+*◆ setuptools* [python-pkg]
+Installed: 53.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Runtime: ▶ in use (running)
+--- section ---
+*Image: web:1.0*
+🟠 CRITICAL 0 / HIGH 1
+*◆ curl*
+Installed: 8.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+--- divider ---
+--- section ---
+*🔕 Upstream won't fix (will_not_fix)*
+--- section ---
+*Image: api:2.0*
+🟠 CRITICAL 0 / HIGH 1
+*◆ leftpad* [node-pkg]
+Installed: 1.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+--- divider ---
+--- section ---
+🔎 *Runtime:* ▶ 2 in use · 2 not observed · 0 unavailable
+--- context ---
+In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused.
+--- divider ---
+--- context ---
+📊 Everything open now is in this message's thread ↓

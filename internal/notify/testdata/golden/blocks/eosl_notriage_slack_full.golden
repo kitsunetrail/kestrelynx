@@ -1,0 +1,76 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 Everything currently open — ⛔ 1 EOL base · ✅ 3 fixable · ℹ️ 3 no fix yet · 🔕 2 upstream won't fix
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 2 affected
+_Everything currently open._
+--- section ---
+*Priority:* ⛔ 1 EOL base · 🔴 3 CRITICAL · 🟠 1 need care · 🟢 1 safe
+--- divider ---
+--- section ---
+*⛔ Base OS end-of-life (top priority)*
+--- section ---
+*Image: web:1.0*
+Status: base OS is EOL (no more security updates coming)
+--- divider ---
+--- section ---
+*✅ Actionable now (fixed)*
+--- section ---
+*Image: web:1.0*
+🔴 CRITICAL 1 / HIGH 1
+*◆ openssl*
+Installed: 3.0.7 · Fixed in: 3.0.11 (🟢 distro security patch)
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
++1 lower-risk fixes (HIGH 1): dpkg
+--- section ---
+*Image: api:2.0*
+🟠 CRITICAL 0 / HIGH 1
+*◆ setuptools* [python-pkg]
+Installed: 53.0.0 · Fixed in: 78.1.1 (🟠 major version bump — needs care)
+Findings: CRITICAL 0 / HIGH 1
+--- divider ---
+--- section ---
+*ℹ️ No fix yet (affected / waiting on upstream)*
+--- section ---
+*Image: web:1.0*
+🔴 CRITICAL 1 / HIGH 1
+*◆ e2fsprogs*
+Installed: 1.47.0-2 · Fixed in: none
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+*◆ openssl*
+Installed: 3.0.7 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+*Image: api:2.0*
+🟠 CRITICAL 0 / HIGH 2
+*◆ libxml2*
+Installed: 2.9.14 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 2
+--- divider ---
+--- section ---
+*🔕 Upstream won't fix (will_not_fix)*
+--- section ---
+*Image: web:1.0*
+🔴 CRITICAL 1 / HIGH 0
+*◆ gcc-12-base*
+Installed: 12.2.0-14 · Fixed in: none
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+*Image: api:2.0*
+🟠 CRITICAL 0 / HIGH 1
+*◆ zlib*
+Installed: 1.2.13 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+--- divider ---
+--- section ---
+*⚠️ Scan failures*
+• broken:1 — identity unconfirmed: scanned by reference — pull failed
+--- context ---
+⚠️ identity unconfirmed: scanned by reference — broken:1
+--- section ---
+_1 lower-risk fix(es) summarized._
+--- divider ---
+--- context ---
+📊 Everything open now is in this message's thread ↓

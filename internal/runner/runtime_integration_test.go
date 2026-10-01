@@ -160,6 +160,7 @@ func renderWithoutPanic(t *testing.T, msg notify.Message) {
 			t.Fatalf("rendering panicked: %v", r)
 		}
 	}()
-	_ = notify.FormatSlackText(msg.Report)
+	_ = notify.BuildChannelMessages(msg, notify.ChannelFooter{}, notify.LanguageEN)
+	_ = notify.BuildThreadBlockMessages(msg.Report, notify.Ages{}, notify.LanguageEN)
 	_ = notify.BuildWebhookPayload(msg.Report, nil)
 }

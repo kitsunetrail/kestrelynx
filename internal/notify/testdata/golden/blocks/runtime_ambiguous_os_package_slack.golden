@@ -1,0 +1,51 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 Everything currently open — 🚨 1 act now · 👀 2 watch · 🔕 2 low
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+2 images scanned, 2 affected
+_Everything currently open._
+--- section ---
+*Priority:* 🚨 1 act now · 👀 2 watch · 🔕 2 low
+--- divider ---
+--- section ---
+*🚨 Act now (1) — exploited or likely to be*
+*Image: web:1.0*
+--- section ---
+*◆ openssl*
+Installed: 3.0.7
+Fixed in: none — consider mitigation
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> · CRITICAL · EPSS n/a
+Exploitation: CISA KEV (exploited in the wild)
+References: <https://avd.example/CVE-OPENSSL|advisory>
+--- section ---
+Runtime: ▶ in use
+Evidence: running; loaded as a library; processes: `/usr/bin/helper`, `/app/server`
+Privilege: runs with elevated privilege · last confirmed 06-24 09:00
+--- divider ---
+--- section ---
+*👀 Watch (2) — not urgent, keep an eye on*
+--- section ---
+*Image: api:2.0*
+*◆ setuptools* [python-pkg]
+Installed: 53.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · EPSS 2%
+Runtime: ▶ in use (running)
+--- section ---
+*Image: web:1.0*
+*◆ curl*
+Installed: 8.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · EPSS 2%
+--- divider ---
+--- section ---
+*🔕 Low priority (2)* — 2 finding(s) across 2 image(s), no exploitation signal (not in KEV, EPSS below threshold).
+--- section ---
+🔎 *Runtime:* ▶ 2 in use · 3 not observed · 0 unavailable
+--- context ---
+In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused.
+--- divider ---
+--- context ---
+📊 Everything open now is in this message's thread ↓

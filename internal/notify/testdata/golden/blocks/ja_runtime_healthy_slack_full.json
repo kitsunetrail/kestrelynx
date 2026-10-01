@@ -1,0 +1,114 @@
+[
+  {
+    "text": "KestreLynx 2026-06-24 09:00 未解決の所見の全体 — 🚨 今すぐ対応1件 · 👀 要監視2件 · 🔕 低優先度2件",
+    "blocks": [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果\nイメージ2件をスキャン、2件に影響あり\n_未解決の所見の全体_"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*優先度:* 🚨 今すぐ対応1件 · 👀 要監視2件 · 🔕 低優先度2件"
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*🚨 今すぐ対応 (1件) — 悪用あり、または悪用の可能性が高い*\n*イメージ: web:1.0*"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*◆ openssl*\n現在: 3.0.7\n修正版: なし — 緩和策を検討\n検出件数: CRITICAL 1 / HIGH 0"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL\u003e · CRITICAL · EPSS n/a\n悪用情報: CISA KEV (実際の攻撃で悪用あり)\n参照: \u003chttps://avd.example/CVE-OPENSSL|アドバイザリ\u003e"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "使用状況: ▶ 使用中\n観測根拠: 実行中 `/usr/sbin/nginx`\n公開状態: 全インターフェースに公開 · 高い権限で実行 · 最終確認06-24 09:00"
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*👀 要監視 (2件) — 緊急性は低いが継続監視*"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*イメージ: api:2.0*\n*◆ setuptools* [python-pkg]\n現在: 53.0.0 · 修正版: なし\n検出件数: CRITICAL 0 / HIGH 1\n代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP\u003e · EPSS 2%\n使用状況: ▶ 使用中 (実行中)"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*イメージ: web:1.0*\n*◆ curl*\n現在: 8.0.0 · 修正版: なし\n検出件数: CRITICAL 0 / HIGH 1\n代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL\u003e · EPSS 2%"
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*🔕 低優先度 (2件)* — イメージ2件で所見2件、悪用の兆候なし (KEV未掲載、EPSSはしきい値未満)"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "🔎 *稼働時の使用状況:* ▶ 使用中2件 · 使用が確認されない2件 · 判定できない1件"
+        }
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": "使用中: OSパッケージは稼働中のプログラムが実行または読み込み。言語パッケージは稼働中のバイナリに含まれるか、その実行環境 (python, node, java, …) が稼働中。使用が確認されないとは観測期間内に限った状態であり、未使用を意味しない。"
+          }
+        ]
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": "📊 未解決の所見の全体はこのメッセージのスレッド ↓"
+          }
+        ]
+      }
+    ]
+  }
+]

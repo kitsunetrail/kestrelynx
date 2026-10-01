@@ -62,26 +62,76 @@ type Notifier interface {
 // defaultClient is used when a notifier has no client configured.
 var defaultClient = &http.Client{Timeout: 15 * time.Second}
 
-// SlackNotifier posts a formatted text message to a Slack Incoming Webhook.
+// SlackNotifier posts the channel message to a Slack Incoming Webhook as
+// Block Kit messages (fallback text plus blocks), one POST per message in
+// order. A webhook cannot thread, so the messages carry no thread notice or
+// last-report link.
 type SlackNotifier struct {
 	WebhookURL string
 	Client     *http.Client
 	// Language selects the wording dictionary the message body renders
 	// from. The zero value is LanguageEN.
 	Language Language
+	// Sleep paces the posts; nil = time.Sleep. A test override.
+	Sleep func(time.Duration)
+	// Limits are the sizes messages are packed against; the zero value is the
+	// defaults. It exists for tests that need small messages.
+	Limits RenderLimits
 }
 
 func (n SlackNotifier) Send(ctx context.Context, m Message) error {
-	body := map[string]string{"text": summaryText(m, n.Language)}
-	return postJSON(ctx, client(n.Client), "slack webhook", n.WebhookURL, body)
+	msgs := buildChannelMessages(m, ChannelFooter{}, messagesFor(n.Language), limitsOrDefault(n.Limits))
+	sleep := n.Sleep
+	if sleep == nil {
+		sleep = time.Sleep
+	}
+	for i, sm := range msgs {
+		if i > 0 {
+			sleep(threadPostGap)
+		}
+		if err := postSlackWebhook(ctx, client(n.Client), n.WebhookURL, sm, sleep); err != nil {
+			return fmt.Errorf("post message %d/%d: %w", i+1, len(msgs), err)
+		}
+	}
+	return nil
 }
 
-// summaryText renders the channel message body for the message's mode.
-func summaryText(m Message, lang Language) string {
-	if m.Diff != nil {
-		return FormatSlackDiffText(m.Report, *m.Diff, m.FullReport, m.Holding, lang)
+// postSlackWebhook posts one message, waiting out a 429's Retry-After and
+// retrying up to apiAttempts times in all.
+func postSlackWebhook(ctx context.Context, c *http.Client, endpoint string, sm SlackMessage, sleep func(time.Duration)) error {
+	const dest = "slack webhook"
+	data, err := json.Marshal(sm)
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
 	}
-	return FormatSlackText(m.Report, lang)
+	var lastErr error
+	for attempt := 0; attempt < apiAttempts; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(data))
+		if err != nil {
+			return fmt.Errorf("build request for %s: %w", dest, redact(err))
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := c.Do(req)
+		if err != nil {
+			return fmt.Errorf("post to %s: %w", dest, redact(err))
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		switch {
+		case resp.StatusCode >= 200 && resp.StatusCode < 300:
+			return nil
+		case resp.StatusCode == http.StatusTooManyRequests:
+			// Only the numeric code reaches the error: the reason phrase is
+			// server-chosen text.
+			lastErr = fmt.Errorf("post to %s: unexpected status %d", dest, resp.StatusCode)
+			if attempt < apiAttempts-1 {
+				sleep(retryAfter(resp))
+			}
+		default:
+			return fmt.Errorf("post to %s: unexpected status %d", dest, resp.StatusCode)
+		}
+	}
+	return lastErr
 }
 
 // WebhookNotifier posts the structured JSON payload to a generic endpoint. It

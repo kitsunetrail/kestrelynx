@@ -1,0 +1,73 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 Everything currently open — 🚨 3 act now · 👀 5 watch
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 2 affected
+_Everything currently open._
+--- section ---
+*Priority:* 🚨 3 act now · 👀 5 watch
+--- section ---
+⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low
+--- divider ---
+--- section ---
+*🚨 Act now (3) — exploited or likely to be*
+*Image: web:1.0*
+--- section ---
+*◆ e2fsprogs*
+Installed: 1.47.0-2
+Fixed in: none — consider mitigation
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> · CRITICAL · severity only (intel unavailable)
+--- divider ---
+--- section ---
+*◆ gcc-12-base*
+Installed: 12.2.0-14
+Fixed in: none — upstream won't fix, consider replacing
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0005|CVE-2031-0005> · CRITICAL · severity only (intel unavailable)
+--- divider ---
+--- section ---
+*◆ openssl*
+Installed: 3.0.7
+Fixed in: 3.0.11
+Upgrade risk: 🟢 distro security patch
+Findings: CRITICAL 1 / HIGH 0
+--- section ---
+Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> · CRITICAL · severity only (intel unavailable)
+References: <https://avd.example/CVE-2031-0001|advisory> · <https://vendor.example/advisory/1|vendor advisory>
+--- divider ---
+--- section ---
+*👀 Watch (5) — not urgent, keep an eye on*
+--- section ---
+*Image: api:2.0*
+*◆ libxml2*
+Installed: 2.9.14 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 2
+--- section ---
+*◆ setuptools* [python-pkg]
+Installed: 53.0.0 · Fixed in: 78.1.1 (🟠 major version bump — needs care)
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+*◆ zlib*
+Installed: 1.2.13 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+*Image: web:1.0*
+*◆ dpkg*
+Installed: 1.21.22 · Fixed in: 1.21.23 (🟢 distro security patch)
+Findings: CRITICAL 0 / HIGH 1
+--- section ---
+*◆ openssl*
+Installed: 3.0.7 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+--- divider ---
+--- section ---
+*⚠️ Scan failures*
+• broken:1 — identity unconfirmed: scanned by reference — pull failed
+--- context ---
+⚠️ identity unconfirmed: scanned by reference — broken:1
+--- divider ---
+--- context ---
+📊 Everything open now is in this message's thread ↓

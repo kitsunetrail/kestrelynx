@@ -17,7 +17,6 @@ includes 1 end-of-life package(s)
 *⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release*
 *Image: app:2.1*
 🔴 CRITICAL 1 / HIGH 3
---- divider ---
 --- section ---
 *◆ libwebkit2gtk*
 Installed: 2.38.5-1
@@ -66,7 +65,6 @@ References: <https://avd.example/CVE-2033-0002|advisory>
 *ℹ️ No fix yet (affected / waiting on upstream)*
 *Image: app:2.1*
 🟠 CRITICAL 0 / HIGH 3
---- divider ---
 --- section ---
 *◆ curl*
 Installed: 7.61.1-34

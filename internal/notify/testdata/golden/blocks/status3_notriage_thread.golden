@@ -6,7 +6,6 @@ TEXT: Everything currently open — ✅ Actionable now (fixed) · web:1.0 +1 mor
 *✅ Actionable now (fixed)*
 *Image: web:1.0*
 🔴 CRITICAL 1 / HIGH 1
---- divider ---
 --- section ---
 *◆ openssl*
 Installed: 3.0.7
@@ -34,7 +33,6 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> · HIGH
 --- section ---
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 1
---- divider ---
 --- section ---
 *◆ setuptools* [python-pkg]
 Installed: 53.0.0
@@ -50,7 +48,6 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0008|CVE-2031-0008> · HIGH
 *ℹ️ No fix yet (affected / waiting on upstream)*
 *Image: web:1.0*
 🔴 CRITICAL 1 / HIGH 1
---- divider ---
 --- section ---
 *◆ e2fsprogs*
 Installed: 1.47.0-2
@@ -75,7 +72,6 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> · HIGH
 --- section ---
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 2
---- divider ---
 --- section ---
 *◆ libxml2*
 Installed: 2.9.14
@@ -93,7 +89,6 @@ Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
 *🔕 Upstream won't fix (will_not_fix)*
 *Image: web:1.0*
 🔴 CRITICAL 1 / HIGH 0
---- divider ---
 --- section ---
 *◆ gcc-12-base*
 Installed: 12.2.0-14
@@ -107,7 +102,6 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0005|CVE-2031-0005> · CRITI
 --- section ---
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 1
---- divider ---
 --- section ---
 *◆ zlib*
 Installed: 1.2.13

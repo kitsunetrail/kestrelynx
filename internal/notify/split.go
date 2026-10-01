@@ -327,8 +327,12 @@ func splitUnits(units []unit, spec splitSpec) []SlackMessage {
 		}
 	}
 	place := func(m *pendingMsg, blocks []Block) {
-		// With no heading ahead of it, a message does not open on a divider.
-		if len(m.body) == 0 && !m.head.present && len(blocks) > 0 && blocks[0].Kind == BlockDivider {
+		// A message does not open on a divider, and a repeated category,
+		// image or card heading runs straight into the content it continues.
+		// Only the channel's bare lead line keeps the divider after it, as the
+		// first message's header does.
+		bareLead := m.head.present && !m.head.showCat && !m.head.showImage && m.head.contTitle == ""
+		if len(m.body) == 0 && !bareLead && len(blocks) > 0 && blocks[0].Kind == BlockDivider {
 			blocks = blocks[1:]
 		}
 		m.body = append(m.body, blocks...)

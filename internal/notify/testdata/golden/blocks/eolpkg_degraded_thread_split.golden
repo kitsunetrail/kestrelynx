@@ -16,7 +16,6 @@ includes 1 end-of-life package(s)
 --- section ---
 *⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release*
 *Image: app:2.1*
---- divider ---
 --- section ---
 *◆ libwebkit2gtk*
 Installed: 2.38.5-1 · Fixed in: none — end-of-life: no fix planned for this release
@@ -38,7 +37,6 @@ TEXT: Everything currently open — ⛔ EOL packages (cont.) · app:2.1 (2 packa
 --- section ---
 *⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release* _(cont.)_
 *Image: app:2.1* _(cont.)_
---- divider ---
 --- section ---
 *◆ libxml2*
 Installed: 2.9.7-16
@@ -65,7 +63,6 @@ TEXT: Everything currently open — 🚨 ACT NOW · legacy:1 +1 more image(s) (2
 --- section ---
 *🚨 ACT NOW (2) — exploited or likely to be*
 *Image: legacy:1*
---- divider ---
 --- section ---
 *◆ zlib*
 Installed: 1.2.11
@@ -80,7 +77,6 @@ Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0007|CVE-2033-0007>
 --- divider ---
 --- section ---
 *Image: app:2.1*
---- divider ---
 --- section ---
 *◆ libwebkit2gtk*
 Installed: 2.38.5-1
@@ -96,7 +92,6 @@ TEXT: Everything currently open — 👀 WATCH · app:2.1 (2 package(s))
 --- section ---
 *👀 WATCH (2) — not urgent, keep an eye on*
 *Image: app:2.1*
---- divider ---
 --- section ---
 *◆ curl*
 Installed: 7.61.1-34

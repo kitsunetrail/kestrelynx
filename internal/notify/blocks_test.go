@@ -578,13 +578,10 @@ func TestSplitRightBeforeSummarySectionsAddsNoStaleContinuation(t *testing.T) {
 				if !strings.Contains(first, "Image: ") || !strings.Contains(first, "(cont.)_") {
 					continue
 				}
-				// A continued image heading must lead into a card.
-				next := 1
-				if msg.Blocks[next].Kind == BlockDivider {
-					next++
-				}
-				if !strings.Contains(msg.Blocks[next].Text, "*◆ ") {
-					t.Errorf("%s blocks<=%d message %d: continuation heading above %q", c.name, maxBlocks, i+1, msg.Blocks[next].Text)
+				// A continued image heading leads straight into a card, with no
+				// divider between them.
+				if next := msg.Blocks[1]; next.Kind != BlockSection || !strings.Contains(next.Text, "*◆ ") {
+					t.Errorf("%s blocks<=%d message %d: continuation heading above %v %q", c.name, maxBlocks, i+1, next.Kind, next.Text)
 				}
 			}
 			if strings.Contains(allBlocksText(c.msgs), "*🔕 Low priority") {
@@ -829,5 +826,32 @@ func TestFallbackCountsImagesByFullName(t *testing.T) {
 	}
 	if n := utf16Len(msgs[0].Text); n > 400 {
 		t.Errorf("fallback text of %d units: the displayed image name must be capped", n)
+	}
+}
+
+// --- dividers sit between packages, not under headings ---
+
+// TestThreadHasNoDividerUnderAHeading checks that a section ending in a
+// category or image heading is followed by the card it heads, never by a
+// divider, in whole and split thread reports in both languages.
+func TestThreadHasNoDividerUnderAHeading(t *testing.T) {
+	r, _, _, _ := eolCycle(goldenModes()[0])
+	for _, msg := range []messages{enMessages, jaMessages} {
+		for _, maxBlocks := range []int{8, 12, 20, 50} {
+			lim := RenderLimits{MaxBlocks: maxBlocks, MaxTextUnits: 3000, MaxMessageUnits: 12000, MaxFallbackUnits: 4000}
+			for n, m := range buildThreadBlockMessages(r, Ages{}, msg, lim) {
+				for i := 1; i < len(m.Blocks); i++ {
+					prev := m.Blocks[i-1]
+					if m.Blocks[i].Kind != BlockDivider || prev.Kind != BlockSection {
+						continue
+					}
+					lines := strings.Split(prev.Text, "\n")
+					last := lines[len(lines)-1]
+					if strings.HasPrefix(last, "*Image: ") || strings.HasPrefix(last, "*イメージ: ") {
+						t.Errorf("blocks<=%d message %d block %d: divider right under heading %q", maxBlocks, n+1, i, last)
+					}
+				}
+			}
+		}
 	}
 }

@@ -162,8 +162,10 @@ func (l *layout) channelCategory(lim RenderLimits, cat, short string, imgs []ima
 }
 
 // threadCategory lays out a category of the thread: the category heading
-// shares a section with the first image's heading, a later image's heading
-// has a divider in front, and every card has one too.
+// shares a section with the first image's heading, and a later image's
+// heading has a divider in front. Dividers sit between packages, never
+// between a heading and the card right below it, so a heading reads as part
+// of the package that follows.
 func (l *layout) threadCategory(lim RenderLimits, cat, short string, imgs []imageView) {
 	if len(imgs) == 0 {
 		return
@@ -180,8 +182,8 @@ func (l *layout) threadCategory(lim RenderLimits, cat, short string, imgs []imag
 		} else {
 			l.emit(unit{blocks: sectionBlocks(headLines, lim.MaxTextUnits), sticky: sticky, startsImage: true}, true)
 		}
-		for _, c := range im.cards {
-			l.emit(c.unit(lim, nil), true)
+		for ci, c := range im.cards {
+			l.emit(c.unit(lim, nil), ci > 0)
 		}
 	}
 	l.closeCat()

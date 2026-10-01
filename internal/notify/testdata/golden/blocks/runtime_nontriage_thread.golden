@@ -6,7 +6,6 @@ TEXT: Everything currently open — ✅ Actionable now (fixed) · web:1.0 +1 mor
 *✅ Actionable now (fixed)*
 *Image: web:1.0*
 🔴 CRITICAL 1 / HIGH 0
---- divider ---
 --- section ---
 *◆ openssl*
 Installed: 3.0.7
@@ -24,7 +23,6 @@ Exposure: published on all interfaces · runs with elevated privilege · last co
 *ℹ️ No fix yet (affected / waiting on upstream)*
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 1
---- divider ---
 --- section ---
 *◆ setuptools* [python-pkg]
 Installed: 53.0.0
@@ -40,7 +38,6 @@ Last seen: 06-24 09:00
 --- section ---
 *Image: web:1.0*
 🟠 CRITICAL 0 / HIGH 1
---- divider ---
 --- section ---
 *◆ curl*
 Installed: 8.0.0
@@ -55,7 +52,6 @@ Runtime: ▷ not observed
 *🔕 Upstream won't fix (will_not_fix)*
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 1
---- divider ---
 --- section ---
 *◆ leftpad* [node-pkg]
 Installed: 1.0.0

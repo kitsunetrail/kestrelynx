@@ -1,5 +1,5 @@
-===== message 1/4 =====
-TEXT: Everything currently open — ⛔ EOL base · legacy:1 +2 more image(s) (1 package(s))
+===== message 1/3 =====
+TEXT: Everything currently open — ⛔ EOL base · legacy:1 +2 more image(s) (2 package(s))
 --- section ---
 📊 *Everything open now — 2026-06-24 09:00*
 
@@ -17,7 +17,6 @@ includes 1 end-of-life package(s)
 *⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release*
 *Image: app:2.1*
 🔴 CRITICAL 1 / HIGH 3
---- divider ---
 --- section ---
 *◆ libwebkit2gtk*
 Installed: 2.38.5-1
@@ -28,11 +27,6 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0001|CVE-2033-0001> · CRITI
 References: <https://avd.example/CVE-2033-0001|advisory>
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 2/4 =====
-TEXT: Everything currently open — ⛔ EOL packages (cont.) · app:2.1 (2 package(s))
---- section ---
-*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release* _(cont.)_
-*Image: app:2.1* _(cont.)_
 --- divider ---
 --- section ---
 *◆ curl*
@@ -44,7 +38,11 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0004|CVE-2033-0004> · HIGH
 References: <https://avd.example/CVE-2033-0004|advisory>
 --- context ---
 ⏱ first seen today
---- divider ---
+===== message 2/3 =====
+TEXT: Everything currently open — ⛔ EOL packages (cont.) · app:2.1 (2 package(s))
+--- section ---
+*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release* _(cont.)_
+*Image: app:2.1* _(cont.)_
 --- section ---
 *◆ libxml2*
 Installed: 2.9.7-16
@@ -55,11 +53,6 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0003|CVE-2033-0003> · HIGH
 References: <https://avd.example/CVE-2033-0003|advisory>
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 3/4 =====
-TEXT: Everything currently open — ⛔ EOL packages (cont.) · app:2.1 (2 package(s))
---- section ---
-*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release* _(cont.)_
-*Image: app:2.1* _(cont.)_
 --- divider ---
 --- section ---
 *◆ qt5-qtbase*
@@ -71,12 +64,12 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> · HIGH
 References: <https://avd.example/CVE-2033-0002|advisory>
 --- context ---
 ⏱ first seen today
---- divider ---
+===== message 3/3 =====
+TEXT: Everything currently open — ℹ️ No fix yet (affected / waiting on upstream) · app:2.1 (2 package(s))
 --- section ---
 *ℹ️ No fix yet (affected / waiting on upstream)*
 *Image: app:2.1*
 🟠 CRITICAL 0 / HIGH 3
---- divider ---
 --- section ---
 *◆ curl*
 Installed: 7.61.1-34
@@ -88,11 +81,6 @@ References: <https://avd.example/CVE-2033-0011|advisory>
 Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0012|CVE-2033-0012>
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 4/4 =====
-TEXT: Everything currently open — ℹ️ No fix yet (affected / waiting on upstream) (cont.) · app:2.1 (1 package(s))
---- section ---
-*ℹ️ No fix yet (affected / waiting on upstream)* _(cont.)_
-*Image: app:2.1* _(cont.)_
 --- divider ---
 --- section ---
 *◆ sqlite-libs*

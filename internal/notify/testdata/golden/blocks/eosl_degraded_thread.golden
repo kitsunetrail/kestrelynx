@@ -10,7 +10,6 @@ Status: base OS is EOL (no more security updates coming)
 --- section ---
 *🚨 ACT NOW (3) — exploited or likely to be*
 *Image: web:1.0*
---- divider ---
 --- section ---
 *◆ e2fsprogs*
 Installed: 1.47.0-2
@@ -48,7 +47,6 @@ References: <https://avd.example/CVE-2031-0001|advisory> · <https://vendor.exam
 --- section ---
 *👀 WATCH (5) — not urgent, keep an eye on*
 *Image: api:2.0*
---- divider ---
 --- section ---
 *◆ libxml2*
 Installed: 2.9.14
@@ -85,7 +83,6 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> · HIGH 
 --- divider ---
 --- section ---
 *Image: web:1.0*
---- divider ---
 --- section ---
 *◆ dpkg*
 Installed: 1.21.22

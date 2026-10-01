@@ -10,9 +10,6 @@
         }
       },
       {
-        "type": "divider"
-      },
-      {
         "type": "section",
         "text": {
           "type": "mrkdwn",
@@ -44,9 +41,6 @@
           "type": "mrkdwn",
           "text": "*イメージ: api:2.0*"
         }
-      },
-      {
-        "type": "divider"
       },
       {
         "type": "section",
@@ -84,9 +78,6 @@
         }
       },
       {
-        "type": "divider"
-      },
-      {
         "type": "section",
         "text": {
           "type": "mrkdwn",
@@ -118,9 +109,6 @@
           "type": "mrkdwn",
           "text": "*👀 要監視 (1件) — 緊急性は低いが継続監視*\n*イメージ: web:1.0*"
         }
-      },
-      {
-        "type": "divider"
       },
       {
         "type": "section",

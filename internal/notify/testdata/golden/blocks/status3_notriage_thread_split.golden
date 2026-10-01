@@ -1,4 +1,4 @@
-===== message 1/6 =====
+===== message 1/4 =====
 TEXT: Everything currently open — ✅ Actionable now (fixed) · web:1.0 (2 package(s))
 --- section ---
 📊 *Everything open now — 2026-06-24 09:00*
@@ -6,7 +6,6 @@ TEXT: Everything currently open — ✅ Actionable now (fixed) · web:1.0 (2 pac
 *✅ Actionable now (fixed)*
 *Image: web:1.0*
 🔴 CRITICAL 1 / HIGH 1
---- divider ---
 --- section ---
 *◆ openssl*
 Installed: 3.0.7
@@ -30,15 +29,13 @@ Findings: CRITICAL 0 / HIGH 1
 Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> · HIGH
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 2/6 =====
-TEXT: Everything currently open — ✅ Actionable now (fixed) (cont.) · api:2.0 (1 package(s))
+===== message 2/4 =====
+TEXT: Everything currently open — ✅ Actionable now (fixed) (cont.) · api:2.0 +1 more image(s) (2 package(s))
 --- section ---
 *✅ Actionable now (fixed)* _(cont.)_
---- divider ---
 --- section ---
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 1
---- divider ---
 --- section ---
 *◆ setuptools* [python-pkg]
 Installed: 53.0.0
@@ -49,13 +46,11 @@ Findings: CRITICAL 0 / HIGH 1
 Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0008|CVE-2031-0008> · HIGH
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 3/6 =====
-TEXT: Everything currently open — ℹ️ No fix yet (affected / waiting on upstream) · web:1.0 (2 package(s))
+--- divider ---
 --- section ---
 *ℹ️ No fix yet (affected / waiting on upstream)*
 *Image: web:1.0*
 🔴 CRITICAL 1 / HIGH 1
---- divider ---
 --- section ---
 *◆ e2fsprogs*
 Installed: 1.47.0-2
@@ -66,7 +61,11 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> · CRITI
 Summary: e2fsprogs: out-of-bounds write
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
---- divider ---
+===== message 3/4 =====
+TEXT: Everything currently open — ℹ️ No fix yet (affected / waiting on upstream) (cont.) · web:1.0 +1 more image(s) (2 package(s))
+--- section ---
+*ℹ️ No fix yet (affected / waiting on upstream)* _(cont.)_
+*Image: web:1.0* _(cont.)_
 --- section ---
 *◆ openssl*
 Installed: 3.0.7
@@ -76,15 +75,10 @@ Findings: CRITICAL 0 / HIGH 1
 Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> · HIGH
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 4/6 =====
-TEXT: Everything currently open — ℹ️ No fix yet (affected / waiting on upstream) (cont.) · api:2.0 (1 package(s))
---- section ---
-*ℹ️ No fix yet (affected / waiting on upstream)* _(cont.)_
 --- divider ---
 --- section ---
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 2
---- divider ---
 --- section ---
 *◆ libxml2*
 Installed: 2.9.14
@@ -97,13 +91,12 @@ References: <https://avd.example/CVE-2031-0006|advisory>
 Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 5/6 =====
-TEXT: Everything currently open — 🔕 Upstream won't fix (will_not_fix) · web:1.0 (1 package(s))
+===== message 4/4 =====
+TEXT: Everything currently open — 🔕 Upstream won't fix (will_not_fix) · web:1.0 +1 more image(s) (2 package(s))
 --- section ---
 *🔕 Upstream won't fix (will_not_fix)*
 *Image: web:1.0*
 🔴 CRITICAL 1 / HIGH 0
---- divider ---
 --- section ---
 *◆ gcc-12-base*
 Installed: 12.2.0-14
@@ -113,15 +106,10 @@ Findings: CRITICAL 1 / HIGH 0
 Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0005|CVE-2031-0005> · CRITICAL
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 6/6 =====
-TEXT: Everything currently open — 🔕 Upstream won't fix (will_not_fix) (cont.) · api:2.0 (1 package(s))
---- section ---
-*🔕 Upstream won't fix (will_not_fix)* _(cont.)_
 --- divider ---
 --- section ---
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 1
---- divider ---
 --- section ---
 *◆ zlib*
 Installed: 1.2.13

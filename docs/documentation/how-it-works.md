@@ -268,6 +268,8 @@ With `notify.mode: full`, diff state is not used, and every cycle with findings 
 
 In diff mode, Slack channels show changes; in full mode, they show current unresolved findings. Bot threads show the current unresolved findings under `Everything open now`. Empty sections are omitted, and Low remains count-only even in a full report. The generic webhook provides the complete per-CVE data.
 
+Channel messages and threads use Block Kit cards with a bold `◆ name` heading and labeled lines for each package. Language-package headings add one space followed by an ecosystem tag such as `[jar]`. Dividers separate sections and detailed cards, and each message includes a short summary for notification previews and screen readers. The examples below show visible text, with `───` for dividers and display names for links.
+
 The image counts in the header have the following meanings.
 
 - `images scanned` counts distinct reference-and-identity pairs, including failed scans; separate references count separately even when they share a scan.
@@ -297,17 +299,39 @@ remains in English regardless of this setting.
 | not observed | 使用が確認されない |
 | unavailable | 判定できない |
 | Muted | 通知オフ |
+| Installed | 現在 |
+| Fixed in | 修正版 |
+| Upgrade risk | 更新の注意度 |
+| Findings | 検出件数 |
+| Top CVE | 代表CVE |
+| Exploitation | 悪用情報 |
+| Summary | 説明 |
+| References | 参照 |
+| Other CVEs | ほかのCVE |
+| Runtime | 使用状況 |
+| Evidence | 観測根拠 |
+| Exposure | 公開状態 |
+| Privilege | 権限 |
+| Last seen | 最終確認 |
+| Change | 変化 |
+| Image | イメージ |
 
-A Japanese diff notification:
+An excerpt from a Japanese diff notification showing a priority escalation:
 
 ```text
-🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果
-イメージ3件をスキャン、2件に影響あり
-_前回のスキャンからの変化_
+───
+イメージ: web:1.0
 
-*🆕 前回のスキャンからの新規検出 (4件)*
-🚨 web:1.0
-   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 アップグレード: ディストリのセキュリティパッチ — ⬆️ 今すぐ対応に優先度昇格
+◆ openssl
+変化: ⬆️ 今すぐ対応に優先度昇格
+現在: 3.0.7
+修正版: 3.0.11
+更新の注意度: 🟢 ディストリのセキュリティパッチ
+検出件数: CRITICAL 1 / HIGH 0
+
+代表CVE: CVE-2031-0001 · CRITICAL · EPSS 94%
+悪用情報: CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃
+参照: アドバイザリ · ベンダーのアドバイザリ
 ```
 
 ### Section order
@@ -399,26 +423,26 @@ CRITICAL and HIGH count distinct CVE IDs within each package and fix-status grou
 | `_Changes since the last scan._` | Italic line immediately after `N images scanned, N affected` in diff-mode channel messages with changes; omitted on unchanged and weekly-full-report days. |
 | `_Everything currently open._` | Italic line in the same position in full-mode channel messages (`notify.mode: full`). |
 | `📊 *Everything open now — YYYY-MM-DD HH:MM*` | Heading for current unresolved findings in a Bot thread. |
-| `_📊 Everything open now is in this message's thread ↓_` | Channel message footer on days when a thread is posted. |
-| `🔗 Everything open as of the last report → thread` | Footer on days without a new thread; the linked findings are from the time of the last report. |
+| `📊 Everything open now is in this message's thread ↓` | Context footer at the end of the first channel message when a thread is posted. |
+| `🔗 Everything open as of the last report → thread` | Context footer on the first channel message when no new thread is posted and a valid previous report link fits; the linked findings are from the time of that report. |
 | `_Details in the generic webhook payload._` | LOW detail guidance shown only when a generic webhook is configured; weekly full reports do not contain LOW details. |
 | `✅ Actionable now (fixed)` | Fix-available section when triage is disabled, separate from Act now. |
 
 | Package or change label | Meaning |
 | --- | --- |
-| `🟢 upgrade: distro security patch` | OS package update treated as a distribution revision without SemVer comparison. |
-| `🟢 upgrade: low-risk` | A language-package change that does not increase the major version. |
-| `🟠 upgrade: major version bump — needs care` | A language-package change that increases the major version and may break compatibility. |
-| `⚪ upgrade: risk unknown` | Versions could not be parsed reliably. |
-| `[<ecosystem>]` | Language-package ecosystem from Trivy, such as `[python-pkg]`, `[npm-pkg]`, `[gobinary]`, or `[jar]`; applies independently of the Sensor. OS packages have no tag. |
+| `🟢 distro security patch` | Upgrade-risk value for an OS package update treated as a distribution revision without SemVer comparison. |
+| `🟢 low-risk` | Upgrade-risk value for a language-package change that does not increase the major version. |
+| `🟠 major version bump — needs care` | Upgrade-risk value for a language-package change that increases the major version and may break compatibility. |
+| `⚪ risk unknown` | Upgrade-risk value when versions could not be parsed reliably. |
+| `[<ecosystem>]` | Language-package ecosystem from Trivy, such as `[python-pkg]`, `[npm-pkg]`, `[gobinary]`, or `[jar]`, placed after one space following the package heading; applies independently of the Sensor, and OS packages have no tag. |
 | `[lang]` | Language-package fallback only when the Trivy type is unknown. |
-| `(no fix available)` | No fixed version is available for an ordinary fix status. |
-| `⬆️ escalated to ACT NOW/WATCH` | A known package's maximum priority increased. |
-| `new: CVE-…, CVE-… (+N more)` | Added CVEs are linked, with up to 3 per line and the remainder shown as a count. |
-| `fix now available` | No fix was previously available, and at least 1 fix is now available. |
-| `↩️ Unmuted (<reason>)` | Notification resumed after muting, unless a newly available fix, escalation to Act now, or added CVEs use an existing change label. |
-| `(end-of-life: no fix planned for this release)` | The selected CVEs are out of support for this release. |
-| `🚨 see Act now` | The EOL package's details appear in Act now. |
+| `Fixed in: none` | No fixed version is available, with guidance appended in detailed cards. |
+| `Change: ⬆️ escalated to ACT NOW/WATCH` | A known package's maximum priority increased. |
+| `Change: new CVEs: CVE-…, CVE-… (+N more)` | Added CVEs are linked, with up to 3 IDs shown and the remainder shown as a count. |
+| `Change: fix now available` | No fix was previously available, and at least 1 fix is now available. |
+| `Change: ↩️ Unmuted (<reason>)` | Notification resumed after muting, unless a newly available fix, escalation to Act now, or added CVEs use an existing change label. |
+| `Fixed in: none — end-of-life: no fix planned for this release` | The selected CVEs are out of support for this release. |
+| `Details: 🚨 see Act now` | The EOL package's details appear in Act now. |
 | `includes N end-of-life package(s)` | Count of EOL groups folded into the base-OS line. |
 | `includes N newly end-of-life package(s)` | Count of newly EOL packages other than Act now folded into a new EOL base. |
 | `N package(s) newly end-of-life (base OS already EOL)` | Count of newly EOL packages other than Act now under an existing EOL base. |
@@ -431,12 +455,12 @@ CRITICAL and HIGH count distinct CVE IDs within each package and fix-status grou
 | `EPSS N%` | EPSS probability; missing scores use `n/a`, very small values use `<0.1%`, and very large values use `>99%`. |
 | `🧨 ransomware campaign` | CISA identifies known use in ransomware campaigns. |
 | `severity only (intel unavailable)` | Neither source is usable, so only severity is used. |
-| `no fix yet, consider mitigation` | An `affected` group has no fix, so mitigation should be considered. |
-| `upstream won't fix, consider replacing` | The group is `will_not_fix`, so replacement or another response should be considered. |
-| `end-of-life: no fix planned for this release, consider a supported version` | A supported version should be considered for the EOL package. |
-| `📎 advisory` | Trivy's primary advisory. |
-| `vendor advisory` | A vendor or CISA reference from KEV notes. |
-| `💬 HN (N pts)` | A qualifying Hacker News discussion and its point count. |
+| `Fixed in: none — consider mitigation` | An `affected` group has no fix, so mitigation should be considered. |
+| `Fixed in: none — upstream won't fix, consider replacing` | The group is `will_not_fix`, so replacement or another response should be considered. |
+| `Fixed in: none — end-of-life: no fix planned for this release, consider a supported version` | A supported version should be considered for the EOL package. |
+| `advisory` | Trivy's primary advisory, linked on the `References:` line. |
+| `vendor advisory` | A vendor or CISA reference from KEV notes, linked on the `References:` line. |
+| `💬 HN (N pts)` | A qualifying Hacker News discussion and its point count, linked on the `References:` line. |
 
 ### Runtime usage
 
@@ -444,57 +468,89 @@ With `runtime.enabled: true`, Slack marks findings for packages observed in use.
 Usage does not change priority. Within each priority, packages in use and images
 containing them appear first. With triage disabled, results are not reordered.
 
-In the full view, Act now has a usage line below its evidence line; Watch and
-other package rows show usage at the end of the row.
+Act now cards show usage in a separate section with `Runtime:` and `Evidence:`
+lines, followed by exposure, privilege, and the last confirmation time when
+available. Watch and compact diff entries show a short `Runtime:` line only
+when use is observed.
+
+The following excerpt shows the Act now and Watch sections of a full report:
 
 ```text
-*🚨 Act now (1) — exploited or likely to be*
-• web:1.0
-   • openssl 3.0.7 (no fix available) (CRITICAL 1 / HIGH 0)
-     ↳ CVE-OPENSSL CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a — no fix yet, consider mitigation
-     ▶ in use (running as `/usr/sbin/nginx`) · published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+───
+🚨 Act now (1) — exploited or likely to be
+Image: web:1.0
 
-*👀 Watch (2) — not urgent, keep an eye on*
-• api:2.0
-   • setuptools 53.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [python-pkg] — CVE-SETUP · EPSS 2% · ▶ in use (running)
+◆ openssl
+Installed: 3.0.7
+Fixed in: none — consider mitigation
+Findings: CRITICAL 1 / HIGH 0
 
-🔎 Runtime: ▶ 2 in use · 2 not observed · 1 unavailable
-_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._
+Top CVE: CVE-OPENSSL · CRITICAL · EPSS n/a
+Exploitation: CISA KEV (exploited in the wild)
+References: advisory
+
+Runtime: ▶ in use
+Evidence: running as /usr/sbin/nginx
+Exposure: published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+───
+👀 Watch (2) — not urgent, keep an eye on
+
+Image: api:2.0
+◆ setuptools [python-pkg]
+Installed: 53.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: CVE-SETUP · EPSS 2%
+Runtime: ▶ in use (running)
+
+Image: web:1.0
+◆ curl
+Installed: 8.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: CVE-CURL · EPSS 2%
 ```
 
 - Low's count line ends with ` · ▶ N in use` when N > 0.
-- New rows in diff mode use the same suffix, with a separate line below the evidence for `act_now`.
-- With triage disabled, the full view only appends usage such as ` · ▶ in use (running)` to each package row.
+- Diff entries use the same detailed or compact runtime layout as their package cards.
+- With triage disabled, the full channel view adds a short `Runtime:` line for packages in use without reordering them.
 
 | Runtime label | Meaning |
 | --- | --- |
-| `published on all interfaces` | Published on all host interfaces. |
-| `published on loopback only` | Published only on host loopback. |
-| `listening (not published)` | Listening without a published port. |
-| `runs with elevated privilege` | UID 0 without a user namespace, dangerous capabilities, or privileged mode. |
-| `last confirmed 06-24 09:00` | Time use was last confirmed. |
+| `Exposure: published on all interfaces` | Published on all host interfaces. |
+| `Exposure: published on loopback only` | Published only on host loopback. |
+| `Exposure: listening (not published)` | Listening without a published port. |
+| `runs with elevated privilege` | UID 0 without a user namespace, dangerous capabilities, or privileged mode, shown on the `Exposure:` line or a separate `Privilege:` line. |
+| `last confirmed 06-24 09:00` / `Last seen: 06-24 09:00` | Time use was last confirmed, appended to exposure or privilege information or shown on its own line. |
 
-When several programs use one OS package, the display can read:
-
-```text
-▶ in use (running; loaded as a library; processes: `/usr/bin/helper`, `/app/server`) · ...
-```
-
-Slack Web API threads add one usage line after each package's details in ACT NOW
-and WATCH. Examples include:
+When several programs use one OS package, the English display can read:
 
 ```text
-▶ in use (runtime is running `/usr/bin/python3.11`) · last confirmed 06-24 09:00
-▷ not observed
-▷ not observed — short-lived programs not fully observed
-▷ runtime evidence unavailable (<reason>)
+Runtime: ▶ in use
+Evidence: running; loaded as a library; processes: /usr/bin/helper, /app/server
+Privilege: runs with elevated privilege · last confirmed 06-24 09:00
 ```
 
-The short-lived-program annotation applies when observation does not cover the
-container from startup, including containers already running before the Sensor
-started. Not observed describes only the observation window and does not mean
-unused. Unavailable means evidence is insufficient; the reason values are listed
-in the webhook section below. The LOW section shows `▶ in use among low: N`.
+Bot threads show runtime information after the CVE details for each ACT NOW
+and WATCH package. For example, an in-use language package has:
+
+```text
+Runtime: ▶ in use
+Evidence: runtime is running /usr/bin/python3.11
+Last seen: 06-24 09:00
+```
+
+A package without observed use has:
+
+```text
+Runtime: ▷ not observed
+```
+
+Not observed describes only the observation window and does not mean unused,
+including for containers already running before the Sensor starts.
+There is no additional short-lived-program annotation on this line.
+Insufficient evidence is shown as
+`Runtime: ▷ runtime evidence unavailable (<reason>)`; the reason values are
+listed in the webhook section below. The LOW section shows
+`▶ in use among low: N`.
 
 Sensor problems add a warning line at the beginning:
 
@@ -526,15 +582,33 @@ status meanings, and observation limits.
 
 ### Details and threads
 
-Act now shows evidence for the strongest CVE, while Watch uses a compact display. In the channel, other CVEs are summarized as `(+N more CVE(s) in this package)`.
+Act now uses detailed cards with sections for package versions and counts, the strongest CVE and references, and runtime evidence when available. Dividers separate detailed cards and report sections. Watch and compact diff entries use one section per package, with installed and fixed versions on the same line, findings, a representative CVE when available, and a short runtime line only for packages in use.
 
-Changes outside Act now include `CVE-ID · KEV/EPSS`, or `CVE-ID SEVERITY` when intelligence is unavailable. Lines listing new IDs omit this suffix.
+Detailed cards use `Upgrade risk:` for the update assessment, while compact cards put the same value in parentheses after the fixed version. Priority escalations, newly available fixes, added CVEs, and notification resumption appear on a `Change:` line.
 
-CVE IDs in evidence, Watch reasons, and `also:` lists link to NVD. Other identifiers, such as GHSA and DLA IDs, appear as plain text.
+In detailed channel cards, other CVEs are summarized as `(+N more CVE(s) in this package)` on the `Top CVE:` line. Compact diff entries show `Top CVE: CVE-ID · KEV/EPSS`, or `Top CVE: CVE-ID · SEVERITY` when intelligence is unavailable. CVE IDs on the `Top CVE:`, `Other CVEs:`, and `Change:` lines link to NVD, while other identifiers, such as GHSA and DLA IDs, appear as plain text.
 
-Threads show the strongest CVE's title, evidence, URLs, and age. Up to 8 other IDs appear after `also:`, with the remainder summarized as `(+N more)`.
+Each thread package begins with a divider, followed by sections for package versions and counts, CVE details, and runtime information when available. `Summary:` contains Trivy's Title, `References:` contains advisory and discussion links, and `Other CVEs:` lists up to 8 other IDs with the remainder summarized as `(+N more)`. Empty sections are omitted.
 
-On the day of detection, the age reads `first seen today`. Long reports are split into multiple replies, and continued headings receive `(cont.)`.
+A context line at the end of the card gives its age as `⏱ open N day(s) · first seen YYYY-MM-DD`, or `⏱ first seen today` on the day of detection. An Act now thread card reads as follows:
+
+```text
+───
+◆ openssl
+Installed: 3.0.7
+Fixed in: 3.0.11
+Upgrade risk: 🟢 distro security patch
+Findings: CRITICAL 1 / HIGH 0
+
+Top CVE: CVE-2031-0001 · CRITICAL · EPSS 94%
+Exploitation: CISA KEV (exploited in the wild) · 🧨 ransomware campaign
+Summary: openssl: buffer overread
+References: advisory · vendor advisory
+
+⏱ open 20 day(s) · first seen 2026-06-04
+```
+
+Long channel reports and threads are split into multiple messages at package boundaries where possible. Continued messages repeat the section and image headings with `(cont.)`, or `(続き)` in Japanese, and channel continuation headers also include a part number such as `(cont. 2/3)`. The thread is attached to the first channel message.
 
 The following settings configure delivery methods and destinations.
 
@@ -544,27 +618,25 @@ The following settings configure delivery methods and destinations.
 
 The Bot posts current state in a thread when findings change or the weekly report is due, and links to the latest report on unchanged days. It also creates a new thread on the first notification, after a channel change, or when no valid previous permalink exists.
 
-A typical unchanged-day message with a generic webhook configured is:
+When a thread is posted, the first channel message ends with the context footer `📊 Everything open now is in this message's thread ↓`. Without a new thread, a valid previous report link appears as `🔗 Everything open as of the last report → thread`. No footer appears if neither applies or if the previous permalink is too long to display.
+
+An unchanged-day Open now excerpt is:
 
 ```text
-No changes since last scan.
-📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 8 low
-_Details in the generic webhook payload._
-🔗 Everything open as of the last report → thread
-```
-
-An Act now evidence line reads as follows:
-
-```text
-↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
+📌 Open now: 🚨 3 act-now / 👀 1 watch / 🔕 3 low
+⏰ oldest act-now/watch unresolved 20 day(s)
 ```
 
 ??? note "Technical details"
 
-    - Slack uses plain `mrkdwn` text.
+    - Slack messages use Block Kit `section`, `divider`, and `context` blocks with a short top-level `text` for notification previews and screen readers.
+    - Rendering respects the limits of 50 blocks per message and 3,000 characters per text, splitting long lines and continuing oversized cards when needed.
+    - Trivy titles, package names, versions, image references, error messages, and other scan-derived values escape Slack's `&`, `<`, and `>` control characters so text such as `<!channel>` does not trigger a mention.
     - The strongest CVE is selected by priority, whether an EPSS score is known, higher EPSS, and then CVE ID.
-    - Slack API calls are attempted up to 3 times.
-    - A new thread reference is saved only after the report finishes posting.
+    - Bot and Incoming Webhook delivery post messages sequentially with a 1-second interval between posts.
+    - HTTP 429 responses cause a wait based on `Retry-After`, capped at 30 seconds, with at most 3 attempts per message including the initial attempt.
+    - If delivery fails partway through, already posted messages remain, the saved thread reference is not updated, and the next notification attempt posts the report again.
+    - Slack's Block Kit presentation leaves the generic webhook JSON payload unchanged.
 
 ## 7. Generic webhook
 

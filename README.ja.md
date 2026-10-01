@@ -20,7 +20,7 @@
 - **パッケージ単位の集約**：修正版の有無・バージョン・アップグレード時の注意度
 - **未修正の脆弱性**：修正版がない項目も通知対象
 - **ベースOS・パッケージのEOL**：サポート終了したベースOS（EOL base）と、ベンダーがこのリリースではサポート対象外と報告したCVEを持つパッケージ（EOL package）を、CVEの優先度とは別に最上部で強調して通知
-- **差分通知**：新規検出・CVE追加・修正版公開・優先度上昇・解消
+- **差分通知**：新規検出・CVE追加・修正版公開・優先度昇格・解消
 - **日本語のSlack通知**：`notify.language: ja`でチャンネル本文とスレッドの定型文を日本語表示（汎用WebhookのJSONは英語のまま）
 - **環境の識別**：Slack見出しへの任意の環境名の表示
 - **対象コンテナの識別**：汎用Webhookへのコンテナ名・Composeプロジェクト／サービス・Kubernetes Workload情報の付加
@@ -42,27 +42,42 @@
 
 ## 通知の例
 
-以下は既定の`diff`モードの例です。
+以下は既定の`diff`モードで、`notify.language: ja`を設定したときの例です。SlackではBlock Kitのカードを使い、パッケージの見出しとラベル付きの行で表示します。
 
 ```text
-🛡️ KestreLynx [prod-vps] — scan results for 2026-06-28 09:00
-12 images scanned, 3 affected
+🛡️ KestreLynx [prod-vps] — 2026-06-28 09:00のスキャン結果
+イメージ12件をスキャン、3件に影響あり
+前回のスキャンからの変化
+───
+🆕 前回のスキャンからの新規検出 (2件)
+イメージ: nginx:1.25.3
 
-🆕 New since last scan (2)
-🚨 nginx:1.25.3
-   • libnghttp2-14 1.52.0-1 → 1.52.0-1+deb12u1 (HIGH 2)  🟢 upgrade: distro security patch
-     ↳ CVE-2023-44487 HIGH · CISA KEV (exploited in the wild) · EPSS >99%
-       📎 advisory · vendor advisory · 💬 HN (166 pts)
-🔕 myapp:latest
-   • webpack 4.46.0 → 5.89.0 (HIGH 1)  🟠 upgrade: major version bump — needs care [npm-pkg] — CVE-2024-37890 · EPSS 0.1%
+◆ libnghttp2-14
+現在: 1.52.0-1
+修正版: 1.52.0-1+deb12u1
+更新の注意度: 🟢 ディストリのセキュリティパッチ
+検出件数: CRITICAL 0 / HIGH 2
 
-✅ Resolved since last scan (1)
+代表CVE: CVE-2023-44487 · HIGH · EPSS >99% (このパッケージにほか +1件のCVE)
+悪用情報: CISA KEV (実際の攻撃で悪用あり)
+参照: アドバイザリ · ベンダーのアドバイザリ · 💬 HN (166 pts)
+───
+イメージ: myapp:latest
+◆ webpack [npm-pkg]
+現在: 4.46.0 · 修正版: 5.89.0 (🟠 メジャーバージョン更新 — 要注意)
+検出件数: CRITICAL 0 / HIGH 1
+代表CVE: CVE-2024-37890 · EPSS 0.1%
+───
+✅ 前回のスキャンからの解消 (1件)
 • myapp:latest: postcss
-
-📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 4 low — oldest act-now/watch unresolved 12 day(s)
+───
+📌 現在の未解決: 🚨 今すぐ対応1件 / 👀 要監視2件 / 🔕 低優先度4件
+今すぐ対応/要監視の未解決の最長期間12日
 ```
 
-- **変更あり**：変化した項目と未解決件数（KEV追加などによる優先度上昇も対象）
+長い通知は複数のメッセージに分け、続きには区分とイメージの見出しを繰り返します。各メッセージには、通知のプレビューと画面読み上げ用の短い要約も付けます。
+
+- **変更あり**：変化した項目と未解決件数（KEV追加などによる優先度昇格も対象）
 - **未解決項目あり・変更なし**：短い概要
 - **問題なし・変更なし**：既定では通知なし（`notify.notify_on_clean`で変更可能）
 - **週次レポート**：全体レポート（既定：月曜日、曜日変更・無効化も可能）

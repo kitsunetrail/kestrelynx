@@ -42,25 +42,40 @@
 
 ## What a notification looks like
 
-This example uses the default `diff` mode.
+This example uses the default `diff` mode and English notification text. Slack uses Block Kit cards with a package heading and labeled lines.
 
 ```text
 🛡️ KestreLynx [prod-vps] — scan results for 2026-06-28 09:00
 12 images scanned, 3 affected
-
+Changes since the last scan.
+───
 🆕 New since last scan (2)
-🚨 nginx:1.25.3
-   • libnghttp2-14 1.52.0-1 → 1.52.0-1+deb12u1 (HIGH 2)  🟢 upgrade: distro security patch
-     ↳ CVE-2023-44487 HIGH · CISA KEV (exploited in the wild) · EPSS >99%
-       📎 advisory · vendor advisory · 💬 HN (166 pts)
-🔕 myapp:latest
-   • webpack 4.46.0 → 5.89.0 (HIGH 1)  🟠 upgrade: major version bump — needs care [npm-pkg] — CVE-2024-37890 · EPSS 0.1%
+Image: nginx:1.25.3
 
+◆ libnghttp2-14
+Installed: 1.52.0-1
+Fixed in: 1.52.0-1+deb12u1
+Upgrade risk: 🟢 distro security patch
+Findings: CRITICAL 0 / HIGH 2
+
+Top CVE: CVE-2023-44487 · HIGH · EPSS >99% (+1 more CVE(s) in this package)
+Exploitation: CISA KEV (exploited in the wild)
+References: advisory · vendor advisory · 💬 HN (166 pts)
+───
+Image: myapp:latest
+◆ webpack [npm-pkg]
+Installed: 4.46.0 · Fixed in: 5.89.0 (🟠 major version bump — needs care)
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: CVE-2024-37890 · EPSS 0.1%
+───
 ✅ Resolved since last scan (1)
 • myapp:latest: postcss
-
-📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 4 low — oldest act-now/watch unresolved 12 day(s)
+───
+📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 4 low
+oldest act-now/watch unresolved 12 day(s)
 ```
+
+Long notifications continue in additional messages with repeated section and image headings. Each message also includes a short summary for notification previews and screen readers.
 
 - **Changes detected**: changed findings and open counts, including priority escalations such as KEV additions
 - **Open findings, no changes**: short summary

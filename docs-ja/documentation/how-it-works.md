@@ -177,7 +177,7 @@ EPSSスコアがない場合は0として扱わず、EPSS条件を判定から�
 - 片方だけ利用できる場合は、その情報で判定を続け、利用できない情報源を通知する
 - 両方利用できない場合は縮退トリアージとなり、CRITICALをAct now、それ以外の選択済み深刻度をWatchにする
 
-縮退中はLowへ分類せず、通常とEOLの優先度上昇通知を抑止する。
+縮退中はLowへ分類せず、通常とEOLの優先度昇格通知を抑止する。
 
 `triage.discussion_links`が有効なら、Act nowのCVEに関するHacker Newsの議論を追加する。対象はCVE IDが一致する20ポイント以上の議論であり、議論検索のCVE ID送信は`triage.discussion_links: false`で止められる。
 
@@ -199,20 +199,20 @@ EPSSスコアがない場合は0として扱わず、EPSS条件を判定から�
 
 ### 差分になる変化
 
-通常のパッケージでは、新規検出、優先度上昇、CVE追加、修正版が利用可能になった変化、通知オフからの再開を通知する。複数の変化が同時に成立した場合は、1つの理由だけを通知する。
+通常のパッケージでは、新規検出、優先度昇格、CVE追加、修正版が利用可能になった変化、通知オフからの再開を通知する。複数の変化が同時に成立した場合は、1つの理由だけを通知する。
 
 - 新規は、前回にイメージ参照とパッケージの組み合わせがない場合
-- 優先度上昇は、保存済みの最大優先度より高くなった場合
+- 優先度昇格は、保存済みの最大優先度より高くなった場合
 - CVE追加は、既知のパッケージに新しいCVE IDが加わった場合
 - 修正版が利用可能は、前回は修正版がなく、今回は1つ以上ある場合
-- 通知の再開は、通知オフの条件を満たさなくなった場合で、修正版の公開・Act nowへの上昇・CVE追加には既存の変化の表示を使用
+- 通知の再開は、通知オフの条件を満たさなくなった場合で、修正版の公開・Act nowへの昇格・CVE追加には既存の変化の表示を使用
 
-優先度低下は通知せず保存し、その後の上昇は保存した値を基準に判定する。EOLから通常へ戻っただけでは、新規やCVE追加として扱わない。
+優先度低下は通知せず保存し、その後の昇格は保存した値を基準に判定する。EOLから通常へ戻っただけでは、新規やCVE追加として扱わない。
 
 EOLパッケージの変化は、通常側とは独立して通知する。
 
 - 新たなEOL検出は、前回のEOL記録がない場合で、通常側からの移動や解除後の再検出も含む
-- EOLのAct nowへの上昇は、保存済みのEOL側優先度からAct nowになった場合で、優先度未保存・縮退中・LowからWatchへの上昇は対象外
+- EOLのAct nowへの昇格は、保存済みのEOL側優先度からAct nowになった場合で、優先度未保存・縮退中・LowからWatchへの昇格は対象外
 - EOLのCVE追加は、既知のEOLパッケージに新しいEOLのCVE IDが加わった場合
 
 パッケージの「解消」は、現在の対象から検出項目がなくなったことを意味し、パッチ適用を証明するものではない。前回の組み合わせが、スキャンに成功した今回の通常側にもEOL側にもない場合に解消とする。
@@ -241,9 +241,9 @@ EOLパッケージの変化は、通常側とは独立して通知する。
     - ベースOSのEOL初回検出日時は、通常のパッケージ状態とは別に保存する
     - EOLパッケージの初回EOL検出日時・CVE ID集合・最大優先度は、通常のパッケージ状態とは別に保存する
     - 状態ファイルの形式バージョンは`1`のままとする
-    - 通常のパッケージの変化は、新規、優先度上昇、CVE追加、修正版が利用可能、通知の再開の順に判定し、同時成立なら最上位の理由だけを通知する
+    - 通常のパッケージの変化は、新規、優先度昇格、CVE追加、修正版が利用可能、通知の再開の順に判定し、同時成立なら最上位の理由だけを通知する
     - 通常側の比較には前回のEOL履歴も使う
-    - EOLパッケージの変化は、新たなEOL検出、Act nowへの上昇、EOLのCVE追加の順に判定する
+    - EOLパッケージの変化は、新たなEOL検出、Act nowへの昇格、EOLのCVE追加の順に判定する
     - 全面・一部スキャン失敗やKubernetesの実体未確認による保持は、通常側とEOL側の移動処理より優先する
     - 状態は一時ファイルへ書いたあとアトミックに置き換える
 
@@ -267,6 +267,8 @@ Kubernetesの実体未確認で以前のパッケージ検出結果を保持中�
 ## 6. Slackでの表示
 
 Slackのチャンネルでは、diffモードは変化を、fullモードは現在の未解決の所見を表示する。Botのスレッドは`Everything open now`（未解決の所見の全体）として現在の未解決の所見を表示する。空の区分は表示せず、完全レポートでもLowは件数だけを示す。CVEごとの全データは汎用Webhookで確認する。
+
+チャンネル本文とスレッドはBlock Kitのカードを使い、パッケージごとに太字の`◆ 名前`の見出しとラベル付きの行を表示する。言語パッケージの見出しには、1つの空白のあとに`[jar]`などのエコシステムを付ける。区分や詳細カードの間には区切り線を置き、各メッセージには通知のプレビューと画面読み上げ用の短い要約も付ける。以下の例はSlackで見える文字を示す。
 
 ヘッダーのイメージ件数は、次の意味である。
 
@@ -296,17 +298,39 @@ Hacker Newsの議論のリンク名は英語のまま残る。
 | not observed | 使用が確認されない |
 | unavailable | 判定できない |
 | Muted | 通知オフ |
+| Installed | 現在 |
+| Fixed in | 修正版 |
+| Upgrade risk | 更新の注意度 |
+| Findings | 検出件数 |
+| Top CVE | 代表CVE |
+| Exploitation | 悪用情報 |
+| Summary | 説明 |
+| References | 参照 |
+| Other CVEs | ほかのCVE |
+| Runtime | 使用状況 |
+| Evidence | 観測根拠 |
+| Exposure | 公開状態 |
+| Privilege | 権限 |
+| Last seen | 最終確認 |
+| Change | 変化 |
+| Image | イメージ |
 
-日本語の差分通知の例は次のとおりである。
+日本語の差分通知から、優先度が昇格したパッケージを抜粋すると次のようになる。
 
 ```text
-🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果
-イメージ3件をスキャン、2件に影響あり
-_前回のスキャンからの変化_
+───
+イメージ: web:1.0
 
-*🆕 前回のスキャンからの新規検出 (4件)*
-🚨 web:1.0
-   • openssl 3.0.7 → 3.0.11 (CRITICAL 1 / HIGH 0)  🟢 アップグレード: ディストリのセキュリティパッチ — ⬆️ 今すぐ対応に優先度昇格
+◆ openssl
+変化: ⬆️ 今すぐ対応に優先度昇格
+現在: 3.0.7
+修正版: 3.0.11
+更新の注意度: 🟢 ディストリのセキュリティパッチ
+検出件数: CRITICAL 1 / HIGH 0
+
+代表CVE: CVE-2031-0001 · CRITICAL · EPSS 94%
+悪用情報: CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃
+参照: アドバイザリ · ベンダーのアドバイザリ
 ```
 
 ### 区分の順序
@@ -373,7 +397,7 @@ CRITICAL・HIGHは、パッケージと修正状態のグループ内で重複�
 | `⛔ N EOL package` | Priority行のEOLグループ件数で、ベースOSへ畳み込んだ分を除外 |
 | `🚨 N act now` | Priority行のAct nowグループ件数で、Act nowのEOLグループも含む |
 | `⛔ Package end-of-life (N) — vendor reports these CVEs as out of support for this release` | 現在状態のEOLパッケージ区分 |
-| `⛔ New: package end-of-life (N) — vendor reports these CVEs as out of support for this release` | EOLパッケージの新規検出・Act nowへの上昇・CVE追加 |
+| `⛔ New: package end-of-life (N) — vendor reports these CVEs as out of support for this release` | EOLパッケージの新規検出・Act nowへの昇格・CVE追加 |
 | `⛔ EOL packages (N) — vendor reports these CVEs as out of support for this release` | スレッドのEOLパッケージ区分 |
 | `🚨 Act now` | 悪用確認済み、またはEPSSがしきい値以上で、縮退時はCRITICALも対象 |
 | `👀 Watch` | 確認・監視する対象 |
@@ -398,26 +422,26 @@ CRITICAL・HIGHは、パッケージと修正状態のグループ内で重複�
 | `_Changes since the last scan._` / `_前回のスキャンからの変化_` | diffモードで変化がある日のチャンネル本文に、`N images scanned, N affected`の直後に置く斜体の1行で、変化がない日と週次全量の日は非表示 |
 | `_Everything currently open._` / `_未解決の所見の全体_` | fullモード（`notify.mode: full`）のチャンネル本文の同じ位置に置く斜体の1行 |
 | `📊 *Everything open now — YYYY-MM-DD HH:MM*` / `📊 *未解決の所見の全体 — YYYY-MM-DD HH:MM*` | Botスレッドの現在の未解決の所見の見出し |
-| `_📊 Everything open now is in this message's thread ↓_` / `_📊 未解決の所見の全体はこのメッセージのスレッド ↓_` | スレッドを投稿した日のチャンネル本文の末尾 |
-| `🔗 Everything open as of the last report → thread` / `🔗 前回のレポート時点の未解決の所見の全体 → スレッド` | スレッドを投稿しない日の末尾で、リンク先は前回のレポート時点の所見 |
+| `📊 Everything open now is in this message's thread ↓` / `📊 未解決の所見の全体はこのメッセージのスレッド ↓` | スレッドを投稿した日のチャンネル本文1通目の末尾に置くcontextのフッター |
+| `🔗 Everything open as of the last report → thread` / `🔗 前回のレポート時点の未解決の所見の全体 → スレッド` | スレッドを投稿せず、有効な前回レポートのリンクが表示上限に収まる場合に本文1通目へ置くcontextのフッターで、リンク先はそのレポート時点の所見 |
 | `_Details in the generic webhook payload._` | 汎用Webhookを設定しているときだけ出すLOWの詳細の案内で、週次全量にもLOWの詳細は非表示 |
 | `✅ Actionable now (fixed)` | トリアージ無効時の修正版あり区分で、Act nowとは別 |
 
 | パッケージ・変化のラベル | 意味 |
 | --- | --- |
-| `🟢 upgrade: distro security patch` | OSパッケージの更新で、ディストリビューションのリビジョンとして扱いSemVer比較しない |
-| `🟢 upgrade: low-risk` | 言語パッケージのメジャーバージョンが増えない変更 |
-| `🟠 upgrade: major version bump — needs care` | 言語パッケージのメジャーバージョンが増え、互換性を壊す可能性がある変更 |
-| `⚪ upgrade: risk unknown` | バージョンを確実に解析できない状態 |
-| `[<ecosystem>]` | Trivyの言語パッケージのエコシステム名（例：`[python-pkg]`・`[npm-pkg]`・`[gobinary]`・`[jar]`）で、Sensorと関係なく適用し、OSパッケージにはタグなし |
+| `🟢 distro security patch` | OSパッケージの更新の注意度で、ディストリビューションのリビジョンとして扱いSemVer比較しない |
+| `🟢 low-risk` | 言語パッケージのメジャーバージョンが増えない変更の注意度 |
+| `🟠 major version bump — needs care` | 言語パッケージのメジャーバージョンが増え、互換性を壊す可能性がある変更の注意度 |
+| `⚪ risk unknown` | バージョンを確実に解析できない場合の注意度 |
+| `[<ecosystem>]` | Trivyの言語パッケージのエコシステム名（例：`[python-pkg]`・`[npm-pkg]`・`[gobinary]`・`[jar]`）をパッケージ見出しの1つの空白のあとに置き、Sensorと関係なく適用し、OSパッケージにはタグなし |
 | `[lang]` | Trivyの種類が不明な言語パッケージだけに使う代替ラベル |
-| `(no fix available)` | 通常の修正状態で修正版なし |
-| `⬆️ escalated to ACT NOW/WATCH` | 既知パッケージの最大優先度が上昇 |
-| `new: CVE-…, CVE-… (+N more)` | 追加CVEのリンクを1行最大3件、残りは件数で表示 |
-| `fix now available` | 前回は修正版なし、今回は1つ以上あり |
-| `↩️ Unmuted (<理由>)` / `↩️ 通知を再開 (<理由>)` | 通知オフからの再開で、修正版の公開・Act nowへの上昇・CVE追加には既存の変化の表示を使用 |
-| `(end-of-life: no fix planned for this release)` | このリリースでは対象CVEがサポート対象外 |
-| `🚨 see Act now` | EOLパッケージの詳細はAct now区分に表示 |
+| `Fixed in: none` | 修正版がない状態で、詳細カードでは対応の案内も付加 |
+| `Change: ⬆️ escalated to ACT NOW/WATCH` | 既知パッケージの最大優先度が上昇 |
+| `Change: new CVEs: CVE-…, CVE-… (+N more)` | 追加CVEのリンクを最大3件、残りは件数で表示 |
+| `Change: fix now available` | 前回は修正版なし、今回は1つ以上あり |
+| `Change: ↩️ Unmuted (<理由>)` / `変化: ↩️ 通知を再開 (<理由>)` | 通知オフからの再開で、修正版の公開・Act nowへの昇格・CVE追加には既存の変化の表示を使用 |
+| `Fixed in: none — end-of-life: no fix planned for this release` | このリリースでは対象CVEがサポート対象外 |
+| `Details: 🚨 see Act now` | EOLパッケージの詳細はAct now区分に表示 |
 | `includes N end-of-life package(s)` | ベースOSの行へ畳み込んだEOLグループ件数 |
 | `includes N newly end-of-life package(s)` | 新規EOL baseへ畳み込んだAct now以外の新規EOLパッケージ件数 |
 | `N package(s) newly end-of-life (base OS already EOL)` | 既存EOL baseのAct now以外の新規EOLパッケージ件数 |
@@ -430,12 +454,12 @@ CRITICAL・HIGHは、パッケージと修正状態のグループ内で重複�
 | `EPSS N%` | EPSS確率で、スコアなしは`n/a`、非常に小さい値は`<0.1%`、非常に大きい値は`>99%` |
 | `🧨 ransomware campaign` | CISAがランサムウェアキャンペーンでの使用を確認 |
 | `severity only (intel unavailable)` | 両情報源が利用不能で深刻度のみを使用 |
-| `no fix yet, consider mitigation` | `affected`グループに修正版がなく緩和策を検討 |
-| `upstream won't fix, consider replacing` | `will_not_fix`のため置き換えなどを検討 |
-| `end-of-life: no fix planned for this release, consider a supported version` | EOLパッケージのサポート中バージョンを検討 |
-| `📎 advisory` | Trivyの主要アドバイザリー |
-| `vendor advisory` | KEVのnotesにあるベンダーまたはCISAの参照 |
-| `💬 HN (N pts)` | 条件を満たすHacker Newsの議論とポイント数 |
+| `Fixed in: none — consider mitigation` | `affected`グループに修正版がなく緩和策を検討 |
+| `Fixed in: none — upstream won't fix, consider replacing` | `will_not_fix`のため置き換えなどを検討 |
+| `Fixed in: none — end-of-life: no fix planned for this release, consider a supported version` | EOLパッケージのサポート中バージョンを検討 |
+| `advisory` | `References:`（日本語では`参照:`）の行に置くTrivyの主要アドバイザリーへのリンク |
+| `vendor advisory` | `References:`（日本語では`参照:`）の行に置くKEVのnotesにあるベンダーまたはCISAへのリンク |
+| `💬 HN (N pts)` | `References:`（日本語では`参照:`）の行に置く条件を満たすHacker Newsの議論へのリンクとポイント数 |
 
 ### 稼働時の使用状況
 
@@ -443,81 +467,111 @@ CRITICAL・HIGHは、パッケージと修正状態のグループ内で重複�
 使用状況は優先度を変えない。同じ優先度の中で、使用中のパッケージと、
 それを含むイメージを先に並べる。トリアージが無効の場合は並べ替えない。
 
-全量ビューでは、Act nowは根拠行の下に使用状況を1行追加し、
-Watchなどのパッケージ行では行末に表示する。
+Act nowのカードは使用状況を独立したsectionにまとめ、`使用状況:`と`観測根拠:`の行に続けて、
+情報があれば公開状態・権限・最終確認時刻を表示する。
+Watchと差分の簡略項目は、使用を確認した場合だけ短い`使用状況:`の行を表示する。
+
+全量レポートの今すぐ対応と要監視の区分を抜粋すると、次のようになる。
 
 ```text
-*🚨 Act now (1) — exploited or likely to be*
-• web:1.0
-   • openssl 3.0.7 (no fix available) (CRITICAL 1 / HIGH 0)
-     ↳ CVE-OPENSSL CRITICAL · CISA KEV (exploited in the wild) · EPSS n/a — no fix yet, consider mitigation
-     ▶ in use (running as `/usr/sbin/nginx`) · published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00
+───
+🚨 今すぐ対応 (1件) — 悪用あり、または悪用の可能性が高い
+イメージ: web:1.0
 
-*👀 Watch (2) — not urgent, keep an eye on*
-• api:2.0
-   • setuptools 53.0.0 (no fix available) (CRITICAL 0 / HIGH 1) [python-pkg] — CVE-SETUP · EPSS 2% · ▶ in use (running)
+◆ openssl
+現在: 3.0.7
+修正版: なし — 緩和策を検討
+検出件数: CRITICAL 1 / HIGH 0
 
-🔎 Runtime: ▶ 2 in use · 2 not observed · 1 unavailable
-_In use: an OS package is executed or loaded by a running program; a language package is in a running binary or its runtime (python, node, java, …) is running. Not observed covers the observation window only and does not mean unused._
+代表CVE: CVE-OPENSSL · CRITICAL · EPSS n/a
+悪用情報: CISA KEV (実際の攻撃で悪用あり)
+参照: アドバイザリ
+
+使用状況: ▶ 使用中
+観測根拠: 実行中 /usr/sbin/nginx
+公開状態: 全インターフェースに公開 · 高い権限で実行 · 最終確認06-24 09:00
+───
+👀 要監視 (2件) — 緊急性は低いが継続監視
+
+イメージ: api:2.0
+◆ setuptools [python-pkg]
+現在: 53.0.0 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 1
+代表CVE: CVE-SETUP · EPSS 2%
+使用状況: ▶ 使用中 (実行中)
+
+イメージ: web:1.0
+◆ curl
+現在: 8.0.0 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 1
+代表CVE: CVE-CURL · EPSS 2%
 ```
 
-- Lowの件数行は、N > 0の場合に末尾へ` · ▶ N in use`を付加
-- 差分モードの新規行にも同じ行末表示を付け、`act_now`は根拠行の下に1行追加
-- トリアージ無効の全量ビューでは、各パッケージ行の末尾に` · ▶ in use (running)`などの付加のみ
+- 低優先度の件数行は、N > 0の場合に末尾へ` · ▶ 使用中N件`を付加
+- 差分の項目も、パッケージカードの詳細表示または簡略表示に合わせて使用状況を配置
+- トリアージ無効のチャンネルの全量ビューでは、使用中のパッケージに短い`使用状況:`の行を追加し、並び順は維持
 
 | 稼働時のラベル | 意味 |
 | --- | --- |
-| `published on all interfaces` | ホストのすべてのインターフェースに公開 |
-| `published on loopback only` | ホストのループバックだけに公開 |
-| `listening (not published)` | ポートを公開せずに待ち受け |
-| `runs with elevated privilege` | UID 0かつuser namespaceなし、危険なcapability、privilegedのいずれか |
-| `last confirmed 06-24 09:00` | 使用を最後に確認した時刻 |
+| `公開状態: 全インターフェースに公開` | ホストのすべてのインターフェースに公開 |
+| `公開状態: ループバックのみに公開` | ホストのループバックだけに公開 |
+| `公開状態: 待ち受け中 (未公開)` | ポートを公開せずに待ち受け |
+| `高い権限で実行` | UID 0かつuser namespaceなし、危険なcapability、privilegedのいずれかで、`公開状態:`の行または独立した`権限:`の行に表示 |
+| `最終確認06-24 09:00` / `最終確認: 06-24 09:00` | 使用を最後に確認した時刻で、公開状態・権限の行に付加するか独立した行に表示 |
 
 1つのOSパッケージを複数のプログラムが使う場合は、次のように表示する。
 
 ```text
-▶ in use (running; loaded as a library; processes: `/usr/bin/helper`, `/app/server`) · ...
+使用状況: ▶ 使用中
+観測根拠: 実行中; ライブラリとして読み込み済み; プロセス: /usr/bin/helper, /app/server
+権限: 高い権限で実行 · 最終確認06-24 09:00
 ```
 
-Slack Web APIのスレッドでは、ACT NOW・WATCHの各パッケージの詳細の後に
-使用状況を1行追加する。表示例は次のとおりである。
+Botのスレッドでは、今すぐ対応・要監視の各パッケージのCVE詳細の後に使用状況を表示する。
+使用中の言語パッケージの例は次のとおりである。
 
 ```text
-▶ in use (runtime is running `/usr/bin/python3.11`) · last confirmed 06-24 09:00
-▷ not observed
-▷ not observed — short-lived programs not fully observed
-▷ runtime evidence unavailable (<理由>)
+使用状況: ▶ 使用中
+観測根拠: 稼働中の実行環境 /usr/bin/python3.11
+最終確認: 06-24 09:00
 ```
 
-短命なプログラムの注記は、Sensorの起動より前から動いていたコンテナなど、
-起動時からの観測でない場合に付く。not observedは観測期間に使用を確認できなかった
-ことだけを意味し、使われていないことは意味しない。unavailableは証拠が足りず
-判定できない状態である。理由の一覧は後述のWebhookの節に記載している。
-LOW区分には`▶ in use among low: N`を表示する。
+使用を確認できないパッケージは次のように表示する。
+
+```text
+使用状況: ▷ 使用が確認されない
+```
+
+使用が確認されないとは観測期間内に使用を確認できなかったことだけを意味し、
+使われていないことは意味しない。
+Sensorの起動より前から動いていたコンテナも同じ扱いで、この行に短命なプログラムの注記は付けない。
+証拠が足りない場合は`使用状況: ▷ 稼働時の使用状況を判定できない (<理由>)`と表示する。
+理由の一覧は後述のWebhookの節に記載している。
+低優先度の区分には`▶ 低優先度のうち使用中: N件`を表示する。
 
 Sensorに問題がある場合は、先頭に警告を1行表示する。
 
 ```text
-⚠️ Runtime evidence unavailable: <理由>
+⚠️ 稼働時の証拠が利用できない: <理由>
 ```
 
 | Sensorの状態 | 警告の理由 |
 | --- | --- |
-| `not_reporting` | `the Sensor has not reported yet` |
-| `evidence_invalid` | `the evidence file failed validation` |
-| `stale` | `the Sensor's last report is stale` |
-| `permission_denied` | `the Sensor's reads are being denied` |
-| `isolation_failed` | `the Sensor's sandbox failed to start` |
-| `isolation_degraded` | `the Sensor's sandbox is running degraded` |
-| `degraded` | `the Sensor is degraded` |
+| `not_reporting` | `Sensorからの報告がまだない` |
+| `evidence_invalid` | `証拠ファイルの検証失敗` |
+| `stale` | `Sensorの最終報告が古い` |
+| `permission_denied` | `Sensorの読み取りが拒否されている` |
+| `isolation_failed` | `Sensorのサンドボックス起動失敗` |
+| `isolation_degraded` | `Sensorのサンドボックスが一部制限の効かない状態で稼働中` |
+| `degraded` | `Sensorの一部機能が利用できない` |
 
 eBPFが利用できない場合は、次の警告を表示する。
 
 ```text
-⚠️ Short-lived programs are not observed (eBPF unavailable: <理由>); using sampling only
+⚠️ 短命なプログラムは観測できない (eBPFが利用できない: <理由>); サンプリングのみ使用
 ```
 
-理由は`kernel unsupported`、`permission denied`、`attach failed`、
+理由は`カーネルが未対応`、`権限不足`、`アタッチ失敗`、
 `cgroup v1`のいずれかである。サンプリングは続けるが、短命なプログラムは観測できない。
 
 使用中とみなす条件、Sensorの導入、状態の意味、観測の限界は
@@ -525,15 +579,33 @@ eBPFが利用できない場合は、次の警告を表示する。
 
 ### 詳細とスレッド
 
-Act nowには最も強いCVEの根拠を示し、Watchは簡潔に表示する。チャンネルでは他のCVEを`(+N more CVE(s) in this package)`にまとめる。
+Act nowは詳細カードを使い、パッケージの版と検出件数、最も強いCVEと参照情報、情報がある場合の稼働時の観測根拠をsectionに分ける。詳細カード同士とレポートの区分の間には区切り線を置く。Watchと差分の簡略項目は1パッケージを1つのsectionにまとめ、現在の版と修正版を同じ行に置き、検出件数、表示できる場合の代表CVE、使用中の場合だけ短い使用状況を続ける。
 
-Act now以外の変化には`CVE-ID · KEV/EPSS`を付け、情報を使えない場合は`CVE-ID SEVERITY`を付ける。新規ID一覧の行では、この表記を省略する。
+詳細カードでは`更新の注意度:`の行を使い、簡略カードでは同じ値を修正版のあとの括弧内に置く。優先度昇格、修正版の公開、CVEの追加、通知の再開は`変化:`の行に表示する。
 
-判定根拠、Watchの理由、`also:`のCVE IDはNVDへのリンクである。GHSAやDLAなどは通常のテキストで表示する。
+チャンネルの詳細カードでは、他のCVEを`代表CVE:`の行の`(このパッケージにほか +N件のCVE)`にまとめる。差分の簡略項目では`代表CVE: CVE-ID · KEV/EPSS`を示し、情報を使えない場合は`代表CVE: CVE-ID · SEVERITY`を示す。`代表CVE:`・`ほかのCVE:`・`変化:`の行のCVE IDはNVDへのリンクであり、GHSAやDLAなどは通常のテキストで表示する。
 
-スレッドでは、最も強いCVEのタイトル・根拠・URL・経過日数を確認できる。他のIDは`also:`に最大8件を示し、残りは`(+N more)`にまとめる。
+スレッドでは、各パッケージを区切り線から始め、パッケージの版と検出件数、CVEの詳細、情報がある場合の使用状況の順にsectionを並べる。`説明:`にはTrivyのTitle、`参照:`にはアドバイザリーや議論へのリンク、`ほかのCVE:`には他のIDを最大8件表示し、残りは`(ほか +N件)`にまとめる。内容がないsectionは省略する。
 
-検出当日は`first seen today`と表示する。長いレポートは複数返信へ分け、継続見出しに`(cont.)`を付ける。
+カード末尾のcontextには、経過日数を`⏱ 未解決N日 · 初回検出YYYY-MM-DD`、検出当日は`⏱ 本日初検出`と表示する。今すぐ対応のスレッドのカードは次のようになる。
+
+```text
+───
+◆ openssl
+現在: 3.0.7
+修正版: 3.0.11
+更新の注意度: 🟢 ディストリのセキュリティパッチ
+検出件数: CRITICAL 1 / HIGH 0
+
+代表CVE: CVE-2031-0001 · CRITICAL · EPSS 94%
+悪用情報: CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃
+説明: openssl: buffer overread
+参照: アドバイザリ · ベンダーのアドバイザリ
+
+⏱ 未解決20日 · 初回検出2026-06-04
+```
+
+長いチャンネル本文とスレッドは、可能な限りパッケージの境目で複数のメッセージに分ける。続きのメッセージには区分とイメージの見出しを`(続き)`（英語では`(cont.)`）付きで繰り返し、チャンネル本文の続きのヘッダーには`(続き 2/3)`のような通し番号も付ける。スレッドはチャンネル本文の1通目に付く。
 
 通知方式と送信先は、次の設定で指定する。
 
@@ -543,27 +615,25 @@ Act now以外の変化には`CVE-ID · KEV/EPSS`を付け、情報を使えな�
 
 Botは変化があった日と週次レポートの日に現在状態をスレッドへ投稿し、変化がない日は直近のレポートへリンクする。初回通知、チャンネル変更、有効な前回パーマリンクがない場合も、新しいスレッドを作る。
 
-汎用Webhookを設定している場合の、変化がない日の代表例は次のとおりである。
+スレッドを投稿する場合、チャンネル本文1通目の末尾にcontextのフッターとして`📊 未解決の所見の全体はこのメッセージのスレッド ↓`を表示する。新しいスレッドがなく、有効な前回レポートへのリンクがある場合は`🔗 前回のレポート時点の未解決の所見の全体 → スレッド`を表示する。どちらもない場合や、前回のパーマリンクが長すぎて表示できない場合はフッターを付けない。
+
+変化がない日の現在の未解決の表示を抜粋すると、次のようになる。
 
 ```text
-No changes since last scan.
-📌 Open now: 🚨 1 act-now / 👀 2 watch / 🔕 8 low
-_Details in the generic webhook payload._
-🔗 Everything open as of the last report → thread
-```
-
-Act nowの判定根拠は次のように読む。
-
-```text
-↳ CVE-2026-12345 CRITICAL · CISA KEV (exploited in the wild) · EPSS 12%
+📌 現在の未解決: 🚨 今すぐ対応3件 / 👀 要監視1件 / 🔕 低優先度3件
+⏰ 今すぐ対応/要監視の未解決の最長期間20日
 ```
 
 ??? note "技術的な詳細"
 
-    - Slackは通常の`mrkdwn`テキストを使う
+    - SlackのメッセージはBlock Kitの`section`・`divider`・`context`を使い、通知のプレビューと画面読み上げ用に短いトップレベルの`text`を付ける
+    - 1メッセージ50ブロック、各テキスト3,000文字の上限に収めるため、必要に応じて長い行を分割し、1通に収まらないカードも次のメッセージへ続ける
+    - TrivyのTitle、パッケージ名、版、イメージ参照、エラー文などスキャン結果由来の値はSlackの制御文字`&`・`<`・`>`をエスケープし、`<!channel>`などをメンションとして機能させない
     - 最も強いCVEは、優先度、EPSS取得済みか、EPSSの高さ、CVE IDの順で決める
-    - Slack APIは最大3回試行する
-    - 新しいスレッド参照は、レポート投稿完了後だけ保存する
+    - Bot・Incoming Webhookとも、メッセージを1秒間隔で順番に投稿する
+    - HTTP 429では`Retry-After`に従って上限30秒で待機し、1メッセージにつき初回を含め最大3回試行する
+    - 途中で送信に失敗した場合は投稿済みのメッセージを残し、保存済みのスレッド参照を更新せず、次回の通知の試行でレポートを改めて投稿する
+    - SlackのBlock Kit表示は汎用WebhookのJSON payloadを変更しない
 
 ## 7. 汎用Webhook
 
@@ -827,7 +897,7 @@ Sensorの状態の意味と観測の限界は[稼働時の使用状況](runtime-
 | `critical` | integer | CRITICAL件数 |
 | `high` | integer | HIGH件数 |
 | `priority` | string | `act_now`、`watch`、`low`で、利用できなければ省略 |
-| `reason` | string | 優先度上昇の根拠を示すプレーンテキスト、または`unmuted`の理由で、それ以外は省略 |
+| `reason` | string | 優先度昇格の根拠を示すプレーンテキスト、または`unmuted`の理由で、それ以外は省略 |
 
 | `new_eol_packages[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
@@ -835,7 +905,7 @@ Sensorの状態の意味と観測の限界は[稼働時の使用状況](runtime-
 | `runtime_usage` | string | 使用状況が有効な場合の`in_use`、`not_observed`、`unavailable`で、判定がなければ省略 |
 | `image` | string | イメージ参照 |
 | `package` | string | パッケージ名 |
-| `kind` | string | 新規EOLの`eol_new`、CVE追加の`eol_new_cves`、Act nowへの上昇の`eol_escalated` |
+| `kind` | string | 新規EOLの`eol_new`、CVE追加の`eol_new_cves`、Act nowへの昇格の`eol_escalated` |
 | `new_cve_ids` | 文字列の配列 | `eol_new_cves`の場合だけ含む並べ替え済み追加EOL IDで、Slackリンク表記なし |
 | `critical` | integer | 今回のEOLグループのCRITICAL件数 |
 | `high` | integer | 今回のEOLグループのHIGH件数 |
@@ -881,7 +951,7 @@ Slackの表示順は、EOL base → EOL package → 修正版あり → 上流�
 
 Open nowは、保持中の記録を含むEOL件数を先に表示する。続くCRITICAL・HIGH・影響イメージ数は今回の検出結果から数え、今回の検出項目がなく保持だけがある場合は、有効時と同じ保持表示を使う。
 
-新規、CVE追加、修正版が利用可能、通知の再開、解消、EOLの新規・CVE追加・解除は引き続き検出する。通常の優先度上昇とEOLパッケージのAct nowへの上昇は検出しない。
+新規、CVE追加、修正版が利用可能、通知の再開、解消、EOLの新規・CVE追加・解除は引き続き検出する。通常の優先度昇格とEOLパッケージのAct nowへの昇格は検出しない。
 
 全量ビューで低リスクの修正をまとめる行には、汎用Webhookを設定しているときだけ
 `— full list in the generic webhook payload`を付ける。

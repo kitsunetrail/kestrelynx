@@ -25,8 +25,11 @@ SlackとWebhookの通知に反映します。トリアージが無効の場合�
 関数の呼び出しやモジュールの読み込みは判定しません。
 データファイルの読み取りは使用の根拠にしません。
 
-`notify.language: en`では、Slackに観測した動作とともに`▶ in use`を表示します。スレッドでは
-`▷ not observed`や`▷ runtime evidence unavailable (<理由>)`も表示します。
+`notify.language: en`では、Slackのパッケージカードに`Runtime: ▶ in use`を表示します。
+詳細カードは観測した動作を`Evidence:`の行に分け、簡略カードは
+`Runtime: ▶ in use (running)`のような短い行を使います。
+スレッドでは`Runtime: ▷ not observed`や
+`Runtime: ▷ runtime evidence unavailable (<理由>)`も表示します。
 通知の文言、並び順、Webhookのフィールドは[KestreLynxの仕組み](how-it-works.md)に記載しています。
 
 ## 動作要件
@@ -151,10 +154,11 @@ EOLは常に通知します。スキャンに失敗した・実体を確認で�
 汎用Webhookには、通知オフの所見も全件残ります。
 追加のフィールドは[KestreLynxの仕組み](how-it-works.md)に記載しています。
 
-通知オフの条件を満たさなくなった場合は、変化として通知を再開します。
-修正版が出た・Act nowになった・CVEが追加された場合は、既存の変化の表示
-（`fix now available`・`escalated`・`new: CVE…`）を使います。
-それ以外は`↩️ Unmuted (<理由>)`（日本語では`↩️ 通知を再開 (<理由>)`）を付けます。
+通知オフの条件を満たさなくなった場合は、`変化:`（英語では`Change:`）の行で通知を再開します。
+修正版が出た・Act nowになった・CVEが追加された場合は、この行に
+`修正版が利用可能`・`⬆️ 今すぐ対応に優先度昇格`・`新しいCVE CVE-…`を表示します。
+英語では`fix now available`・`⬆️ escalated to ACT NOW`・`new CVEs: CVE-…`です。
+それ以外は`変化: ↩️ 通知を再開 (<理由>)`（英語では`Change: ↩️ Unmuted (<理由>)`）を表示します。
 
 | 理由 | 日本語の通知 |
 | --- | --- |
@@ -164,6 +168,16 @@ EOLは常に通知します。スキャンに失敗した・実体を確認で�
 | `now end-of-life` | サポート終了(EOL)となった |
 | `insufficient observation` | 観測不足 |
 | `not an eligible status` | 対象外の状態 |
+
+```text
+イメージ: web:1.0
+◆ curl
+変化: ↩️ 通知を再開 (使用中になった)
+現在: 8.0.0 · 修正版: なし
+検出件数: CRITICAL 0 / HIGH 1
+代表CVE: CVE-CURL · EPSS n/a
+使用状況: ▶ 使用中 (実行中)
+```
 
 ### 観測のオプション
 
@@ -236,7 +250,7 @@ Composeでno-new-privilegesを付けないのは、イメージのfile capabilit
 ## 観測の限界
 
 - 観測はSensorの起動後からで、それより前に終了した短命なプロセスは対象外
-- Sensorの起動より前から動いていたコンテナは、使用が確認されない表示に`short-lived programs not fully observed`の注記を付加
+- `not_observed`は観測期間内の状態だけを表し、Sensorの起動より前から動いていたコンテナも含め、パッケージが未使用であることは意味しない
 - Sensorが一度も見つけないまま終了した、ごく短時間のコンテナは観測の対象外
 - データファイルの読み取りは使用の根拠の対象外
 - 実行環境による言語パッケージの判定はエコシステム全体が対象で、関数の呼び出しやモジュールの読み込みは未判定

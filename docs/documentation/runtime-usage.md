@@ -25,8 +25,11 @@ still shown, but results are not reordered.
 Function calls and module imports are not checked. Reading a data file does not
 count as evidence of use.
 
-With `notify.language: en`, Slack shows `▶ in use` with the observed activity. Threads also show
-`▷ not observed` or `▷ runtime evidence unavailable (<reason>)`.
+With `notify.language: en`, Slack shows `Runtime: ▶ in use` in package cards.
+Detailed cards put the observed activity on an `Evidence:` line, while compact
+cards use a short line such as `Runtime: ▶ in use (running)`.
+Threads also show `Runtime: ▷ not observed` or
+`Runtime: ▷ runtime evidence unavailable (<reason>)`.
 The notification text, ordering, and webhook fields are described in
 [How KestreLynx works](how-it-works.md).
 
@@ -155,10 +158,12 @@ them from priority counts in the Priority line and Open now. It shows a count:
 The generic webhook retains all muted findings. Its additional fields are
 described in [How KestreLynx works](how-it-works.md).
 
-When the muting conditions no longer hold, notification resumes as a change.
-Newly available fixes, escalation to Act now, and added CVEs use the existing
-`fix now available`, `escalated`, and `new: CVE…` labels. Other changes show
-`↩️ Unmuted (<reason>)` (`↩️ 通知を再開 (<理由>)` in Japanese).
+When the muting conditions no longer hold, notification resumes on a `Change:`
+line (`変化:` in Japanese).
+Newly available fixes, escalation to Act now, and added CVEs use
+`fix now available`, `⬆️ escalated to ACT NOW`, and `new CVEs: CVE-…` on that line.
+Other changes show `Change: ↩️ Unmuted (<reason>)`
+(`変化: ↩️ 通知を再開 (<理由>)` in Japanese).
 
 | Reason | Japanese notification |
 | --- | --- |
@@ -170,7 +175,13 @@ Newly available fixes, escalation to Act now, and added CVEs use the existing
 | `not an eligible status` | 対象外の状態 |
 
 ```text
-• curl 8.0.0 (no fix available) (CRITICAL 0 / HIGH 1) — CVE-CURL · EPSS n/a — ↩️ Unmuted (now in use) · ▶ in use (running)
+Image: web:1.0
+◆ curl
+Change: ↩️ Unmuted (now in use)
+Installed: 8.0.0 · Fixed in: none
+Findings: CRITICAL 0 / HIGH 1
+Top CVE: CVE-CURL · EPSS n/a
+Runtime: ▶ in use (running)
 ```
 
 ### Observation options
@@ -246,7 +257,7 @@ the Sensor volume, owned by the Sensor UID with permissions `0644`.
 ## Observation limits
 
 - Observation begins after the Sensor starts; short-lived processes that ended earlier cannot be captured
-- Containers already running before the Sensor started receive the annotation `short-lived programs not fully observed` when shown as not observed
+- `not_observed` covers only the observation window and does not establish that a package is unused, including for containers already running before the Sensor starts
 - Very short-lived containers that finish before the Sensor ever discovers them are outside the observation scope
 - Data-file reads do not establish package use
 - Runtime-based language-package assessment covers the whole ecosystem and does not establish function calls or module imports

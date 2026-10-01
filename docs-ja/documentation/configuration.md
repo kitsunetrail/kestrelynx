@@ -41,10 +41,13 @@ YAML設定ファイルについて説明します。コンテナイメージで�
 汎用Webhookは、どちらのSlack通知方式とも併用できます。
 
 Botのスレッドの見出しは`Everything open now`（日本語では`未解決の所見の全体`）です。
-スレッドを投稿した日は、チャンネル本文の末尾に
-`_📊 Everything open now is in this message's thread ↓_`を表示します。
-投稿しない日のリンクは`🔗 Everything open as of the last report → thread`で、
-前回のレポート時点の未解決の所見を示します。
+本文を複数のメッセージに分ける場合も、スレッドは本文1通目に付けます。
+スレッドを投稿した日は、その1通目の末尾にcontextのフッターとして
+`📊 Everything open now is in this message's thread ↓`を表示します。
+新しいスレッドがなく、有効な前回レポートへのリンクがある場合は
+`🔗 Everything open as of the last report → thread`を表示し、
+そのレポート時点の未解決の所見を示します。
+どちらもない場合や、前回のパーマリンクが長すぎて表示できない場合はフッターを付けません。
 
 日本語のSlack通知は、次のように設定します。
 
@@ -62,7 +65,7 @@ notify:
 | `notify.mode` | `diff` | `diff`は変化を通知し、`full`はスキャンごとに現在の全項目を通知します。 |
 | `notify.full_report_day` | `monday` | diffモードで完全なレポートを送る曜日です。`never`で無効化します。 |
 
-diffモードでは、新規検出、解消、修正可能化、緊急度上昇、通知オフからの再開を通知します。未解決項目が
+diffモードでは、新規検出、解消、修正可能化、優先度昇格、通知オフからの再開を通知します。未解決項目が
 残っていても変化がない場合、完全なレポートを繰り返さず、短いハートビート通知を
 送信します。
 

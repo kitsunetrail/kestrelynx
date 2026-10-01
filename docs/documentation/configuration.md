@@ -40,11 +40,14 @@ At least one destination is required.
 Configure either `slack_webhook_url` or the bot-token pair, not both. A generic
 webhook can be used alongside either Slack delivery method.
 
-Bot threads are headed `Everything open now`. When a thread is posted, the
-channel message ends with `_📊 Everything open now is in this message's thread ↓_`.
-On days without a new thread, the link reads
+Bot threads are headed `Everything open now` (`未解決の所見の全体` in Japanese)
+and attach to the first channel message when the report spans multiple messages.
+When a thread is posted, that first message ends with the context footer
+`📊 Everything open now is in this message's thread ↓`.
+Without a new thread, a valid previous report link appears as
 `🔗 Everything open as of the last report → thread` and refers to the state
 at the time of that report.
+No footer appears if neither applies or if the previous permalink is too long to display.
 
 To use Japanese Slack notifications:
 

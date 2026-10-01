@@ -78,6 +78,10 @@ When a reference has multiple identities, Slack distinguishes them with labels s
 
     Scan results are obtained as JSON from the Trivy CLI.
 
+    Docker can start a container's process before marking it as running in `GET /containers/json`. On the process's first listing, KestreLynx retries every 200 ms until its own container appears, with a total limit of 5 seconds including API calls, then scans the returned list. This prevents a startup listing delay from incorrectly resolving findings for its own image. At the limit, it logs a warning and continues with the last list; if no list was obtained, it returns a listing error.
+
+    The container ID comes from `/containers/<64-character ID>/` in the mount-source path for `/etc/hostname` in `/proc/self/mountinfo`, with `/etc/resolv.conf` and `/etc/hosts` as fallbacks. No wait occurs when the ID is unknown, such as outside Docker or in Kubernetes, or on subsequent listings.
+
     | Item | Docker | Kubernetes |
     | --- | --- | --- |
     | Container listing | `GET /containers/json`: `Image`, `ImageID`, `Names`, and `Labels`. | Read-only LIST requests for nodes, pods, replicasets, and jobs. `kubernetes.namespaces` applies to all except nodes. |
@@ -221,7 +225,22 @@ Moving all ordinary findings to EOL does not resolve the package. A combination 
 
 Base-OS changes also report newly detected EOL and references no longer recorded as EOL.
 
-Image replacement is a diff independent of package changes and is reported even for images without findings. It applies when the previous and current verified content-ID sets are both nonempty and differ. The first observation does not count as a replacement.
+Image replacement is a diff independent of package changes and is reported even for images without findings. It applies when the previous and current verified content-ID sets for the same reference are both nonempty and differ, such as when `:latest` points to new content. The first observation does not count as a replacement.
+
+State keys include the image reference, including its tag, and package name. When an update changes a reference, such as `repo:sha-A` to `repo:sha-B`, KestreLynx carries the old reference's history over to the new reference before computing the ordinary diff if all of the following conditions hold.
+
+- The same workload moves to a different reference in the same repository.
+- The old reference is absent from the current observations, and the new reference is absent from the previous image records.
+- Both references identify the same repository after removing tags and digests, preserving registry ports and treating `app` and `docker.io/library/app` as equivalent.
+- The match is one-to-one across all candidates, both per reference and per shared workload, including candidates with failed or unconfirmed scans.
+- The new reference's scan succeeds in full and confirms a single image identity, with no failed, partially failed, unconfirmed, or ambiguous result.
+- The new reference has no existing history.
+
+Workload matching uses the Compose project and service; the Kubernetes controller kind, namespace, name, and container name within the Pod; or the container name for a standalone Docker container with no known workload. A shared reference splitting into multiple references, or multiple references merging into one, does not qualify.
+
+The carried history includes first-seen dates, priorities, CVE IDs, fix availability, EOL package records, base-OS EOL dates, and muting history. Added CVEs still produce ordinary changes such as `new_cves`, and packages that disappear are resolved under the new reference. Muting is reassessed after the transfer, so a new container with less than 7 days of observation can cause notifications to resume. The old image's metadata, including content IDs, does not become the new reference's current metadata.
+
+If the conditions are not met, history stays with its original reference and ordinary per-reference rules apply: findings under a new reference are new, and findings under the old reference are resolved when they leave the scan scope, subject to the scan-failure and identity-retention rules. This includes rolling updates where both references are still running and older state files without workload records.
 
 Resolutions and EOL clearances are not reported when previous state is retained because of fully or partially failed scans or unconfirmed Kubernetes identities.
 
@@ -237,7 +256,8 @@ The first run, a missing or corrupt state file, or a state-format version mismat
 
     - Ordinary package state stores the first-seen timestamp, CVE ID set, fix availability, maximum priority, and `content_id` for a single verified identity.
     - Package-state `content_id` is empty when the reference is ambiguous or some scans fail.
-    - The state file's `images` map is keyed by reference and records sorted `content_ids`, `registry_digests`, `ambiguous`, and `last_seen`.
+    - The state file's `images` map is keyed by reference and records sorted `content_ids`, `registry_digests`, `ambiguous`, `last_seen`, and `workloads`, the sorted list of distinct workload keys running that reference.
+    - `workloads` is omitted when empty, and older state files without it are read as having no recorded workload keys.
     - Base-OS EOL first-seen timestamps are stored separately from ordinary package state.
     - EOL package first-seen-as-EOL timestamps, CVE ID sets, and maximum priorities are stored separately from ordinary package state.
     - The state-format version remains `1`.
@@ -256,7 +276,7 @@ The default `notify.mode: diff` reports changes and current unresolved counts. `
 - When the final finding is resolved, the notification includes the resolution and an all-clear status.
 - When there are no findings or changes, `notify_on_clean: false` suppresses the notification.
 
-Scan failures and image replacements trigger notifications even when there are no vulnerability findings.
+Scan failures, image replacements, and reference updates with carried history trigger notifications even when there are no vulnerability findings or other changes.
 
 When an unconfirmed Kubernetes identity causes previous package findings to be retained, including EOL packages, a notification is sent even if nothing changed. Retained base-OS EOL history alone does not meet this holding-notification condition.
 
@@ -338,9 +358,17 @@ An excerpt from a Japanese diff notification showing a priority escalation:
 
 Diff notifications show changes since the previous scan, while current-state reports show unresolved findings by EOL status and priority. Each notification uses the following display order.
 
-- Diff notifications use this order: common header → image content changes → new EOL base → EOL package changes → intelligence-source warnings → ordinary new or changed findings → resolutions and EOL clearances → weekly report or scan failures and Open now → identity-unconfirmed and holding annotations → Bot report link.
+- Diff notifications use this order: common header → image content changes → image reference updates → new EOL base → EOL package changes → intelligence-source warnings → ordinary new or changed findings → resolutions and EOL clearances → weekly report or scan failures and Open now → identity-unconfirmed and holding annotations → Bot report link.
 - Current-state reports use this order: EOL base → unfolded EOL package → Act now → Watch → Low → scan failures and intelligence-freshness warnings → identity-unconfirmed and holding annotations.
 - Bot threads use this order: EOL base → EOL packages → ACT NOW → WATCH → LOW.
+
+Reference updates appear after the `🔄 Image content changed` section in a separate section without a heading, with one line per update.
+
+```text
+🔄 Image reference updated: repo sha-A → sha-B (history carried over)
+```
+
+Each line shows the repository followed by the old and new tags. A digest-pinned reference without a tag shows a shortened digest, and a reference with neither a tag nor a digest shows `latest`. The preview text includes `🔄 N reference update(s)`. The `🔄 Image content changed` line continues to report content changes under the same reference.
 
 Warnings about unavailable intelligence sources appear immediately after the current-state report's Priority line, before the EOL sections.
 
@@ -404,6 +432,7 @@ CRITICAL and HIGH count distinct CVE IDs within each package and fix-status grou
 | `👀 Watch` | Findings to review and monitor. |
 | `🔕 Low` | No signal reaches the threshold; this does not mean there is no vulnerability. |
 | `🔄 Image content changed` | A verified content-ID set changed. |
+| `🔄 Image reference updated` | A workload moved to another reference in the same repository, carrying its detection history over. |
 | `🆕 New since last scan` | New packages and changed known packages. |
 | `✅ Resolved since last scan` | Resolved packages and EOL base images, and cleared EOL package records. |
 | `📌 Open now` | Unresolved state after the latest scan. |
@@ -870,7 +899,7 @@ Sensor status meanings and observation limits are described in
 
 ### Diff
 
-`diff` provides changes since the previous scan by type. It is present only in diff mode, and empty arrays are returned as `[]` rather than `null`.
+`diff` provides changes since the previous scan by type. It is present only in diff mode, and empty arrays are returned as `[]` rather than `null`, except that `reference_changes` is omitted when empty. Reference updates add this optional field without changing existing keys.
 
 | `diff` field | Type | Meaning |
 | --- | --- | --- |
@@ -879,6 +908,7 @@ Sensor status meanings and observation limits are described in
 | `resolved[].image` | string | Image reference. |
 | `resolved[].package` | string | Package name. |
 | `replaced` | array of replacement objects | References whose verified content-ID sets changed. |
+| `reference_changes` | array of reference-change objects | Reference updates with carried history; omitted when none. |
 | `new_eosl` | array of strings | Newly detected EOL base-image references. |
 | `resolved_eosl` | array of strings | References no longer recorded as EOL. |
 | `new_eol_packages` | array of EOL change objects | New or changed EOL findings, including those folded in Slack. |
@@ -928,6 +958,15 @@ EOL changes have no `new_cve_count` field. Use the length of `new_cve_ids` to ob
 | `ref` | string | Image reference. |
 | `prev_content_ids` | array of strings | Sorted previous verified content-ID set. |
 | `content_ids` | array of strings | Sorted current verified content-ID set. |
+
+| `reference_changes[]` field | Type | Meaning |
+| --- | --- | --- |
+| `repository` | string | Repository as written in the new reference, without its tag or digest, preserving the registry port. |
+| `previous_ref` | string | Full previous image reference. |
+| `ref` | string | Full new image reference. |
+| `workloads` | array of strings | Sorted shared workload keys that link the old and new references. |
+
+Workload keys use `compose/<project>/<service>` for Compose, `<kind>/<namespace>/<name>/<container>` for Kubernetes, and `container/<name>` for a standalone Docker container with no known workload.
 
 ### Backward compatibility
 

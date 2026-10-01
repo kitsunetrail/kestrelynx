@@ -588,12 +588,11 @@ Detailed cards use `Upgrade risk:` for the update assessment, while compact card
 
 In detailed channel cards, other CVEs are summarized as `(+N more CVE(s) in this package)` on the `Top CVE:` line. Compact diff entries show `Top CVE: CVE-ID · KEV/EPSS`, or `Top CVE: CVE-ID · SEVERITY` when intelligence is unavailable. CVE IDs on the `Top CVE:`, `Other CVEs:`, and `Change:` lines link to NVD, while other identifiers, such as GHSA and DLA IDs, appear as plain text.
 
-Each thread package begins with a divider, followed by sections for package versions and counts, CVE details, and runtime information when available. `Summary:` contains Trivy's Title, `References:` contains advisory and discussion links, and `Other CVEs:` lists up to 8 other IDs with the remainder summarized as `(+N more)`. Empty sections are omitted.
+Thread dividers appear only between packages and before headings where the section or image changes. No divider separates a heading from the first package below it, including repeated headings in continued replies. Each package contains sections for package versions and counts, CVE details, and runtime information when available. `Summary:` contains Trivy's Title, `References:` contains advisory and discussion links, and `Other CVEs:` lists up to 8 other IDs with the remainder summarized as `(+N more)`. Empty sections are omitted.
 
 A context line at the end of the card gives its age as `⏱ open N day(s) · first seen YYYY-MM-DD`, or `⏱ first seen today` on the day of detection. An Act now thread card reads as follows:
 
 ```text
-───
 ◆ openssl
 Installed: 3.0.7
 Fixed in: 3.0.11

@@ -58,6 +58,7 @@ func goldenWebhook(t *testing.T, r analyze.Report, d *state.Diff) string {
 	if diff, ok := m["diff"].(map[string]any); ok {
 		delete(diff, "new_eol_packages")
 		delete(diff, "resolved_eol_packages")
+		delete(diff, "reference_changes")
 	}
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {

@@ -1,0 +1,22 @@
+===== message 1/1 =====
+TEXT: KestreLynx 2026-06-24 09:00 Changes since the last scan — 🔄 2 reference update(s) · ⚠️ 1 scan failure(s)
+--- section ---
+🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
+3 images scanned, 2 affected
+_Changes since the last scan._
+--- divider ---
+--- section ---
+🔄 Image reference updated: ghcr.io/acme/web sha-aaaa → sha-bbbb (history carried over)
+🔄 Image reference updated: registry.example:5000/team/api 0123456789ab → 1.4 (history carried over)
+--- divider ---
+--- section ---
+*⚠️ Scan failures*
+• broken:1 — identity unconfirmed: scanned by reference — pull failed
+--- divider ---
+--- section ---
+📌 *Open now:* 🚨 3 act-now / 👀 1 watch / 🔕 3 low
+⏰ oldest act-now/watch unresolved 20 day(s)
+--- context ---
+⚠️ identity unconfirmed: scanned by reference — broken:1
+--- context ---
+📊 Everything open now is in this message's thread ↓

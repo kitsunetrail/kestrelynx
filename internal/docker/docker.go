@@ -13,9 +13,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -30,6 +32,45 @@ type Client struct {
 	httpClient *http.Client
 	baseURL    string
 	Log        *slog.Logger
+
+	// selfID is this process's own container ID ("" when unknown). Only the
+	// first RunningContainers call uses it, to wait out the startup window in
+	// which dockerd does not list a container it has just started.
+	selfID   string
+	listed   atomic.Bool // set once the first RunningContainers call has begun
+	selfWait selfWait
+}
+
+// selfWait bounds and paces the first-listing wait; the fields exist so tests
+// can run it without real time.
+type selfWait struct {
+	interval time.Duration
+	limit    time.Duration
+	sleep    func(ctx context.Context, d time.Duration) error
+	now      func() time.Time
+}
+
+const (
+	selfWaitInterval = 200 * time.Millisecond
+	selfWaitLimit    = 5 * time.Second
+)
+
+func defaultSelfWait() selfWait {
+	return selfWait{
+		interval: selfWaitInterval,
+		limit:    selfWaitLimit,
+		sleep: func(ctx context.Context, d time.Duration) error {
+			t := time.NewTimer(d)
+			defer t.Stop()
+			select {
+			case <-t.C:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+		now: time.Now,
+	}
 }
 
 func (c *Client) log() *slog.Logger {
@@ -49,13 +90,15 @@ func New(socketPath string) *Client {
 	return &Client{
 		httpClient: &http.Client{Transport: transport, Timeout: 15 * time.Second},
 		// Host is ignored for unix sockets but required to form a valid URL.
-		baseURL: "http://docker",
+		baseURL:  "http://docker",
+		selfID:   selfContainerID(),
+		selfWait: defaultSelfWait(),
 	}
 }
 
 // newClient is used by tests to point the client at an httptest server.
 func newClient(baseURL string, hc *http.Client) *Client {
-	return &Client{httpClient: hc, baseURL: baseURL}
+	return &Client{httpClient: hc, baseURL: baseURL, selfWait: defaultSelfWait()}
 }
 
 // allowedPath is one Docker Engine API path this Client may GET. It is a
@@ -207,7 +250,74 @@ func containerName(names []string) string {
 // distinct set of images to scan use inventory.DistinctImages on the result.
 // The return order is deterministic: (Image.Ref, Image.ContentID(),
 // Workload.Group, Workload.Name, Container.Name), lexicographically.
+//
+// The first call in a process additionally waits, when this process's own
+// container ID is known, until that container appears in the listing (see
+// listWaitingForSelf); later calls never wait.
 func (c *Client) RunningContainers(ctx context.Context) ([]inventory.Container, error) {
+	if c.listed.Swap(true) || c.selfID == "" {
+		return c.listContainers(ctx)
+	}
+	return c.listWaitingForSelf(ctx)
+}
+
+// listWaitingForSelf re-lists every selfWait.interval until the listing
+// contains this process's own container, within a single overall deadline
+// that also covers the API calls. dockerd marks a container running and
+// refreshes its listing snapshot slightly after the process has started, so
+// an early listing can omit the caller itself and make every finding of its
+// own image look resolved. The listing that contains self is returned whole;
+// at the limit a warning is logged and the last listing is returned as is
+// (the old behaviour) — the cycle is not failed. When no listing came back
+// at all within the limit, the listing error is returned.
+func (c *Client) listWaitingForSelf(ctx context.Context) ([]inventory.Container, error) {
+	w := c.selfWait
+	start := w.now()
+	wctx, cancel := context.WithTimeout(ctx, w.limit)
+	defer cancel()
+
+	var last []inventory.Container
+	haveLast := false
+	warn := func() ([]inventory.Container, error) {
+		c.log().Warn("own container not in the running container list; continuing with the last list",
+			"container", shortID(c.selfID), "waited", w.now().Sub(start).Round(time.Millisecond).String())
+		return last, nil
+	}
+	for {
+		cs, err := c.listContainers(wctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, err // the caller cancelled
+			}
+			if haveLast && wctx.Err() != nil {
+				return warn() // the limit hit while re-listing
+			}
+			return nil, err
+		}
+		for _, ct := range cs {
+			if ct.ID == c.selfID {
+				return cs, nil
+			}
+		}
+		last, haveLast = cs, true
+		if err := w.sleep(wctx, w.interval); err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return warn()
+		}
+	}
+}
+
+func shortID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
+}
+
+// listContainers is one GET /containers/json converted to the common model.
+func (c *Client) listContainers(ctx context.Context) ([]inventory.Container, error) {
 	var raw []container
 	if err := c.get(ctx, containersJSONPath(), &raw); err != nil {
 		return nil, fmt.Errorf("list containers: %w", err)
@@ -355,4 +465,55 @@ func (c *Client) Inspect(ctx context.Context, id string) (InspectResult, error) 
 		}
 	}
 	return result, nil
+}
+
+// selfMountTargets are the files Docker bind-mounts from the container's own
+// directory under the data root, in the order they are tried.
+var selfMountTargets = []string{"/etc/hostname", "/etc/resolv.conf", "/etc/hosts"}
+
+// selfContainerRE picks the container ID out of a mount source such as
+// /var/lib/docker/containers/<id>/hostname. The data root before it is not
+// assumed, since rootless and userns-remap setups place it elsewhere.
+var selfContainerRE = regexp.MustCompile(`/containers/([0-9a-f]{64})/`)
+
+// selfContainerID reads this process's own container ID from
+// /proc/self/mountinfo; "" when it cannot be determined.
+func selfContainerID() string {
+	data, err := os.ReadFile("/proc/self/mountinfo")
+	if err != nil {
+		return ""
+	}
+	return parseSelfContainerID(string(data))
+}
+
+// parseSelfContainerID extracts the container ID from mountinfo text. Each
+// line reads "id parent major:minor root mountpoint options ... - fstype
+// source superopts"; a line such as
+//
+//	1234 1200 8:1 /var/lib/docker/containers/<64 hex>/hostname /etc/hostname rw,relatime - ext4 /dev/sda1 rw
+//
+// yields <64 hex>. Lines that are malformed or whose root carries no
+// container ID are skipped; "" is returned when none match.
+func parseSelfContainerID(mountinfo string) string {
+	byTarget := map[string]string{}
+	for _, line := range strings.Split(mountinfo, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 5 {
+			continue
+		}
+		root, target := f[3], f[4]
+		m := selfContainerRE.FindStringSubmatch(root)
+		if m == nil {
+			continue
+		}
+		if _, seen := byTarget[target]; !seen {
+			byTarget[target] = m[1]
+		}
+	}
+	for _, t := range selfMountTargets {
+		if id, ok := byTarget[t]; ok {
+			return id
+		}
+	}
+	return ""
 }

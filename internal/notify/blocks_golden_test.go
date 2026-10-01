@@ -209,6 +209,15 @@ func allBlockCases(t *testing.T) []blockCase {
 		channelCase("ja_eolpkg_triage_slack_full", LanguageJA, jaEOL, nil, false),
 	)
 
+	// Reference changes: a workload moved to another tag, and one to a
+	// digest-pinned reference.
+	rcR, _, rcUnchanged, _ := goldenCycle(modes[0], false)
+	rcDiff := refChangeDiff(rcUnchanged)
+	add(
+		channelCase("refchange_slack_diff", LanguageEN, rcR, &rcDiff, false),
+		channelCase("ja_refchange_slack_diff", LanguageJA, rcR, &rcDiff, false),
+	)
+
 	// Runtime fixtures.
 	healthy := rtGoldenReport(t)
 	rtGoldenAttach(t, &healthy)

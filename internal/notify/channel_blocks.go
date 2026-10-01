@@ -529,9 +529,19 @@ func (v *chView) buildDiff() {
 		}
 		v.l.section(v.rd.lim, lines, false)
 	}
+	// A reference change is a change too: the same workload moved to another
+	// tag or digest of its repository, with its history carried over.
+	if len(d.RefChanges) > 0 {
+		v.l.group()
+		lines := make([]string, 0, len(d.RefChanges))
+		for _, rc := range d.RefChanges {
+			lines = append(lines, trimNL(fmt.Sprintf(msg.RefChangeLine, escMrkdwn(rc.Repository), escMrkdwn(refTagLabel(rc.PreviousRef)), escMrkdwn(refTagLabel(rc.Ref)))))
+		}
+		v.l.section(v.rd.lim, lines, false)
+	}
 
 	if early {
-		v.diffSegs(0, 0, 0, len(d.Replaced))
+		v.diffSegs(0, 0, 0, len(d.Replaced), len(d.RefChanges))
 		v.diffTail(false)
 		return
 	}
@@ -560,13 +570,13 @@ func (v *chView) buildDiff() {
 		v.fullBody(false)
 		return
 	}
-	v.diffSegs(newN, resolvedN, len(d.NewEOSL)+eolN, len(d.Replaced))
+	v.diffSegs(newN, resolvedN, len(d.NewEOSL)+eolN, len(d.Replaced), len(d.RefChanges))
 	v.diffTail(resolvedN > 0)
 }
 
 // diffSegs sets the fallback segments of a diff view: what changed, zero
 // counts omitted.
-func (v *chView) diffSegs(newN, resolvedN, eolNew, replaced int) {
+func (v *chView) diffSegs(newN, resolvedN, eolNew, replaced, refChanged int) {
 	msg := v.msg
 	var seg []string
 	if eolNew > 0 {
@@ -580,6 +590,9 @@ func (v *chView) diffSegs(newN, resolvedN, eolNew, replaced int) {
 	}
 	if replaced > 0 {
 		seg = append(seg, fmt.Sprintf(msg.FbSegReplaced, replaced))
+	}
+	if refChanged > 0 {
+		seg = append(seg, fmt.Sprintf(msg.FbSegRefChanged, refChanged))
 	}
 	if n := len(v.r.ScanErrors); n > 0 {
 		seg = append(seg, fmt.Sprintf(msg.FbSegScanFailed, n))

@@ -48,6 +48,9 @@ type messages struct {
 	ReplacedHeading string // "\n*🔄 Image content changed (%d)*\n"
 	ReplacedLine    string // "• %[1]s: image updated (%[2]s → %[3]s)\n" (ref, prev digests, new digests)
 
+	// --- reference changes (history carried to a new tag or digest) ---
+	RefChangeLine string // "🔄 Image reference updated: %[1]s %[2]s → %[3]s (history carried over)\n" (repository, old tag, new tag)
+
 	// --- identity / unresolved references ---
 	IdentityUnconfirmed string // "identity unconfirmed: scanned by reference"
 	UnresolvedRefsLine  string // "⚠️ %[1]s — %[2]s\n" (IdentityUnconfirmed text, comma-joined refs)
@@ -319,6 +322,7 @@ type messages struct {
 	FbSegScanFailed      string // "⚠️ %d scan failure(s)"
 	FbSegEOLNew          string // "⛔ %d new EOL"
 	FbSegReplaced        string // "🔄 %d image(s) updated"
+	FbSegRefChanged      string // "🔄 %d reference update(s)"
 	FbSegActionable      string // "✅ %d fixable"
 	FbSegNoFix           string // "ℹ️ %d no fix yet"
 	FbSegWontFix         string // "🔕 %d upstream won't fix"
@@ -351,6 +355,8 @@ var enMessages = messages{
 
 	ReplacedHeading: "\n*🔄 Image content changed (%d)*\n",
 	ReplacedLine:    "• %[1]s: image updated (%[2]s → %[3]s)\n",
+
+	RefChangeLine: "🔄 Image reference updated: %[1]s %[2]s → %[3]s (history carried over)\n",
 
 	IdentityUnconfirmed: "identity unconfirmed: scanned by reference",
 	UnresolvedRefsLine:  "⚠️ %[1]s — %[2]s\n",
@@ -583,6 +589,7 @@ var enMessages = messages{
 	FbSegScanFailed:      "⚠️ %d scan failure(s)",
 	FbSegEOLNew:          "⛔ %d new EOL",
 	FbSegReplaced:        "🔄 %d image(s) updated",
+	FbSegRefChanged:      "🔄 %d reference update(s)",
 	FbSegActionable:      "✅ %d fixable",
 	FbSegNoFix:           "ℹ️ %d no fix yet",
 	FbSegWontFix:         "🔕 %d upstream won't fix",
@@ -611,6 +618,8 @@ var jaMessages = messages{
 
 	ReplacedHeading: "\n*🔄 イメージの内容が変化 (%d件)*\n",
 	ReplacedLine:    "• %[1]s: イメージ更新 (%[2]s → %[3]s)\n",
+
+	RefChangeLine: "🔄 イメージ参照の更新: %[1]s %[2]s → %[3]s(検出履歴を引き継ぎ)\n",
 
 	IdentityUnconfirmed: "実体未確認: 参照によるスキャン",
 	UnresolvedRefsLine:  "⚠️ %[1]s — %[2]s\n",
@@ -844,6 +853,7 @@ var jaMessages = messages{
 	FbSegScanFailed:      "⚠️ スキャン失敗%d件",
 	FbSegEOLNew:          "⛔ 新規EOL%d件",
 	FbSegReplaced:        "🔄 イメージ更新%d件",
+	FbSegRefChanged:      "🔄 参照の更新%d件",
 	FbSegActionable:      "✅ 修正版あり%d件",
 	FbSegNoFix:           "ℹ️ 修正版なし%d件",
 	FbSegWontFix:         "🔕 上流の修正予定なし%d件",

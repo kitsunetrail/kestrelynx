@@ -34,6 +34,19 @@ const openNowEOLBaseWithoutTriage = true
 // display. The sets themselves (state.ImageReplacement's Prev/ContentIDs) are
 // already sorted upstream, so this only shortens each value — it never
 // reorders.
+// refTagLabel is how a reference is named after its repository in a reference
+// change line: the tag, else the short digest of a digest-pinned reference,
+// else "latest" (a reference with neither names the default tag).
+func refTagLabel(ref string) string {
+	if tag := inventory.TagOf(ref); tag != "" {
+		return tag
+	}
+	if d := inventory.DigestOf(ref); d != "" {
+		return shortDigest(d)
+	}
+	return "latest"
+}
+
 func joinShortDigests(ids []string) string {
 	short := make([]string, len(ids))
 	for i, id := range ids {
@@ -488,12 +501,15 @@ type environmentPayload struct {
 // are always present; the diff is additive so receivers can build their own
 // "what changed" view without keeping state.
 type diffPayload struct {
-	New           []changePayload   `json:"new"`
-	Resolved      []resolvedPayload `json:"resolved"`
-	Replaced      []replacedPayload `json:"replaced"`
-	NewEOSL       []string          `json:"new_eosl"`
-	ResolvedEOSL  []string          `json:"resolved_eosl"`
-	OldestOpenDay int               `json:"oldest_open_days"`
+	New      []changePayload   `json:"new"`
+	Resolved []resolvedPayload `json:"resolved"`
+	Replaced []replacedPayload `json:"replaced"`
+	// ReferenceChanges is omitted when empty so the payload of a cycle with
+	// no reference change is unchanged.
+	ReferenceChanges []referenceChangePayload `json:"reference_changes,omitempty"`
+	NewEOSL          []string                 `json:"new_eosl"`
+	ResolvedEOSL     []string                 `json:"resolved_eosl"`
+	OldestOpenDay    int                      `json:"oldest_open_days"`
 
 	// End-of-life package changes, independent of new/resolved above (the
 	// same package can appear in both).
@@ -536,6 +552,16 @@ type replacedPayload struct {
 	Ref            string   `json:"ref"`
 	PrevContentIDs []string `json:"prev_content_ids"`
 	ContentIDs     []string `json:"content_ids"`
+}
+
+// referenceChangePayload mirrors state.RefChange: a workload that moved to
+// another reference of the same repository and whose findings history was
+// carried over.
+type referenceChangePayload struct {
+	Repository  string   `json:"repository"`
+	PreviousRef string   `json:"previous_ref"`
+	Ref         string   `json:"ref"`
+	Workloads   []string `json:"workloads"`
 }
 
 type changePayload struct {
@@ -881,6 +907,14 @@ func buildDiffPayload(r analyze.Report, d state.Diff) *diffPayload {
 			Ref:            rep.Ref,
 			PrevContentIDs: emptyIfNil(rep.PrevContentIDs),
 			ContentIDs:     emptyIfNil(rep.ContentIDs),
+		})
+	}
+	for _, rc := range d.RefChanges {
+		dp.ReferenceChanges = append(dp.ReferenceChanges, referenceChangePayload{
+			Repository:  rc.Repository,
+			PreviousRef: rc.PreviousRef,
+			Ref:         rc.Ref,
+			Workloads:   emptyIfNil(rc.Workloads),
 		})
 	}
 	for _, c := range d.NewEOLPackages {

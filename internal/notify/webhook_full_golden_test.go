@@ -30,6 +30,10 @@ func TestGolden_WebhookFullPayload(t *testing.T) {
 	r, changed, _, _ = eolCycle(goldenModes()[0])
 	checkGolden(t, "webhookfull_eolpkg_triage_diff", fullWebhookJSON(t, r, &changed))
 
+	r, _, unchanged, _ := goldenCycle(goldenModes()[0], false)
+	rcDiff := refChangeDiff(unchanged)
+	checkGolden(t, "webhookfull_refchange_diff", fullWebhookJSON(t, r, &rcDiff))
+
 	rt := rtGoldenReport(t)
 	rtGoldenAttach(t, &rt)
 	d, _ := state.Compute(state.State{}, rt)
@@ -39,4 +43,25 @@ func TestGolden_WebhookFullPayload(t *testing.T) {
 	muteGoldenAttach(t, &muted, true)
 	md, _ := state.Compute(state.State{}, muted)
 	checkGolden(t, "webhookfull_mute_diff", fullWebhookJSON(t, muted, &md))
+}
+
+// refChangeDiff returns d with two reference changes added: a tag change and
+// a change to a digest-pinned reference.
+func refChangeDiff(d state.Diff) state.Diff {
+	const hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	d.RefChanges = []state.RefChange{
+		{
+			Repository:  "ghcr.io/acme/web",
+			PreviousRef: "ghcr.io/acme/web:sha-aaaa",
+			Ref:         "ghcr.io/acme/web:sha-bbbb",
+			Workloads:   []string{"compose/shop/web"},
+		},
+		{
+			Repository:  "registry.example:5000/team/api",
+			PreviousRef: "registry.example:5000/team/api@sha256:" + hex,
+			Ref:         "registry.example:5000/team/api:1.4",
+			Workloads:   []string{"compose/shop/api"},
+		},
+	}
+	return d
 }

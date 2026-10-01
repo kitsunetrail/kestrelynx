@@ -72,6 +72,11 @@ type ImageMeta struct {
 	RegistryDigests []string  `json:"registry_digests,omitempty"`
 	Ambiguous       bool      `json:"ambiguous,omitempty"`
 	LastSeen        time.Time `json:"last_seen"`
+	// Workloads is the sorted set of workload keys (see WorkloadKey) that
+	// ran this reference as of the last cycle. Added without a version bump:
+	// older state decodes it empty, which only means no reference change can
+	// be recognised for that reference.
+	Workloads []string `json:"workloads,omitempty"`
 }
 
 // EnvironmentRecord is the persisted self-description of which environment a
@@ -388,6 +393,9 @@ type Diff struct {
 	Changes      []Change
 	Resolved     []Resolved
 	Replaced     []ImageReplacement
+	// RefChanges lists the references whose history was carried over to a
+	// new reference of the same repository (see RefChange).
+	RefChanges []RefChange
 
 	OpenCritical int
 	OpenHigh     int
@@ -420,7 +428,7 @@ type Diff struct {
 
 // HasChanges reports whether anything is new or resolved since the last scan.
 func (d Diff) HasChanges() bool {
-	return len(d.Changes) > 0 || len(d.Resolved) > 0 || len(d.NewEOSL) > 0 || len(d.ResolvedEOSL) > 0 || len(d.Replaced) > 0 ||
+	return len(d.Changes) > 0 || len(d.Resolved) > 0 || len(d.NewEOSL) > 0 || len(d.ResolvedEOSL) > 0 || len(d.Replaced) > 0 || len(d.RefChanges) > 0 ||
 		len(d.NewEOLPackages) > 0 || len(d.ResolvedEOLPackages) > 0
 }
 
@@ -473,6 +481,10 @@ type current struct {
 // to end-of-life is not reported resolved, and the heartbeat counts each
 // package once.
 func Compute(prev State, r analyze.Report) (Diff, State) {
+	// A workload that moved to another reference of the same repository keeps
+	// its history: prev is rewritten before anything else reads it, so the
+	// rest of Compute sees an ordinary unchanged reference.
+	prev, refChanges := carryOverRefChanges(prev, r.Images)
 	next := empty()
 	now := r.GeneratedAt
 
@@ -499,7 +511,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		}
 	}
 	next.Images = nextImages(prev.Images, r.Images, now)
-	d := Diff{Replaced: replacedImages(prev.Images, r.Images)}
+	d := Diff{Replaced: replacedImages(prev.Images, r.Images), RefChanges: refChanges}
 
 	// Report order: sections are already priority-sorted.
 	cur, order := mergeSections(r.Actionable, r.Watch, r.WontFix)
@@ -941,7 +953,7 @@ func sortedIDs(set map[string]bool) []string {
 func nextImages(prevImages map[string]ImageMeta, obs []analyze.ImageObservation, now time.Time) map[string]ImageMeta {
 	next := map[string]ImageMeta{}
 	for _, o := range obs {
-		meta := ImageMeta{ContentIDs: o.ContentIDs, RegistryDigests: o.RegistryDigests, Ambiguous: o.Ambiguous}
+		meta := ImageMeta{ContentIDs: o.ContentIDs, RegistryDigests: o.RegistryDigests, Ambiguous: o.Ambiguous, Workloads: workloadKeys(o.Containers)}
 		if !o.ScanFailed && !o.PartialFailure {
 			meta.LastSeen = now
 		} else if prevMeta, ok := prevImages[o.Ref]; ok {

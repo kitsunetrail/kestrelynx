@@ -478,7 +478,7 @@ A collector can repeat the following loop:
 
 - Retain timestamps, successful sample counts, failed reads, and unresolved paths alongside these classifications.
 - Socket-attribution failure need not erase a valid package mapping.
-- Use this evidence only to **raise priority, never lower it**.
+- Without changing the urgency assessed using KEV, EPSS, severity, and other factors, confirmed runtime package use supports **addressing the associated findings first among those with the same urgency; failure to confirm use is not a reason to lower priority**.
 - Confirmation shows observed package use within the method's limits.
 - Neither `unknown` nor `unobserved` justifies suppressing a vulnerability or declaring it safe.
 

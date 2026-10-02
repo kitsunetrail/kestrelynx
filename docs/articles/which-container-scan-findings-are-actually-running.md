@@ -50,9 +50,11 @@ Findings have the following limitations:
 
 Checking a package's runtime usage therefore requires information (runtime
 evidence) connecting an observed process to a package and version in this
-container. Confirmed package use supports raising the remediation priority
-of the associated vulnerabilities. Record usage separately from KEV and
-EPSS assessments so that the reason for raising priority remains clear.
+container. Confirmed package use supports addressing the associated
+findings first among those with the same urgency, without changing the
+urgency assessed using KEV, EPSS, severity, and other factors.
+Record usage separately from KEV and EPSS assessments so that the reason
+for addressing those findings first remains clear.
 
 ## Meaning of “used at runtime”
 
@@ -72,10 +74,10 @@ It does not establish the following:
 - That an unobserved package is unused.
     - It may load during another request, in a different worker, or between samples.
 
-Confirmed package use therefore supports raising the remediation priority
-of the associated vulnerabilities. If use cannot be confirmed, that does
-not establish that the package is unused, so it is not a reason to lower
-priority.[^harness]
+Confirmed package use therefore supports addressing the associated
+findings first among those with the same urgency. If use cannot be
+confirmed, that does not establish that the package is unused, so it is
+not a reason to lower priority.[^harness]
 
 For details on handling observed paths, ownership, and versions, see the
 [procfs process-to-package mapping article](procfs-process-to-package-mapping.md).
@@ -246,9 +248,11 @@ relationship separately from a failed process read.
 ## Use of runtime evidence in remediation prioritization
 
 When package use is confirmed at runtime, use that information to support
-raising the remediation priority of its vulnerabilities. If use is not
-confirmed during the observation period, that does not establish that the
-package is unused, so do not lower priority on that basis.
+addressing the associated findings first among those with the same urgency,
+without changing the urgency assessed using KEV, EPSS, severity, and other
+factors. If use is not confirmed during the observation period, that does
+not establish that the package is unused, so do not lower priority on that
+basis.
 Record usage separately from KEV and EPSS assessments and use it to inform
 remediation decisions.
 
@@ -273,7 +277,7 @@ unsuccessful match alongside the classification.[^harness]
 
 Apply them as follows:
 
-- A confirmed HIGH finding gains a local reason for prompt investigation, even without another signal increasing its priority.
+- A confirmed HIGH finding gains environment-specific evidence supporting investigation before other findings with the same urgency, without changing its assessed urgency.
 - An unobserved HIGH finding for a KEV-listed CVE is still urgent; sampling absence does not cancel exploitation evidence.
 - An unknown finding needs its collection problem investigated while retaining its existing remediation priority.
 - An unobserved language-package finding needs appropriate mapping evidence, not a claim that its runtime never loaded it.

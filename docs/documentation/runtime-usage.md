@@ -42,11 +42,26 @@ The supplied Compose file runs the Sensor as non-root UID 65532 with these setti
 
 - `pid: host`
 - `cgroup: host`
+- `userns_mode: host`
 - `network_mode: none`
 - `read_only: true`
 - `cap_drop: [ALL]`
 - `cap_add: [SYS_PTRACE, DAC_READ_SEARCH, BPF, PERFMON]`
 - The supplied seccomp profile
+
+`cgroup: host` is required because, in its own cgroup namespace, the Sensor
+reads other containers' `/proc/<pid>/cgroup` paths relative to that namespace's
+root and cannot match them to any container. On a cgroup v2 host, without this
+setting, the Sensor exits at startup with exit code 1 and the following error
+on standard error. With `docker run`, use `--cgroupns host`.
+
+```text
+kestrelynx sensor: sensor: this container is not in the host's cgroup namespace; run it with `cgroup: host` (compose) or `--cgroupns host` (docker run)
+```
+
+`userns_mode: host` is required when the Docker daemon has userns-remap enabled;
+without it, sharing the host PID namespace is refused. In other environments,
+this setting is the same as the default.
 
 eBPF observation of short-lived processes requires a kernel with BTF. Without
 BPF or PERFMON, without BTF, or on a cgroup v1 host, the Sensor warns and continues
@@ -160,8 +175,9 @@ described in [How KestreLynx works](how-it-works.md).
 
 When the muting conditions no longer hold, notification resumes on a `Change:`
 line (`変化:` in Japanese).
-Newly available fixes, escalation to Act now, and added CVEs use
-`fix now available`, `⬆️ escalated to ACT NOW`, and `new CVEs: CVE-…` on that line.
+Newly available fixes, priority escalation, and added CVEs use
+`fix now available`, `⬆️ escalated to <priority>` (e.g. ACT NOW or WATCH),
+and `new CVEs: CVE-…` on that line.
 Other changes show `Change: ↩️ Unmuted (<reason>)`
 (`変化: ↩️ 通知を再開 (<理由>)` in Japanese).
 

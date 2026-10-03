@@ -41,11 +41,26 @@ Dockerとcgroup v2が必要です。Kubernetesでは利用できません。
 
 - `pid: host`
 - `cgroup: host`
+- `userns_mode: host`
 - `network_mode: none`
 - `read_only: true`
 - `cap_drop: [ALL]`
 - `cap_add: [SYS_PTRACE, DAC_READ_SEARCH, BPF, PERFMON]`
 - 配布のseccompプロファイル
+
+`cgroup: host`が必要なのは、Sensorが自身のcgroup名前空間で動作すると、
+他のコンテナの`/proc/<pid>/cgroup`のパスをその名前空間のルートからの相対パスとして読み、
+どのコンテナにも対応付けられなくなるためです。cgroup v2のホストでこの設定がない場合、
+Sensorは起動時に次のエラーを標準エラーに出力し、終了コード1で終了します。
+`docker run`では`--cgroupns host`を指定します。
+
+```text
+kestrelynx sensor: sensor: this container is not in the host's cgroup namespace; run it with `cgroup: host` (compose) or `--cgroupns host` (docker run)
+```
+
+`userns_mode: host`は、Dockerデーモンでuserns-remapが有効な場合に必要です。
+指定しないと、ホストのPID名前空間の共有が拒否されます。
+それ以外の環境では、この設定は既定値と同じです。
 
 短命なプロセスを観測するeBPFには、BTFのあるカーネルが必要です。
 BPF・PERFMONがない場合、BTFがない場合、cgroup v1のホストでは、
@@ -155,9 +170,9 @@ EOLは常に通知します。スキャンに失敗した・実体を確認で�
 追加のフィールドは[KestreLynxの仕組み](how-it-works.md)に記載しています。
 
 通知オフの条件を満たさなくなった場合は、`変化:`（英語では`Change:`）の行で通知を再開します。
-修正版が出た・Act nowになった・CVEが追加された場合は、この行に
-`修正版が利用可能`・`⬆️ 今すぐ対応に優先度昇格`・`新しいCVE CVE-…`を表示します。
-英語では`fix now available`・`⬆️ escalated to ACT NOW`・`new CVEs: CVE-…`です。
+修正版が出た・優先度が上がった・CVEが追加された場合は、この行に
+`修正版が利用可能`・`⬆️ <優先度>に優先度昇格`（例: 今すぐ対応・要監視）・`新しいCVE CVE-…`を表示します。
+英語では`fix now available`・`⬆️ escalated to <priority>`（例: ACT NOW・WATCH）・`new CVEs: CVE-…`です。
 それ以外は`変化: ↩️ 通知を再開 (<理由>)`（英語では`Change: ↩️ Unmuted (<理由>)`）を表示します。
 
 | 理由 | 日本語の通知 |

@@ -209,7 +209,7 @@ For ordinary packages, notifications cover new findings, priority escalations, a
 - Escalated means that the priority rose above the saved maximum priority.
 - New CVEs means that new CVE IDs were added to a known package.
 - Now fixable means that no fix was previously available and at least 1 fix is now available.
-- Unmuted means that a muted package no longer meets the muting conditions; newly available fixes, escalation to Act now, and added CVEs use their existing change labels.
+- Unmuted means that a muted package no longer meets the muting conditions; newly available fixes, priority escalations, and added CVEs use their existing change labels.
 
 Priority decreases are saved without notification, and later escalations use the saved value as their baseline. Moving from EOL back to ordinary findings alone does not count as New or New CVEs.
 
@@ -469,7 +469,7 @@ CRITICAL and HIGH count distinct CVE IDs within each package and fix-status grou
 | `Change: ⬆️ escalated to ACT NOW/WATCH` | A known package's maximum priority increased. |
 | `Change: new CVEs: CVE-…, CVE-… (+N more)` | Added CVEs are linked, with up to 3 IDs shown and the remainder shown as a count. |
 | `Change: fix now available` | No fix was previously available, and at least 1 fix is now available. |
-| `Change: ↩️ Unmuted (<reason>)` | Notification resumed after muting, unless a newly available fix, escalation to Act now, or added CVEs use an existing change label. |
+| `Change: ↩️ Unmuted (<reason>)` | Notification resumed after muting, unless a newly available fix, a priority escalation, or added CVEs use an existing change label. |
 | `Fixed in: none — end-of-life: no fix planned for this release` | The selected CVEs are out of support for this release. |
 | `Details: 🚨 see Act now` | The EOL package's details appear in Act now. |
 | `includes N end-of-life package(s)` | Count of EOL groups folded into the base-OS line. |

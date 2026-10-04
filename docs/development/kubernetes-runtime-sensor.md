@@ -1,8 +1,8 @@
 # Kubernetes Sensor Feasibility
 
 - **Status:** Design and feasibility validation only (implementation not started).
-- **Started:** October 2, 2026.
-- **Last updated:** October 3, 2026.
+- **Started:** October 2, 2026
+- **Last updated:** October 3, 2026
 
 ## Purpose
 

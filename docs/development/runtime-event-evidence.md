@@ -1,8 +1,8 @@
 # Runtime Evidence Observation with eBPF: Feasibility Research
 
 - **Status:** Measurements completed in the local environment; privileges, overhead, and validation in production are covered in [runtime evidence observation environment validation](runtime-environment-validation.md)
-- **Started:** 2026-09-13
-- **Last updated:** 2026-09-23
+- **Started:** September 13, 2026
+- **Last updated:** September 23, 2026
 
 ## Purpose
 
@@ -148,7 +148,7 @@ Extend the tooling described in the [harness README for the sampling investigati
     - Document Docker access and sampling privileges alongside event-observation privileges to show the combined requirements.
     - Record tested kernel features, active security restrictions, and resource limits without treating root access as a guarantee of success.
 
-## Results (2026-09-16)
+## Results (September 16, 2026) {#results-2026-09-16}
 
 Event evidence linked findings for short-lived curl and git processes and Node.js dependencies to observed use where the previous methods could not, but coverage depends on when observation starts and whether records are lost.
 
@@ -262,12 +262,12 @@ This table shows how many events were lost to recording-buffer overflow at each 
 
 ## Change log
 
-### 2026-09-13
+### September 13, 2026 {#2026-09-13}
 
 - **Investigation planned**
     - Recorded the staged approach, validation questions, scope, and verification plan before starting measurements for this investigation.
 
-### 2026-09-16
+### September 16, 2026 {#2026-09-16}
 
 - **Recorded development-environment measurements**
     - Added finding confirmations, occurrence capture, attribution, collection losses, and lessons from the development environment.
@@ -277,7 +277,7 @@ This table shows how many events were lost to recording-buffer overflow at each 
     - Recorded conditional CO-RE implementation and measurement work.
     - Recorded pending publication of unresolved questions before a decision.
 
-### 2026-09-23
+### September 23, 2026 {#2026-09-23}
 
 - **Terminology and status updates**
     - Updated the status line to reflect current progress and added a reference to [runtime evidence observation environment validation](runtime-environment-validation.md) for privileges, overhead, and validation in production.

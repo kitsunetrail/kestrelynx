@@ -1,8 +1,8 @@
 # Runtime Evidence Coverage Validation
 
 - **Status:** Measurements completed in the local environment; privileges, overhead, and validation in production are covered in [runtime evidence observation environment validation](runtime-environment-validation.md).
-- **Started:** 2026-09-19
-- **Last updated:** 2026-09-23
+- **Started:** September 19, 2026
+- **Last updated:** September 23, 2026
 
 ## Purpose
 
@@ -260,7 +260,7 @@ The established recall threshold and 0 false-positive packages were required for
 **Effects on remediation decisions**
 
 - **Comparison conditions and ranks**
-    - Scan results were fixed per image, and the full KEV/EPSS cache fetched on 2026-09-20 was applied uniformly to all runs as the threat information source.
+    - Scan results were fixed per image, and the full KEV/EPSS cache fetched on September 20, 2026 was applied uniformly to all runs as the threat information source.
     - Ranks were compared across three configurations (no runtime information, the previous rules, and with event evidence), using no runtime information as the baseline.
     - Rank changes were examined within the saved top 20 findings in each of the two categories, “act now” (act-now) and “watch” (watch).
     - The following results use a 30-second interval and a 900-second window, with both repetitions agreeing under each of startup and attach_running.
@@ -340,12 +340,12 @@ Saved inputs for all 30 runs were reprocessed with the same corrections and rule
 
 - **Effects on remediation decisions**
     - Used fixed scan results and threat information to count “act now” and “watch” findings belonging to packages still missed with event evidence, and incorrect priority increases for unused packages.
-    - Compared act-now and watch rank changes and the effects of misses within the top 20 across three configurations: no runtime information, the previous rules, and those rules with read-only additions and event evidence (2026-09-21).
+    - Compared act-now and watch rank changes and the effects of misses within the top 20 across three configurations: no runtime information, the previous rules, and those rules with read-only additions and event evidence (September 21, 2026).
 
 - **Matching changes and adoption decision**
-    - Resolved symlinks inside containers in the matcher and reassessed ownership mapping for mawk and tzdata, including false confirmations (2026-09-21).
-    - Added matching support for the application's own package outside `node_modules` (2026-09-21).
-    - Decided to adopt runtime evidence for remediation prioritization subject to three conditions (2026-09-20).
+    - Resolved symlinks inside containers in the matcher and reassessed ownership mapping for mawk and tzdata, including false confirmations (September 21, 2026).
+    - Added matching support for the application's own package outside `node_modules` (September 21, 2026).
+    - Decided to adopt runtime evidence for remediation prioritization subject to three conditions (September 20, 2026).
 
 ## Remaining work
 
@@ -356,20 +356,20 @@ Saved inputs for all 30 runs were reprocessed with the same corrections and rule
     - Compare overall classification counts across all four configurations, including the configuration with read-only additions.
 
 - **Matching changes and validation of applicability**
-    - Define how to handle files opened immediately after startup and before the first layout reading (added 2026-09-21).
+    - Define how to handle files opened immediately after startup and before the first layout reading (added September 21, 2026).
     - Reflect which use before observation began can and cannot be confirmed afterwards under attach_running in the specification and presentation.
     - [Runtime evidence observation environment validation](runtime-environment-validation.md) has confirmed candidate privilege sets and measured overhead in the local environment (bpftrace overhead provides an upper-bound estimate, not implementation overhead); verification of start conditions and actual usage paths in production, and assessment of where these results apply, remain work tracked in that log.
     - Implement the adoption conditions by retaining and displaying the indeterminate state, operating observation continuously, and enforcing in both implementation and presentation the rule that absent evidence or an unused classification must never lower priority or exclude a package from remediation.
 
 ## Change log
 
-### 2026-09-19
+### September 19, 2026 {#2026-09-19}
 
 - **Recorded the validation plan**
     - Documented the purpose, observation methods, workloads, independent ground truth, metrics, acceptance criteria, and comparison of remediation decisions.
     - Measurements and the adoption decision remain pending.
 
-### 2026-09-20
+### September 20, 2026 {#2026-09-20}
 
 - **Recorded development-environment measurements**
     - Added the scope of three ground-truth runs and 30 measurement runs, ground truth, recall, false positives, condition differences, reasons for misses, and acceptance decisions.
@@ -378,14 +378,14 @@ Saved inputs for all 30 runs were reprocessed with the same corrections and rule
     - Recorded completed validation items and pending standalone method aggregation, remediation count and ranking comparisons, matching extensions, specification updates, and production-environment validation.
     - Decided to adopt runtime evidence subject to three conditions, with the criteria still unmet for language packages under attach_running and resident OS packages in the Node.js case.
 
-### 2026-09-21
+### September 21, 2026 {#2026-09-21}
 
 - Added symlink and application-package matching support, exclusion of directory opens as evidence of use, confirmation measurements for three applications, and the remaining misses.
 - Completed the comparison of rank differences for the previous rules and the configuration with event evidence against the baseline without runtime information within the stored act-now and watch top 20, recording the effects on findings belonging to missed packages and the limits of the comparison.
 - Updated next steps to mark matching changes and ranking comparisons as completed and added handling of files opened before the first layout reading as pending.
 - Removed the statement in Purpose that measurements and the adoption decision were pending, added matching and the remediation priority categories to Terms, restructured the explanation of matching limitations and the effects on remediation decisions for readability, removed the date from the Results heading, split the adoption decision's work items into completed and remaining, and replaced Next steps with the Completed work and Remaining work sections.
 
-### 2026-09-23
+### September 23, 2026 {#2026-09-23}
 
 - **Terminology and status updates**
     - Updated the status line to reflect current progress and added a reference to [runtime evidence observation environment validation](runtime-environment-validation.md) for privileges, overhead, and validation in production.

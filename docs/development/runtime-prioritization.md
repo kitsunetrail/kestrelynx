@@ -1,8 +1,8 @@
 # Runtime Evidence Prioritization: Feasibility Research
 
 - **Status:** Verification complete
-- **Started:** 2026-09-09
-- **Last updated:** 2026-09-13
+- **Started:** September 9, 2026
+- **Last updated:** September 13, 2026
 
 ## Purpose
 
@@ -97,7 +97,7 @@ All five questions are conditions for proceeding. If they cannot be satisfied, t
 
 See the [harness README](https://github.com/kitsunetrail/kestrelynx/blob/main/experiments/runtime-discovery/README.md) for specific permission names and procedures.
 
-## Results (2026-09-12)
+## Results (September 12, 2026) {#results-2026-09-12}
 
 - **What worked**
     - Resolved the owning packages of executables and OS shared libraries for the resident processes checked.
@@ -174,7 +174,7 @@ See the [harness README](https://github.com/kitsunetrail/kestrelynx/blob/main/ex
     - The separate issue of some findings missing from product notifications and other outputs remains unresolved.
     - Additional checks to distinguish replaced files and an assessment of where further observation could help in static Go cases remain unvalidated.
 
-## Decision (2026-09-13)
+## Decision (September 13, 2026) {#decision-2026-09-13}
 
 - **Proceed to [Runtime Evidence Observation with eBPF: Feasibility Research](runtime-event-evidence.md)**
     - Prioritization of HIGH/CRITICAL findings did not improve in this production sample, so investigate how to confirm use by short-lived processes and use of language packages.
@@ -198,14 +198,14 @@ See the [harness README](https://github.com/kitsunetrail/kestrelynx/blob/main/ex
 
 ## Change log
 
-### 2026-09-13
+### September 13, 2026 {#2026-09-13}
 
 - **Recorded results from the sampling investigation**
     - Added the verification method, results, required permissions, load, production sample, fixed defects, and remaining limitations.
 - **Defined the approach for investigating eBPF-based event observation**
     - Begin investigating how to confirm use by short-lived processes and use of language packages while entry conditions remain unevaluated.
 
-### 2026-09-10
+### September 10, 2026 {#2026-09-10}
 
 - **Kubernetes stage defined**
     - Keep the initial investigation limited to Docker Engine while defining observation classifications and evidence types for both Docker and Kubernetes identifiers.
@@ -214,7 +214,7 @@ See the [harness README](https://github.com/kitsunetrail/kestrelynx/blob/main/ex
     - Start with procfs and Docker API state sampling that includes loaded shared libraries and requires access to the host PID namespace and root-equivalent permissions.
     - Make eBPF event evidence a separate opt-in for a later stage, conditional on measured confirmation gaps and users accepting its kernel and permission requirements, while keeping attack detection outside scope.
 
-### 2026-09-09
+### September 9, 2026 {#2026-09-09}
 
 - **Research started**
     - Recorded the motivation, design stance, five feasibility questions, non-goals, and initial verification plan.

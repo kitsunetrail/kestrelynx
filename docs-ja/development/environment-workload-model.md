@@ -1,8 +1,8 @@
 # Environment / Workloadモデルの開発
 
 - **状態:** 実装済み(Environmentの識別・Workload/containerの共通モデル・stateへの記録・通知まで。単一stateファイル=単一環境という構造は維持したまま、複数環境の統合は今後の課題)
-- **開始日:** 2026-08-25
-- **最終更新:** 2026-08-29
+- **開始日:** 2026年8月25日
+- **最終更新:** 2026年8月29日
 
 ## 目的
 
@@ -117,7 +117,7 @@ Containerは、**実際に動いている個体**の観測事実である。同�
 
 ## 更新履歴
 
-### 2026-08-29
+### 2026年8月29日 {#2026-08-29}
 
 - Environment/Workloadモデルを実装した
     - `inventory`パッケージ(新設)にEnvironment/Workload/Container/RunningImageの共通語彙を定義し、Docker adapterの観測単位を`RunningImages`から`RunningContainers`へ切り替えた
@@ -128,7 +128,7 @@ Containerは、**実際に動いている個体**の観測事実である。同�
 - 複数環境の履歴を1つのstateファイルへ統合することは行っていない
     - 単一stateファイル=単一環境という構造を維持したまま今後の課題として残した
 
-### 2026-08-25
+### 2026年8月25日 {#2026-08-25}
 
 - Environment/Workload モデルの実装内容を整理した
 

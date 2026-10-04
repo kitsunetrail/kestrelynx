@@ -1,8 +1,8 @@
 # Runtime Evidence Prioritization Development
 
 - **Status:** Design finalized (not yet implemented)
-- **Started:** 2026-09-25
-- **Last updated:** 2026-09-25
+- **Started:** September 25, 2026
+- **Last updated:** September 25, 2026
 
 ## Purpose
 
@@ -109,7 +109,7 @@ Changes in whether a package is in use do not trigger diff notifications.
 
 ## Change log
 
-### 2026-09-25
+### September 25, 2026 {#2026-09-25}
 
 - Recorded the plan
 

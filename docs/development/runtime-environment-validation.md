@@ -1,8 +1,8 @@
 # Runtime Evidence Observation Environment Validation
 
 - **Status:** Measurement complete
-- **Started:** 2026-09-22
-- **Last updated:** 2026-09-25
+- **Started:** September 22, 2026
+- **Last updated:** September 25, 2026
 
 ## Purpose
 
@@ -415,15 +415,15 @@ The table shows collector and bpftrace values for each observation, with attach_
 
 ## Change log
 
-### 2026-09-22
+### September 22, 2026 {#2026-09-22}
 
 - Recorded the plan
 
-### 2026-09-23
+### September 23, 2026 {#2026-09-23}
 
 - Recorded local and production results
 
-### 2026-09-25
+### September 25, 2026 {#2026-09-25}
 
 - Corrected the interpretation of the static Go result
 

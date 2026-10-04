@@ -1,8 +1,8 @@
 # Developing Kubernetes Support
 
 - **Status:** Implemented (discovery through scanning and notifications verified on a real K3s cluster; output of resolved deployment owners in notifications and webhooks is future work).
-- **Started:** September 6, 2026.
-- **Last updated:** September 9, 2026.
+- **Started:** September 6, 2026
+- **Last updated:** September 9, 2026
 
 ## Purpose
 
@@ -112,7 +112,7 @@ The following records the settled decisions that define the adapter's behavior a
 - The container runtime was containerd 2.3.
 - The OS was Ubuntu, and the platform was linux/amd64.
 - The workloads deployed for verification included a Deployment, StatefulSet, DaemonSet, standalone Pod, digest-pinned Pod, Helm release, and Flux Kustomization-managed Deployment.
-- The second verification round on 2026-09-09 used the same cluster and added Argo CD-managed and Flux HelmRelease-managed Deployments, a Pod pulling from an authenticated private registry, and a Pod using an image imported directly into containerd.
+- The second verification round on September 9, 2026 used the same cluster and added Argo CD-managed and Flux HelmRelease-managed Deployments, a Pod pulling from an authenticated private registry, and a Pod using an image imported directly into containerd.
 
 ### Verified
 
@@ -205,7 +205,7 @@ The following four questions carry over from the [landscape research](kubernetes
 
 ## Update history
 
-### 2026-09-09
+### September 9, 2026 {#2026-09-09}
 
 - Completed a second verification round on the same real K3s + containerd cluster.
 - Verified Argo CD and Flux HelmRelease markers and their owner chains against the live cluster.

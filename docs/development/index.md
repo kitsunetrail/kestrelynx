@@ -14,6 +14,7 @@ For instructions on currently available features, see [Documentation](../documen
   listening ports, and privileges can be linked to vulnerability findings to improve prioritization (research complete)
 - [Developing Kubernetes support](kubernetes-support.md) — connecting Kubernetes workloads to scanning, prioritization,
   and diff notifications, starting with K3s + containerd (implemented; verified end to end on a real K3s cluster)
+- [Kubernetes Sensor Feasibility](kubernetes-runtime-sensor.md) — validation of the Docker Sensor's permissions and isolation on Kubernetes and the changes needed for cgroup namespaces and AppArmor (design and feasibility validation only; implementation not started)
 - [The Kubernetes vulnerability scanning landscape](kubernetes-scanning-landscape.md) — what existing tools already
   cover and what we found missing, ahead of Kubernetes support (research note)
 - [Designing the remediation relations model](remediation-relations-model.md) — the relation models that connect

@@ -12,6 +12,7 @@
   脆弱性の検出結果に紐づけ、優先順位付けの改善に使えるかを検証した調査(検証完了)
 - [Kubernetes対応の開発](kubernetes-support.md) — K3s + containerdを出発点に、KubernetesのWorkloadを
   スキャン・優先順位付け・差分通知へつなぐ実装(実装済み・K3s実環境でエンドツーエンド検証済み)
+- [KubernetesでのSensorの成立性の検証](kubernetes-runtime-sensor.md) — Docker向けSensorの権限・隔離の成立性と、cgroup名前空間・AppArmorで必要な変更を確かめた検証(設計・成立性の検証まで、実装未着手)
 - [Kubernetes向け脆弱性スキャンツールの調査](kubernetes-scanning-landscape.md) — Kubernetes対応に着手する前に、
   既存ツールの機能と追加実装が必要な点を整理した記録(調査ノート)
 - [修正関係モデルの設計](remediation-relations-model.md) — 検出した脆弱性を「どこを直せば消えるか」の

@@ -31,6 +31,7 @@ nav:
       - eBPFによる実行時証拠の観測調査: development/runtime-event-evidence.md
       - 実行時証拠の優先順位付け調査: development/runtime-prioritization.md
       - Kubernetes対応の開発: development/kubernetes-support.md
+      - KubernetesでのSensorの成立性の検証: development/kubernetes-runtime-sensor.md
       - Kubernetesスキャンツール調査: development/kubernetes-scanning-landscape.md
       - 修正関係モデル: development/remediation-relations-model.md
       - Environment / Workloadモデル: development/environment-workload-model.md

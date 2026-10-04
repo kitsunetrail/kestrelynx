@@ -57,6 +57,7 @@ nav:
       - Runtime evidence observation with eBPF: development/runtime-event-evidence.md
       - Runtime evidence prioritization: development/runtime-prioritization.md
       - Kubernetes support: development/kubernetes-support.md
+      - Kubernetes sensor feasibility: development/kubernetes-runtime-sensor.md
       - Kubernetes scanning landscape: development/kubernetes-scanning-landscape.md
       - Remediation relations model: development/remediation-relations-model.md
       - Environment and workload model: development/environment-workload-model.md

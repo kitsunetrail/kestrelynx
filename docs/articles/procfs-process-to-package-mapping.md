@@ -21,6 +21,8 @@ This article covers the following:
 - How to handle cases where a path cannot reliably identify a package, along with permission and sampling limits.
 - The command examples assume a Linux Docker Engine host and an existing container named `web`. Run them on the machine hosting the daemon.
 
+The [Interactive Guide to the procfs Package Mapping Workflow](procfs-package-mapping-interactive.md) follows one nginx worker inside a container in eight steps, from its loaded `libssl.so.3` through procfs and dpkg records to a match with Trivy findings and confirmation that files from `libssl3` were loaded.
+
 ## What a loaded file proves
 
 Finding a library in a process's executable mappings establishes that the

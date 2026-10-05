@@ -24,3 +24,4 @@ description: "CVE・KEV・EPSS・CVSSの基礎からTrivyのスキャン結果�
 - 2026年9月19日 — [bpftraceでコンテナの実行とファイルオープンを観測する](bpftrace-container-exec-open-events-ja.md) — 計測に使用したプログラム、tracepointとcgroupによる観測、短命な実行の捕捉、観測開始のタイミングと記録の欠落
 - 2026年9月20日 — [Trivyで検出した言語パッケージを実行時のファイル情報に紐づける](trivy-language-packages-runtime-mapping-ja.md) — Python・Node.js・Java・Goの検出情報とファイルの対応付け、方法ごとの計測結果、観測開始のタイミングと証拠の粒度
 - 2026年10月5日 — [bpftraceの計測プログラムの流れを追う動く図解](bpftrace-event-observation-interactive-ja.md) — curl 1回分を追う9ステップ、E・O・Xの出力行、開始と結果の対応付け、コンテナIDの付与とJSONLへの変換
+- 2026年10月5日 — [procfsのパッケージ紐づけの流れを追う動く図解](procfs-package-mapping-interactive-ja.md) — nginxワーカー1つを追う8ステップ、mapsからのパス抽出、dpkgによる所有元とバージョンの特定、Trivyとの照合と読み込みの確認

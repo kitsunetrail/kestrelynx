@@ -50,3 +50,4 @@ nav:
       - bpftraceでコンテナの実行とファイルオープンを観測する: articles/bpftrace-container-exec-open-events-ja.md
       - Trivyで検出した言語パッケージを実行時のファイル情報に紐づける: articles/trivy-language-packages-runtime-mapping-ja.md
       - bpftraceの計測プログラムの流れを追う動く図解: articles/bpftrace-event-observation-interactive-ja.md
+      - procfsのパッケージ紐づけの流れを追う動く図解: articles/procfs-package-mapping-interactive-ja.md

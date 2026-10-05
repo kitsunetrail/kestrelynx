@@ -1,0 +1,325 @@
+/* Interactive explainer layout. Colors follow Material's light and dark schemes. */
+
+.md-main__inner.md-grid:has(.klx-explainer) {
+  max-width: 78rem;
+}
+
+.klx-explainer {
+  --klx-pid: #7c3aed;
+  --klx-pid-bg: rgba(124, 58, 237, 0.12);
+  --klx-path: #2563eb;
+  --klx-path-bg: rgba(37, 99, 235, 0.12);
+  --klx-pkg: #15803d;
+  --klx-pkg-bg: rgba(21, 128, 61, 0.12);
+  --klx-ver: #c2410c;
+  --klx-ver-bg: rgba(194, 65, 12, 0.12);
+  --klx-start: #b91c1c;
+  --klx-start-bg: rgba(185, 28, 28, 0.1);
+  --klx-new: rgba(250, 204, 21, 0.22);
+  --klx-cursor: #0d9488;
+  --klx-cursor-bg: rgba(13, 148, 136, 0.1);
+  --klx-border: var(--md-default-fg-color--lightest);
+  --klx-panel: var(--md-code-bg-color);
+  margin: 1.2em 0 2em;
+  font-size: 0.74rem;
+  scroll-margin-top: 3.6rem;
+}
+
+[data-md-color-scheme="slate"] .klx-explainer {
+  --klx-pid: #c4a5ff;
+  --klx-pid-bg: rgba(196, 165, 255, 0.15);
+  --klx-path: #8ab4ff;
+  --klx-path-bg: rgba(138, 180, 255, 0.14);
+  --klx-pkg: #6ee7a0;
+  --klx-pkg-bg: rgba(110, 231, 160, 0.13);
+  --klx-ver: #ffab70;
+  --klx-ver-bg: rgba(255, 171, 112, 0.14);
+  --klx-start: #ff8a80;
+  --klx-start-bg: rgba(255, 138, 128, 0.14);
+  --klx-new: rgba(250, 204, 21, 0.14);
+  --klx-cursor: #2dd4bf;
+  --klx-cursor-bg: rgba(45, 212, 191, 0.12);
+}
+
+.klx-explainer .klx-fallback {
+  padding: 0.8em 1em;
+  border: 1px solid var(--klx-border);
+  border-radius: 6px;
+}
+
+.klx-explainer.is-ready .klx-fallback {
+  display: none;
+}
+
+/* Title and controls */
+
+.klx-explainer h3.klx-title {
+  margin: 0 0 0.6em;
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.klx-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4em;
+  margin-bottom: 0.7em;
+}
+
+.klx-btn {
+  font: inherit;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--klx-border);
+  border-radius: 6px;
+  padding: 0.3em 0.8em;
+  cursor: pointer;
+}
+
+.klx-btn:hover:not(:disabled) {
+  border-color: var(--md-accent-fg-color);
+}
+
+.klx-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.klx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4em;
+  height: 2em;
+  padding: 0;
+}
+
+.klx-btn svg {
+  width: 1.15em;
+  height: 1.15em;
+  fill: currentColor;
+}
+
+.klx-btn-primary {
+  border-color: var(--klx-cursor);
+  color: var(--klx-cursor);
+}
+
+.klx-counter {
+  margin-left: auto;
+  color: var(--md-default-fg-color--light);
+  font-variant-numeric: tabular-nums;
+}
+
+.klx-explainer button:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 2px;
+}
+
+/* Columns */
+
+.klx-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr) minmax(0, 1.3fr) minmax(0, 1.25fr);
+  gap: 0.8em;
+}
+
+@media screen and (max-width: 76em) {
+  .klx-stage {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 45em) {
+  .klx-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.klx-explainer h3.klx-col-title {
+  margin: 0 0 0.35em;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--md-default-fg-color--light);
+}
+
+.klx-col.is-active .klx-box {
+  border-color: var(--klx-cursor);
+  box-shadow: 0 0 0 2px var(--klx-cursor-bg);
+}
+
+.klx-col.is-active h3.klx-col-title {
+  color: var(--klx-cursor);
+}
+
+.klx-box {
+  min-height: 9em;
+  padding: 0.6em 0.7em;
+  border: 1px solid var(--klx-border);
+  border-radius: 8px;
+  background: var(--klx-panel);
+}
+
+.klx-explainer .klx-box p {
+  margin: 0;
+}
+
+/* Shared small parts */
+
+.klx-explainer .klx-box p.klx-sub {
+  margin: 0.8em 0 0.3em;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color--light);
+}
+
+.klx-explainer .klx-box > p.klx-sub:first-child {
+  margin-top: 0;
+}
+
+.klx-explainer .klx-empty {
+  color: var(--md-default-fg-color--light);
+}
+
+.klx-explainer .klx-box p.klx-out {
+  margin-top: 0.6em;
+  padding-top: 0.45em;
+  border-top: 1px dashed var(--klx-border);
+}
+
+.klx-explainer .klx-box > p.klx-out:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Listings */
+
+.klx-explainer pre.klx-pre {
+  margin: 0 0 0.3em;
+  padding: 0.45em 0.55em;
+  border: 1px solid var(--klx-border);
+  border-radius: 6px;
+  background: var(--md-default-bg-color);
+  font-family: var(--md-code-font-family);
+  font-size: 0.6rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.klx-row {
+  display: block;
+  border-radius: 3px;
+}
+
+.klx-explainer .klx-row.is-hit {
+  background: var(--klx-new);
+  outline: 1px solid var(--klx-cursor);
+}
+
+.klx-row.is-keep {
+  font-weight: 700;
+}
+
+.klx-row.is-drop {
+  color: var(--md-default-fg-color--light);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.klx-prompt,
+.klx-c {
+  color: var(--md-default-fg-color--light);
+  font-weight: 400;
+}
+
+.klx-f {
+  padding: 0 0.15em;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.klx-f-pid { color: var(--klx-pid); background: var(--klx-pid-bg); }
+.klx-f-path { color: var(--klx-path); background: var(--klx-path-bg); }
+.klx-f-pkg { color: var(--klx-pkg); background: var(--klx-pkg-bg); }
+.klx-f-ver { color: var(--klx-ver); background: var(--klx-ver-bg); }
+.klx-f-start { color: var(--klx-start); background: var(--klx-start-bg); }
+
+.klx-explainer .is-glow {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.klx-explainer .klx-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8em;
+  margin: 0.6em 0 0;
+  font-size: 0.64rem;
+}
+
+/* Tables */
+
+.klx-explainer table.klx-t {
+  display: table;
+  width: 100%;
+  margin: 0;
+  font-size: 0.64rem;
+  border-collapse: collapse;
+  background: var(--md-default-bg-color);
+}
+
+.klx-explainer table.klx-t th,
+.klx-explainer table.klx-t td {
+  padding: 0.3em 0.45em;
+  border: 1px solid var(--klx-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.klx-explainer table.klx-t th {
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+  background: var(--klx-panel);
+}
+
+.klx-explainer table.klx-t tr.is-hit td {
+  background: var(--klx-new);
+}
+
+/* Explanation */
+
+.klx-explain {
+  margin-top: 0.9em;
+  padding: 0.55em 0.9em;
+  border-left: 4px solid var(--klx-cursor);
+  border-radius: 6px;
+  background: var(--klx-panel);
+  font-size: 0.78rem;
+}
+
+.klx-explain p {
+  margin: 0.3em 0;
+}
+
+.md-typeset .klx-explainer .klx-explain ul {
+  margin: 0.3em 0;
+}
+
+.md-typeset .klx-explainer .klx-explain ul ul {
+  margin: 0.15em 0;
+}
+
+.md-typeset .klx-explainer .klx-explain li {
+  margin: 0.15em 0 0.15em 1.2em;
+}
+
+.klx-explain .klx-back {
+  font-size: 0.68rem;
+  color: var(--md-default-fg-color--light);
+}

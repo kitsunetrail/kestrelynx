@@ -76,6 +76,7 @@ nav:
       - Observing Container Execution and File Opens with bpftrace: articles/bpftrace-container-exec-open-events.md
       - Mapping Language Packages Detected by Trivy to Runtime Files: articles/trivy-language-packages-runtime-mapping.md
       - Interactive Guide to the bpftrace Measurement Workflow: articles/bpftrace-event-observation-interactive.md
+      - Interactive Guide to the procfs Package Mapping Workflow: articles/procfs-package-mapping-interactive.md
 
 plugins:
   - search

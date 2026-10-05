@@ -30,9 +30,10 @@ window.KLX_TEXT = {
     followedLabel: 'PID being followed:',
     starttime: '`starttime`, field 22 of `/proc/2479938/stat`',
     startedAt: 'Docker `State.StartedAt`',
+    ns: 'Namespace identifiers read from the links in `/proc/2479938/ns`',
     before: 'Before collection',
     after: 'After collection',
-    same: 'Both values are unchanged across collection, so this sample is accepted.',
+    same: 'All values are unchanged across collection, so this sample is accepted.',
   },
   maps: {
     waiting: 'Next, the collector reads this worker’s `maps`.',
@@ -43,7 +44,7 @@ window.KLX_TEXT = {
   dpkg: {
     waiting: 'After extracting the file paths, the collector reads the dpkg records inside the container.',
     where: 'Where the records are read',
-    rootNote: 'The collector reads the container’s `/var/lib/dpkg` through this process’s `root`. The host’s `/var/lib/dpkg` describes packages on the host.',
+    rootNote: 'The collector reads the container’s `/var/lib/dpkg` through this process’s `root`.',
     listTitle: '`info/libssl3:amd64.list` (excerpt)',
     indexTitle: 'Built index (path → package)',
     indexMore: '… Excerpt of the index built from every package’s `.list`',
@@ -116,11 +117,12 @@ window.KLX_TEXT = {
       ],
     },
     6: {
-      title: 'Comparing start times before and after collection validates the sample',
+      title: 'Comparing start times and namespace identifiers before and after collection validates the sample',
       body: [
         'PIDs can be reused, so the collector compares `starttime`, field 22 of `/proc/2479938/stat`, before and after collection.',
+        'The collector reads the `net`, `mnt`, and `user` links in `/proc/2479938/ns` and checks that the namespace identifiers are unchanged before and after collection.',
         'It also compares Docker’s `State.StartedAt` to check for a container restart.',
-        'In this example, `starttime` is `15146823` both times and `State.StartedAt` is unchanged, so the sample is accepted.',
+        'In this example, `starttime` is `15146823` both times, the namespace identifiers are `net:[4026532238]`, `mnt:[4026532233]`, and `user:[4026531837]` both times, and `State.StartedAt` is unchanged, so the sample is accepted.',
       ],
       back: [
         ['Namespace identity and PID reuse', '../procfs-process-to-package-mapping/#namespace-identity-and-pid-reuse'],

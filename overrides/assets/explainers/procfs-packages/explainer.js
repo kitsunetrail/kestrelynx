@@ -59,6 +59,12 @@
   const VER = '3.0.16-1~deb12u1';
   const STARTTIME = '15146823';
   const STARTED_AT = '2026-09-11T23:39:27.070569713Z';
+  // Namespace identity of the followed worker, identical before and after every sample.
+  const NAMESPACES = [
+    ['net', 'net:[4026532238]'],
+    ['mnt', 'mnt:[4026532233]'],
+    ['user', 'user:[4026531837]'],
+  ];
 
   // Field classes color the same kind of value wherever it appears.
   function f(text, cls, glow) {
@@ -140,6 +146,10 @@
         '<table class="klx-t"><tbody>' +
         '<tr><th>' + t('proc.before') + '</th><td>' + st(false) + '</td></tr>' +
         '<tr class="is-hit"><th>' + t('proc.after') + '</th><td>' + st(true) + '</td></tr>' +
+        '</tbody></table>' +
+        '<p class="klx-sub">' + t('proc.ns') + '</p>' +
+        '<table class="klx-t"><tbody>' +
+        NAMESPACES.map(([k, v]) => '<tr><th>' + k + '</th><td><code>' + v + '</code></td></tr>').join('') +
         '</tbody></table>' +
         '<p class="klx-sub">' + t('proc.startedAt') + '</p>' +
         '<table class="klx-t"><tbody>' +

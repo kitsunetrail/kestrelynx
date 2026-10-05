@@ -30,9 +30,10 @@ window.KLX_TEXT = {
     followedLabel: '追うプロセスのPID：',
     starttime: '`/proc/2479938/stat` の22番目のフィールド `starttime`',
     startedAt: 'Docker の `State.StartedAt`',
+    ns: '`/proc/2479938/ns` の各リンクから読む名前空間の識別子',
     before: '収集前',
     after: '収集後',
-    same: 'どちらも収集前後で同じ値なので、このサンプルを採用します。',
+    same: 'いずれも収集前後で同じ値なので、このサンプルを採用します。',
   },
   maps: {
     waiting: '次に、このワーカーの `maps` を読みます。',
@@ -43,7 +44,7 @@ window.KLX_TEXT = {
   dpkg: {
     waiting: 'ファイルのパスを取り出した後、コンテナ内の dpkg の記録を読みます。',
     where: '読む場所',
-    rootNote: 'このプロセスの `root` 経由で、コンテナ内の `/var/lib/dpkg` を読みます。ホストの `/var/lib/dpkg` はホストのパッケージの記録です。',
+    rootNote: 'このプロセスの `root` 経由で、コンテナ内の `/var/lib/dpkg` を読みます。',
     listTitle: '`info/libssl3:amd64.list`（抜粋）',
     indexTitle: '作った索引（パス → パッケージ）',
     indexMore: '… 全パッケージの `.list` から作った索引の一部',
@@ -116,11 +117,12 @@ window.KLX_TEXT = {
       ],
     },
     6: {
-      title: '収集前後の開始時刻を比べてサンプルを採用する',
+      title: '収集前後の開始時刻と名前空間を比べてサンプルを採用する',
       body: [
         'PIDは再利用されることがあるため、収集前後で `/proc/2479938/stat` の22番目のフィールド `starttime` を比べる',
+        '`/proc/2479938/ns` の `net`・`mnt`・`user` の各リンクを読み、収集前後で名前空間の識別子が変わっていないことを確認する',
         'コンテナの再起動を確認するため、Docker の `State.StartedAt` も比べる',
-        'この例では `starttime` は前後とも `15146823` で、`State.StartedAt` も変わっていないため、このサンプルを採用する',
+        'この例では `starttime` は前後とも `15146823`、名前空間は前後とも `net:[4026532238]`・`mnt:[4026532233]`・`user:[4026531837]` で、`State.StartedAt` も変わっていないため、このサンプルを採用する',
       ],
       back: [
         ['名前空間の識別情報とPIDの再利用', '../procfs-process-to-package-mapping-ja/#pid_1'],

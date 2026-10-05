@@ -340,7 +340,7 @@
   controls.append(btnPlay, btnPrev, btnNext, btnReset, counter);
   const stage = h('div', { class: 'klx-stage' });
   const explain = h('div', { class: 'klx-explain', 'aria-live': 'polite' });
-  root.append(head, stage, controls, explain);
+  root.append(controls, head, stage, explain);
 
   let step = 1;
   let selected = null;

@@ -18,6 +18,8 @@ However, a Node.js load that finished before observation began was not captured,
 
 This article references the programs used in those measurements to explain event collection, container attribution, and the results.
 
+The [Interactive Guide to the bpftrace Measurement Workflow](bpftrace-event-observation-interactive.md) follows one `curl` run inside a container in nine steps, from execution and file-open activity through output lines to events with a container ID.
+
 ## What the Tests Covered
 
 We compared application-side logs with bpftrace records in two cases.

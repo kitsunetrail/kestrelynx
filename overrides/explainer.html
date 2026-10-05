@@ -1,0 +1,20 @@
+{% extends "main.html" %}
+
+{#- Page template for interactive explainers. Front matter `explainer: <name>`
+    selects overrides/assets/explainers/<name>/, which holds the shared script
+    and stylesheet and one text file per site language. -#}
+
+{% block styles %}
+  {{ super() }}
+  {% if page.meta.explainer %}
+    <link rel="stylesheet" href="{{ ('assets/explainers/' ~ page.meta.explainer ~ '/explainer.css') | url }}">
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  {% if page.meta.explainer %}
+    <script src="{{ ('assets/explainers/' ~ page.meta.explainer ~ '/text-' ~ config.theme.language ~ '.js') | url }}"></script>
+    <script src="{{ ('assets/explainers/' ~ page.meta.explainer ~ '/explainer.js') | url }}"></script>
+  {% endif %}
+{% endblock %}

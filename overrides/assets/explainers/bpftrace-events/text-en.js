@@ -1,0 +1,137 @@
+window.KLX_TEXT = {
+  ui: {
+    play: 'Play',
+    pause: 'Pause',
+    prev: 'Previous',
+    next: 'Next',
+    reset: 'Restart',
+    counter: 'Step {i} of {n}',
+    reading: 'Reading this line ▶',
+  },
+  cols: {
+    container: 'Activity inside the container',
+    script: 'bpftrace script',
+    output: 'Lines written by bpftrace',
+    convert: 'Converter (convert.go)',
+  },
+  container: {
+    exec: { label: '`curl` starts', note: 'Successful switch to `/usr/bin/curl`' },
+    openTry: { label: 'Attempt to open `/etc/ssl/openssl.cnf`', note: 'Calls `openat`' },
+    opened: { label: 'Open succeeds', note: 'Return value 3 (file descriptor)' },
+    exit: { label: '`curl` exits', note: 'The recorded lines remain' },
+  },
+  script: {
+    point: 'Triggered at: ',
+    readLabel: 'Values read',
+    doLabel: 'Action',
+    exec: {
+      point: 'Successful switch to a new program',
+      tracepoint: 'sched_process_exec',
+      wrote: '`E` line',
+      read: 'Timestamp / thread ID 4242 / cgroup ID 11823 / path `/usr/bin/curl` / other fields',
+      do: 'Write an E line',
+    },
+    enter: {
+      point: 'Entry to a file-open call',
+      tracepoint: 'sys_enter_openat',
+      wrote: '`O` line',
+      read: 'Timestamp 1003000000 / thread ID 4242 / cgroup ID 11823 / path `/etc/ssl/openssl.cnf` / other fields',
+      do: 'Remember the entry timestamp in the table below and write an O line',
+    },
+    exit: {
+      point: 'Return from a file-open call',
+      tracepoint: 'sys_exit_openat',
+      wrote: '`X` line',
+      read: 'Timestamp 1003050000 / thread ID 4242 / return value 3 / other fields',
+      do: 'Retrieve the entry timestamp for the same thread from the table below and write it with the return value in an X line. Remove the table entry',
+    },
+    remember: {
+      title: 'Entry timestamp remembered by the script',
+      tid: 'Thread ID',
+      start: 'Entry timestamp',
+      empty: 'None',
+    },
+  },
+  legend: {
+    E: 'E = execution / timestamp / PID / **thread ID** / … / **cgroup ID** / … / command name / **path**',
+    O: 'O = open entry / **timestamp** / PID / **thread ID** / … / **cgroup ID** / … / **path** (outcome not yet known)',
+    X: 'X = open exit / timestamp / PID / **thread ID** / … / **return value** / **matching entry timestamp**',
+  },
+  convert: {
+    waiting: 'Once observation ends, the converter reads the saved lines from the beginning, one at a time.',
+    output: 'Event output (JSONL)',
+    execNote: 'An E line needs no matching line, so the converter creates an execution event from that line alone.',
+    pending: {
+      title: 'Pending opens',
+      key: 'Key (thread ID + entry timestamp)',
+      path: 'Path',
+      empty: 'None',
+    },
+    events: { title: 'Created events' },
+    combined: 'Paired result',
+    finishing: 'Fields added to the paired result',
+    okComment: 'Return value 3 is nonnegative, so the open succeeded',
+    tsComment: '① Timestamp',
+    pathComment: '② Path',
+    containerComment: '③ Container',
+    cgmap: {
+      title: 'Cgroup mapping (built and updated from `/sys/fs/cgroup` for the observation)',
+      id: 'Cgroup ID',
+      container: 'Container ID',
+      valid: 'Validity period',
+      whole: 'Throughout observation',
+    },
+    boot: { title: 'Reference time for timestamp conversion (recorded for the observation)', unit: 'nanoseconds' },
+    clickHint: 'Select a value in the file-open event to highlight the values it came from.',
+  },
+  provenance: {
+    ts: '`ts`: The timestamp from the O line, in monotonic nanoseconds, added to the reference time recorded for the observation.',
+    tid: '`tid`: The thread ID from the O line. The X line contains the same ID.',
+    path: '`path`: The normalized path from the O line. In this example, normalization leaves it unchanged.',
+    ok: '`ok`: The return value 3 from the X line is nonnegative, so the open succeeded (`true`).',
+    ret: '`ret`: The return value from the X line.',
+    cgroup_id: '`cgroup_id`: The cgroup ID from the O line.',
+    container_id: '`container_id`: The result of looking up cgroup ID 11823 from the O line in the mapping valid at the event time.',
+  },
+  steps: {
+    1: {
+      title: 'How the bpftrace script writes a line when curl starts',
+      body: 'A tracepoint is a predefined point in the kernel where tracing actions can run. The script attaches an action to the point reached after a successful switch to a new program. When `curl` reaches that point, the action reads the timestamp, thread ID, cgroup ID, path, and other fields, producing a line that starts with E.',
+    },
+    2: {
+      title: 'How the script saves the entry timestamp and writes an O line when curl tries to open a file',
+      body: 'At file-open entry, the path is known, but the outcome is not. The script remembers the entry timestamp under the thread ID and writes an O line.',
+    },
+    3: {
+      title: 'How the script puts the saved entry timestamp in an X line when the file opens successfully',
+      body: 'When the file-open call returns, its return value is available: a file descriptor on success or a negative value on failure. The script retrieves the entry timestamp it remembered for the same thread and includes it with the return value in an X line. This timestamp, shown in purple, combines with the thread ID to identify the matching O and X lines later.',
+    },
+    4: {
+      title: 'How the written lines are retained after curl exits',
+      body: 'After `curl` exits, its executable and related information can no longer be inspected through `/proc`. The recorded lines contain the cgroup ID captured at event time, so the converter can still identify the container by consulting the cgroup mapping. Output lines are saved to a file during observation and read by the converter afterwards.',
+    },
+    5: {
+      title: 'How the converter reads the E line and creates an execution event',
+      body: 'After observation, the converter reads the saved lines from the beginning, one at a time. An E line needs no matching line, so it becomes an execution event on its own. The timestamp, path, and container are filled in using the same method shown in step 8.',
+    },
+    6: {
+      title: 'How the converter reads an O line and adds it to pending opens until the result is known',
+      body: 'An O line alone cannot tell us whether the file was opened successfully. The converter stores it in the pending opens, using the thread ID and entry timestamp as its key.',
+    },
+    7: {
+      title: 'How the converter reads an X line, finds the O line with the same key, and combines them into one event',
+      body: 'The converter uses the thread ID and matching entry timestamp from the X line to find the O line under the same key. After also checking that the PIDs match, it removes the pending O line and combines the two lines into one event. A nonnegative return value means success (`ok: true`); a negative value means failure (`ok: false`).',
+    },
+    8: {
+      title: 'How the converter fills in timestamps, paths, and container details',
+      body: [
+        'Both execution and file-open events receive these three fields.',
+        '① Timestamp: Add the timestamp from the line, in monotonic nanoseconds, to the reference time recorded for the observation to obtain a wall-clock timestamp. ② Path: Normalize a path that starts with / and put it in `path` (a path relative to the working directory is combined with the working-directory record for that time). ③ Container: Look up the cgroup ID in the mapping valid at the event time and add `container_id`.',
+      ],
+    },
+    9: {
+      title: 'How the converter outputs each event as a single line of JSON',
+      body: 'The converter writes each event as a single line of JSON (JSONL). The converted event includes a container ID, identifying which container’s `curl` successfully opened `/etc/ssl/openssl.cnf`. Executions of other programs such as `node` follow the same recording flow, as do file opens such as those caused by `require(\'lodash\')` in the article’s Node.js case.',
+    },
+  },
+};

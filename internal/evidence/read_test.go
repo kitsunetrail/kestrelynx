@@ -765,3 +765,46 @@ func corrupt(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 }
+
+// TestRead_KernelLostRoundTripAndCompatibility pins both directions of the
+// kernel_lost field: a snapshot carrying it round-trips, and a body without
+// it (written by a Sensor that predates it) is accepted and reads as zero.
+func TestRead_KernelLostRoundTripAndCompatibility(t *testing.T) {
+	dir := t.TempDir()
+	want := baseSnapshot(testNow)
+	want.Sensor.Events.Lost = 7
+	want.Sensor.Events.KernelLost = 5
+	writeEvidence(t, dir, want)
+	got, err := Reader{Dir: dir}.Read(testNow, nil)
+	if err != nil {
+		t.Fatalf("Read with kernel_lost: %v", err)
+	}
+	if got.Sensor.Events.KernelLost != 5 || got.Sensor.Events.Lost != 7 {
+		t.Errorf("events = %+v, want lost 7 and kernel_lost 5", got.Sensor.Events)
+	}
+
+	body, err := json.Marshal(baseSnapshot(testNow))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := bytes.Replace(body, []byte(`,"kernel_lost":0`), nil, 1)
+	if bytes.Equal(legacy, body) {
+		t.Fatalf("test setup: kernel_lost not found in %s", body)
+	}
+	legacyDir := writeRawEvidence(t, t.TempDir(), legacy)
+	got, err = Reader{Dir: legacyDir}.Read(testNow, nil)
+	if err != nil {
+		t.Fatalf("Read without kernel_lost: %v", err)
+	}
+	if got.Sensor.Events.KernelLost != 0 {
+		t.Errorf("KernelLost = %d, want 0 when absent", got.Sensor.Events.KernelLost)
+	}
+
+	neg := baseSnapshot(testNow)
+	neg.Sensor.Events.KernelLost = -1
+	negDir := t.TempDir()
+	writeEvidence(t, negDir, neg)
+	if _, err := (Reader{Dir: negDir}).Read(testNow, nil); !errors.Is(err, ErrInvalid) {
+		t.Errorf("negative kernel_lost err = %v, want ErrInvalid", err)
+	}
+}

@@ -1,8 +1,11 @@
 package sensor
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -2125,5 +2128,76 @@ func TestApplyFallbackLoss_EndedGenerationAliveDuringLossIsDowngraded(t *testing
 	}
 	if endedBefore.eventsCoverage != evidence.CoverageSinceStart || endedBefore.incomplete {
 		t.Errorf("endedBefore = {coverage=%q incomplete=%v}, want unchanged -- its end was applied before the loss interval began", endedBefore.eventsCoverage, endedBefore.incomplete)
+	}
+}
+
+func TestKernelLossTotal(t *testing.T) {
+	if got := kernelLossTotal(nil, 0); got != 0 {
+		t.Errorf("kernelLossTotal(nil, 0) = %d, want 0", got)
+	}
+	if got := kernelLossTotal(map[uint64]uint64{7: 5, 9: 2}, 3); got != 10 {
+		t.Errorf("kernelLossTotal = %d, want 10 (5+2 per-cgroup plus 3 fallback)", got)
+	}
+	if got := kernelLossTotal(map[uint64]uint64{7: 1 << 63}, 0); got != 1<<63-1 {
+		t.Errorf("kernelLossTotal per-cgroup overflow = %d, want saturation at max int64", got)
+	}
+	if got := kernelLossTotal(map[uint64]uint64{7: 1<<63 - 1}, 1); got != 1<<63-1 {
+		t.Errorf("kernelLossTotal sum overflow = %d, want saturation at max int64", got)
+	}
+	if got := kernelLossTotal(nil, 1<<63); got != 1<<63-1 {
+		t.Errorf("kernelLossTotal fallback overflow = %d, want saturation at max int64", got)
+	}
+}
+
+func TestMergeKernelLossReads(t *testing.T) {
+	boom := errors.New("read failed")
+	var prev map[uint64]uint64
+	var fb uint64
+	var total int64
+	step := func(read map[uint64]uint64, readErr error, fallback uint64, fbErr error, want int64) {
+		t.Helper()
+		prev, fb, total = mergeKernelLossReads(prev, read, readErr, fb, fallback, fbErr)
+		if total != want {
+			t.Fatalf("total = %d, want %d (map %v, fallback %d)", total, want, prev, fb)
+		}
+	}
+	step(map[uint64]uint64{7: 5, 9: 2}, nil, 3, nil, 10)
+	// Consecutive read: counters grow.
+	step(map[uint64]uint64{7: 6, 9: 2}, nil, 3, nil, 11)
+	// Per-cgroup read fails: total holds, not 0 or fallback alone.
+	step(nil, boom, 3, nil, 11)
+	// Recovery: increments after the failure are reflected.
+	step(map[uint64]uint64{7: 8, 9: 2}, nil, 3, nil, 13)
+	// Fallback read fails: the reported fallback value is ignored.
+	step(map[uint64]uint64{7: 8, 9: 2}, nil, 0, boom, 13)
+	// Shrinking map: key 7 vanished and keeps its last value, 9 grows.
+	step(map[uint64]uint64{9: 4}, nil, 3, nil, 15)
+	// Saturation survives later reads.
+	step(map[uint64]uint64{9: 1 << 63}, nil, 3, nil, 1<<63-1)
+	step(map[uint64]uint64{9: 1 << 63}, nil, 3, nil, 1<<63-1)
+}
+
+// TestBuildSnapshotCarriesKernelLost pins that the snapshot reports the
+// kernel-side total separately, leaving lost and unclassified as they were.
+func TestBuildSnapshotCarriesKernelLost(t *testing.T) {
+	now := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	s := &Session{now: func() time.Time { return now }, cfg: Config{Interval: 30 * time.Second}}
+	s.kernelLost = kernelLossTotal(map[uint64]uint64{7: 5, 9: 2}, 3)
+	s.unattributedEventsLost = 4
+	s.eventsUnclassified = 1
+
+	snap := s.buildSnapshot(evidence.SensorOK)
+	if snap.Sensor.Events.KernelLost != 10 {
+		t.Errorf("KernelLost = %d, want 10", snap.Sensor.Events.KernelLost)
+	}
+	if snap.Sensor.Events.Lost != 4 || snap.Sensor.Events.Unclassified != 1 {
+		t.Errorf("Lost/Unclassified = %d/%d, want 4/1 (unchanged by kernel_lost)", snap.Sensor.Events.Lost, snap.Sensor.Events.Unclassified)
+	}
+	body, err := json.Marshal(snap.Sensor.Events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"kernel_lost":10`) {
+		t.Errorf("events JSON %s lacks kernel_lost:10", body)
 	}
 }

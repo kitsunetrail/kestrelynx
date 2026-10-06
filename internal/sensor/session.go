@@ -236,6 +236,13 @@ type Session struct {
 	// re-attributing every loss on every call.
 	lastLostByCgroup map[uint64]uint64
 	lastLostFallback uint64
+	// kernelLost is the cumulative number of eBPF events the kernel failed
+	// to put into the ring buffer this session: the per-cgroup loss counter
+	// total plus the fallback loss counter, as of reconcileEventLossCounters'
+	// latest read (see kernelLossTotal). Reported as the evidence's
+	// events.kernel_lost; unlike eventsLost it excludes Sensor-side losses.
+	// Starts at zero each session, since the counters are this session's own.
+	kernelLost int64
 
 	// lastLossCounterReadAt is when reconcileEventLossCounters last read the
 	// kernel loss counters (zero before the first read). Loss found in the
@@ -2075,6 +2082,7 @@ func (s *Session) buildSnapshot(status evidence.SensorStatus) evidence.Snapshot 
 				AttachedAt:   s.eventsAttachedAt,
 				Lost:         s.eventsLost,
 				Unclassified: s.eventsUnclassified,
+				KernelLost:   s.kernelLost,
 			},
 		},
 	}

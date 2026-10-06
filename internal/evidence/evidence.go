@@ -101,6 +101,17 @@ type EventsInfo struct {
 	// running often enough) — not, on its own, evidence that any specific
 	// container's own evidence is incomplete.
 	Unclassified int64 `json:"unclassified"`
+	// KernelLost is the cumulative number of eBPF events the kernel failed
+	// to put into the ring buffer during this Sensor session: the sum of
+	// the per-cgroup loss counter and the fallback loss counter the Sensor
+	// reads from the kernel. Lost is a blended total that also includes
+	// losses on the Sensor's own side (events it dropped after reading
+	// them), so this field is the only one that separates the kernel's
+	// share. Counted from zero at each Sensor session start (the counters
+	// live in that session's own BPF maps), like Lost and Unclassified.
+	// Absent in evidence written by a Sensor that predates the field, which
+	// reads back as zero.
+	KernelLost int64 `json:"kernel_lost"`
 }
 
 // SensorInfo is the Sensor's self-report: who it is, how long it has been

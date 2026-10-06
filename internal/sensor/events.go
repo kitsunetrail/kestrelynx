@@ -1409,11 +1409,13 @@ func (s *Session) reconcileEventLossCounters() {
 		return
 	}
 	byCgroup, err := s.ebpfHandle.LostEventsByCgroup()
-	if err != nil {
+	byCgroupErr := err
+	if byCgroupErr != nil {
 		byCgroup = nil
 	}
 	fallback, err := s.ebpfHandle.LostEvents()
-	if err != nil {
+	fallbackErr := err
+	if fallbackErr != nil {
 		fallback = s.lastLostFallback
 	}
 
@@ -1448,12 +1450,12 @@ func (s *Session) reconcileEventLossCounters() {
 	// Logged only when either counter's own current value has actually
 	// changed since the last call — the evidence file's own events_lost is
 	// deliberately a single blended total (see buildSnapshot's own doc
-	// comment), with no field distinguishing a kernel-side ring-buffer
-	// reservation failure from a Sensor-side (userspace) one; this line is
-	// the only place that distinction survives at all, for an operator (or
-	// an integration test, which has no other way to read this Sensor's own
-	// BPF maps directly, running as a separate process in a separate
-	// container) reading this Sensor's own stderr.
+	// comment); the kernel-side share alone is reported as events.kernel_lost,
+	// and this line additionally splits that share into its per-cgroup and
+	// fallback counters, for an operator (or an integration test, which has
+	// no other way to read this Sensor's own BPF maps directly, running as a
+	// separate process in a separate container) reading this Sensor's own
+	// stderr.
 	var byCgroupTotal, prevByCgroupTotal uint64
 	for _, c := range byCgroup {
 		byCgroupTotal += c
@@ -1464,14 +1466,49 @@ func (s *Session) reconcileEventLossCounters() {
 	if byCgroupTotal != prevByCgroupTotal || fallback != s.lastLostFallback {
 		fmt.Fprintf(os.Stderr, "kestrelynx sensor: ebpf kernel loss counters: by_cgroup_total=%d fallback=%d\n", byCgroupTotal, fallback)
 	}
-	if s.lastLostByCgroup == nil && len(byCgroup) > 0 {
-		s.lastLostByCgroup = map[uint64]uint64{}
-	}
-	for cgroupID, count := range byCgroup {
-		s.lastLostByCgroup[cgroupID] = count
-	}
-	s.lastLostFallback = fallback
+	s.lastLostByCgroup, s.lastLostFallback, s.kernelLost = mergeKernelLossReads(s.lastLostByCgroup, byCgroup, byCgroupErr, s.lastLostFallback, fallback, fallbackErr)
 	s.lastLossCounterReadAt = now
+}
+
+// mergeKernelLossReads folds one read of the kernel's loss counters into the
+// previous state and returns the new per-cgroup map, the new fallback value
+// and the kernel-side loss total (see kernelLossTotal). A per-cgroup key
+// missing from the new read keeps its last-read value, and a failed read
+// (byCgroupErr or fallbackErr non-nil) leaves the corresponding previous
+// value in place, so the total never decreases within a session. prev is
+// updated in place when non-nil.
+func mergeKernelLossReads(prev, read map[uint64]uint64, readErr error, prevFallback, fallback uint64, fallbackErr error) (map[uint64]uint64, uint64, int64) {
+	if readErr != nil {
+		read = nil
+	}
+	if fallbackErr != nil {
+		fallback = prevFallback
+	}
+	if prev == nil && len(read) > 0 {
+		prev = map[uint64]uint64{}
+	}
+	for cgroupID, count := range read {
+		prev[cgroupID] = count
+	}
+	return prev, fallback, kernelLossTotal(prev, fallback)
+}
+
+// kernelLossTotal is the number of events the kernel failed to put into the
+// ring buffer so far: every per-cgroup loss counter plus the fallback
+// counter, saturating at the largest int64 rather than wrapping negative.
+func kernelLossTotal(byCgroup map[uint64]uint64, fallback uint64) int64 {
+	const maxInt64 = uint64(1<<63 - 1)
+	if fallback > maxInt64 {
+		return int64(maxInt64)
+	}
+	total := fallback
+	for _, c := range byCgroup {
+		if c > maxInt64-total {
+			return int64(maxInt64)
+		}
+		total += c
+	}
+	return int64(total)
 }
 
 // pendingCgroupLoss is one attributeEventLossDeltas' own per-cgroup delta

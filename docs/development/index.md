@@ -5,6 +5,7 @@ This section covers the problems being addressed, approaches tried, lessons lear
 Development logs record how features were explored and implemented.
 For instructions on currently available features, see [Documentation](../documentation/index.md).
 
+- October 3, 2026 — [Short-lived container scanning development](short-lived-containers.md) — design for recording short-lived container executions and keeping the last version that ran under each image name in scan and notification scope for 14 days (design; implementation not started)
 - October 2, 2026 — [Kubernetes Sensor Feasibility](kubernetes-runtime-sensor.md) — validation of the Docker Sensor's permissions and isolation on Kubernetes and the changes needed for cgroup namespaces and AppArmor (design and feasibility validation only; implementation not started)
 - September 25, 2026 — [Runtime Evidence Prioritization Development](runtime-prioritization-development.md) — implementation plan defining in-use classification, its effect on prioritization, and the observation component’s placement and permissions (design finalized)
 - September 22, 2026 — [Runtime Evidence Observation Environment Validation](runtime-environment-validation.md) — the permissions, continuous-observation overhead, and production start conditions and workflows verified before implementing the adopted runtime evidence (measurement complete)

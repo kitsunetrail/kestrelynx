@@ -51,6 +51,7 @@ nav:
       - How it works: documentation/how-it-works.md
   - Development:
       - Overview: development/index.md
+      - Short-lived container scanning development: development/short-lived-containers.md
       - Kubernetes sensor feasibility: development/kubernetes-runtime-sensor.md
       - Runtime evidence prioritization development: development/runtime-prioritization-development.md
       - Runtime evidence observation environment validation: development/runtime-environment-validation.md

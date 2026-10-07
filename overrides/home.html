@@ -1,0 +1,16 @@
+{% extends "main.html" %}
+
+{#- Page template for the site home. Front matter `template: home.html` renders
+    the page body in a narrower, centred column with the home stylesheet,
+    without the edit button. -#}
+
+{% block styles %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ 'assets/home/home.css' | url }}">
+{% endblock %}
+
+{% block content %}
+  <div class="kl-home">
+    {{ page.content }}
+  </div>
+{% endblock %}

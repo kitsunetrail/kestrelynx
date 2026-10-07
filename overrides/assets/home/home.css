@@ -1,0 +1,364 @@
+/* Site home (overrides/home.html). Colours come from Material's theme
+   variables so the page follows the light and dark palettes. */
+
+.kl-home {
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.kl-home h1 {
+  margin: 0 0 0.6em;
+  color: var(--md-default-fg-color);
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.kl-home h2 {
+  margin: 0 0 0.5em;
+  color: var(--md-default-fg-color);
+  font-size: 1.625em;
+  font-weight: 500;
+}
+
+.kl-home h3 {
+  margin: 0 0 0.75em;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.8125em;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kl-section {
+  padding: 2.5em 0;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.kl-section > :last-child {
+  margin-bottom: 0;
+}
+
+/* Hero: description and a sample notification side by side. */
+
+.kl-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.5em;
+  align-items: flex-start;
+  padding: 1.5em 0 2em;
+}
+
+.kl-hero__text {
+  flex: 1 1 18em;
+  min-width: 0;
+  padding-top: 0.5em;
+}
+
+.kl-hero__text p {
+  color: var(--md-default-fg-color--light);
+}
+
+.kl-home .kl-eyebrow {
+  margin: 0 0 0.9em;
+  color: var(--md-accent-fg-color);
+  font-size: 0.75em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kl-home .kl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75em;
+  margin: 1.75em 0 0;
+}
+
+.kl-home .kl-actions .md-button {
+  margin: 0;
+}
+
+.kl-home .kl-license {
+  margin: 0.9em 0 0;
+  font-size: 0.8125em;
+}
+
+/* Sample Slack message. */
+
+.kl-notification {
+  flex: 1 1 26em;
+  min-width: 0;
+  margin: 0;
+}
+
+.kl-slack {
+  overflow: hidden;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.6em;
+  background-color: var(--md-default-bg-color);
+  box-shadow: var(--md-shadow-z2);
+  text-align: left;
+}
+
+.kl-slack__channel {
+  padding: 0.6em 1em;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  background-color: var(--md-code-bg-color);
+  color: var(--md-default-fg-color);
+  font-size: 0.8125em;
+  font-weight: 700;
+}
+
+.kl-slack__message {
+  display: flex;
+  gap: 0.75em;
+  padding: 1em 1.1em 1.1em;
+}
+
+.kl-slack__avatar {
+  display: flex;
+  flex: 0 0 2.25em;
+  align-items: center;
+  justify-content: center;
+  width: 2.25em;
+  height: 2.25em;
+  border-radius: 0.375em;
+  background-color: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+}
+
+.kl-slack__avatar svg {
+  width: 1.25em;
+  height: 1.25em;
+}
+
+.kl-slack__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--md-typeset-color);
+  font-size: 0.84em;
+  line-height: 1.55;
+}
+
+.kl-home .kl-slack__body p {
+  margin: 0;
+}
+
+.kl-home .kl-slack__body p + p {
+  margin-top: 0.5em;
+}
+
+.kl-home .kl-slack__body hr {
+  margin: 0.6em 0;
+  border-bottom-color: var(--md-default-fg-color--lightest);
+}
+
+.kl-home .kl-slack__meta {
+  margin-bottom: 0.25em;
+}
+
+.kl-slack__badge {
+  margin-left: 0.3em;
+  padding: 0.05em 0.3em;
+  border-radius: 0.2em;
+  background-color: var(--md-default-fg-color--lightest);
+  font-size: 0.7em;
+  font-weight: 700;
+}
+
+.kl-slack__time {
+  margin-left: 0.3em;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.85em;
+}
+
+.kl-slack__link {
+  color: var(--md-typeset-a-color);
+}
+
+.kl-notification figcaption {
+  max-width: none;
+  margin: 0.75em 0 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.8125em;
+  font-style: normal;
+  text-align: left;
+}
+
+/* Where to read the sample notification. */
+
+.kl-home .kl-callouts > ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15em, 1fr));
+  gap: 1.25em;
+  margin: 0 0 2.5em;
+  padding: 0;
+  list-style: none;
+}
+
+.kl-home .kl-callouts > ul > li {
+  margin: 0;
+  list-style: none;
+  padding-top: 0.6em;
+  border-top: 3px solid var(--md-primary-fg-color);
+  color: var(--md-default-fg-color--light);
+  font-size: 0.875em;
+}
+
+.kl-callouts strong {
+  display: block;
+  color: var(--md-default-fg-color);
+  font-weight: 700;
+}
+
+/* Features. */
+
+.kl-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15em, 1fr));
+  gap: 2em;
+}
+
+.kl-home .kl-features > div > :first-child .twemoji {
+  --md-icon-size: 1.6em;
+  color: var(--md-accent-fg-color);
+}
+
+.kl-home .kl-features h2 {
+  margin: 0.4em 0 0.5em;
+  font-size: 1.125em;
+}
+
+.kl-home .kl-features p {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.9em;
+}
+
+/* Scope and access. */
+
+.kl-home .kl-scope {
+  display: grid;
+  grid-template-columns: minmax(7.5em, 11em) minmax(0, 1fr);
+  gap: 0.9em 1.5em;
+  margin: 1.5em 0 0;
+}
+
+.kl-home .kl-scope dt {
+  margin: 0;
+  font-weight: 500;
+}
+
+.kl-home .kl-scope dd {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+}
+
+/* Setup steps. */
+
+.kl-home .kl-steps > ol {
+  margin: 1.5em 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: kl-step;
+}
+
+.kl-home .kl-steps > ol > li {
+  position: relative;
+  margin: 0 0 1.5em;
+  list-style: none;
+  padding-left: 2.25em;
+  counter-increment: kl-step;
+}
+
+.kl-steps > ol > li::before {
+  position: absolute;
+  top: 0.05em;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 50%;
+  background-color: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+  font-size: 0.8125em;
+  font-weight: 700;
+  content: counter(kl-step);
+}
+
+.kl-home .kl-steps > ol > li > p {
+  margin: 0 0 0.5em;
+}
+
+.kl-home .kl-steps .kl-step-note {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.875em;
+}
+
+.kl-home .kl-steps > ol > li > .highlight {
+  margin: 0.5em 0 0;
+}
+
+.kl-home .kl-note {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.875em;
+}
+
+/* Documentation, development logs and articles. */
+
+.kl-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15em, 1fr));
+  gap: 1.25em;
+  margin: 1.5em 0 0;
+}
+
+.kl-links > div {
+  padding: 1.1em 1.25em;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.3em;
+}
+
+.kl-home .kl-links ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kl-home .kl-links ul li {
+  margin: 0 0 0.6em;
+  list-style: none;
+  line-height: 1.45;
+}
+
+.kl-home .kl-links ul li:last-child {
+  margin-bottom: 0;
+}
+
+.kl-home .kl-links .kl-more {
+  color: var(--md-default-fg-color--light);
+}
+
+.kl-home .kl-issues {
+  margin: 1.5em 0 0;
+}
+
+@media screen and (max-width: 44.9375em) {
+  .kl-home h1 {
+    font-size: 1.6em;
+  }
+
+  .kl-home .kl-scope {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2em;
+  }
+
+  .kl-home .kl-scope dd {
+    margin-bottom: 0.8em;
+  }
+}

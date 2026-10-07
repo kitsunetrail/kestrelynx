@@ -1,23 +1,214 @@
+---
+template: home.html
+hide:
+  - navigation
+  - toc
+  - footer
+---
+
+<div class="kl-hero" markdown>
+<div class="kl-hero__text" markdown>
+
+Docker · Kubernetes · Trivy · CISA KEV · EPSS
+{ .kl-eyebrow }
+
 # Container image vulnerability notifications for Docker and Kubernetes
 
-KestreLynx is a lightweight, open-source agent that scans images used by
-running containers in Docker or Kubernetes and reports changes in
-vulnerabilities that require attention.
+KestreLynx regularly scans images used by running Docker and Kubernetes
+containers with [Trivy](https://trivy.dev/). It sends new findings, newly
+available fixes, priority increases, and resolutions since the previous scan to
+Slack or a webhook, along with priorities based on severity,
+[CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog), and
+[EPSS](https://www.first.org/epss/).
 
-Instead of sending the same complete scan results every day, KestreLynx
-highlights **new findings**, **resolved findings**, **changes in fix
-availability**, and **priority escalations**. It combines
-[Trivy](https://trivy.dev/) scan results with
-[CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and
-[EPSS](https://www.first.org/epss/) data to separate urgent problems from noise.
+[Setup](documentation/getting-started.md){ .md-button .md-button--primary }
+[GitHub](https://github.com/kitsunetrail/kestrelynx){ .md-button }
+{ .kl-actions }
 
-- :material-rocket-launch-outline: [Setup instructions](documentation/getting-started.md)
-- :material-bell-badge-outline: [Notification decision logic](documentation/how-it-works.md)
-- :material-hammer-wrench: [Development logs](development/index.md)
-- :material-book-open-page-variant-outline: [Technical articles](articles/index.md)
+Open source · AGPL-3.0
+{ .kl-license }
 
-!!! info "Kubernetes verification scope"
-    Kubernetes discovery, scanning, and
-    notifications have been verified on a single-node K3s cluster with
-    containerd on linux/amd64. See the [verification record and limitations](development/kubernetes-support.md)
-    for details, including configurations that have not been verified.
+</div>
+<figure class="kl-notification">
+<div class="kl-slack">
+<div class="kl-slack__channel"># security-alerts</div>
+<div class="kl-slack__message">
+<div class="kl-slack__avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/></svg></div>
+<div class="kl-slack__body">
+<p class="kl-slack__meta"><strong>KestreLynx</strong> <span class="kl-slack__badge">APP</span> <span class="kl-slack__time">9:00 AM</span></p>
+<p>🛡️ <strong>KestreLynx</strong> [prod-vps] — scan results for 2026-06-28 09:00<br>12 images scanned, 1 affected<br><em>Changes since the last scan.</em></p>
+<hr>
+<p><strong>🆕 New since last scan (1)</strong><br>Image: <code>nginx:1.25.3</code></p>
+<p><strong>◆ libnghttp2-14</strong><br><strong>Installed:</strong> 1.52.0-1<br><strong>Fixed in:</strong> 1.52.0-1+deb12u1<br><strong>Upgrade risk:</strong> 🟢 distro security patch<br><strong>Findings:</strong> CRITICAL 0 / HIGH 2</p>
+<p><strong>Top CVE:</strong> <span class="kl-slack__link">CVE-2023-44487</span> · HIGH · EPSS &gt;99% (+1 more CVE(s) in this package)<br><strong>Exploitation:</strong> CISA KEV (exploited in the wild)<br><strong>References:</strong> <span class="kl-slack__link">advisory</span> · <span class="kl-slack__link">vendor advisory</span> · 💬 <span class="kl-slack__link">HN (166 pts)</span></p>
+<hr>
+<p>📌 <strong>Open now:</strong> 🚨 1 act-now</p>
+</div>
+</div>
+</div>
+<figcaption>Sample notification in the default <code>diff</code> mode. Values are illustrative, not from a live scan.</figcaption>
+</figure>
+</div>
+
+<div class="kl-callouts" markdown>
+
+- **New findings** “New since last scan” names the image and package.
+- **Fix availability** “Installed” and “Fixed in” show the current and fixed versions.
+- **Priority** “Open now” counts by priority; KEV and EPSS give the context.
+
+</div>
+
+<div class="kl-section kl-features" markdown>
+<div markdown>
+
+:material-history:
+
+## Follow changes between scans
+
+Diff notifications highlight new findings, added CVEs, newly available fixes,
+priority escalations, and findings that leave the monitored scope. Open
+findings still trigger a short update when nothing changes; Monday
+notifications include a full report by default.
+
+</div>
+<div markdown>
+
+:material-sort-variant:
+
+## Prioritize with KEV and EPSS
+
+KestreLynx combines severity with CISA KEV and EPSS data to group findings into
+Act now, Watch, and Low. These priorities help guide review; they do not
+establish whether your environment can be exploited.
+
+</div>
+<div markdown>
+
+:material-magnify-scan:
+
+## Scan with Trivy, review fixes by package
+
+Trivy scans report HIGH and CRITICAL vulnerabilities by default, including
+findings without available fixes. Package summaries show fixed versions when
+available and annotate upgrade risk, without guaranteeing compatibility.
+
+</div>
+</div>
+
+<div class="kl-section" markdown>
+
+## Scope and access
+
+For self-hosted services where you want to review vulnerability changes in the
+images your containers are running.
+
+<dl class="kl-scope" markdown>
+<dt>Docker</dt>
+<dd markdown="span">One instance per host covers running containers across Compose projects and standalone deployments.</dd>
+<dt>Kubernetes</dt>
+<dd markdown="span">An in-cluster Deployment discovers running containers across all or selected namespaces using a ServiceAccount with read-only API access.</dd>
+<dt>Verified scope</dt>
+<dd markdown="span">Single-node K3s with containerd on linux/amd64. Multi-node clusters, arm64, managed Kubernetes, and authenticated private registries remain unverified. [Verification record](development/kubernetes-support.md)</dd>
+<dt>Discovery</dt>
+<dd markdown="span">Containers must be running when discovered. Kubernetes native sidecars are included; ordinary init containers and ephemeral containers are excluded.</dd>
+<dt>Docker socket access</dt>
+<dd markdown="span">KestreLynx reads container information and Trivy reads images through the Docker API. Mounting the socket with `:ro` does not restrict API permissions, so the mounted image must be trusted.</dd>
+</dl>
+
+</div>
+
+<div class="kl-section kl-steps" markdown>
+
+## Setup
+
+These steps use Docker Compose. You need a Docker host with Docker Compose and
+at least one notification destination: a Slack Incoming Webhook, a Slack bot
+with a destination channel, or a generic webhook. For Kubernetes, see
+[Setup instructions](documentation/getting-started.md#run-on-kubernetes).
+
+1. Clone the repository and enter its directory
+
+    ```sh
+    git clone https://github.com/kitsunetrail/kestrelynx.git
+    cd kestrelynx
+    ```
+
+2. Create the configuration file
+
+    Copy the example to `config.yml` and set a notification destination.
+    { .kl-step-note }
+
+    ```sh
+    cp config.example.yml config.yml
+    ${EDITOR:-vi} config.yml
+    ```
+
+3. Check the timezone and start KestreLynx
+
+    Scan times follow `TZ` in `docker-compose.yml`, which defaults to `UTC`;
+    use `Asia/Tokyo` for Japan time.
+    { .kl-step-note }
+
+    ```sh
+    ${EDITOR:-vi} docker-compose.yml
+    docker compose up -d
+    ```
+
+4. Check startup and scans in the logs
+
+    The example configuration runs one scan at startup, then scans daily at
+    09:00.
+    { .kl-step-note }
+
+    ```sh
+    docker compose logs -f
+    ```
+
+:material-information-outline: Keep the `kestrelynx-state` volume when
+recreating the container to preserve the history used for change notifications
+and first-seen dates.
+{ .kl-note }
+
+</div>
+
+<div class="kl-section" markdown>
+
+## Documentation, development logs, and articles
+
+<div class="kl-links" markdown>
+<div markdown>
+
+### Documentation
+
+- [Setup](documentation/getting-started.md)
+- [Configuration](documentation/configuration.md)
+- [Runtime usage](documentation/runtime-usage.md)
+- [How it works](documentation/how-it-works.md)
+
+</div>
+<div markdown>
+
+### Development logs
+
+- [Kubernetes support](development/kubernetes-support.md)
+- [Runtime evidence observation with eBPF](development/runtime-event-evidence.md)
+- [All development logs →](development/index.md){ .kl-more }
+
+</div>
+<div markdown>
+
+### Technical articles
+
+- [Trivy Basics and How to Read Scan Results](articles/trivy-basics-scan-results.md)
+- [EPSS Basics and How to Check Scores](articles/epss-exploit-prediction-scoring-system.md)
+- [How to Check Runtime Usage of Packages Reported by Container Vulnerability Scans](articles/which-container-scan-findings-are-actually-running.md)
+- [All articles →](articles/index.md){ .kl-more }
+
+</div>
+</div>
+
+Report a bug or suggest an improvement on
+[GitHub Issues](https://github.com/kitsunetrail/kestrelynx/issues).
+{ .kl-issues }
+
+</div>

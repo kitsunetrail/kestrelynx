@@ -1016,7 +1016,7 @@ func (s *Session) dispatchUsageEvent(g *generationState, path string, ev ebpf.Ev
 		// real cross-mount-namespace/cross-root event (see
 		// matchesMountView's own doc comment), not merely an unconfirmed
 		// one, so there is nothing further to wait for here.
-		g.incomplete = true
+		g.markIncomplete("mount_view_mismatch", fmt.Sprintf("event_mntns=%d g_mntns=%d event_root=%s:%d", ev.MountNamespaceID, g.mntNsID, formatKernelDev(ev.RootDev), ev.RootIno))
 		return
 	}
 

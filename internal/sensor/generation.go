@@ -51,9 +51,13 @@ const (
 // in this type needs its own synchronization.
 type generationState struct {
 	container evidence.ContainerRef
-	init      InitProcess
-	startedAt time.Time
-	endedAt   *time.Time
+	// incompleteLogged is the set of reason codes already written to the
+	// log for this generation (see logIncomplete), so each (generation,
+	// reason) pair is reported once. Loop-owned, freed with the generation.
+	incompleteLogged map[string]struct{}
+	init             InitProcess
+	startedAt        time.Time
+	endedAt          *time.Time
 	// endAppliedAt is when the loop applied this generation's end (see
 	// Session.endGeneration). Unlike endedAt, it never precedes the
 	// process's actual exit, so it is what decides whether this generation
@@ -669,7 +673,7 @@ func (g *generationState) recordEventLoss(n int64) {
 		return
 	}
 	g.eventsLost += n
-	g.incomplete = true
+	g.markIncomplete("event_loss", fmt.Sprintf("lost=%d", n))
 	if g.eventsCoverage == evidence.CoverageSinceStart {
 		g.eventsCoverage = evidence.CoveragePartial
 	}
@@ -697,7 +701,7 @@ func (g *generationState) couldOwnLossSince(since time.Time) bool {
 }
 
 func (g *generationState) markCoveragePartial() {
-	g.incomplete = true
+	g.markIncomplete("event_coverage_partial", "")
 	if g.eventsCoverage == evidence.CoverageSinceStart {
 		g.eventsCoverage = evidence.CoveragePartial
 	}
@@ -886,11 +890,11 @@ func derivePublishedState(g *generationState) evidence.GenerationState {
 // one (marking Truncated), but still updates one it already has.
 func (g *generationState) recordOSPackage(name, version string, kind evidence.EvidenceKind, now time.Time, obs *evidence.ProcessObservation) {
 	if !validRecordString(name) || !validRecordString(version) {
-		g.incomplete = true
+		g.markIncomplete("invalid_record", "os_package name="+quoteDiag(name)+" version="+quoteDiag(version))
 		return
 	}
 	if !validObservation(obs) {
-		g.incomplete = true
+		g.markIncomplete("invalid_observation", "")
 		obs = nil
 	}
 	key := pkgKey{Name: name, Version: version}
@@ -924,7 +928,7 @@ func (g *generationState) recordOSPackage(name, version string, kind evidence.Ev
 // entity-count rules applied identically here.
 func (g *generationState) recordUnavailableOSPackage(name, version string, reason evidence.UnavailableReason) {
 	if !validRecordString(name) || !validRecordString(version) {
-		g.incomplete = true
+		g.markIncomplete("invalid_record", "os_package name="+quoteDiag(name)+" version="+quoteDiag(version))
 		return
 	}
 	key := pkgKey{Name: name, Version: version}
@@ -945,11 +949,11 @@ func (g *generationState) recordUnavailableOSPackage(name, version string, reaso
 // the string-validation and entity-count rules applied identically here.
 func (g *generationState) recordExecutable(path, dev string, inode uint64, kind evidence.EvidenceKind, now time.Time, obs *evidence.ProcessObservation) {
 	if !validRecordString(path) || !validRecordString(dev) {
-		g.incomplete = true
+		g.markIncomplete("invalid_record", "executable path="+quoteDiag(path)+" dev="+quoteDiag(dev))
 		return
 	}
 	if !validObservation(obs) {
-		g.incomplete = true
+		g.markIncomplete("invalid_observation", "")
 		obs = nil
 	}
 	e, ok := g.executables[path]

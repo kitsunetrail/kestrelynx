@@ -152,7 +152,11 @@ type sampleResult struct {
 	// mismatch or unreadable identity, or resolveCandidatesWithRoot's own
 	// "candidate unknown" cases.
 	incomplete bool
-	truncated  bool
+	// reasons records, bounded, why incomplete was set — diagnostic only,
+	// reported by loop (applySampleResult) and never consulted for any
+	// decision.
+	reasons   incompleteReasons
+	truncated bool
 
 	executables []executableObs
 
@@ -277,6 +281,7 @@ func runSampleWorker(job sampleJob) sampleResult {
 			if procfs.Classify(err) == procfs.OutcomeDenied {
 				res.denied++
 				res.incomplete = true
+				res.reasons.add("sample_procfs_denied", fmt.Sprintf("pid=%d open %s", proc.PID, errDiag(err)))
 			}
 			continue
 		}
@@ -295,6 +300,7 @@ func runSampleWorker(job sampleJob) sampleResult {
 			if isDeniedAny(exeErr, mapsErr, statusErr) {
 				res.denied++
 				res.incomplete = true
+				res.reasons.add("sample_procfs_denied", fmt.Sprintf("pid=%d exe: %s maps: %s status: %s", proc.PID, errDiag(exeErr), errDiag(mapsErr), errDiag(statusErr)))
 			}
 			h.Close()
 			continue
@@ -308,13 +314,28 @@ func runSampleWorker(job sampleJob) sampleResult {
 		mnt, mntErr := h.NSLink("mnt")
 
 		sameRoot := false
-		if basis.ok && mntErr == nil && mnt == basis.mntNS {
-			if rootFD, rerr := h.OpenRoot(); rerr == nil {
+		// notSameRoot is the diagnostic-only counterpart of sameRoot: why
+		// this process's root could not be confirmed identical to init's.
+		notSameRoot := incompleteReason{code: "sample_basis_unknown"}
+		switch {
+		case !basis.ok:
+		case mntErr != nil:
+			notSameRoot = incompleteReason{code: "sample_mnt_ns_unreadable", detail: fmt.Sprintf("pid=%d %s", proc.PID, errDiag(mntErr))}
+		case mnt != basis.mntNS:
+			notSameRoot = incompleteReason{code: "sample_not_same_root", detail: fmt.Sprintf("pid=%d mntns=%s init_mntns=%s", proc.PID, quoteDiag(mnt), quoteDiag(basis.mntNS))}
+		default:
+			notSameRoot = incompleteReason{code: "sample_root_unreadable", detail: fmt.Sprintf("pid=%d", proc.PID)}
+			rootFD, rerr := h.OpenRoot()
+			if rerr != nil {
+				notSameRoot.detail += " open root: " + errDiag(rerr)
+			} else {
 				var st unix.Stat_t
-				if ferr := unix.Fstat(int(rootFD.Fd()), &st); ferr == nil {
-					if formatDevForCompare(st.Dev) == basis.rootDev && st.Ino == basis.rootIno {
-						sameRoot = true
-					}
+				if ferr := unix.Fstat(int(rootFD.Fd()), &st); ferr != nil {
+					notSameRoot.detail += " fstat root: " + errDiag(ferr)
+				} else if formatDevForCompare(st.Dev) == basis.rootDev && st.Ino == basis.rootIno {
+					sameRoot = true
+				} else {
+					notSameRoot = incompleteReason{code: "sample_not_same_root", detail: fmt.Sprintf("pid=%d root=%s:%d init_root=%s:%d", proc.PID, formatDevForCompare(st.Dev), st.Ino, basis.rootDev, basis.rootIno)}
 				}
 				rootFD.Close()
 			}
@@ -337,6 +358,7 @@ func runSampleWorker(job sampleJob) sampleResult {
 			// generation's own filesystem view, so nothing is recorded for
 			// it at all, not even its exe path.
 			res.incomplete = true
+			res.reasons.add(notSameRoot.code, notSameRoot.detail)
 			continue
 		}
 
@@ -377,6 +399,7 @@ func runSampleWorker(job sampleJob) sampleResult {
 		// verify against root/basis regardless.
 	case !basis.ok:
 		res.incomplete = true
+		res.reasons.add("sample_basis_unknown", fmt.Sprintf("candidates=%d", len(res.candidates)))
 	default:
 		// root was already opened above, together with basis, from the same
 		// fd basis itself was derived from — reused here unchanged, never
@@ -384,6 +407,7 @@ func runSampleWorker(job sampleJob) sampleResult {
 		resolution := resolveCandidatesWithRoot(root, res.candidates)
 		if resolution.incomplete {
 			res.incomplete = true
+			res.reasons.merge(resolution.reasons)
 		}
 		res.verified = resolution.verified
 		res.replaced = resolution.replaced
@@ -447,6 +471,8 @@ type candidateResolution struct {
 	replaced      []string
 	incomplete    bool
 	mergedUsrDirs map[string]bool
+	// reasons records, bounded, why incomplete was set (diagnostic only).
+	reasons incompleteReasons
 }
 
 // resolveCandidatesWithRoot classifies every unique path in candidates
@@ -500,6 +526,7 @@ func resolveCandidatesWithRoot(r *rootfs.Reader, candidates map[string][]sampleC
 			// withdraws not-observed from the whole generation rather than
 			// only this path.
 			res.incomplete = true
+			res.reasons.add("sample_open_failed", "path="+quoteDiag(path)+" "+errDiag(err))
 			continue
 		}
 		var st unix.Stat_t
@@ -507,6 +534,7 @@ func resolveCandidatesWithRoot(r *rootfs.Reader, candidates map[string][]sampleC
 		f.Close()
 		if ferr != nil {
 			res.incomplete = true
+			res.reasons.add("sample_fstat_failed", "path="+quoteDiag(path)+" "+errDiag(ferr))
 			continue
 		}
 

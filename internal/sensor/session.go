@@ -737,6 +737,9 @@ func (s *Session) loadPreviousEvidence() {
 		// more confidence in the carried-over OSPackages/Executables below
 		// than this generation has actually earned.
 		gs.incomplete = g.Incomplete
+		if g.Incomplete {
+			gs.logIncomplete("restored_incomplete", "")
+		}
 		gs.truncated = g.Truncated
 		for _, p := range g.OSPackages {
 			p := p
@@ -1179,6 +1182,15 @@ func (s *Session) applySampleResult(g *generationState, res sampleResult) {
 	}
 	if res.incomplete {
 		g.incomplete = true
+		for _, r := range res.reasons.list {
+			g.logIncomplete(r.code, r.detail)
+		}
+		if res.reasons.dropped > 0 {
+			g.logIncomplete("sample_reasons_dropped", fmt.Sprintf("dropped=%d", res.reasons.dropped))
+		}
+		if len(res.reasons.list) == 0 {
+			g.logIncomplete("sample_incomplete_unspecified", "")
+		}
 	}
 	mountViewJustConfirmed := g.mntNsID == 0 && res.basis.ok
 	if g.mntNsID == 0 && res.basis.ok {
@@ -1290,7 +1302,7 @@ func (s *Session) applySampleResult(g *generationState, res sampleResult) {
 	// was already computed above, before applyEventVerificationResult ran.
 	if basisMismatch {
 		g.idxState = indexIdle
-		g.incomplete = true
+		g.markIncomplete("basis_mismatch", fmt.Sprintf("index_mntns=%s sample_mntns=%s", quoteDiag(g.idxBasis.mntNS), quoteDiag(res.basis.mntNS)))
 		// A confirmation earned against the old root does not carry over
 		// to whatever the rebuilt index turns out to describe — the next
 		// index needs its own first post-ready sample and lookup all over
@@ -1393,7 +1405,7 @@ func (s *Session) submitCandidateBatches(g *generationState, epoch int, batches 
 		g.pendingLookup = &pendingLookup{batches: batches, epoch: epoch, seq: seq, submittedAt: s.now()}
 		return
 	}
-	g.incomplete = true
+	g.markIncomplete("lookup_submit_failed", "")
 }
 
 // applyDBResult applies one dbworker result (build, lookup or forget),
@@ -1460,7 +1472,7 @@ func (s *Session) applyBuildResult(g *generationState, res dbResult) {
 		// besides the ones actually named failed is unknown, so this
 		// generation cannot claim full confidence in its own NoFileList or
 		// per-file attribution this round.
-		g.incomplete = true
+		g.markIncomplete("failures_truncated", "")
 	}
 	if res.hadFailure {
 		g.recordParseFailure(res.failIdentity.input, res.failIdentity.path, res.failIdentity.dev, res.failIdentity.inode, res.failIdentity.size, now, s.cfg.Interval)
@@ -1550,7 +1562,7 @@ func (s *Session) applyLookupResult(g *generationState, res dbResult) {
 		// doc comment) — none of this pending lookup's candidates were
 		// resolved at all. The next sample re-derives them fresh; for this
 		// one, withdraw not-observed rather than silently drop it.
-		g.incomplete = true
+		g.markIncomplete("lookup_failed", errDiag(res.lookupErr))
 		return
 	}
 
@@ -1591,14 +1603,14 @@ func (s *Session) applyLookupResult(g *generationState, res dbResult) {
 		for _, path := range batch.verified {
 			result, answered, truncated := lookupResult(batch.mergedUsrDirs, path)
 			if !answered {
-				g.incomplete = true
+				g.markIncomplete("lookup_unanswered", "path="+quoteDiag(path))
 				continue
 			}
 			if truncated {
 				// The true owner set extends beyond what was actually
 				// reported (see maxOwnersPerPath) — this generation cannot
 				// honestly claim to have ruled out every one of them.
-				g.incomplete = true
+				g.markIncomplete("lookup_owners_truncated", "path="+quoteDiag(path))
 			}
 			switch len(result) {
 			case 0:
@@ -1617,11 +1629,11 @@ func (s *Session) applyLookupResult(g *generationState, res dbResult) {
 		for _, path := range batch.replaced {
 			result, answered, truncated := lookupResult(batch.mergedUsrDirs, path)
 			if !answered {
-				g.incomplete = true
+				g.markIncomplete("lookup_unanswered", "path="+quoteDiag(path))
 				continue
 			}
 			if truncated {
-				g.incomplete = true
+				g.markIncomplete("lookup_owners_truncated", "path="+quoteDiag(path))
 			}
 			for _, owner := range result {
 				g.recordUnavailableOSPackage(owner.Name, owner.Version, evidence.ReasonFileReplaced)
@@ -1951,7 +1963,7 @@ func (s *Session) reconcileGenerations(groups map[string]containerGroup, now tim
 			// about this generation's own coverage having a gap from its
 			// own start, not a transient condition later classification
 			// resolves away.
-			gs.incomplete = true
+			gs.markIncomplete("coverage_gap_at_start", "")
 		}
 		gs.pendingProcesses = group.Processes
 		s.generations[gs.key()] = gs
@@ -2098,7 +2110,10 @@ func (s *Session) buildSnapshot(status evidence.SensorStatus) evidence.Snapshot 
 	// (queue empties), this reverts on its own, the next snapshot.
 	anyPendingLossDelta := len(s.pendingLossDeltas) > 0
 	for _, g := range s.generations {
-		hasPendingRouteEvent := !g.ended && (incompletePending[g.container.ID] || anyPendingLossDelta)
+		routeEvent := !g.ended && incompletePending[g.container.ID]
+		lossDelta := !g.ended && anyPendingLossDelta
+		hasPendingRouteEvent := routeEvent || lossDelta
+		g.logTransientIncomplete(routeEvent, lossDelta)
 		snap.Generations = append(snap.Generations, g.toEvidence(hasPendingRouteEvent))
 	}
 	return snap

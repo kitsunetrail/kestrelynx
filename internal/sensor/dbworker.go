@@ -134,8 +134,11 @@ type dbResult struct {
 	// back either way.
 	owners       map[string]lookupOutcome
 	lookupFailed bool
-	epochStale   bool
-	epoch        int
+	// lookupErr is the parser rejection behind lookupFailed, kept only for
+	// the incomplete-reason log line.
+	lookupErr  error
+	epochStale bool
+	epoch      int
 	// seq echoes job.seq back — see dbJob.seq's own doc comment.
 	// applyLookupResult uses this, not epoch alone, to refuse a stale
 	// lookup's own delayed answer.
@@ -930,6 +933,7 @@ func handleLookupJob(sockFD int, job dbJob) dbResult {
 			res.fatalErr = err
 		} else {
 			res.lookupFailed = true
+			res.lookupErr = err
 		}
 		return res
 	}

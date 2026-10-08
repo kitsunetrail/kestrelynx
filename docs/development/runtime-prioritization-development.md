@@ -1,8 +1,8 @@
 # Runtime Evidence Prioritization Development
 
-- **Status:** Design finalized (not yet implemented)
+- **Status:** Implemented and operationally validated
 - **Started:** September 25, 2026
-- **Last updated:** September 25, 2026
+- **Last updated:** October 8, 2026
 
 ## Purpose
 
@@ -107,11 +107,71 @@ Ecosystem labels and the webhook `class` and `ecosystem` fields are introduced r
 
 Changes in whether a package is in use do not trigger diff notifications.
 
+## Implementation and Operational Results (October 8, 2026) {#results-2026-10-08}
+
+- **Validation environment and measurement period**
+    - **VPS environment**
+        - A VPS with 6 cores and just under 12GB of memory
+        - Ubuntu 26.04 LTS, Linux 7.0, Docker Engine 29
+    - **Running containers**
+        - Four long-running containers
+            - Web application frontend (Node.js)
+            - Web application backend (Node.js)
+            - Elasticsearch (Java)
+            - KestreLynx main application
+        - A batch container also runs for only a few seconds each morning
+    - **Measurement period**
+        - Continuous operation on a VPS serving live applications began on September 28, 2026; measurements cover the week from September 29 to October 6
+
+**Overhead and effects on services**
+
+| Target | Result |
+| --- | --- |
+| Sensor CPU | Average 0.33%, maximum 31% |
+| Sensor memory | Averaged 70MiB on the first day and stayed at 92–94MiB from the fifth day onward (maximum 108MiB during the period) |
+| Main application container memory | Around 50MiB while not scanning |
+| Observed services | No restarts; Elasticsearch remained healthy throughout |
+
+- **Reads and event losses**
+    - The default read interval is 30 seconds, and no long-running container was recorded reaching a read limit during the week
+    - Kernel buffer overflow caused zero event losses during the week
+    - One event was lost later under high load, but it appears not to have affected counting for the observed containers
+    - Sensor evidence records kernel event losses separately from other losses
+    - Observation cannot prepare in time for batch containers that run for only a few seconds each morning, so their events are counted as lost or unclassified
+        - Event handling and image scanning are covered in [Short-lived container scanning development](short-lived-containers.md)
+- **Notification display and settings**
+    - Notifications showed in-use markers and evidence such as the Java runtime and TLS libraries loaded by curl for health checks
+    - Ports published on 0.0.0.0 appeared alongside evidence for in-use packages
+    - `runtime.mute_unfixable_not_in_use` mutes notifications for findings without a fix and with no observed use; it is disabled by default
+        - Omission from notifications was verified in tests but remains unverified in operation because no findings met the conditions
+    - Sensor setup, states, and muting conditions are documented in [Runtime Usage](../documentation/runtime-usage.md)
+- **Remaining operational observations**
+    - A long-running Elasticsearch container retains the `incomplete` state, indicating that part of its observation could not be verified
+        - The cause remains undetermined, and observation continues using Sensor logs that report the reason for the state
+        - While this state persists, the container's packages are never reported as `not_observed`
+    - The increase in Sensor memory during the first week may reflect bounded records still accumulating, including records of ended containers retained for seven days
+        - Trends from the second week onward will be checked to verify this explanation
+
+## Next Steps
+
+The order of the following work has not been decided.
+
+- **Expand coverage**
+    - Implement [short-lived container scanning](short-lived-containers.md)
+    - Continue [Kubernetes Sensor Feasibility](kubernetes-runtime-sensor.md) with implementation and validation of the Sensor for Kubernetes
+- **Check continued operation**
+    - Investigate why part of the Elasticsearch container's observation remains unverified
+    - Check Sensor memory trends from the second week onward
+
 ## Change log
 
 ### September 25, 2026 {#2026-09-25}
 
 - Recorded the plan
+
+### October 8, 2026 {#2026-10-08}
+
+- Recorded implementation and operational results
 
 ---
 

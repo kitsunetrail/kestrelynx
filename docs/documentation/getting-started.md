@@ -49,7 +49,7 @@ docker run -d --name kestrelynx \
   ghcr.io/kitsunetrail/kestrelynx:latest
 ```
 
-On Docker, an optional Sensor marks findings for packages in use and puts them
+On Docker, an optional Sensor (experimental) marks findings for packages in use and puts them
 first within the same priority, without changing priority. Setup and observation
 limits are described in [Runtime usage](runtime-usage.md).
 

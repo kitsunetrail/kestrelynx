@@ -83,6 +83,8 @@ directory beside `state.path`, by default `/var/lib/kestrelynx/intel`.
 
 ## Runtime usage
 
+[Runtime usage](runtime-usage.md) is an experimental feature.
+
 | Option | Default | Description |
 | --- | --- | --- |
 | `runtime.enabled` | `false` | Read Sensor evidence and include runtime usage in notifications. Leave disabled when no Sensor is installed. |

@@ -1,5 +1,10 @@
 # Runtime usage
 
+!!! warning "Experimental feature"
+
+    Sensor (runtime usage) is an experimental feature.
+    Its configuration, display, and evidence formats may change, and the feature may be frozen.
+
 An optional Sensor container on a Docker host marks findings for packages in use
 and puts those packages and their images first within the same priority.
 It does not change priority.

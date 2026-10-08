@@ -493,6 +493,8 @@ CRITICAL and HIGH count distinct CVE IDs within each package and fix-status grou
 
 ### Runtime usage
 
+[Runtime usage](runtime-usage.md) is an experimental feature.
+
 With `runtime.enabled: true`, Slack marks findings for packages observed in use.
 Usage does not change priority. Within each priority, packages in use and images
 containing them appear first. With triage disabled, results are not reordered.

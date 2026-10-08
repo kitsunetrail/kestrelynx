@@ -182,7 +182,7 @@ and first-seen dates.
 
 - [Setup](documentation/getting-started.md)
 - [Configuration](documentation/configuration.md)
-- [Runtime usage](documentation/runtime-usage.md)
+- [Runtime usage (experimental)](documentation/runtime-usage.md)
 - [How it works](documentation/how-it-works.md)
 
 </div>

@@ -1,4 +1,4 @@
-# The Sensor: an opt-in, separately-privileged companion to the main
+# The Sensor: an experimental, opt-in, separately-privileged companion to the main
 # `kestrelynx` service, run from the same image under a distinct
 # entrypoint/command. It walks the host's /proc, samples running processes
 # and their listening sockets, indexes each container's OS package database,

@@ -108,7 +108,7 @@ triage:
   discussion_links: true
 
 runtime:
-  # Show which packages an optional, separately-privileged Sensor companion
+  # Show which packages an optional, experimental, separately-privileged Sensor companion
   # process (`kestrelynx sensor`, deploy/docker/docker-compose.sensor.yml)
   # actually observed running, alongside the ordinary vulnerability
   # findings. Requires deploying the Sensor and sharing its evidence volume

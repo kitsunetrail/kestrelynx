@@ -16,7 +16,7 @@
 - **Image scanning**: HIGH / CRITICAL detection with [Trivy](https://github.com/aquasecurity/trivy) by default
 - **Scan deduplication**: shared results for images confirmed to be identical
 - **Prioritization**: act now / watch / low, based on severity, CISA KEV, and EPSS
-- **Runtime usage**: optional Docker Sensor marks findings for packages in use and puts them first within the same priority, without changing priority; see [Runtime usage](docs/documentation/runtime-usage.md)
+- **Runtime usage (experimental)**: optional Docker Sensor marks findings for packages in use and puts them first within the same priority, without changing priority; see [Runtime usage](docs/documentation/runtime-usage.md)
 - **Package grouping**: fix availability, fixed versions, and upgrade-risk annotations
 - **Unpatched vulnerabilities**: inclusion of findings without available fixes
 - **Base-OS and package EOL**: prominent reporting at the top, separately from CVE priority, of unsupported base operating systems (EOL base) and packages with CVEs reported by vendors as out of support for this release (EOL package)

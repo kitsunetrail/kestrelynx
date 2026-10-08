@@ -162,7 +162,7 @@ Docker Composeでの手順です。Docker Composeが使えるDockerホストと�
 
 - [セットアップ](documentation/getting-started.md)
 - [設定](documentation/configuration.md)
-- [稼働時の使用状況](documentation/runtime-usage.md)
+- [稼働時の使用状況（実験的）](documentation/runtime-usage.md)
 - [仕組み](documentation/how-it-works.md)
 
 </div>

@@ -353,7 +353,9 @@ func TestToolSpec_UvLooksForUvTomlUpToTheRoot(t *testing.T) {
 func TestToolSpec_ResolvedChoices(t *testing.T) {
 	pm := defaultTool(ManagerPnpm)
 	hash := strings.Repeat("ab", 64)
-	spec, uerr := ResolveToolSpec(ToolSpecInput{Manager: ManagerPnpm, Manifest: []byte(withField(pnpmManifest, `"packageManager":"pnpm@`+pm+`+sha512.`+strings.ToUpper(hash)+`"`))})
+	// Node.js 24 is the newest series in long-term support on this day.
+	lts24 := time.Date(2026, 10, 13, 0, 0, 0, 0, time.UTC)
+	spec, uerr := ResolveToolSpec(ToolSpecInput{Manager: ManagerPnpm, Manifest: []byte(withField(pnpmManifest, `"packageManager":"pnpm@`+pm+`+sha512.`+strings.ToUpper(hash)+`"`)), Now: lts24})
 	if uerr != nil {
 		t.Fatal(uerr)
 	}
@@ -374,7 +376,7 @@ func TestToolSpec_ResolvedChoices(t *testing.T) {
 	}
 	// A version other than the default that the project names exactly is the
 	// one to run, with the hash it was declared with.
-	spec, uerr = ResolveToolSpec(ToolSpecInput{Manager: ManagerPnpm, Manifest: []byte(withField(pnpmManifest, `"packageManager":"pnpm@10.34.4+sha512.`+hash+`"`))})
+	spec, uerr = ResolveToolSpec(ToolSpecInput{Manager: ManagerPnpm, Manifest: []byte(withField(pnpmManifest, `"packageManager":"pnpm@10.34.4+sha512.`+hash+`"`)), Now: lts24})
 	if uerr != nil || spec.ToolVersion != "10.34.4" || spec.ToolSource != "declared" || spec.SpecHash != "sha512."+hash || spec.Runtime != "node24" {
 		t.Errorf("pnpm 10 with a hash: %+v %v", spec, uerr)
 	}

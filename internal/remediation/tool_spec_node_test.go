@@ -299,6 +299,8 @@ func TestUpdateChecksEnginesAgainstTheDeclaredNode(t *testing.T) {
 	})
 	t.Run("nothing declared runs on the image and checks nothing", func(t *testing.T) {
 		h := setup(t, nil, ">=24.5")
+		// Node.js 24 is the newest series in long-term support on this day.
+		h.cfg.Now = func() time.Time { return time.Date(2026, 10, 13, 0, 0, 0, 0, time.UTC) }
 		it, _ := h.run()
 		wantCategory(t, it, CategoryPRCandidate, ReasonUpdateVerified)
 		if rt := it.Update.Runtime; rt == nil || rt.ID != "node24" || rt.Basis != RuntimeBasisDefault || rt.EnginesFloor != "" {

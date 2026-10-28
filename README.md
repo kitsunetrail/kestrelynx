@@ -10,7 +10,7 @@
 [Configuration reference](docs/documentation/configuration.md) ·
 [Trial reports](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx)
 
-> Open-source software that regularly scans images used by running Docker and Kubernetes containers with Trivy and sends **changes since the last scan and priorities based on severity, CISA KEV, and EPSS** to Slack or a webhook. **Remediation plans and pull requests (experimental)** for Docker, Compose, and Kubernetes support remediation from comparing update candidates to creating GitHub pull requests, with both features disabled by default.
+> Open-source software that regularly scans images used by running Docker and Kubernetes containers with Trivy and sends **changes since the last scan and priorities based on severity, CISA KEV, and EPSS** to Slack, email, or a webhook. **Remediation plans and pull requests (experimental)** for Docker, Compose, and Kubernetes support remediation from comparing update candidates to creating GitHub pull requests, with both features disabled by default.
 
 ## What it does
 
@@ -91,12 +91,14 @@ Long notifications continue in additional messages with repeated section and ima
 | Slack Incoming Webhook | Summary in the channel | `notify.slack_webhook_url` |
 | Slack Bot | Summary plus a thread with open-finding details in diff mode | `notify.slack_bot_token` and `notify.slack_channel` |
 | Generic webhook | Structured JSON POST with current scan results and, in diff mode, changes | `notify.generic_webhook_url` |
+| Email | Plain-text summary over SMTP with required TLS | `notify.email` (`host`, `port`, `tls`, `from`, `to`) |
 
 - **Slack Bot details**: evidence, references, and time open for act-now/watch findings; counts for low-priority findings
 - **Report refresh**: on changes and weekly report days
 - **Slack Bot on quiet days**: link to the last detailed report
 - **Slack Bot requirements**: `chat:write` scope and invitation to the destination channel
-- **Allowed combination**: either Slack Incoming Webhook or Slack Bot, plus the generic webhook
+- **Email TLS**: `starttls` or `tls` only; unencrypted SMTP is refused
+- **Allowed combination**: either Slack Incoming Webhook or Slack Bot, plus the generic webhook and/or email
 - **Unsupported combination**: Slack Incoming Webhook and Slack Bot together
 
 ## Remediation plans and pull requests (experimental)
@@ -221,7 +223,7 @@ See [config.example.yml](config.example.yml) for all configuration options and t
 | `schedule.daily_at` | Daily scan time (`09:00` in the example; 24-hour interval if omitted or empty) |
 | `schedule.run_on_start` | Startup scan (default: `true`) |
 | `scan.severity` | Included severities (default: `[HIGH, CRITICAL]`) |
-| `notify.language` | Language for Slack notifications and PR bodies: `en` (default) or `ja`; other values are configuration errors, and the generic webhook remains in English |
+| `notify.language` | Language for Slack and email notifications and PR bodies: `en` (default) or `ja`; other values are configuration errors, and the generic webhook remains in English |
 | `notify.mode` | `diff`: change notifications (default); `full`: full report every scan |
 | `notify.full_report_day` | Weekly report day in diff mode (default: `monday`; disabled: `never`) |
 | `notify.notify_on_clean` | Notifications with no issues or changes (default: `false`) |

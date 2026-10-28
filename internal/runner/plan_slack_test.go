@@ -9,17 +9,25 @@ import (
 )
 
 // slackDelivered is a delivered-plan record that also keeps what the Slack
-// fix plan message showed.
+// and email fix plan messages showed.
 type slackDelivered struct {
 	fakeDelivered
 	slack      string
 	slackSaves []string
+	email      string
+	emailSaves []string
 }
 
 func (f *slackDelivered) LoadSlack() (string, error) { return f.slack, nil }
 func (f *slackDelivered) SaveSlack(fp string) error {
 	f.slackSaves = append(f.slackSaves, fp)
 	f.slack = fp
+	return nil
+}
+func (f *slackDelivered) LoadEmail() (string, error) { return f.email, nil }
+func (f *slackDelivered) SaveEmail(fp string) error {
+	f.emailSaves = append(f.emailSaves, fp)
+	f.email = fp
 	return nil
 }
 
@@ -144,13 +152,18 @@ func TestPlanSlack_WeeklyDaySendsAnUnchangedPlan(t *testing.T) {
 	}
 }
 
-// deliveryNotifier fails after telling how the plan went.
+// deliveryNotifier fails after telling how the Slack and email plans went.
 type deliveryNotifier struct {
-	posted, failed bool
+	posted, failed           bool
+	emailPosted, emailFailed bool
+	setEmail                 bool
 }
 
 func (n deliveryNotifier) Send(_ context.Context, m notify.Message) error {
 	m.PlanDelivery.Posted, m.PlanDelivery.Failed = n.posted, n.failed
+	if n.setEmail {
+		m.EmailDelivery.Posted, m.EmailDelivery.Failed = n.emailPosted, n.emailFailed
+	}
 	return errors.New("the thread failed")
 }
 
@@ -176,5 +189,63 @@ func TestPlanSlack_PostedPlanIsRecordedAfterAFailedSend(t *testing.T) {
 		if len(h.delivered.saves) != 0 {
 			t.Errorf("%s: the plan as a whole was recorded after a failed send: %v", name, h.delivered.saves)
 		}
+	}
+}
+
+// postedEmailNotifier records a successful email plan and keeps the message
+// the runner built.
+type postedEmailNotifier struct {
+	msg notify.Message
+}
+
+func (n *postedEmailNotifier) Send(_ context.Context, m notify.Message) error {
+	n.msg = m
+	if m.Plan.EmailDue() {
+		m.EmailDelivery.Posted = true
+	}
+	return nil
+}
+
+// Slack success and email failure keep separate records: the next cycle can
+// still send the plan by email.
+func TestPlanEmail_StaysDueWhenOnlySlackWasRecorded(t *testing.T) {
+	h, d := newSlackPlanHarness(true)
+	h.r.EmailConfigured = true
+	h.r.Notifier = deliveryNotifier{posted: true, setEmail: true, emailFailed: true}
+	if err := h.r.RunOnce(context.Background()); err == nil {
+		t.Fatal("expected the send error")
+	}
+	if len(d.slackSaves) != 1 {
+		t.Fatalf("slack saves = %v, want the posted plan", d.slackSaves)
+	}
+	if len(d.emailSaves) != 0 {
+		t.Fatalf("email saves = %v after a failed email", d.emailSaves)
+	}
+
+	ok := &postedEmailNotifier{}
+	h.r.Notifier = ok
+	if err := h.r.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	p := ok.msg.Plan
+	if p == nil || p.SlackChanged || !p.EmailChanged || !p.EmailDue() {
+		t.Fatalf("after Slack-only record: plan=%+v", p)
+	}
+	if len(d.emailSaves) != 1 || d.emailSaves[0] != p.SlackFingerprint() {
+		t.Errorf("email saves = %v, want the display fingerprint", d.emailSaves)
+	}
+}
+
+// Without email configured, a successful Slack send does not store an email
+// fingerprint, and the plan is not treated as waiting on email.
+func TestPlanEmail_IgnoredWhenEmailIsNotConfigured(t *testing.T) {
+	h, d := newSlackPlanHarness(true)
+	h.run(t)
+	p := h.notif.msg.Plan
+	if p == nil || p.EmailChanged || p.EmailDue() {
+		t.Fatalf("email plan due without email: %+v", p)
+	}
+	if len(d.emailSaves) != 0 {
+		t.Fatalf("email saves = %v without email configured", d.emailSaves)
 	}
 }

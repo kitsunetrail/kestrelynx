@@ -47,6 +47,14 @@ type SlackDeliveredStore interface {
 	SaveSlack(fingerprint string) error
 }
 
+// EmailDeliveredStore is the part of a DeliveredStore that keeps the
+// fingerprint of the last email fix plan. A store without it sends that
+// plan whenever the plan as a whole changed.
+type EmailDeliveredStore interface {
+	LoadEmail() (string, error)
+	SaveEmail(fingerprint string) error
+}
+
 // PRStage runs the pull request stage once (implemented by
 // *remediation.PRStage).
 type PRStage interface {
@@ -191,6 +199,11 @@ type planOutcome struct {
 	// plan message shows (notify.PlanInfo.SlackFingerprint).
 	slackFingerprint string
 	slackChanged     bool
+	// emailFingerprint and emailChanged are the same for what the email fix
+	// plan shows. The display fingerprint matches Slack's; the delivery
+	// record is separate so a Slack success cannot hide a failed email.
+	emailFingerprint string
+	emailChanged     bool
 	// prLastSeq is the highest sequence number among the pull request
 	// operation events the notification carries (0 when there are none).
 	// prPending says the pull request stage has something to deliver whatever
@@ -286,6 +299,20 @@ func (r Runner) finishPlan(info *notify.PlanInfo, planFingerprint string) planOu
 		out.slackChanged = out.slackFingerprint != last
 	}
 	info.SlackChanged = out.slackChanged
+
+	out.emailFingerprint = out.slackFingerprint
+	if r.EmailConfigured {
+		out.emailChanged = out.changed
+		if store, ok := r.Plan.Delivered.(EmailDeliveredStore); ok {
+			last, err := store.LoadEmail()
+			if err != nil {
+				r.log().Warn("delivered email fix plan record unreadable; treating the plan as undelivered", "err", err)
+				last = ""
+			}
+			out.emailChanged = out.emailFingerprint != last
+		}
+	}
+	info.EmailChanged = out.emailChanged
 	return out
 }
 
@@ -545,6 +572,18 @@ func (r Runner) saveSlackPlan(o planOutcome) {
 	}
 }
 
+// saveEmailPlan records what the email fix plan showed.
+func (r Runner) saveEmailPlan(o planOutcome) {
+	if r.Plan == nil || !o.emailChanged {
+		return
+	}
+	if store, ok := r.Plan.Delivered.(EmailDeliveredStore); ok {
+		if err := store.SaveEmail(o.emailFingerprint); err != nil {
+			r.log().Warn("delivered email fix plan could not be recorded; the plan may be announced again", "err", err)
+		}
+	}
+}
+
 // markSlackPlanDelivered records the Slack fix plan message after a send that
 // failed as a whole, when the plan itself was posted: the next cycle then does
 // not post it again. The rest stays unrecorded and is sent again.
@@ -553,6 +592,21 @@ func (r Runner) markSlackPlanDelivered(o planOutcome, d *notify.PlanDelivery) {
 		return
 	}
 	r.saveSlackPlan(o)
+}
+
+// emailPlanDue reports whether this cycle should send because the email
+// fix plan is due. Email that is not configured never makes a cycle due.
+func (r Runner) emailPlanDue(p *notify.PlanInfo) bool {
+	return r.EmailConfigured && p.EmailDue()
+}
+
+// markEmailPlanDelivered records the email fix plan when that email carried
+// it, including after a send that failed for some other destination.
+func (r Runner) markEmailPlanDelivered(o planOutcome, d *notify.PlanDelivery) {
+	if o.info == nil || d == nil || !d.Posted || d.Failed {
+		return
+	}
+	r.saveEmailPlan(o)
 }
 
 // KEVSource lists the CISA KEV catalog (implemented by intel.Source). It is

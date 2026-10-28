@@ -1,6 +1,6 @@
 // Command kestrelynx regularly scans images used by running Docker and Kubernetes
 // containers with Trivy and sends changes since the last scan and priorities
-// based on severity, CISA KEV, and EPSS to Slack or a webhook.
+// based on severity, CISA KEV, and EPSS to Slack, email, or a webhook.
 // For Docker and Compose, remediation plans and pull requests (experimental)
 // support remediation from comparing update candidates to creating GitHub pull
 // requests, with both features disabled by default. Users handle merging,
@@ -95,6 +95,7 @@ func main() {
 		Source:                   scanSource,
 		Now:                      time.Now,
 		Log:                      log,
+		EmailConfigured:          cfg.Notify.Email.Configured(),
 		GenericWebhookConfigured: cfg.Notify.GenericWebhookURL != "",
 	}
 	if cfg.Notify.Mode == "diff" {
@@ -590,6 +591,14 @@ func buildNotifier(c config.NotifyConfig) runner.Notifier {
 	}
 	if c.GenericWebhookURL != "" {
 		notifiers = append(notifiers, notify.WebhookNotifier{URL: c.GenericWebhookURL})
+	}
+	if c.Email.Configured() {
+		notifiers = append(notifiers, notify.EmailNotifier{
+			Host: c.Email.Host, Port: c.Email.Port, TLS: c.Email.TLS,
+			Username: c.Email.Username, Password: c.Email.Password.Value(),
+			From: c.Email.From, To: append([]string(nil), c.Email.To...),
+			Language: lang,
+		})
 	}
 	if len(notifiers) == 0 {
 		return nil

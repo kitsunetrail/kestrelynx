@@ -164,6 +164,7 @@ func main() {
 			"mappings", len(cfg.Remediation.Mappings),
 			"registry_logins", len(cfg.Remediation.Registries),
 			"github_token_set", cfg.Remediation.GitHub.Token != "",
+			"github_owner_tokens", len(cfg.Remediation.GitHub.Tokens),
 			"pull_requests", cfg.Remediation.PullRequests.Enabled,
 			"new_prs_per_cycle", l.NewPRsPerCycle,
 			"open_prs", l.OpenPRs,
@@ -366,19 +367,28 @@ func pullRequestRepositories(ms []config.RemediationMapping) []string {
 	return out
 }
 
+// ownerTokens converts the per-owner GitHub tokens of the configuration.
+func ownerTokens(g config.RemediationGitHubConfig) []github.OwnerToken {
+	var out []github.OwnerToken
+	for _, t := range g.Tokens {
+		out = append(out, github.OwnerToken{Owner: t.Owner, Token: github.Token(t.Token.Value())})
+	}
+	return out
+}
+
 // buildPullRequestConfig assembles the pull request stage. The write client
 // exists only here, so with pull requests off nothing in the process can
 // write to GitHub. Each cycle gets its own write and read clients, each with
-// its own request budget; the token goes to those clients alone.
+// its own request budget; the tokens go to those clients alone.
 func buildPullRequestConfig(rc config.RemediationConfig, language string) *runner.PullRequestConfig {
-	token := rc.GitHub.Token.Value()
+	token, owners := rc.GitHub.Token.Value(), ownerTokens(rc.GitHub)
 	store := remediation.PRStore{Dir: rc.StorageDir}
 	limits := remediation.PRLimits{NewPRsPerCycle: rc.Limits.NewPRsPerCycle, OpenPRs: rc.Limits.OpenPRs}
 	return &runner.PullRequestConfig{
 		NewStage: func(resolver remediation.CandidateResolver) (runner.PRStage, error) {
 			stage, err := remediation.NewPRStage(remediation.PRStageConfig{
-				GitHub:   github.NewWriter(github.Options{Token: github.Token(token), Budget: github.NewBudget(gitHubRequestsPerCycle)}),
-				Source:   github.New(github.Options{Token: github.Token(token), Budget: github.NewBudget(gitHubRequestsPerCycle)}),
+				GitHub:   github.NewWriter(github.Options{Token: github.Token(token), OwnerTokens: owners, Budget: github.NewBudget(gitHubRequestsPerCycle)}),
+				Source:   github.New(github.Options{Token: github.Token(token), OwnerTokens: owners, Budget: github.NewBudget(gitHubRequestsPerCycle)}),
 				Resolver: resolver,
 				Store:    store,
 				Limits:   limits,
@@ -502,10 +512,10 @@ func buildPlanConfig(cfg config.Config) *runner.PlanConfig {
 	pc.Composes = composeMappings(rc.Mappings)
 	if len(pc.Dependencies) > 0 || len(pc.Dockerfiles) > 0 || len(pc.Composes) > 0 {
 		// One client per cycle: its request budget and file byte total are
-		// per-cycle counters. The token goes to this client alone.
-		token := rc.GitHub.Token.Value()
+		// per-cycle counters. The tokens go to this client alone.
+		token, owners := rc.GitHub.Token.Value(), ownerTokens(rc.GitHub)
 		pc.NewGitHub = func() remediation.GitHubReader {
-			return github.New(github.Options{Token: github.Token(token), Budget: github.NewBudget(gitHubRequestsPerCycle)})
+			return github.New(github.Options{Token: github.Token(token), OwnerTokens: owners, Budget: github.NewBudget(gitHubRequestsPerCycle)})
 		}
 	}
 	return pc

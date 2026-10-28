@@ -202,22 +202,42 @@ runtime:
 #   # Kustomize images[].newTag, Helm values image tags,
 #   # Dockerfile FROM tags, or language dependency files. Image tag updates
 #   # stay in the same major/minor series; language updates can cross major
-#   # versions. Requires remediation.enabled, source mappings and
-#   # github.token. No automatic merge or deployment; existing branches are
-#   # not rewritten. PR creation can start the repository's pull_request CI.
+#   # versions. Requires remediation.enabled, source mappings and a GitHub
+#   # token for every mapped repository, from github.tokens or github.token.
+#   # No automatic merge or deployment; existing branches are not rewritten.
+#   # PR creation can start the repository's pull_request CI.
 #   # Language updates run in disposable Docker containers or configured Kubernetes Pods, with their
 #   # output and before/after dependency-file scans checked by KestreLynx.
 #   # Neither application tests nor image rebuilds are run. Off by default.
 #   pull_requests:
 #     enabled: false
-#   # Token for GitHub. Empty reads public repositories anonymously, which is
-#   # enough without pull requests. With pull_requests enabled it is required
-#   # and needs the permissions Contents: Read and write and Pull requests:
-#   # Read and write on the configured repositories only (a fine-grained
-#   # personal access token limited to them). Keep the file readable by its
-#   # owner only.
+#   # GitHub tokens. token is the default for owners not listed in tokens;
+#   # existing configurations using only token continue to work.
+#   # A fine-grained token can access repositories of only one owner, so
+#   # prepare a token per owner when working with different users or organizations.
+#   # Each tokens entry requires owner (a GitHub user or organization name)
+#   # and a nonempty token. Owner matching is case-insensitive; duplicates
+#   # are errors. Tokens must not contain whitespace or control characters.
+#   # With pull_requests enabled, every mapped repository needs its owner's
+#   # token or the default token; a missing token causes a startup error
+#   # identifying the affected mapping and owner. Each token needs Contents:
+#   # Read and write and Pull requests: Read and write, limited to its target
+#   # repositories. Without pull requests, Contents: Read is enough for
+#   # private repositories; repositories with neither token are read
+#   # anonymously, which works only for public repositories.
+#   # Each request sends only the target repository owner's token, or the
+#   # default if no owner entry matches, to api.github.com over HTTPS.
+#   # Redirects to other hosts are rejected.
+#   # The startup log field github_owner_tokens counts configured owner tokens.
+#   # Keep the file readable by its owner only.
+#   # Replace the example token values before use.
 #   github:
 #     token: ""
+#     tokens:
+#       - owner: example-org
+#         token: example-token-for-org
+#       - owner: example-user
+#         token: example-token-for-user
 #   # Logins for private image registries, used to look for newer images and
 #   # to scan candidates. A host without an entry is reached anonymously.
 #   # host is the registry host as written in image references, with the port

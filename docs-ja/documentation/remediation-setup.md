@@ -38,8 +38,30 @@ remediation:
 
 1. 対応付けるGitHubリポジトリと、ソースの取得元・PRの宛先にするブランチを決める
 2. [GitHubアクセス](configuration.md#remediation-github)で、ソースの読み取りとPR作成に必要な権限を確認する
-3. tokenが必要な用途では、対象リポジトリに限定したtokenを用意し、`remediation.github.token`に設定する
+3. tokenが必要な用途では、対象リポジトリに限定したtokenを用意し、`remediation.github.tokens`に所有者ごとに設定するか、既定の`remediation.github.token`に設定する
 4. tokenを含む設定ファイルは所有者だけが読めるようにし、リポジトリへのコミット対象から外す
+
+fine-grained tokenは、1つの所有者（ユーザーまたは組織）のリポジトリにしか権限を持てません。
+所有者が違うリポジトリを扱う場合は、所有者ごとにtokenを用意します。
+
+たとえば、`example-org/application`と`example-user/deployment`を対応付ける場合は、次のように設定します。
+例のtokenは、各所有者の対象リポジトリに権限を持つtokenに置き換えてください。
+
+```yaml
+remediation:
+  github:
+    tokens:
+      - owner: example-org
+        token: example-token-for-org
+      - owner: example-user
+        token: example-token-for-user
+```
+
+`tokens`にない所有者には、既定の`remediation.github.token`を使います。
+`token`だけの既存設定もそのまま利用でき、すべての所有者を`tokens`に設定する場合は既定のtokenを省略できます。
+
+PRを有効にする前に、対応付けたすべてのリポジトリに、所有者ごとのtokenか既定のtokenがあることを確認してください。
+PRが無効なら、どちらのtokenもないリポジトリは匿名で読み取るため、公開リポジトリに限られます。
 
 ### Workloadの確認 {#identify-workload}
 

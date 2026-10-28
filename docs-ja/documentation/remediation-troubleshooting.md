@@ -22,6 +22,7 @@
 | 稼働イメージとスキャンしたイメージの実体が一致しない | 計画に項目が出ないことがあるため、ログのスキャン失敗と対象のイメージIDを確認する | [ソースの確認](remediation-logic.md#source-verification) |
 | 計画の記録はあるが通知がない | 通知先、送信条件、配信失敗のログを確認する | [通知を送る条件](notification-conditions.md#notification-conditions)・[修正計画の再送](notification-conditions.md#remediation-redelivery) |
 | ソースを取得できない、対象ファイルが見つからない | Composeラベル、Composeを使わないコンテナの名前、またはKubernetesのワークロードキー、対応付け、ベースブランチ、パス、GitHubのアクセスを確認する | [ソースの対応付け](configuration.md#remediation-mappings)・[GitHubアクセス](configuration.md#remediation-github) |
+| 所有者ごとのtokenを設定していて、名前変更・移管したリポジトリの読み取りに失敗する | 所有者を含まないリポジトリIDのURLへの転送ではtokenを選べず転送を拒否するため、対応付けの`repository`を現在の`owner/name`に直す | [GitHubアクセス](configuration.md#remediation-github) |
 | 非公開イメージへアクセスできない | レジストリのホスト、認証情報、取得権限、token serviceの許可を確認する | [イメージレジストリの認証](configuration.md#remediation-registries) |
 | 新しいイメージ候補がない | 通知の理由から、新しいタグ・内容・改善の有無を確認する | [イメージ候補の理由](remediation-reference.md#image-reasons) |
 | Kubernetesの項目が`declared_ref_mismatch`または`declared_ref_unavailable`になる | 同じ稼働イメージ参照を使う各コンテナのPodのspecと稼働中の参照を確認する | [Kubernetesのイメージ参照と再取得](remediation-logic.md#kubernetes-image-references) |

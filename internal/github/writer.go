@@ -803,7 +803,7 @@ func (w *Writer) send(ctx context.Context, method, rawURL string, payload, out a
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	req.Header.Set("User-Agent", "kestrelynx")
-	if a := c.auth(); a != "" {
+	if a := c.auth(c.ownerOf(rawURL)); a != "" {
 		req.Header.Set("Authorization", a)
 	}
 	resp, err := w.wh.Do(req)
@@ -883,10 +883,10 @@ func (c *Client) message(body []byte) string {
 	return strings.TrimSpace(m)
 }
 
-// scrub masks the token wherever it appears in s.
+// scrub masks every token wherever it appears in s.
 func (c *Client) scrub(s string) string {
-	if tok := strings.TrimPrefix(c.auth(), "Bearer "); tok != "" {
-		return strings.ReplaceAll(s, tok, redacted)
+	for _, tok := range c.secrets() {
+		s = strings.ReplaceAll(s, tok, redacted)
 	}
 	return s
 }

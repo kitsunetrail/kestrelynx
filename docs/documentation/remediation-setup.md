@@ -38,8 +38,30 @@ With the supplied deployment, use `kubectl logs -n kestrelynx deployment/kestrel
 
 1. Choose the GitHub repository to map and the branch to use as the source and PR target
 2. Check [GitHub access](configuration.md#remediation-github) for the permissions needed to read source files and create PRs
-3. For uses that require a token, prepare one restricted to the target repositories and set it in `remediation.github.token`
+3. For uses that require a token, prepare one restricted to the target repositories and configure it by owner in `remediation.github.tokens` or as the default `remediation.github.token`
 4. Keep the configuration file containing the token readable only by its owner and exclude it from repository commits
+
+A fine-grained token can have permissions only for repositories belonging to one owner, either a user or an organization.
+When working with repositories belonging to different owners, prepare a token for each owner.
+
+For example, use the following settings when mapping `example-org/application` and `example-user/deployment`.
+Replace the example tokens with tokens that have permissions for each owner's target repositories.
+
+```yaml
+remediation:
+  github:
+    tokens:
+      - owner: example-org
+        token: example-token-for-org
+      - owner: example-user
+        token: example-token-for-user
+```
+
+Owners not listed in `tokens` use the default `remediation.github.token`.
+Existing configurations using only `token` continue to work; the default token can be omitted when all owners are listed in `tokens`.
+
+Before enabling PRs, check that every mapped repository has either its owner's token or the default token.
+When PRs are disabled, repositories with neither token are read anonymously, which limits access to public repositories.
 
 ### Identifying the workload {#identify-workload}
 

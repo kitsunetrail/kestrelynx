@@ -141,7 +141,20 @@ notify:
 
 | 設定項目 | 既定値 | 形式・必須条件 |
 | --- | --- | --- |
-| `remediation.github.token` | 空 | 空白・制御文字を含まないGitHub tokenで、PRを有効にする場合は必須です。 |
+| `remediation.github.token` | 空 | `tokens`にない所有者のリポジトリに使う既定のGitHub tokenです。空白・制御文字は含められません。 |
+| `remediation.github.tokens` | `[]` | 所有者ごとのGitHub tokenの一覧です。対象リポジトリの所有者に一致する項目があれば、既定のtokenの代わりに使います。 |
+| `remediation.github.tokens[].owner` | 必須 | GitHubのユーザー名または組織名です。大文字・小文字を区別せずに比較し、同じ所有者の重複指定はエラーになります。 |
+| `remediation.github.tokens[].token` | 必須 | その所有者のリポジトリに使う、空でないGitHub tokenです。空白・制御文字は含められません。 |
+
+`remediation.github.token`だけを使う既存の設定は、そのまま利用できます。
+
+PRを有効にする場合は、対応付けたすべてのリポジトリについて、所有者ごとのtokenか既定のtokenが必要です。
+不足すると起動時にエラーになり、該当する対応付けと所有者を示します。
+
+PRが無効の場合、所有者ごとのtokenも既定のtokenもないリポジトリは匿名で読み取ります。
+匿名で読み取れるのは公開リポジトリだけです。
+
+起動ログの`github_owner_tokens`で、設定した所有者ごとのtokenの数を確認できます。
 
 | 用途 | 必要な権限 |
 | --- | --- |
@@ -311,7 +324,7 @@ Kubernetesモードの言語パッケージ更新に使います。
 次の組み合わせは起動時にエラーになります。
 
 - `remediation.enabled`を有効にせず、PRだけを有効にした場合
-- `remediation.github.token`なしでPRを有効にした場合
+- 対応付けたリポジトリの所有者に`remediation.github.tokens`のtokenも既定の`remediation.github.token`もない状態でPRを有効にした場合
 - Dockerモードで`manifest`・`kustomize`・`helm_values`の対応付けを指定した場合
 - Kubernetesモードで`compose`の対応付けを指定した場合
 

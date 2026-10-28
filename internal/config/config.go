@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/kitsunetrail/kestrelynx/internal/github"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/regauth"
 	"github.com/kitsunetrail/kestrelynx/internal/worker"
@@ -293,10 +294,33 @@ type RemediationPullRequestsConfig struct {
 
 // RemediationGitHubConfig holds the GitHub credentials of the fix plan.
 type RemediationGitHubConfig struct {
-	// Token is an optional token for reading the mapped repositories; empty
-	// means anonymous access (public repositories only). Pull requests need
-	// it, with write access to the mapped repositories.
+	// Token is an optional token for reading the mapped repositories of every
+	// owner that has no entry in Tokens; empty means anonymous access (public
+	// repositories only). Pull requests need a token, with write access, for
+	// every mapped repository.
 	Token Secret
+	// Tokens are the tokens of particular owners (users or organizations),
+	// used instead of Token for their repositories. A fine-grained token
+	// reaches the repositories of one owner only.
+	Tokens []RemediationGitHubToken
+}
+
+// RemediationGitHubToken is the token for the repositories of one owner.
+type RemediationGitHubToken struct {
+	Owner string
+	Token Secret
+}
+
+// TokenFor returns the token used for a repository, owner/name: the owner's
+// own token, or Token. Owners compare case-insensitively, as GitHub names do.
+func (g RemediationGitHubConfig) TokenFor(repo string) Secret {
+	owner, _, _ := strings.Cut(repo, "/")
+	for _, t := range g.Tokens {
+		if strings.EqualFold(t.Owner, owner) {
+			return t.Token
+		}
+	}
+	return g.Token
 }
 
 // RemediationRegistry is the login for one private image registry.
@@ -550,7 +574,11 @@ type rawConfig struct {
 		GitHub struct {
 			// A raw node, so the value is checked before the decoder can
 			// quote it in an error.
-			Token yaml.Node `yaml:"token"`
+			Token  yaml.Node `yaml:"token"`
+			Tokens []struct {
+				Owner string    `yaml:"owner"`
+				Token yaml.Node `yaml:"token"`
+			} `yaml:"tokens"`
 		} `yaml:"github"`
 		Registries []struct {
 			Host     string `yaml:"host"`
@@ -703,6 +731,15 @@ func Parse(data []byte) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("config: remediation.github.token: %w", err)
 	}
+	var githubTokens []RemediationGitHubToken
+	for i := range raw.Remediation.GitHub.Tokens {
+		t := &raw.Remediation.GitHub.Tokens[i]
+		tok, err := secretFromNode(&t.Token)
+		if err != nil {
+			return Config{}, fmt.Errorf("config: remediation.github.tokens[%d].token: %w", i, err)
+		}
+		githubTokens = append(githubTokens, RemediationGitHubToken{Owner: t.Owner, Token: tok})
+	}
 
 	rw := raw.Remediation.Worker
 	wk := RemediationWorkerConfig{
@@ -809,7 +846,7 @@ func Parse(data []byte) (Config, error) {
 		Remediation: RemediationConfig{
 			Enabled:      boolOr(raw.Remediation.Enabled, false),
 			PullRequests: RemediationPullRequestsConfig{Enabled: boolOr(raw.Remediation.PullRequests.Enabled, false)},
-			GitHub:       RemediationGitHubConfig{Token: githubToken},
+			GitHub:       RemediationGitHubConfig{Token: githubToken, Tokens: githubTokens},
 			Registries:   registries,
 			StorageDir:   raw.Remediation.StorageDir,
 			Worker:       wk,
@@ -1067,12 +1104,8 @@ func validateRemediation(c *Config) error {
 	if r.PullRequests.Enabled && !r.Enabled {
 		return fmt.Errorf("config: remediation.pull_requests.enabled requires remediation.enabled")
 	}
-	if r.PullRequests.Enabled && r.GitHub.Token.Value() == "" {
-		return fmt.Errorf("config: remediation.pull_requests.enabled requires remediation.github.token")
-	}
-	if tok := r.GitHub.Token.Value(); strings.IndexFunc(tok, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
-		// The value is not echoed.
-		return fmt.Errorf("config: remediation.github.token must not contain whitespace or control characters")
+	if err := validateGitHubTokens(r); err != nil {
+		return err
 	}
 	if !filepath.IsAbs(r.StorageDir) {
 		return fmt.Errorf("config: remediation.storage_dir %q must be an absolute path", r.StorageDir)
@@ -1106,6 +1139,48 @@ func validateRemediation(c *Config) error {
 		return err
 	}
 	return validateMappings(r.Mappings, c.Kubernetes.Enabled)
+}
+
+// validateGitHubTokens checks the GitHub tokens. With pull requests on, every
+// mapped repository needs a token: the default one or its owner's. No message
+// contains a token.
+func validateGitHubTokens(r *RemediationConfig) error {
+	bad := func(tok string) bool {
+		return strings.IndexFunc(tok, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0
+	}
+	if bad(r.GitHub.Token.Value()) {
+		return fmt.Errorf("config: remediation.github.token must not contain whitespace or control characters")
+	}
+	seen := map[string]int{}
+	for i, t := range r.GitHub.Tokens {
+		at := fmt.Sprintf("remediation.github.tokens[%d]", i)
+		if !github.ValidOwner(t.Owner) {
+			return fmt.Errorf("config: %s.owner %q must be a GitHub user or organization name", at, t.Owner)
+		}
+		if j, dup := seen[strings.ToLower(t.Owner)]; dup {
+			return fmt.Errorf("config: %s.owner %q repeats remediation.github.tokens[%d]", at, t.Owner, j)
+		}
+		seen[strings.ToLower(t.Owner)] = i
+		if t.Token.Value() == "" {
+			return fmt.Errorf("config: %s.token is required", at)
+		}
+		if bad(t.Token.Value()) {
+			return fmt.Errorf("config: %s.token must not contain whitespace or control characters", at)
+		}
+	}
+	if !r.PullRequests.Enabled {
+		return nil
+	}
+	if r.GitHub.Token == "" && len(r.GitHub.Tokens) == 0 {
+		return fmt.Errorf("config: remediation.pull_requests.enabled requires remediation.github.token or remediation.github.tokens")
+	}
+	for i, m := range r.Mappings {
+		if r.GitHub.TokenFor(m.Repository) == "" {
+			owner, _, _ := strings.Cut(m.Repository, "/")
+			return fmt.Errorf("config: remediation.mappings[%d].repository %q has no token for pull requests: add remediation.github.tokens with owner %q, or remediation.github.token", i, m.Repository, owner)
+		}
+	}
+	return nil
 }
 
 // validateRegistries checks the registry logins. No message contains a

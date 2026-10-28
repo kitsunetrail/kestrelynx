@@ -154,7 +154,7 @@ See [Notification conditions](notification-conditions.md#notification-conditions
 
 | Credentials or communication | Destinations and restrictions |
 | --- | --- |
-| GitHub token | Sent only to `api.github.com` over HTTPS; redirects to other hosts are rejected. |
+| GitHub token | Each request includes only the target repository owner's token from `remediation.github.tokens`, or the default `remediation.github.token` if no owner entry matches, or no token if neither is available. Sent only to `api.github.com` over HTTPS; redirects to other hosts are rejected. Redirects to another owner reselect and apply the token for the destination owner. If any owner-specific token is configured, redirects to URLs without an owner are rejected; configurations with only the default token continue to follow redirects as before. |
 | Image registry credentials | Sent over HTTPS only to the configured registry and token services on the same host or allowed by `token_hosts`. |
 | KestreLynx image-registry requests | Credentials are not forwarded to redirect destinations. |
 | Trivy image-registry requests | Credentials may be included in redirects within the same host, but are not forwarded to other hosts. |

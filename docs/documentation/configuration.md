@@ -143,7 +143,20 @@ See [Plan and PR execution scope](remediation-logic.md#plan-and-pr-execution) fo
 
 | Option | Default | Format and requirements |
 | --- | --- | --- |
-| `remediation.github.token` | empty | GitHub token without whitespace or control characters; required when pull requests are enabled. |
+| `remediation.github.token` | empty | Default GitHub token for repositories whose owners are not listed in `tokens`; must not contain whitespace or control characters. |
+| `remediation.github.tokens` | `[]` | List of GitHub tokens by owner. A matching repository owner's token is used instead of the default token. |
+| `remediation.github.tokens[].owner` | required | GitHub user or organization name. Matching is case-insensitive; duplicate owners cause an error. |
+| `remediation.github.tokens[].token` | required | Nonempty GitHub token for that owner's repositories; must not contain whitespace or control characters. |
+
+Existing configurations using only `remediation.github.token` continue to work unchanged.
+
+When PRs are enabled, every mapped repository requires either its owner's token or the default token.
+A missing token causes a startup error identifying the affected mapping and owner.
+
+When PRs are disabled, repositories with neither an owner token nor a default token are read anonymously.
+Anonymous reads are limited to public repositories.
+
+The startup log field `github_owner_tokens` reports the number of configured owner tokens.
 
 | Purpose | Required permissions |
 | --- | --- |
@@ -313,7 +326,7 @@ See [Container inputs](remediation-logic.md#worker-inputs) for checks when passi
 The following combinations cause startup errors.
 
 - Enabling PRs without `remediation.enabled`
-- Enabling PRs without `remediation.github.token`
+- Enabling PRs when any mapped repository's owner has neither a token in `remediation.github.tokens` nor the default `remediation.github.token`
 - Specifying a `manifest`, `kustomize`, or `helm_values` mapping in Docker mode
 - Specifying a `compose` mapping in Kubernetes mode
 

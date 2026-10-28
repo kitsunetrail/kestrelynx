@@ -46,9 +46,13 @@ const (
 
 // Options configures a Client. Zero values select the defaults.
 type Options struct {
-	// Token is a GitHub token sent as a Bearer credential. Empty means
-	// anonymous access, which reaches public repositories only.
+	// Token is a GitHub token sent as a Bearer credential to the repositories
+	// of every owner that has no entry in OwnerTokens. Empty means anonymous
+	// access, which reaches public repositories only.
 	Token Token
+	// OwnerTokens are the tokens of particular owners, sent instead of Token
+	// to the repositories of those owners.
+	OwnerTokens []OwnerToken
 	// HTTPClient is the base client. It is copied, and the copy's timeout and
 	// redirect policy are replaced; nil means a default client.
 	HTTPClient *http.Client
@@ -73,12 +77,14 @@ type Options struct {
 
 // Client talks to the GitHub API. It is safe for concurrent use.
 type Client struct {
-	http   *http.Client
-	budget *Budget
-	opts   Options
-	auth   func() string
-	base   string // apiBase; tests point it at a local server
-	host   string
+	http     *http.Client
+	budget   *Budget
+	opts     Options
+	auth     func(owner string) string // the Authorization value for a repository owner
+	secrets  func() []string           // every token value, for masking
+	perOwner bool                      // some owner has a token of its own
+	base     string                    // apiBase; tests point it at a local server
+	host     string
 
 	mu         sync.Mutex
 	totalBytes int64
@@ -106,10 +112,15 @@ func New(o Options) *Client {
 	}
 	// The per-request deadline is a context, so Client.Timeout stays off.
 	hc.Timeout = 0
-	c := &Client{commits: map[string]string{}, trees: map[string][]treeEntry{}, budget: o.Budget, auth: bearer(o.Token)}
-	// The copy kept in the client must not hold the token: fmt prints
+	c := &Client{commits: map[string]string{}, trees: map[string][]treeEntry{}, budget: o.Budget}
+	c.auth, c.secrets = bearers(o.Token, o.OwnerTokens)
+	for _, t := range o.OwnerTokens {
+		c.perOwner = c.perOwner || t.Token != ""
+	}
+	// The copy kept in the client must not hold the tokens: fmt prints
 	// unexported fields without calling their methods.
 	o.Token = ""
+	o.OwnerTokens = nil
 	c.opts = o
 	c.setBase(apiBase)
 	hc.CheckRedirect = c.checkRedirect
@@ -182,7 +193,8 @@ func (c *Client) dialContext(ctx context.Context, network, addr string) (net.Con
 
 // checkRedirect allows a few redirects within the API host, only over HTTPS,
 // each costing one request. A redirect to another host is refused, so the
-// token cannot leave api.github.com.
+// token cannot leave api.github.com. The token of a redirected request is
+// chosen again for the owner of the new URL (see reauth).
 func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) > maxRedirects {
 		return fmt.Errorf("%w: too many redirects", ErrBadResponse)
@@ -193,7 +205,34 @@ func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
 	if req.URL.Host != c.host {
 		return fmt.Errorf("%w: redirect to another host", ErrBadResponse)
 	}
+	if err := c.reauth(req); err != nil {
+		return err
+	}
 	return c.budget.take()
+}
+
+// reauth sets the Authorization of a redirected request, which carries a copy
+// of the header chosen for the URL before it. A URL of another owner's
+// repository gets that owner's token, or none. A URL that names no owner (a
+// repository that was renamed or transferred is reached by its ID) keeps the
+// header when there is one token for every owner, as before owner tokens
+// existed; with owner tokens it is refused, since the token chosen for the
+// owner the mapping names may not be meant for the owner the repository now
+// has.
+func (c *Client) reauth(req *http.Request) error {
+	owner := c.ownerOf(req.URL.String())
+	if owner == "" {
+		if c.perOwner && req.Header.Get("Authorization") != "" {
+			return fmt.Errorf("%w: redirect to %s, which names no repository owner to choose a token for; if the repository was renamed or transferred, map it by its current owner/name", ErrBadResponse, req.URL.Redacted())
+		}
+		return nil
+	}
+	if a := c.auth(owner); a != "" {
+		req.Header.Set("Authorization", a)
+	} else {
+		req.Header.Del("Authorization")
+	}
+	return nil
 }
 
 type response struct {
@@ -210,8 +249,15 @@ func (c *Client) get(ctx context.Context, rawURL, accept string, limit int64) (*
 }
 
 // fetch is get that also reports, in read, how many body bytes were read from
-// the network, whatever the outcome.
+// the network, whatever the outcome. Transport errors can carry
+// response-supplied strings (a malformed Location header, say), so every
+// error has the tokens masked.
 func (c *Client) fetch(ctx context.Context, rawURL, accept string, limit int64, read *int64) (*response, error) {
+	r, err := c.fetchRaw(ctx, rawURL, accept, limit, read)
+	return r, c.redact(err)
+}
+
+func (c *Client) fetchRaw(ctx context.Context, rawURL, accept string, limit int64, read *int64) (*response, error) {
 	if err := c.budget.take(); err != nil {
 		return nil, err
 	}
@@ -224,7 +270,7 @@ func (c *Client) fetch(ctx context.Context, rawURL, accept string, limit int64, 
 	req.Header.Set("Accept", accept)
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	req.Header.Set("User-Agent", "kestrelynx")
-	if a := c.auth(); a != "" {
+	if a := c.auth(c.ownerOf(rawURL)); a != "" {
 		req.Header.Set("Authorization", a)
 	}
 	resp, err := c.http.Do(req)
@@ -297,6 +343,21 @@ func rateLimited(h http.Header, now time.Time) *RateLimitedError {
 
 func (c *Client) repoURL(repo Repo, suffix string) string {
 	return c.base + "/repos/" + url.PathEscape(repo.Owner) + "/" + url.PathEscape(repo.Name) + suffix
+}
+
+// ownerOf returns the owner of the repository a request URL made by repoURL
+// addresses, or "" for any other URL.
+func (c *Client) ownerOf(rawURL string) string {
+	rest, ok := strings.CutPrefix(rawURL, c.base+"/repos/")
+	if !ok {
+		return ""
+	}
+	seg, _, _ := strings.Cut(rest, "/")
+	owner, err := url.PathUnescape(seg)
+	if err != nil {
+		return ""
+	}
+	return owner
 }
 
 func escapePath(p string) string {

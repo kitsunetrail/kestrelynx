@@ -42,6 +42,10 @@ func ParseRepo(s string) (Repo, error) {
 	return Repo{Owner: owner, Name: name}, nil
 }
 
+// ValidOwner reports whether s can be the name of a GitHub user or
+// organization.
+func ValidOwner(s string) bool { return validOwner(s) }
+
 func validOwner(s string) bool {
 	if s == "" || len(s) > maxOwnerLen || s[0] == '-' || s[len(s)-1] == '-' || strings.Contains(s, "--") {
 		return false

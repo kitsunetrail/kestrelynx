@@ -65,9 +65,11 @@ func ParseKubernetesWorkloadKey(key string) (KubernetesWorkload, error) {
 // against each other. kubernetes says which adapter the keys are for: the
 // Compose form with Docker, the Kubernetes form otherwise. A Compose mapping
 // belongs to Docker, a manifest mapping to Kubernetes; dependency and
-// Dockerfile mappings to both. The checks are:
-//   - a workload has at most one entry of each source, and at most one of
-//     Compose and Manifest, since two places would decide its image tag;
+// Dockerfile mappings to both. A mapping sets one or more sources that share
+// its repository and branch. The checks are:
+//   - a workload has each source at most once over all its mappings, and at
+//     most one of Compose, Manifest, Kustomize and Helm values, since two
+//     places would decide its image tag;
 //   - a manifest object of a namespace is edited on behalf of one workload
 //     container only (mappings that differ in namespace are told apart here;
 //     a document without a namespace that two of them resolve to is refused
@@ -126,18 +128,20 @@ func validateMappings(ms []RemediationMapping, kubernetes bool) error {
 		if !github.ValidBranch(m.BaseBranch) {
 			return fmt.Errorf("config: %s.base_branch %q is not a valid branch name", at, m.BaseBranch)
 		}
-		set := 0
-		for _, present := range []bool{m.Compose != nil, m.Manifest != nil, m.Kustomize != nil, m.HelmValues != nil, m.Dependencies != nil, m.Dockerfile != nil} {
+		tagSources := 0
+		for _, present := range []bool{m.Compose != nil, m.Manifest != nil, m.Kustomize != nil, m.HelmValues != nil} {
 			if present {
-				set++
+				tagSources++
 			}
 		}
-		if set != 1 {
-			return fmt.Errorf("config: %s must set exactly one of compose, manifest, kustomize, helm_values, dependencies and dockerfile", at)
+		if tagSources == 0 && m.Dependencies == nil && m.Dockerfile == nil {
+			return fmt.Errorf("config: %s must set at least one of compose, manifest, kustomize, helm_values, dependencies and dockerfile", at)
+		}
+		if tagSources > 1 {
+			return fmt.Errorf("config: %s sets more than one of compose, manifest, kustomize and helm_values; each of them decides the image tag, so a mapping sets one of them at most", at)
 		}
 		repoKey := strings.ToLower(repo.String())
-		switch {
-		case m.Compose != nil:
+		if m.Compose != nil {
 			if strings.HasPrefix(m.Workload, inventory.ContainerKeyPrefix) {
 				return fmt.Errorf("config: %s sets a compose mapping for workload %q, a container that does not belong to a Compose project and so has no Compose file; for a Compose service use its compose/<project>/<service> key", at, m.Workload)
 			}
@@ -157,7 +161,8 @@ func validateMappings(ms []RemediationMapping, kubernetes bool) error {
 				return fmt.Errorf("config: %s maps service %q of %s in %s, already mapped by remediation.mappings[%d] for another workload", at, m.Compose.Service, m.Compose.Path, m.Repository, j)
 			}
 			composes[ck] = i
-		case m.Manifest != nil:
+		}
+		if m.Manifest != nil {
 			if !github.ValidPath(m.Manifest.Path, false) {
 				return fmt.Errorf("config: %s.manifest.path %q must be a normalized path inside the repository (no leading /, no ./ or .., no backslashes)", at, m.Manifest.Path)
 			}
@@ -189,15 +194,18 @@ func validateMappings(ms []RemediationMapping, kubernetes bool) error {
 			if err := editPoints.add(at, m.Workload, nil, editPoint{kind: "manifest", repo: repoKey, path: m.Manifest.Path, item: wantKind + "/" + kw.Namespace + "/" + objName + "/" + kw.Container}); err != nil {
 				return err
 			}
-		case m.Kustomize != nil:
+		}
+		if m.Kustomize != nil {
 			if err := validateKustomize(at, m, repoKey, kw, routes, i, tagRoutes, editPoints, kustBranch); err != nil {
 				return err
 			}
-		case m.HelmValues != nil:
+		}
+		if m.HelmValues != nil {
 			if err := validateHelmValues(at, m, repoKey, routes, i, tagRoutes, editPoints, kustBranch); err != nil {
 				return err
 			}
-		case m.Dockerfile != nil:
+		}
+		if m.Dockerfile != nil {
 			if !github.ValidPath(m.Dockerfile.Path, false) {
 				return fmt.Errorf("config: %s.dockerfile.path %q must be a normalized path inside the repository (no leading /, no ./ or .., no backslashes)", at, m.Dockerfile.Path)
 			}
@@ -217,7 +225,8 @@ func validateMappings(ms []RemediationMapping, kubernetes bool) error {
 				dockerfiles[fk] = i
 				dockerfileBranch[fk] = m.BaseBranch
 			}
-		default:
+		}
+		if m.Dependencies != nil {
 			if !github.ValidPath(m.Dependencies.Directory, true) {
 				return fmt.Errorf("config: %s.dependencies.directory %q must be \".\" or a normalized path inside the repository (no leading /, no ./ or .., no backslashes)", at, m.Dependencies.Directory)
 			}

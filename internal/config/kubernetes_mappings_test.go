@@ -149,7 +149,6 @@ func TestParse_ManifestMappingsRejected(t *testing.T) {
 		"repeated":                    {k8sMapping("deployment/shop/web/app", manifestSource) + k8sMapping("deployment/shop/web/app", manifestSource), "repeats the manifest mapping"},
 		"same object, same namespace": {k8sMapping("deployment/shop/web/app", manifestSource) + k8sMapping("deployment/shop/web2/app", "      manifest:\n        path: apps/web/deployment.yaml\n        object:\n          name: web\n"), "already mapped"},
 		"unknown key":                 {k8sMapping("deployment/shop/web/app", "      manifest:\n        path: web.yaml\n        affects: []\n"), "affects"},
-		"two sources at once":         {k8sMapping("deployment/shop/web/app", manifestSource+depSource), "exactly one"},
 	} {
 		_, err := Parse([]byte(minimal + k8sHeader + tc.mapping))
 		if err == nil || !strings.Contains(err.Error(), tc.want) {

@@ -178,9 +178,10 @@ See [Credential destinations](outbound-communication.md#credential-destinations)
 | --- | --- | --- |
 | `remediation.mappings` | `[]` | Map running Compose or Kubernetes workloads, or Docker containers that do not use Compose, to their GitHub source files. |
 
-Each entry sets `workload`, `repository`, and `base_branch`, plus exactly one source type.
+Each entry sets `workload`, `repository`, and `base_branch`, plus one or more source types from `dockerfile`, `dependencies`, `compose`, `manifest`, `kustomize`, and `helm_values`.
+Sources within an entry share that entry's `repository` and `base_branch`.
 
-- `container/<name>` is available only in Docker mode and only for `dockerfile` or `dependencies` mappings
+- `container/<name>` is available only in Docker mode and only for mappings specifying `dockerfile`, `dependencies`, or both
 - The name is the `NAMES` value shown by `docker ps`, assigned with `docker run --name`; it is case-sensitive and must be 2–253 bytes matching `[a-zA-Z0-9][a-zA-Z0-9_.-]+`
 - Combining `container/<name>` with a `compose` mapping causes a configuration error that directs you to use `compose/<project>/<service>`
 - Specifying `container/<name>` in Kubernetes mode causes a configuration error
@@ -209,7 +210,11 @@ When remediation plans are enabled and a mapping's namespace is outside `kuberne
 | `dependencies.directory` | Required for dependency-file mappings; dependency directory, with `.` representing the repository root. |
 
 - Paths must be normalized within the repository, without a leading `/`, `./`, `..`, or backslashes
-- A workload can have one mapping of each source type in separate entries, but cannot combine `manifest`, `kustomize`, and `helm_values`
+- An entry with no sources causes a configuration error
+- Each entry can specify at most one of the source types that determine the image tag: `compose`, `manifest`, `kustomize`, or `helm_values`
+- Each source type can be specified only once per workload across all entries
+- A workload cannot combine `manifest`, `kustomize`, and `helm_values`, even in separate entries
+- Sources in different repositories or on different branches must use separate entries with the same `workload`
 - Shared dependency directories or Dockerfiles must use the same base branch
 - A service in the same Compose file in the same repository must not be mapped to multiple workloads
 - A container of an object with the same kind, namespace, and name in the same manifest and repository must not be mapped to multiple workloads

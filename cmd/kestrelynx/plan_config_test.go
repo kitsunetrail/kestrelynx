@@ -247,3 +247,39 @@ func TestTrivyDockerHost(t *testing.T) {
 		t.Errorf("docker host on Kubernetes = %q, want none", got)
 	}
 }
+
+func TestBuildPlanConfigSplitsAMappingWithSeveralSources(t *testing.T) {
+	cfg := config.Config{
+		State: config.StateConfig{Path: "/var/lib/kestrelynx/state.json"},
+		Remediation: config.RemediationConfig{
+			Enabled: true, StorageDir: "/data/remediation",
+			PullRequests: config.RemediationPullRequestsConfig{Enabled: true},
+			GitHub:       config.RemediationGitHubConfig{Token: "ghp_exampletoken"},
+			Limits:       config.RemediationLimits{NewPRsPerCycle: 2, OpenPRs: 5},
+			Mappings: []config.RemediationMapping{{
+				Workload: "compose/shop/web", Repository: "ex/app", BaseBranch: "release",
+				Compose:      &config.RemediationComposeSource{Path: "c.yml", Service: "web"},
+				Dockerfile:   &config.RemediationDockerfileSource{Path: "Dockerfile", Target: "runtime"},
+				Dependencies: &config.RemediationDependenciesSource{Directory: "."},
+			}},
+		},
+	}
+	pc := buildPlanConfig(cfg)
+	if len(pc.Composes) != 1 || len(pc.Dockerfiles) != 1 || len(pc.Dependencies) != 1 {
+		t.Fatalf("plan config = %+v, want one mapping of each source", pc)
+	}
+	wantDF := remediation.DockerfileMapping{Workload: "compose/shop/web", Project: "shop", Service: "web", Repository: "ex/app", BaseBranch: "release", Path: "Dockerfile", Target: "runtime"}
+	if pc.Dockerfiles[0] != wantDF {
+		t.Errorf("Dockerfile mapping = %+v, want %+v", pc.Dockerfiles[0], wantDF)
+	}
+	wantDep := remediation.DependencyMapping{Workload: "compose/shop/web", Project: "shop", Service: "web", Repository: "ex/app", BaseBranch: "release", Directory: "."}
+	if pc.Dependencies[0] != wantDep {
+		t.Errorf("dependencies mapping = %+v, want %+v", pc.Dependencies[0], wantDep)
+	}
+	if pc.Composes[0].Path != "c.yml" || pc.Composes[0].Repository != "ex/app" {
+		t.Errorf("compose mapping = %+v", pc.Composes[0])
+	}
+	if pc.PullRequests == nil || len(pc.PullRequests.Mappings) != 1 || len(pc.PullRequests.Repositories) != 1 {
+		t.Errorf("pull request config = %+v, want the compose mapping and its repository once", pc.PullRequests)
+	}
+}

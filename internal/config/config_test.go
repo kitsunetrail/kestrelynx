@@ -717,7 +717,6 @@ func TestParse_RemediationMappingInvalid(t *testing.T) {
 		"branch leading dash":    {mapping("compose/p/web", "ex/app", "-main", depsRoute)},
 		"branch with space":      {mapping("compose/p/web", "ex/app", "\"a b\"", depsRoute)},
 		"no route":               {mapping("compose/p/web", "ex/app", "main", "")},
-		"both routes":            {mapping("compose/p/web", "ex/app", "main", composeRoute+depsRoute)},
 		"compose no path":        {mapping("compose/p/web", "ex/app", "main", "      compose:\n        service: web\n")},
 		"compose no service":     {mapping("compose/p/web", "ex/app", "main", "      compose:\n        path: compose.yml\n")},
 		"compose root path":      {mapping("compose/p/web", "ex/app", "main", "      compose:\n        path: .\n        service: web\n")},
@@ -810,8 +809,6 @@ func TestParse_RemediationDockerfileMappingInvalid(t *testing.T) {
 		"target with space":   {mapping("compose/p/web", "ex/app", "main", df("        path: Dockerfile\n        target: \"a b\"\n"))},
 		"target with dollar":  {mapping("compose/p/web", "ex/app", "main", df("        path: Dockerfile\n        target: $T\n"))},
 		"target leading dash": {mapping("compose/p/web", "ex/app", "main", df("        path: Dockerfile\n        target: -x\n"))},
-		"with compose":        {mapping("compose/p/web", "ex/app", "main", composeRoute+dockerfileRoute)},
-		"with dependencies":   {mapping("compose/p/web", "ex/app", "main", depsRoute+dockerfileRoute)},
 		"duplicate dockerfile": {
 			mapping("compose/p/web", "ex/a", "main", dockerfileRoute),
 			mapping("compose/p/web", "ex/b", "main", dockerfileRoute),

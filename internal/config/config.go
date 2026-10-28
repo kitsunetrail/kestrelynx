@@ -338,8 +338,8 @@ func (s Secret) MarshalText() ([]byte, error) { return []byte(s.redacted()), nil
 func (s Secret) LogValue() slog.Value         { return slog.StringValue(s.redacted()) }
 
 // RemediationMapping ties a running workload to the repository that
-// holds its source. Exactly one of Compose, Manifest, Dependencies and
-// Dockerfile is set.
+// holds its source. At least one source is set, and at most one of Compose,
+// Manifest, Kustomize and HelmValues, the sources that decide the image tag.
 type RemediationMapping struct {
 	// Workload is the running workload: compose/<project>/<service> with the
 	// Docker adapter, <kind>/<namespace>/<name>/<container> with Kubernetes.

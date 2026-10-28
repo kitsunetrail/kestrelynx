@@ -61,7 +61,7 @@ func TestParse_HelmValuesMappingsRejected(t *testing.T) {
 		"affects: self":             {k8sMapping(web, helmSource(helmPath, "image", web)), "affects"},
 		"affects: duplicate":        {k8sMapping(web, helmSource(helmPath, "image", "job/shop/a/b", "job/shop/a/b")), "affects"},
 		"repeated":                  {k8sMapping(web, helmSource(helmPath, "image")) + k8sMapping(web, helmSource(helmPath, "image")), "repeats the helm_values mapping"},
-		"two sources at once":       {k8sMapping(web, helmSource(helmPath, "image")+manifestSource), "exactly one"},
+		"two sources at once":       {k8sMapping(web, helmSource(helmPath, "image")+manifestSource), "more than one"},
 		"unknown key":               {k8sMapping(web, "      helm_values:\n        path: "+helmPath+"\n        key: image\n        image: x\n"), "image"},
 		"helm_values and kustomize of one workload": {
 			k8sMapping(web, helmSource(helmPath, "image")) + k8sMapping(web, kustSource(kustPath, "api")), "already sets"},

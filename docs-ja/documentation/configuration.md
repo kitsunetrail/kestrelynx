@@ -178,9 +178,10 @@ tokenの送付先は[認証情報の送付範囲](outbound-communication.md#cred
 | --- | --- | --- |
 | `remediation.mappings` | `[]` | 稼働中のCompose・Kubernetesワークロード、Composeを使わないDockerコンテナとGitHub上のソースファイルを対応付けます。 |
 
-各項目に`workload`、`repository`、`base_branch`と、ちょうど1種類のソースを設定します。
+各項目に`workload`、`repository`、`base_branch`と、`dockerfile`・`dependencies`・`compose`・`manifest`・`kustomize`・`helm_values`から1種類以上のソースを設定します。
+同じ項目内のソースは、その項目の`repository`と`base_branch`を共有します。
 
-- `container/<名前>`はDockerモード専用で、`dockerfile`または`dependencies`の対応付けだけに使う
+- `container/<名前>`はDockerモード専用で、`dockerfile`・`dependencies`を単独または組み合わせて指定する対応付けだけに使う
 - 名前は`docker run --name`で指定した`docker ps`の`NAMES`の値で、`[a-zA-Z0-9][a-zA-Z0-9_.-]+`に一致する2〜253バイトとし、大文字・小文字を区別する
 - `container/<名前>`と`compose`の対応付けを組み合わせると、`compose/<project>/<service>`を案内する設定エラーになる
 - Kubernetesモードで`container/<名前>`を指定すると設定エラーになる
@@ -209,7 +210,11 @@ Kubernetesモードでは`manifest`・`kustomize`・`helm_values`・`dockerfile`
 | `dependencies.directory` | 依存ファイルの対応付けで必須のディレクトリで、`.`はリポジトリのルートです。 |
 
 - パスはリポジトリ内の正規化したパスとし、先頭の`/`、`./`、`..`、バックスラッシュを使わない
-- 同じワークロードには、ソースの種類ごとに1件ずつ、別の項目で対応付けるが、`manifest`・`kustomize`・`helm_values`は併用しない
+- ソースを1つも指定しない項目は設定エラーになる
+- イメージタグを決めるソースである`compose`・`manifest`・`kustomize`・`helm_values`は、1項目に1種類まで指定できる
+- 同じワークロードの同じ種類のソースは、全項目を通じて1件だけ指定できる
+- 同じワークロードでは、別の項目に分けても`manifest`・`kustomize`・`helm_values`を併用しない
+- リポジトリやブランチが異なるソースは、同じ`workload`の別の項目に分けて指定する
 - 共有する依存ディレクトリやDockerfileには同じbase branchを指定する
 - 同じリポジトリの同じComposeファイルのサービスを複数のワークロードに対応付けない
 - 同じリポジトリの同じマニフェスト内で、種類・名前空間・名前が同じオブジェクトの同じコンテナを複数のワークロードに対応付けない

@@ -65,7 +65,7 @@ func TestParse_KustomizeMappingsRejected(t *testing.T) {
 		"affects: self":            {k8sMapping(web, kustSource(kustPath, "api", web)), "affects"},
 		"affects: duplicate":       {k8sMapping(web, kustSource(kustPath, "api", "job/shop/a/b", "job/shop/a/b")), "affects"},
 		"repeated":                 {k8sMapping(web, kustSource(kustPath, "api")) + k8sMapping(web, kustSource(kustPath, "api")), "repeats the kustomize mapping"},
-		"two sources at once":      {k8sMapping(web, kustSource(kustPath, "api")+manifestSource), "exactly one"},
+		"two sources at once":      {k8sMapping(web, kustSource(kustPath, "api")+manifestSource), "more than one"},
 		"unknown key":              {k8sMapping(web, "      kustomize:\n        path: "+kustPath+"\n        image: api\n        key: x\n"), "key"},
 		"kustomize and manifest of one workload": {
 			k8sMapping(web, kustSource(kustPath, "api")) + k8sMapping(web, manifestSource), "already sets",

@@ -236,13 +236,21 @@ runtime:
 #   # directory inside the supplied state volume.
 #   storage_dir: /var/lib/kestrelynx/remediation
 #   # Where each running workload's source lives. Read and validated at
-#   # startup. Each entry sets exactly one of compose (the Compose file and
-#   # service that deploy it), dependencies (the directory holding its lockfiles),
-#   # dockerfile (the Dockerfile that builds its image), or manifest (the Kubernetes
-#   # manifest file), kustomize (an images entry in a kustomization file), or
-#   # helm_values (an image key in a Helm values file). Paths are
-#   # repository-relative and normalized; "." is the repository root. Example
-#   # names only.
+#   # startup. Each entry sets one or more source types: compose (the Compose
+#   # file and service that deploy it), dependencies (the directory holding
+#   # its lockfiles), dockerfile (the Dockerfile that builds its image),
+#   # manifest (the Kubernetes manifest file), kustomize (an images entry in
+#   # a kustomization file), or helm_values (an image key in a Helm values file).
+#   # Sources within an entry share its repository and base_branch.
+#   # An entry with no sources is a configuration error.
+#   # Each entry sets at most one of compose, manifest, kustomize and helm_values,
+#   # since each of these determines the image tag.
+#   # Each source type can appear only once per workload across all entries.
+#   # A workload cannot combine manifest, kustomize and helm_values, even in
+#   # separate entries. Sources in different repositories or on different
+#   # branches must use separate entries with the same workload.
+#   # Paths are repository-relative and normalized; "." is the repository root.
+#   # Example names only.
 #   #
 #   # Docker workload keys use compose/<project>/<service> or container/<name>
 #   # for containers started outside Compose. Kubernetes keys use
@@ -465,14 +473,13 @@ runtime:
 #   #
 #   # KestreLynx trusts this mapping and does not verify the source repository.
 #   # Do not reuse the name for another application: PRs may target the wrong repository.
+#   # The Dockerfile and dependency directory share one repository and branch.
+#   # If either differs, use separate entries with the same workload.
 #     - workload: container/example-api
 #       repository: example/application
 #       base_branch: main
 #       dockerfile:
 #         path: Dockerfile
-#     - workload: container/example-api
-#       repository: example/application
-#       base_branch: main
 #       dependencies:
 #         directory: .
 #   # Processing limits. Every value must be positive; work beyond a limit is

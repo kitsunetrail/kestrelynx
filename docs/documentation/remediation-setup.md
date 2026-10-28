@@ -91,7 +91,8 @@ In Docker mode, map containers started without Compose by name.
 3. Use `dockerfile` for base image updates or `dependencies` for language package updates
 4. Enable remediation plans with PR creation initially disabled
 
-This example maps the Dockerfile and dependency directory for `example-api` in separate entries.
+This example maps the Dockerfile and dependency directory for `example-api` in a single entry.
+For sources in different repositories or on different branches, use separate entries with the same `workload`.
 
 ```yaml
 remediation:
@@ -104,9 +105,6 @@ remediation:
       base_branch: main
       dockerfile:
         path: Dockerfile
-    - workload: container/example-api
-      repository: example/application
-      base_branch: main
       dependencies:
         directory: .
 ```

@@ -91,7 +91,8 @@ Composeを使わずに起動したコンテナは、Dockerモードで名前か�
 3. ベースイメージの更新には`dockerfile`、言語パッケージの更新には`dependencies`を指定する
 4. 修正計画を有効にし、最初はPR作成を無効にした状態で設定する
 
-`example-api`のDockerfileと依存ディレクトリを、別々の項目で対応付ける例です。
+`example-api`のDockerfileと依存ディレクトリを、1つの項目で対応付ける例です。
+リポジトリやブランチが異なる場合は、同じ`workload`の別の項目に分けて指定します。
 
 ```yaml
 remediation:
@@ -104,9 +105,6 @@ remediation:
       base_branch: main
       dockerfile:
         path: Dockerfile
-    - workload: container/example-api
-      repository: example/application
-      base_branch: main
       dependencies:
         directory: .
 ```

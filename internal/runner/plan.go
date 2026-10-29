@@ -390,6 +390,24 @@ func (r Runner) buildPlan(ctx context.Context, cyc planCycle, report analyze.Rep
 		})
 	}
 
+	// Newer series are checked last before the plan is saved, and leave a
+	// share of the cycle's time and registry requests to the pull request
+	// stage.
+	ns := planner.CheckNewerSeries(ctx, &plan, remediation.NewerSeriesOptions{
+		ReserveTime: pc.CycleTimeout / 3, ReserveRequests: pc.MaxRegistryRequests / 4,
+		IntelFor: func(stage context.Context) remediation.IntelFunc { return r.planIntel(stage, report) },
+	})
+	if ns.Items > 0 {
+		log.Info("newer series checked",
+			"items", ns.Items,
+			"resolving", ns.Resolving,
+			"not_checked", ns.NotChecked,
+			"candidate_scans", ns.CandidateScans,
+			"baseline_rescans", ns.BaselineRescans,
+			"tag_pages", ns.TagPages,
+			"registry_requests", ns.RegistryRequests)
+	}
+
 	info := &notify.PlanInfo{Plan: &plan}
 	if pc.Plans != nil {
 		if err := pc.Plans.Save(plan); err != nil {

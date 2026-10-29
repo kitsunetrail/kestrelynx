@@ -716,6 +716,42 @@ func TestBudget(t *testing.T) {
 	}
 }
 
+func TestBudgetReserveKeepsRequestsForLater(t *testing.T) {
+	f := newFakeRegistry(t)
+	f.route("/v2/team/app/tags/list", func(w http.ResponseWriter, r *http.Request) { tagPage([]string{"1"}, "", w) })
+
+	// Challenge + token + retry = 3 requests; with 5 and 3 kept, the retry
+	// finds only the kept ones left.
+	b := NewBudget(5)
+	b.Reserve(3)
+	_, err := f.client(Options{Budget: b}).ListTags(context.Background(), f.repo("team/app"))
+	if !errors.Is(err, ErrBudgetReserved) || errors.Is(err, ErrBudgetExhausted) {
+		t.Fatalf("err = %v, want ErrBudgetReserved", err)
+	}
+	if b.Used() != 2 || b.Remaining() != 3 || len(f.hits()) != 2 {
+		t.Errorf("used=%d remaining=%d hits=%d; the kept requests must not be spent", b.Used(), b.Remaining(), len(f.hits()))
+	}
+
+	// Once nothing is kept, the rest is there for the work after.
+	b.Reserve(0)
+	if _, err := f.client(Options{Budget: b}).ListTags(context.Background(), f.repo("team/app")); err != nil {
+		t.Fatal(err)
+	}
+	if b.Remaining() != 0 {
+		t.Errorf("remaining = %d", b.Remaining())
+	}
+	// An exhausted budget says so, whatever is kept.
+	b.Reserve(2)
+	if err := b.take(); !errors.Is(err, ErrBudgetExhausted) {
+		t.Errorf("err = %v, want ErrBudgetExhausted", err)
+	}
+	var none *Budget
+	none.Reserve(5)
+	if err := none.take(); err != nil {
+		t.Errorf("a nil budget refused: %v", err)
+	}
+}
+
 func TestBudgetCountsResolveRequests(t *testing.T) {
 	f := newFakeRegistry(t)
 	f.serveIndex("team/app", mediaOCIIndex, mediaOCIManifest, linuxAMD64)

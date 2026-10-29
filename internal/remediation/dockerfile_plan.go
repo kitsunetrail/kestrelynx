@@ -153,6 +153,10 @@ type DockerfileEntity struct {
 	// image's base: what the current base's runtime versions would do to the
 	// running image's runtime findings.
 	RebuildRuntimes []RuntimeRebuild `json:"rebuild_runtimes,omitempty"`
+
+	// NewerSeries is this running image's part of the item's check of newer
+	// series of the base.
+	NewerSeries *NewerSeries `json:"newer_series,omitempty"`
 }
 
 // DockerfileCounts summarizes an item's comparison across its running
@@ -193,6 +197,12 @@ type DockerfileItem struct {
 	// base is not built or scanned, and the instructions after the FROM can
 	// change what the comparison of the bases shows.
 	FinalImageVerified bool `json:"final_image_verified"`
+
+	// NewerSeries is what checking newer series of the pinned base found
+	// over all the running images, set when the base's own series gave no
+	// candidate that resolves their targets. Its candidates carry no
+	// comparison; each entity holds its own.
+	NewerSeries *NewerSeries `json:"newer_series,omitempty"`
 }
 
 // CountDockerfile returns how many Dockerfile items are in category c.

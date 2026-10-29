@@ -99,6 +99,8 @@ type planRegistry struct {
 	// registry would.
 	block       bool
 	hadDeadline bool
+	// tags, when set, replaces the listing.
+	tags []string
 }
 
 func (r *planRegistry) ListTagsUpTo(ctx context.Context, _ string, _ int) (registry.TagList, error) {
@@ -106,6 +108,9 @@ func (r *planRegistry) ListTagsUpTo(ctx context.Context, _ string, _ int) (regis
 	if r.block {
 		<-ctx.Done()
 		return registry.TagList{}, ctx.Err()
+	}
+	if r.tags != nil {
+		return registry.TagList{Tags: r.tags, Pages: 1}, nil
 	}
 	return registry.TagList{Tags: []string{"1.25.3", "1.25.4"}, Pages: 1}, nil
 }
@@ -549,9 +554,20 @@ type kevIntel struct {
 	fakeIntel
 	kev map[string]bool
 	err error
+	// block makes KEVSet wait for its context to end, as a fetch from an
+	// unreachable source would.
+	block bool
+	calls int
 }
 
-func (k *kevIntel) KEVSet(context.Context) (map[string]bool, error) { return k.kev, k.err }
+func (k *kevIntel) KEVSet(ctx context.Context) (map[string]bool, error) {
+	k.calls++
+	if k.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return k.kev, k.err
+}
 
 // A candidate that brings in a KEV-listed vulnerability the cycle never saw
 // is a manual item with that reason, and Slack says so.
@@ -671,5 +687,53 @@ func TestPlan_RegistryClientIsMadeBeforeTheScansOncePerCycle(t *testing.T) {
 	}
 	if h.reg.budget != budgets[1] {
 		t.Error("the second cycle's plan did not use the second cycle's budget")
+	}
+}
+
+// A pinned image whose series has no newer patch is checked against a newer
+// series before the plan is saved and sent; the item's own outcome stays.
+func TestPlan_NewerSeriesCheckedBeforeTheSave(t *testing.T) {
+	h := newPlanHarness(osFinding("CVE-1"))
+	h.reg.tags = []string{"1.25.3", "1.26.0"}
+	h.run(t)
+	if len(h.plans.saved) != 1 {
+		t.Fatalf("plan saves = %d", len(h.plans.saved))
+	}
+	it := h.plans.saved[0].Items[0]
+	if it.Category != remediation.CategoryNoCandidate || it.Reason != remediation.ReasonNoNewerTag || it.Candidate != nil {
+		t.Errorf("item = %s/%s candidate %+v", it.Category, it.Reason, it.Candidate)
+	}
+	ns := it.NewerSeries
+	if ns == nil || ns.Status != remediation.NewerSeriesResolves || ns.Shown != "1.26.0" {
+		t.Fatalf("newer series = %+v", ns)
+	}
+	if h.plans.saved[0].Usage.CandidateScans != 1 || h.notif.msg.Plan.Plan.Items[0].NewerSeries == nil {
+		t.Errorf("usage = %+v; the sent plan must carry the check", h.plans.saved[0].Usage)
+	}
+}
+
+// A KEV catalog fetch while newer series are checked stops at the check's
+// own deadline, leaving the rest of the cycle's time to pull requests.
+func TestPlan_NewerSeriesKEVLookupStopsAtTheCheckDeadline(t *testing.T) {
+	h := newPlanHarness(osFinding("CVE-1"))
+	h.reg.tags = []string{"1.25.3", "1.26.0"}
+	h.scn.candidate = []scanner.Finding{{
+		Class: scanner.ClassOS, Type: "debian", Target: "web (debian 12)", Package: "newlib",
+		InstalledVer: "1", Status: scanner.StatusAffected, Severity: scanner.SeverityHigh, VulnID: "CVE-NEW",
+	}}
+	kev := &kevIntel{fakeIntel: fakeIntel{fresh: intel.Freshness{KEVOK: true, EPSSOK: true}}, block: true}
+	h.r.Intel = kev
+	h.r.Plan.CycleTimeout = 900 * time.Millisecond
+	start := time.Now()
+	h.run(t)
+	if took := time.Since(start); took > 800*time.Millisecond {
+		t.Errorf("the cycle took %v; the lookup must end at the check's deadline, a third of the timeout before the cycle's", took)
+	}
+	if kev.calls == 0 {
+		t.Fatal("the KEV catalog was not looked up; the test needs the lookup")
+	}
+	ns := h.plans.saved[0].Items[0].NewerSeries
+	if ns == nil || ns.Status != remediation.NewerSeriesNotChecked || ns.Reason != remediation.ReasonNewerSeriesReserved {
+		t.Errorf("newer series = %+v", ns)
 	}
 }

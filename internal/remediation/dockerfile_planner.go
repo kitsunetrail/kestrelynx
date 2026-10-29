@@ -804,10 +804,10 @@ func (r *run) compareBase(ref ImageRef, tag string, platform inventory.Platform,
 	}
 	c.baseScan, c.candScan = baseScan.id, candScan.id
 	if err := r.ctx.Err(); err != nil {
-		return fail(CategoryDeferred, ReasonCycleDeadline, err.Error())
+		return fail(CategoryDeferred, r.deadlineReason(), err.Error())
 	}
 	vr := Compare(baseScan.rec, candScan.rec).ApplyCoverage(targets, baseScan.rec, candScan.rec)
-	dec := Decide(targets, vr, r.p.cfg.Intel)
+	dec := Decide(targets, vr, r.intel())
 	c.vr, c.dec = &vr, &dec
 	return c
 }

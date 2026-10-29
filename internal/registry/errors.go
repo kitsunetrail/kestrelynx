@@ -20,6 +20,9 @@ var (
 	// ErrBudgetExhausted means the caller's request budget is used up; no
 	// request was sent.
 	ErrBudgetExhausted = errors.New("registry: request budget exhausted")
+	// ErrBudgetReserved means the requests left in the budget are kept for
+	// later work (see Budget.Reserve); no request was sent.
+	ErrBudgetReserved = errors.New("registry: requests left are kept for later work")
 	// ErrRateLimited means the registry answered 429. Use errors.As with
 	// *RateLimitedError to read the Retry-After.
 	ErrRateLimited = errors.New("registry: rate limited")

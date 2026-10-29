@@ -98,6 +98,9 @@ type Config struct {
 // check before each scan as well.
 type Planner struct {
 	cfg Config
+	// last is the pass of the last Plan call, which CheckNewerSeries
+	// continues.
+	last *run
 }
 
 // NewPlanner validates cfg and returns a Planner.
@@ -141,6 +144,13 @@ type run struct {
 	p    *Planner
 	ctx  context.Context
 	plan Plan
+	// outer is the context ctx was derived from when a stage runs with an
+	// earlier deadline of its own; nil during Plan.
+	outer  context.Context
+	inputs []ImageInput
+	// stageIntel, when set, replaces Config.Intel in the comparisons of a
+	// stage: it looks up what they introduce within the stage's deadline.
+	stageIntel IntelFunc
 
 	tags     map[string]tagEntry
 	resolved map[string]resolveEntry
@@ -198,6 +208,7 @@ func (p *Planner) Plan(ctx context.Context, inputs []ImageInput) Plan {
 	r := &run{
 		p:        p,
 		ctx:      ctx,
+		inputs:   inputs,
 		tags:     map[string]tagEntry{},
 		tagUsed:  map[string]int{},
 		fullTags: map[string]tagEntry{},
@@ -254,6 +265,7 @@ func (p *Planner) Plan(ctx context.Context, inputs []ImageInput) Plan {
 	r.languagePart(inputs)
 	r.dockerfilePart(inputs)
 	r.plan.Usage.RegistryRequests = p.cfg.Budget.Used() - startUsed
+	p.last = r
 	return r.plan
 }
 
@@ -677,12 +689,15 @@ func (r *run) registryOutcome(repo string, err error) planOutcome {
 	switch {
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded),
 		errors.Is(err, registry.ErrTimeout) && r.ctx.Err() != nil:
-		r.halted = &halt{ReasonCycleDeadline, err.Error()}
+		r.halted = &halt{r.deadlineReason(), err.Error()}
 		return planOutcome{CategoryDeferred, r.halted.reason, r.halted.detail}
 	case errors.Is(err, registry.ErrTimeout):
 		return planOutcome{CategoryDeferred, ReasonRegistryTimeout, err.Error()}
 	case errors.Is(err, registry.ErrBudgetExhausted):
 		r.halted = &halt{ReasonRegistryBudget, "registry request budget exhausted"}
+		return planOutcome{CategoryDeferred, r.halted.reason, r.halted.detail}
+	case errors.Is(err, registry.ErrBudgetReserved):
+		r.halted = &halt{ReasonNewerSeriesReserved, "the registry requests left are kept for the pull request stage"}
 		return planOutcome{CategoryDeferred, r.halted.reason, r.halted.detail}
 	case errors.As(err, &limited):
 		r.halted = &halt{ReasonRateLimited, err.Error()}
@@ -706,6 +721,23 @@ func (r *run) registryOutcome(repo string, err error) planOutcome {
 		return planOutcome{CategoryNotComparable, ReasonPlatformMismatch, err.Error()}
 	}
 	return planOutcome{CategoryFailed, ReasonRegistryError, err.Error()}
+}
+
+// intel is what the comparisons look introduced vulnerabilities up in.
+func (r *run) intel() IntelFunc {
+	if r.stageIntel != nil {
+		return r.stageIntel
+	}
+	return r.p.cfg.Intel
+}
+
+// deadlineReason names the deadline that ended r.ctx: the cycle's, or the
+// earlier one of a stage that leaves time to the work after it.
+func (r *run) deadlineReason() Reason {
+	if r.outer != nil && r.outer.Err() == nil {
+		return ReasonNewerSeriesReserved
+	}
+	return ReasonCycleDeadline
 }
 
 // isOfficialImage reports whether repo is a Docker Official Image repository,
@@ -781,11 +813,11 @@ func (r *run) compareImage(in ImageInput, repo, tag string, platform inventory.P
 	}
 	c := imageComparison{baseScan: base.id, candScan: cand.id}
 	if err := r.ctx.Err(); err != nil {
-		c.out = &planOutcome{CategoryDeferred, ReasonCycleDeadline, err.Error()}
+		c.out = &planOutcome{CategoryDeferred, r.deadlineReason(), err.Error()}
 		return c
 	}
 	vr := Compare(base.rec, cand.rec).ApplyCoverage(targets, base.rec, cand.rec)
-	dec := Decide(targets, vr, r.p.cfg.Intel)
+	dec := Decide(targets, vr, r.intel())
 	c.vr, c.dec = &vr, &dec
 	return c
 }

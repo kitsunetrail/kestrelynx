@@ -60,6 +60,9 @@ const (
 	// ReasonNewerSeriesTagListIncomplete: the whole tag listing, which newer
 	// series are chosen from, was cut short.
 	ReasonNewerSeriesTagListIncomplete Reason = "newer_series_tag_list_incomplete"
+	// ReasonNewerSeriesReserved: checking newer series stopped to leave time
+	// and registry requests to the pull request stage.
+	ReasonNewerSeriesReserved Reason = "newer_series_reserved"
 	// ReasonRegistryTimeout: one registry request did not finish in its own
 	// time limit. Only the images it was for are deferred; the cycle goes on.
 	ReasonRegistryTimeout Reason = "registry_timeout"
@@ -215,6 +218,11 @@ type Item struct {
 	// image, as far as the markers on their objects show them (Kubernetes
 	// only).
 	Management []WorkloadChains `json:"management,omitempty"`
+
+	// NewerSeries is what checking newer series of a pinned tag found, set
+	// when the item's own series gave no candidate that resolves its
+	// targets. It changes nothing else in the item.
+	NewerSeries *NewerSeries `json:"newer_series,omitempty"`
 }
 
 // Plan is the outcome of one planning pass; Items follow the order the

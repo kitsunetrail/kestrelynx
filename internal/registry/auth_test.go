@@ -316,7 +316,7 @@ func TestRequestTimeoutIsNotAContextError(t *testing.T) {
 		case <-r.Context().Done():
 		}
 	})
-	c := authClient(reg, nil, Options{Timeout: 50 * time.Millisecond})
+	c := authClient(reg, nil, Options{Timeout: 50 * time.Millisecond, TagTimeout: 50 * time.Millisecond})
 	_, err := c.ListTagsAfter(context.Background(), reg.host()+"/a/b", "", 10)
 	if !errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("err = %v, want ErrTimeout and not a context deadline", err)

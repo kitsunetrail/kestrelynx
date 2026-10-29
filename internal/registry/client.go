@@ -30,15 +30,22 @@ import (
 )
 
 const (
-	defaultTimeout          = 30 * time.Second
+	defaultTimeout = 30 * time.Second
+	// defaultTagTimeout is longer: a registry of a repository with tens of
+	// thousands of tags may take most of a minute to answer one tag listing
+	// request, whatever the page size.
+	defaultTagTimeout       = 2 * time.Minute
 	defaultMaxManifestBytes = 4 << 20
 	defaultMaxTagPageBytes  = 2 << 20
 	defaultMaxTokenBytes    = 64 << 10
 	defaultMaxConfigBytes   = 4 << 20
 	defaultMaxTagPages      = 20
-	defaultTagPageSize      = 1000
-	maxErrorBodyBytes       = 64 << 10
-	maxRedirects            = 3
+	defaultTagPageSize      = 10000
+	// fallbackTagPageSize is the page size used again when a registry refuses
+	// a larger one.
+	fallbackTagPageSize = 1000
+	maxErrorBodyBytes   = 64 << 10
+	maxRedirects        = 3
 	// defaultTokenTTL applies when a token response gives no expires_in; the
 	// token specification says clients assume 60 seconds then.
 	defaultTokenTTL = 60 * time.Second
@@ -55,6 +62,8 @@ type Options struct {
 	Budget *Budget
 	// Timeout bounds each HTTP request, body read included.
 	Timeout time.Duration
+	// TagTimeout bounds each tag listing request instead of Timeout.
+	TagTimeout time.Duration
 	// Auth holds credentials by registry host. A host without one is reached
 	// anonymously. Nil means no credentials at all.
 	Auth *regauth.Store
@@ -105,6 +114,9 @@ type cachedToken struct {
 func New(o Options) *Client {
 	if o.Timeout <= 0 {
 		o.Timeout = defaultTimeout
+	}
+	if o.TagTimeout <= 0 {
+		o.TagTimeout = defaultTagTimeout
 	}
 	if o.MaxManifestBytes <= 0 {
 		o.MaxManifestBytes = defaultMaxManifestBytes
@@ -274,13 +286,21 @@ type response struct {
 // returns the raw response. Successful responses over the limit are
 // ErrTooLarge; error bodies are truncated instead. sent is false only when
 // the budget refused the request, so nothing went out.
-func (c *Client) once(ctx context.Context, rawURL, accept, authz string, limit int64) (r *response, sent bool, err error) {
+func (c *Client) once(ctx context.Context, rawURL, accept, authz string, limit int64, timeout time.Duration) (r *response, sent bool, err error) {
 	if err := c.budget.take(); err != nil {
 		return nil, false, err
 	}
-	r, err = c.send(ctx, rawURL, accept, authz, limit)
+	r, err = c.send(ctx, rawURL, accept, authz, limit, timeout)
 	return r, true, err
 }
+
+// tokenStepError is a failure to get the token a challenge asked for, kept
+// apart from what the registry answered to the request itself. Its text and
+// the errors it wraps are those of the failure.
+type tokenStepError struct{ err error }
+
+func (e *tokenStepError) Error() string { return e.err.Error() }
+func (e *tokenStepError) Unwrap() error { return e.err }
 
 // requestErr wraps a failed request. When only the request's own deadline
 // passed, and the caller's context is still live, the error is ErrTimeout;
@@ -293,10 +313,10 @@ func requestErr(parent, req context.Context, what string, err error) error {
 	return fmt.Errorf("registry: %s: %w", what, err)
 }
 
-// send performs one GET. authz is the complete Authorization header value,
-// "" for none.
-func (c *Client) send(parent context.Context, rawURL, accept, authz string, limit int64) (*response, error) {
-	ctx, cancel := context.WithTimeout(parent, c.opts.Timeout)
+// send performs one GET within timeout. authz is the complete Authorization
+// header value, "" for none.
+func (c *Client) send(parent context.Context, rawURL, accept, authz string, limit int64, timeout time.Duration) (*response, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -379,7 +399,7 @@ func parseRetryAfter(v string, now time.Time) time.Duration {
 // get fetches rawURL from the registry of t, answering an authentication
 // challenge when there is one (see getSent).
 func (c *Client) get(ctx context.Context, t target, rawURL, accept string, limit int64) (*response, error) {
-	r, _, err := c.getSent(ctx, t, rawURL, accept, limit)
+	r, _, err := c.getSent(ctx, t, rawURL, accept, limit, c.opts.Timeout)
 	return r, err
 }
 
@@ -390,8 +410,9 @@ func (c *Client) get(ctx context.Context, t target, rawURL, accept string, limit
 // A cached token, or a Basic credential the host asked for before, is tried
 // first. A Bearer challenge is answered with one token request; a Basic
 // challenge is answered with the configured credential of t's host, if there
-// is one. At most one challenge is answered per call.
-func (c *Client) getSent(ctx context.Context, t target, rawURL, accept string, limit int64) (resp *response, sent bool, err error) {
+// is one. At most one challenge is answered per call. timeout bounds each
+// request for rawURL; a token request has the ordinary timeout.
+func (c *Client) getSent(ctx context.Context, t target, rawURL, accept string, limit int64, timeout time.Duration) (resp *response, sent bool, err error) {
 	cred, hasCred := c.opts.Auth.For(t.host)
 	if hasCred {
 		// Whatever goes wrong, the text that is kept holds no part of the login.
@@ -400,7 +421,7 @@ func (c *Client) getSent(ctx context.Context, t target, rawURL, accept string, l
 	authz := c.cachedAuthz(t, cred, hasCred)
 	fresh := false
 	for {
-		r, s, err := c.once(ctx, rawURL, accept, authz, limit)
+		r, s, err := c.once(ctx, rawURL, accept, authz, limit, timeout)
 		sent = sent || s
 		if err != nil {
 			return nil, sent, err
@@ -417,7 +438,7 @@ func (c *Client) getSent(ctx context.Context, t target, rawURL, accept string, l
 			case strings.EqualFold(ch.scheme, "bearer") && ch.params["realm"] != "":
 				authz, err = c.fetchToken(ctx, t, ch)
 				if err != nil {
-					return nil, sent, err
+					return nil, sent, &tokenStepError{err}
 				}
 			case strings.EqualFold(ch.scheme, "basic") && hasCred:
 				authz = cred.BasicAuthorization()
@@ -491,7 +512,7 @@ func (c *Client) fetchToken(ctx context.Context, t target, ch challenge) (string
 			withheld = true
 		}
 	}
-	r, _, err := c.once(ctx, realm.String(), "application/json", authz, c.opts.MaxTokenBytes)
+	r, _, err := c.once(ctx, realm.String(), "application/json", authz, c.opts.MaxTokenBytes, c.opts.Timeout)
 	if err != nil {
 		return "", err
 	}
@@ -621,7 +642,7 @@ func (c *Client) Challenges(ctx context.Context, repo string) ([]regauth.Challen
 }
 
 func (c *Client) challengeAt(ctx context.Context, t target, rawURL string) (regauth.Challenge, error) {
-	r, _, err := c.once(ctx, rawURL, "application/json", "", c.opts.MaxTagPageBytes)
+	r, _, err := c.once(ctx, rawURL, "application/json", "", c.opts.MaxTagPageBytes, c.opts.Timeout)
 	if err != nil {
 		return regauth.Challenge{}, err
 	}

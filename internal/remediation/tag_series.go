@@ -19,8 +19,8 @@ var _ TagPager = (*registry.Client)(nil)
 
 // seriesPageSize is how many tags one request of a series walk asks for.
 // Large public registries answer a tag listing request in about the same time
-// whatever n is, so the walk asks for the page size the client already uses
-// for whole listings.
+// whatever n is; the walk asks for a size registries commonly accept, and
+// reads few pages since it starts near the series.
 const seriesPageSize = 1000
 
 // maxStartMinors is how many earlier minor versions the walk tries as the

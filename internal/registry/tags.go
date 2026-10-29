@@ -3,7 +3,9 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -34,6 +36,9 @@ func (c *Client) ListTags(ctx context.Context, repo string) (TagList, error) {
 // ListTagsUpTo is ListTags with a per-call page allowance: it follows at most
 // maxPages pages, or the configured limit when that is smaller. A maxPages of
 // zero or less means the configured limit alone.
+//
+// Each page asks for TagPageSize tags. A registry that refuses that size on
+// the first page with 400 Bad Request is asked again with 1000 tags a page.
 func (c *Client) ListTagsUpTo(ctx context.Context, repo string, maxPages int) (TagList, error) {
 	t, err := newTarget(repo)
 	if err != nil {
@@ -43,14 +48,26 @@ func (c *Client) ListTagsUpTo(ctx context.Context, repo string, maxPages int) (T
 	if maxPages > 0 && maxPages < limit {
 		limit = maxPages
 	}
-	next := t.base() + "/tags/list?n=" + strconv.Itoa(c.opts.TagPageSize)
+	size := c.opts.TagPageSize
+	next := t.base() + "/tags/list?n=" + strconv.Itoa(size)
 	var out TagList
 	for next != "" {
 		if out.Pages >= limit {
 			out.Truncated = true
 			return out, nil
 		}
-		r, sent, err := c.getSent(ctx, t, next, "application/json", c.opts.MaxTagPageBytes)
+		r, sent, err := c.getSent(ctx, t, next, "application/json", c.opts.MaxTagPageBytes, c.opts.TagTimeout)
+		var status *StatusError
+		var token *tokenStepError
+		if err != nil && out.Pages == 0 && size > fallbackTagPageSize && !errors.As(err, &token) && errors.As(err, &status) && status.Status == http.StatusBadRequest {
+			// A registry may refuse a page size above its own maximum: the
+			// listing starts again with the size registries commonly accept.
+			// The refused request counts as a page.
+			out.Pages++
+			size = fallbackTagPageSize
+			next = t.base() + "/tags/list?n=" + strconv.Itoa(size)
+			continue
+		}
 		if err != nil {
 			pages := out.Pages
 			if sent {
@@ -123,7 +140,7 @@ func (c *Client) ListTagsAfter(ctx context.Context, repo, last string, n int) (T
 	if last != "" {
 		q.Set("last", last)
 	}
-	r, sent, err := c.getSent(ctx, t, t.base()+"/tags/list?"+q.Encode(), "application/json", c.opts.MaxTagPageBytes)
+	r, sent, err := c.getSent(ctx, t, t.base()+"/tags/list?"+q.Encode(), "application/json", c.opts.MaxTagPageBytes, c.opts.TagTimeout)
 	if err != nil {
 		return TagsAfter{Sent: sent}, err
 	}

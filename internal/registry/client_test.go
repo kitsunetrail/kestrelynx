@@ -39,6 +39,7 @@ type fakeRegistry struct {
 	routes      map[string]func(w http.ResponseWriter, r *http.Request)
 	rejectToken bool   // keep answering 401 even with a token
 	tokenBody   string // override the token response
+	tokenStatus int    // when set, the status of the token response
 	noAuth      bool   // serve without demanding a token
 	challenge   string // override WWW-Authenticate
 	tokenTTL    int
@@ -86,7 +87,11 @@ func (f *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 		f.tokenQuery = append(f.tokenQuery, r.URL.RawQuery)
 		body := f.tokenBody
 		ttl := f.tokenTTL
+		status := f.tokenStatus
 		f.mu.Unlock()
+		if status != 0 {
+			w.WriteHeader(status)
+		}
 		if body == "" {
 			body = fmt.Sprintf(`{"token":%q,"expires_in":%d}`, testToken, ttl)
 		}
@@ -836,7 +841,7 @@ func TestRequestTimeout(t *testing.T) {
 		}
 	})
 	start := time.Now()
-	_, err := f.client(Options{Timeout: 100 * time.Millisecond}).ListTags(context.Background(), f.repo("team/app"))
+	_, err := f.client(Options{Timeout: 100 * time.Millisecond, TagTimeout: 100 * time.Millisecond}).ListTags(context.Background(), f.repo("team/app"))
 	if err == nil || time.Since(start) > 3*time.Second {
 		t.Errorf("err=%v elapsed=%v; want a timeout error", err, time.Since(start))
 	}

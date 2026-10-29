@@ -164,6 +164,10 @@ type run struct {
 	// tagUsed counts the tag listing requests made for each repository, over
 	// all the series read from it.
 	tagUsed map[string]int
+	// fullTags holds, by repository key, the repository's whole tag listing,
+	// read at most once per pass. A series listing that read the whole
+	// listing shares it here.
+	fullTags map[string]tagEntry
 }
 
 // composeState is what is known of a mapped workload's Compose service.
@@ -171,7 +175,7 @@ type composeState struct {
 	build ComposeBuild
 	// out, set when the build section could not be determined, is the plan
 	// outcome of the images the workload runs.
-	out *dfOutcome
+	out *planOutcome
 }
 
 // initDF creates the caches the GitHub reads of the Dockerfile and Compose
@@ -196,6 +200,7 @@ func (p *Planner) Plan(ctx context.Context, inputs []ImageInput) Plan {
 		ctx:      ctx,
 		tags:     map[string]tagEntry{},
 		tagUsed:  map[string]int{},
+		fullTags: map[string]tagEntry{},
 		resolved: map[string]resolveEntry{},
 		cands:    map[string]scanned{},
 		bases:    map[string]scanned{},
@@ -367,8 +372,9 @@ func (r *run) process(in ImageInput, it *Item) {
 			return
 		}
 	}
-	res, ok := r.resolve(ref.Repository, candTag, platform, it)
-	if !ok {
+	res, out := r.resolveTag(ref.Repository, candTag, platform)
+	if out != nil {
+		set(it, out.cat, out.reason, out.detail)
 		return
 	}
 	cand := &ImageState{
@@ -429,7 +435,7 @@ func (r *run) readComposeBuilds(inputs []ImageInput) {
 			build, why := ComposeServiceBuilds(e.file.Content, cm.Path, cm.ComposeService)
 			st := composeState{build: build}
 			if build == ComposeBuildUndetermined {
-				st.out = &dfOutcome{CategoryManual, ReasonComposeBuildUndetermined,
+				st.out = &planOutcome{CategoryManual, ReasonComposeBuildUndetermined,
 					"the mapped Compose service cannot be read with confidence (" + why + "), so it is not known whether the running image was built on this host"}
 			}
 			r.composeBuild[k] = st
@@ -447,7 +453,7 @@ const (
 	// builtLocally: it was.
 	builtLocally
 	// localUnknown: the workload is mapped to a Compose file that cannot say;
-	// the outcome is in the returned dfOutcome.
+	// the outcome is in the returned planOutcome.
 	localUnknown
 )
 
@@ -479,8 +485,8 @@ const (
 //     confidence (or the file cannot be read): the image is neither looked up
 //     nor called built, since either would be a guess; the outcome is
 //     deferred or manual.
-func (r *run) locallyBuilt(ref ImageRef, in ImageInput) (localVerdict, string, *dfOutcome) {
-	var unknown *dfOutcome
+func (r *run) locallyBuilt(ref ImageRef, in ImageInput) (localVerdict, string, *planOutcome) {
+	var unknown *planOutcome
 	noBuild := false
 	for _, s := range in.Services {
 		st, ok := r.composeBuild[workloadKey(s)]
@@ -546,6 +552,14 @@ func (r *run) pinnedCandidate(ref ImageRef, it *Item, candTag *string) bool {
 	}
 	e, cached := r.tags[key]
 	if !cached {
+		// A series listing that read the whole listing already holds the
+		// tags of every series; it is not read again for another one.
+		e, cached = r.fullTags[repoKey]
+		if cached {
+			r.tags[key] = e
+		}
+	}
+	if !cached {
 		if r.halted != nil {
 			defer0(it, r.halted.reason, r.halted.detail)
 			return false
@@ -557,14 +571,18 @@ func (r *run) pinnedCandidate(ref ImageRef, it *Item, candTag *string) bool {
 			defer0(it, ReasonTagPageLimit, fmt.Sprintf("tag page limit of %d reached", r.p.cfg.Limits.MaxTagPages))
 			return false
 		}
-		list, err := listPinnedSeries(r.ctx, r.p.cfg.Registry, ref.Repository, ref.Version, allowance)
+		list, whole, err := listPinnedSeries(r.ctx, r.p.cfg.Registry, ref.Repository, ref.Version, allowance)
 		e = tagEntry{list: list, err: err, allowance: allowance}
 		r.tags[key] = e
+		if whole {
+			r.fullTags[repoKey] = e
+		}
 		r.tagUsed[repoKey] += list.Pages
 		r.plan.Usage.TagPages += list.Pages
 	}
 	if e.err != nil {
-		r.registryFailure(it, ref.Repository, e.err)
+		out := r.registryOutcome(ref.Repository, e.err)
+		set(it, out.cat, out.reason, out.detail)
 		return false
 	}
 	sel := SelectPinned(ref.Version, e.list)
@@ -584,36 +602,75 @@ func (r *run) pinnedCandidate(ref ImageRef, it *Item, candTag *string) bool {
 	return true
 }
 
-// resolve resolves a candidate tag to the platform's manifest and config,
-// sharing the result between images. ok is false after the item's outcome
-// has been recorded.
-func (r *run) resolve(repo, tag string, platform inventory.Platform, it *Item) (registry.Resolution, bool) {
+// fullTagList returns the whole tag listing of repo, which newer series are
+// chosen from. It is read at most once per pass, and a series listing that
+// read the whole listing is used instead of reading it again. The allowance
+// is what the repository's tag page limit has left; with nothing left
+// nothing is read. A listing cut short or failed is returned as an outcome,
+// never as a list: the tags it lacks cannot be ruled out.
+func (r *run) fullTagList(repo string) ([]string, *planOutcome) {
+	key, ok := inventory.RepositoryKey(repo)
+	if !ok {
+		return nil, &planOutcome{CategoryExcluded, Reason(ExcludeUnparsable), "repository cannot be normalized"}
+	}
+	e, cached := r.fullTags[key]
+	if !cached {
+		if r.halted != nil {
+			return nil, &planOutcome{CategoryDeferred, r.halted.reason, r.halted.detail}
+		}
+		allowance := r.p.cfg.Limits.MaxTagPages - r.tagUsed[key]
+		if allowance <= 0 {
+			return nil, &planOutcome{CategoryDeferred, ReasonTagPageLimit, fmt.Sprintf("tag page limit of %d reached", r.p.cfg.Limits.MaxTagPages)}
+		}
+		list, err := r.p.cfg.Registry.ListTagsUpTo(r.ctx, repo, allowance)
+		e = tagEntry{list: list, err: err, allowance: allowance}
+		r.fullTags[key] = e
+		r.tagUsed[key] += list.Pages
+		r.plan.Usage.TagPages += list.Pages
+	}
+	if e.err != nil {
+		out := r.registryOutcome(repo, e.err)
+		return nil, &out
+	}
+	if e.list.Truncated {
+		reason := ReasonNewerSeriesTagListIncomplete
+		if e.list.Pages >= e.allowance {
+			reason = ReasonTagPageLimit
+		}
+		return nil, &planOutcome{CategoryDeferred, reason, fmt.Sprintf("tag listing stopped after %d pages; tags of newer series cannot be ruled out", e.list.Pages)}
+	}
+	return e.list.Tags, nil
+}
+
+// resolveTag resolves a tag to the platform's manifest and config, sharing
+// the result between images. A failure is returned as the outcome of the
+// image it was for.
+func (r *run) resolveTag(repo, tag string, platform inventory.Platform) (registry.Resolution, *planOutcome) {
 	rk, _ := inventory.RepositoryKey(repo)
 	key := rk + ":" + tag + "|" + platform.OS + "/" + platform.Architecture
 	e, cached := r.resolved[key]
 	if !cached {
 		if r.halted != nil {
-			defer0(it, r.halted.reason, r.halted.detail)
-			return registry.Resolution{}, false
+			return registry.Resolution{}, &planOutcome{CategoryDeferred, r.halted.reason, r.halted.detail}
 		}
 		res, err := r.p.cfg.Registry.Resolve(r.ctx, repo, tag, platform)
 		e = resolveEntry{res: res, err: err}
 		r.resolved[key] = e
 	}
 	if e.err != nil {
-		r.registryFailure(it, repo, e.err)
-		return registry.Resolution{}, false
+		out := r.registryOutcome(repo, e.err)
+		return registry.Resolution{}, &out
 	}
-	return e.res, true
+	return e.res, nil
 }
 
-// registryFailure maps a registry error to a plan outcome. Rate limiting,
+// registryOutcome maps a registry error to a plan outcome. Rate limiting,
 // an exhausted budget and a dead context stop further registry work in the
 // pass. A request that merely ran out of its own time, while the cycle's
 // context is live, defers only the image it was for: the cycle deadline and
 // one slow registry are different conditions. repo is the repository the
 // failed request was for.
-func (r *run) registryFailure(it *Item, repo string, err error) {
+func (r *run) registryOutcome(repo string, err error) planOutcome {
 	var variant *registry.VariantError
 	var limited *registry.RateLimitedError
 	var anonymous *registry.AnonymousDeniedError
@@ -621,36 +678,34 @@ func (r *run) registryFailure(it *Item, repo string, err error) {
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded),
 		errors.Is(err, registry.ErrTimeout) && r.ctx.Err() != nil:
 		r.halted = &halt{ReasonCycleDeadline, err.Error()}
-		defer0(it, r.halted.reason, r.halted.detail)
+		return planOutcome{CategoryDeferred, r.halted.reason, r.halted.detail}
 	case errors.Is(err, registry.ErrTimeout):
-		defer0(it, ReasonRegistryTimeout, err.Error())
+		return planOutcome{CategoryDeferred, ReasonRegistryTimeout, err.Error()}
 	case errors.Is(err, registry.ErrBudgetExhausted):
 		r.halted = &halt{ReasonRegistryBudget, "registry request budget exhausted"}
-		defer0(it, r.halted.reason, r.halted.detail)
+		return planOutcome{CategoryDeferred, r.halted.reason, r.halted.detail}
 	case errors.As(err, &limited):
-		detail := err.Error()
-		r.halted = &halt{ReasonRateLimited, detail}
-		defer0(it, r.halted.reason, r.halted.detail)
+		r.halted = &halt{ReasonRateLimited, err.Error()}
+		return planOutcome{CategoryDeferred, r.halted.reason, r.halted.detail}
 	case errors.As(err, &variant):
-		set(it, CategoryNotComparable, ReasonVariantUnsupported, err.Error())
+		return planOutcome{CategoryNotComparable, ReasonVariantUnsupported, err.Error()}
 	case errors.As(err, &anonymous) && isOfficialImage(repo):
 		// Docker Hub serves every Docker Official Image to anyone, so an
 		// anonymous refusal means the repository does not exist there and the
 		// image exists only on its host. The containerd image store gives a
 		// registry digest to an image built on the host too, so locallyBuilt
 		// does not always catch such an image first.
-		set(it, CategoryExcluded, ReasonLocallyBuilt, repo+" names a Docker Official Image repository, which Docker Hub refuses to anonymous requests only when it does not exist, so no registry holds this image and it was built or loaded on its host")
+		return planOutcome{CategoryExcluded, ReasonLocallyBuilt, repo + " names a Docker Official Image repository, which Docker Hub refuses to anonymous requests only when it does not exist, so no registry holds this image and it was built or loaded on its host"}
 	case errors.Is(err, registry.ErrAuthRequired):
-		set(it, CategoryNotComparable, ReasonAuthRequired, err.Error())
+		return planOutcome{CategoryNotComparable, ReasonAuthRequired, err.Error()}
 	case errors.Is(err, registry.ErrPlatformNotFound):
-		set(it, CategoryNotComparable, ReasonPlatformNotFound, err.Error())
+		return planOutcome{CategoryNotComparable, ReasonPlatformNotFound, err.Error()}
 	case errors.Is(err, registry.ErrPlatformAmbiguous):
-		set(it, CategoryNotComparable, ReasonPlatformAmbiguous, err.Error())
+		return planOutcome{CategoryNotComparable, ReasonPlatformAmbiguous, err.Error()}
 	case errors.Is(err, registry.ErrPlatformMismatch):
-		set(it, CategoryNotComparable, ReasonPlatformMismatch, err.Error())
-	default:
-		set(it, CategoryFailed, ReasonRegistryError, err.Error())
+		return planOutcome{CategoryNotComparable, ReasonPlatformMismatch, err.Error()}
 	}
+	return planOutcome{CategoryFailed, ReasonRegistryError, err.Error()}
 }
 
 // isOfficialImage reports whether repo is a Docker Official Image repository,
@@ -661,20 +716,30 @@ func isOfficialImage(repo string) bool {
 	return ok && strings.HasPrefix(key, "docker.io/library/")
 }
 
-// compare scans the baseline (when needed) and the candidate under the
-// prepared conditions, compares them and records the decision.
-func (r *run) compare(in ImageInput, ref ImageRef, platform inventory.Platform, res registry.Resolution, it *Item) {
+// imageComparison is the comparison of a running image with one resolved
+// candidate, before anything is written to an item.
+type imageComparison struct {
+	baseScan, candScan string // the IDs of the scans used; empty when none ran
+	vr                 *VerificationResult
+	dec                *Decision
+	// out is set when the comparison reached no decision. Set after the
+	// scans ran, it is the deadline that cut the comparison off.
+	out *planOutcome
+}
+
+// compareImage scans the baseline (when needed) and the candidate tag under
+// the prepared conditions and compares them. It writes nothing to an item,
+// so a candidate the item does not adopt is compared the same way.
+func (r *run) compareImage(in ImageInput, repo, tag string, platform inventory.Platform, res registry.Resolution, targets []Target) imageComparison {
 	prep := r.p.cfg.Prepared
 	if !prep.Known() {
-		set(it, CategoryNotComparable, ReasonConditionsUnknown, "the cycle has no prepared scan conditions")
-		return
+		return imageComparison{out: &planOutcome{CategoryNotComparable, ReasonConditionsUnknown, "the cycle has no prepared scan conditions"}}
 	}
 	regDigest, ok := inventory.ParseDigest(inventory.DigestRegistry, res.ManifestDigest)
 	if !ok {
-		set(it, CategoryFailed, ReasonRegistryError, "the registry resolution has no usable manifest digest")
-		return
+		return imageComparison{out: &planOutcome{CategoryFailed, ReasonRegistryError, "the registry resolution has no usable manifest digest"}}
 	}
-	repoKey, _ := inventory.RepositoryKey(ref.Repository)
+	repoKey, _ := inventory.RepositoryKey(repo)
 	candKey := repoKey + "|" + entityString(inventory.EntityKey{Digest: regDigest, Platform: platform})
 
 	baseKey := entityString(in.Scan.Subject.Key) + "|" + string(in.Target.Source)
@@ -684,12 +749,10 @@ func (r *run) compare(in ImageInput, ref ImageRef, platform inventory.Platform, 
 
 	// Check both limits before spending either, so a deferral wastes nothing.
 	if needRescan && r.plan.Usage.BaselineRescans >= r.p.cfg.Limits.MaxBaselineRescans {
-		defer0(it, ReasonBaselineRescanLimit, fmt.Sprintf("baseline rescan limit of %d reached", r.p.cfg.Limits.MaxBaselineRescans))
-		return
+		return imageComparison{out: &planOutcome{CategoryDeferred, ReasonBaselineRescanLimit, fmt.Sprintf("baseline rescan limit of %d reached", r.p.cfg.Limits.MaxBaselineRescans)}}
 	}
 	if !candCached && r.plan.Usage.CandidateScans >= r.p.cfg.Limits.MaxCandidateScans {
-		defer0(it, ReasonCandidateScanLimit, fmt.Sprintf("candidate scan limit of %d reached", r.p.cfg.Limits.MaxCandidateScans))
-		return
+		return imageComparison{out: &planOutcome{CategoryDeferred, ReasonCandidateScanLimit, fmt.Sprintf("candidate scan limit of %d reached", r.p.cfg.Limits.MaxCandidateScans)}}
 	}
 
 	switch {
@@ -706,26 +769,41 @@ func (r *run) compare(in ImageInput, ref ImageRef, platform inventory.Platform, 
 		r.plan.Usage.CandidateScans++
 		target := scanner.ScanTarget{
 			Subject: inventory.ImageSubject{
-				Ref:      ref.Repository + ":" + it.Candidate.Tag,
+				Ref:      repo + ":" + tag,
 				Key:      inventory.EntityKey{Digest: regDigest, Platform: platform},
 				Resolved: true,
 			},
-			Registry: inventory.RegistryRef{Repository: ref.Repository, Digest: regDigest},
+			Registry: inventory.RegistryRef{Repository: repo, Digest: regDigest},
 			Source:   scanner.SourceRemote,
 		}
 		cand = r.scanUnder(RoleCandidate, target)
 		r.cands[candKey] = cand
 	}
-	it.BaselineScan, it.CandidateScan = base.id, cand.id
+	c := imageComparison{baseScan: base.id, candScan: cand.id}
 	if err := r.ctx.Err(); err != nil {
-		defer0(it, ReasonCycleDeadline, err.Error())
-		it.Candidate = nil
+		c.out = &planOutcome{CategoryDeferred, ReasonCycleDeadline, err.Error()}
+		return c
+	}
+	vr := Compare(base.rec, cand.rec).ApplyCoverage(targets, base.rec, cand.rec)
+	dec := Decide(targets, vr, r.p.cfg.Intel)
+	c.vr, c.dec = &vr, &dec
+	return c
+}
+
+// compare compares the running image with the item's candidate and records
+// the decision.
+func (r *run) compare(in ImageInput, ref ImageRef, platform inventory.Platform, res registry.Resolution, it *Item) {
+	c := r.compareImage(in, ref.Repository, it.Candidate.Tag, platform, res, it.Targets)
+	it.BaselineScan, it.CandidateScan = c.baseScan, c.candScan
+	if c.out != nil {
+		set(it, c.out.cat, c.out.reason, c.out.detail)
+		if c.out.reason == ReasonCycleDeadline {
+			it.Candidate = nil
+		}
 		return
 	}
-
-	vr := Compare(base.rec, cand.rec).ApplyCoverage(it.Targets, base.rec, cand.rec)
-	dec := Decide(it.Targets, vr, r.p.cfg.Intel)
-	it.Comparison, it.Decision = &vr, &dec
+	vr, dec := *c.vr, *c.dec
+	it.Comparison, it.Decision = c.vr, c.dec
 	switch dec.Kind {
 	case DecisionAdopt, DecisionAdoptPartial:
 		if ref.Kind == TagPinned {

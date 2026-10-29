@@ -184,24 +184,27 @@ func walkFrom(ctx context.Context, pager TagPager, repo string, cur TagVersion, 
 // reads the whole listing. The allowance counts every request of either
 // kind. A walk the allowance or an error stops is reported like a listing
 // that was cut short: Truncated, or the error with the requests made so far
-// in Pages.
-func listPinnedSeries(ctx context.Context, reg Registry, repo string, cur TagVersion, allowance int) (registry.TagList, error) {
+// in Pages. whole reports that the list is the repository's whole listing
+// (or the attempt to read it), not only the series: a series list says
+// nothing about the tags outside the series, even when it is complete.
+func listPinnedSeries(ctx context.Context, reg Registry, repo string, cur TagVersion, allowance int) (list registry.TagList, whole bool, err error) {
 	pager, ok := reg.(TagPager)
 	if !ok {
-		return reg.ListTagsUpTo(ctx, repo, allowance)
+		list, err = reg.ListTagsUpTo(ctx, repo, allowance)
+		return list, true, err
 	}
 	w, err := walkSeries(ctx, pager, repo, cur, allowance)
 	if err != nil {
-		return registry.TagList{Pages: w.requests}, err
+		return registry.TagList{Pages: w.requests}, false, err
 	}
 	if w.unreliable {
 		rest := allowance - w.requests
 		if rest <= 0 {
-			return registry.TagList{Pages: w.requests, Truncated: true}, nil
+			return registry.TagList{Pages: w.requests, Truncated: true}, false, nil
 		}
 		l, err := reg.ListTagsUpTo(ctx, repo, rest)
 		l.Pages += w.requests
-		return l, err
+		return l, true, err
 	}
-	return registry.TagList{Tags: w.tags, Truncated: !w.complete, Pages: w.requests}, nil
+	return registry.TagList{Tags: w.tags, Truncated: !w.complete, Pages: w.requests}, false, nil
 }

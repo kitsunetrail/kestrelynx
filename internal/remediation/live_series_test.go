@@ -25,7 +25,7 @@ func liveSeries(t *testing.T, repo, tag string, allowance int) (Selection, regis
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	start := time.Now()
-	list, err := listPinnedSeries(ctx, c, repo, cur, allowance)
+	list, _, err := listPinnedSeries(ctx, c, repo, cur, allowance)
 	took := time.Since(start)
 	if err != nil {
 		t.Fatalf("%s:%s: %v (after %d requests, %s)", repo, tag, err, budget.Used(), took)

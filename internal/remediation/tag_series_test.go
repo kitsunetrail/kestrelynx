@@ -324,7 +324,7 @@ func TestWalkSeriesLimitLeavesItIncomplete(t *testing.T) {
 	if w.complete || w.requests != 2 {
 		t.Errorf("walk = %+v, want 2 requests and not complete", w)
 	}
-	list, err := listPinnedSeries(context.Background(), seriesRegistry{newFakeRegistry(), newSortedPager(elasticLike())}, "r", tv(t, "8.19.16"), 2)
+	list, _, err := listPinnedSeries(context.Background(), seriesRegistry{newFakeRegistry(), newSortedPager(elasticLike())}, "r", tv(t, "8.19.16"), 2)
 	if err != nil || !list.Truncated || list.Pages != 2 {
 		t.Errorf("list = %+v, %v; want truncated after 2 requests", list, err)
 	}
@@ -361,7 +361,7 @@ func TestListPinnedSeriesFallsBackToFullListing(t *testing.T) {
 	fake := newFakeRegistry()
 	fake.tags["r"] = registry.TagList{Tags: []string{"8.19.1", "8.19.3"}, Pages: 2}
 	reg := seriesRegistry{fake, &sortedPager{misbehave: func(string, int) []string { return []string{"8.18.5", "8.18.4"} }}}
-	list, err := listPinnedSeries(context.Background(), reg, "r", tv(t, "8.19.1"), 10)
+	list, _, err := listPinnedSeries(context.Background(), reg, "r", tv(t, "8.19.1"), 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ func TestListPinnedSeriesFallsBackToFullListing(t *testing.T) {
 	// With no allowance left the fallback is not started and the list is
 	// incomplete.
 	fake.allowances = nil
-	list, err = listPinnedSeries(context.Background(), reg, "r", tv(t, "8.19.1"), 1)
+	list, _, err = listPinnedSeries(context.Background(), reg, "r", tv(t, "8.19.1"), 1)
 	if err != nil || !list.Truncated || len(fake.allowances) != 0 {
 		t.Errorf("list = %+v, %v, allowances %v; want truncated and no full listing", list, err, fake.allowances)
 	}
@@ -387,7 +387,7 @@ func TestListPinnedSeriesErrorKeepsRequestCount(t *testing.T) {
 	boom := errors.New("boom")
 	pager := newSortedPager(elasticLike())
 	pager.err, pager.errAfter = boom, 2
-	list, err := listPinnedSeries(context.Background(), seriesRegistry{newFakeRegistry(), pager}, "r", tv(t, "8.19.16"), 40)
+	list, _, err := listPinnedSeries(context.Background(), seriesRegistry{newFakeRegistry(), pager}, "r", tv(t, "8.19.16"), 40)
 	if !errors.Is(err, boom) || list.Pages != 3 || len(list.Tags) != 0 {
 		t.Errorf("list = %+v, err = %v; want the error and 3 requests counted", list, err)
 	}
@@ -396,7 +396,7 @@ func TestListPinnedSeriesErrorKeepsRequestCount(t *testing.T) {
 func TestListPinnedSeriesWithoutPagerReadsTheListing(t *testing.T) {
 	fake := newFakeRegistry()
 	fake.tags["r"] = registry.TagList{Tags: []string{"8.19.1"}, Pages: 1}
-	list, err := listPinnedSeries(context.Background(), fake, "r", tv(t, "8.19.1"), 5)
+	list, _, err := listPinnedSeries(context.Background(), fake, "r", tv(t, "8.19.1"), 5)
 	if err != nil || !reflect.DeepEqual(list.Tags, []string{"8.19.1"}) || fake.listCalls != 1 {
 		t.Errorf("list = %+v, %v, calls %d", list, err, fake.listCalls)
 	}
@@ -441,7 +441,7 @@ func TestWalkSeriesChecksTheWholePageBeforeEndingTheSeries(t *testing.T) {
 	// out-of-place tag is found there.
 	fake := newFakeRegistry()
 	fake.tags["r"] = registry.TagList{Tags: []string{"8.19.16", "8.19.23"}, Pages: 1}
-	list, err := listPinnedSeries(context.Background(), seriesRegistry{fake, &sortedPager{misbehave: func(string, int) []string { return []string{"8.18.9", "8.19.16", "8.20.0", "8.19.23"} }}}, "r", tv(t, "8.19.16"), 10)
+	list, _, err := listPinnedSeries(context.Background(), seriesRegistry{fake, &sortedPager{misbehave: func(string, int) []string { return []string{"8.18.9", "8.19.16", "8.20.0", "8.19.23"} }}}, "r", tv(t, "8.19.16"), 10)
 	if err != nil || list.Truncated || SelectPinned(tv(t, "8.19.16"), list).Tag != "8.19.23" {
 		t.Errorf("list = %+v, %v", list, err)
 	}
@@ -464,7 +464,7 @@ func TestWalkSeriesEmptyPageWithMoreIsNotTheEnd(t *testing.T) {
 	// is ruled out.
 	fake := newFakeRegistry()
 	fake.tags["r"] = registry.TagList{Tags: []string{"8.19.16"}, Pages: 5, Truncated: true}
-	list, err := listPinnedSeries(context.Background(), seriesRegistry{fake, &scriptedPager{pages: []registry.TagsAfter{{Tags: []string{"8.18.1", "8.19.1"}, More: true}, {More: true}}}}, "r", tv(t, "8.19.16"), 6)
+	list, _, err := listPinnedSeries(context.Background(), seriesRegistry{fake, &scriptedPager{pages: []registry.TagsAfter{{Tags: []string{"8.18.1", "8.19.1"}, More: true}, {More: true}}}}, "r", tv(t, "8.19.16"), 6)
 	if err != nil || SelectPinned(tv(t, "8.19.16"), list).Outcome != SelectionIncomplete {
 		t.Errorf("list = %+v, %v; want an incomplete selection", list, err)
 	}

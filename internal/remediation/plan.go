@@ -57,6 +57,9 @@ const (
 	ReasonRegistryBudget      Reason = "registry_budget_exhausted"
 	ReasonRateLimited         Reason = "rate_limited"
 	ReasonCycleDeadline       Reason = "cycle_deadline"
+	// ReasonNewerSeriesTagListIncomplete: the whole tag listing, which newer
+	// series are chosen from, was cut short.
+	ReasonNewerSeriesTagListIncomplete Reason = "newer_series_tag_list_incomplete"
 	// ReasonRegistryTimeout: one registry request did not finish in its own
 	// time limit. Only the images it was for are deferred; the cycle goes on.
 	ReasonRegistryTimeout Reason = "registry_timeout"

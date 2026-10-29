@@ -30,6 +30,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"targets_not_detected_on_baseline":   {"the comparison scan of the running image (or the current base) does not show the target findings", "比較用のスキャンで対象の所見が検出されなかった"},
 	"analysis_incomplete":                {"the analysis of the image was incomplete", "イメージの解析が不完全だった"},
 	"tag_listing_incomplete":             {"the tag list could not be read to the end", "タグ一覧を最後まで取得できなかった"},
+	"newer_series_tag_list_incomplete":   {"the whole tag list, which newer series are chosen from, could not be read to the end", "新しい系列を選ぶためのタグ一覧の全体を最後まで取得できなかった"},
 	"candidate_scan_limit":               {"the limit on candidate scans of a run was reached", "1回の実行でスキャンできる候補数の上限に達した"},
 	"baseline_rescan_limit":              {"the limit on rescans of running images was reached", "稼働中のイメージを再スキャンできる数の上限に達した"},
 	"tag_page_limit":                     {"the limit on tag list requests was reached", "タグ一覧の取得回数の上限に達した"},

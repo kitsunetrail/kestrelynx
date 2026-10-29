@@ -83,13 +83,13 @@ func TestLiveAuthRegistryClient(t *testing.T) {
 		t.Fatalf("without a login: err = %v, want ErrAuthRequired", err)
 	}
 	t.Logf("without a login: %v", err)
-	if _, err := listPinnedSeries(ctx, l.client(t, false, nil), repo, tv(t, "1.2.3"), 20); !errors.Is(err, registry.ErrAuthRequired) {
+	if _, _, err := listPinnedSeries(ctx, l.client(t, false, nil), repo, tv(t, "1.2.3"), 20); !errors.Is(err, registry.ErrAuthRequired) {
 		t.Fatalf("series walk without a login: err = %v", err)
 	}
 
 	budget := registry.NewBudget(50)
 	c := l.client(t, true, budget)
-	list, err := listPinnedSeries(ctx, c, repo, tv(t, "1.2.3"), 20)
+	list, _, err := listPinnedSeries(ctx, c, repo, tv(t, "1.2.3"), 20)
 	if err != nil {
 		t.Fatalf("with the login: %v", err)
 	}

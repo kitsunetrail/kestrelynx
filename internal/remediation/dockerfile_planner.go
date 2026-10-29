@@ -24,8 +24,9 @@ func dockerfileStageLocation(index int, name string) string {
 	return loc
 }
 
-// dfOutcome is a plan outcome decided before any image work.
-type dfOutcome struct {
+// planOutcome is the plan outcome of an item or entity, returned by a step
+// that does not write to the item itself.
+type planOutcome struct {
 	cat    Category
 	reason Reason
 	detail string
@@ -57,12 +58,12 @@ type dfLocated struct {
 	files       []SourceFile
 	// out, when set, ends the workload's processing; outKey groups workloads
 	// that share the outcome into one item.
-	out    *dfOutcome
+	out    *planOutcome
 	outKey string
 	// poison, set beside a known location, stops the unit of that location:
 	// something about how the workload is built casts doubt on the mapped
 	// Dockerfile, so no workload sharing it is adopted.
-	poison *dfOutcome
+	poison *planOutcome
 }
 
 // dfGroup is one item to be produced: an edit location shared by workloads,
@@ -78,7 +79,7 @@ type dfGroup struct {
 	compose   string
 	files     []SourceFile
 	workloads []*dfWorkload
-	out       *dfOutcome
+	out       *planOutcome
 	// base and file are set for an edit location.
 	file *Dockerfile
 	rank int
@@ -89,17 +90,17 @@ type dfGroup struct {
 	// group's FROM, by target; poison is the first outcome that stops the
 	// unit.
 	bases  map[string]DockerfileBase
-	poison *dfOutcome
+	poison *planOutcome
 }
 
 type dfShaEntry struct {
 	sha string
-	out *dfOutcome
+	out *planOutcome
 }
 
 type dfFileEntry struct {
 	file   github.File
-	out    *dfOutcome
+	out    *planOutcome
 	parsed *Dockerfile
 	prob   *DockerfileProblem
 	done   bool // parsed or prob is set
@@ -133,11 +134,11 @@ func sameRepoName(a, b string) bool { return strings.EqualFold(a, b) }
 // githubOutcome maps a GitHub error to a plan outcome. Rate limiting, an
 // exhausted budget and a dead context end all further reads of the pass;
 // file says a file was being read.
-func (r *run) githubOutcome(err error, file bool) *dfOutcome {
+func (r *run) githubOutcome(err error, file bool) *planOutcome {
 	var limited *github.RateLimitedError
-	deferred := func(h *halt) *dfOutcome {
+	deferred := func(h *halt) *planOutcome {
 		r.srcHalt = h
-		return &dfOutcome{CategoryDeferred, h.reason, h.detail}
+		return &planOutcome{CategoryDeferred, h.reason, h.detail}
 	}
 	switch {
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
@@ -149,34 +150,34 @@ func (r *run) githubOutcome(err error, file bool) *dfOutcome {
 	case errors.Is(err, github.ErrByteBudgetExhausted):
 		return deferred(&halt{ReasonByteBudget, err.Error()})
 	case errors.Is(err, github.ErrLFSPointer), errors.Is(err, github.ErrNotRegularFile):
-		return &dfOutcome{CategoryManual, ReasonDockerfileFileUnusable, err.Error()}
+		return &planOutcome{CategoryManual, ReasonDockerfileFileUnusable, err.Error()}
 	case errors.Is(err, github.ErrNotFound):
 		if file {
-			return &dfOutcome{CategoryFailed, ReasonDockerfileFileNotFound, err.Error()}
+			return &planOutcome{CategoryFailed, ReasonDockerfileFileNotFound, err.Error()}
 		}
-		return &dfOutcome{CategoryFailed, ReasonSourceNotFound, err.Error()}
+		return &planOutcome{CategoryFailed, ReasonSourceNotFound, err.Error()}
 	case errors.Is(err, github.ErrAuthRequired), errors.Is(err, github.ErrForbidden):
-		return &dfOutcome{CategoryFailed, ReasonSourceAccessDenied, err.Error()}
+		return &planOutcome{CategoryFailed, ReasonSourceAccessDenied, err.Error()}
 	case errors.Is(err, github.ErrTooLarge):
 		reason := ReasonSourceTooLarge
 		if file {
 			reason = ReasonFileTooLarge
 		}
-		return &dfOutcome{CategoryFailed, reason, err.Error()}
+		return &planOutcome{CategoryFailed, reason, err.Error()}
 	}
-	return &dfOutcome{CategoryFailed, ReasonSourceError, err.Error()}
+	return &planOutcome{CategoryFailed, ReasonSourceError, err.Error()}
 }
 
 // dfStopped is the deferral for a pass whose GitHub work has ended.
-func (r *run) dfStopped() *dfOutcome {
+func (r *run) dfStopped() *planOutcome {
 	if h := r.stopReason(); h != nil {
-		return &dfOutcome{CategoryDeferred, h.reason, h.detail}
+		return &planOutcome{CategoryDeferred, h.reason, h.detail}
 	}
 	return nil
 }
 
 // dfBranch resolves a branch to its commit once per cycle.
-func (r *run) dfBranch(repo, branch string) (string, *dfOutcome) {
+func (r *run) dfBranch(repo, branch string) (string, *planOutcome) {
 	key := strings.ToLower(repo) + "\x00" + branch
 	if e, ok := r.dfSHA[key]; ok {
 		return e.sha, e.out
@@ -218,7 +219,7 @@ func (r *run) dfRead(repo, sha, path string) *dfFileEntry {
 // dfDerive reads the Dockerfile location of a service from the build section
 // of its Compose file. read is the outcome of reading the file when that
 // failed; prob says why a file that was read gave no location.
-func (r *run) dfDerive(cm *ComposeMapping, sha string) (loc DockerfileLocation, file SourceFile, prob *DockerfileProblem, read *dfOutcome) {
+func (r *run) dfDerive(cm *ComposeMapping, sha string) (loc DockerfileLocation, file SourceFile, prob *DockerfileProblem, read *planOutcome) {
 	e := r.dfRead(cm.Repository, sha, cm.Path)
 	if e.out != nil {
 		return DockerfileLocation{}, SourceFile{}, nil, e.out
@@ -232,14 +233,14 @@ func (r *run) dfDerive(cm *ComposeMapping, sha string) (loc DockerfileLocation, 
 func (r *run) dfLocate(w *dfWorkload) (dfLocated, bool) {
 	em, cm := w.explicit, w.compose
 	problem := func(l dfLocated, p *DockerfileProblem) dfLocated {
-		l.out = &dfOutcome{CategoryManual, p.Reason, p.Detail}
+		l.out = &planOutcome{CategoryManual, p.Reason, p.Detail}
 		l.outKey = "dockerfile:" + w.key + "#config"
 		return l
 	}
 	switch {
 	case em != nil:
 		l := dfLocated{w: w, repo: em.Repository, branch: em.BaseBranch, loc: DockerfileLocation{Path: em.Path, Target: em.Target}, origin: DockerfileFromMapping}
-		fail := func(out *dfOutcome) dfLocated {
+		fail := func(out *planOutcome) dfLocated {
 			l.out = out
 			l.outKey = "dockerfile:" + strings.ToLower(em.Repository) + "@" + em.BaseBranch + ":" + em.Path
 			if em.Target != "" {
@@ -259,7 +260,7 @@ func (r *run) dfLocate(w *dfWorkload) (dfLocated, bool) {
 			// a file or branch that cannot be read stops the unit, and a file
 			// that confirms the absence is a plan input like any other.
 			same := sameRepoName(cm.Repository, em.Repository) && cm.BaseBranch == em.BaseBranch
-			csha, cout := sha, (*dfOutcome)(nil)
+			csha, cout := sha, (*planOutcome)(nil)
 			if !same {
 				csha, cout = r.dfBranch(cm.Repository, cm.BaseBranch)
 			}
@@ -277,12 +278,12 @@ func (r *run) dfLocate(w *dfWorkload) (dfLocated, bool) {
 			}
 			switch {
 			case prob != nil && !composeExplicitSilent[prob.Reason]:
-				l.poison = &dfOutcome{CategoryManual, prob.Reason, prob.Detail}
+				l.poison = &planOutcome{CategoryManual, prob.Reason, prob.Detail}
 			case prob != nil:
 				l.files = append(l.files, file)
 			case same:
 				if p := AgreeDockerfileLocation(derived, l.loc); p != nil {
-					l.poison = &dfOutcome{CategoryManual, p.Reason, p.Detail}
+					l.poison = &planOutcome{CategoryManual, p.Reason, p.Detail}
 				}
 				l.origin, l.composePath, l.files = DockerfileFromBoth, cm.Path, append(l.files, file)
 			default:
@@ -445,14 +446,14 @@ func (r *run) dockerfilePart(inputs []ImageInput) {
 		l.files = append(l.files, SourceFile{Path: fe.file.Path, BlobSHA: fe.file.SHA})
 		if fe.prob != nil {
 			g := join(fileKey+targetSuffix(l.loc.Target), l, l.loc.Path)
-			g.out = &dfOutcome{CategoryManual, fe.prob.Reason, fe.prob.Detail}
+			g.out = &planOutcome{CategoryManual, fe.prob.Reason, fe.prob.Detail}
 			g.targets[l.loc.Target] = true
 			continue
 		}
 		base, prob := fe.parsed.ResolveBase(l.loc.Target)
 		if prob != nil {
 			g := join(fileKey+targetSuffix(l.loc.Target), l, l.loc.Path)
-			g.out = &dfOutcome{CategoryManual, prob.Reason, prob.Detail}
+			g.out = &planOutcome{CategoryManual, prob.Reason, prob.Detail}
 			g.targets[l.loc.Target] = true
 			continue
 		}
@@ -639,10 +640,9 @@ func (r *run) dockerfileEntity(in ImageInput, base DockerfileBase, sel *dfSelect
 	ref := base.Ref
 	pinned := base.Disposition == DockerfilePinned
 
-	var tmp Item
-	curRes, ok := r.resolve(ref.Repository, ref.Tag, platform, &tmp)
-	if !ok {
-		return fromItem(tmp)
+	curRes, out := r.resolveTag(ref.Repository, ref.Tag, platform)
+	if out != nil {
+		return outcome(out.cat, out.reason, out.detail)
 	}
 	cur := baseState(ref.Repository, ref.Tag, curRes, platform)
 	ent.CurrentBase = &cur
@@ -693,71 +693,14 @@ func (r *run) dockerfileEntity(in ImageInput, base DockerfileBase, sel *dfSelect
 	if sel.out != nil {
 		return fromItem(*sel.out)
 	}
-	tmp = Item{}
-	candRes, ok := r.resolve(ref.Repository, sel.tag, platform, &tmp)
-	if !ok {
-		return fromItem(tmp)
+	c := r.compareBase(ref, sel.tag, platform, curRes, targets)
+	ent.CandidateBase = c.cand
+	ent.BaselineScan, ent.CandidateScan = c.baseScan, c.candScan
+	if c.out != nil {
+		return outcome(c.out.cat, c.out.reason, c.out.detail)
 	}
-	cand := baseState(ref.Repository, sel.tag, candRes, platform)
-	ent.CandidateBase = &cand
-	if candRes.OnBuild {
-		return outcome(CategoryManual, ReasonBaseOnBuild, "the candidate base image "+cand.Ref+" has ONBUILD triggers")
-	}
-	if candRes.ManifestDigest == curRes.ManifestDigest || candRes.ConfigDigest == curRes.ConfigDigest {
-		return outcome(CategoryNoCandidate, ReasonSameContent, "the candidate base resolves to the content of the current base")
-	}
-
-	prep := r.p.cfg.Prepared
-	if !prep.Known() {
-		return outcome(CategoryNotComparable, ReasonConditionsUnknown, "the cycle has no prepared scan conditions")
-	}
-	curDigest, ok1 := inventory.ParseDigest(inventory.DigestRegistry, curRes.ManifestDigest)
-	candDigest, ok2 := inventory.ParseDigest(inventory.DigestRegistry, candRes.ManifestDigest)
-	if !ok1 || !ok2 {
-		return outcome(CategoryFailed, ReasonRegistryError, "the registry resolution has no usable manifest digest")
-	}
-	repoKey, _ := inventory.RepositoryKey(ref.Repository)
-	baseScanKey := string(RoleBaseline) + "|" + repoKey + "|" + entityString(inventory.EntityKey{Digest: curDigest, Platform: platform})
-	candScanKey := string(RoleCandidate) + "|" + repoKey + "|" + entityString(inventory.EntityKey{Digest: candDigest, Platform: platform})
-	baseScan, baseCached := r.dfScans[baseScanKey]
-	candScan, candCached := r.dfScans[candScanKey]
-	// Both limits are checked before either is spent.
-	if !baseCached && r.plan.Usage.BaselineRescans >= r.p.cfg.Limits.MaxBaselineRescans {
-		return outcome(CategoryDeferred, ReasonBaselineRescanLimit, fmt.Sprintf("baseline rescan limit of %d reached", r.p.cfg.Limits.MaxBaselineRescans))
-	}
-	if !candCached && r.plan.Usage.CandidateScans >= r.p.cfg.Limits.MaxCandidateScans {
-		return outcome(CategoryDeferred, ReasonCandidateScanLimit, fmt.Sprintf("candidate scan limit of %d reached", r.p.cfg.Limits.MaxCandidateScans))
-	}
-	scan := func(role ScanRole, repo, tag string, d inventory.Digest) scanned {
-		target := scanner.ScanTarget{
-			Subject: inventory.ImageSubject{
-				Ref:      repo + ":" + tag,
-				Key:      inventory.EntityKey{Digest: d, Platform: platform},
-				Resolved: true,
-			},
-			Registry: inventory.RegistryRef{Repository: repo, Digest: d},
-			Source:   scanner.SourceRemote,
-		}
-		return r.scanUnder(role, target)
-	}
-	if !baseCached {
-		r.plan.Usage.BaselineRescans++
-		baseScan = scan(RoleBaseline, ref.Repository, ref.Tag, curDigest)
-		r.dfScans[baseScanKey] = baseScan
-	}
-	if !candCached {
-		r.plan.Usage.CandidateScans++
-		candScan = scan(RoleCandidate, ref.Repository, sel.tag, candDigest)
-		r.dfScans[candScanKey] = candScan
-	}
-	ent.BaselineScan, ent.CandidateScan = baseScan.id, candScan.id
-	if err := r.ctx.Err(); err != nil {
-		return outcome(CategoryDeferred, ReasonCycleDeadline, err.Error())
-	}
-
-	vr := Compare(baseScan.rec, candScan.rec).ApplyCoverage(targets, baseScan.rec, candScan.rec)
-	dec := Decide(targets, vr, r.p.cfg.Intel)
-	ent.Comparison, ent.Decision = &vr, &dec
+	vr, dec := *c.vr, *c.dec
+	ent.Comparison, ent.Decision = c.vr, c.dec
 	switch dec.Kind {
 	case DecisionAdopt:
 		return outcome(CategoryPRCandidate, ReasonAdopted, fmt.Sprintf("all %d base findings resolved by the candidate base, nothing introduced", dec.Targets))
@@ -780,6 +723,93 @@ func (r *run) dockerfileEntity(in ImageInput, base DockerfileBase, sel *dfSelect
 		cat = CategoryFailed
 	}
 	return outcome(cat, vr.Reason, vr.Detail)
+}
+
+// baseComparison is the comparison of a pinned base with one candidate tag,
+// before anything is written to an entity.
+type baseComparison struct {
+	cand               *ImageState // the resolved candidate base; nil when it was not resolved
+	baseScan, candScan string      // the IDs of the scans used; empty when none ran
+	vr                 *VerificationResult
+	dec                *Decision
+	out                *planOutcome // set when the comparison reached no decision
+}
+
+// compareBase resolves tag as a candidate for the pinned base ref, which
+// resolved to curRes, and compares the two base images under the prepared
+// conditions. It writes nothing to an entity, so a candidate the entity does
+// not adopt is compared the same way.
+func (r *run) compareBase(ref ImageRef, tag string, platform inventory.Platform, curRes registry.Resolution, targets []Target) baseComparison {
+	var c baseComparison
+	fail := func(cat Category, reason Reason, detail string) baseComparison {
+		c.out = &planOutcome{cat, reason, detail}
+		return c
+	}
+	candRes, out := r.resolveTag(ref.Repository, tag, platform)
+	if out != nil {
+		c.out = out
+		return c
+	}
+	cand := baseState(ref.Repository, tag, candRes, platform)
+	c.cand = &cand
+	if candRes.OnBuild {
+		return fail(CategoryManual, ReasonBaseOnBuild, "the candidate base image "+cand.Ref+" has ONBUILD triggers")
+	}
+	if candRes.ManifestDigest == curRes.ManifestDigest || candRes.ConfigDigest == curRes.ConfigDigest {
+		return fail(CategoryNoCandidate, ReasonSameContent, "the candidate base resolves to the content of the current base")
+	}
+
+	prep := r.p.cfg.Prepared
+	if !prep.Known() {
+		return fail(CategoryNotComparable, ReasonConditionsUnknown, "the cycle has no prepared scan conditions")
+	}
+	curDigest, ok1 := inventory.ParseDigest(inventory.DigestRegistry, curRes.ManifestDigest)
+	candDigest, ok2 := inventory.ParseDigest(inventory.DigestRegistry, candRes.ManifestDigest)
+	if !ok1 || !ok2 {
+		return fail(CategoryFailed, ReasonRegistryError, "the registry resolution has no usable manifest digest")
+	}
+	repoKey, _ := inventory.RepositoryKey(ref.Repository)
+	baseScanKey := string(RoleBaseline) + "|" + repoKey + "|" + entityString(inventory.EntityKey{Digest: curDigest, Platform: platform})
+	candScanKey := string(RoleCandidate) + "|" + repoKey + "|" + entityString(inventory.EntityKey{Digest: candDigest, Platform: platform})
+	baseScan, baseCached := r.dfScans[baseScanKey]
+	candScan, candCached := r.dfScans[candScanKey]
+	// Both limits are checked before either is spent.
+	if !baseCached && r.plan.Usage.BaselineRescans >= r.p.cfg.Limits.MaxBaselineRescans {
+		return fail(CategoryDeferred, ReasonBaselineRescanLimit, fmt.Sprintf("baseline rescan limit of %d reached", r.p.cfg.Limits.MaxBaselineRescans))
+	}
+	if !candCached && r.plan.Usage.CandidateScans >= r.p.cfg.Limits.MaxCandidateScans {
+		return fail(CategoryDeferred, ReasonCandidateScanLimit, fmt.Sprintf("candidate scan limit of %d reached", r.p.cfg.Limits.MaxCandidateScans))
+	}
+	scan := func(role ScanRole, repo, tag string, d inventory.Digest) scanned {
+		target := scanner.ScanTarget{
+			Subject: inventory.ImageSubject{
+				Ref:      repo + ":" + tag,
+				Key:      inventory.EntityKey{Digest: d, Platform: platform},
+				Resolved: true,
+			},
+			Registry: inventory.RegistryRef{Repository: repo, Digest: d},
+			Source:   scanner.SourceRemote,
+		}
+		return r.scanUnder(role, target)
+	}
+	if !baseCached {
+		r.plan.Usage.BaselineRescans++
+		baseScan = scan(RoleBaseline, ref.Repository, ref.Tag, curDigest)
+		r.dfScans[baseScanKey] = baseScan
+	}
+	if !candCached {
+		r.plan.Usage.CandidateScans++
+		candScan = scan(RoleCandidate, ref.Repository, tag, candDigest)
+		r.dfScans[candScanKey] = candScan
+	}
+	c.baseScan, c.candScan = baseScan.id, candScan.id
+	if err := r.ctx.Err(); err != nil {
+		return fail(CategoryDeferred, ReasonCycleDeadline, err.Error())
+	}
+	vr := Compare(baseScan.rec, candScan.rec).ApplyCoverage(targets, baseScan.rec, candScan.rec)
+	dec := Decide(targets, vr, r.p.cfg.Intel)
+	c.vr, c.dec = &vr, &dec
+	return c
 }
 
 // attachLayers records on each target the layers its findings were reported

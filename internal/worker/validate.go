@@ -14,6 +14,7 @@ var inputNames = map[Manager][]string{
 	ManagerPnpm: {"package.json", "pnpm-lock.yaml"},
 	ManagerUv:   {"pyproject.toml", "uv.lock"},
 	ManagerPip:  {"requirements.txt"},
+	ManagerGo:   {"go.mod", "go.sum"},
 }
 
 // optionalInputNames are the files a job may carry besides the required ones.
@@ -33,6 +34,7 @@ var opManager = map[Op]Manager{
 	OpUvUpgrade:      ManagerUv,
 	OpUvUpgradeChain: ManagerUv,
 	OpPipDryRun:      ManagerPip,
+	OpGoGet:          ManagerGo,
 }
 
 // RequiredInputNames returns the file names a job for m must carry.
@@ -78,6 +80,11 @@ var (
 	// PEP 440 versions in their normalized (lowercase) form.
 	pyVersionRe = regexp.MustCompile(`^([0-9]+!)?[0-9]+(\.[0-9]+)*((a|b|rc)[0-9]+)?(\.post[0-9]+)?(\.dev[0-9]+)?(\+[a-z0-9]+([-_.][a-z0-9]+)*)?$`)
 
+	// Go module versions: v, three numbers, an optional pre-release (which is
+	// where a pseudo-version keeps its time and commit) and the one build
+	// suffix a module version may carry.
+	goVersionRe = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+incompatible)?$`)
+
 	pyMinorRe   = regexp.MustCompile(`^3\.[0-9]{1,2}$`)
 	platformRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.]{0,63}$`)
 	abiRe       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.]{0,31}$`)
@@ -95,6 +102,39 @@ func ValidPythonName(s string) bool { return len(s) <= 100 && pyNameRe.MatchStri
 
 // ValidPythonVersion reports whether s is a normalized PEP 440 version.
 func ValidPythonVersion(s string) bool { return len(s) <= 128 && pyVersionRe.MatchString(s) }
+
+// ValidGoModulePath reports whether s is a module path as the go command
+// accepts one: ASCII letters, digits and "-._~" in elements separated by single
+// slashes, no element that starts or ends with a dot or has two dots in a row,
+// no leading dash, and a dot in the first element (the host). It is stricter
+// than the go command in the length it allows.
+func ValidGoModulePath(s string) bool {
+	if s == "" || len(s) > 255 || s[0] == '-' {
+		return false
+	}
+	for i, elem := range strings.Split(s, "/") {
+		if elem == "" || elem[0] == '.' || elem[len(elem)-1] == '.' || strings.Contains(elem, "..") {
+			return false
+		}
+		if i == 0 && !strings.Contains(elem, ".") {
+			return false
+		}
+		for _, r := range elem {
+			switch {
+			case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			case r == '-' || r == '.' || r == '_' || r == '~':
+			default:
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// ValidGoVersion reports whether s is the version of a Go module: a semantic
+// version with a leading v, which may be a pseudo-version and may end in
+// "+incompatible".
+func ValidGoVersion(s string) bool { return len(s) <= 128 && goVersionRe.MatchString(s) }
 
 // ValidStepID reports whether s may name a step and its output directory.
 func ValidStepID(s string) bool { return stepIDRe.MatchString(s) }
@@ -221,13 +261,17 @@ func (j *Job) validateRuntime() error {
 	return nil
 }
 
-// validateTool requires the tool a manager needs, and none for pip, with every
-// field in its form.
+// RunsFromImage reports whether the manager is the one the runtime image
+// carries, so that a job for it brings no tool: pip and the go command.
+func RunsFromImage(m Manager) bool { return m == ManagerPip || m == ManagerGo }
+
+// validateTool requires the tool a manager needs, and none for pip and go, with
+// every field in its form.
 func (j *Job) validateTool() error {
 	t := j.Tool
-	if j.Manager == ManagerPip {
+	if RunsFromImage(j.Manager) {
 		if t != nil {
-			return fmt.Errorf("pip runs from the Python image and takes no tool")
+			return fmt.Errorf("%s runs from the image of its runtime and takes no tool", j.Manager)
 		}
 		return nil
 	}
@@ -409,7 +453,7 @@ func (s *Step) Validate(m Manager) error {
 	if len(s.Packages) > MaxPackages {
 		return fmt.Errorf("%d packages exceed %d", len(s.Packages), MaxPackages)
 	}
-	needPkgs := s.Op == OpUvUpgrade || s.Op == OpUvUpgradeChain
+	needPkgs := s.Op == OpUvUpgrade || s.Op == OpUvUpgradeChain || s.Op == OpGoGet
 	if needPkgs != (len(s.Packages) > 0) {
 		if needPkgs {
 			return fmt.Errorf("%s needs packages", s.Op)
@@ -435,13 +479,26 @@ func (s *Step) Validate(m Manager) error {
 	return nil
 }
 
-// validatePackage checks a package of a uv.upgrade or uv.upgrade_chain step: a
+// validatePackage checks a package of a uv.upgrade, uv.upgrade_chain or go.get
+// step. For go.get it is a module path and an exact version. For uv it is a
 // Python project name and normalized versions. uv.upgrade needs a version and
 // takes no lowest version; uv.upgrade_chain takes a version, a lowest version
 // or neither, and not both.
 func validatePackage(op Op, p Package) error {
 	if strings.HasPrefix(p.Name, "-") || strings.HasPrefix(p.Version, "-") || strings.HasPrefix(p.AtLeast, "-") {
 		return fmt.Errorf("value starting with '-' is refused")
+	}
+	if op == OpGoGet {
+		if !ValidGoModulePath(p.Name) {
+			return fmt.Errorf("invalid module path %q", p.Name)
+		}
+		if !ValidGoVersion(p.Version) {
+			return fmt.Errorf("invalid version %q for %q", p.Version, p.Name)
+		}
+		if p.AtLeast != "" {
+			return fmt.Errorf("%s takes no lowest version", op)
+		}
+		return nil
 	}
 	if !ValidPythonName(p.Name) {
 		return fmt.Errorf("invalid package name %q", p.Name)

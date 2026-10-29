@@ -59,6 +59,7 @@ const (
 	ManagerPnpm Manager = "pnpm"
 	ManagerUv   Manager = "uv"
 	ManagerPip  Manager = "pip"
+	ManagerGo   Manager = "go"
 )
 
 // Op is one fixed operation. The program turns it into a command line itself;
@@ -76,6 +77,9 @@ const (
 	// lowest version, or neither (uv then picks the newest it can).
 	OpUvUpgradeChain Op = "uv.upgrade_chain"
 	OpPipDryRun      Op = "pip.dry_run"
+	// OpGoGet is one go get of every module of the step, each at an exact
+	// version.
+	OpGoGet Op = "go.get"
 )
 
 // PipReportName is the file pip.dry_run writes its install report to, in the
@@ -156,8 +160,8 @@ type Job struct {
 	Protocol int     `json:"protocol"`
 	Manager  Manager `json:"manager"`
 	Runtime  Runtime `json:"runtime"`
-	// Tool is the package manager release; pip is the one manager that has
-	// none, because it is the one of the Python image.
+	// Tool is the package manager release; pip and go have none, because they
+	// are the ones of the Python and Go images.
 	Tool *Tool `json:"tool,omitempty"`
 	// Inputs are the files under /work/src, by name, with the size and
 	// SHA-256 the main process computed. No other file may be present.
@@ -194,7 +198,7 @@ type Step struct {
 	Scratch bool   `json:"scratch,omitempty"`
 	// Packages are the update targets of uv.upgrade and uv.upgrade_chain, each
 	// a name and a version (uv.upgrade_chain: a version, a lowest version or
-	// neither).
+	// neither), and the modules of go.get, each a module path and a version.
 	Packages []Package `json:"packages,omitempty"`
 	// RequireHashes and Target are for pip.dry_run.
 	RequireHashes bool    `json:"require_hashes,omitempty"`

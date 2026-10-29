@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -8,7 +9,7 @@ import (
 
 func TestRuntimeTableIsConsistent(t *testing.T) {
 	specs := Runtimes()
-	for _, id := range []string{"node20", "node22", "node24", "node26", "python3.9", "python3.10", "python3.11", "python3.12", "python3.13", "python3.14", "python3.15"} {
+	for _, id := range []string{"node20", "node22", "node24", "node26", "python3.9", "python3.10", "python3.11", "python3.12", "python3.13", "python3.14", "python3.15", "golang1.26", "golang1.27"} {
 		if _, ok := LookupRuntime(id); !ok {
 			t.Errorf("%s is not in the table", id)
 		}
@@ -39,6 +40,13 @@ func TestRuntimeTableIsConsistent(t *testing.T) {
 			if r.VersionEnv() != "PYTHON_VERSION" || r.Interpreter() != "/usr/local/bin/"+r.ID || r.InterpreterName() != r.ID || r.Pip == "" {
 				t.Errorf("%s: %+v", r.ID, r)
 			}
+		case KindGolang:
+			if r.VersionEnv() != "GOLANG_VERSION" || r.Interpreter() != "/usr/local/go/bin/go" || r.InterpreterName() != "go" || r.Pip != "" ||
+				r.Image != "golang" || r.Label() != "Go "+r.Series || !slices.Contains(r.CoveredPaths, "/go") {
+				t.Errorf("%s: %+v", r.ID, r)
+			}
+		default:
+			t.Errorf("%s: unexpected kind %q", r.ID, r.Kind)
 		}
 		for p, d := range r.Tested {
 			if r.Platforms[p] != d {
@@ -77,6 +85,7 @@ func TestParseRuntimesRejects(t *testing.T) {
 		"eol":        strings.Replace(good, `2026-04-30`, `soon`, 1),
 		"no digests": strings.Replace(good, `"series":"20"`, `"series":"20","image":"node","version":"20.1.0"`, 1),
 		"lts_from":   strings.Replace(good, `"eol":"2026-04-30"`, `"eol":"2026-04-30","lts_from":"later"`, 1),
+		"go id":      strings.Replace(good, `"id":"node20","kind":"node"`, `"id":"golang1.20","kind":"golang"`, 1),
 		"duplicate":  strings.Replace(good, `}]}`, `},{"id":"node20","kind":"node","series":"20","eol":"2026-04-30"}]}`, 1),
 	} {
 		if _, err := parseRuntimes([]byte(bad)); err == nil {
@@ -232,5 +241,43 @@ func TestLongTermSupportAndTheDefaultNodeRuntime(t *testing.T) {
 		if !ok || got != c.want {
 			t.Errorf("default Node.js runtime on %s = %q (%v), want %s", c.now, got, ok, c.want)
 		}
+	}
+}
+
+func TestManagerKinds(t *testing.T) {
+	for m, want := range map[Manager]RuntimeKind{
+		ManagerNpm: KindNode, ManagerPnpm: KindNode, ManagerUv: KindPython, ManagerPip: KindPython, ManagerGo: KindGolang,
+	} {
+		if got := KindFor(m); got != want {
+			t.Errorf("KindFor(%s) = %q, want %q", m, got, want)
+		}
+		if !m.Known() {
+			t.Errorf("%s is not known", m)
+		}
+	}
+	// A manager the protocol does not have is no kind at all, and no row of
+	// the table is of that kind.
+	for _, m := range []Manager{"", "cargo", "yarn", "Go", "GO"} {
+		if k := KindFor(m); k != "" {
+			t.Errorf("KindFor(%q) = %q", m, k)
+		}
+		if m.Known() {
+			t.Errorf("%q is known", m)
+		}
+		for _, r := range Runtimes() {
+			if r.Kind == KindFor(m) {
+				t.Errorf("%s is taken for a runtime of the manager %q", r.ID, m)
+			}
+		}
+	}
+}
+
+func TestRuntimeSpecOfAnUnknownKindHasNothing(t *testing.T) {
+	r := RuntimeSpec{ID: "ruby3.4", Kind: "ruby", Series: "3.4"}
+	if r.VersionEnv() != "" || r.Interpreter() != "" || r.InterpreterName() != "" {
+		t.Errorf("%q %q %q", r.VersionEnv(), r.Interpreter(), r.InterpreterName())
+	}
+	if got := r.Label(); got != "ruby 3.4" {
+		t.Errorf("label %q", got)
 	}
 }

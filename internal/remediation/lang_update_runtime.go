@@ -66,12 +66,16 @@ func DefaultRuntimeIDs() []string {
 }
 
 // runtimeIDFor is the runtime a manager's jobs run in when nothing chooses
-// another, at the time now.
+// another, at the time now. Go has none: its runtime is chosen from the
+// versions an update moves to. "" is not a runtime of the table.
 func runtimeIDFor(m worker.Manager, now time.Time) string {
-	if worker.KindFor(m) == worker.KindNode {
+	switch worker.KindFor(m) {
+	case worker.KindNode:
 		return defaultNodeRuntime(now)
+	case worker.KindPython:
+		return defaultPythonRuntime
 	}
-	return defaultPythonRuntime
+	return ""
 }
 
 // lockPython is the exact Python of the runtime uv locks with; a project whose
@@ -175,7 +179,7 @@ func (u *LangUpdater) prepareJob(ctx context.Context, m worker.Manager, ts ToolS
 		Platform: u.cfg.Platform, Digest: spec.Platforms[u.cfg.Platform], Support: spec.Support, EOL: spec.EOL,
 		Basis: ts.RuntimeBasis, Declared: ts.RuntimeDeclared, Excluded: ts.RuntimeExcluded, EnginesFloor: ts.NodeFloor,
 	}
-	if m == worker.ManagerPip {
+	if worker.RunsFromImage(m) {
 		return env, nil
 	}
 	if u.cfg.Tools == nil || u.cfg.DefaultToolVersion == nil {

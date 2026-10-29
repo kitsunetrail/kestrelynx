@@ -169,13 +169,15 @@ func (c *WorkClient) buildCreateBody(jobID string, r Resources) createBody {
 			// noexec (the daemon's default); only the directory the package
 			// manager is unpacked into allows execution. /var/tmp and
 			// /run/lock, which the official images leave writable by anyone,
-			// are covered by tiny tmpfs that root owns.
+			// are covered by tiny tmpfs that root owns, and so is /go, the
+			// GOPATH of the Go images (the other images do not have it).
 			Tmpfs: map[string]string{
 				tmpMount:    tmpfsOpts(r.TmpSizeBytes, "mode=1777"),
 				homeMount:   tmpfsOpts(r.HomeSizeBytes, fmt.Sprintf("uid=%d,gid=%d,mode=0700", workUID, workGID)),
 				toolsMount:  tmpfsOpts(r.ToolsSizeBytes, fmt.Sprintf("exec,uid=%d,gid=%d,mode=0755", workUID, workGID)),
 				varTmpMount: tmpfsOpts(coveredTmpfsBytes, "mode=0755"),
 				lockMount:   tmpfsOpts(coveredTmpfsBytes, "mode=0755"),
+				goMount:     tmpfsOpts(coveredTmpfsBytes, "mode=0755"),
 			},
 			CapDrop:       []string{"ALL"},
 			SecurityOpt:   []string{"no-new-privileges"},

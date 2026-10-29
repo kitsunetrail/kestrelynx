@@ -13,6 +13,12 @@ import (
 // npmRegistry is the only registry npm and pnpm use.
 const npmRegistry = "https://registry.npmjs.org/"
 
+// The proxy and the checksum database go uses.
+const (
+	goProxy = "https://proxy.golang.org"
+	goSumDB = "sum.golang.org"
+)
+
 // Names of the empty files npm and pnpm are told to read as their user and
 // global configuration. They must be two different paths: npm refuses to load
 // the same file as both.
@@ -100,6 +106,26 @@ func (c *Config) childEnv(m worker.Manager) []string {
 		env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
 		env["PYTHONDONTWRITEBYTECODE"] = "1"
 		env["PYTHONNOUSERSITE"] = "1"
+	case worker.ManagerGo:
+		// Only these go settings reach the command: modules come from the
+		// public proxy and are checked against the public checksum database,
+		// nothing is excluded from either, no other toolchain is fetched and
+		// no configuration file or workspace is read. The module cache, the
+		// build cache and GOPATH are in the tmpfs.
+		env["GOPROXY"] = goProxy
+		env["GOSUMDB"] = goSumDB
+		env["GOPRIVATE"] = ""
+		env["GONOPROXY"] = ""
+		env["GONOSUMDB"] = ""
+		env["GOINSECURE"] = ""
+		env["GOFLAGS"] = "-mod=mod"
+		env["GOTOOLCHAIN"] = "local"
+		env["GOENV"] = "off"
+		env["GOWORK"] = "off"
+		env["CGO_ENABLED"] = "0"
+		env["GOPATH"] = filepath.Join(cache, "go")
+		env["GOMODCACHE"] = filepath.Join(cache, "go", "pkg", "mod")
+		env["GOCACHE"] = filepath.Join(cache, "go-build")
 	}
 	out := make([]string, 0, len(env))
 	for k, v := range env {

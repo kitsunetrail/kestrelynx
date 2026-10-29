@@ -114,6 +114,12 @@ PYTHON_CYCLES = {
     "3.14": {"cycle": "3.14", "releaseDate": "2025-10-07", "eol": "2030-10-31", "support": "2027-10-01"},
     "3.13": {"cycle": "3.13", "releaseDate": "2024-10-07", "eol": "2029-10-31", "support": "2026-10-01"},
 }
+GO_CYCLES = {
+    "1.28": {"cycle": "1.28", "releaseDate": "2027-02-09", "eol": False},
+    "1.27": {"cycle": "1.27", "releaseDate": "2026-08-19", "eol": False},
+    "1.26": {"cycle": "1.26", "releaseDate": "2026-02-10", "eol": False},
+    "1.25": {"cycle": "1.25", "releaseDate": "2025-08-12", "eol": "2026-08-19"},
+}
 
 
 def table_of(*rows):
@@ -171,6 +177,51 @@ class SupportTest(unittest.TestCase):
         node = {"id": "node22", "lts_from": "2024-10-29"}
         u.refresh_facts(node, {"eol": "2027-04-30", "support": "maintenance"})
         self.assertNotIn("lts_from", node)
+
+
+class GoSeriesTest(unittest.TestCase):
+    def test_a_supported_series_without_an_end_date_ends_a_year_after_its_release(self):
+        facts = u.support_facts("golang", GO_CYCLES["1.26"], "2026-10-29")
+        self.assertEqual(facts, {"eol": "2027-02-10", "support": "supported"})
+        self.assertEqual(u.support_facts("golang", GO_CYCLES["1.25"], "2026-10-29")["support"], "end_of_life")
+
+    def test_a_published_end_date_is_used_as_it_is(self):
+        c = dict(GO_CYCLES["1.26"], eol="2027-02-16")
+        self.assertEqual(u.support_facts("golang", c, "2026-10-29")["eol"], "2027-02-16")
+
+    def test_only_a_go_series_gets_an_estimate(self):
+        with self.assertRaises(u.Failure):
+            u.support_facts("node", {"cycle": "26", "releaseDate": "2026-05-05", "eol": False}, "2026-10-29")
+
+    def test_support_dates_list_the_go_series(self):
+        saved = u.cycles_of
+        try:
+            u.cycles_of = lambda kind: GO_CYCLES if kind == "golang" else {}
+            got = u.support_dates("2026-10-29")
+        finally:
+            u.cycles_of = saved
+        self.assertEqual(sorted(got), ["golang1.25", "golang1.26", "golang1.27", "golang1.28"])
+
+    def test_new_go_series_start_a_table_without_any(self):
+        got = u.new_series(table_of(), "golang", GO_CYCLES, "2026-10-29", exists=lambda k, s: True)
+        self.assertEqual([s for s, _ in got], ["1.26", "1.27"])  # 1.28 is not released, 1.25 has ended
+
+    def test_a_go_row_also_covers_the_gopath(self):
+        row = u.skeleton("golang", "1.26", {"eol": "2027-02-10", "support": "supported"}, "2026-10-29")
+        self.assertEqual(row["image"], "golang")
+        self.assertEqual(row["tag"], "1.26-trixie")
+        self.assertEqual(row["covered_paths"], ["/tmp", "/var/tmp", "/run/lock", "/go"])
+
+    def test_the_go_version_is_read_from_go_version(self):
+        saved = u.docker_run
+        try:
+            u.docker_run = lambda pinned, plat, *a: "go version go1.26.10 linux/arm64" if a == ("go", "version") else ""
+            self.assertEqual(u.exact_versions({"id": "golang1.26", "kind": "golang", "series": "1.26"}, "x", "linux/arm64"), ("1.26.10", ""))
+            u.docker_run = lambda pinned, plat, *a: "go version go1.26.10 linux/amd64"
+            with self.assertRaises(u.Failure):
+                u.exact_versions({"id": "golang1.26", "kind": "golang", "series": "1.26"}, "x", "linux/arm64")
+        finally:
+            u.docker_run = saved
 
 
 class NewSeriesTest(unittest.TestCase):

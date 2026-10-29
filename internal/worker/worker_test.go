@@ -49,6 +49,45 @@ func TestNameAndVersionValidation(t *testing.T) {
 		{ValidPythonVersion, "==1.0", false},
 		{ValidPythonVersion, "1.0 ", false},
 		{ValidPythonVersion, "1.0;x", false},
+		{ValidGoModulePath, "golang.org/x/net", true},
+		{ValidGoModulePath, "github.com/Azure/go-autorest/autorest/adal", true},
+		{ValidGoModulePath, "gopkg.in/yaml.v3", true},
+		{ValidGoModulePath, "example.com/m/v2", true},
+		{ValidGoModulePath, "example.com/a~b_c-d", true},
+		{ValidGoModulePath, "", false},
+		{ValidGoModulePath, "net", false},
+		{ValidGoModulePath, "-example.com/x", false},
+		{ValidGoModulePath, "--flag=x.com", false},
+		{ValidGoModulePath, "/example.com/x", false},
+		{ValidGoModulePath, "example.com/x/", false},
+		{ValidGoModulePath, "example.com//x", false},
+		{ValidGoModulePath, "example.com/.x", false},
+		{ValidGoModulePath, "example.com/x.", false},
+		{ValidGoModulePath, "example.com/../x", false},
+		{ValidGoModulePath, "example.com/a..b", false},
+		{ValidGoModulePath, "example.com/a b", false},
+		{ValidGoModulePath, "example.com/a@v1.0.0", false},
+		{ValidGoModulePath, "example.com/a:b", false},
+		{ValidGoModulePath, "example.com/a;b", false},
+		{ValidGoModulePath, "example.com/a\\b", false},
+		{ValidGoModulePath, "example.com/\u00e9", false},
+		{ValidGoModulePath, "example.com/a%2fb", false},
+		{ValidGoModulePath, "example.com/" + strings.Repeat("a", 250), false},
+		{ValidGoVersion, "v0.23.0", true},
+		{ValidGoVersion, "v2.0.0+incompatible", true},
+		{ValidGoVersion, "v1.2.3-rc.1", true},
+		{ValidGoVersion, "v0.0.0-20210101000000-abcdef123456", true},
+		{ValidGoVersion, "v1.2.4-0.20191109021931-daa7c04131f5", true},
+		{ValidGoVersion, "0.23.0", false},
+		{ValidGoVersion, "v0.23", false},
+		{ValidGoVersion, "v01.2.3", false},
+		{ValidGoVersion, "latest", false},
+		{ValidGoVersion, "none", false},
+		{ValidGoVersion, "v1.2.3+build.5", false},
+		{ValidGoVersion, "v1.2.3 ", false},
+		{ValidGoVersion, "v1.2.3;rm", false},
+		{ValidGoVersion, "-v1.2.3", false},
+		{ValidGoVersion, "", false},
 		{ValidStepID, "s1", true},
 		{ValidStepID, "../x", false},
 		{ValidStepID, "-s", false},
@@ -65,8 +104,11 @@ func TestNameAndVersionValidation(t *testing.T) {
 // testRuntime and testTool give a job the runtime and tool its manager needs.
 func testRuntime(m Manager) Runtime {
 	id := "node24"
-	if KindFor(m) == KindPython {
+	switch KindFor(m) {
+	case KindPython:
 		id = "python3.13"
+	case KindGolang:
+		id = "golang1.26"
 	}
 	spec, ok := LookupRuntime(id)
 	if !ok {
@@ -118,6 +160,8 @@ func TestArgv(t *testing.T) {
 			[]string{"uv", "lock", "--upgrade-package", "urllib3==2.2.2", "--upgrade-package", "idna==3.7", "--no-build", "--no-config", "--no-python-downloads", "--python", "/usr/local/bin/python3.13"}},
 		{"uv upgrade chain", ManagerUv, Step{ID: "a", Op: OpUvUpgradeChain, Packages: []Package{{Name: "pyopenssl"}, {Name: "cryptography", AtLeast: "42.0.4"}, {Name: "idna", Version: "3.7"}}},
 			[]string{"uv", "lock", "--upgrade-package", "pyopenssl", "--upgrade-package", "cryptography>=42.0.4", "--upgrade-package", "idna==3.7", "--no-build", "--no-config", "--no-python-downloads", "--python", "/usr/local/bin/python3.13"}},
+		{"go get", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "golang.org/x/net", Version: "v0.23.0"}, {Name: "gopkg.in/yaml.v3", Version: "v3.0.1"}}},
+			[]string{"go", "get", "golang.org/x/net@v0.23.0", "gopkg.in/yaml.v3@v3.0.1"}},
 		{"pip dry run", ManagerPip, Step{ID: "a", Op: OpPipDryRun},
 			[]string{"python3.13", "-m", "pip", "--isolated", "install", "--dry-run", "--ignore-installed", "--only-binary=:all:",
 				"--disable-pip-version-check", "--no-input", "--index-url", "https://pypi.org/simple", "--report", "pip-report.json", "-r", "requirements.txt"}},
@@ -171,11 +215,82 @@ func TestStepRejections(t *testing.T) {
 		{"dash platform", ManagerPip, Step{ID: "a", Op: OpPipDryRun, Target: &Target{Platforms: []string{"--index-url=x"}}}},
 		{"bad implementation", ManagerPip, Step{ID: "a", Op: OpPipDryRun, Target: &Target{Implementation: "cpython"}}},
 		{"empty target", ManagerPip, Step{ID: "a", Op: OpPipDryRun, Target: &Target{}}},
+		{"go get without packages", ManagerGo, Step{ID: "a", Op: OpGoGet}},
+		{"go get on uv", ManagerUv, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "golang.org/x/net", Version: "v0.23.0"}}}},
+		{"uv upgrade on go", ManagerGo, Step{ID: "a", Op: OpUvUpgrade, Packages: []Package{{Name: "golang.org/x/net", Version: "v0.23.0"}}}},
+		{"go python name", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "urllib3", Version: "v1.0.0"}}}},
+		{"go dash path", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "-u", Version: "v1.0.0"}}}},
+		{"go without version", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "golang.org/x/net"}}}},
+		{"go latest", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "golang.org/x/net", Version: "latest"}}}},
+		{"go python version", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "golang.org/x/net", Version: "0.23.0"}}}},
+		{"go lowest version", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "golang.org/x/net", Version: "v0.23.0", AtLeast: "v0.20.0"}}}},
+		{"go version with a query", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "golang.org/x/net", Version: "v0.23.0@v1"}}}},
+		{"go duplicate", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: []Package{{Name: "golang.org/x/net", Version: "v0.23.0"}, {Name: "golang.org/x/net", Version: "v0.24.0"}}}},
+		{"go too many packages", ManagerGo, Step{ID: "a", Op: OpGoGet, Packages: manyGoPackages(MaxPackages + 1)}},
+		{"go hashes", ManagerGo, Step{ID: "a", Op: OpGoGet, RequireHashes: true, Packages: []Package{{Name: "golang.org/x/net", Version: "v0.23.0"}}}},
 		{"bad step id", ManagerNpm, Step{ID: "../a", Op: OpNpmRelock}},
 	}
 	for _, c := range cases {
 		if _, err := Argv(testJob(c.m), c.step); err == nil {
 			t.Errorf("%s: accepted", c.name)
+		}
+	}
+}
+
+func manyGoPackages(n int) []Package {
+	var out []Package
+	for i := 0; i < n; i++ {
+		out = append(out, Package{Name: "example.com/m" + strings.Repeat("a", i%5) + string(rune('a'+i%26)) + "/p" + strings.Repeat("b", i/26), Version: "v1.0.0"})
+	}
+	return out
+}
+
+func goodGoJob() *Job {
+	h := strings.Repeat("a", 64)
+	j := testJob(ManagerGo)
+	return &Job{
+		Protocol: ProtocolVersion, Manager: ManagerGo, Runtime: j.Runtime,
+		Inputs:  []Input{{Path: "go.mod", Size: 1, SHA256: h}, {Path: "go.sum", Size: 2, SHA256: h}},
+		Steps:   []Step{{ID: "get", Op: OpGoGet, Packages: []Package{{Name: "golang.org/x/net", Version: "v0.23.0"}}}},
+		Outputs: []string{"go.mod", "go.sum"}, DeadlineSeconds: 60, StepTimeoutSeconds: 30,
+	}
+}
+
+func TestGoJobValidate(t *testing.T) {
+	if err := goodGoJob().Validate(); err != nil {
+		t.Fatalf("good go job: %v", err)
+	}
+	if got := RequiredInputNames(ManagerGo); !reflect.DeepEqual(got, []string{"go.mod", "go.sum"}) {
+		t.Errorf("required inputs %v", got)
+	}
+	if got := OptionalInputNames(ManagerGo); len(got) != 0 {
+		t.Errorf("optional inputs %v", got)
+	}
+	if got := OutputNames(ManagerGo); !reflect.DeepEqual(got, []string{"go.mod", "go.sum"}) {
+		t.Errorf("outputs %v", got)
+	}
+	h := strings.Repeat("a", 64)
+	mutations := map[string]func(*Job){
+		"no go.sum":        func(j *Job) { j.Inputs = j.Inputs[:1] },
+		"no go.mod":        func(j *Job) { j.Inputs = j.Inputs[1:] },
+		"vendor input":     func(j *Job) { j.Inputs = append(j.Inputs, Input{Path: "go.work", SHA256: h}) },
+		"npm input":        func(j *Job) { j.Inputs[0].Path = "package.json" },
+		"a tool":           func(j *Job) { j.Tool = testTool(ManagerNpm, "11.19.0") },
+		"node runtime":     func(j *Job) { j.Runtime = testRuntime(ManagerNpm) },
+		"python runtime":   func(j *Job) { j.Runtime = testRuntime(ManagerUv) },
+		"version off":      func(j *Job) { j.Runtime.Version = "1.27.1" },
+		"pip version":      func(j *Job) { j.Runtime.Pip = "26.2.1" },
+		"foreign output":   func(j *Job) { j.Outputs = []string{"requirements.txt"} },
+		"npm op":           func(j *Job) { j.Steps[0] = Step{ID: "get", Op: OpNpmRelock} },
+		"replacement":      func(j *Job) { j.Replacements = []Input{{Path: "go.sum", SHA256: h}} },
+		"unknown manager":  func(j *Job) { j.Manager = "cargo" },
+		"module path only": func(j *Job) { j.Steps[0].Packages[0].Name = "net" },
+	}
+	for name, mut := range mutations {
+		j := goodGoJob()
+		mut(j)
+		if err := j.Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
 		}
 	}
 }

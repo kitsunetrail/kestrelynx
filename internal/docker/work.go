@@ -119,6 +119,9 @@ const (
 	toolsMount  = "/opt/kestrelynx-tools"
 	varTmpMount = "/var/tmp"
 	lockMount   = "/run/lock"
+	// goMount is the GOPATH of the official Go images, which they leave
+	// writable by anyone.
+	goMount = "/go"
 	// coveredTmpfsBytes is the size of the tmpfs mounts that only cover a
 	// directory of the image that anyone could write to.
 	coveredTmpfsBytes = 1 << 20

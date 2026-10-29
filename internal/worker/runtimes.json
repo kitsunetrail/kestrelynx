@@ -249,6 +249,58 @@
       "tested": {
         "linux/amd64": "sha256:b23bb42e5298783f81e7e6f09e1175f68eb46000a789b3ee272ac231c212c4cf"
       }
+    },
+    {
+      "id": "golang1.26",
+      "kind": "golang",
+      "series": "1.26",
+      "version": "1.26.10",
+      "image": "golang",
+      "tag": "1.26-trixie",
+      "exact_tag": "1.26.10-trixie",
+      "index_digest": "sha256:a050dcceee6eb9bf110151662dfac7662f3bec40927c7dee48731e3d92083d42",
+      "platforms": {
+        "linux/amd64": "sha256:4ddd76d158c062213aaf055513809cdac05a445b2db3a0f12dbb624ed2e577d9",
+        "linux/arm64": "sha256:220fc85e089da8f6ebdb609cfe9c952e4c0784d525679419ca2bbd53f5a6cdfe"
+      },
+      "covered_paths": [
+        "/tmp",
+        "/var/tmp",
+        "/run/lock",
+        "/go"
+      ],
+      "volumes_empty": true,
+      "healthcheck": false,
+      "support": "supported",
+      "eol": "2027-02-10",
+      "checked": "2026-10-29",
+      "tested": {}
+    },
+    {
+      "id": "golang1.27",
+      "kind": "golang",
+      "series": "1.27",
+      "version": "1.27.3",
+      "image": "golang",
+      "tag": "1.27-trixie",
+      "exact_tag": "1.27.3-trixie",
+      "index_digest": "sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385",
+      "platforms": {
+        "linux/amd64": "sha256:5bbe76a31abbe0f1449d7820e550131c020b097c24d3bcfc5ad1231779982c1c",
+        "linux/arm64": "sha256:cb0d3faca7ea5b063b6cbf10a5e381421819a11591ca4cf83507bc8227d7abb6"
+      },
+      "covered_paths": [
+        "/tmp",
+        "/var/tmp",
+        "/run/lock",
+        "/go"
+      ],
+      "volumes_empty": true,
+      "healthcheck": false,
+      "support": "supported",
+      "eol": "2027-08-19",
+      "checked": "2026-10-29",
+      "tested": {}
     }
   ]
 }

@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -56,6 +57,7 @@ func DefaultEnvironment() *EnvironmentConfig {
 				{Path: worker.TmpDir},
 				{Path: "/var/tmp"},
 				{Path: "/run/lock"},
+				{Path: "/go"},
 				{Path: worker.HomeDir},
 				{Path: worker.ToolsRoot, Exec: true},
 			},
@@ -149,16 +151,25 @@ func (c *Config) checkRuntime(spec worker.RuntimeSpec, job *worker.Job, interp s
 		}
 		return strings.TrimSpace(pr.stdout), nil
 	}
-	got, err := run("--version")
-	if err != nil {
-		return err
-	}
-	want := job.Runtime.Version
+	// node and python print their version for --version; go has the command
+	// "go version", which names the platform too.
+	var got, want string
+	var err error
 	switch spec.Kind {
 	case worker.KindNode:
-		want = "v" + want
+		want = "v" + job.Runtime.Version
+		got, err = run("--version")
 	case worker.KindPython:
-		want = "Python " + want
+		want = "Python " + job.Runtime.Version
+		got, err = run("--version")
+	case worker.KindGolang:
+		want = "go version go" + job.Runtime.Version + " linux/" + runtime.GOARCH
+		got, err = run("version")
+	default:
+		return fmt.Errorf("the runtime %s is of the unknown kind %q", spec.ID, spec.Kind)
+	}
+	if err != nil {
+		return err
 	}
 	if got != want {
 		return fmt.Errorf("%s reports %q, the job asks for %q", spec.Label(), clipVersion(got), want)

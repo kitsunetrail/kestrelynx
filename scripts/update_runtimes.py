@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Update internal/worker/runtimes.json from the official Node.js and Python images.
+"""Update internal/worker/runtimes.json from the official Node.js, Python and Go images.
 
 The update containers run in the official images the table pins by digest. This
 script moves the pins forward and checks that the new images are still safe to
@@ -44,10 +44,15 @@ HUB_TAG = "https://hub.docker.com/v2/repositories/library/%s/tags/%s"
 KINDS = {
     "node": {"product": "nodejs", "image": "node", "tag": "%s-trixie-slim", "prefix": ""},
     "python": {"product": "python", "image": "python", "tag": "%s-slim-trixie", "prefix": "3."},
+    "golang": {"product": "go", "image": "golang", "tag": "%s-trixie", "prefix": "1."},
 }
+# The environment variable of the image that holds the exact version.
+VERSION_ENV = {"node": "NODE_VERSION", "python": "PYTHON_VERSION", "golang": "GOLANG_VERSION"}
 # Paths the official images leave writable by everyone; a new row starts from
 # them and the scan of the image has to agree.
 STANDARD_COVERED_PATHS = ["/tmp", "/var/tmp", "/run/lock"]
+# The Go image also leaves its GOPATH writable by everyone.
+EXTRA_COVERED_PATHS = {"golang": ["/go"]}
 FIELD_ORDER = ["id", "kind", "series", "version", "pip", "image", "tag", "exact_tag", "index_digest", "platforms",
                "covered_paths", "volumes_empty", "healthcheck", "support", "eol", "eol_month_only", "lts_from",
                "checked", "tested"]
@@ -109,6 +114,14 @@ def exact_versions(row, pinned, platform):
         if not out.startswith("v"):
             raise Failure("node --version printed %r" % out)
         return out[1:], ""
+    if row["kind"] == "golang":
+        out = docker_run(pinned, platform, "go", "version")
+        f = out.split()
+        if len(f) != 4 or f[:2] != ["go", "version"] or not f[2].startswith("go") or f[3] != platform:
+            raise Failure("go version printed %r" % out)
+        return f[2][2:], ""
+    if row["kind"] != "python":
+        raise Failure("%s: no way to read the version of a %s image" % (row.get("id"), row["kind"]))
     py = "python" + row["series"]
     out = docker_run(pinned, platform, py, "--version")
     if not out.startswith("Python "):
@@ -247,6 +260,9 @@ def support_state(kind, entry, today):
     """The maintenance state of a cycle on the date today (ISO date)."""
     if is_date(entry.get("eol")) and entry["eol"] < today:
         return "end_of_life"
+    if kind == "golang":
+        # Go supports a series until two newer ones are released.
+        return "supported"
     if kind == "node":
         in_support = is_date(entry.get("support")) and today < entry["support"]
         if not is_date(entry.get("lts")):
@@ -275,6 +291,23 @@ def optional_date(entry, key):
     raise Failure("endoflife.date gives %r as %s of %s" % (v, key, entry.get("cycle")))
 
 
+def with_estimated_eol(kind, entry):
+    """endoflife.date gives a Go series that is still supported no end date
+    (false), because it ends when the second newer series is released. The end
+    is then taken to be one year after the release, the interval of two
+    six-monthly releases; it is replaced by the published date when there is
+    one."""
+    released = entry.get("releaseDate")
+    if kind != "golang" or entry.get("eol") is not False or not is_date(released):
+        return entry
+    d = datetime.date.fromisoformat(released)
+    try:
+        end = d.replace(year=d.year + 1)
+    except ValueError:
+        end = d.replace(year=d.year + 1, day=28)
+    return dict(entry, eol=end.isoformat())
+
+
 def support_facts(kind, entry, today):
     """Return the fields of a row that endoflife.date decides for a cycle: the
     end of support, the start of long-term support (Node.js) and the state.
@@ -282,6 +315,7 @@ def support_facts(kind, entry, today):
     are dates, any other date is a date or false, and release <= start of
     long-term support <= end of support. Otherwise a Failure is raised and none
     of the cycle's answer is used."""
+    entry = with_estimated_eol(kind, entry)
     cycle = entry.get("cycle")
     released, eol = entry.get("releaseDate"), entry.get("eol")
     if not is_date(released):
@@ -309,7 +343,8 @@ def support_dates(today):
     try:
         for kind, k in KINDS.items():
             for series, entry in cycles_of(kind).items():
-                if series.startswith(k["prefix"]) and (kind == "python" or series.isdigit()) and entry.get("eol") is not None and not isinstance(entry["eol"], bool):
+                entry = with_estimated_eol(kind, entry)
+                if series.startswith(k["prefix"]) and (kind != "node" or series.isdigit()) and entry.get("eol") is not None and not isinstance(entry["eol"], bool):
                     try:
                         out[kind + series] = support_facts(kind, entry, today)
                     except Failure as e:
@@ -358,6 +393,7 @@ def new_series(table, kind, cycles, today, exists=None):
         released = entry.get("releaseDate")
         if not is_date(released) or released > today:
             continue
+        entry = with_estimated_eol(kind, entry)
         if not is_date(entry.get("eol")) or entry["eol"] < today:
             continue
         try:
@@ -377,7 +413,7 @@ def skeleton(kind, series, facts, today):
     """The row of a new series, before its image has been resolved."""
     k = KINDS[kind]
     row = {"id": kind + series, "kind": kind, "series": series, "image": k["image"], "tag": k["tag"] % series,
-           "covered_paths": list(STANDARD_COVERED_PATHS), "volumes_empty": True, "healthcheck": False,
+           "covered_paths": STANDARD_COVERED_PATHS + EXTRA_COVERED_PATHS.get(kind, []), "volumes_empty": True, "healthcheck": False,
            "checked": today, "tested": {}}
     row.update(facts)
     return row
@@ -409,7 +445,7 @@ def add_new_series(table, only, today, report):
             if only and rid not in only:
                 continue
             rows = table["runtimes"]
-            last = max(i for i, r in enumerate(rows) if r["kind"] == kind)
+            last = max((i for i, r in enumerate(rows) if r["kind"] == kind), default=len(rows) - 1)
             rows.insert(last + 1, skeleton(kind, series, facts, today))
             report.append("- %s: added (end of support %s, %s)" % (rid, facts["eol"], facts["support"]))
             added = True
@@ -443,7 +479,7 @@ def resolve_row(row, facts, today, report):
         if cfg.get("Healthcheck"):
             raise Failure("%s %s declares a health check" % (rid, plat))
         env = dict(e.split("=", 1) for e in cfg.get("Env") or [])
-        key = "NODE_VERSION" if row["kind"] == "node" else "PYTHON_VERSION"
+        key = VERSION_ENV[row["kind"]]
         if env.get(key) != next(iter(versions))[0]:
             raise Failure("%s %s: %s is %r, the executable reports %r" % (rid, plat, key, env.get(key), next(iter(versions))[0]))
         writable = scan_image(pinned[plat], plat)

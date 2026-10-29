@@ -1,11 +1,11 @@
 name: Runtime table
 
-# Moves the pins of internal/worker/runtimes.json (the official Node.js and
-# Python images the update containers run in) to the images the series tags
+# Moves the pins of internal/worker/runtimes.json (the official Node.js, Python and
+# Go images the update containers run in) to the images the series tags
 # point at now, and opens a pull request when something changed. The pull
 # request is made only after the new images pass every check:
 #   - the tags are resolved to image index digests, and both platforms are run
-#     to read the exact versions of Node.js, Python and pip
+#     to read the exact versions of Node.js, Python, pip and Go
 #   - the image configuration declares no volumes and no health check
 #   - the final filesystem of each platform holds exactly the paths the table
 #     says are covered by a tmpfs as writable by the job user

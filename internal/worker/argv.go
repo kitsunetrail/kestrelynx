@@ -93,6 +93,11 @@ func Argv(j Job, s Step) ([]string, error) {
 			}
 		}
 		a = append(a, "--no-build", "--no-config", "--no-python-downloads", "--python", python)
+	case OpGoGet:
+		a = []string{"go", "get"}
+		for _, p := range s.Packages {
+			a = append(a, p.Name+"@"+p.Version)
+		}
 	case OpPipDryRun:
 		a = []string{spec.InterpreterName(), "-m", "pip", "--isolated", "install", "--dry-run", "--ignore-installed",
 			"--only-binary=:all:", "--disable-pip-version-check", "--no-input",

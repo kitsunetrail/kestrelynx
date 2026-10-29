@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// runtimesJSON is the table of runtimes (official Node.js and Python images)
+// runtimesJSON is the table of runtimes (official Node.js, Python and Go images)
 // jobs may run in. It is part of the build: a runtime is selected only when
 // the table pins an image for it.
 //
@@ -23,16 +23,17 @@ type RuntimeKind string
 const (
 	KindNode   RuntimeKind = "node"
 	KindPython RuntimeKind = "python"
+	KindGolang RuntimeKind = "golang"
 )
 
 // RuntimeSpec is one row of the runtime table.
 type RuntimeSpec struct {
-	// ID names the runtime in a job ("node24", "python3.13").
+	// ID names the runtime in a job ("node24", "python3.13", "golang1.26").
 	ID   string      `json:"id"`
 	Kind RuntimeKind `json:"kind"`
-	// Series is the major version of Node.js or the X.Y of Python.
+	// Series is the major version of Node.js or the X.Y of Python and Go.
 	Series string `json:"series"`
-	// Version is the exact Node.js or Python version of the pinned image, and
+	// Version is the exact Node.js, Python or Go version of the pinned image, and
 	// Pip the version of the pip it carries (Python only). Both are empty for
 	// a runtime that has no image.
 	Version string `json:"version,omitempty"`
@@ -107,6 +108,10 @@ func parseRuntimes(raw []byte) ([]RuntimeSpec, error) {
 			if r.ID != "python"+r.Series {
 				return nil, fmt.Errorf("runtime %q does not match its series %q", r.ID, r.Series)
 			}
+		case KindGolang:
+			if r.ID != "golang"+r.Series {
+				return nil, fmt.Errorf("runtime %q does not match its series %q", r.ID, r.Series)
+			}
 		default:
 			return nil, fmt.Errorf("runtime %q has the unknown kind %q", r.ID, r.Kind)
 		}
@@ -171,30 +176,45 @@ func (r RuntimeSpec) HasImage() bool { return r.Image != "" }
 func (r RuntimeSpec) ImageRef() string { return r.Image + "@" + r.IndexDigest }
 
 // VersionEnv is the environment variable of the image that holds the exact
-// version of the language.
+// version of the language. It is empty for a kind the table does not have.
 func (r RuntimeSpec) VersionEnv() string {
-	if r.Kind == KindNode {
+	switch r.Kind {
+	case KindNode:
 		return "NODE_VERSION"
+	case KindPython:
+		return "PYTHON_VERSION"
+	case KindGolang:
+		return "GOLANG_VERSION"
 	}
-	return "PYTHON_VERSION"
+	return ""
 }
 
-// Interpreter is the absolute path of the node or python executable the
-// official image provides.
+// Interpreter is the absolute path of the node, python or go executable the
+// official image provides. It is empty for a kind the table does not have.
 func (r RuntimeSpec) Interpreter() string {
-	if r.Kind == KindNode {
+	switch r.Kind {
+	case KindNode:
 		return "/usr/local/bin/node"
+	case KindPython:
+		return "/usr/local/bin/" + r.ID
+	case KindGolang:
+		return "/usr/local/go/bin/go"
 	}
-	return "/usr/local/bin/" + r.ID
+	return ""
 }
 
 // InterpreterName is the name the interpreter is linked as in the directory of
-// the tools.
+// the tools. It is empty for a kind the table does not have.
 func (r RuntimeSpec) InterpreterName() string {
-	if r.Kind == KindNode {
+	switch r.Kind {
+	case KindNode:
 		return "node"
+	case KindPython:
+		return r.ID
+	case KindGolang:
+		return "go"
 	}
-	return r.ID
+	return ""
 }
 
 // EOLDate is the date support for the runtime ends.
@@ -269,10 +289,15 @@ func seriesOrder(a, b string) bool {
 
 // Label is how the runtime is named to a person.
 func (r RuntimeSpec) Label() string {
-	if r.Kind == KindNode {
+	switch r.Kind {
+	case KindNode:
 		return "Node.js " + r.Series
+	case KindPython:
+		return "Python " + r.Series
+	case KindGolang:
+		return "Go " + r.Series
 	}
-	return "Python " + r.Series
+	return string(r.Kind) + " " + r.Series
 }
 
 // JobRuntime is the Runtime a job for this runtime carries.
@@ -280,10 +305,16 @@ func (r RuntimeSpec) JobRuntime() Runtime {
 	return Runtime{ID: r.ID, Version: r.Version, Pip: r.Pip}
 }
 
-// KindFor is the kind of runtime a manager needs.
+// KindFor is the kind of runtime a manager needs. A manager the protocol does
+// not have gets the empty kind, which no row of the table has.
 func KindFor(m Manager) RuntimeKind {
-	if m == ManagerNpm || m == ManagerPnpm {
+	switch m {
+	case ManagerNpm, ManagerPnpm:
 		return KindNode
+	case ManagerUv, ManagerPip:
+		return KindPython
+	case ManagerGo:
+		return KindGolang
 	}
-	return KindPython
+	return ""
 }

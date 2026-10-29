@@ -63,9 +63,16 @@ func checkDefaultManagers(t *testing.T) {
 		if !r.HasImage() {
 			continue
 		}
-		managers := []toolfetch.Manager{toolfetch.ManagerNpm, toolfetch.ManagerPnpm}
-		if r.Kind == worker.KindPython {
+		var managers []toolfetch.Manager
+		switch r.Kind {
+		case worker.KindNode:
+			managers = []toolfetch.Manager{toolfetch.ManagerNpm, toolfetch.ManagerPnpm}
+		case worker.KindPython:
 			managers = []toolfetch.Manager{toolfetch.ManagerUv}
+		case worker.KindGolang:
+			// The go command comes with the image.
+		default:
+			t.Errorf("%s is of the kind %q, which has no managers listed here", r.ID, r.Kind)
 		}
 		for _, m := range managers {
 			if toolfetch.DefaultVersion(m, r.ID) == "" {

@@ -267,6 +267,9 @@ KustomizeとHelmのvaluesの設定例と作用先の指定方法は[Kustomizeの
 
 上限による結果は[理由コード](remediation-reference.md#reason-codes)、PRの扱いは[PRの管理](remediation-logic.md#pr-management)、実行期限と後処理は[作業用コンテナの実行](remediation-logic.md#worker-execution)を参照してください。
 
+[新しい系列の確認](remediation-logic.md#newer-series-check)も、候補スキャン・比較元の再スキャン・タグ一覧の取得・レジストリ要求の上限を通常の処理と共有します。
+PR処理のため、`cycle_timeout`の1/3を残す時点で止まり、レジストリ要求の残りが`registry_requests_per_cycle`の1/4以下なら次の要求を行いません。
+
 ### 作業用Podの設定 {#remediation-worker-kubernetes}
 
 Kubernetesモードの言語パッケージ更新に使います。

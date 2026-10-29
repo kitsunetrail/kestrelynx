@@ -35,11 +35,12 @@ Update: base image python 3.12.3-slim → 3.12.4-slim
 | Pull request | A PR link and its status: opened now, open, merged, or closed without merging. |
 | Update | Image tag or package changes proposed by the PR. |
 | Update candidate | A proposed change that does not necessarily have a PR yet. |
+| Newer series | A newer minor or major candidate resolves all or some findings without adding findings; guidance separate from PR candidates. |
 | Re-pull | The comparison supports updating to new content under the same tag. |
 | Pull policy | The image pull policy and re-pull guidance for the affected workloads, shown on Kubernetes re-pull items. |
 | Managed by (from markers) | The management chain shown when Kubernetes resources carry management markers; attribution is inferred from those markers. |
 | Rebuild | Expected resolution based on a dependency version constraint, or guidance to pull the base again and rebuild. |
-| Needs a decision | Manual handling is needed for the source, version constraints, update method, comparison results, or similar issues. |
+| Needs a decision | Manual handling is needed for the source, version constraints, update method, comparison results, or similar issues, including newer-series candidates that resolve findings but add new findings or KEV-listed findings. |
 | Deferred | Processing could not proceed because of limits, waiting periods, retrieval problems, or similar issues. |
 | Not comparable | Information or conditions needed for the comparison were missing. |
 | Failed | A scan, retrieval, update, or other operation failed. |
@@ -49,6 +50,19 @@ Update: base image python 3.12.3-slim → 3.12.4-slim
 Packages with an update target that need a decision appear on individual lines.
 Packages without a target are grouped by reason, with a package list below each reason.
 
+A single “Newer series” line appears for `resolves` or `resolves_partially`, and a “Needs a decision” line for `resolves_with_new`.
+`not_resolving`, `not_checked`, and `no_newer_series` produce no line in the remediation plan message.
+
+| Result | Example |
+| --- | --- |
+| All resolved | `Newer series: nginx 1.24.1 → 1.27.3 (minor update, resolves 1 finding(s), compatibility not checked)` |
+| Partly resolved | `Newer series: nginx 1.24.1 → 1.27.3 (minor update, resolves 1 of 2 findings, compatibility not checked)` |
+| Base comparison | `Newer series: base image python 3.11.9-slim → 3.13.1-slim (minor update, resolves 2 finding(s), base images compared, the rebuilt image not checked, compatibility not checked)` |
+| New findings added | `Needs a decision: nginx 1.24.1 → 2.0.1 in a newer series resolves 1 finding(s) and adds 2 (major update, compatibility not checked)` |
+
+A change to this line causes the remediation plan message to be sent as a change.
+See [Newer series check](remediation-logic.md#newer-series-check) for check scope and candidate selection.
+
 For reason definitions, see [Reason codes](remediation-reference.md#reason-codes); for troubleshooting steps, see [When no candidate or pull request appears](remediation-troubleshooting.md).
 
 ### Reading counts {#reading-counts}
@@ -57,6 +71,7 @@ For reason definitions, see [Reason codes](remediation-reference.md#reason-codes
 | --- | --- |
 | `Pull requests: … created · … open` and similar summaries | The status of each update unit handled by PR processing. |
 | `… update candidate(s) · … need a decision` and similar summaries | Display categories for each item, such as a file to change or an image to re-pull. |
+| `… resolved in a newer series` | Items with newer-series status `resolves` or `resolves_partially`, not resolved findings or PRs. |
 | `resolves … finding(s)` | Findings no longer detected in the comparison. |
 | `… KEV` | Counts related to vulnerabilities in the CISA KEV catalog included in the displayed results. |
 

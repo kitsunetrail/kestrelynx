@@ -269,6 +269,9 @@ The following options are under `remediation.limits`.
 
 See [Reason codes](remediation-reference.md#reason-codes) for outcomes caused by limits, [PR management](remediation-logic.md#pr-management) for PR handling, and [Work container execution](remediation-logic.md#worker-execution) for execution deadlines and cleanup.
 
+The [Newer series check](remediation-logic.md#newer-series-check) shares the candidate-scan, baseline-rescan, tag-listing, and registry-request limits with normal processing.
+To reserve capacity for PR processing, it stops with one third of `cycle_timeout` remaining and makes no further registry request when the remaining budget is at most one quarter of `registry_requests_per_cycle`.
+
 ### Work Pod configuration {#remediation-worker-kubernetes}
 
 These settings apply to language-package updates in Kubernetes mode.

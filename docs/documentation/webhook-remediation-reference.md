@@ -70,6 +70,30 @@ The item's `reason` and supplementary `detail` are omitted when empty.
 | `items[].kev_targets` | integer | Number of comparison targets listed in KEV; omitted when `0`. |
 | `items[].comparison` | object | Comparison result; omitted when no result is available. |
 | `items[].scans` | array of objects | Records of scans used for comparison; omitted when empty. |
+| `items[].newer_series` | object | Newer series check result; omitted when no result is available. |
+| `items[].newer_series.status` | string | A [Newer series status value](remediation-reference.md#newer-series-status-values). |
+| `items[].newer_series.shown` | string | Tag of the candidate selected for display; omitted when none is selected. |
+| `items[].newer_series.reason` / `items[].newer_series.detail` | string | Reason, such as why the result is `not_checked`, and additional details; omitted when empty. |
+| `items[].newer_series.candidates` | array of objects | Candidate results in the order checked. |
+| `items[].newer_series.candidates[].tag` | string | Candidate tag. |
+| `items[].newer_series.candidates[].change` | string | `minor` or `major`. |
+| `items[].newer_series.candidates[].status` | string | Candidate status. |
+| `items[].newer_series.candidates[].reason` / `items[].newer_series.candidates[].detail` | string | Candidate reason and additional details; omitted when empty. |
+| `items[].newer_series.candidates[].candidate` | object | Image information in the existing `candidate` format; omitted if the candidate's content cannot be resolved. |
+| `items[].newer_series.candidates[].counts` | object | Counts of target outcomes and added findings. |
+| `items[].newer_series.candidates[].counts.targets` / `resolved` / `remaining` | integer | Target, resolved, and remaining counts. |
+| `items[].newer_series.candidates[].counts.unknown` / `undetected` | integer | Counts of indeterminate findings and findings not detected in the baseline. |
+| `items[].newer_series.candidates[].counts.introduced` / `introduced_kev` | integer | Counts of newly detected findings and newly introduced KEV-listed findings. |
+| `items[].newer_series.candidates[].comparison` | object | Uses the existing `comparison` format, with `verdicts` containing only target findings and the same list limits; `decision` is omitted, and this field is omitted when no result is available. |
+| `items[].newer_series.candidates[].scans` | array of objects | Uses the existing `scans` format without scan IDs; omitted when empty. |
+
+If the candidate tag points to the same content as the current image, scanning is skipped.
+`comparison` marks all targets as `remaining`, and `scope` contains an English statement that no scan was performed.
+
+For newer-series results, Webhook change detection uses the following information.
+
+- Includes status, the displayed candidate, reason, candidate content (digests), counts, and per-target outcomes
+- Excludes scan IDs, timestamps, and `detail`
 
 Image information in `current` and `candidate` uses the following format.
 Image information in base-image items uses the same format.
@@ -123,6 +147,16 @@ See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for
 | `dockerfile_items[].counts` | object | Integer counts named `targets`, `resolved`, `remaining`, and `introduced`. |
 | `dockerfile_items[].rebuild_runtimes` | array of objects | Aggregated runtime rebuild estimates when all running images have the `floating_base_unconfirmed` outcome; omitted when empty. |
 | `dockerfile_items[].entities` | array of objects | Matching and comparison results for each running image; omitted when empty. |
+| `dockerfile_items[].newer_series` | object | Newer series check result across all running images; omitted when no result is available. |
+| `dockerfile_items[].newer_series.status` | string | A [Newer series status value](remediation-reference.md#newer-series-status-values). |
+| `dockerfile_items[].newer_series.shown` | string | Tag of the candidate selected for display; omitted when none is selected. |
+| `dockerfile_items[].newer_series.reason` / `dockerfile_items[].newer_series.detail` | string | Reason and additional details; omitted when empty. |
+| `dockerfile_items[].newer_series.candidates` | array of objects | Aggregate candidate results in the order checked, without `comparison` or `scans`. |
+| `dockerfile_items[].newer_series.candidates[].tag` / `change` / `status` | string | Candidate tag, change type, and status, as defined in [Published image fields](#remediation-image-fields). |
+| `dockerfile_items[].newer_series.candidates[].reason` / `detail` | string | Candidate reason and additional details; omitted when empty. |
+| `dockerfile_items[].newer_series.candidates[].candidate` | object | Candidate image information; omitted if its content cannot be resolved. |
+| `dockerfile_items[].newer_series.candidates[].counts` | object | Integer counts named `targets`, `resolved`, `remaining`, `unknown`, `undetected`, `introduced`, and `introduced_kev`, as defined in [Published image fields](#remediation-image-fields). |
+| `dockerfile_items[].entities[].newer_series` | object | Per-running-image result, including candidate, comparison, and scan records in the same format as `items[].newer_series`; omitted when no result is available. |
 | `dockerfile_items[].final_image_verified` | boolean | Whether the rebuilt application image has been verified; always `false`. |
 | `dockerfile_items[].pull_request` | object | Matching [PR processing](#remediation-pr-fields); omitted when there is no match. |
 

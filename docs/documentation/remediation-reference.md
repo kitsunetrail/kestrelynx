@@ -415,6 +415,22 @@ See [Runtime selection](remediation-logic.md#runtime-and-tool-versions) for sele
 | `excluded` | Outside automatic candidate selection |
 | `failed` | Processing failed |
 
+### Newer series status values {#newer-series-status-values}
+
+`newer_series.status` and each candidate's `status` describe whether a newer series resolves the target findings.
+The item's overall `category` remains unchanged.
+
+| Value | Meaning |
+| --- | --- |
+| `resolves` | All targets are resolved without added findings |
+| `resolves_partially` | Some targets are resolved, some remain, and no findings are added |
+| `resolves_with_new` | At least one target is resolved, but new findings or KEV-listed findings are added |
+| `not_resolving` | No targets are resolved |
+| `not_checked` | Checking could not be completed because of retrieval or scan failures, limits, deadlines, indeterminate targets, or targets not detected in the baseline |
+| `no_newer_series` | No newer-series tag meets the conditions |
+
+See [Newer series check](remediation-logic.md#newer-series-check) for candidate selection and comparison scope.
+
 ### Package action values {#action-values}
 
 `action` describes how an individual package is handled.
@@ -485,6 +501,8 @@ The following tables give each code's meaning and related decision rules or chec
 | `targets_not_detected_on_baseline` | The baseline scan did not detect the target findings | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 | `analysis_incomplete` | The analysis of the image was incomplete | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 | `tag_listing_incomplete` | The tag list could not be read to the end | [Tag discovery](remediation-logic.md#tag-discovery) |
+| `newer_series_tag_list_incomplete` | The full tag list needed to select a newer series could not be read to the end | [Newer series check](remediation-logic.md#newer-series-check) |
+| `newer_series_reserved` | The newer series check stopped to reserve time and registry requests for PR processing | [Newer series check](remediation-logic.md#newer-series-check) |
 | `candidate_scan_limit` | The limit on candidate scans in a run was reached | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
 | `baseline_rescan_limit` | The limit on baseline image rescans was reached | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
 | `tag_page_limit` | The limit on tag list requests was reached | [Tag discovery](remediation-logic.md#tag-discovery) |
@@ -754,7 +772,7 @@ In webhooks, check both `packages[].reason` and `update.chain.reason`.
 | Code | Meaning | Details |
 | --- | --- | --- |
 | `pr_limit` | The limit on PRs created in a run, or on open PRs, was reached (`detail` says which) | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_changed` | The candidate changed while the PR was being prepared | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
+| `candidate_changed` | The candidate changed while the PR was being prepared, or a Dockerfile candidate tag pointed to different content across running images during the newer series check | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr), [Newer series check](remediation-logic.md#newer-series-check) |
 | `base_moved` | The base branch advanced while the PR was being prepared | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `github_rate_limited` | GitHub limited the request rate | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `write_outcome_unknown` | The result of a GitHub write cannot be confirmed | [Stopping writes](remediation-logic.md#write-stops) |

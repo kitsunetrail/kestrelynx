@@ -237,28 +237,43 @@ See [Vulnerability fields](webhook-reference.md#vulnerability-fields) for comple
 
 ### Base image update wait {#base-image-wait}
 
-```text
-Action: waiting for a newer base image of elasticsearch 8.19.23 (no newer tag in the same series)
-```
+When findings are not resolved within the same series, the card's `Action:` line shows the newer series check result.
+It appears after `Findings:` in detailed and compact channel cards, thread cards, and diff cards.
 
-The line has the following meaning.
+The name is the last part of the repository name without the registry hostname.
+The current version is the current tag, which for a Dockerfile is the tag specified by `FROM`.
 
-- The package with the finding comes from the base image specified by `FROM` in the Dockerfile.
-- Examples include jars such as `org.jsoup:jsoup` bundled in the official Elasticsearch image `8.19.23`.
-- The remediation plan finds no newer version (tag) of the base image in the same series.
-- Even when a fixed package version exists, KestreLynx cannot yet create a PR in the project to fix that finding.
-- A newer base image in the same series becomes a candidate for a PR that updates the base image.
-- The name is the last part of the base image repository name without the registry hostname, and the version is the tag specified by `FROM` in the Dockerfile.
+| Result | Example |
+| --- | --- |
+| Resolved in a base image | `Action: base image python 3.11.9 → 3.13.1 resolves it (minor update, no newer tag in the same series, base images compared)` |
+| Partly resolved in a published image | `Action: image nginx 1.24.1 → 1.27.3 resolves part of it (1 of 2, minor update, no newer tag in the same series)` |
+| No newer same-series tag, and findings remain in checked candidates | `Action: waiting for a newer image of nginx 1.24.1 (not resolved in the checked tag(s) 1.27.3 and 2.0.1 either)` |
+| Findings remain in both the newer same-series tag and checked candidates | `Action: waiting for a newer image of nginx (not resolved by the newer tag of the same series or the checked tag(s) 2.0.1)` |
+| No newer tag in the same series or a matching newer series | `Action: waiting for a newer base image of python 3.11.9 (no newer tag in the same series or in a newer series of the same form)` |
+| Newer series could not be checked and the existing guidance is retained | `Action: waiting for a newer base image of python 3.11.9 (no newer tag in the same series)` |
 
-The line appears after `Findings:` in detailed cards, compact cards, thread cards, and diff cards when all the following conditions hold.
+The line uses results for every finding with an available fix on that card, based on the candidate selected for display in the same cycle's remediation plan.
 
-- Remediation planning is enabled for the same scan cycle, and the plan identifies every finding with an available fix for that package as waiting for the same base image.
-- Every copy of the package is confirmed to be in the base image layers.
-- The actual running image is confirmed to match the image assessed by the plan.
+- Dockerfile results cover findings attributed to the base image and use the subject “base image”
+- Published-image results use the subject “image” and do not require layer confirmation
+- When Dockerfile results differ between running images, the result for that image is used
+- If the original reason is `same_content` or `candidate_does_not_resolve_targets`, resolution and partial-resolution lines use “not resolved by the newer tag of the same series” instead of “no newer tag in the same series”
+- If the displayed candidate has status `resolves_with_new`, the line adds “with new findings”
+- Dockerfile lines add “base images compared” to indicate a comparison between base images, and omit this phrase from lines reporting that no newer series exists
 
-The line is absent when a layer added by the project also contains the package or when these conditions cannot be confirmed.
+A newer version (patch) in the same series becomes a candidate for a PR that updates the base-image or image tag.
+Newer-series lines do not result in PRs.
 
-See [Base image selection](remediation-logic.md#base-image-selection) for how the remediation plan selects the base image and update candidates.
+Newer-series results are not displayed in the following cases.
+
+- For `not_checked` or indeterminate findings, a Dockerfile item with “no newer tag in the same series” retains the existing line, and other cases show no line
+- `no_newer_series` shows no line when the original reason is not `no_newer_tag`
+- No line is shown when the Dockerfile base and published image produce different lines for the same finding
+
+A change to the card line alone does not resend the detailed thread report.
+It arrives when findings change or in the weekly full report.
+
+See [Newer series check](remediation-logic.md#newer-series-check) for candidate selection and check scope, and [Displayed fields](remediation-results.md#slack-fields) for remediation plan messages.
 
 ### Upgrade risk {#upgrade-risk}
 

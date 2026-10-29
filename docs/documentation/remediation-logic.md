@@ -71,7 +71,7 @@ The running image reference determines which candidate to compare.
 
 | Tag type | Candidate selection | Treatment after adoption |
 | --- | --- | --- |
-| Pinned tag specifying a full version | Selects the newest patch above the current version in the same major, minor, prefix, and suffix series. | Becomes a candidate for a PR that changes the tag in Compose, a Kubernetes manifest, Kustomize, or Helm values if source-editing requirements are also met. |
+| Pinned tag specifying a full version | Selects the newest patch above the current version in the same major, minor, prefix, and suffix series. If candidates in the same series do not resolve the findings, KestreLynx performs the [Newer series check](#newer-series-check). | Becomes a candidate for a PR that changes the tag in Compose, a Kubernetes manifest, Kustomize, or Helm values if source-editing requirements are also met. |
 | Floating tag | Selects the content the same tag currently points to in the registry. | Produces re-pull guidance if an improvement is confirmed, without a PR because the reference does not change. |
 
 - A candidate with the same image content as the running image is not an update candidate
@@ -160,6 +160,89 @@ If the registry supports listing from a specified starting position, the search 
 | A limit, deadline, or other condition interrupted retrieval | Defers processing without treating the highest version retrieved as the latest patch. |
 
 See [Processing limits](configuration.md#remediation-limits) for retrieval and time settings.
+
+### Newer series check {#newer-series-check}
+
+For pinned tags whose findings are not resolved within the same major and minor series, KestreLynx checks whether a newer minor or major version resolves them.
+This check is always enabled and has no additional settings.
+
+#### Eligible items {#newer-series-eligibility}
+
+| Target | Conditions for checking |
+| --- | --- |
+| Published image | Pinned tags of containers in Compose, Kubernetes, or docker run, without requiring a mapping. Checks items with category `no_candidate`, one of the reasons below, and at least one target finding. |
+| Dockerfile | Pinned-tag `FROM` references in mapped Dockerfiles, where every running image has one of the reasons below. Reasons may differ between images. |
+
+| Same-series result | Meaning |
+| --- | --- |
+| `no_newer_tag` | No newer patch exists in the same series. |
+| `same_content` | The newer patch points to the same content as the current image. |
+| `candidate_does_not_resolve_targets` | The newer patch does not resolve the target findings. |
+
+- The plan item's category stays unchanged, and Dockerfile items with different reasons across running images are checked while still needing a decision
+- Floating tags such as `node:22-alpine`, digest-pinned references, and prereleases are excluded
+- Versions with a different prefix or suffix, such as a change from `-alpine` to `-bookworm`, are excluded
+- Remaining findings in an item that became a PR candidate after a same-series candidate resolved some findings are excluded
+
+#### Versions checked {#newer-series-versions}
+
+Candidates come from the repository's full tag list and must specify a three-number version, have the same prefix and suffix as the current tag, belong to a newer series, and not be prereleases.
+
+| Order | Candidate | Example when the current version is `1.24.1` |
+| --- | --- | --- |
+| First | The latest tag with the same major and a newer minor | `1.27.3` |
+| Second | The latest tag with a newer major | `2.0.1` |
+
+- The full list is retrieved only once per repository per cycle and reused if the same-series search already read it
+- Listing requests use the remaining `tag_pages_per_repository` budget, with `newer_series_tag_list_incomplete` reported if the list cannot be read to the end
+- If there is no same-major candidate, checking starts with the newer-major candidate
+- If the first candidate resolves all targets without adding findings, the second is not checked
+- If the first candidate cannot be checked, KestreLynx does not skip ahead to the second
+
+#### Comparison and decisions {#newer-series-comparison}
+
+[Scan comparison conditions](#comparison-conditions) are the same as for same-series candidates.
+The baseline and candidate are scanned and compared under the prepared database conditions.
+
+| Target | Comparison scope |
+| --- | --- |
+| Published image | Compares the running image with the candidate. |
+| Dockerfile | Compares the current and candidate base images. When there are multiple running images, comparisons cover all of them and require the candidate tag to point to the same content for all. |
+| Candidate with the same content as the current image | Skips scanning and treats all targets as remaining. |
+
+- If a Dockerfile candidate tag points to different content across images, the reason is `candidate_changed`
+- Candidates use the [Newer series status values](remediation-reference.md#newer-series-status-values), with `not_checked` when any target is indeterminate or not detected in the baseline
+- The displayed candidate prioritizes `resolves`; otherwise, the candidate resolving the most findings is selected
+- Ties favor the candidate without added findings, then the one checked first
+- `not_checked` candidates are not selected, and the result is `not_resolving` when every checked candidate leaves all targets unresolved
+
+#### Limits and capacity reserved for PR processing {#newer-series-limits}
+
+The check runs after planning and language-package updates, before the plan is saved.
+It shares [Processing limits](configuration.md#remediation-limits) with normal processing and reserves time and registry requests for PR processing.
+
+| Limit | Treatment during the newer series check |
+| --- | --- |
+| `candidate_scans_per_cycle` / `baseline_rescans_per_cycle` | Uses the remaining candidate-scan and baseline-rescan budgets. |
+| `tag_pages_per_repository` / `registry_requests_per_cycle` | Uses the remaining tag-listing and registry-request budgets. |
+| `cycle_timeout` | Stops one third of the configured duration before the cycle deadline, leaving 10 minutes with the default `30m`. KEV catalog lookups also stop at this earlier deadline. |
+| Reserved registry requests | Stops before making the next request when the remaining budget is at most one quarter of `registry_requests_per_cycle`, leaving 50 requests with the default `200`. |
+
+- Candidates stopped to reserve PR capacity and unprocessed items become `not_checked` with reason `newer_series_reserved`
+- Reaching the cycle's own deadline uses `cycle_deadline`
+- Once checking ends, PR processing can use all remaining time and registry requests
+- Items are checked in `act_now`, `watch`, then other priority order, with Dockerfile items ordered by base-finding priority
+- Checks run again every cycle without carrying results forward, so lower-priority items may repeatedly remain `not_checked` when budgets are insufficient
+
+Separately from startup logs, cycles with eligible items log `newer series checked`.
+The log records `items`, `resolving`, `not_checked`, `candidate_scans`, `baseline_rescans`, `tag_pages`, and `registry_requests`.
+
+#### Checks and actions not performed {#newer-series-non-goals}
+
+- No PR is created to update to a newer series
+- Application compatibility with the newer version is not checked
+- Dockerfile checks do not verify the rebuilt final image
+- Intermediate minor versions are not checked, so failure to resolve findings in the checked candidates does not establish that no fixed version exists
 
 ### Excluding local builds {#local-builds}
 

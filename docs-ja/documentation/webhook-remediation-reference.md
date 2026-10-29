@@ -70,6 +70,30 @@
 | `items[].kev_targets` | integer | KEVに掲載された比較対象の所見数で、`0`なら省略 |
 | `items[].comparison` | object | 比較結果で、結果がなければ省略 |
 | `items[].scans` | objectの配列 | 比較に使ったスキャンの記録で、空なら省略 |
+| `items[].newer_series` | object | 新しい系列の確認結果で、結果がなければ省略 |
+| `items[].newer_series.status` | string | [新しい系列の状態値](remediation-reference.md#newer-series-status-values) |
+| `items[].newer_series.shown` | string | 表示する候補のタグで、なければ省略 |
+| `items[].newer_series.reason` / `items[].newer_series.detail` | string | `not_checked`の理由などと補足で、空なら省略 |
+| `items[].newer_series.candidates` | objectの配列 | 候補を調べた順に並べた結果 |
+| `items[].newer_series.candidates[].tag` | string | 候補のタグ |
+| `items[].newer_series.candidates[].change` | string | `minor`または`major` |
+| `items[].newer_series.candidates[].status` | string | 候補の状態 |
+| `items[].newer_series.candidates[].reason` / `items[].newer_series.candidates[].detail` | string | 候補の理由と補足で、空なら省略 |
+| `items[].newer_series.candidates[].candidate` | object | 既存の`candidate`と同じ形式のイメージ情報で、候補の内容を解決できなければ省略 |
+| `items[].newer_series.candidates[].counts` | object | 対象の解消状況と増加の件数 |
+| `items[].newer_series.candidates[].counts.targets` / `resolved` / `remaining` | integer | 対象・解消・残存の件数 |
+| `items[].newer_series.candidates[].counts.unknown` / `undetected` | integer | 判定不能・比較元で未検出の件数 |
+| `items[].newer_series.candidates[].counts.introduced` / `introduced_kev` | integer | 新規検出・新たに入るKEV掲載の所見の件数 |
+| `items[].newer_series.candidates[].comparison` | object | 既存の`comparison`と同じ形式で、`verdicts`は対象の所見だけを含み、一覧の上限も既存と同じで、`decision`は省略し、結果がなければこのフィールドも省略 |
+| `items[].newer_series.candidates[].scans` | objectの配列 | 既存の`scans`と同じ形式で、スキャンIDは出力せず、空なら省略 |
+
+候補のタグが現在のイメージと同じ内容を指す場合はスキャンしません。
+`comparison`は対象をすべて`remaining`とし、`scope`にはスキャンしていないことを示す英文が入ります。
+
+新しい系列の結果について、Webhookの送信判定には次の情報を使います。
+
+- 状態、表示する候補、理由、候補の内容（digest）、件数、対象ごとの結果を含める
+- スキャンID、時刻、`detail`は含めない
 
 `current`と`candidate`のイメージ情報は、次の形式です。
 ベースイメージの項目に含むイメージ情報も同じ形式を使用します。
@@ -123,6 +147,16 @@
 | `dockerfile_items[].counts` | object | 整数値の`targets`・`resolved`・`remaining`・`introduced`による集計 |
 | `dockerfile_items[].rebuild_runtimes` | objectの配列 | 全稼働イメージが`floating_base_unconfirmed`の場合にまとめたランタイムの再ビルドの見込みで、空なら省略 |
 | `dockerfile_items[].entities` | objectの配列 | 稼働イメージごとの照合・比較結果で、空なら省略 |
+| `dockerfile_items[].newer_series` | object | 稼働イメージ全体の新しい系列の確認結果で、結果がなければ省略 |
+| `dockerfile_items[].newer_series.status` | string | [新しい系列の状態値](remediation-reference.md#newer-series-status-values) |
+| `dockerfile_items[].newer_series.shown` | string | 表示する候補のタグで、なければ省略 |
+| `dockerfile_items[].newer_series.reason` / `dockerfile_items[].newer_series.detail` | string | 理由と補足で、空なら省略 |
+| `dockerfile_items[].newer_series.candidates` | objectの配列 | 候補を調べた順に並べた全体の結果で、`comparison`と`scans`は含まない |
+| `dockerfile_items[].newer_series.candidates[].tag` / `change` / `status` | string | 候補のタグ・変更の種類・状態で、[配布イメージのフィールド](#remediation-image-fields)と同じ定義 |
+| `dockerfile_items[].newer_series.candidates[].reason` / `detail` | string | 候補の理由と補足で、空なら省略 |
+| `dockerfile_items[].newer_series.candidates[].candidate` | object | 候補のイメージ情報で、内容を解決できなければ省略 |
+| `dockerfile_items[].newer_series.candidates[].counts` | object | 整数値の`targets`・`resolved`・`remaining`・`unknown`・`undetected`・`introduced`・`introduced_kev`による集計で、[配布イメージのフィールド](#remediation-image-fields)と同じ定義 |
+| `dockerfile_items[].entities[].newer_series` | object | 稼働イメージごとの結果で、`items[].newer_series`と同じ形式の候補・比較・スキャン記録を含み、結果がなければ省略 |
 | `dockerfile_items[].final_image_verified` | boolean | 再ビルド後のアプリケーションイメージの検証有無で、常に`false` |
 | `dockerfile_items[].pull_request` | object | 対応する[PR処理](#remediation-pr-fields)で、対応がなければ省略 |
 

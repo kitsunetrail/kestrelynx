@@ -415,6 +415,22 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 | `excluded` | 自動で候補を探す対象外 |
 | `failed` | 処理に失敗 |
 
+### 新しい系列の状態値 {#newer-series-status-values}
+
+`newer_series.status`と候補の`status`は、新しい系列で対象の所見が解消するかを表します。
+項目全体の`category`は変更しません。
+
+| 値 | 意味 |
+| --- | --- |
+| `resolves` | 対象がすべて解消し、新しい所見の増加がない |
+| `resolves_partially` | 対象の一部が解消し、残りがあり、新しい所見の増加がない |
+| `resolves_with_new` | 対象が1件以上解消し、新しい所見またはKEV掲載の所見が増える |
+| `not_resolving` | 解消した対象が0件 |
+| `not_checked` | 取得・スキャンの失敗、上限、期限、判断できない対象、比較元で検出されない対象があるため確認できない |
+| `no_newer_series` | 条件に合う新しい系列のタグがない |
+
+候補の選び方と比較範囲は[新しい系列の確認](remediation-logic.md#newer-series-check)を参照してください。
+
 ### パッケージの処理値 {#action-values}
 
 `action`は個々のパッケージの扱いです。
@@ -485,6 +501,8 @@ PR記録の`state`には、次の値があります。
 | `targets_not_detected_on_baseline` | 比較元のスキャンで対象の所見が検出されなかった | [比較条件](remediation-logic.md#comparison-conditions) |
 | `analysis_incomplete` | イメージの解析が不完全だった | [比較条件](remediation-logic.md#comparison-conditions) |
 | `tag_listing_incomplete` | タグ一覧を最後まで取得できなかった | [タグ一覧の探索](remediation-logic.md#tag-discovery) |
+| `newer_series_tag_list_incomplete` | 新しい系列を選ぶためのタグ一覧の全体を最後まで取得できなかった | [新しい系列の確認](remediation-logic.md#newer-series-check) |
+| `newer_series_reserved` | PR処理の時間とレジストリ要求を残すため、新しい系列の確認を止めた | [新しい系列の確認](remediation-logic.md#newer-series-check) |
 | `candidate_scan_limit` | 1回の実行でスキャンできる候補数の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
 | `baseline_rescan_limit` | 比較元イメージを再スキャンできる数の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
 | `tag_page_limit` | タグ一覧の取得回数の上限に達した | [タグ一覧の探索](remediation-logic.md#tag-discovery) |
@@ -754,7 +772,7 @@ Webhookでは、`packages[].reason`と`update.chain.reason`を併せて確認し
 | コード | 意味 | 詳しい説明 |
 | --- | --- | --- |
 | `pr_limit` | 1回の実行で作成するPR数、またはオープン中のPR数の上限に達した（どちらかは`detail`で確認する） | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_changed` | PRの準備中に候補が変わった | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
+| `candidate_changed` | PRの準備中に候補が変わった、または新しい系列の確認でDockerfileの候補タグが稼働イメージごとに異なる内容を指した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr)、[新しい系列の確認](remediation-logic.md#newer-series-check) |
 | `base_moved` | PRの準備中にベースブランチが進んだ | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `github_rate_limited` | GitHubのレート制限に掛かった | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `write_outcome_unknown` | GitHubへの書き込み結果を確認できない | [書き込みの停止](remediation-logic.md#write-stops) |

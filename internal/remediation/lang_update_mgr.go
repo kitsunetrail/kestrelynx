@@ -21,7 +21,10 @@ func (r *updateRun) run(ctx context.Context) *updateFailure {
 	}
 	r.src = src
 	r.manifest = src.manifest
-	if r.it.Manager != ManagerPip {
+	// pip runs from the Python image and the go command from the Go image,
+	// whose release is chosen from what the update needs (see runGo); the
+	// others take the runtime and the manager's release the project declares.
+	if r.it.Manager != ManagerPip && r.it.Manager != ManagerGo {
 		in := ToolSpecInput{
 			Manager: r.it.Manager, Manifest: src.manifest, Lock: src.lock, Files: src.specFiles, UvToml: src.uvToml,
 			Now: r.u.now(),
@@ -41,8 +44,9 @@ func (r *updateRun) run(ctx context.Context) *updateFailure {
 		}
 	}
 	// Only a lockfile tells where each package ended up; a pip update pins its
-	// packages exactly and has nothing to leave out.
-	if r.it.Manager == ManagerPip {
+	// packages exactly and has nothing to leave out, and a Go update takes
+	// its targets in one go get, all or none.
+	if r.it.Manager == ManagerPip || r.it.Manager == ManagerGo {
 		r.noPartial = true
 	}
 	// The sizes the planning below works over are checked first: the
@@ -71,6 +75,8 @@ func (r *updateRun) run(ctx context.Context) *updateFailure {
 		out = r.runUv(ctx)
 	case ManagerPip:
 		out = r.runPip(ctx)
+	case ManagerGo:
+		out = r.runGo(ctx)
 	default:
 		out = failedFailure(ReasonUpdateInputInvalid, "unknown manager %q", r.it.Manager)
 	}
@@ -754,7 +760,8 @@ func (r *updateRun) parseLockfile(lock []byte) (*lockfile, error) {
 	return parseLockfileFor(r.it.Manager, r.manifest, lock)
 }
 
-// parseLockfileFor reads a lockfile of manager m made for the manifest.
+// parseLockfileFor reads a lockfile of manager m made for the manifest (for
+// Go, go.mod with go.sum as the manifest).
 func parseLockfileFor(m DependencyManager, manifest, lock []byte) (*lockfile, error) {
 	switch m {
 	case ManagerNpm:
@@ -763,8 +770,13 @@ func parseLockfileFor(m DependencyManager, manifest, lock []byte) (*lockfile, er
 		return parsePnpm(manifest, lock)
 	case ManagerUv:
 		return parseUv(manifest, lock)
+	case ManagerPip:
+		return parseRequirements(lock)
+	case ManagerGo:
+		l, _, err := parseGo(manifest, lock)
+		return l, err
 	}
-	return parseRequirements(lock)
+	return nil, fmt.Errorf("no lockfile is read for %s", m)
 }
 
 // buildGraph reads a lockfile as a dependency graph.
@@ -1302,6 +1314,11 @@ const maxVersionsPerPackage = 256
 // earliest upload time of the files of the release that the entry records.
 func (r *updateRun) publishedAt(ctx context.Context, n *depNode) (time.Time, *updateFailure) {
 	id := n.name + "@" + n.version
+	switch r.it.Manager {
+	case ManagerUv, ManagerNpm, ManagerPnpm:
+	default:
+		return time.Time{}, failedFailure(ReasonUpdateInputInvalid, "no publication time is looked up for %s", r.it.Manager)
+	}
 	if r.it.Manager == ManagerUv {
 		rel, err := r.pyRelease(ctx, n.name, n.version)
 		if err != nil {

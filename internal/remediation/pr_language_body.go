@@ -27,14 +27,19 @@ type languageBodyInput struct {
 
 // registryName is the public registry a manager's packages come from.
 func registryName(t *prText, m DependencyManager) string {
-	if m == ManagerUv || m == ManagerPip {
+	switch m {
+	case ManagerUv, ManagerPip:
 		return t.RegistryPyPI
+	case ManagerNpm, ManagerPnpm:
+		return t.RegistryNpm
+	case ManagerGo:
+		return t.RegistryGo
 	}
-	return t.RegistryNpm
+	return string(m)
 }
 
 // installCheck is an example of a CI step that installs from the changed
-// files.
+// files; for Go, one that builds and tests with go.mod as it is.
 func installCheck(m DependencyManager) string {
 	switch m {
 	case ManagerNpm:
@@ -43,8 +48,12 @@ func installCheck(m DependencyManager) string {
 		return "pnpm install --frozen-lockfile"
 	case ManagerUv:
 		return "uv sync --locked"
+	case ManagerPip:
+		return "pip install -r requirements.txt"
+	case ManagerGo:
+		return "go build -mod=readonly ./... && go test -mod=readonly ./..."
 	}
-	return "pip install -r requirements.txt"
+	return ""
 }
 
 // buildLanguagePRBody renders the body of a language package pull request. It
@@ -237,6 +246,9 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 				fmt.Fprintf(&b, t.LFollowedLine, mdCode(e.Entry), strings.Join(moves, "; "))
 			}
 		}
+		if g := up.Go; g != nil {
+			writeGoUpdate(t, &b, g, it.GoBuiltWith)
+		}
 		for _, n := range up.Notes {
 			fmt.Fprintf(&b, t.LNote, mdCode(n))
 		}
@@ -274,7 +286,11 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 	if !strings.HasSuffix(b.String(), "\n\n") {
 		b.WriteString("\n")
 	}
-	fmt.Fprintf(&b, t.LInstallCheck, mdCode(installCheck(it.Manager)))
+	if it.Manager == ManagerGo {
+		fmt.Fprintf(&b, t.LGoBuildCheck, mdCode(installCheck(it.Manager)))
+	} else {
+		fmt.Fprintf(&b, t.LInstallCheck, mdCode(installCheck(it.Manager)))
+	}
 
 	return assembleBodyKeeping(b.String(), in.Marker, t.CutNote, keep)
 }
@@ -433,6 +449,8 @@ func runtimeWhy(t *prText, r *RuntimeRecord) string {
 		parts = append(parts, fmt.Sprintf(pick(t.LEnvBasisRange, t.LEnvPyBasisRange), strings.Join(decls, t.ListSep)))
 	case RuntimeBasisDefault:
 		parts = append(parts, t.LEnvBasisDefault)
+	case RuntimeBasisGoLines:
+		parts = append(parts, t.LEnvGoBasis)
 	default:
 		return ""
 	}
@@ -452,8 +470,70 @@ func runtimeWhy(t *prText, r *RuntimeRecord) string {
 
 // manifestFileName is the file a manager's direct dependencies are declared in.
 func manifestFileName(m DependencyManager) string {
-	if m == ManagerUv {
+	switch m {
+	case ManagerUv:
 		return "pyproject.toml"
+	case ManagerNpm, ManagerPnpm:
+		return "package.json"
+	case ManagerPip:
+		return "requirements.txt"
+	case ManagerGo:
+		return "go.mod"
 	}
-	return "package.json"
+	return ""
+}
+
+// writeGoUpdate describes what a Go module update did besides moving its
+// targets: the go and toolchain lines, the modules the targets' new versions
+// required, the go.sum lines taken from the checksum database and which
+// versions the scans cover.
+func writeGoUpdate(t *prText, b *strings.Builder, g *GoUpdate, builtWith string) {
+	b.WriteString(t.LGoHead)
+	if g.GoAfter != g.GoBefore {
+		before, _ := parseGoRelease(g.GoBefore)
+		after, _ := parseGoRelease(g.GoAfter)
+		if after.compare(before) == 0 {
+			// The same release, written in another form.
+			fmt.Fprintf(b, t.LGoLineForm, mdCode(g.GoBefore), mdCode(g.GoAfter))
+		} else {
+			fmt.Fprintf(b, t.LGoLine, mdCode(g.GoBefore), mdCode(g.GoAfter), mdCode(builtWith))
+		}
+	}
+	if g.ToolchainAfter != g.ToolchainBefore {
+		from, to := t.LGoNoToolchain, t.LGoNoToolchain
+		if g.ToolchainBefore != "" {
+			from = mdCode(g.ToolchainBefore)
+		}
+		if g.ToolchainAfter != "" {
+			to = mdCode(g.ToolchainAfter)
+		}
+		fmt.Fprintf(b, t.LGoToolchain, from, to)
+	}
+	fmt.Fprintf(b, t.LGoProxyChecked, t.RegistryGo)
+	fmt.Fprintf(b, t.LGoSumChecked, t.RegistryGoSum)
+	b.WriteString(t.LGoScanned)
+	if len(g.Collateral) > 0 {
+		fmt.Fprintf(b, "\n**%s (%d)**\n\n", t.LGoCollateralTitle, len(g.Collateral))
+		for i, m := range g.Collateral {
+			if i == maxListedEntries {
+				fmt.Fprintf(b, t.LineMore, len(g.Collateral)-maxListedEntries)
+				break
+			}
+			if m.From == "" {
+				fmt.Fprintf(b, t.LGoAdded, mdCode(m.Path), mdCode(m.To))
+			} else {
+				fmt.Fprintf(b, t.LGoRaised, mdCode(m.Path), mdCode(m.From), mdCode(m.To))
+			}
+		}
+	}
+	if len(g.SumAdded) > 0 {
+		fmt.Fprintf(b, "\n**%s (%d)**\n\n", t.LGoSumAddedTitle, len(g.SumAdded))
+		for i, l := range g.SumAdded {
+			if i == maxListedEntries {
+				fmt.Fprintf(b, t.LineMore, len(g.SumAdded)-maxListedEntries)
+				break
+			}
+			fmt.Fprintf(b, "- %s\n", mdCode(l))
+		}
+	}
 }

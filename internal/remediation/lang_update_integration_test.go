@@ -27,6 +27,17 @@ func TestIntegrationLangUpdate(t *testing.T) {
 			CVERef{VulnID: "CVE-2023-43804", FixedVers: []string{"1.26.17", "2.0.6"}})
 	}
 
+	goOrigin := FindingOrigin{Entity: "img", Workload: "compose/p/web", Target: "usr/local/bin/app"}
+	// xnet is golang.org/x/net v0.20.0 of a Go binary with a vulnerability
+	// fixed in the given version: 0.23.0 moves nothing else, 0.33.0 raises
+	// golang.org/x/text with it, 0.53.0 raises the go line to 1.25.0 too.
+	xnet := func(vuln, fixed string) func() *findingGroup {
+		return func() *findingGroup {
+			return group(typeGoBinary, "golang.org/x/net", "v0.20.0", goOrigin, CVERef{VulnID: vuln, FixedVers: []string{fixed}})
+		}
+	}
+	goFiles := []string{"go.mod", "go.sum"}
+
 	// declare adds members to the top level of the package.json of a fixture.
 	declare := func(members string) func(map[string]string) {
 		return func(f map[string]string) {
@@ -221,6 +232,11 @@ func TestIntegrationLangUpdate(t *testing.T) {
 			func(f map[string]string) {
 				f["pyproject.toml"] = strings.Replace(f["pyproject.toml"], "[tool.uv]", "[tool.uv]\nrequired-version = \"==0.12.24\"", 1)
 			}, "", "", "0.12.24", "declared"},
+		// Go: one go get in the lowest supported Go the go lines need, go.sum
+		// checked against the checksum database.
+		{"go", ManagerGo, "go", goFiles, xnet("CVE-2023-45288", "0.23.0"), "golang.org/x/net", nil, "", "", "", ""},
+		{"go_collateral", ManagerGo, "go", goFiles, xnet("CVE-2024-45338", "0.33.0"), "golang.org/x/net", nil, "", "", "", ""},
+		{"go_line_raised", ManagerGo, "go", goFiles, xnet("CVE-2026-33814", "0.53.0"), "golang.org/x/net", nil, "", "", "", ""},
 	}
 	// One case per runtime of the table that is in support and has an image,
 	// made from the table: each is chosen by a declaration (.nvmrc for npm and
@@ -247,6 +263,14 @@ func TestIntegrationLangUpdate(t *testing.T) {
 		case worker.KindPython:
 			add("table_uv_"+r.ID, ManagerUv, "uv", []string{"pyproject.toml", "uv.lock"}, urllib3, "urllib3",
 				withFile(".python-version", r.Series+"\n", nil))
+		case worker.KindGolang:
+			// A go line of the runtime's release makes it the lowest Go that
+			// is new enough.
+			version := r.Version
+			add("table_go_"+r.ID, ManagerGo, "go", goFiles, xnet("CVE-2023-45288", "0.23.0"), "golang.org/x/net",
+				func(f map[string]string) {
+					f["go.mod"] = strings.Replace(f["go.mod"], "go 1.22\n", "go "+version+"\n", 1)
+				})
 		}
 	}
 	// ran holds the runtimes a case ran in and passed.
@@ -258,6 +282,11 @@ func TestIntegrationLangUpdate(t *testing.T) {
 				c.mutate(files)
 			}
 			it := itemFor(t, c.manager, files, c.group())
+			if c.manager == ManagerGo {
+				// The running binaries were built with a Go above every go line
+				// the cases reach.
+				it.GoBuiltWith = "1.27.3"
+			}
 			if it.Category != CategoryDependencyUpdateCandidate {
 				t.Fatalf("the fixture is not an update candidate: %s %s", it.Category, it.Detail)
 			}
@@ -286,7 +315,7 @@ func TestIntegrationLangUpdate(t *testing.T) {
 				t.Errorf("executed flags = %v %v", got.UpdateExecuted, got.PostUpdateCheckExecuted)
 			}
 			// What the update ran in and with is on record.
-			wantRuntime := map[DependencyManager]string{ManagerNpm: defaultNodeRuntime(time.Now()), ManagerPnpm: defaultNodeRuntime(time.Now()), ManagerUv: "python3.13", ManagerPip: "python3.13"}[c.manager]
+			wantRuntime := map[DependencyManager]string{ManagerNpm: defaultNodeRuntime(time.Now()), ManagerPnpm: defaultNodeRuntime(time.Now()), ManagerUv: "python3.13", ManagerPip: "python3.13", ManagerGo: "golang1.26"}[c.manager]
 			if c.manager == ManagerUv {
 				wantRuntime = "python3.11"
 			}
@@ -306,9 +335,9 @@ func TestIntegrationLangUpdate(t *testing.T) {
 			if rt := got.Update.Runtime; rt == nil || rt.ID != wantRuntime || rt.Version == "" || rt.Digest == "" {
 				t.Errorf("runtime record = %+v, want %s", rt, wantRuntime)
 			}
-			if tl := got.Update.Tool; c.manager == ManagerPip && tl != nil {
-				t.Errorf("pip has a tool record: %+v", tl)
-			} else if c.manager != ManagerPip {
+			if tl := got.Update.Tool; (c.manager == ManagerPip || c.manager == ManagerGo) && tl != nil {
+				t.Errorf("%s has a tool record: %+v", c.manager, tl)
+			} else if c.manager != ManagerPip && c.manager != ManagerGo {
 				wantTool, wantSource := c.wantTool, c.wantSource
 				if wantTool == "" {
 					wantTool, wantSource = itDefaultToolVersions[c.manager], "default"
@@ -341,8 +370,33 @@ func TestIntegrationLangUpdate(t *testing.T) {
 			sc := got.SourceCheck
 			t.Logf("fs check: before=%v after=%v resolved=%v remaining=%v introduced=%v", sc.Before, sc.After, sc.Resolved, sc.Remaining, sc.Introduced)
 			wantArtifacts := 1
-			if c.wantEdit != "" {
+			if c.wantEdit != "" || c.manager == ManagerGo {
 				wantArtifacts = 2
+			}
+			if c.manager == ManagerGo {
+				g := got.Update.Go
+				if g == nil {
+					t.Fatal("no record of the Go update")
+				}
+				t.Logf("go update: %+v", *g)
+				moved := map[string]string{}
+				for _, m := range g.Collateral {
+					moved[m.Path] = m.To
+				}
+				switch c.name {
+				case "go_collateral":
+					if moved["golang.org/x/text"] != "v0.21.0" || g.GoAfter != "1.22" {
+						t.Errorf("collateral = %+v, go %s", g.Collateral, g.GoAfter)
+					}
+				case "go_line_raised":
+					if moved["golang.org/x/text"] != "v0.36.0" || g.GoAfter != "1.25.0" {
+						t.Errorf("collateral = %+v, go %s", g.Collateral, g.GoAfter)
+					}
+				case "go":
+					if len(g.Collateral) != 0 || g.GoAfter != g.GoBefore {
+						t.Errorf("go update = %+v", *g)
+					}
+				}
 			}
 			if len(got.Artifacts) != wantArtifacts || len(got.Artifacts[0].Content) == 0 {
 				t.Fatalf("artifacts = %+v", got.Artifacts)

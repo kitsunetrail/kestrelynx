@@ -213,6 +213,9 @@ func (e *itEnv) config(cfg LangUpdateConfig) LangUpdateConfig {
 	if cfg.Npm == nil {
 		cfg.Npm = &NpmClient{}
 	}
+	if cfg.Go == nil {
+		cfg.Go = &GoClient{}
+	}
 	return cfg
 }
 

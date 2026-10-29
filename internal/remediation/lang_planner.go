@@ -236,8 +236,12 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 	if _, isGo := byName(entries, "go.mod"); hasGo && srcErr == nil && isGo && r.stopReason() == nil {
 		it := newItem(typeGoBinary)
 		var keep bool
-		if goModule, keep = r.analyseGoUnit(&it, u, entries); keep {
+		var std *LanguageItem
+		if goModule, keep, std = r.analyseGoUnit(&it, u, entries); keep {
 			out = append(out, it)
+		}
+		if std != nil {
+			out = append(out, *std)
 		}
 	}
 
@@ -421,22 +425,20 @@ func (r *run) analyseUnit(it *LanguageItem, u *depUnit, groups []*findingGroup, 
 // their absence is recorded, since one added later changes what an update is
 // made from. The Go release an update runs with is chosen when it runs.
 //
-// It returns the module go.mod declares ("" when it was not read) and
-// whether the unit has an item: it has none when no finding comes from a
-// binary built from the module.
-func (r *run) analyseGoUnit(it *LanguageItem, u *depUnit, entries []github.Entry) (string, bool) {
+// The standard library's findings are an item of their own when the module's
+// dependencies have findings too: they are fixed by building with a newer
+// Go, which no pull request of go.mod does, and stay to be read when the
+// module's item becomes one.
+//
+// It returns the module go.mod declares ("" when it was not read), whether
+// the unit has an item (none when no finding comes from a binary built from
+// the module) and the standard library's own item.
+func (r *run) analyseGoUnit(it *LanguageItem, u *depUnit, entries []github.Entry) (string, bool, *LanguageItem) {
 	gh := r.p.cfg.GitHub
 	sha := it.Source.CommitSHA
 	intel := r.p.cfg.Intel
 	all := groupLanguageFindings(u.goPinned, intel)
-	setPriority := func(gs []*findingGroup) {
-		it.Priority = ""
-		for _, g := range gs {
-			if g.priority.Rank() > it.Priority.Rank() {
-				it.Priority = g.priority
-			}
-		}
-	}
+	setPriority := func(gs []*findingGroup) { setPriorityOf(it, gs) }
 	setPriority(all)
 	it.Manager = ManagerGo
 	it.Key = u.key + "#" + string(ManagerGo)
@@ -469,63 +471,79 @@ func (r *run) analyseGoUnit(it *LanguageItem, u *depUnit, entries []github.Entry
 
 	modData, ok := read(all, "go.mod")
 	if !ok {
-		return "", keepAll
+		return "", keepAll, nil
 	}
 	gm, err := parseGoMod(modData)
 	if err != nil {
 		refuse(all, err)
-		return "", keepAll
+		return "", keepAll, nil
 	}
 
 	kept, why := goSelect(u.goPinned, u.goBins, gm, true)
 	groups := groupLanguageFindings(kept, intel)
 	if len(groups) == 0 {
-		return gm.module, false
+		return gm.module, false, nil
 	}
 	setPriority(groups)
 	it.GoBuiltWith = goBuiltWith(u.goBins, gm.module)
 	if why != "" {
 		unitManual(it, groups, ReasonGoBinaryNotFromSource, why)
-		return gm.module, true
+		return gm.module, true, nil
 	}
 
 	if _, present := byName(entries, "go.sum"); !present {
 		unitManual(it, groups, ReasonDependencyFilesNotFound, "the directory has go.mod but no go.sum")
-		return gm.module, true
+		return gm.module, true, nil
 	}
 	sumData, ok := read(groups, "go.sum")
 	if !ok {
-		return gm.module, true
+		return gm.module, true, nil
 	}
 	if err := checkGoSum(sumData); err != nil {
 		refuse(groups, err)
-		return gm.module, true
+		return gm.module, true, nil
 	}
 	if err := goModRefusal(gm); err != nil {
 		refuse(groups, err)
-		return gm.module, true
+		return gm.module, true, nil
 	}
 	lock, err := goLockfile(gm)
 	if err != nil {
 		refuse(groups, err)
-		return gm.module, true
+		return gm.module, true, nil
 	}
 
 	for _, name := range []string{"go.work", "vendor"} {
 		if _, found := byName(entries, name); found {
 			unitManual(it, groups, ReasonWorkspaceUnsupported, pathIn(u.dir, name)+" exists; a Go workspace or a vendor directory is not handled")
-			return gm.module, true
+			return gm.module, true, nil
 		}
 		it.Source.Absent = append(it.Source.Absent, pathIn(u.dir, name))
 	}
 	if found, ok := r.ancestorFile(it, groups, u, sha, "go.work"); !ok {
-		return gm.module, true
+		return gm.module, true, nil
 	} else if found != "" {
 		unitManual(it, groups, ReasonWorkspaceUnsupported, found+" exists; a Go workspace applies to the modules below it and is not handled")
-		return gm.module, true
+		return gm.module, true, nil
 	}
 
 	mods, stdlib := goSplit(groups)
+	var std *LanguageItem
+	if len(mods) > 0 && len(stdlib) > 0 {
+		s := *it
+		s.Key = it.Key + "-" + goStdlib
+		s.Source.Files = append([]SourceFile(nil), it.Source.Files...)
+		s.Source.Absent = append([]string(nil), it.Source.Absent...)
+		s.Packages = nil
+		for _, g := range stdlib {
+			s.Packages = append(s.Packages, goStdlibPackage(g))
+		}
+		setPriorityOf(&s, stdlib)
+		classify(&s)
+		std = &s
+		setPriority(mods)
+		stdlib = nil
+	}
 	pkgs := make([]LanguagePackage, 0, len(groups))
 	for _, g := range mods {
 		p := matchPackage(lock, g)
@@ -543,7 +561,17 @@ func (r *run) analyseGoUnit(it *LanguageItem, u *depUnit, entries []github.Entry
 	}
 	it.Packages = pkgs
 	classify(it)
-	return gm.module, true
+	return gm.module, true, std
+}
+
+// setPriorityOf sets an item's priority to the strongest of its groups'.
+func setPriorityOf(it *LanguageItem, gs []*findingGroup) {
+	it.Priority = ""
+	for _, g := range gs {
+		if g.priority.Rank() > it.Priority.Rank() {
+			it.Priority = g.priority
+		}
+	}
 }
 
 // ancestorWorkspace looks for a pnpm-workspace.yaml in each directory above

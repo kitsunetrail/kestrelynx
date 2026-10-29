@@ -13,7 +13,9 @@ import (
 // the blob it recorded, and one it looked for and did not find must still not
 // exist, because either would change what the update is made from.
 func (u *LangUpdater) readToolSpecFiles(ctx context.Context, it *LanguageItem, sf *sourceFiles) *updateFailure {
-	if it.Manager == ManagerPip {
+	// pip and go run from the image of their runtime and declare nothing to
+	// read again here.
+	if it.Manager == ManagerPip || it.Manager == ManagerGo {
 		return nil
 	}
 	src := it.Source

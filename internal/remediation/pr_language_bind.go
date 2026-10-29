@@ -40,12 +40,15 @@ func LanguageInputFingerprint(it LanguageItem) string {
 		}
 	}
 	sort.Slice(pkgs, func(i, j int) bool { return fmt.Sprint(pkgs[i]) < fmt.Sprint(pkgs[j]) })
+	// The Go the running binaries were built with bounds the go line a Go
+	// update may write, so it is part of what the update is made from.
 	return hashCanonical(struct {
-		Key      string   `json:"key"`
-		Files    []string `json:"files"`
-		Absent   []string `json:"absent,omitempty"`
-		Packages []pkg    `json:"packages"`
-	}{it.Key, files, absent, pkgs})
+		Key         string   `json:"key"`
+		Files       []string `json:"files"`
+		Absent      []string `json:"absent,omitempty"`
+		Packages    []pkg    `json:"packages"`
+		GoBuiltWith string   `json:"go_built_with,omitempty"`
+	}{it.Key, files, absent, pkgs, it.GoBuiltWith})
 }
 
 // languageLockPath is the lockfile a language item updates, "" when the files

@@ -183,6 +183,8 @@ func goStdlibPackage(g *findingGroup) LanguagePackage {
 		detail = fmt.Sprintf("building with Go %s or later fixes this; go.mod does not", at)
 	}
 	manualPackage(&p, ReasonGoStdlib, detail)
+	// The release to build with is shown as the target.
+	p.SelectionLowerBound = at
 	return p
 }
 

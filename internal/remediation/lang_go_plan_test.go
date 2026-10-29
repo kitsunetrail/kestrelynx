@@ -290,8 +290,8 @@ func TestLanguagePlan_GoCandidate(t *testing.T) {
 	for _, p := range it.Packages {
 		got[p.Name+"@"+p.Installed] = p
 	}
-	if len(got) != 3 {
-		t.Fatalf("packages = %+v; the tool's finding must be left out", it.Packages)
+	if len(got) != 2 {
+		t.Fatalf("packages = %+v; the tool's finding and the standard library's must be left out", it.Packages)
 	}
 	net := got["golang.org/x/net@v0.20.0"]
 	if net.Action != ActionUpdate || net.SelectionLowerBound != "0.23.0" || net.Relation != RelationDirect {
@@ -308,8 +308,26 @@ func TestLanguagePlan_GoCandidate(t *testing.T) {
 	if it.GoBuiltWith != "1.22.5" {
 		t.Errorf("built with = %q", it.GoBuiltWith)
 	}
-	if s := got["stdlib@v1.22.5"]; s.Action != ActionManual || s.Reason != ReasonGoStdlib || !strings.Contains(s.Detail, "Go 1.22.7") {
+	// The standard library is an item of its own, which stays when the
+	// module's item becomes a pull request.
+	plan := langPlan(t, gh, []DependencyMapping{depMapping("compose/shop/api", "ex/app", "svc")}, nil, goInput(
+		goFinding("CVE-NET", "usr/local/bin/app", "golang.org/x/net", "v0.20.0", "0.23.0"),
+		goFinding("CVE-STD", "usr/local/bin/app", goStdlib, "v1.22.5", "1.22.7, 1.23.1"),
+	))
+	var std *LanguageItem
+	for i := range plan.LanguageItems {
+		if plan.LanguageItems[i].Key == "deps:ex/app@main:svc#go-stdlib" {
+			std = &plan.LanguageItems[i]
+		}
+	}
+	if std == nil || std.Category != CategoryManual || std.Reason != ReasonGoStdlib || len(std.Packages) != 1 {
+		t.Fatalf("stdlib item = %+v", std)
+	}
+	if s := std.Packages[0]; s.Action != ActionManual || s.Reason != ReasonGoStdlib || s.SelectionLowerBound != "1.22.7" || !strings.Contains(s.Detail, "Go 1.22.7") {
 		t.Errorf("stdlib = %+v", s)
+	}
+	if len(std.Source.Files) != 2 || std.Manager != ManagerGo {
+		t.Errorf("stdlib item = %+v", std)
 	}
 	for _, want := range []string{"svc/go.work", "svc/vendor"} {
 		if !containsString(it.Source.Absent, want) {

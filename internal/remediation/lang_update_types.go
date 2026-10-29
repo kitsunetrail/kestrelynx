@@ -200,6 +200,8 @@ type LanguageUpdate struct {
 	// Chain records the re-resolution of the packages that depend on a held
 	// back package, when the update tried it.
 	Chain *ChainUpdate `json:"chain,omitempty"`
+	// Go records what a Go module update did besides moving its targets.
+	Go *GoUpdate `json:"go,omitempty"`
 }
 
 // Outcomes of ChainUpdate.

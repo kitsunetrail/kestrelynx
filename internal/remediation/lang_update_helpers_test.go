@@ -378,6 +378,8 @@ func itemFor(t *testing.T, m DependencyManager, files map[string]string, groups 
 		lf, err = parsePnpm([]byte(files["package.json"]), []byte(files["pnpm-lock.yaml"]))
 	case ManagerUv:
 		lf, err = parseUv([]byte(files["pyproject.toml"]), []byte(files["uv.lock"]))
+	case ManagerGo:
+		lf, _, err = parseGo([]byte(files["go.sum"]), []byte(files["go.mod"]))
 	default:
 		lf, err = parseRequirements([]byte(files["requirements.txt"]))
 	}

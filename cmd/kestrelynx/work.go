@@ -252,6 +252,7 @@ func newLanguageUpdater(cfg config.Config, tools toolSupply, work remediation.Wo
 		Scanner:  scanner.Trivy{Severity: cfg.Scan.Severity, SkipDBUpdate: true},
 		PyPI:     &remediation.PyPIClient{},
 		Npm:      &remediation.NpmClient{},
+		Go:       &remediation.GoClient{},
 		GitHub:   in.GitHub,
 		Prepared: in.Prepared,
 		Images:   in.Images,

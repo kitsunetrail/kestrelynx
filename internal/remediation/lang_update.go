@@ -30,7 +30,10 @@ type LangUpdateConfig struct {
 	// Npm tells what the public npm registry publishes for a version; the
 	// update stage checks every package version an update adds or changes
 	// against it.
-	Npm    NpmRegistry
+	Npm NpmRegistry
+	// Go reads the public Go module proxy and checksum database; a Go item
+	// fails without it.
+	Go     GoModuleRegistry
 	GitHub GitHubReader
 	// Prepared are the cycle's scan conditions (Plan.Conditions). The stage's
 	// scans are valid only under them.
@@ -97,6 +100,8 @@ type LangUpdater struct {
 	// itemBudget, when set, makes the budget of an item that may go on to the
 	// chain update, in place of the default limits.
 	itemBudget func() *itemBudget
+	// goCache keeps the go.mod files the Go updates of the pass read.
+	goCache *goModCache
 }
 
 // NewLangUpdater validates cfg and returns an updater.
@@ -132,7 +137,8 @@ func NewLangUpdater(cfg LangUpdateConfig) (*LangUpdater, error) {
 	if _, err := rand.Read(b[:]); err != nil {
 		return nil, fmt.Errorf("remediation: job id: %w", err)
 	}
-	return &LangUpdater{cfg: cfg, runID: hex.EncodeToString(b[:]), chainRunners: map[DependencyManager]chainRunner{ManagerNpm: runNpmChain, ManagerPnpm: runPnpmChain, ManagerUv: runUvChain}}, nil
+	return &LangUpdater{cfg: cfg, runID: hex.EncodeToString(b[:]), chainRunners: map[DependencyManager]chainRunner{ManagerNpm: runNpmChain, ManagerPnpm: runPnpmChain, ManagerUv: runUvChain},
+		goCache: newGoModCache()}, nil
 }
 
 // LangUpdateUsage records what a pass spent.
@@ -357,6 +363,9 @@ func (u *LangUpdater) readUnitSources(ctx context.Context, it *LanguageItem) (*s
 		sf.manifestName = "package.json"
 	case ManagerUv:
 		sf.manifestName = "pyproject.toml"
+	case ManagerGo:
+		// go.sum is read as the second file: an update changes both.
+		sf.manifestName = "go.sum"
 	case ManagerPip:
 	default:
 		return nil, failedFailure(ReasonUpdateInputInvalid, "unknown manager %q", it.Manager)
@@ -407,28 +416,23 @@ func (u *LangUpdater) readUnitSources(ctx context.Context, it *LanguageItem) (*s
 		return nil, fail
 	}
 	sf.manifest, sf.manifestPath, sf.manifestMode = got.Content, got.Path, got.Mode
-	if it.Manager != ManagerPnpm {
+	switch it.Manager {
+	case ManagerGo:
+		// A workspace or a vendor directory the plan did not find must not be
+		// there now either.
+		for _, name := range []string{"go.work", "vendor"} {
+			if fail := u.stillAbsent(ctx, it, lf.Path, name); fail != nil {
+				return nil, fail
+			}
+		}
+		return sf, nil
+	case ManagerPnpm:
+	default:
 		return sf, nil
 	}
 	// A settings file the plan did not find must not be there now either.
-	for _, p := range src.Absent {
-		if path.Base(p) != pnpmWorkspaceName || !isSameOrAbove(path.Dir(p), path.Dir(lf.Path)) {
-			continue
-		}
-		for _, f := range src.Files {
-			if f.Path == p {
-				return nil, failedFailure(ReasonUpdateInputInvalid, "the plan records %s as both read and not found", p)
-			}
-		}
-		_, err := u.cfg.GitHub.ReadFile(ctx, src.Repository, src.CommitSHA, p)
-		var nr *github.NotRegularFileError
-		switch {
-		case errors.Is(err, github.ErrNotFound):
-		case err == nil, errors.As(err, &nr), errors.Is(err, github.ErrLFSPointer), errors.Is(err, github.ErrTooLarge):
-			return nil, failedFailure(ReasonSourceChanged, "%s did not exist when the plan was made and does now", p)
-		default:
-			return nil, readFailure(err, p)
-		}
+	if fail := u.stillAbsent(ctx, it, lf.Path, pnpmWorkspaceName); fail != nil {
+		return nil, fail
 	}
 	var settings []SourceFile
 	for _, f := range src.Files {
@@ -456,6 +460,33 @@ func (u *LangUpdater) readUnitSources(ctx context.Context, it *LanguageItem) (*s
 	}
 	sf.settings = got.Content
 	return sf, nil
+}
+
+// stillAbsent requires every file of the given name the plan recorded as
+// not found, in the directory of the lockfile or above it, to be absent
+// still. Anything there now (a file, a directory, a link) fails the item.
+func (u *LangUpdater) stillAbsent(ctx context.Context, it *LanguageItem, lockPath, name string) *updateFailure {
+	src := it.Source
+	for _, p := range src.Absent {
+		if path.Base(p) != name || !isSameOrAbove(path.Dir(p), path.Dir(lockPath)) {
+			continue
+		}
+		for _, f := range src.Files {
+			if f.Path == p {
+				return failedFailure(ReasonUpdateInputInvalid, "the plan records %s as both read and not found", p)
+			}
+		}
+		_, err := u.cfg.GitHub.ReadFile(ctx, src.Repository, src.CommitSHA, p)
+		var nr *github.NotRegularFileError
+		switch {
+		case errors.Is(err, github.ErrNotFound):
+		case err == nil, errors.As(err, &nr), errors.Is(err, github.ErrLFSPointer), errors.Is(err, github.ErrTooLarge):
+			return failedFailure(ReasonSourceChanged, "%s did not exist when the plan was made and does now", p)
+		default:
+			return readFailure(err, p)
+		}
+	}
+	return nil
 }
 
 // readFailure maps a GitHub read error: running out of time or of a request
@@ -671,6 +702,10 @@ type updateRun struct {
 	// chainCmp are the graphs a chain run compared the lockfiles in, which its
 	// comparison of findings uses to judge requirements by place.
 	chainCmp [2]*depGraph
+	// goTargets are the versions a Go update asked for, by module path, and
+	// goRetracts the retract directives of each target's latest go.mod.
+	goTargets  map[string]string
+	goRetracts map[string][]string
 }
 
 // succeed records a passed update on the item.
@@ -701,7 +736,8 @@ func (r *updateRun) succeed() {
 		Path: r.src.lockPath, SHA256: sha256Hex(r.newLock), Size: int64(len(r.newLock)),
 		Mode: r.src.lockMode, Content: r.newLock,
 	}}
-	if len(r.upd.ManifestEdits) > 0 {
+	// A Go update changes go.sum with go.mod, always.
+	if len(r.upd.ManifestEdits) > 0 || it.Manager == ManagerGo {
 		it.Artifacts = append(it.Artifacts, ArtifactFile{
 			Path: r.src.manifestPath, SHA256: sha256Hex(r.manifest), Size: int64(len(r.manifest)),
 			Mode: r.src.manifestMode, Content: r.manifest,

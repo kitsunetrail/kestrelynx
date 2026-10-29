@@ -117,7 +117,11 @@ type prText struct {
 	LBothScans, LDBBuilt, LScanTail                                             string
 	LInstallCheck                                                               string
 	RegistryNpm, RegistryPyPI                                                   string
-	RelDirect, RelTransitive, RelMixed, RelUnknown                              string
+	// Go module bodies.
+	RegistryGo, RegistryGoSum, LGoBuildCheck, LEnvGoBasis                                                   string
+	LGoHead, LGoLine, LGoLineForm, LGoToolchain, LGoNoToolchain, LGoProxyChecked, LGoSumChecked, LGoScanned string
+	LGoCollateralTitle, LGoRaised, LGoAdded, LGoSumAddedTitle                                               string
+	RelDirect, RelTransitive, RelMixed, RelUnknown                                                          string
 }
 
 // textFor returns the wording of l; any unknown value falls back to English,
@@ -302,6 +306,22 @@ var enPRText = prText{
 	LInstallCheck:       "- Before merging, run a CI job that installs from the lockfile (for example %s)\n",
 	RegistryNpm:         "the npm registry",
 	RegistryPyPI:        "PyPI",
+	RegistryGo:          "the Go module proxy (proxy.golang.org)",
+	RegistryGoSum:       "the Go checksum database (sum.golang.org)",
+	LGoBuildCheck:       "- Before merging, run a CI job that builds and tests with go.mod as it is (for example %s). Do not run go get, go mod tidy or a build with -mod=mod before it: the checks above assume a build that stops when go.mod lacks a module it needs, which is what the go command does by default\n",
+	LEnvGoBasis:         "the lowest supported Go that is at least the go and toolchain lines of go.mod and the go lines of the targets' new versions",
+	LGoHead:             "\n**Go module update**\n\n",
+	LGoLine:             "- The go line of go.mod goes from %[1]s to %[2]s, the highest go line the versions the update moved to declare. It stays at or below Go %[3]s, which the running binaries were built with. A higher go line can change language features and default behaviour (the GODEBUG defaults); that the build still succeeds was not checked\n",
+	LGoLineForm:         "- The go line of go.mod is written %[2]s in place of %[1]s, the same Go release\n",
+	LGoToolchain:        "- The toolchain line of go.mod goes from %[1]s to %[2]s\n",
+	LGoNoToolchain:      "none",
+	LGoProxyChecked:     "- Each target version was confirmed on %s (published, in its canonical form, not retracted), and the go.mod of every version the update moved to was read from it: every module that moved besides the targets is required at that version by those go.mod files\n",
+	LGoSumChecked:       "- go.sum was checked against %s: every line the update added or changed, and both hashes (of the module and of its go.mod) of every version the update moved to\n",
+	LGoScanned:          "- The scans below cover the versions go.mod writes. A build with the go command's default -mod=readonly uses exactly those, and stops when go.mod lacks a module it needs or writes a lower version than one it needs\n",
+	LGoCollateralTitle:  "Modules the update also moved, which the targets' new versions require",
+	LGoRaised:           "- %[1]s: %[2]s to %[3]s\n",
+	LGoAdded:            "- %[1]s: added at %[2]s\n",
+	LGoSumAddedTitle:    "go.sum lines of the versions the update moved to, added from the checksum database",
 	RelDirect:           "direct dependency",
 	RelTransitive:       "transitive dependency",
 	RelMixed:            "direct and transitive dependency",
@@ -481,6 +501,22 @@ var jaPRText = prText{
 	LInstallCheck:       "- マージ前に CI で lockfile からのインストール (例: %s) を実行してください\n",
 	RegistryNpm:         "npm レジストリ",
 	RegistryPyPI:        "PyPI",
+	RegistryGo:          "Go module proxy (proxy.golang.org)",
+	RegistryGoSum:       "Go の checksum database (sum.golang.org)",
+	LGoBuildCheck:       "- マージ前に、CI で go.mod をそのまま使うビルドとテスト (例: %s) を実行してください。その前に go get・go mod tidy・-mod=mod のビルドは実行しないでください。上の確認は、go.mod に必要なモジュールが足りなければビルドが止まるという、go コマンドの既定の動きを前提にしています\n",
+	LEnvGoBasis:         "go.mod の go・toolchain の行と、対象の新しい版の go の行のうち最も高い版以上で、サポート中の Go の最小の版",
+	LGoHead:             "\n**Go モジュールの更新**\n\n",
+	LGoLine:             "- 更新後の版の go.mod が宣言する最も高い go の行に合わせて、go.mod の go の行が %[1]s から %[2]s に上がります。稼働中のバイナリをビルドした Go %[3]s 以下に収まっています。go の行が上がると、言語の機能や既定の動き (GODEBUG の既定値) が変わることがあります。ビルドが通ることは確かめていません\n",
+	LGoLineForm:         "- go.mod の go の行の書き方が %[1]s から %[2]s に変わります (同じ Go の版)\n",
+	LGoToolchain:        "- go.mod の toolchain の行が %[1]s から %[2]s に変わります\n",
+	LGoNoToolchain:      "なし",
+	LGoProxyChecked:     "- 対象の版は %sで、公開されていること・正規の表記・撤回されていないことを確かめ、更新後の各版の go.mod もそこから取得しました。対象のほかに動いたモジュールは、すべてそれらの go.mod がその版で要求しているものです\n",
+	LGoSumChecked:       "- go.sum は %sと照合しました。対象は、更新で追加・変更したすべての行と、更新後の版ごとの 2 つのハッシュ (モジュールと go.mod) です\n",
+	LGoScanned:          "- 下のスキャンの対象は、go.mod に書かれた版です。go コマンドの既定の -mod=readonly のビルドはこの版だけを使い、必要なモジュールが go.mod にない、または書かれた版が必要な版より低い場合は止まります\n",
+	LGoCollateralTitle:  "対象の新しい版が要求するため、あわせて上がったモジュール",
+	LGoRaised:           "- %[1]s: %[2]s から %[3]s へ\n",
+	LGoAdded:            "- %[1]s: %[2]s を追加\n",
+	LGoSumAddedTitle:    "更新後の版について checksum database から補った go.sum の行",
 	RelDirect:           "直接依存",
 	RelTransitive:       "間接依存",
 	RelMixed:            "直接依存かつ間接依存",

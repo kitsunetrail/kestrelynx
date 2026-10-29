@@ -246,6 +246,60 @@ type remediationItemPayload struct {
 	KEVTargets int                    `json:"kev_targets,omitempty"`
 	Comparison *comparisonPayload     `json:"comparison,omitempty"`
 	Scans      []remediationScanEntry `json:"scans,omitempty"`
+	// NewerSeries is the check of newer series of a pinned tag whose own
+	// series resolves nothing; no pull request is made for it.
+	NewerSeries *newerSeriesPayload `json:"newer_series,omitempty"`
+}
+
+// newerSeriesPayload is what checking newer series of a pinned tag found.
+type newerSeriesPayload struct {
+	Status     string                  `json:"status"`
+	Shown      string                  `json:"shown,omitempty"`
+	Reason     string                  `json:"reason,omitempty"`
+	Detail     string                  `json:"detail,omitempty"`
+	Candidates []newerCandidatePayload `json:"candidates,omitempty"`
+}
+
+// newerCandidatePayload is one checked tag of a newer series, with the scans
+// its comparison used.
+type newerCandidatePayload struct {
+	Tag        string                         `json:"tag"`
+	Change     string                         `json:"change"`
+	Status     string                         `json:"status"`
+	Reason     string                         `json:"reason,omitempty"`
+	Detail     string                         `json:"detail,omitempty"`
+	Candidate  *imageStatePayload             `json:"candidate,omitempty"`
+	Counts     *remediation.NewerSeriesCounts `json:"counts,omitempty"`
+	Comparison *comparisonPayload             `json:"comparison,omitempty"`
+	Scans      []remediationScanEntry         `json:"scans,omitempty"`
+}
+
+// newerSeriesPayloadOf renders a check of newer series; the verdicts listed
+// are those of the targets.
+func newerSeriesPayloadOf(ns *remediation.NewerSeries, targets []remediation.Target, scans map[string]remediation.ScanExecution) *newerSeriesPayload {
+	if ns == nil {
+		return nil
+	}
+	out := &newerSeriesPayload{Status: string(ns.Status), Shown: ns.Shown, Reason: string(ns.Reason), Detail: ns.Detail}
+	for _, c := range ns.Candidates {
+		cp := newerCandidatePayload{Tag: c.Tag, Change: string(c.Change), Status: string(c.Status), Reason: string(c.Reason), Detail: c.Detail, Counts: c.Counts}
+		if c.Candidate != nil {
+			s := imageStatePayloadOf(*c.Candidate, false)
+			cp.Candidate = &s
+		}
+		if c.Comparison != nil {
+			vr := *c.Comparison
+			vr.Verdicts = remediation.TargetVerdicts(vr.Verdicts, targets)
+			cp.Comparison = comparisonPayloadFor(vr, nil, len(targets))
+			if n := c.Counts; n != nil {
+				cmp := cp.Comparison
+				cmp.Targets, cmp.Resolved, cmp.Remaining, cmp.Unknown, cmp.Undetected, cmp.Introduced = n.Targets, n.Resolved, n.Remaining, n.Unknown, n.Undetected, n.Introduced
+			}
+		}
+		cp.Scans = scanEntries(scans, c.BaselineScan, c.CandidateScan)
+		out.Candidates = append(out.Candidates, cp)
+	}
+	return out
 }
 
 type imageStatePayload struct {
@@ -717,6 +771,7 @@ func remediationItemPayloadOf(it remediation.Item, scans map[string]remediation.
 		out.Comparison = comparisonPayloadOf(it)
 	}
 	out.Scans = scanEntries(scans, it.BaselineScan, it.CandidateScan)
+	out.NewerSeries = newerSeriesPayloadOf(it.NewerSeries, it.Targets, scans)
 	return out
 }
 

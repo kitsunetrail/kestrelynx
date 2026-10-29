@@ -9,12 +9,45 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
-// baseWait says that a package finding lives in the base image of a
-// Dockerfile-built image and that the fix plan found no newer tag of that base
-// to move to, so the fix has to wait for a newer base release.
+// waitVerdict is what a card's action line says about a newer version of the
+// image its findings come from.
+type waitVerdict int
+
+const (
+	// waitPlain: the base has no newer tag in its series; nothing more is
+	// known.
+	waitPlain waitVerdict = iota
+	// waitResolved: a checked tag of a newer series resolves every fixed
+	// finding of the card.
+	waitResolved
+	// waitPartial: it resolves some of them and the others remain.
+	waitPartial
+	// waitRemains: they remain in every checked tag of a newer series.
+	waitRemains
+	// waitNoNewerSeries: the complete listing has no newer series either.
+	waitNoNewerSeries
+)
+
+// baseWait says that a package finding lives in an image the fix plan found
+// no fix for in the image tag's own series, and what it found in a newer
+// series: either the base image a Dockerfile builds from or a pinned image
+// that runs as it is.
 type baseWait struct {
-	Name string // the base image's repository name without registry and path
-	Tag  string
+	Image bool   // the running image's own tag rather than a Dockerfile's base
+	Name  string // the repository name without registry and path
+	Tag   string
+	// OwnNoNewer says the tag's own series has no newer tag; otherwise its
+	// newer tag did not resolve the findings.
+	OwnNoNewer bool
+	Verdict    waitVerdict
+	To         string // the tag of a newer series that resolves something
+	Change     remediation.SeriesChange
+	WithNew    bool // that tag introduces findings
+	// Resolved and Total count the card's fixed findings it resolves.
+	Resolved, Total int
+	// Checked are the tags of newer series checked that resolve none of
+	// them, joined by "\x00".
+	Checked string
 }
 
 // baseWaitKey identifies one finding target of one running entity.
@@ -25,69 +58,221 @@ type baseWaitKey struct {
 	coord  remediation.PackageCoord
 }
 
-// baseWaitEntry is what the plan says about one key: the base it waits on
-// and the base layers (diff IDs) its targets were reported in.
+// waitSource is what the plan says about the image one target comes from,
+// the same for all its targets.
+type waitSource struct {
+	image      bool
+	name, tag  string
+	ownNoNewer bool
+	// legacy allows the plain line, the one a Dockerfile item without a
+	// newer series result shows.
+	legacy  bool
+	status  remediation.NewerSeriesStatus // "" without a newer series result
+	to      string
+	change  remediation.SeriesChange
+	withNew bool
+	checked string
+}
+
+// baseWaitEntry is what the plan says about one key: its source, the
+// target's outcome in the tag shown, and, for a Dockerfile's base, the base
+// layers the target was reported in.
 type baseWaitEntry struct {
-	wait   baseWait
-	layers map[string]bool
+	src     waitSource
+	outcome remediation.Outcome
+	layers  map[string]bool
 }
 
-// baseWaitIndex finds, for a package group of a scanned image, whether this
-// cycle's plan holds its fixable findings back for a newer base image. The
-// nil index matches nothing.
+// baseWaitIndex finds, for a package group of a scanned image, the action
+// line this cycle's plan gives it. The nil index matches nothing.
 type baseWaitIndex struct {
-	byKey map[baseWaitKey][]*baseWaitEntry
+	bases  map[baseWaitKey][]*baseWaitEntry // Dockerfile base images
+	images map[baseWaitKey][]*baseWaitEntry // pinned running images
 }
 
-// newBaseWaitIndex indexes the targets of the Dockerfile items that are
-// no_candidate with reason no_newer_tag, one entity at a time (the entity
-// must carry the same category and reason, a confirmed entity key and a
-// current base to name). It returns nil when there is no plan or nothing to
-// index.
+func (x *baseWaitIndex) add(m map[baseWaitKey][]*baseWaitEntry, k baseWaitKey, e *baseWaitEntry) {
+	for _, have := range m[k] {
+		if have.src == e.src && have.outcome == e.outcome {
+			for l := range e.layers {
+				have.layers[l] = true
+			}
+			return
+		}
+	}
+	m[k] = append(m[k], e)
+}
+
+// newerSource is the source of a check of newer series, or false when it
+// gives no line: an unfinished check, or no newer series after the own
+// series had a newer tag that did not help. outcome gives a target's
+// outcome in the tag shown.
+func newerSource(ns *remediation.NewerSeries, own remediation.Reason, cands []remediation.NewerSeriesCandidate) (src waitSource, outcome func(remediation.Target) remediation.Outcome, ok bool) {
+	src = waitSource{ownNoNewer: own == remediation.ReasonNoNewerTag, status: ns.Status}
+	remains := func(remediation.Target) remediation.Outcome { return remediation.OutcomeRemaining }
+	switch {
+	case ns.Status == remediation.NewerSeriesNotResolving:
+		var tags []string
+		for _, c := range ns.Candidates {
+			if c.Status == remediation.NewerSeriesNotResolving {
+				tags = append(tags, c.Tag)
+			}
+		}
+		src.checked = strings.Join(tags, "\x00")
+		return src, remains, true
+	case ns.Status == remediation.NewerSeriesNone:
+		return src, remains, src.ownNoNewer
+	case ns.Shown == "":
+		return src, nil, false
+	}
+	var shown *remediation.NewerSeriesCandidate
+	for i := range cands {
+		if cands[i].Tag == ns.Shown {
+			shown = &cands[i]
+		}
+	}
+	if shown == nil || shown.Comparison == nil {
+		return src, nil, false
+	}
+	src.to, src.change = shown.Tag, shown.Change
+	// Whether the tag shown introduces findings is the item's to say: a
+	// running image of a Dockerfile item may introduce none where another
+	// does.
+	for _, c := range ns.Candidates {
+		if c.Tag == ns.Shown {
+			src.withNew = c.Status == remediation.NewerSeriesResolvesWithNew
+		}
+	}
+	vs := shown.Comparison.Verdicts
+	return src, func(t remediation.Target) remediation.Outcome {
+		for _, v := range vs {
+			if v.VulnID == t.VulnID && v.Package == t.Package {
+				return v.Outcome
+			}
+		}
+		return ""
+	}, true
+}
+
+// newBaseWaitIndex indexes the targets the plan has a line for: those of the
+// running images of Dockerfile items whose base's series gave no fix, and
+// those of pinned running images whose own series gave none, by running
+// entity. A Dockerfile item without a newer series result keeps the plain
+// line when it and the entity are no_candidate with reason no_newer_tag. It
+// returns nil when there is no plan or nothing to index.
 func newBaseWaitIndex(info *PlanInfo) *baseWaitIndex {
 	if info == nil || info.Plan == nil {
 		return nil
 	}
-	var idx *baseWaitIndex
+	x := &baseWaitIndex{bases: map[baseWaitKey][]*baseWaitEntry{}, images: map[baseWaitKey][]*baseWaitEntry{}}
+	confirmed := func(s remediation.ImageState) bool {
+		return s.Ref != "" && s.Entity != "" && s.Entity != remediation.Unconfirmed
+	}
 	for _, it := range info.Plan.DockerfileItems {
-		if it.Category != remediation.CategoryNoCandidate || it.Reason != remediation.ReasonNoNewerTag {
-			continue
-		}
+		legacy := it.Category == remediation.CategoryNoCandidate && it.Reason == remediation.ReasonNoNewerTag
 		for _, e := range it.Entities {
-			if e.Category != remediation.CategoryNoCandidate || e.Reason != remediation.ReasonNoNewerTag ||
-				e.CurrentBase == nil || e.Running.Ref == "" || e.Running.Entity == "" || e.Running.Entity == remediation.Unconfirmed {
+			if e.Category != remediation.CategoryNoCandidate || e.CurrentBase == nil || !confirmed(e.Running) {
 				continue
 			}
 			name, tag := baseNameTag(*e.CurrentBase)
 			if name == "" || tag == "" {
 				continue
 			}
-			w := baseWait{Name: name, Tag: tag}
-			for _, t := range e.Targets {
-				if idx == nil {
-					idx = &baseWaitIndex{byKey: map[baseWaitKey][]*baseWaitEntry{}}
-				}
-				k := baseWaitKey{image: e.Running.Ref, entity: e.Running.Entity, vuln: t.VulnID, coord: t.Package}
-				var ent *baseWaitEntry
-				for _, x := range idx.byKey[k] {
-					if x.wait == w {
-						ent = x
+			src := waitSource{name: name, tag: tag, ownNoNewer: e.Reason == remediation.ReasonNoNewerTag}
+			src.legacy = legacy && src.ownNoNewer
+			outcome := func(remediation.Target) remediation.Outcome { return "" }
+			perTarget := func(t remediation.Target) waitSource { return src }
+			switch {
+			case it.NewerSeries == nil || e.NewerSeries == nil:
+			case it.NewerSeries.Status == remediation.NewerSeriesNotResolving:
+				// The item resolves no target in every running image, which
+				// this one may still do for some: each target remains only
+				// in the tags this image's own comparisons show it in.
+				legacySrc := src
+				remains := waitSource{name: name, tag: tag, ownNoNewer: src.ownNoNewer, legacy: src.legacy, status: remediation.NewerSeriesNotResolving}
+				perTarget = func(t remediation.Target) waitSource {
+					tags, ok := remainingTags(e.NewerSeries.Candidates, t)
+					if !ok {
+						return legacySrc
 					}
+					s := remains
+					s.checked = tags
+					return s
 				}
-				if ent == nil {
-					ent = &baseWaitEntry{wait: w, layers: map[string]bool{}}
-					idx.byKey[k] = append(idx.byKey[k], ent)
+				outcome = func(t remediation.Target) remediation.Outcome {
+					if _, ok := remainingTags(e.NewerSeries.Candidates, t); ok {
+						return remediation.OutcomeRemaining
+					}
+					return ""
 				}
+			default:
+				if ns, out, ok := newerSource(it.NewerSeries, e.Reason, e.NewerSeries.Candidates); ok {
+					ns.name, ns.tag, ns.legacy = name, tag, src.legacy
+					src, outcome = ns, out
+				}
+			}
+			for _, t := range e.Targets {
+				src := perTarget(t)
+				if src.status == "" && !src.legacy {
+					continue
+				}
+				ent := &baseWaitEntry{src: src, outcome: outcome(t), layers: map[string]bool{}}
 				for _, l := range t.Layers {
 					ent.layers[l] = true
 				}
+				x.add(x.bases, baseWaitKey{image: e.Running.Ref, entity: e.Running.Entity, vuln: t.VulnID, coord: t.Package}, ent)
 			}
 		}
 	}
-	return idx
+	for _, it := range info.Plan.Items {
+		if it.NewerSeries == nil || !confirmed(it.Current) {
+			continue
+		}
+		src, outcome, ok := newerSource(it.NewerSeries, it.Reason, it.NewerSeries.Candidates)
+		if !ok {
+			continue
+		}
+		src.image = true
+		src.name, src.tag = baseNameTag(it.Current)
+		if src.name == "" || src.tag == "" {
+			continue
+		}
+		for _, t := range it.Targets {
+			x.add(x.images, baseWaitKey{image: it.Current.Ref, entity: it.Current.Entity, vuln: t.VulnID, coord: t.Package}, &baseWaitEntry{src: src, outcome: outcome(t)})
+		}
+	}
+	if len(x.bases) == 0 && len(x.images) == 0 {
+		return nil
+	}
+	return x
 }
 
-// baseNameTag is the short name and the tag of a base image state: the last
+// remainingTags joins the tags of the checked candidates, every one of which
+// shows target t remaining; ok is false when one does not, or none was
+// checked.
+func remainingTags(cands []remediation.NewerSeriesCandidate, t remediation.Target) (tags string, ok bool) {
+	var out []string
+	for _, c := range cands {
+		if c.Status == remediation.NewerSeriesNotChecked {
+			continue
+		}
+		if c.Comparison == nil {
+			return "", false
+		}
+		found := false
+		for _, v := range c.Comparison.Verdicts {
+			if v.VulnID == t.VulnID && v.Package == t.Package {
+				found = v.Outcome == remediation.OutcomeRemaining
+			}
+		}
+		if !found {
+			return "", false
+		}
+		out = append(out, c.Tag)
+	}
+	return strings.Join(out, "\x00"), len(out) > 0
+}
+
+// baseNameTag is the short name and the tag of an image state: the last
 // path element of its repository, so a registry host never shows.
 func baseNameTag(s remediation.ImageState) (name, tag string) {
 	ref := remediation.ParseImageRef(s.Ref)
@@ -101,48 +286,117 @@ func baseNameTag(s remediation.ImageState) (name, tag string) {
 	return path.Base(strings.TrimSuffix(ref.Repository, "/")), tag
 }
 
-// lookup returns the wait of group g of the scanned entity img. It matches
-// only when all of these hold, so that in doubt the card stays as it is:
+// lookup returns the action line of group g of the scanned entity img. A
+// line from a Dockerfile's base and one from the image's own tag that differ
+// give none. It matches only when all of these hold, so that in doubt the
+// card stays as it is:
 //   - the entity is confirmed and is the one the plan judged (same reference
 //     and entity key);
 //   - the group has at least one fixed finding, and every fixed finding of it
-//     is a target of no-newer-tag entities that name one and the same base;
-//   - every layer the group's findings were attributed to is a base layer
-//     those targets were reported in, so a copy of the package in a later
-//     layer, or one with no layer attribution, never qualifies.
+//     is a target of exactly one source of the kind, the same for all;
+//   - for a Dockerfile's base, every layer the group's findings were
+//     attributed to is a base layer those targets were reported in, so a copy
+//     of the package in a later layer, or one with no layer attribution,
+//     never qualifies.
 func (x *baseWaitIndex) lookup(img analyze.ImageFindings, g analyze.PackageGroup) (baseWait, bool) {
-	if x == nil || img.Image == "" || !img.Subject.Resolved || len(g.LayerDiffIDs) == 0 {
+	if x == nil || img.Image == "" || !img.Subject.Resolved {
 		return baseWait{}, false
 	}
 	entity := remediation.EntityKeyString(img.Subject.Key)
 	if entity == remediation.Unconfirmed {
 		return baseWait{}, false
 	}
+	base, okBase := x.match(x.bases, img, entity, g, true)
+	own, okOwn := x.match(x.images, img, entity, g, false)
+	switch {
+	case okBase && okOwn:
+		if base != own {
+			return baseWait{}, false
+		}
+		return base, true
+	case okBase:
+		return base, true
+	}
+	return own, okOwn
+}
+
+func (x *baseWaitIndex) match(m map[baseWaitKey][]*baseWaitEntry, img analyze.ImageFindings, entity string, g analyze.PackageGroup, layered bool) (baseWait, bool) {
+	if layered && len(g.LayerDiffIDs) == 0 {
+		return baseWait{}, false
+	}
 	coord := remediation.PackageCoord{Ecosystem: g.Ecosystem, Class: g.Class, Name: g.Package}
-	var found baseWait
-	base := map[string]bool{}
-	fixed := 0
+	var src waitSource
+	layers := map[string]bool{}
+	var outcomes []remediation.Outcome
 	for _, v := range g.Vulns {
 		if v.Status != scanner.StatusFixed {
 			continue
 		}
-		es := x.byKey[baseWaitKey{image: img.Image, entity: entity, vuln: v.ID, coord: coord}]
-		if len(es) != 1 || (fixed > 0 && es[0].wait != found) {
+		es := m[baseWaitKey{image: img.Image, entity: entity, vuln: v.ID, coord: coord}]
+		if len(es) != 1 || (len(outcomes) > 0 && es[0].src != src) {
 			return baseWait{}, false
 		}
-		found = es[0].wait
+		src = es[0].src
 		for l := range es[0].layers {
-			base[l] = true
+			layers[l] = true
 		}
-		fixed++
+		outcomes = append(outcomes, es[0].outcome)
 	}
-	if fixed == 0 {
+	if len(outcomes) == 0 {
 		return baseWait{}, false
 	}
-	for _, l := range g.LayerDiffIDs {
-		if l == "" || !base[l] {
-			return baseWait{}, false
+	if layered {
+		for _, l := range g.LayerDiffIDs {
+			if l == "" || !layers[l] {
+				return baseWait{}, false
+			}
 		}
 	}
-	return found, true
+	return src.line(outcomes)
+}
+
+// line is the wait a card shows from the outcomes of its fixed findings, or
+// false when it shows none.
+func (s waitSource) line(outcomes []remediation.Outcome) (baseWait, bool) {
+	w := baseWait{Image: s.image, Name: s.name, Tag: s.tag, OwnNoNewer: s.ownNoNewer, Total: len(outcomes)}
+	plain := func() (baseWait, bool) {
+		if !s.legacy {
+			return baseWait{}, false
+		}
+		return baseWait{Name: s.name, Tag: s.tag, OwnNoNewer: true, Verdict: waitPlain}, true
+	}
+	switch s.status {
+	case "":
+		return plain()
+	case remediation.NewerSeriesNone:
+		w.Verdict = waitNoNewerSeries
+		return w, true
+	case remediation.NewerSeriesNotResolving:
+		w.Verdict, w.Checked = waitRemains, s.checked
+		return w, true
+	}
+	remaining := 0
+	for _, o := range outcomes {
+		switch o {
+		case remediation.OutcomeResolved:
+			w.Resolved++
+		case remediation.OutcomeRemaining:
+			remaining++
+		default:
+			// A finding the comparison could not judge: nothing is claimed.
+			return plain()
+		}
+	}
+	switch {
+	case w.Resolved == 0:
+		w.Verdict, w.Checked = waitRemains, s.to
+	case remaining == 0:
+		w.Verdict = waitResolved
+	default:
+		w.Verdict = waitPartial
+	}
+	if w.Resolved > 0 {
+		w.To, w.Change, w.WithNew = s.to, s.change, s.withNew
+	}
+	return w, true
 }

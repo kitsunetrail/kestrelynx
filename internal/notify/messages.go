@@ -308,19 +308,43 @@ type messages struct {
 	FixNoteEOL        string // "end-of-life: no fix planned for this release, consider a supported version"
 	FixNoteEOLRuntime string // the same as EOLRuntimeText, for a language runtime itself
 
-	CardNewCVEs      string // "new CVEs: %s" (linked CVE ids)
-	CardKEVShort     string // "CISA KEV"
-	CardSeeActNow    string // "🚨 see Act now"
-	CardEOSLStatus   string // "base OS is EOL (no more security updates coming)"
-	CardFoldedEOL    string // "includes %d end-of-life package(s)"
-	CardNewEOSLNote  string // "includes %d newly end-of-life package(s)"
-	CardBaseEOL      string // "base OS already EOL"
-	CardCollapsed    string // "+%[1]d lower-risk fixes (%[2]s): %[3]s" (count, severity summary, comma-joined names)
-	CardCounts       string // "CRITICAL %[1]d / HIGH %[2]d"
-	CardBaseWait     string // value of the action line: %[1]s base image name, %[2]s its tag
-	CardAgeLine      string // "⏱ open %[1]d day(s) · first seen %[2]s" (days, formatted date)
-	CardAgeToday     string // "⏱ first seen today"
-	ChannelContinued string // " _(cont. %[1]d/%[2]d)_" (message number, total) appended to the channel header of a continuation message
+	CardNewCVEs     string // "new CVEs: %s" (linked CVE ids)
+	CardKEVShort    string // "CISA KEV"
+	CardSeeActNow   string // "🚨 see Act now"
+	CardEOSLStatus  string // "base OS is EOL (no more security updates coming)"
+	CardFoldedEOL   string // "includes %d end-of-life package(s)"
+	CardNewEOSLNote string // "includes %d newly end-of-life package(s)"
+	CardBaseEOL     string // "base OS already EOL"
+	CardCollapsed   string // "+%[1]d lower-risk fixes (%[2]s): %[3]s" (count, severity summary, comma-joined names)
+	CardCounts      string // "CRITICAL %[1]d / HIGH %[2]d"
+	CardBaseWait    string // value of the action line: %[1]s base image name, %[2]s its tag
+
+	// The action line of a finding whose image tag's own series has no fix,
+	// with what a newer series showed. %[1]s is CardSubjectBase or
+	// CardSubjectImage, %[2]s the image name, %[3]s its tag, %[4]s the newer
+	// tag; the clauses follow in CardClauseWrap.
+	CardSubjectBase        string // "base image"
+	CardSubjectImage       string // "image"
+	CardNewerResolved      string // "%[1]s %[2]s %[3]s → %[4]s resolves it"
+	CardNewerPartial       string // "%[1]s %[2]s %[3]s → %[4]s resolves part of it"
+	CardNewerWait          string // "waiting for a newer %[1]s of %[2]s %[3]s"
+	CardNewerWaitUntagged  string // "waiting for a newer %[1]s of %[2]s" (no tag)
+	CardPartialClause      string // "%[1]d of %[2]d" (resolved, fixed findings of the card)
+	CardChangeMinor        string // "minor update"
+	CardChangeMajor        string // "major update"
+	CardOwnNoNewer         string // "no newer tag in the same series"
+	CardOwnNotFixed        string // "not resolved by the newer tag of the same series"
+	CardWithNew            string // "with new findings"
+	CardBaseCompared       string // "base images compared"
+	CardCheckedNotFixed    string // "not resolved in the checked tag(s) %s either" (tags)
+	CardOwnCheckedNotFixed string // "not resolved by the newer tag of the same series or the checked tag(s) %s" (tags)
+	CardNoNewerSeries      string // "no newer tag in the same series or in a newer series of the same form"
+	CardClauseWrap         string // " (%s)"
+	CardClauseJoin         string // ", "
+	CardTagJoin            string // " and "
+	CardAgeLine            string // "⏱ open %[1]d day(s) · first seen %[2]s" (days, formatted date)
+	CardAgeToday           string // "⏱ first seen today"
+	ChannelContinued       string // " _(cont. %[1]d/%[2]d)_" (message number, total) appended to the channel header of a continuation message
 
 	// Fallback text (the notification preview / screen-reader text).
 	FbFull               string // "KestreLynx %[1]s %[2]s — %[3]s" (generated-at, role, joined segments)
@@ -375,6 +399,7 @@ type messages struct {
 	PlanSegNotComparable string // "%d not comparable"
 	PlanSegFailed        string // "%d failed"
 	PlanSegDeferred      string // "%d deferred"
+	PlanSegNewerSeries   string // "%d resolved in a newer series"
 
 	// Labels of the lines of an item.
 	PlanLblService       string // "Service"
@@ -391,6 +416,7 @@ type messages struct {
 	PlanLblMajor         string // "⚠️ Major version change"
 	PlanLblPullPolicy    string // "Pull policy"
 	PlanLblManagedBy     string // "Managed by (from markers)"
+	PlanLblNewerSeries   string // "Newer series"
 
 	// Values.
 	PlanPullRestart              string // "restarting the Pods pulls the new content"
@@ -420,6 +446,11 @@ type messages struct {
 	PlanUndetectedClause         string // "%d not detected on the running image"
 	PlanClauseJoin               string // ", " (between the clauses)
 	PlanClauseWrap               string // " (%s)" (around the joined clauses)
+	PlanNewerMinor               string // "minor update"
+	PlanNewerMajor               string // "major update"
+	PlanNewerUnverified          string // "compatibility not checked"
+	PlanNewerBaseCompared        string // "base images compared, the rebuilt image not checked"
+	PlanNewerWithNew             string // "%[1]s in a newer series resolves %[2]d finding(s) and adds %[3]d" (change, resolved, introduced)
 	PlanPackageReason            string // "%[1]s %[2]s → %[3]s: %[4]s%[5]s" (name, installed, target, reason, the lockfile note)
 	PlanLockfileUnchanged        string // " (the lockfile did not change)"
 	PlanLeftOut                  string // "%[1]s %[2]s → %[3]s left out because %[4]s" (name, old, target, reason)
@@ -687,19 +718,39 @@ var enMessages = messages{
 	FixNoteEOL:        "end-of-life: no fix planned for this release, consider a supported version",
 	FixNoteEOLRuntime: "end-of-life: no fix will be released for this series, so the series has to be upgraded (manual)",
 
-	CardNewCVEs:      "new CVEs: %s",
-	CardKEVShort:     "CISA KEV",
-	CardSeeActNow:    "🚨 see Act now",
-	CardEOSLStatus:   "base OS is EOL (no more security updates coming)",
-	CardFoldedEOL:    "includes %d end-of-life package(s)",
-	CardNewEOSLNote:  "includes %d newly end-of-life package(s)",
-	CardBaseEOL:      "base OS already EOL",
-	CardCollapsed:    "+%[1]d lower-risk fixes (%[2]s): %[3]s",
-	CardCounts:       "CRITICAL %[1]d / HIGH %[2]d",
-	CardBaseWait:     "waiting for a newer base image of %[1]s %[2]s (no newer tag in the same series)",
-	CardAgeLine:      "⏱ open %[1]d day(s) · first seen %[2]s",
-	CardAgeToday:     "⏱ first seen today",
-	ChannelContinued: " _(cont. %[1]d/%[2]d)_",
+	CardNewCVEs:     "new CVEs: %s",
+	CardKEVShort:    "CISA KEV",
+	CardSeeActNow:   "🚨 see Act now",
+	CardEOSLStatus:  "base OS is EOL (no more security updates coming)",
+	CardFoldedEOL:   "includes %d end-of-life package(s)",
+	CardNewEOSLNote: "includes %d newly end-of-life package(s)",
+	CardBaseEOL:     "base OS already EOL",
+	CardCollapsed:   "+%[1]d lower-risk fixes (%[2]s): %[3]s",
+	CardCounts:      "CRITICAL %[1]d / HIGH %[2]d",
+	CardBaseWait:    "waiting for a newer base image of %[1]s %[2]s (no newer tag in the same series)",
+
+	CardSubjectBase:        "base image",
+	CardSubjectImage:       "image",
+	CardNewerResolved:      "%[1]s %[2]s %[3]s → %[4]s resolves it",
+	CardNewerPartial:       "%[1]s %[2]s %[3]s → %[4]s resolves part of it",
+	CardNewerWait:          "waiting for a newer %[1]s of %[2]s %[3]s",
+	CardNewerWaitUntagged:  "waiting for a newer %[1]s of %[2]s",
+	CardPartialClause:      "%[1]d of %[2]d",
+	CardChangeMinor:        "minor update",
+	CardChangeMajor:        "major update",
+	CardOwnNoNewer:         "no newer tag in the same series",
+	CardOwnNotFixed:        "not resolved by the newer tag of the same series",
+	CardWithNew:            "with new findings",
+	CardBaseCompared:       "base images compared",
+	CardCheckedNotFixed:    "not resolved in the checked tag(s) %s either",
+	CardOwnCheckedNotFixed: "not resolved by the newer tag of the same series or the checked tag(s) %s",
+	CardNoNewerSeries:      "no newer tag in the same series or in a newer series of the same form",
+	CardClauseWrap:         " (%s)",
+	CardClauseJoin:         ", ",
+	CardTagJoin:            " and ",
+	CardAgeLine:            "⏱ open %[1]d day(s) · first seen %[2]s",
+	CardAgeToday:           "⏱ first seen today",
+	ChannelContinued:       " _(cont. %[1]d/%[2]d)_",
 
 	FbFull:               "KestreLynx %[1]s %[2]s — %[3]s",
 	FbPlain:              "KestreLynx %[1]s %[2]s",
@@ -748,6 +799,7 @@ var enMessages = messages{
 	PlanSegNotComparable: "%d not comparable",
 	PlanSegFailed:        "%d failed",
 	PlanSegDeferred:      "%d deferred",
+	PlanSegNewerSeries:   "%d resolved in a newer series",
 
 	PlanLblService:       "Service",
 	PlanLblFile:          "File to change",
@@ -763,6 +815,7 @@ var enMessages = messages{
 	PlanLblMajor:         "⚠️ Major version change",
 	PlanLblPullPolicy:    "Pull policy",
 	PlanLblManagedBy:     "Managed by (from markers)",
+	PlanLblNewerSeries:   "Newer series",
 
 	PlanPullRestart:              "restarting the Pods pulls the new content",
 	PlanPullChangeTag:            "nodes keep the image they have, so a restart does not help; a fixed tag or a digest is needed",
@@ -791,6 +844,11 @@ var enMessages = messages{
 	PlanUndetectedClause:         "%d not detected on the running image",
 	PlanClauseJoin:               ", ",
 	PlanClauseWrap:               " (%s)",
+	PlanNewerMinor:               "minor update",
+	PlanNewerMajor:               "major update",
+	PlanNewerUnverified:          "compatibility not checked",
+	PlanNewerBaseCompared:        "base images compared, the rebuilt image not checked",
+	PlanNewerWithNew:             "%[1]s in a newer series resolves %[2]d finding(s) and adds %[3]d",
 	PlanPackageReason:            "%[1]s %[2]s → %[3]s: %[4]s%[5]s",
 	PlanLockfileUnchanged:        " (the lockfile did not change)",
 	PlanLeftOut:                  "%[1]s %[2]s → %[3]s left out because %[4]s",
@@ -1054,19 +1112,39 @@ var jaMessages = messages{
 	FixNoteEOL:        "サポート終了(EOL): このリリースでは修正予定なし、サポート中のバージョンを検討",
 	FixNoteEOLRuntime: "サポート終了(EOL): この系列には修正版が出ないため、系列を上げる必要がある(手動)",
 
-	CardNewCVEs:      "新しいCVE %s",
-	CardKEVShort:     "CISA KEV",
-	CardSeeActNow:    "🚨 今すぐ対応を参照",
-	CardEOSLStatus:   "ベースOSがEOL (今後のセキュリティ更新なし)",
-	CardFoldedEOL:    "サポート終了(EOL)のパッケージ%d件を含む",
-	CardNewEOSLNote:  "新たにサポート終了(EOL)となったパッケージ%d件を含む",
-	CardBaseEOL:      "ベースOSは既にEOL",
-	CardCollapsed:    "低リスクの修正 +%[1]d件 (%[2]s): %[3]s",
-	CardCounts:       "CRITICAL %[1]d / HIGH %[2]d",
-	CardBaseWait:     "元イメージ %[1]s %[2]s の新しい版待ち（同じ系列に新しい版なし）",
-	CardAgeLine:      "⏱ 未解決%[1]d日 · 初回検出%[2]s",
-	CardAgeToday:     "⏱ 本日初検出",
-	ChannelContinued: " _(続き %[1]d/%[2]d)_",
+	CardNewCVEs:     "新しいCVE %s",
+	CardKEVShort:    "CISA KEV",
+	CardSeeActNow:   "🚨 今すぐ対応を参照",
+	CardEOSLStatus:  "ベースOSがEOL (今後のセキュリティ更新なし)",
+	CardFoldedEOL:   "サポート終了(EOL)のパッケージ%d件を含む",
+	CardNewEOSLNote: "新たにサポート終了(EOL)となったパッケージ%d件を含む",
+	CardBaseEOL:     "ベースOSは既にEOL",
+	CardCollapsed:   "低リスクの修正 +%[1]d件 (%[2]s): %[3]s",
+	CardCounts:      "CRITICAL %[1]d / HIGH %[2]d",
+	CardBaseWait:    "元イメージ %[1]s %[2]s の新しい版待ち（同じ系列に新しい版なし）",
+
+	CardSubjectBase:        "元イメージ",
+	CardSubjectImage:       "イメージ",
+	CardNewerResolved:      "%[1]s %[2]s %[3]s → %[4]s で解消",
+	CardNewerPartial:       "%[1]s %[2]s %[3]s → %[4]s で一部解消",
+	CardNewerWait:          "%[1]s %[2]s %[3]s の新しい版待ち",
+	CardNewerWaitUntagged:  "%[1]s %[2]s の新しい版待ち",
+	CardPartialClause:      "%[2]d件中%[1]d件",
+	CardChangeMinor:        "minor の更新",
+	CardChangeMajor:        "major の更新",
+	CardOwnNoNewer:         "同じ系列に新しい版なし",
+	CardOwnNotFixed:        "同じ系列の新しい版では未解消",
+	CardWithNew:            "新たな所見あり",
+	CardBaseCompared:       "ベースの比較",
+	CardCheckedNotFixed:    "確認した %s でも未解消",
+	CardOwnCheckedNotFixed: "同じ系列の新しい版と、確認した %s で未解消",
+	CardNoNewerSeries:      "同じ系列にも、条件に合う新しい系列にも新しい版なし",
+	CardClauseWrap:         "（%s）",
+	CardClauseJoin:         "、",
+	CardTagJoin:            " と ",
+	CardAgeLine:            "⏱ 未解決%[1]d日 · 初回検出%[2]s",
+	CardAgeToday:           "⏱ 本日初検出",
+	ChannelContinued:       " _(続き %[1]d/%[2]d)_",
 
 	FbFull:               "KestreLynx %[1]s %[2]s — %[3]s",
 	FbPlain:              "KestreLynx %[1]s %[2]s",
@@ -1115,6 +1193,7 @@ var jaMessages = messages{
 	PlanSegNotComparable: "比較不能 %d件",
 	PlanSegFailed:        "失敗 %d件",
 	PlanSegDeferred:      "保留 %d件",
+	PlanSegNewerSeries:   "新しい系列で解消 %d件",
 
 	PlanLblService:       "サービス",
 	PlanLblFile:          "修正するファイル",
@@ -1130,6 +1209,7 @@ var jaMessages = messages{
 	PlanLblMajor:         "⚠️ メジャーバージョンの変更",
 	PlanLblPullPolicy:    "pullポリシー",
 	PlanLblManagedBy:     "管理元(目印による推定)",
+	PlanLblNewerSeries:   "新しい系列",
 
 	PlanPullRestart:              "Podを再起動すると新しい中身を取得する",
 	PlanPullChangeTag:            "ノードにある古い中身が使われるため再起動では直らない。固定タグへの変更かdigest指定が要る",
@@ -1158,6 +1238,11 @@ var jaMessages = messages{
 	PlanUndetectedClause:         "稼働中のイメージで未検出 %d件",
 	PlanClauseJoin:               "、",
 	PlanClauseWrap:               " (%s)",
+	PlanNewerMinor:               "minor の更新",
+	PlanNewerMajor:               "major の更新",
+	PlanNewerUnverified:          "互換性は未確認",
+	PlanNewerBaseCompared:        "ベースの比較、再ビルド後は未確認",
+	PlanNewerWithNew:             "新しい系列の %[1]s で所見%[2]d件が解消、新たな所見%[3]d件",
 	PlanPackageReason:            "%[1]s %[2]s → %[3]s は%[4]s%[5]s",
 	PlanLockfileUnchanged:        " (lockfile は変わらず)",
 	PlanLeftOut:                  "%[1]s %[2]s → %[3]s は%[4]sため除外",

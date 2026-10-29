@@ -36,6 +36,7 @@ const (
 	tagNotComparable
 	tagFailed
 	tagDeferred
+	tagNewerSeries
 )
 
 // planEntry is what one file (or one image to pull again) adds under the
@@ -244,6 +245,7 @@ func (b *planBuilder) summary() string {
 		{msg.PlanSegNotComparable, tagNotComparable},
 		{msg.PlanSegFailed, tagFailed},
 		{msg.PlanSegDeferred, tagDeferred},
+		{msg.PlanSegNewerSeries, tagNewerSeries},
 	} {
 		if counts[c.tag] > 0 {
 			segs = append(segs, fmt.Sprintf(c.format, counts[c.tag]))
@@ -612,7 +614,58 @@ func (b *planBuilder) composeItemLines(it remediation.Item) planEntry {
 			e.line(tag, kv(label, b.reason(it.Reason)))
 		}
 	}
+	image, old := splitImageRef(it.Current.Ref)
+	if tag, line, ok := b.newerSeriesLine(it.NewerSeries, func(to string) string { return b.change(image, old, to) }, false); ok {
+		e.line(tag, line)
+	}
 	return e
+}
+
+// newerSeriesLine is the line of a check of newer series that found a tag
+// resolving something: a line of its own, apart from the update candidates
+// since no pull request is made for it, or a decision when the tag
+// introduces findings. ok is false for every other outcome of the check,
+// which is not shown here. update renders the change to a tag; base marks a
+// comparison of base images.
+func (b *planBuilder) newerSeriesLine(ns *remediation.NewerSeries, update func(to string) string, base bool) (tag planTag, line string, ok bool) {
+	if ns == nil || ns.Shown == "" {
+		return 0, "", false
+	}
+	var c *remediation.NewerSeriesCandidate
+	for i := range ns.Candidates {
+		if ns.Candidates[i].Tag == ns.Shown {
+			c = &ns.Candidates[i]
+		}
+	}
+	if c == nil || c.Counts == nil {
+		return 0, "", false
+	}
+	msg := b.msg
+	clauses := []string{msg.PlanNewerMinor}
+	if c.Change == remediation.SeriesChangeMajor {
+		clauses[0] = msg.PlanNewerMajor
+	}
+	n := c.Counts
+	switch ns.Status {
+	case remediation.NewerSeriesResolves, remediation.NewerSeriesResolvesPartially:
+		if n.Resolved < n.Targets {
+			clauses = append(clauses, fmt.Sprintf(msg.PlanResolvesPartial, n.Resolved, n.Targets))
+		} else {
+			clauses = append(clauses, fmt.Sprintf(msg.PlanResolves, n.Resolved))
+		}
+		if base {
+			clauses = append(clauses, msg.PlanNewerBaseCompared)
+		}
+		clauses = append(clauses, msg.PlanNewerUnverified)
+		return tagNewerSeries, kv(msg.PlanLblNewerSeries, update(c.Tag)+b.wrap(clauses...)), true
+	case remediation.NewerSeriesResolvesWithNew:
+		if base {
+			clauses = append(clauses, msg.PlanNewerBaseCompared)
+		}
+		clauses = append(clauses, msg.PlanNewerUnverified)
+		return tagDecide, kv(msg.PlanLblDecide, fmt.Sprintf(msg.PlanNewerWithNew, update(c.Tag), n.Resolved, n.Introduced)+b.wrap(clauses...)), true
+	}
+	return 0, "", false
 }
 
 // pullAdvice is the value of a pull policy line: the policy, what it means for
@@ -754,6 +807,16 @@ func (b *planBuilder) dockerfileItem(it remediation.DockerfileItem) planEntry {
 			e.plain(file)
 			e.line(tag, kv(label, b.reason(it.Reason)))
 		}
+	}
+	image, old := splitImageRef(it.BaseRef)
+	newer := func(to string) string {
+		return fmt.Sprintf(b.msg.PlanBaseImageValue, litMrkdwn(image), litMrkdwn(old), litMrkdwn(to))
+	}
+	if tag, line, ok := b.newerSeriesLine(it.NewerSeries, newer, true); ok {
+		if len(e.lines) == 0 {
+			e.plain(file)
+		}
+		e.line(tag, line)
 	}
 	return e
 }

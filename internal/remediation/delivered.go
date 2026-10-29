@@ -28,8 +28,10 @@ const deliveredVersion = 1
 // repository and target; operation events are delivered by sequence number instead and
 // are not part of it. The Dockerfile items add their edit location, the base
 // image and candidate, each running image's layer check, category and
-// counts. A plan with nothing in it has the empty fingerprint,
-// the same as nothing delivered.
+// counts. The check of newer series adds, for each item, Dockerfile item and
+// running image of one, its status, shown tag and reason, and each candidate's
+// tag, status, reason, content, counts and per-target outcomes. A plan with
+// nothing in it has the empty fingerprint, the same as nothing delivered.
 func Fingerprint(p Plan) string {
 	if len(p.Items) == 0 && len(p.LanguageItems) == 0 && len(p.DockerfileItems) == 0 && len(p.PullRequests) == 0 && len(p.PRProblems) == 0 {
 		return ""
@@ -57,6 +59,7 @@ func Fingerprint(p Plan) string {
 		Declared   []DeclaredInstance `json:"declared,omitempty"`
 		Pull       []PullAdvice       `json:"pull,omitempty"`
 		Management []WorkloadChains   `json:"management,omitempty"`
+		Newer      *newerFP           `json:"newer_series,omitempty"`
 	}
 	type langPackage struct {
 		Name        string        `json:"name"`
@@ -89,6 +92,7 @@ func Fingerprint(p Plan) string {
 		Resolved   int      `json:"resolved,omitempty"`
 		Remaining  int      `json:"remaining,omitempty"`
 		Introduced int      `json:"introduced,omitempty"`
+		Newer      *newerFP `json:"newer_series,omitempty"`
 	}
 	type dfItem struct {
 		Key       string           `json:"key"`
@@ -100,6 +104,7 @@ func Fingerprint(p Plan) string {
 		Candidate *image           `json:"candidate,omitempty"`
 		Entities  []dfEntity       `json:"entities,omitempty"`
 		Counts    DockerfileCounts `json:"counts"`
+		Newer     *newerFP         `json:"newer_series,omitempty"`
 	}
 	type prUnit struct {
 		Key          string       `json:"key"`
@@ -148,7 +153,7 @@ func Fingerprint(p Plan) string {
 	})
 	for _, di := range p.DockerfileItems {
 		fd := dfItem{Key: di.Key, Category: di.Category, Reason: di.Reason, Workloads: append([]string(nil), di.Workloads...),
-			Path: di.Source.Path, Base: di.BaseRef, Counts: di.Counts}
+			Path: di.Source.Path, Base: di.BaseRef, Counts: di.Counts, Newer: newerFingerprint(di.NewerSeries, nil)}
 		sort.Strings(fd.Workloads)
 		if c := di.Candidate; c != nil {
 			fd.Candidate = &image{Ref: c.Ref, Config: c.ConfigDigest, Manifest: c.ManifestDigest, Top: c.TopDigest}
@@ -165,6 +170,7 @@ func Fingerprint(p Plan) string {
 			if e.Comparison != nil {
 				fe.Resolved, fe.Remaining, fe.Introduced = e.Comparison.Counts()
 			}
+			fe.Newer = newerFingerprint(e.NewerSeries, e.Targets)
 			fd.Entities = append(fd.Entities, fe)
 		}
 		sort.Slice(fd.Entities, func(i, j int) bool {
@@ -249,6 +255,7 @@ func Fingerprint(p Plan) string {
 		if it.Comparison != nil {
 			fi.Resolved, fi.Remaining, fi.Introduced = it.Comparison.Counts()
 		}
+		fi.Newer = newerFingerprint(it.NewerSeries, it.Targets)
 		out.Items = append(out.Items, fi)
 	}
 	sort.Slice(out.Items, func(i, j int) bool {
@@ -266,6 +273,63 @@ func Fingerprint(p Plan) string {
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+// newerFP is what a check of newer series shows, for Fingerprint.
+type newerFP struct {
+	Status     NewerSeriesStatus `json:"status"`
+	Shown      string            `json:"shown,omitempty"`
+	Reason     Reason            `json:"reason,omitempty"`
+	Candidates []newerCandFP     `json:"candidates,omitempty"`
+}
+
+type newerCandFP struct {
+	Tag      string             `json:"tag"`
+	Status   NewerSeriesStatus  `json:"status"`
+	Reason   Reason             `json:"reason,omitempty"`
+	Top      string             `json:"top,omitempty"`
+	Manifest string             `json:"manifest,omitempty"`
+	Counts   *NewerSeriesCounts `json:"counts,omitempty"`
+	// Outcomes are the outcomes of the targets, sorted by vulnerability and
+	// package.
+	Outcomes []string `json:"outcomes,omitempty"`
+}
+
+func newerFingerprint(ns *NewerSeries, targets []Target) *newerFP {
+	if ns == nil {
+		return nil
+	}
+	out := &newerFP{Status: ns.Status, Shown: ns.Shown, Reason: ns.Reason}
+	for _, c := range ns.Candidates {
+		fc := newerCandFP{Tag: c.Tag, Status: c.Status, Reason: c.Reason, Counts: c.Counts}
+		if c.Candidate != nil {
+			fc.Top, fc.Manifest = c.Candidate.TopDigest, c.Candidate.ManifestDigest
+		}
+		if c.Comparison != nil {
+			for _, v := range TargetVerdicts(c.Comparison.Verdicts, targets) {
+				fc.Outcomes = append(fc.Outcomes, v.VulnID+"|"+string(v.Package.Ecosystem)+"|"+string(v.Package.Class)+"|"+v.Package.Name+"|"+string(v.Outcome))
+			}
+			sort.Strings(fc.Outcomes)
+		}
+		out.Candidates = append(out.Candidates, fc)
+	}
+	return out
+}
+
+// TargetVerdicts keeps the verdicts of vs that are about one of the targets:
+// a comparison has a verdict for every finding the baseline reported.
+func TargetVerdicts(vs []VulnVerdict, targets []Target) []VulnVerdict {
+	is := map[verdictKey]bool{}
+	for _, t := range targets {
+		is[verdictKey{t.VulnID, t.Package}] = true
+	}
+	var out []VulnVerdict
+	for _, v := range vs {
+		if is[verdictKey{v.VulnID, v.Package}] {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // StatusFingerprint extends a plan fingerprint with the plan's status: why no

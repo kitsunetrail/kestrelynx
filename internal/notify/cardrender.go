@@ -10,6 +10,7 @@ import (
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
 	rtevidence "github.com/kitsunetrail/kestrelynx/internal/evidence"
+	"github.com/kitsunetrail/kestrelynx/internal/remediation"
 )
 
 // renderer carries what every card needs to render: the dictionary and the
@@ -49,13 +50,68 @@ func (rd renderer) countsValue(c pkgCard) string {
 	return countsLine(rd.msg, analyze.SeverityCounts{Critical: c.Critical, High: c.High, Medium: c.Medium, Low: c.Low, Unknown: c.Unknown})
 }
 
-// baseWaitLine is the action line of a finding that waits for a newer base
-// image, or "" when the card has none.
+// baseWaitLine is the action line of a finding whose image tag's own series
+// has no fix, with what a newer series showed, or "" when the card has none.
+// It never says that no fix exists: only the tags named were checked.
 func (rd renderer) baseWaitLine(c pkgCard) string {
-	if c.BaseWait == nil {
+	w := c.BaseWait
+	if w == nil {
 		return ""
 	}
-	return kv(rd.msg.LblAction, fmt.Sprintf(rd.msg.CardBaseWait, litMrkdwn(c.BaseWait.Name), litMrkdwn(c.BaseWait.Tag)))
+	msg := rd.msg
+	name, tag := litMrkdwn(w.Name), litMrkdwn(w.Tag)
+	if w.Verdict == waitPlain {
+		return kv(msg.LblAction, fmt.Sprintf(msg.CardBaseWait, name, tag))
+	}
+	subject := msg.CardSubjectBase
+	if w.Image {
+		subject = msg.CardSubjectImage
+	}
+	own := msg.CardOwnNotFixed
+	if w.OwnNoNewer {
+		own = msg.CardOwnNoNewer
+	}
+	change := msg.CardChangeMinor
+	if w.Change == remediation.SeriesChangeMajor {
+		change = msg.CardChangeMajor
+	}
+	var checked []string
+	for _, t := range strings.Split(w.Checked, "\x00") {
+		if t != "" {
+			checked = append(checked, litMrkdwn(t))
+		}
+	}
+	var head string
+	var clauses []string
+	switch w.Verdict {
+	case waitResolved:
+		head = fmt.Sprintf(msg.CardNewerResolved, subject, name, tag, litMrkdwn(w.To))
+		clauses = []string{change, own}
+	case waitPartial:
+		head = fmt.Sprintf(msg.CardNewerPartial, subject, name, tag, litMrkdwn(w.To))
+		clauses = []string{fmt.Sprintf(msg.CardPartialClause, w.Resolved, w.Total), change, own}
+	case waitRemains:
+		tags := strings.Join(checked, msg.CardTagJoin)
+		if w.OwnNoNewer {
+			head = fmt.Sprintf(msg.CardNewerWait, subject, name, tag)
+			clauses = []string{fmt.Sprintf(msg.CardCheckedNotFixed, tags)}
+		} else {
+			head = fmt.Sprintf(msg.CardNewerWaitUntagged, subject, name)
+			clauses = []string{fmt.Sprintf(msg.CardOwnCheckedNotFixed, tags)}
+		}
+	case waitNoNewerSeries:
+		head = fmt.Sprintf(msg.CardNewerWait, subject, name, tag)
+		clauses = []string{msg.CardNoNewerSeries}
+	default:
+		return ""
+	}
+	if w.WithNew {
+		clauses = append(clauses, msg.CardWithNew)
+	}
+	if !w.Image && w.Verdict != waitNoNewerSeries {
+		clauses = append(clauses, msg.CardBaseCompared)
+	}
+	return kv(msg.LblAction, head+fmt.Sprintf(msg.CardClauseWrap, strings.Join(clauses, msg.CardClauseJoin)))
 }
 
 func (rd renderer) changeLine(c pkgCard) string {

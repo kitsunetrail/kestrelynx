@@ -95,6 +95,9 @@ type dockerfileItemPayload struct {
 	RebuildRuntimes []remediation.RuntimeRebuild `json:"rebuild_runtimes,omitempty"`
 	Entities        []dockerfileEntityPayload    `json:"entities,omitempty"`
 	PullRequest     *dockerfilePRPayload         `json:"pull_request,omitempty"`
+	// NewerSeries is the check of newer series of a pinned base over all the
+	// running images; each entity holds its own comparisons.
+	NewerSeries *newerSeriesPayload `json:"newer_series,omitempty"`
 }
 
 // dockerfileEntityPayload is one running image of an item, with the three
@@ -118,6 +121,7 @@ type dockerfileEntityPayload struct {
 	Comparison      *comparisonPayload           `json:"comparison,omitempty"`
 	RebuildRuntimes []remediation.RuntimeRebuild `json:"rebuild_runtimes,omitempty"`
 	Scans           []remediationScanEntry       `json:"scans,omitempty"`
+	NewerSeries     *newerSeriesPayload          `json:"newer_series,omitempty"`
 }
 
 // dockerfilePRPayload is the state of the pull request unit for an item.
@@ -168,21 +172,14 @@ func dockerfileItemPayloadOf(it remediation.DockerfileItem, scans map[string]rem
 			// The scans of the bases report every finding of the base; the
 			// verdicts listed are those of the findings the running image has.
 			vr := *e.Comparison
-			isTarget := map[string]bool{}
-			for _, t := range e.Targets {
-				isTarget[t.VulnID+"\x00"+t.Package.Name+"\x00"+string(t.Package.Ecosystem)+"\x00"+string(t.Package.Class)] = true
-			}
-			vr.Verdicts = nil
-			for _, v := range e.Comparison.Verdicts {
-				if isTarget[v.VulnID+"\x00"+v.Package.Name+"\x00"+string(v.Package.Ecosystem)+"\x00"+string(v.Package.Class)] {
-					vr.Verdicts = append(vr.Verdicts, v)
-				}
-			}
+			vr.Verdicts = remediation.TargetVerdicts(vr.Verdicts, e.Targets)
 			ep.Comparison = comparisonPayloadFor(vr, e.Decision, len(e.Targets))
 		}
 		ep.Scans = scanEntries(scans, e.BaselineScan, e.CandidateScan)
+		ep.NewerSeries = newerSeriesPayloadOf(e.NewerSeries, e.Targets, scans)
 		out.Entities = append(out.Entities, ep)
 	}
+	out.NewerSeries = newerSeriesPayloadOf(it.NewerSeries, nil, scans)
 	if pr := dockerfileUnitOf(it, units); pr != nil {
 		out.PullRequest = &dockerfilePRPayload{Status: string(pr.Status), Reason: string(pr.Reason), Number: pr.Number, URL: pr.URL, State: string(pr.State)}
 	}

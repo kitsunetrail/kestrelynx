@@ -252,7 +252,7 @@ The current version is the current tag, which for a Dockerfile is the tag specif
 | No newer tag in the same series or a matching newer series | `Action: waiting for a newer base image of python 3.11.9 (no newer tag in the same series or in a newer series of the same form)` |
 | Newer series could not be checked and the existing guidance is retained | `Action: waiting for a newer base image of python 3.11.9 (no newer tag in the same series)` |
 
-The line uses results for every finding with an available fix on that card, based on the candidate selected for display in the same cycle's remediation plan.
+Resolution and partial-resolution lines appear only when a candidate is selected for display in the item in the same cycle's remediation plan, using that candidate's results for every finding with an available fix on the card.
 
 - Dockerfile results cover findings attributed to the base image and use the subject “base image”
 - Published-image results use the subject “image” and do not require layer confirmation
@@ -264,9 +264,11 @@ The line uses results for every finding with an available fix on that card, base
 A newer version (patch) in the same series becomes a candidate for a PR that updates the base-image or image tag.
 Newer-series lines do not result in PRs.
 
-Newer-series results are not displayed in the following cases.
+Newer-series results are displayed or omitted under the following conditions.
 
-- For `not_checked` or indeterminate findings, a Dockerfile item with “no newer tag in the same series” retains the existing line, and other cases show no line
+- When the item has no candidate selected for display and its status is `not_resolving` or `not_checked`, candidates with comparison results are checked separately for each finding, and the card shows “not resolved in the checked tag(s) X either” if every finding with an available fix on the card is known to remain in every candidate compared for that finding
+- Even when the item as a whole is `not_checked`, a card without indeterminate findings shows “not resolved in the checked tag(s) X either” if it meets the condition above
+- For a card containing indeterminate findings or findings that have not been compared, a Dockerfile item with “no newer tag in the same series” retains the existing line, and other cases show no line
 - `no_newer_series` shows no line when the original reason is not `no_newer_tag`
 - No line is shown when the Dockerfile base and published image produce different lines for the same finding
 

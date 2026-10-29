@@ -304,3 +304,76 @@ func TestNewerSeriesCardWithNewFollowsTheItem(t *testing.T) {
 		t.Errorf("want %q in:\n%s", want, out)
 	}
 }
+
+// A check the item could not judge as a whole, because one finding could not
+// be judged, still says on the other findings' cards that the compared tag
+// leaves them; a card with the finding that could not be judged keeps its
+// line.
+func TestNewerSeriesCardLinesWhenTheItemCouldNotBeJudged(t *testing.T) {
+	r := baseWaitReport(t)
+	all := append(jsoupTargets(), otherTarget())
+	unknown := remediation.OutcomeUnknown
+	plan := func(outs ...remediation.Outcome) *PlanInfo {
+		cand := newerCand("9.5.5", remediation.SeriesChangeMajor, remediation.NewerSeriesNotChecked, all, outs...)
+		cand.Reason = remediation.ReasonAnalysisIncomplete
+		itemCand := remediation.NewerSeriesCandidate{Tag: "9.5.5", Change: remediation.SeriesChangeMajor, Status: remediation.NewerSeriesNotChecked, Reason: remediation.ReasonAnalysisIncomplete}
+		p := dfNewerPlan(t,
+			&remediation.NewerSeries{Status: remediation.NewerSeriesNotChecked, Reason: remediation.ReasonAnalysisIncomplete, Candidates: []remediation.NewerSeriesCandidate{itemCand}},
+			&remediation.NewerSeries{Status: remediation.NewerSeriesNotChecked, Reason: remediation.ReasonAnalysisIncomplete, Candidates: []remediation.NewerSeriesCandidate{cand}})
+		p.Plan.DockerfileItems[0].Entities[0].Targets = all
+		return p
+	}
+	// The thread shows every card; the channel folds other-lib's away.
+	render := func(p *PlanInfo) string {
+		return allBlocksText(buildThreadBlockMessagesWithPlan(r, Ages{}, p, jaMessages, defaultRenderLimits))
+	}
+	remains := "対応: 元イメージ elasticsearch 8.19.23 の新しい版待ち（確認した 9.5.5 でも未解消、ベースの比較）"
+	plain := "対応: 元イメージ elasticsearch 8.19.23 の新しい版待ち（同じ系列に新しい版なし）"
+
+	out := render(plan(remaining(), remaining(), unknown))
+	if actionOf(out, "org.jsoup:jsoup") != remains || actionOf(out, "other-lib") != plain {
+		t.Errorf("want jsoup's card to remain and other-lib's to keep its line:\n%s", out)
+	}
+	// One of jsoup's findings could not be judged: its card keeps the plain
+	// line.
+	out = render(plan(remaining(), unknown, remaining()))
+	if actionOf(out, "org.jsoup:jsoup") != plain || actionOf(out, "other-lib") != remains {
+		t.Errorf("want jsoup's card plain and other-lib's to remain:\n%s", out)
+	}
+	// A tag compared that resolves a finding is never shown as remaining.
+	out = render(plan(resolved(), resolved(), unknown))
+	if strings.Contains(out, "確認した 9.5.5") {
+		t.Errorf("a finding the compared tag resolves is shown as remaining:\n%s", out)
+	}
+	// A tag that was never compared gives no such line.
+	noCmp := plan(remaining(), remaining(), unknown)
+	noCmp.Plan.DockerfileItems[0].Entities[0].NewerSeries.Candidates[0].Comparison = nil
+	if out := render(noCmp); strings.Contains(out, "確認した") || strings.Count(out, plain) != 2 {
+		t.Errorf("a tag never compared is named:\n%s", out)
+	}
+
+	// The same for a pinned running image.
+	cand := newerCand("2.0.1", remediation.SeriesChangeMajor, remediation.NewerSeriesNotChecked, jsoupTargets(), remaining(), remaining())
+	img := imageNewerPlan(t, remediation.ReasonNoNewerTag, &remediation.NewerSeries{Status: remediation.NewerSeriesNotChecked, Reason: remediation.ReasonAnalysisIncomplete, Candidates: []remediation.NewerSeriesCandidate{cand}})
+	if out := render(img); !strings.Contains(out, "対応: イメージ shop-es 1 の新しい版待ち（確認した 2.0.1 でも未解消）") {
+		t.Errorf("published image:\n%s", out)
+	}
+}
+
+// actionOf is the action line of the card of package pkg in a rendered
+// message: the first such line after the card's heading.
+func actionOf(out, pkg string) string {
+	i := strings.Index(out, "*◆ "+pkg+"*")
+	if i < 0 {
+		return ""
+	}
+	for _, l := range strings.Split(out[i:], "\n")[1:] {
+		if strings.HasPrefix(l, "*◆ ") {
+			return ""
+		}
+		if strings.HasPrefix(l, "対応: ") || strings.HasPrefix(l, "Action: ") {
+			return l
+		}
+	}
+	return ""
+}

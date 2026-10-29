@@ -110,15 +110,6 @@ func newerSource(ns *remediation.NewerSeries, own remediation.Reason, cands []re
 	src = waitSource{ownNoNewer: own == remediation.ReasonNoNewerTag, status: ns.Status}
 	remains := func(remediation.Target) remediation.Outcome { return remediation.OutcomeRemaining }
 	switch {
-	case ns.Status == remediation.NewerSeriesNotResolving:
-		var tags []string
-		for _, c := range ns.Candidates {
-			if c.Status == remediation.NewerSeriesNotResolving {
-				tags = append(tags, c.Tag)
-			}
-		}
-		src.checked = strings.Join(tags, "\x00")
-		return src, remains, true
 	case ns.Status == remediation.NewerSeriesNone:
 		return src, remains, src.ownNoNewer
 	case ns.Shown == "":
@@ -183,10 +174,12 @@ func newBaseWaitIndex(info *PlanInfo) *baseWaitIndex {
 			perTarget := func(t remediation.Target) waitSource { return src }
 			switch {
 			case it.NewerSeries == nil || e.NewerSeries == nil:
-			case it.NewerSeries.Status == remediation.NewerSeriesNotResolving:
-				// The item resolves no target in every running image, which
-				// this one may still do for some: each target remains only
-				// in the tags this image's own comparisons show it in.
+			case shownNone(it.NewerSeries):
+				// The item shows no tag: none resolves a target in every
+				// running image, or one could not be judged. A target still
+				// remains in the tags this image's own comparisons show it
+				// remaining in; one they do not, or that none compared, keeps
+				// the line it had.
 				legacySrc := src
 				remains := waitSource{name: name, tag: tag, ownNoNewer: src.ownNoNewer, legacy: src.legacy, status: remediation.NewerSeriesNotResolving}
 				perTarget = func(t remediation.Target) waitSource {
@@ -227,17 +220,33 @@ func newBaseWaitIndex(info *PlanInfo) *baseWaitIndex {
 		if it.NewerSeries == nil || !confirmed(it.Current) {
 			continue
 		}
+		name, tag := baseNameTag(it.Current)
+		if name == "" || tag == "" {
+			continue
+		}
+		key := func(t remediation.Target) baseWaitKey {
+			return baseWaitKey{image: it.Current.Ref, entity: it.Current.Entity, vuln: t.VulnID, coord: t.Package}
+		}
+		if shownNone(it.NewerSeries) {
+			// As for a Dockerfile's base: a target remains in the tags whose
+			// comparisons show it remaining; any other gets no line.
+			for _, t := range it.Targets {
+				tags, ok := remainingTags(it.NewerSeries.Candidates, t)
+				if !ok {
+					continue
+				}
+				src := waitSource{image: true, name: name, tag: tag, ownNoNewer: it.Reason == remediation.ReasonNoNewerTag, status: remediation.NewerSeriesNotResolving, checked: tags}
+				x.add(x.images, key(t), &baseWaitEntry{src: src, outcome: remediation.OutcomeRemaining})
+			}
+			continue
+		}
 		src, outcome, ok := newerSource(it.NewerSeries, it.Reason, it.NewerSeries.Candidates)
 		if !ok {
 			continue
 		}
-		src.image = true
-		src.name, src.tag = baseNameTag(it.Current)
-		if src.name == "" || src.tag == "" {
-			continue
-		}
+		src.image, src.name, src.tag = true, name, tag
 		for _, t := range it.Targets {
-			x.add(x.images, baseWaitKey{image: it.Current.Ref, entity: it.Current.Entity, vuln: t.VulnID, coord: t.Package}, &baseWaitEntry{src: src, outcome: outcome(t)})
+			x.add(x.images, key(t), &baseWaitEntry{src: src, outcome: outcome(t)})
 		}
 	}
 	if len(x.bases) == 0 && len(x.images) == 0 {
@@ -246,17 +255,22 @@ func newBaseWaitIndex(info *PlanInfo) *baseWaitIndex {
 	return x
 }
 
-// remainingTags joins the tags of the checked candidates, every one of which
-// shows target t remaining; ok is false when one does not, or none was
-// checked.
+// shownNone reports whether a check shows no tag on its own: none resolves a
+// target, or one could not be judged.
+func shownNone(ns *remediation.NewerSeries) bool {
+	return ns.Status == remediation.NewerSeriesNotResolving || ns.Status == remediation.NewerSeriesNotChecked
+}
+
+// remainingTags joins the tags of the candidates whose comparison was made,
+// every one of which shows target t remaining; ok is false when one does
+// not, or none was compared. A candidate the check could not judge as a
+// whole still counts by its comparison: a target it shows remaining is known
+// to remain there, whatever another target's outcome.
 func remainingTags(cands []remediation.NewerSeriesCandidate, t remediation.Target) (tags string, ok bool) {
 	var out []string
 	for _, c := range cands {
-		if c.Status == remediation.NewerSeriesNotChecked {
+		if c.Comparison == nil || !c.Comparison.Comparable {
 			continue
-		}
-		if c.Comparison == nil {
-			return "", false
 		}
 		found := false
 		for _, v := range c.Comparison.Verdicts {
@@ -328,14 +342,17 @@ func (x *baseWaitIndex) match(m map[baseWaitKey][]*baseWaitEntry, img analyze.Im
 	var src waitSource
 	layers := map[string]bool{}
 	var outcomes []remediation.Outcome
+	mixed, allLegacy := false, true
 	for _, v := range g.Vulns {
 		if v.Status != scanner.StatusFixed {
 			continue
 		}
 		es := m[baseWaitKey{image: img.Image, entity: entity, vuln: v.ID, coord: coord}]
-		if len(es) != 1 || (len(outcomes) > 0 && es[0].src != src) {
+		if len(es) != 1 {
 			return baseWait{}, false
 		}
+		mixed = mixed || (len(outcomes) > 0 && es[0].src != src)
+		allLegacy = allLegacy && es[0].src.legacy
 		src = es[0].src
 		for l := range es[0].layers {
 			layers[l] = true
@@ -344,6 +361,14 @@ func (x *baseWaitIndex) match(m map[baseWaitKey][]*baseWaitEntry, img analyze.Im
 	}
 	if len(outcomes) == 0 {
 		return baseWait{}, false
+	}
+	if mixed {
+		// The card's findings are not all known the same way: only the
+		// plain line, when every one of them has it, is still true.
+		if !allLegacy {
+			return baseWait{}, false
+		}
+		src = waitSource{name: src.name, tag: src.tag, ownNoNewer: true, legacy: true}
 	}
 	if layered {
 		for _, l := range g.LayerDiffIDs {

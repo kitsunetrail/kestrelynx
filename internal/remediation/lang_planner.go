@@ -25,6 +25,12 @@ type depUnit struct {
 	unpinned  []*findingGroup // findings of scans that did not confirm the running image
 	priority  Priority
 	rank      int // the best position among the planner's inputs of an image that maps to the unit
+	// The Go findings are kept per running image and binary until go.mod
+	// names the module they must come from (see goSelect): goPinned and
+	// goUnpinned are those of verified and other scans, goBins and
+	// goBinsUnpinned the binaries of those scans by entity and target.
+	goPinned, goUnpinned   []srcFinding
+	goBins, goBinsUnpinned map[string]*goBinary
 }
 
 // dependencyPair is a manager's manifest and lockfile; lock is the file the
@@ -41,6 +47,9 @@ var dependencyPairs = []dependencyPair{
 	{ManagerPnpm, "package.json", "pnpm-lock.yaml", typeNodePkg},
 	{ManagerUv, "pyproject.toml", "uv.lock", typePythonPkg},
 	{ManagerPip, "", "requirements.txt", typePythonPkg},
+	// go.mod is what the packages are matched against; go.sum is read with
+	// it as the second file, since an update changes both.
+	{ManagerGo, "go.sum", "go.mod", typeGoBinary},
 }
 
 // unitsOf groups the mappings into units, in the order they first appear.
@@ -57,6 +66,9 @@ func unitsOf(ms []DependencyMapping) []*depUnit {
 				branch:    m.BaseBranch,
 				dir:       m.Directory,
 				workloads: map[string]bool{},
+				goBins:    map[string]*goBinary{},
+
+				goBinsUnpinned: map[string]*goBinary{},
 			}
 			idx[k] = u
 			out = append(out, u)
@@ -99,24 +111,38 @@ func (r *run) languagePart(inputs []ImageInput) {
 				continue
 			}
 			entity := entityString(in.Scan.Subject.Key)
+			// Only a scan that confirmed which image content it saw says
+			// anything about the running image.
+			verified := in.Scan.Pinned && in.Scan.Subject.Resolved
+			if verified {
+				goBinariesOf(rank, in.Scan, u.goBins)
+			} else {
+				goBinariesOf(rank, in.Scan, u.goBinsUnpinned)
+			}
 			for _, f := range in.Scan.Findings {
 				lf := srcFinding{f: f, entity: entity, workloads: ws, rank: rank}
-				// Only a scan that confirmed which image content it saw says
-				// anything about the running image.
-				if in.Scan.Pinned && in.Scan.Subject.Resolved {
+				switch {
+				case f.Type == typeGoBinary && verified:
+					u.goPinned = append(u.goPinned, lf)
+				case f.Type == typeGoBinary:
+					u.goUnpinned = append(u.goUnpinned, lf)
+				case verified:
 					pinned = append(pinned, lf)
-				} else {
+				default:
 					unpinned = append(unpinned, lf)
 				}
 			}
 		}
 		u.groups = groupLanguageFindings(pinned, cfg.Intel)
 		u.unpinned = groupLanguageFindings(unpinned, cfg.Intel)
-		if len(u.groups) == 0 && len(u.unpinned) == 0 {
+		// The Go findings are grouped as they are only to place the unit
+		// among the others.
+		goAll := groupLanguageFindings(append(append([]srcFinding(nil), u.goPinned...), u.goUnpinned...), cfg.Intel)
+		if len(u.groups) == 0 && len(u.unpinned) == 0 && len(goAll) == 0 {
 			continue
 		}
 		u.rank = int(^uint(0) >> 1)
-		for _, g := range append(append([]*findingGroup(nil), u.groups...), u.unpinned...) {
+		for _, g := range append(append(append([]*findingGroup(nil), u.groups...), u.unpinned...), goAll...) {
 			if g.priority.Rank() > u.priority.Rank() {
 				u.priority = g.priority
 			}
@@ -154,15 +180,17 @@ func (r *run) stopReason() *halt {
 // languageUnits plans one unit. The unit's findings are split by ecosystem
 // and each part gets its own item, keyed by the manager once the files tell
 // it (by the ecosystem before that): node packages are matched against an npm
-// or pnpm pair, Python packages against a uv or pip pair, so a directory
-// holding files of both ecosystems is two items, not an ambiguity. The
-// branch is resolved and the directory listed once for all of them.
+// or pnpm pair, Python packages against a uv or pip pair, Go binaries against
+// a go.mod, so a directory holding files of several ecosystems is several
+// items, not an ambiguity. The branch is resolved and the directory listed
+// once for all of them.
 func (r *run) languageUnits(u *depUnit) []LanguageItem {
 	var node, python []*findingGroup
 	for _, g := range u.groups {
-		if g.Type == typeNodePkg {
+		switch g.Type {
+		case typeNodePkg:
 			node = append(node, g)
-		} else {
+		case typePythonPkg:
 			python = append(python, g)
 		}
 	}
@@ -172,21 +200,21 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 			subs = append(subs, gs)
 		}
 	}
+	hasGo := len(u.goPinned) > 0 || len(u.goUnpinned) > 0
 
 	var sha string
 	var entries []github.Entry
 	var srcErr error
-	if len(subs) > 0 && r.stopReason() == nil {
+	if (len(subs) > 0 || hasGo) && r.stopReason() == nil {
 		gh := r.p.cfg.GitHub
 		if sha, srcErr = gh.ResolveBranch(r.ctx, u.repo, u.branch); srcErr == nil {
 			entries, srcErr = gh.ListDirectory(r.ctx, u.repo, sha, u.dir)
 		}
 	}
 
-	var out []LanguageItem
-	for _, gs := range subs {
+	newItem := func(kind string) LanguageItem {
 		it := LanguageItem{
-			Key:       u.key + "#" + gs[0].Type,
+			Key:       u.key + "#" + kind,
 			Workloads: append([]string(nil), u.order...),
 			Source: SourceRecord{
 				Repository: u.repo, BaseBranch: u.branch, Directory: u.dir, CommitSHA: sha,
@@ -194,6 +222,27 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 			},
 		}
 		sort.Strings(it.Workloads)
+		return it
+	}
+
+	var out []LanguageItem
+	// A Go binary's findings belong to this source only if the directory is a
+	// Go module, and then only those of the binaries built from that module:
+	// an image may carry Go programs of its base image, and a directory of
+	// another ecosystem says nothing about them. Go comes first, so that the
+	// reads of the other ecosystems do not use up what it needs to learn the
+	// module.
+	var goModule string
+	if _, isGo := byName(entries, "go.mod"); hasGo && srcErr == nil && isGo && r.stopReason() == nil {
+		it := newItem(typeGoBinary)
+		var keep bool
+		if goModule, keep = r.analyseGoUnit(&it, u, entries); keep {
+			out = append(out, it)
+		}
+	}
+
+	for _, gs := range subs {
+		it := newItem(gs[0].Type)
 		for _, g := range gs {
 			if g.priority.Rank() > it.Priority.Rank() {
 				it.Priority = g.priority
@@ -209,27 +258,32 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 		}
 		out = append(out, it)
 	}
-	if len(u.unpinned) > 0 {
-		it := LanguageItem{
-			Key:       u.key + "#unverified",
-			Workloads: append([]string(nil), u.order...),
-			Priority:  u.priority,
-			Source: SourceRecord{
-				Repository: u.repo, BaseBranch: u.branch, Directory: u.dir,
-				Origin: OriginConfig, Confidence: ConfidenceAsserted,
-			},
-			Category: CategoryNotComparable, Reason: ReasonScanNotPinned,
-			Detail:   "the scan did not confirm which image content it saw, so its findings are not matched against the source",
-			Packages: unitPackages(u.unpinned, "", "", ""),
+
+	unpinned := u.unpinned
+	if goModule != "" && len(u.goUnpinned) > 0 {
+		// The unverified scans' Go findings are those of binaries built from
+		// the module; they are listed, not matched against go.mod.
+		kept, _ := goSelect(u.goUnpinned, u.goBinsUnpinned, &goMod{module: goModule}, false)
+		unpinned = append(append([]*findingGroup(nil), unpinned...), groupLanguageFindings(kept, r.p.cfg.Intel)...)
+	}
+	if len(unpinned) > 0 {
+		it := newItem("unverified")
+		it.Source.CommitSHA = ""
+		for _, g := range unpinned {
+			if g.priority.Rank() > it.Priority.Rank() {
+				it.Priority = g.priority
+			}
 		}
-		sort.Strings(it.Workloads)
+		it.Category, it.Reason = CategoryNotComparable, ReasonScanNotPinned
+		it.Detail = "the scan did not confirm which image content it saw, so its findings are not matched against the source"
+		it.Packages = unitPackages(unpinned, "", "", "")
 		out = append(out, it)
 	}
 	return out
 }
 
 // analyseUnit reads and matches the dependency files for one ecosystem's
-// findings of a unit.
+// findings of a unit (Go has its own, analyseGoUnit).
 func (r *run) analyseUnit(it *LanguageItem, u *depUnit, groups []*findingGroup, entries []github.Entry) {
 	gh := r.p.cfg.GitHub
 	sha := it.Source.CommitSHA
@@ -326,8 +380,10 @@ func (r *run) analyseUnit(it *LanguageItem, u *depUnit, groups []*findingGroup, 
 		lock, err = parsePnpm(manifest, lockData)
 	case ManagerUv:
 		lock, err = parseUv(manifest, lockData)
-	default:
+	case ManagerPip:
 		lock, err = parseRequirements(lockData)
+	default:
+		err = fmt.Errorf("no parser for %s", pair.manager)
 	}
 	if err != nil {
 		var ue *UnsupportedError
@@ -352,6 +408,142 @@ func (r *run) analyseUnit(it *LanguageItem, u *depUnit, groups []*findingGroup, 
 	reconcileVersions(lock, pkgs)
 	it.Packages = pkgs
 	classify(it)
+	return
+}
+
+// analyseGoUnit plans the Go item of a unit whose directory has a go.mod:
+// it reads go.mod for the module, keeps the findings of the binaries built
+// from it (goSelect), and matches the module's own dependencies against
+// go.mod, the standard library apart. Until go.mod has been read the module
+// is not known, so an outcome reached before that (a failed read, a go.mod
+// that does not parse) carries every Go finding of the unit. A workspace
+// (go.work here or above) or a vendor directory sends the unit to a person;
+// their absence is recorded, since one added later changes what an update is
+// made from. The Go release an update runs with is chosen when it runs.
+//
+// It returns the module go.mod declares ("" when it was not read) and
+// whether the unit has an item: it has none when no finding comes from a
+// binary built from the module.
+func (r *run) analyseGoUnit(it *LanguageItem, u *depUnit, entries []github.Entry) (string, bool) {
+	gh := r.p.cfg.GitHub
+	sha := it.Source.CommitSHA
+	intel := r.p.cfg.Intel
+	all := groupLanguageFindings(u.goPinned, intel)
+	setPriority := func(gs []*findingGroup) {
+		it.Priority = ""
+		for _, g := range gs {
+			if g.priority.Rank() > it.Priority.Rank() {
+				it.Priority = g.priority
+			}
+		}
+	}
+	setPriority(all)
+	it.Manager = ManagerGo
+	it.Key = u.key + "#" + string(ManagerGo)
+	read := func(groups []*findingGroup, name string) ([]byte, bool) {
+		if e, _ := byName(entries, name); e.Type != github.EntryFile {
+			unitManual(it, groups, ReasonDependencyFileUnusable, name+" is a "+string(e.Type))
+			return nil, false
+		}
+		if h := r.stopReason(); h != nil {
+			r.deferUnit(it, groups, h.reason, h.detail)
+			return nil, false
+		}
+		f, err := gh.ReadFile(r.ctx, u.repo, sha, pathIn(u.dir, name))
+		if err != nil {
+			r.sourceFailure(it, groups, err, true)
+			return nil, false
+		}
+		it.Source.Files = append(it.Source.Files, SourceFile{Path: f.Path, BlobSHA: f.SHA})
+		return f.Content, true
+	}
+	refuse := func(groups []*findingGroup, err error) {
+		var ue *UnsupportedError
+		if errors.As(err, &ue) {
+			unitManual(it, groups, ue.Reason, ue.Detail)
+			return
+		}
+		unitManual(it, groups, ReasonUnparsableSource, err.Error())
+	}
+	keepAll := len(all) > 0
+
+	modData, ok := read(all, "go.mod")
+	if !ok {
+		return "", keepAll
+	}
+	gm, err := parseGoMod(modData)
+	if err != nil {
+		refuse(all, err)
+		return "", keepAll
+	}
+
+	kept, why := goSelect(u.goPinned, u.goBins, gm, true)
+	groups := groupLanguageFindings(kept, intel)
+	if len(groups) == 0 {
+		return gm.module, false
+	}
+	setPriority(groups)
+	it.GoBuiltWith = goBuiltWith(u.goBins, gm.module)
+	if why != "" {
+		unitManual(it, groups, ReasonGoBinaryNotFromSource, why)
+		return gm.module, true
+	}
+
+	if _, present := byName(entries, "go.sum"); !present {
+		unitManual(it, groups, ReasonDependencyFilesNotFound, "the directory has go.mod but no go.sum")
+		return gm.module, true
+	}
+	sumData, ok := read(groups, "go.sum")
+	if !ok {
+		return gm.module, true
+	}
+	if err := checkGoSum(sumData); err != nil {
+		refuse(groups, err)
+		return gm.module, true
+	}
+	if err := goModRefusal(gm); err != nil {
+		refuse(groups, err)
+		return gm.module, true
+	}
+	lock, err := goLockfile(gm)
+	if err != nil {
+		refuse(groups, err)
+		return gm.module, true
+	}
+
+	for _, name := range []string{"go.work", "vendor"} {
+		if _, found := byName(entries, name); found {
+			unitManual(it, groups, ReasonWorkspaceUnsupported, pathIn(u.dir, name)+" exists; a Go workspace or a vendor directory is not handled")
+			return gm.module, true
+		}
+		it.Source.Absent = append(it.Source.Absent, pathIn(u.dir, name))
+	}
+	if found, ok := r.ancestorFile(it, groups, u, sha, "go.work"); !ok {
+		return gm.module, true
+	} else if found != "" {
+		unitManual(it, groups, ReasonWorkspaceUnsupported, found+" exists; a Go workspace applies to the modules below it and is not handled")
+		return gm.module, true
+	}
+
+	mods, stdlib := goSplit(groups)
+	pkgs := make([]LanguagePackage, 0, len(groups))
+	for _, g := range mods {
+		p := matchPackage(lock, g)
+		if p.Action == ActionUpdate {
+			if why := goMajorProblem(g.Name, p.Installed, p.SelectionLowerBound); why != "" {
+				p.SelectionLowerBound = ""
+				manualPackage(&p, ReasonFixInOtherMajor, why)
+			}
+		}
+		pkgs = append(pkgs, p)
+	}
+	reconcileVersions(lock, pkgs)
+	for _, g := range stdlib {
+		pkgs = append(pkgs, goStdlibPackage(g))
+	}
+	it.Packages = pkgs
+	classify(it)
+	return gm.module, true
 }
 
 // ancestorWorkspace looks for a pnpm-workspace.yaml in each directory above
@@ -360,6 +552,19 @@ func (r *run) analyseUnit(it *LanguageItem, u *depUnit, groups []*findingGroup, 
 // file was looked for and not found. ok is false when a listing failed and the
 // item has been given its outcome.
 func (r *run) ancestorWorkspace(it *LanguageItem, groups []*findingGroup, u *depUnit, sha string) (why string, ok bool) {
+	found, ok := r.ancestorFile(it, groups, u, sha, pnpmWorkspaceName)
+	if found != "" {
+		why = fmt.Sprintf("%s has a pnpm-workspace.yaml, which pnpm applies to this directory (it may be a member of a workspace)", found)
+	}
+	return why, ok
+}
+
+// ancestorFile looks for a file of the given name in each directory above
+// the unit's, up to the repository root, and returns the path of the first
+// one found. The directories without one are recorded on the item as places
+// the file was looked for and not found. ok is false when a listing failed
+// and the item has been given its outcome.
+func (r *run) ancestorFile(it *LanguageItem, groups []*findingGroup, u *depUnit, sha, name string) (found string, ok bool) {
 	for dir := u.dir; dir != "." && dir != ""; {
 		parent := path.Dir(dir)
 		if parent == "" || parent == "/" {
@@ -378,10 +583,10 @@ func (r *run) ancestorWorkspace(it *LanguageItem, groups []*findingGroup, u *dep
 			r.sourceFailure(it, groups, err, false)
 			return "", false
 		}
-		if _, found := byName(entries, pnpmWorkspaceName); found {
-			return fmt.Sprintf("%s has a pnpm-workspace.yaml, which pnpm applies to this directory (it may be a member of a workspace)", pathIn(dir, pnpmWorkspaceName)), true
+		if _, found := byName(entries, name); found {
+			return pathIn(dir, name), true
 		}
-		it.Source.Absent = append(it.Source.Absent, pathIn(dir, pnpmWorkspaceName))
+		it.Source.Absent = append(it.Source.Absent, pathIn(dir, name))
 	}
 	return "", true
 }
@@ -497,6 +702,7 @@ func detectPair(entries []github.Entry, pkgType string) (dependencyPair, Reason,
 var noPairText = map[string]string{
 	typeNodePkg:   "package.json with package-lock.json, package.json with pnpm-lock.yaml",
 	typePythonPkg: "pyproject.toml with uv.lock, requirements.txt",
+	typeGoBinary:  "go.mod with go.sum",
 }
 
 // byName finds a directory entry.

@@ -50,7 +50,7 @@ func groupLanguageFindings(fs []srcFinding, intel IntelFunc) []*findingGroup {
 		if f.Status != scanner.StatusFixed || f.FixedVer == "" || f.Package == "" || f.InstalledVer == "" {
 			continue
 		}
-		if f.Type != typeNodePkg && f.Type != typePythonPkg {
+		if f.Type != typeNodePkg && f.Type != typePythonPkg && f.Type != typeGoBinary {
 			continue
 		}
 		name := f.Package

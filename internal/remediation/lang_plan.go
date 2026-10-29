@@ -74,6 +74,9 @@ const (
 	ManagerPnpm DependencyManager = "pnpm"
 	ManagerUv   DependencyManager = "uv"
 	ManagerPip  DependencyManager = "pip"
+	// ManagerGo is Go modules: go.mod is both what is required and what is
+	// matched against, and go.sum changes with it.
+	ManagerGo DependencyManager = "go"
 )
 
 // LockfileName is the file whose entries the unit's packages are matched
@@ -88,14 +91,19 @@ func (m DependencyManager) LockfileName() string {
 		return "uv.lock"
 	case ManagerPip:
 		return "requirements.txt"
+	case ManagerGo:
+		return "go.mod"
 	}
 	return ""
 }
 
 // scheme is the version ordering of the manager's ecosystem.
 func (m DependencyManager) scheme() scheme {
-	if m == ManagerUv || m == ManagerPip {
+	switch m {
+	case ManagerUv, ManagerPip:
 		return schemePEP440
+	case ManagerGo:
+		return schemeGo
 	}
 	return schemeSemver
 }
@@ -294,6 +302,10 @@ type LanguageItem struct {
 	// RuntimeEOL is set with the reason runtime_eol: the runtime the update
 	// would run in and the date its support ended.
 	RuntimeEOL *RuntimeEOLInfo `json:"runtime_eol,omitempty"`
+	// GoBuiltWith is, for a Go module, the lowest Go release the running
+	// binaries built from it were built with ("" when one did not record
+	// it): the highest go line an update may write.
+	GoBuiltWith string `json:"go_built_with,omitempty"`
 
 	Source   SourceRecord      `json:"source"`
 	Packages []LanguagePackage `json:"packages,omitempty"`

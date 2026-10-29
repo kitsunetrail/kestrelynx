@@ -1,0 +1,112 @@
+{
+  "SchemaVersion": 2,
+  "ArtifactName": "ghcr.io/kitsunetrail/kestrelynx:sha-021a7c8",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.24.1"
+    },
+    "ImageID": "sha256:5a42df6d4a2a70fb6663698f75240c336809d5b7326a80aa7a4a146c1516eced",
+    "DiffIDs": [
+      "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+      "sha256:7ddb95de1dd4a052fc0b13e3860dd6239abc7e9edc44fa453f755bef46587c63",
+      "sha256:a2b8bc5de7c6d72ada813f4ac5158ef896a068fe5a3e8cc6236639741837fab0",
+      "sha256:a0a3efa886b2f41a0ddbb315bf8dbcdc3947a162b682beb253fd3dc565ad3bd8",
+      "sha256:449905b0ca09456ac9d2ba603d8e24898b7e2e6d778222ddc1d56e9d98517e10",
+      "sha256:cbb253e0bf41a8752a3484e3ed3579c5dfe6bb6c7722ba71f87465a9d525bfb5",
+      "sha256:451f81da73e6e04fc23be5e9f07fc24329e04847fb2b1c08d2273314a6040ebf",
+      "sha256:bbdad4411105a73089b829b9e92ed7a18108d2e31e518c7f461a9a6b196f1362",
+      "sha256:23916b486acc768b4dd00af6d9b0d95ada163f61a039cee28f28effedd0ffc43"
+    ],
+    "RepoDigests": [
+      "ghcr.io/kitsunetrail/kestrelynx@sha256:76aac42febce241fac975c7ae4df5361410e49d2d2b8b428e8f86cf44a527b06"
+    ]
+  },
+  "Results": [
+    {
+      "Target": "usr/local/bin/kestrelynx",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Packages": [
+        {
+          "ID": "github.com/kitsunetrail/kestrelynx",
+          "Name": "github.com/kitsunetrail/kestrelynx",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/kitsunetrail/kestrelynx",
+            "UID": "2652026ed10ba7fa"
+          },
+          "Relationship": "root",
+          "DependsOn": [
+            "github.com/cilium/ebpf@v0.22.0",
+            "golang.org/x/sys@v0.48.0",
+            "gopkg.in/yaml.v3@v3.0.1",
+            "stdlib@v1.26.10"
+          ],
+          "Layer": {
+            "Digest": "sha256:0760862d8b2f6ea4f2c4da316031901b108729265e817a300addf634f49a6097",
+            "DiffID": "sha256:449905b0ca09456ac9d2ba603d8e24898b7e2e6d778222ddc1d56e9d98517e10"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "stdlib@v1.26.10",
+          "Name": "stdlib",
+          "Identifier": {
+            "PURL": "pkg:golang/stdlib@v1.26.10",
+            "UID": "e406f3ae2af9b4db"
+          },
+          "Version": "v1.26.10",
+          "Relationship": "direct",
+          "Layer": {
+            "Digest": "sha256:0760862d8b2f6ea4f2c4da316031901b108729265e817a300addf634f49a6097",
+            "DiffID": "sha256:449905b0ca09456ac9d2ba603d8e24898b7e2e6d778222ddc1d56e9d98517e10"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "github.com/cilium/ebpf@v0.22.0",
+          "Name": "github.com/cilium/ebpf",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/cilium/ebpf@v0.22.0",
+            "UID": "a640a9fc5b46c447"
+          },
+          "Version": "v0.22.0",
+          "Layer": {
+            "Digest": "sha256:0760862d8b2f6ea4f2c4da316031901b108729265e817a300addf634f49a6097",
+            "DiffID": "sha256:449905b0ca09456ac9d2ba603d8e24898b7e2e6d778222ddc1d56e9d98517e10"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "golang.org/x/sys@v0.48.0",
+          "Name": "golang.org/x/sys",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/sys@v0.48.0",
+            "UID": "67a95248ce572a69"
+          },
+          "Version": "v0.48.0",
+          "Layer": {
+            "Digest": "sha256:0760862d8b2f6ea4f2c4da316031901b108729265e817a300addf634f49a6097",
+            "DiffID": "sha256:449905b0ca09456ac9d2ba603d8e24898b7e2e6d778222ddc1d56e9d98517e10"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "gopkg.in/yaml.v3@v3.0.1",
+          "Name": "gopkg.in/yaml.v3",
+          "Identifier": {
+            "PURL": "pkg:golang/gopkg.in/yaml.v3@v3.0.1",
+            "UID": "1086ea4ce399a606"
+          },
+          "Version": "v3.0.1",
+          "Layer": {
+            "Digest": "sha256:0760862d8b2f6ea4f2c4da316031901b108729265e817a300addf634f49a6097",
+            "DiffID": "sha256:449905b0ca09456ac9d2ba603d8e24898b7e2e6d778222ddc1d56e9d98517e10"
+          },
+          "AnalyzedBy": "gobinary"
+        }
+      ]
+    }
+  ]
+}

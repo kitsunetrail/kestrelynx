@@ -13,6 +13,11 @@ type scheme int
 const (
 	schemeSemver scheme = iota
 	schemePEP440
+	// schemeGo is semver as Go modules write it: with a leading "v", which
+	// Trivy keeps on installed versions and drops on fixed ones, so both
+	// spellings are read. Pseudo-versions are prereleases and order as
+	// such; "+incompatible" is build metadata and takes no part in ordering.
+	schemeGo
 )
 
 // version is a parsed version of one scheme. Only versions of the same scheme
@@ -25,8 +30,12 @@ type version interface {
 // does not accept, which callers treat as a reason to hand the package to a
 // person rather than guess an order.
 func parseVersion(sc scheme, s string) (version, bool) {
-	if sc == schemePEP440 {
+	switch sc {
+	case schemePEP440:
 		v, ok := parsePEP440(s)
+		return v, ok
+	case schemeGo:
+		v, ok := parseSemver(strings.TrimPrefix(s, "v"))
 		return v, ok
 	}
 	v, ok := parseSemver(s)

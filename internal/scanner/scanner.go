@@ -249,6 +249,10 @@ type Package struct {
 	// PkgPath is the file the package was found at, normalized like
 	// Finding.PkgPath; empty when Trivy reported none.
 	PkgPath string
+	// Relationship is how Trivy relates the package to what it was found
+	// in, verbatim: "root" for the main module of a Go binary, "direct",
+	// "indirect" or "unknown"; empty when Trivy reported none.
+	Relationship string
 }
 
 // ScanTarget names the image to scan. Subject carries the identity to pin
@@ -294,11 +298,12 @@ type trivyReport struct {
 		Type     string `json:"Type"`
 		Target   string `json:"Target"`
 		Packages []struct {
-			Name     string `json:"Name"`
-			Version  string `json:"Version"`
-			Release  string `json:"Release"`
-			Epoch    int    `json:"Epoch"`
-			FilePath string `json:"FilePath"`
+			Name         string `json:"Name"`
+			Version      string `json:"Version"`
+			Release      string `json:"Release"`
+			Epoch        int    `json:"Epoch"`
+			FilePath     string `json:"FilePath"`
+			Relationship string `json:"Relationship"`
 		} `json:"Packages"`
 		Vulnerabilities []struct {
 			VulnerabilityID  string `json:"VulnerabilityID"`
@@ -387,9 +392,10 @@ func ParseReport(data []byte) (ImageScan, error) {
 					break
 				}
 				rp.Packages = append(rp.Packages, Package{
-					Name:    p.Name,
-					Version: formatPackageVersion(p.Epoch, p.Version, p.Release),
-					PkgPath: trimLeadingSlash(p.FilePath),
+					Name:         p.Name,
+					Version:      formatPackageVersion(p.Epoch, p.Version, p.Release),
+					PkgPath:      trimLeadingSlash(p.FilePath),
+					Relationship: p.Relationship,
 				})
 				retained++
 			}

@@ -1,6 +1,6 @@
 # Go modules remediation pull request development
 
-- **Status:** Implemented (PR creation verified in a validation repository).
+- **Status:** Implemented (PR creation verified in a validation repository, and worker Pod operation verified in Kubernetes on a validation host).
 - **Started:** October 29, 2026
 - **Last updated:** October 30, 2026
 
@@ -100,31 +100,39 @@ The following results are from verification in a real environment on October 30,
 
 ### Remediation plan and worker image
 
-| Check | Result | Significance for the implementation |
-| --- | --- | --- |
-| Detected findings | Eight HIGH findings in `golang.org/x/net` (fixed versions from `0.23.0` to `0.60.0`) and two findings in `golang.org/x/text` (fixed versions `0.39.0` and `0.41.0`) | Dependencies in the running binary can be treated as remediation targets |
-| Target versions | `x/net v0.60.0` and `x/text v0.41.0` | A target version that resolves the target findings can be selected for each module |
-| Worker image | Selected `golang1.26` (1.26.10) based on the input `go` directive and `go 1.26.0` in the `go.mod` of `x/net v0.60.0` | A worker image that meets the Go version required for the update can be selected |
+| Check | Result |
+| --- | --- |
+| Detected findings | Eight HIGH findings in `golang.org/x/net` (fixed versions from `0.23.0` to `0.60.0`) and two findings in `golang.org/x/text` (fixed versions `0.39.0` and `0.41.0`) |
+| Target versions | `x/net v0.60.0` and `x/text v0.41.0` |
+| Worker image | Selected `golang1.26` (1.26.10) based on the input `go` directive and `go 1.26.0` in the `go.mod` of `x/net v0.60.0` |
 
 ### PR changes and checks after the update
 
-| Check | Result | Significance for the implementation |
-| --- | --- | --- |
-| PR creation | Created a GitHub PR in the validation repository from the remediation plan | Go modules updates can be delivered as PRs |
-| `go` directive in `go.mod` | `1.22` → `1.26.0` | The directive can be raised to the Go version required by the updated modules without exceeding the version used to build the running binary |
-| `golang.org/x/net` | `v0.20.0` → `v0.60.0` | The update to the target version can be accepted |
-| `golang.org/x/text` | `v0.14.0` → `v0.42.0` (`// indirect`) | An update beyond the target version required by another target can also be accepted after checking consistency with the requirement |
-| Reason for the `x/text` update | The execution notes in the PR body explain why it was omitted from the `go get` arguments and updated to `v0.42.0` through the requirement from `x/net v0.60.0` | Users can see why the target version differs from the version in the PR |
-| `go.sum` | Four lines added | Changes that include hashes for the updated versions can be included in a PR |
-| Scans before and after the update | 10 resolved, 0 remaining, 0 new | Comparing the versions listed in `go.mod` can confirm that the target findings are resolved without adding new findings |
-| Checks on the PR branch | `go build -mod=readonly ./...` and `go vet -mod=readonly ./...` passed, and the only versions used by the build were `x/net v0.60.0` and `x/text v0.42.0` | The checked versions were confirmed to match the versions used by the build for this application |
+| Check | Result |
+| --- | --- |
+| PR creation | Created a GitHub PR in the validation repository from the remediation plan |
+| `go` directive in `go.mod` | `1.22` → `1.26.0` |
+| `golang.org/x/net` | `v0.20.0` → `v0.60.0` |
+| `golang.org/x/text` | `v0.14.0` → `v0.42.0` (`// indirect`) |
+| Reason for the `x/text` update | The execution notes in the PR body explain why it was omitted from the `go get` arguments and updated to `v0.42.0` through the requirement from `x/net v0.60.0` |
+| `go.sum` | Four lines added |
+| Scans before and after the update | 10 resolved, 0 remaining, 0 new |
+| Checks on the PR branch | `go build -mod=readonly ./...` and `go vet -mod=readonly ./...` passed, and the only versions used by the build were `x/net v0.60.0` and `x/text v0.42.0` |
+
+### Kubernetes worker Pods
+
+| Check | Result |
+| --- | --- |
+| Worker Pod creation | Created language package update worker Pods in a worker namespace on K3s (v1.36.5) on a validation host, with the restricted Pod Security standard and an admission policy restricting worker Pod specifications applied |
+| Go integration tests | Ran all five scenarios in worker Pods: updates to direct dependencies only, updates that also raise `golang.org/x/text`, updates that raise the `go` directive from `1.22` to `1.25.0`, and updates using Go 1.26 and Go 1.27 worker images; all became PR candidates |
+| Worker image operation | Official `golang` images pinned by digest (Go 1.26.10 and 1.27.3) ran in Pods with read-only root filesystems, completing `go get` and result retrieval |
+| Worker Pods after completion | No completed worker Pods remained |
+| Deployment of the version with Go support | Deployed to the production environment and the validation host; neither runs Go applications, so no actual Go updates have occurred yet |
 
 ## Unverified areas and next steps
 
-- Verification of `golang` images in Kubernetes worker Pods
 - Verification on arm64
-- Verification in the production environment and on a validation host
-- Verification of merging and applying the created PR
+- Verification of updates to Go applications in the production environment
 
 ## Update history
 
@@ -136,6 +144,7 @@ The following results are from verification in a real environment on October 30,
 
 - Verified PR creation in a real environment.
 - Documented handling when another target requires a higher version.
+- Verified Kubernetes worker Pod operation.
 
 ---
 

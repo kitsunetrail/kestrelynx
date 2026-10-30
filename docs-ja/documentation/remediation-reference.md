@@ -16,7 +16,7 @@
 | 言語更新の実行環境 | [対応する実行環境](#supported-runtimes)に記載した系列 |
 | Sensor | 修正計画と修正PRの利用には不要 |
 | Kubernetesの計画 | 配布イメージ・Dockerfileのベースイメージの更新候補、浮動タグの再取得の案内、言語パッケージの更新候補の提示 |
-| KubernetesのPR | プレーンなマニフェストのイメージタグ、Kustomizeの`images[].newTag`、Helmのvaluesのイメージタグ、Dockerfileのベースイメージの更新に加え、[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)によりnpm・pnpm・pip・uvの更新に対応 |
+| KubernetesのPR | プレーンなマニフェストのイメージタグ、Kustomizeの`images[].newTag`、Helmのvaluesのイメージタグ、Dockerfileのベースイメージの更新に加え、[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)によりnpm・pnpm・pip・uv・Goの更新に対応 |
 
 ### docker runのコンテナ {#docker-run-containers}
 
@@ -43,8 +43,9 @@ containerdで古いイメージが消えた場合は、コンテナを新しい�
 | Dockerfileのベースイメージ | 公開レジストリ、認証を設定した非公開レジストリ | 計画の作成からDockerfileまたはComposeの対応付けが必要 |
 | npm・pnpmの依存パッケージ | 公開npmレジストリ | 計画の作成から依存ディレクトリの対応付けが必要 |
 | pip・uvの依存パッケージ | 公開PyPI | 計画の作成から依存ディレクトリの対応付けが必要 |
+| Goの依存モジュール | 公開のGo module proxy (`proxy.golang.org`)と`sum.golang.org` | 計画の作成から依存ディレクトリの対応付けが必要 |
 
-非公開npmレジストリや非公開PyPIは更新対象にできません。
+非公開npmレジストリ・非公開PyPI・非公開Goモジュールは更新対象にできません。
 イメージレジストリの認証は、依存パッケージの取得には使いません。
 
 ## 対応する入力形式 {#supported-inputs}
@@ -315,6 +316,25 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 
 `[tool.uv]`のキーを読み取れる場合も、依存の取得元やプロジェクト構成が対応範囲内である必要があります。
 
+### Goの依存ファイル {#go-inputs}
+
+| 入力 | 対応範囲 |
+| --- | --- |
+| 必須ファイル | 対応付けた依存ディレクトリの`go.mod`と`go.sum` |
+| 対象の所見 | 稼働イメージのGoバイナリをTrivyが`gobinary`として検出した所見 |
+| バイナリとの対応 | メインモジュールのパスが`go.mod`の`module`と一致するバイナリだけを対象とし、ベースイメージのツールなど一致しないバイナリの所見は計画に含めない |
+| 組み込まれた依存 | モジュールの版が`go.mod`の`require`と一致しない場合や、パッケージ一覧が切り詰められている場合は`go_binary_not_from_source`で手動対応 |
+| 取得元 | 公開の`proxy.golang.org`と`sum.golang.org`だけを使用し、非公開モジュールは対象外 |
+| `replace`・`exclude` | いずれかが1行でもある場合は手動対応 |
+| `go`の行 | 1.21以上が必要で、行がない場合や1.21より古い場合は手動対応 |
+| `toolchain`の行 | 公開されたGoの版を表す`go1.N.M`形式に対応し、`default`・独自の接尾辞・RCなどは手動対応 |
+| `go.work` | 依存ディレクトリまたはリポジトリのルートまでの上位ディレクトリにある場合は手動対応 |
+| `vendor` | 依存ディレクトリにある場合は手動対応 |
+| 別のメジャー版 | 修正版が別のモジュールパスにしかない場合は`fix_in_other_major_version`で手動対応 |
+| 標準ライブラリの`stdlib` | PRを作らず、ビルドに使うGoの版を上げる案内を修正計画に表示 |
+
+候補の決め方と標準ライブラリの案内は[Goの候補選定](remediation-logic.md#go-package-selection)、採用条件は[Goの更新結果の検査](remediation-logic.md#go-update-validation)を参照してください。
+
 ### Node.jsの版宣言 {#node-declarations}
 
 | 宣言 | 対応する形式 |
@@ -367,25 +387,28 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 
 ## 対応する実行環境 {#supported-runtimes}
 
-対応する実行環境は、同梱の表にあるサポート中の系列(現時点で Node.js 22・24・26、Python 3.11〜3.15)です。
+対応する実行環境は、同梱の表にあるサポート中の系列(現時点で Node.js 22・24・26、Python 3.11〜3.15、Go 1.26・1.27)です。
 次の版と期限はKestreLynxが持つ情報であり、KestreLynxの更新に伴って変わります。
 
 | 系列 | 同梱の表の実行版 | サポート終了日 |
 | --- | --- | --- |
-| Node.js 22 | `22.23.3` | 2027-04-30 |
-| Node.js 24 | `24.21.0` | 2028-04-30 |
-| Node.js 26 | `26.11.1` | 2029-04-30 |
+| Node.js 22 | `22.23.4` | 2027-04-30 |
+| Node.js 24 | `24.22.1` | 2028-04-30 |
+| Node.js 26 | `26.12.1` | 2029-04-30 |
 | Python 3.11 | `3.11.17` | 2027-10-31 |
 | Python 3.12 | `3.12.15` | 2028-10-31 |
-| Python 3.13 | `3.13.16` | 2029-10-31 |
-| Python 3.14 | `3.14.8` | 2030-10-31 |
-| Python 3.15 | `3.15.0` | 2031-10-31 |
+| Python 3.13 | `3.13.17` | 2029-10-31 |
+| Python 3.14 | `3.14.9` | 2030-10-31 |
+| Python 3.15 | `3.15.1` | 2031-10-31 |
+| Go 1.26 | `1.26.10` | 2027-02-10 |
+| Go 1.27 | `1.27.3` | 2027-08-19 |
 
 | 用途 | 既定の実行環境 |
 | --- | --- |
 | Node.jsの宣言がないnpm・pnpm更新 | 現時点ではNode.js 24で、同梱の表のLTS開始日に従い2026-10-28から26が候補になる |
 | pip更新の作業用コンテナ | Python 3.13 |
 | uv更新 | Pythonの宣言に従って選定 |
+| Go更新 | go.mod と目標版の go の行から選ぶ |
 
 | 同梱の表にある終了済み系列 | サポート終了日 |
 | --- | --- |
@@ -626,6 +649,9 @@ PR記録の`state`には、次の値があります。
 | `ambiguous_dependency_files` | 依存ファイルの組み合わせが複数あり、一意に決められない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
 | `dependency_file_unusable` | 依存ファイルを利用できない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
 | `unsupported_lockfile` | lockfileの形式に対応していない | |
+| `go_replace_unsupported` | `go.mod`に`replace`があり、対応していない | [Goの依存ファイル](#go-inputs) |
+| `go_exclude_unsupported` | `go.mod`に`exclude`があり、対応していない | [Goの依存ファイル](#go-inputs) |
+| `go_binary_not_from_source` | イメージのGoバイナリが、この`go.mod`と一致しない、またはパッケージ一覧が不完全で照合できない | [Goの依存ファイル](#go-inputs) |
 | `workspace_unsupported` | プロジェクトのworkspace構成に対応していない | |
 | `workspace_settings_unsupported` | workspace設定ファイルの内容に対応していない | |
 | `dynamic_metadata` | プロジェクトのメタデータが動的に決まる | |
@@ -665,6 +691,9 @@ PR記録の`state`には、次の値があります。
 | `manager_spec_unsupported` | 宣言されたパッケージマネージャーの版に対応していない | [ツール版の選定](remediation-logic.md#tool-version-selection) |
 | `work_program_mismatch` | 作業用コンテナ内のプログラムが、実行中のKestreLynxに付属するものと異なる | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
 | `work_environment_rejected` | 作業用コンテナがプログラムの実行要件を満たしていない | [実行時の制限](remediation-logic.md#worker-restrictions) |
+| `go_version_too_old` | `go.mod`に`go`の版の指定がない、または1.21より古い | [Goの依存ファイル](#go-inputs) |
+| `go_toolchain_unsupported` | `go.mod`の`toolchain`の行が、公開されたGoの版ではない | [Goの依存ファイル](#go-inputs) |
+| `go_runtime_unavailable` | 更新に必要な版以上の、サポート中のGoを選べない | [Goの選定](remediation-logic.md#go-runtime-selection) |
 | `runtime_eol` | 更新対象の実行環境がサポート終了している | [実行環境の選定](remediation-logic.md#runtime-and-tool-versions) |
 | `runtime_engines_mismatch` | 更新した依存が、プロジェクトの宣言する最小Node.js版に対応していない | [Node.jsの互換条件](remediation-logic.md#node-compatibility) |
 | `requires_python_unsupported` | 必要なPython版の条件を満たせない、または条件がない・解釈できない | [uv用Pythonの選定](remediation-logic.md#uv-python-selection) |
@@ -703,6 +732,11 @@ PR記録の`state`には、次の値があります。
 | --- | --- | --- |
 | `update_candidate_in_source` | ソース内のパッケージに対応する修正版の更新候補がある | [修正版の下限](remediation-logic.md#fix-lower-bound) |
 | `range_allows_fix` | 依存範囲が修正版を許し、再ビルドで入る見込みがある | [直接依存の版指定](remediation-logic.md#direct-dependencies) |
+| `go_stdlib_needs_newer_go` | Goの標準ライブラリの脆弱性で、`go.mod`の更新ではなく、新しいGoでビルドし直すと直る | [Goの候補選定](remediation-logic.md#go-package-selection) |
+| `fix_in_other_major_version` | 修正版が別のメジャー版にあり、Goでは別のモジュールパスになる | [Goの候補選定](remediation-logic.md#go-package-selection) |
+| `go_release_retracted` | 対象の版が、モジュールの作者によって撤回されている | [Goの候補選定](remediation-logic.md#go-package-selection) |
+| `go_line_raised_too_far` | 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える、またはビルドした版が不明なまま行の版が変わる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
+| `go_dependencies_uncheckable` | 更新後の依存の要求を確かめるためにたどるモジュールの版が多すぎる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
 | `no_fixed_version_above_installed` | 稼働版より新しい修正版がない、または修正対象がない | [修正版の下限](remediation-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | 候補または更新後の版が依存の制約を満たさない | [直接依存の版指定](remediation-logic.md#direct-dependencies)・[推移的依存の更新範囲](remediation-logic.md#transitive-dependencies) |
 | `constraint_not_evaluable` | 版の制約を評価できない、または修正版がpipで選ばれないプレリリースである | [直接依存の版指定](remediation-logic.md#direct-dependencies) |
@@ -736,7 +770,7 @@ PR記録の`state`には、次の値があります。
 | `target_not_updated` | 更新しても目標の版に上がらなかった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
 | `target_removed` | 更新後に対象パッケージがなくなった、または依存関係から到達できなくなった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
 | `fix_condition_not_met` | 更新後の版が脆弱性の修正条件を満たさない | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
-| `unexplained_dependency_diff` | 更新との関係を説明できない依存の変更がある | [付随変更の検査](remediation-logic.md#change-validation) |
+| `unexplained_dependency_diff` | 更新との関係を説明できない依存の変更や、版が上がった・追加されたモジュールが要求する版の最大と一致しないGoの`go`の行の引き上げがある | [付随変更の検査](remediation-logic.md#change-validation)・[Goの更新結果の検査](remediation-logic.md#go-update-validation) |
 | `distribution_mismatch` | パッケージがレジストリの公開内容やpipの解決結果と一致しない | [付随変更の検査](remediation-logic.md#change-validation) |
 | `registry_check_limit` | 更新時のレジストリ照会数の上限に達した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
 | `update_package_limit` | 更新するパッケージ数が上限を超えている | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |

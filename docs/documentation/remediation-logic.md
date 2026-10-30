@@ -351,6 +351,26 @@ A prerelease satisfies the fixed-version conditions only if that exact version i
 
 Reaching the lower bound alone is insufficient; the checks in [Adopting update results](#update-method-and-partial-pull-requests) also apply.
 
+### Go candidate selection {#go-package-selection}
+
+- From the running image's `gobinary` findings, select only binaries whose main module path matches `module` in the mapped `go.mod`
+- Exclude findings from unmatched binaries, such as tools included in the base image, from the plan
+- Require manual handling with `go_binary_not_from_source` if dependency versions built into a selected binary do not match `require`, or if the package list is truncated
+
+#### Module target versions {#go-target-versions}
+
+- Select the lowest fixed version above the running version; for multiple CVEs, use the highest of their respective minimum fixed versions as the target
+- Require manual handling with `fix_in_other_major_version` if fixes exist only under a different module path for another major version
+- Before updating, check `.info` from `proxy.golang.org` to verify that the target version exists and confirm its canonical form, including `+incompatible`
+- Check `retract` directives in the latest version's `go.mod`, using `@latest` to find that version; a retracted target version requires manual handling with `go_release_retracted`
+
+#### Go standard library rebuild guidance {#go-stdlib-rebuild}
+
+- Exclude `stdlib` findings from `go.mod` update PRs and show a separate remediation plan item explaining that rebuilding with the specified Go version or later fixes them
+- Select the lowest version in the series used to build the binary that fixes all CVEs; if none exists, recommend a version in a newer series that fixes all CVEs
+
+See [Go dependency files](remediation-reference.md#go-inputs) for required files and inputs that need manual handling.
+
 ### Direct dependency version specifications {#direct-dependencies}
 
 If a direct dependency's version specification excludes the update target, KestreLynx edits the version portion while preserving the operator, but only for supported forms.
@@ -360,10 +380,11 @@ If a direct dependency's version specification excludes the update target, Kestr
 - After the update, KestreLynx checks that the manifest and lockfile specifications agree and that the adopted version is within the specified range
 
 See the dependency-file sections for [npm](remediation-reference.md#npm-inputs), [pnpm](remediation-reference.md#pnpm-inputs), and [uv](remediation-reference.md#uv-inputs) for editable specifications and locations.
+For Go, `go get` updates `require` directives in `go.mod`.
 
 ### Transitive dependency update scope {#transitive-dependencies}
 
-Transitive dependencies are updated within the ranges declared by their parent packages.
+For npm, pnpm, and uv, transitive dependencies are updated within the ranges declared by their parent packages.
 Updated versions are checked against parent-package declarations returned by the public registry.
 
 - Normal updates do not upgrade parent packages outside the update targets to obtain a fixed version
@@ -371,6 +392,9 @@ Updated versions are checked against parent-package declarations returned by the
 - Changes to targets and related dependencies are checked for violations of version requirements between dependent packages and their dependencies
 
 [Partial PR conditions](#partial-pr-selection) explains what happens when a declared range prevents reaching the lower bound.
+
+For Go, updates add or change `require` directives marked `// indirect` for transitive dependencies.
+Modules changed alongside the targets are checked through [Go update validation](#go-update-validation); re-resolution through dependent packages does not apply.
 
 ### Re-resolution through dependent packages {#dependent-reresolution}
 
@@ -499,7 +523,7 @@ See [Re-resolution check conditions](remediation-reference.md#dependent-reresolu
 
 ## Runtime selection {#runtime-and-tool-versions}
 
-Supported runtimes are the supported series in the bundled table, currently Node.js 22, 24, and 26 and Python 3.11–3.15.
+Supported runtimes are the supported series in the bundled table, currently Node.js 22, 24, and 26, Python 3.11–3.15, and Go 1.26 and 1.27.
 See [Supported runtimes](remediation-reference.md#supported-runtimes) for execution versions and support end dates.
 
 ### Node.js selection {#node-selection}
@@ -562,6 +586,18 @@ The work container uses the default Python environment in the bundled table, whi
 
 See [Supported runtimes](remediation-reference.md#supported-runtimes) for work-container execution versions.
 
+### Go selection {#go-runtime-selection}
+
+| Declarations | Selection rule |
+| --- | --- |
+| Required Go version | Uses the highest version from the input `go.mod`'s `go` and `toolchain` lines and the target versions' `go.mod` `go` lines. |
+| Work runtime series | Selects the oldest supported series in the bundled table whose execution version is at least the required version. |
+| Execution version | Uses Go from the official `golang` image pinned by digest, containing the bundled table's version for the selected series. |
+| No suitable execution version | Requires manual handling with `go_runtime_unavailable`. |
+
+- The Go version used to build the running binaries does not place an upper bound on the Go version used for the update
+- The updated `go` and `toolchain` lines are subject to separate [conditions for raising versions](#go-update-validation)
+
 ### Tool version selection {#tool-version-selection}
 
 Project declarations take priority when selecting npm, pnpm, and uv versions.
@@ -597,7 +633,7 @@ Failure to verify the Pod creation rules requires manual action with `work_admis
 Failure to retrieve the cluster version defers updates with the same reason code, while Pod count or resource limits defer updates with `work_pod_limit`.
 ### Pinning official images {#worker-images}
 
-Language package updates use official Node.js and Python images.
+Language package updates use official Node.js, Python, and Go (`golang`) images.
 Their content is pinned by digest in the bundled table and does not follow changes to the same tag.
 
 - Docker or the Kubernetes node's container runtime retrieves the required images
@@ -673,6 +709,28 @@ File ownership, permissions, and temporary mounts restrict where the non-root pr
 
 See [Processing limits](configuration.md#remediation-limits) for workload settings and [Work container networking](outbound-communication.md#worker-network) for network restrictions.
 
+### Go execution settings {#go-worker-settings}
+
+Go jobs receive the following fixed environment variables.
+
+| Environment variable | Value or treatment |
+| --- | --- |
+| `GOPROXY` | `https://proxy.golang.org` |
+| `GOSUMDB` | `sum.golang.org` |
+| `GOPRIVATE`, `GONOPROXY`, `GONOSUMDB`, and `GOINSECURE` | Empty |
+| `GOFLAGS` | `-mod=mod` |
+| `GOTOOLCHAIN` | `local` |
+| `GOENV` | `off` |
+| `GOWORK` | `off` |
+| `CGO_ENABLED` | `0` |
+| `GOPATH`, `GOMODCACHE`, and `GOCACHE` | Paths on tmpfs |
+
+- Use the `go` command included in the official image without automatically downloading another toolchain
+- Mount tmpfs over `/go` and keep module and build caches on tmpfs
+- Run `go get <module>@<version> ...` once for the update, without running `go mod tidy`
+
+See [Dependency downloads](outbound-communication.md#dependency-downloads) for network destinations.
+
 ### Result collection {#worker-results}
 
 After collecting results from standard output on Docker, or collecting and decrypting encrypted results from Pod logs on Kubernetes, KestreLynx attempts to remove the work container or Pod.
@@ -695,6 +753,7 @@ After rechecking the update inputs, KestreLynx edits direct dependency version s
 | pnpm | Removes target entries from a working copy of the lockfile and regenerates it without freezing the lockfile. With pnpm 12, it also passes `--fix-lockfile` so the removed entries are resolved again. | Checks dependency consistency with the lockfile frozen before and after the update. |
 | uv | Updates the lockfile with a specified target version for each target package. | Checks consistency between the lockfile and project declarations before and after the update. |
 | pip | Rewrites pinned versions and updates existing hashes from PyPI wheel information. | Checks dependency resolution before and after the update using dry runs targeting the running image's environment. |
+| Go | Updates all targets with one `go get <module>@<version> ...` command, without running `go mod tidy`. | Checks the `go.mod` diff, `go.sum`, dependency requirements, and scan results before and after the update. |
 
 When pnpm updates only transitive dependencies, direct dependency entries may also be temporarily removed to trigger resolution.
 
@@ -720,10 +779,56 @@ The lockfile or resolution results returned by the work container are not suffic
 Dependency distribution references and hashes are checked against public registry information.
 This does not unpack distributions to compare all of their contents.
 
+### Go update validation {#go-update-validation}
+
+For Go, update results are adopted only when all of the following conditions are met.
+
+#### File and version declaration changes {#go-file-changes}
+
+| Check target | Conditions for acceptance |
+| --- | --- |
+| Changed files | Only `go.mod` and `go.sum` |
+| Changed parts of `go.mod` | Only `require` directives and the `go` and `toolchain` lines |
+| Existing `require` directives | No removals, downgrades, or changes to `// indirect` markers |
+| Other directives | No changes to the meaning of `module`, `replace`, `exclude`, `retract`, `godebug`, or other directives |
+| Update targets | All reach at least their target versions and satisfy the fixed-version conditions for each CVE |
+| Changed `go` and `toolchain` lines | The resulting versions are no higher than the lowest Go version used to build the target binaries |
+
+- Results that lower the `go` version are rejected
+- When the `go` line's version is numerically increased, it must exactly match the highest `go` version declared in the new `go.mod` files of upgraded or added modules; a lower or higher version is rejected with `unexplained_dependency_diff`
+- Results that lower the higher of the `go` and `toolchain` versions are rejected, including when the `toolchain` line is removed
+- If a changed `go` or `toolchain` line exceeds the lowest Go version used to build the running binaries, or a line's version changes while the build version is unknown, manual handling is required with `go_line_raised_too_far`
+- PRs that raise the `go` line state that language features or `GODEBUG` defaults may change
+
+#### go.sum verification and completion {#go-sum-validation}
+
+- Check added lines and both the zip and `go.mod` hashes of upgraded or added modules against `sum.golang.org` records
+- Check hashes for changed versions even when using existing lines
+- If lines for changed versions are missing, KestreLynx adds them from `sum.golang.org` records and lists the added lines in the PR body
+- Reject removal of original lines, changes to their hashes, or conflicting values for the same module, version, and hash kind
+
+#### Related module updates {#go-collateral-validation}
+
+- Starting from the targets' versions verified through `proxy.golang.org`, allow only necessary additions and upgrades reachable through their `go.mod` requirements
+- If a target exceeds its target version, reject it with `unexplained_dependency_diff` unless another requirement path explains the higher version
+- When an explained target version exceeds the target, check it against `retract` directives in the latest version's `go.mod`; a retracted version requires manual handling with `go_release_retracted`
+- Check that versions written in the updated `go.mod` are at least those required by the new `go.mod` files of upgraded or added modules
+- Require manual handling if a new version has no `go.mod` of its own and only a proxy-generated `go.mod` is available
+- Require manual handling with `go_dependencies_uncheckable` if the number of versions followed to check dependency requirements exceeds the limit
+
+#### Scans and user builds {#go-scan-validation}
+
+- Scan `go.mod` before and after the update with the same Trivy, vulnerability database, and severity settings; exclude `go.sum` from scans so that old-version lines are not counted as dependencies
+- Check that the targeted CVEs disappear and no new module-and-vulnerability pairs appear, including in modules changed alongside the targets
+- Scans cover the versions written in `go.mod` and assume that user builds use Go's default `-mod=readonly`
+- With `-mod=readonly`, builds use only the written versions and stop if a required module is missing or its version is too low
+
+See [Go PRs and CI checks](remediation-results.md#go-pull-requests) for a CI command example to run before merging and the information included in PR bodies.
+
 ### Partial PR conditions {#partial-pr-selection}
 
 For npm, pnpm, and uv, the remaining updates may be accepted even when some packages do not reach the update target's lower bound.
-Pinned-version pip updates are not split this way.
+Pinned-version pip updates and Go updates are not split this way.
 
 For npm, pnpm, and uv, when the conditions for [Re-resolution through dependent packages](#dependent-reresolution) are met, KestreLynx checks that result before deciding whether to adopt a partial PR from the normal update.
 

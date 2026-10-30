@@ -99,7 +99,7 @@ PRには、イメージ参照とdigest、Workload名、リポジトリ名、ソ�
 
 | 通信主体 | 通信先 | 取得・送信する情報 | 発生条件 |
 | --- | --- | --- | --- |
-| DockerまたはKubernetesノードのコンテナランタイム | Docker Hubまたは設定したミラー | 作業用の公式Node.js・Pythonイメージを取得 | 言語パッケージの更新に必要なイメージがローカルにない場合 |
+| DockerまたはKubernetesノードのコンテナランタイム | Docker Hubまたは設定したミラー | 作業用の公式Node.js・Python・Go (`golang`)イメージを取得 | 言語パッケージの更新に必要なイメージがローカルにない場合 |
 | Kubernetesノードのコンテナランタイム | KestreLynxイメージのレジストリ | 入力ファイルを受け取るコンテナのイメージを取得 | 作業用Podに必要なイメージがローカルにない場合 |
 
 ミラーの設定は[作業用イメージの取得先](configuration.md#remediation-worker-registry)、固定と取得不能時の扱いは[公式イメージの固定](remediation-logic.md#worker-images)を参照してください。
@@ -123,8 +123,11 @@ PRには、イメージ参照とdigest、Workload名、リポジトリ名、ソ�
 | KestreLynx | `pypi.org`・`files.pythonhosted.org` | Pythonパッケージの情報・配布物を取得 | Pythonの更新結果を照合する場合 |
 | KestreLynx | `registry.npmjs.org` | パッケージ名・版を指定し、依存先の版指定と公開日時を取得 | npm・pnpmの再解決で、更新を妨げる指定や公開後72時間の経過を確認する場合 |
 | KestreLynx | `pypi.org` | パッケージ名・版を指定し、依存先の版指定と配布物のアップロード日時を取得 | uvの再解決で、更新を妨げる指定や公開後72時間の経過を確認する場合 |
-
-| 作業用コンテナ | 公開npmレジストリ・PyPIと配布物の取得先 | 依存解決、lockfile生成、検査に必要な情報・配布物を取得 | 言語パッケージの依存更新を実行する場合 |
+| KestreLynx | `proxy.golang.org` | モジュールパスと版を指定し、版情報の`.info`・`go.mod`の`.mod`・最新版の`@latest`を取得 | Goの目標版、撤回、必要なGoの版、依存の要求を確認する場合 |
+| KestreLynx | `sum.golang.org` | モジュールパスと版を指定し、`lookup`でモジュールのzipと`go.mod`のハッシュを取得 | Goの更新結果の照合と`go.sum`の補完を行う場合 |
+| 作業用コンテナ | 公開npmレジストリ・PyPIと配布物の取得先 | 依存解決、lockfile生成、検査に必要な情報・配布物を取得 | npm・pnpm・pip・uvの依存更新を実行する場合 |
+| 作業用コンテナ | `proxy.golang.org`・`sum.golang.org` | モジュールの情報・配布物とハッシュの検証に必要な情報を取得 | Goの依存更新を実行する場合 |
+| 作業用コンテナ | `storage.googleapis.com` | proxyからの転送先でモジュールのzipを取得 | Goの依存更新で配布物の取得先が転送される場合 |
 
 更新処理は、[マネージャー別の更新処理](remediation-logic.md#manager-update-methods)を参照してください。
 

@@ -128,6 +128,27 @@ Planning alone does not run dependency updates, so do not interpret the update t
 
 For the lower-bound calculation, see [Fixed-version lower bound](remediation-logic.md#fix-lower-bound); for differences in processing, see [Execution scope of plans and PRs](remediation-logic.md#plan-and-pr-execution).
 
+### Go PRs and CI checks {#go-pull-requests}
+
+Go PRs propose updates to `go.mod` and `go.sum` and include the following information in the body.
+
+- The public Go module proxy (`proxy.golang.org`) and hash verification through `sum.golang.org`
+- Modules upgraded or added alongside the targets because the targets' new versions require them
+- Changes to the `go` and `toolchain` lines, and the possibility that raising the `go` line changes language features or `GODEBUG` defaults
+- `go.sum` lines that KestreLynx added from `sum.golang.org` records
+
+Before merging, run builds and tests in CI using the updated `go.mod` as-is.
+
+```sh
+go build -mod=readonly ./... && go test -mod=readonly ./...
+```
+
+- Do not run `go get`, `go mod tidy`, or a build with `-mod=mod` before this check
+- With `-mod=readonly`, the build stops if a required module is missing or its version is too low, so check the CI results before merging
+- KestreLynx checks the versions written in `go.mod`; these checks do not guarantee a successful build or correct application behavior
+
+See [Go update validation](remediation-logic.md#go-update-validation) for acceptance conditions.
+
 ### Partial PRs {#partial-pull-requests}
 
 For npm, pnpm, and uv, a PR may include only the planned package updates that passed the checks.
@@ -142,7 +163,7 @@ For npm, pnpm, and uv, a PR may include only the planned package updates that pa
 “Left out” does not mean that the package was removed from the image.
 An item being a PR candidate also does not mean that every package was updated.
 
-Pinned-version pip updates are not split into partial PRs.
+Pinned-version pip updates and Go updates are not split into partial PRs.
 For eligibility conditions, see [Partial PR selection](remediation-logic.md#partial-pr-selection); for checks to perform, see [Checking update failures](remediation-troubleshooting.md#check-update-failure).
 
 ### Results of re-resolution through dependent packages {#dependent-reresolution-results}
@@ -198,13 +219,14 @@ It does not mean that running containers have been replaced with that content.
 | Displayed content | Interpretation |
 | --- | --- |
 | `a rebuild is expected to pick up … or later` | The pip dependency range permits a fixed version, so a rebuild is expected to resolve the finding. |
+| Guidance to rebuild the Go standard library with a newer Go | `stdlib` findings do not produce a PR; a separate remediation plan item recommends rebuilding with at least the Go version that fixes all CVEs. |
 | `which base the running image was built from cannot be confirmed` | The base behind a floating tag could not be confirmed, so the guidance is to pull the current base and rebuild. |
 | Guidance to run `docker compose build --pull` | Instructions to pull the base again and rebuild when the Dockerfile was discovered through Compose `build`. |
 | pull the base again, rebuild the image (for example with `docker build --pull`) and deploy it again | Guidance when the Dockerfile was found only through a configured mapping, including images built in CI. |
 | `Node.js in the current … is …; if the rebuild takes over this version, … of the … findings of the detected Node.js … are expected to disappear (the rebuilt image is not checked)` | The number of currently detected CVEs expected to disappear if the rebuild inherits the current base's runtime version, excluding CVEs introduced by the new version; Python is displayed as `Python runtime`. |
 
 None of these cases confirms the version actually installed by a rebuild or resolution in the running image after deployment.
-For details, see [Direct dependency version constraints](remediation-logic.md#direct-dependencies) and [Base layer matching](remediation-logic.md#base-layer-matching).
+For details, see [Direct dependency version constraints](remediation-logic.md#direct-dependencies), [Base layer matching](remediation-logic.md#base-layer-matching), and [Go standard library rebuild guidance](remediation-logic.md#go-stdlib-rebuild).
 
 ### Resolved findings in comparisons {#verification-results}
 

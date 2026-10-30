@@ -16,7 +16,7 @@ See [Setup steps](remediation-setup.md) to enable them.
 | Language update runtimes | Series listed in [Supported runtimes](#supported-runtimes) |
 | Sensor | Not required for remediation plans or fix pull requests |
 | Kubernetes plans | Published-image and Dockerfile base-image update candidates, guidance for pulling floating tags again, and language-package update candidates |
-| Kubernetes PRs | Image tag updates in plain manifests, Kustomize `images[].newTag` updates, image tag updates in Helm values, and base image updates in Dockerfiles, plus npm / pnpm / pip / uv updates with [work Pods configured](remediation-setup.md#kubernetes-language-updates) |
+| Kubernetes PRs | Image tag updates in plain manifests, Kustomize `images[].newTag` updates, image tag updates in Helm values, and base image updates in Dockerfiles, plus npm / pnpm / pip / uv / Go updates with [work Pods configured](remediation-setup.md#kubernetes-language-updates) |
 
 ### docker run containers {#docker-run-containers}
 
@@ -43,8 +43,9 @@ See [Mapping docker run containers](remediation-setup.md#docker-run-mappings) fo
 | Dockerfile base image | Public registries and private registries with authentication configured | A Dockerfile or Compose mapping is required from the planning stage |
 | npm and pnpm dependencies | Public npm registry | A dependency-directory mapping is required from the planning stage |
 | pip and uv dependencies | Public PyPI | A dependency-directory mapping is required from the planning stage |
+| Go module dependencies | Public Go module proxy (`proxy.golang.org`) and `sum.golang.org` | A dependency-directory mapping is required from the planning stage |
 
-Private npm registries and private PyPI sources are not supported for updates.
+Private npm registries, private PyPI sources, and private Go modules are not supported for updates.
 Image registry authentication is not used to retrieve dependency packages.
 
 ## Supported input formats {#supported-inputs}
@@ -315,6 +316,25 @@ See [pip verification environment](remediation-logic.md#pip-target-environment) 
 
 Readable `[tool.uv]` keys still require supported dependency sources and project structure.
 
+### Go dependency files {#go-inputs}
+
+| Input | Support |
+| --- | --- |
+| Required files | `go.mod` and `go.sum` in the mapped dependency directory |
+| Target findings | Findings from Go binaries in the running image that Trivy detects as `gobinary` |
+| Matching binaries | Only binaries whose main module path matches `module` in `go.mod` are targeted; findings from unmatched binaries, such as tools in the base image, are excluded from the plan |
+| Built-in dependencies | Module versions that do not match `require` in `go.mod`, or a truncated package list, require manual handling with `go_binary_not_from_source` |
+| Source | Only public `proxy.golang.org` and `sum.golang.org`; private modules are excluded |
+| `replace` and `exclude` | Any occurrence requires manual handling |
+| `go` line | Requires 1.21 or later; a missing line or a version below 1.21 requires manual handling |
+| `toolchain` line | Supports released Go versions in `go1.N.M` form; `default`, custom suffixes, release candidates, and similar forms require manual handling |
+| `go.work` | Requires manual handling if present in the dependency directory or any ancestor up to the repository root |
+| `vendor` | Requires manual handling if present in the dependency directory |
+| Another major version | Fixes available only under another module path require manual handling with `fix_in_other_major_version` |
+| Standard library `stdlib` | No PR is created; the remediation plan recommends building with a newer Go version |
+
+See [Go candidate selection](remediation-logic.md#go-package-selection) for candidate selection and standard library guidance, and [Go update validation](remediation-logic.md#go-update-validation) for acceptance conditions.
+
 ### Node.js version declarations {#node-declarations}
 
 | Declaration | Supported form |
@@ -367,25 +387,28 @@ See [Tool version selection](remediation-logic.md#tool-version-selection) for ch
 
 ## Supported runtimes {#supported-runtimes}
 
-Supported runtimes are the supported series in the bundled table, currently Node.js 22, 24, and 26 and Python 3.11–3.15.
+Supported runtimes are the supported series in the bundled table, currently Node.js 22, 24, and 26, Python 3.11–3.15, and Go 1.26 and 1.27.
 The following versions and dates are information held by KestreLynx and change with KestreLynx updates.
 
 | Series | Execution version in the bundled table | Support end date |
 | --- | --- | --- |
-| Node.js 22 | `22.23.3` | 2027-04-30 |
-| Node.js 24 | `24.21.0` | 2028-04-30 |
-| Node.js 26 | `26.11.1` | 2029-04-30 |
+| Node.js 22 | `22.23.4` | 2027-04-30 |
+| Node.js 24 | `24.22.1` | 2028-04-30 |
+| Node.js 26 | `26.12.1` | 2029-04-30 |
 | Python 3.11 | `3.11.17` | 2027-10-31 |
 | Python 3.12 | `3.12.15` | 2028-10-31 |
-| Python 3.13 | `3.13.16` | 2029-10-31 |
-| Python 3.14 | `3.14.8` | 2030-10-31 |
-| Python 3.15 | `3.15.0` | 2031-10-31 |
+| Python 3.13 | `3.13.17` | 2029-10-31 |
+| Python 3.14 | `3.14.9` | 2030-10-31 |
+| Python 3.15 | `3.15.1` | 2031-10-31 |
+| Go 1.26 | `1.26.10` | 2027-02-10 |
+| Go 1.27 | `1.27.3` | 2027-08-19 |
 
 | Use | Default runtime |
 | --- | --- |
 | npm and pnpm updates without Node.js declarations | Currently Node.js 24; Node.js 26 becomes eligible on 2026-10-28 according to the LTS start date in the bundled table |
 | Work containers for pip updates | Python 3.13 |
 | uv updates | Selected according to Python declarations |
+| Go updates | Selected from go.mod and the target versions' go lines |
 
 | Series in the bundled table whose support has ended | Support end date |
 | --- | --- |
@@ -626,6 +649,9 @@ The following tables give each code's meaning and related decision rules or chec
 | `ambiguous_dependency_files` | More than one set of dependency files matches, so no unique set can be selected | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
 | `dependency_file_unusable` | A dependency file cannot be used | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
 | `unsupported_lockfile` | The lockfile format is not supported | |
+| `go_replace_unsupported` | `go.mod` has a `replace` directive, which is not handled | [Go dependency files](#go-inputs) |
+| `go_exclude_unsupported` | `go.mod` has an `exclude` directive, which is not handled | [Go dependency files](#go-inputs) |
+| `go_binary_not_from_source` | The Go binary of the image does not match this `go.mod`, or its package list is incomplete and cannot be compared | [Go dependency files](#go-inputs) |
 | `workspace_unsupported` | The project's workspace layout is not supported | |
 | `workspace_settings_unsupported` | The workspace settings file contains unsupported settings | |
 | `dynamic_metadata` | The project's metadata is dynamic | |
@@ -665,6 +691,9 @@ The following tables give each code's meaning and related decision rules or chec
 | `manager_spec_unsupported` | The declared package manager version is not supported | [Tool version selection](remediation-logic.md#tool-version-selection) |
 | `work_program_mismatch` | The program in the work container differs from the one bundled with the running KestreLynx | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
 | `work_environment_rejected` | The work container did not meet its program's execution requirements | [Execution restrictions](remediation-logic.md#worker-restrictions) |
+| `go_version_too_old` | `go.mod` declares no `go` version, or one below 1.21 | [Go dependency files](#go-inputs) |
+| `go_toolchain_unsupported` | The `toolchain` line of `go.mod` is not a released Go version | [Go dependency files](#go-inputs) |
+| `go_runtime_unavailable` | No supported Go is as new as the update needs | [Go selection](remediation-logic.md#go-runtime-selection) |
 | `runtime_eol` | The runtime targeted by the update is past the end of its support | [Runtime selection](remediation-logic.md#runtime-and-tool-versions) |
 | `runtime_engines_mismatch` | An updated dependency does not support the minimum Node.js version declared by the project | [Node.js compatibility requirements](remediation-logic.md#node-compatibility) |
 | `requires_python_unsupported` | The Python version requirement cannot be satisfied, is missing, or cannot be interpreted | [Python selection for uv](remediation-logic.md#uv-python-selection) |
@@ -703,6 +732,11 @@ The following tables give each code's meaning and related decision rules or chec
 | --- | --- | --- |
 | `update_candidate_in_source` | A fixed-version update candidate exists for the package in the source | [Fixed-version lower bound](remediation-logic.md#fix-lower-bound) |
 | `range_allows_fix` | The version range allows the fixed version, so a rebuild is expected to install it | [Direct dependency version specifications](remediation-logic.md#direct-dependencies) |
+| `go_stdlib_needs_newer_go` | The Go standard library vulnerability is fixed by building with a newer Go, rather than by updating `go.mod` | [Go candidate selection](remediation-logic.md#go-package-selection) |
+| `fix_in_other_major_version` | The fix is in another major version, which Go names as another module path | [Go candidate selection](remediation-logic.md#go-package-selection) |
+| `go_release_retracted` | The module's author retracted the target version | [Go candidate selection](remediation-logic.md#go-package-selection) |
+| `go_line_raised_too_far` | A changed `go` or `toolchain` line exceeds the lowest Go version the running binaries were built with, or a line's version changes while the build version is unknown | [Go update validation](remediation-logic.md#go-update-validation) |
+| `go_dependencies_uncheckable` | The module versions followed to check the updated dependency requirements cannot all be checked because there are too many | [Go update validation](remediation-logic.md#go-update-validation) |
 | `no_fixed_version_above_installed` | There is no fixed version above the running one, or nothing to fix | [Fixed-version lower bound](remediation-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | The candidate or updated version does not satisfy the dependency constraints | [Direct dependency version specifications](remediation-logic.md#direct-dependencies), [Transitive dependency update scope](remediation-logic.md#transitive-dependencies) |
 | `constraint_not_evaluable` | The version constraint cannot be evaluated, or the fixed version is a prerelease pip does not select | [Direct dependency version specifications](remediation-logic.md#direct-dependencies) |
@@ -736,7 +770,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `target_not_updated` | The package did not reach the target version after the update | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
 | `target_removed` | The target package is missing after the update or is no longer reachable through dependencies | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
 | `fix_condition_not_met` | The updated version does not meet the vulnerability's fixed-version condition | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
-| `unexplained_dependency_diff` | Dependency changes cannot be explained by the update | [Checking related changes](remediation-logic.md#change-validation) |
+| `unexplained_dependency_diff` | The update changed dependencies it cannot explain, or raised the Go `go` line to a version that does not exactly match the highest version required by the upgraded or added modules | [Checking related changes](remediation-logic.md#change-validation), [Go update validation](remediation-logic.md#go-update-validation) |
 | `distribution_mismatch` | A package differs from what the registry publishes or pip resolution reports | [Checking related changes](remediation-logic.md#change-validation) |
 | `registry_check_limit` | The limit on registry lookups during the update was reached | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
 | `update_package_limit` | The update changes more packages than the limit allows | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |

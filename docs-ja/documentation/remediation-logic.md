@@ -351,6 +351,26 @@ majorが`0`の場合は、同じmajorのまとまりをminor単位で扱いま�
 
 下限に達しただけでは採用せず、[更新結果の採用](#update-method-and-partial-pull-requests)の検査も適用します。
 
+### Goの候補選定 {#go-package-selection}
+
+- 稼働イメージの`gobinary`の所見から、メインモジュールのパスが対応付けた`go.mod`の`module`と一致するバイナリだけを選ぶ
+- ベースイメージに含まれるツールなど、一致しないバイナリの所見は計画に含めない
+- 対象のバイナリに組み込まれた依存の版が`require`と一致しない場合や、パッケージ一覧が切り詰められている場合は`go_binary_not_from_source`で手動対応にする
+
+#### モジュールの目標版 {#go-target-versions}
+
+- 稼働版より新しい修正版のうち最も低い版を選び、複数のCVEがある場合はそれぞれの最小の修正版の最大を目標版にする
+- 修正版が別のメジャー版の別モジュールパスにしかない場合は、`fix_in_other_major_version`で手動対応にする
+- 更新前に`proxy.golang.org`の`.info`で目標版の存在と、`+incompatible`を含む正規の表記を確かめる
+- `@latest`で得た最新版の`go.mod`にある`retract`を調べ、目標版が撤回されていれば`go_release_retracted`で手動対応にする
+
+#### 標準ライブラリの再ビルド案内 {#go-stdlib-rebuild}
+
+- `stdlib`の所見は`go.mod`の更新PRに含めず、修正計画の別項目で「この版以上のGoでビルドし直すと直る」と案内する
+- ビルドに使われたGoと同じ系列で全CVEを直せる最小の版を選び、なければ全CVEを直せる新しい系列の版を案内する
+
+必要なファイルと手動対応になる入力は[Goの依存ファイル](remediation-reference.md#go-inputs)を参照してください。
+
 ### 直接依存の版指定 {#direct-dependencies}
 
 直接依存の版指定が更新目標を許さない場合は、対応する形式に限り、演算子を保って版の部分を編集します。
@@ -360,10 +380,11 @@ majorが`0`の場合は、同じmajorのまとまりをminor単位で扱いま�
 - 更新後は、manifestの指定とlockfileが記録する指定の一致、および採用版が指定範囲内であることを確認する
 
 編集できる版指定と記載箇所は、[npm](remediation-reference.md#npm-inputs)、[pnpm](remediation-reference.md#pnpm-inputs)、[uv](remediation-reference.md#uv-inputs)の依存ファイルを参照してください。
+Goでは、`go get`で`go.mod`の`require`を更新します。
 
 ### 推移的依存の更新範囲 {#transitive-dependencies}
 
-推移的依存は、親パッケージが宣言する依存範囲内で更新します。
+npm・pnpm・uvの推移的依存は、親パッケージが宣言する依存範囲内で更新します。
 更新後の版は、公開レジストリが返す親パッケージの宣言と照合します。
 
 - 通常の更新では、修正版を入れるために、更新対象ではない親パッケージの版を上げない
@@ -371,6 +392,9 @@ majorが`0`の場合は、同じmajorのまとまりをminor単位で扱いま�
 - 更新対象や付随する依存の変更によって、依存元・依存先の版の条件が破られていないことを確認する
 
 宣言された範囲内で下限に到達できない場合の扱いは、[部分PRの成立条件](#partial-pr-selection)で説明します。
+
+Goでは、推移的依存の`// indirect`付きの`require`を追加・更新します。
+付随して動いたモジュールは[Goの更新結果の検査](#go-update-validation)で確かめ、依存元からの再解決は適用しません。
 
 ### 依存元からの再解決 {#dependent-reresolution}
 
@@ -499,7 +523,7 @@ npm・pnpm・uvそれぞれの解決し直す方法と、更新結果を採用�
 
 ## 実行環境の選定 {#runtime-and-tool-versions}
 
-対応する実行環境は、同梱の表にあるサポート中の系列(現時点で Node.js 22・24・26、Python 3.11〜3.15)です。
+対応する実行環境は、同梱の表にあるサポート中の系列(現時点で Node.js 22・24・26、Python 3.11〜3.15、Go 1.26・1.27)です。
 実行版とサポート期限の一覧は[対応する実行環境](remediation-reference.md#supported-runtimes)を参照してください。
 
 ### Node.jsの選定 {#node-selection}
@@ -562,6 +586,18 @@ pipを動かす作業用Pythonと、依存解決の検証対象は別に決め�
 
 作業用の実行版は[対応する実行環境](remediation-reference.md#supported-runtimes)を参照してください。
 
+### Goの選定 {#go-runtime-selection}
+
+| 判定対象 | 選定規則 |
+| --- | --- |
+| 必要なGoの版 | 入力の`go.mod`の`go`・`toolchain`の行と、目標版の`go.mod`の`go`の行のうち最も高い版 |
+| 作業用の系列 | 必要な版以上で、同梱表にあるサポート中の最小の系列 |
+| 実行する版 | 選んだ系列の同梱表の版を含む、digestで固定した公式`golang`イメージのGo |
+| 条件を満たす実行版がない場合 | `go_runtime_unavailable`で手動対応 |
+
+- 作業に使うGoの版には、稼働バイナリをビルドしたGoの版による上限を設けない
+- 更新後の`go`・`toolchain`の行には、別途[引き上げの条件](#go-update-validation)を適用する
+
 ### ツール版の選定 {#tool-version-selection}
 
 npm・pnpm・uvの版は、プロジェクトの宣言を優先して選びます。
@@ -597,7 +633,7 @@ Pod作成規則を確認できない場合は`work_admission_unverified`で手�
 クラスタの版を取得できない場合は同じ理由コードで延期し、Pod数や資源の上限に達した場合は`work_pod_limit`で延期します。
 ### 公式イメージの固定 {#worker-images}
 
-言語パッケージの更新には、公式Node.js・Pythonイメージを使います。
+言語パッケージの更新には、公式Node.js・Python・Go (`golang`)イメージを使います。
 使用する内容は同梱表のdigestで固定し、同じタグの内容が変わっても追従しません。
 
 - 必要なイメージをDocker、またはKubernetesノードのコンテナランタイムが取得する
@@ -673,6 +709,28 @@ Dockerのroot filesystem設定自体は読み取り専用ではありません�
 
 処理量の設定は[処理の上限](configuration.md#remediation-limits)、通信の制限範囲は[作業用コンテナのネットワーク](outbound-communication.md#worker-network)を参照してください。
 
+### Goの実行設定 {#go-worker-settings}
+
+Goのジョブには、次の環境変数を固定して渡します。
+
+| 環境変数 | 値・扱い |
+| --- | --- |
+| `GOPROXY` | `https://proxy.golang.org` |
+| `GOSUMDB` | `sum.golang.org` |
+| `GOPRIVATE`・`GONOPROXY`・`GONOSUMDB`・`GOINSECURE` | 空 |
+| `GOFLAGS` | `-mod=mod` |
+| `GOTOOLCHAIN` | `local` |
+| `GOENV` | `off` |
+| `GOWORK` | `off` |
+| `CGO_ENABLED` | `0` |
+| `GOPATH`・`GOMODCACHE`・`GOCACHE` | tmpfs内のパス |
+
+- `go`コマンドは公式イメージに含まれるものを使い、別のtoolchainを自動取得しない
+- `/go`をtmpfsで覆い、モジュールとビルドのキャッシュもtmpfsに置く
+- 更新には`go get <module>@<version> ...`を1回実行し、`go mod tidy`は実行しない
+
+通信先は[依存パッケージの取得](outbound-communication.md#dependency-downloads)を参照してください。
+
 ### 結果の回収 {#worker-results}
 
 Dockerでは標準出力から、KubernetesではPodのログから暗号化した結果を回収して復号した後、作業用コンテナまたはPodの削除を試みます。
@@ -695,6 +753,7 @@ Dockerでは標準出力から、KubernetesではPodのログから暗号化し�
 | pnpm | 作業用コピーのlockfileから対象の記録を取り除き、固定を解除した状態でlockfileを再生成します。pnpm 12では、取り除いた記録を解決し直す`--fix-lockfile`も指定します。 | 更新前後に、lockfileを固定した状態で依存の整合を確認します。 |
 | uv | 対象パッケージごとに更新先を指定してlockfileを更新します。 | 更新前後のlockfileとプロジェクト宣言の整合を確認します。 |
 | pip | 固定版を書き換え、既存のハッシュがあればPyPIのwheel情報から更新します。 | 稼働イメージの環境を対象に、更新前後の依存解決をdry-runで確認します。 |
+| Go | すべての対象を1回の`go get <module>@<version> ...`で更新し、`go mod tidy`は実行しない | `go.mod`の差分、`go.sum`、依存の要求、更新前後のスキャン結果を確認 |
 
 pnpmで推移的依存だけを更新する場合は、再解決を促すために直接依存の記録も一時的に取り除くことがあります。
 
@@ -720,10 +779,56 @@ pipの範囲指定が更新目標を許す場合は、固定版へ書き換え�
 依存パッケージの配布物については、参照先とハッシュなどを公開レジストリの情報と照合します。
 配布物の内部を展開して、すべての内容を比較する検査ではありません。
 
+### Goの更新結果の検査 {#go-update-validation}
+
+Goでは、次の条件をすべて満たす更新結果だけを採用します。
+
+#### ファイルと版宣言の変更 {#go-file-changes}
+
+| 検査対象 | 採用条件 |
+| --- | --- |
+| 変更するファイル | `go.mod`と`go.sum`だけ |
+| `go.mod`の変更箇所 | `require`と`go`・`toolchain`の行だけ |
+| 既存の`require` | 削除・版下げ・`// indirect`の印の変更がないこと |
+| ほかの指令 | `module`・`replace`・`exclude`・`retract`・`godebug`などの意味が変わらないこと |
+| 更新対象 | すべてが目標版以上になり、各CVEの修正条件を満たすこと |
+| 変更した`go`・`toolchain`の行 | 変更後の版が、対象のバイナリをビルドしたGoの最も低い版以下であること |
+
+- `go`の版を下げる結果は採用しない
+- `go`の行の版を数値として上げる場合は、版が上がった・追加されたモジュールの新しい`go.mod`が宣言する`go`の版の最大とちょうど一致するものとし、それより低い・高い版への引き上げは`unexplained_dependency_diff`で拒否する
+- `toolchain`の行の削除も含め、`go`・`toolchain`の行のうち高い方の版が下がる結果は拒否する
+- 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える場合や、ビルドした版が不明なまま行の版が変わる場合は`go_line_raised_too_far`で手動対応にする
+- `go`の行が上がるPRには、言語の機能や`GODEBUG`の既定値が変わりうることを記載する
+
+#### go.sumの照合と補完 {#go-sum-validation}
+
+- 追加された行と、版が上がった・追加されたモジュールのzipと`go.mod`の両方のハッシュを`sum.golang.org`の記録と照合する
+- 動いた版のハッシュは、既存の行を使う場合も照合する
+- 動いた版の行が足りない場合は、KestreLynxが`sum.golang.org`の記録から補い、補った行をPR本文に載せる
+- 元の行の削除・ハッシュの変更や、同じモジュール・版・ハッシュの種類で値が食い違う結果は拒否する
+
+#### 付随するモジュールの更新 {#go-collateral-validation}
+
+- `proxy.golang.org`で確かめた対象の目標版を起点に、その`go.mod`の要求からたどれる、必要な追加・版上げだけを認める
+- 対象が目標版を超えて上がった場合も、ほかの要求の経路で説明できなければ`unexplained_dependency_diff`で拒否する
+- 説明できた対象の版が目標版を超える場合は、最新版の`go.mod`の`retract`と照合し、撤回されていれば`go_release_retracted`で手動対応にする
+- 版が上がった・追加されたモジュールの新しい`go.mod`の要求に対し、更新後の`go.mod`に書かれた版がその要求以上であることを確かめる
+- 新しい版に独自の`go.mod`がなく、proxyが合成した`go.mod`しかない場合は手動対応にする
+- 依存の要求を確かめるためにたどる版が上限を超える場合は、`go_dependencies_uncheckable`で手動対応にする
+
+#### スキャンと利用者のビルド {#go-scan-validation}
+
+- 更新前後の`go.mod`を同じTrivy・脆弱性データベース・重大度でスキャンし、古い版の行を依存として数えないよう`go.sum`はスキャンに渡さない
+- 対象のCVEが消え、付随して動いたモジュールを含めて、モジュールと脆弱性の組で新しい所見がないことを確かめる
+- スキャンするのは`go.mod`に書かれた版で、利用者のビルドはGoの既定の`-mod=readonly`であることを前提にする
+- `-mod=readonly`では書かれた版だけを使い、必要なモジュールがない場合や版が低い場合はビルドが止まる
+
+マージ前のCIの実行例とPR本文の記載内容は[GoのPRとCIでの確認](remediation-results.md#go-pull-requests)を参照してください。
+
 ### 部分PRの成立条件 {#partial-pr-selection}
 
 npm・pnpm・uvでは、一部のパッケージが更新目標の下限に届かなくても、残りの更新を採用できる場合があります。
-pipの固定版更新は、この分割の対象にしません。
+pipの固定版更新とGoの更新は、この分割の対象にしません。
 
 npm・pnpm・uvでは、[依存元からの再解決](#dependent-reresolution)の条件を満たす場合、その結果を確認してから通常更新の部分PRを判断します。
 

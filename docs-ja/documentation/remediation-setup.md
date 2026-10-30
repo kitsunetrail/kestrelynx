@@ -301,7 +301,7 @@ KestreLynxはHelmを描画しないため、このキーがイメージの最終
 全コンテナの確認条件は[HelmのvaluesのPR](remediation-logic.md#helm-values-prs)、設定の制約は[ソースの対応付け](configuration.md#remediation-mappings)、編集できる形式は[Helmのvaluesの形式](remediation-reference.md#helm-values-formats)を参照してください。
 ### Kubernetesの言語パッケージ更新 {#kubernetes-language-updates}
 
-npm・pnpm・pip・uvの更新は、利用者が用意した作業用namespaceにKestreLynxが作る使い捨てのPodで実行します。
+npm・pnpm・pip・uv・Goの更新は、利用者が用意した作業用namespaceにKestreLynxが作る使い捨てのPodで実行します。
 npm・pnpm・uvの[依存元からの再解決](remediation-reference.md#dependent-reresolution-limits)にも同じPodを使います。
 
 #### 導入条件
@@ -322,6 +322,7 @@ npm・pnpm・uvの[依存元からの再解決](remediation-reference.md#depende
 - `10-rbac.yaml`のRoleBindingの`subjects`を、KestreLynxが使うServiceAccount名とnamespaceに合わせる
 - `20-priorityclass.yaml`は`preemptionPolicy: Never`を維持し、名前を変える場合は設定と`52-policy-params.yaml`の`priorityClass`もそろえる
 - `52-policy-params.yaml`の`receiverRepository`をKestreLynxイメージのリポジトリ名、`workRepositories`を公式イメージまたは設定したミラーのリポジトリ名、`arch`をKestreLynxのPodと実行ノードのアーキテクチャに合わせる
+- `workRepositories`の既定値はDocker Hubの公式`node`・`python`・`golang`のリポジトリで、ミラーを使う場合は3つとも取得先に合わせる
 - `40-networkpolicy.yaml`のDNSの選択条件と除外するアドレス範囲を、クラスタのDNS・Pod・Service・ノードのネットワークに合わせる
 - ValidatingAdmissionPolicyとそのbindingの`metadata.name`は、確認処理で使う`kestrelynx-work`のままにする
 

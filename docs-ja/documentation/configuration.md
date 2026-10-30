@@ -294,7 +294,7 @@ Kubernetesモードの言語パッケージ更新に使います。
 
 - scheme・タグ・digest・`//`・`..`を含めない
 - パスには小文字英数字と区切りの`.`・`_`・`-`を使う
-- ミラーには指定したホストとパスの下に、公式イメージと同じ内容の`library/node`・`library/python`を配置する
+- ミラーには指定したホストとパスの下に、公式イメージと同じ内容の`library/node`・`library/python`・`library/golang`を配置する
 
 固定と取得不能時の扱いは[公式イメージの固定](remediation-logic.md#worker-images)、系列は[対応する実行環境](remediation-reference.md#supported-runtimes)、通信先は[作業用イメージの取得](outbound-communication.md#worker-image-downloads)を参照してください。
 

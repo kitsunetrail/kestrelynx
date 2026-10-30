@@ -296,7 +296,7 @@ Setting other fields without `namespace`, or supplying invalid names, image refe
 
 - Do not include a scheme, tag, digest, `//`, or `..`
 - Paths use lowercase letters, digits, and the separators `.`, `_`, and `-`
-- The mirror must serve `library/node` and `library/python` with the same contents as the official images under the specified host and path
+- The mirror must serve `library/node`, `library/python`, and `library/golang` with the same contents as the official images under the specified host and path
 
 See [Pinning official images](remediation-logic.md#worker-images) for pinning and handling unavailable images, [Supported runtimes](remediation-reference.md#supported-runtimes) for version series, and [Work image downloads](outbound-communication.md#worker-image-downloads) for network destinations.
 

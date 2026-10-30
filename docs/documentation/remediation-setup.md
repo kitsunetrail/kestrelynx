@@ -301,7 +301,7 @@ This update uses only the read-only scanning RBAC.
 See [Helm values PRs](remediation-logic.md#helm-values-prs) for checks across all containers, [Source mappings](configuration.md#remediation-mappings) for configuration constraints, and [Helm values formats](remediation-reference.md#helm-values-formats) for editable inputs.
 ### Kubernetes language-package updates {#kubernetes-language-updates}
 
-npm, pnpm, pip, and uv updates run in disposable Pods that KestreLynx creates in a user-provided work namespace.
+npm, pnpm, pip, uv, and Go updates run in disposable Pods that KestreLynx creates in a user-provided work namespace.
 The same Pods also run [re-resolution through dependent packages](remediation-reference.md#dependent-reresolution-limits) for npm, pnpm, and uv.
 
 #### Prerequisites
@@ -322,6 +322,7 @@ Adjust the following settings in `deploy/kubernetes/work/` for the installation.
 - Set the RoleBinding's `subjects` in `10-rbac.yaml` to the ServiceAccount name and namespace used by KestreLynx
 - Keep `preemptionPolicy: Never` in `20-priorityclass.yaml`, and match the configuration and `priorityClass` in `52-policy-params.yaml` if renaming it
 - Set `receiverRepository` in `52-policy-params.yaml` to the KestreLynx image repository, `workRepositories` to the official image repositories or configured mirror repositories, and `arch` to the architecture of the KestreLynx Pod and execution nodes
+- The default `workRepositories` are the official `node`, `python`, and `golang` repositories on Docker Hub; when using a mirror, adjust all three to match the download sources
 - Adjust the DNS selectors and excluded address ranges in `40-networkpolicy.yaml` for the cluster's DNS, Pod, Service, and node networks
 - Keep the ValidatingAdmissionPolicy and its binding's `metadata.name` as `kestrelynx-work`, which the verification checks use
 

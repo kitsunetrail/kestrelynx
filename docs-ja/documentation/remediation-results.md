@@ -128,6 +128,27 @@ Kubernetes向けのPR本文には、次の情報を載せます。
 
 下限の求め方は[修正版の下限](remediation-logic.md#fix-lower-bound)、実行する処理の違いは[計画とPRの実行範囲](remediation-logic.md#plan-and-pr-execution)を参照してください。
 
+### GoのPRとCIでの確認 {#go-pull-requests}
+
+GoのPRは`go.mod`と`go.sum`の更新を提案し、本文に次の情報を載せます。
+
+- 公開レジストリのGo module proxy (`proxy.golang.org`)と、`sum.golang.org`によるハッシュの照合
+- 対象の新しい版が要求するために、あわせて上がった・追加されたモジュール
+- `go`・`toolchain`の行の変化と、`go`の行が上がることで言語の機能や`GODEBUG`の既定値が変わりうること
+- KestreLynxが`sum.golang.org`の記録から補った`go.sum`の行
+
+マージ前に、CIで更新後の`go.mod`をそのまま使ってビルドとテストを実行します。
+
+```sh
+go build -mod=readonly ./... && go test -mod=readonly ./...
+```
+
+- この確認の前に`go get`・`go mod tidy`・`-mod=mod`のビルドを実行しない
+- `-mod=readonly`で必要なモジュールが足りない場合や版が低い場合はビルドが止まるため、CIの結果を確認してからマージする
+- KestreLynxの検査は`go.mod`に書かれた版を対象とし、ビルドやアプリケーションの動作を保証するものではない
+
+採用条件は[Goの更新結果の検査](remediation-logic.md#go-update-validation)を参照してください。
+
 ### 部分PR {#partial-pull-requests}
 
 npm・pnpm・uvでは、計画したパッケージのうち、検査を通った更新だけがPRに含まれる場合があります。
@@ -142,7 +163,7 @@ npm・pnpm・uvでは、計画したパッケージのうち、検査を通っ�
 「除外」は、パッケージをイメージから削除したという意味ではありません。
 また、項目全体がPR候補でも、すべてのパッケージが更新されたとは限りません。
 
-pipの固定版更新は部分PRに分けません。
+pipの固定版更新とGoの更新は部分PRに分けません。
 成立条件は[部分PRの成立条件](remediation-logic.md#partial-pr-selection)、確認操作は[更新を実行できない場合の確認](remediation-troubleshooting.md#check-update-failure)を参照してください。
 
 ### 依存元からの再解決の結果 {#dependent-reresolution-results}
@@ -198,13 +219,14 @@ npm・pnpm・uvでの処理の流れは[依存元からの再解決](remediation
 | 表示の内容 | 読み方 |
 | --- | --- |
 | `再ビルドで … 以上が入る見込み` | pipの依存範囲が修正版を許すため、再ビルドによる解消を見込んでいる |
+| Goの標準ライブラリを新しいGoでビルドし直す案内 | `stdlib`の所見はPRを作らず、修正計画の別項目で、全CVEを直せるGoの版以上での再ビルドを案内 |
 | `稼働中のイメージの作成元のベースを確認できない` | 浮動タグのベースを確認できず、現在のベースを再取得してビルドする案内 |
 | `docker compose build --pull`の案内 | Composeの`build`からDockerfileを見つけた場合の、ベースを再取得して再ビルドする案内 |
 | ベースを取り直して再ビルドし(`docker build --pull` など)、デプロイし直す | 設定の対応付けだけでDockerfileを見つけた場合の案内で、CIなどでビルドしたイメージにも適用する |
 | `現在の … の Node.js は …。この版を引き継げば、検出中の Node.js … の … 件のうち … 件は出なくなる見込み(再ビルド後のイメージは未確認)` | 現在のベースの版を引き継いだ場合に、検出中のCVEのうち出なくなる見込みの件数で、新しい版で増えるCVEは含めず、Pythonでは`Python runtime`と表示する |
 
 いずれも、再ビルド後に実際に入る版や、配置後の稼働イメージでの解消を確認した結果ではありません。
-判定の詳細は[直接依存の版指定](remediation-logic.md#direct-dependencies)と[ベースレイヤーの照合](remediation-logic.md#base-layer-matching)を参照してください。
+判定の詳細は[直接依存の版指定](remediation-logic.md#direct-dependencies)、[ベースレイヤーの照合](remediation-logic.md#base-layer-matching)、[Goの標準ライブラリの再ビルド案内](remediation-logic.md#go-stdlib-rebuild)を参照してください。
 
 ### 比較結果の解消 {#verification-results}
 

@@ -157,5 +157,8 @@ extra:
     - icon: fontawesome/brands/x-twitter
       link: https://x.com/kitsunetraildev
       name: KitsuneTrail on X
+    - icon: octicons/heart-fill-16
+      link: https://github.com/sponsors/kitsunetrail
+      name: Sponsor KestreLynx on GitHub
 
 copyright: Copyright &copy; 2026 Kitsune Trail

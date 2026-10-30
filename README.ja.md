@@ -4,6 +4,7 @@
 
 [![CI](https://github.com/kitsunetrail/kestrelynx/actions/workflows/ci.yml/badge.svg)](https://github.com/kitsunetrail/kestrelynx/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub_Sponsors-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/kitsunetrail)
 
 [ドキュメント](https://kestrelynx.dev/ja/) ·
 [セットアップ手順](docs-ja/documentation/getting-started.md) ·

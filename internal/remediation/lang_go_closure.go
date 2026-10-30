@@ -201,6 +201,37 @@ func explainGoMoves(g *goModGraph, ch *goModChange, targets map[string]string) (
 	return "", nil
 }
 
+// goRaisedTargets returns, for each target that another target's go.mod (at
+// the version asked for) requires at a higher version than asked for, the
+// highest version so required. go get, told the exact version of every
+// target, fails on such a requirement ("requires X, not Y"); left out of the
+// command, the target is raised to it by the requirement, as the go command
+// selects versions. The go.mod requirements of the targets are part of every
+// module graph the go command builds from the updated go.mod, pruned or not.
+func goRaisedTargets(g *goModGraph, targets map[string]string) (map[string]string, error) {
+	raised := map[string]string{}
+	for _, p := range goSortedKeys(targets) {
+		reqs, err := g.requires(p, targets[p])
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range reqs {
+			want, isTarget := targets[r.path]
+			if !isTarget || r.path == p {
+				continue
+			}
+			hi := want
+			if v, ok := raised[r.path]; ok {
+				hi = v
+			}
+			if c, ok := compareVersions(schemeGo, r.version, hi); ok && c > 0 {
+				raised[r.path] = r.version
+			}
+		}
+	}
+	return raised, nil
+}
+
 // goLineNeeded is the highest go line of the go.mod files of the versions an
 // update moved to: what go get raises the module's go line to.
 func goLineNeeded(g *goModGraph, moved map[string]string) (goRelease, error) {

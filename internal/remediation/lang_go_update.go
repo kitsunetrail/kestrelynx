@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -162,6 +163,32 @@ func (r *updateRun) runGo(ctx context.Context) *updateFailure {
 		pkgs = append(pkgs, worker.Package{Name: n, Version: canonical})
 		r.goTargets[n] = canonical
 	}
+	// A target another target requires at a higher version is left to that
+	// requirement; its version is checked after the update like any move
+	// (explainGoMoves, goRetraction).
+	raised, err := goRaisedTargets(graph, r.goTargets)
+	if err != nil {
+		return goFailure(ctx, err, ReasonDistributionMismatch)
+	}
+	if len(raised) > 0 {
+		kept := pkgs[:0]
+		for _, p := range pkgs {
+			v, up := raised[p.Name]
+			if !up {
+				kept = append(kept, p)
+				continue
+			}
+			e, err := graph.entry(p.Name, v)
+			if err != nil {
+				return goFailure(ctx, err, ReasonDistributionMismatch)
+			}
+			if gl, ok := parseGoRelease(e.goLine); ok && gl.compare(need) > 0 {
+				need = gl
+			}
+			r.upd.Notes = append(r.upd.Notes, fmt.Sprintf("%s was not named in go get: %s requires it at %s, above the target %s", p.Name, raisedBy(graph, r.goTargets, p.Name, v), v, p.Version))
+		}
+		pkgs = kept
+	}
 	spec, ok := goRuntimeFor(need, r.u.now())
 	if !ok {
 		return manualFailure(ReasonGoRuntimeUnavailable, "the update needs Go %s or later, and no supported Go of the runtime table is", need)
@@ -262,6 +289,19 @@ func goRetraction(retracts []string, version string) string {
 		}
 	}
 	return ""
+}
+
+// raisedBy names the target whose go.mod requires path at version.
+func raisedBy(g *goModGraph, targets map[string]string, path, version string) string {
+	for _, p := range goSortedKeys(targets) {
+		reqs, _ := g.requires(p, targets[p])
+		for _, r := range reqs {
+			if r.path == path && r.version == version {
+				return p + "@" + targets[p]
+			}
+		}
+	}
+	return "another target"
 }
 
 // goRuntimeFor is the lowest supported Go of the runtime table that is at

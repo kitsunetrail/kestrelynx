@@ -870,3 +870,48 @@ func TestGoUpdateSharesTheGoModCacheBetweenItems(t *testing.T) {
 		}
 	}
 }
+
+// Two targets, one of which requires the other above the version asked for:
+// go get names only the first, and the second is raised by its requirement,
+// which explains the move; the raised version is checked for retraction.
+func TestGoUpdateTargetRaisedByAnotherTarget(t *testing.T) {
+	setup := func(t *testing.T) *goFlow {
+		f := newGoFlow(t, ".")
+		f.reg.mod(pText, "v0.14.5", goModText(pText, "1.18"))
+		f.reg.latest[pText] = "v0.16.0"
+		f.vulns[pText+"@v0.14.0"] = []string{"CVE-TEXT"}
+		origin := FindingOrigin{Entity: "img", Workload: "compose/p/web", Target: "usr/local/bin/app"}
+		f.setItem(
+			group(typeGoBinary, pNet, "v0.20.0", origin, CVERef{VulnID: goCVENet, FixedVers: []string{"0.23.0"}}),
+			group(typeGoBinary, pText, "v0.14.0", origin, CVERef{VulnID: "CVE-TEXT", FixedVers: []string{"0.14.5"}}),
+		)
+		f.build()
+		return f
+	}
+	t.Run("adopted at the required version", func(t *testing.T) {
+		f := setup(t)
+		it, _ := f.run()
+		wantCategory(t, it, CategoryPRCandidate, ReasonUpdateVerified)
+		job := f.work.jobs[0]
+		if len(job.Steps) != 1 || len(job.Steps[0].Packages) != 1 || job.Steps[0].Packages[0].Name != pNet {
+			t.Errorf("go get names %+v; only x/net", job.Steps[0].Packages)
+		}
+		for _, p := range it.Packages {
+			if p.Name == pText && p.AdoptedVersion != "v0.15.0" {
+				t.Errorf("x/text adopted %q", p.AdoptedVersion)
+			}
+		}
+		found := false
+		for _, n := range it.Update.Notes {
+			found = found || strings.Contains(n, pText+" was not named in go get")
+		}
+		if !found {
+			t.Errorf("notes = %v", it.Update.Notes)
+		}
+	})
+	t.Run("the raised version is retracted", func(t *testing.T) {
+		f := setup(t)
+		f.reg.mod(pText, "v0.16.0", goModText(pText, "1.18")+"\nretract v0.15.0\n")
+		f.refused(CategoryManual, ReasonGoRetracted)
+	})
+}

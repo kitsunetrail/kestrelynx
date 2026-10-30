@@ -68,6 +68,7 @@ nav:
       - Runtime usage (experimental): documentation/runtime-usage.md
   - Development:
       - Overview: development/index.md
+      - Go modules remediation pull request development: development/go-modules-remediation.md
       - Newer series check development: development/newer-series-check.md
       - docker run remediation pull request development: development/docker-run-remediation.md
       - Development of remediation plans for language runtimes: development/language-runtime-remediation.md

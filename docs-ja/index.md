@@ -9,14 +9,13 @@ hide:
 <div class="kl-hero" markdown>
 <div class="kl-hero__text" markdown>
 
-Docker · Kubernetes · Trivy · CISA KEV · EPSS
+Docker · Compose · Kubernetes · GitHub pull requests
 { .kl-eyebrow }
 
-# コンテナイメージの脆弱性スキャン・通知・修正
+# 修正計画から修正PR、デプロイ後の解消確認まで
 
-KestreLynxは、Docker・Kubernetesで稼働中のコンテナが使うイメージを[Trivy](https://trivy.dev/)で定期的にスキャンするOSSです。前回からの変化と、深刻度・[CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)・[EPSS](https://www.first.org/epss/)に基づく優先度をSlack、メール、またはWebhookへ通知します。
-
-Docker・Compose・Kubernetes向けの[修正計画と修正PR（実験的）](documentation/remediation.md)を備え、同じ条件での再スキャン結果の比較とGitHubへのPR作成を通じて修正を支援します（既定で無効）。
+KestreLynxは、更新候補を同じ条件で再スキャンして比べ、利用中のComposeファイル・Kubernetesマニフェスト・Kustomizeの設定ファイル・Helmのvaluesファイル・Dockerfile・依存ファイルを更新する修正PRをGitHubに作るOSSです。利用者がマージ・デプロイした後、次のスキャンで履歴を引き継いで所見の解消を確かめます。
+稼働イメージの[Trivy](https://trivy.dev/)によるスキャン、[CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)・[EPSS](https://www.first.org/epss/)に基づく優先度、Slack・メール・Webhookへの通知が、修正の入口と結果を確かめる手段になります。
 
 [セットアップ](documentation/getting-started.md){ .md-button .md-button--primary }
 [GitHub](https://github.com/kitsunetrail/kestrelynx){ .md-button }
@@ -26,6 +25,158 @@ Docker・Compose・Kubernetes向けの[修正計画と修正PR（実験的）](d
 { .kl-license }
 
 </div>
+<figure class="kl-notification">
+<div class="kl-slack">
+<div class="kl-slack__channel"># security-alerts</div>
+<div class="kl-slack__message">
+<div class="kl-slack__avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/></svg></div>
+<div class="kl-slack__body">
+<p class="kl-slack__meta"><strong>KestreLynx</strong> <span class="kl-slack__badge">アプリ</span> <span class="kl-slack__time">9:00</span></p>
+<p>🔧 <strong>修正計画</strong><br><strong>Pull Request:</strong> 作成 3件</p>
+<hr>
+<p><strong>イメージ: nginx:1.27.0</strong><br><strong>修正するファイル:</strong> kitsunetrail/kestrelynx-demo の compose.yml<br><strong>Pull Request:</strong> <span class="kl-slack__link">#1</span> (今回作成)<br><strong>更新:</strong> nginx 1.27.0 → 1.27.5</p>
+<hr>
+<p><strong>イメージ: kestrelynx-demo-api</strong><br><strong>修正するファイル:</strong> kitsunetrail/kestrelynx-demo の api/requirements.txt<br><strong>Pull Request:</strong> <span class="kl-slack__link">#2</span> (今回作成)<br><strong>更新:</strong> Werkzeug 3.0.1 → 3.0.3、urllib3 2.2.2 → 2.8.0<br><strong>修正するファイル:</strong> kitsunetrail/kestrelynx-demo の api/Dockerfile<br><strong>更新候補:</strong> ベースイメージ python 3.12.3-slim → 3.12.15-slim<br><strong>要判断:</strong> 候補で新たな所見が入る</p>
+<hr>
+<p><strong>イメージ: kestrelynx-demo-web</strong><br><strong>修正するファイル:</strong> kitsunetrail/kestrelynx-demo の web/package-lock.json<br><strong>Pull Request:</strong> <span class="kl-slack__link">#3</span> (今回作成)<br><strong>更新:</strong> body-parser 1.20.1 → 1.20.8（express 4.18.2 → 4.22.3 も更新）、path-to-regexp 0.1.7 → 0.1.13（express 4.18.2 → 4.22.3 も更新）</p>
+<hr>
+<p><em>詳細は汎用Webhookのペイロードに記載</em></p>
+</div>
+</div>
+</div>
+<figcaption>デモ用リポジトリで実際に出た修正計画を、<code>notify.language: ja</code>の表記で示したものです。</figcaption>
+</figure>
+</div>
+
+<div class="kl-callouts" markdown>
+
+- **作成されたPR** 「Pull Request」の#1・#2・#3と「修正するファイル」で、変更先を確認
+- **PRにしなかったベースイメージの更新** python 3.12.15-slimは新たな所見が入るためPRを作らず「要判断」と表示し、更新するか別のタグを待つかを利用者が決定
+- **親パッケージも含む更新** body-parserとpath-to-regexpの更新に伴い、依存元のexpressも4.18.2から4.22.3へ更新
+
+</div>
+
+<div class="kl-section kl-features" markdown>
+<div markdown>
+
+:material-magnify-scan:
+
+## 更新候補の比較
+
+更新前後を同じ条件で再スキャンし、解消する所見・残る所見・新たに入る所見を比べます。
+
+- 配布イメージは現在と更新先のイメージを比較
+- Dockerfileは現在と更新先のベースイメージを比較
+- 言語パッケージは更新前後の依存ファイルを比較
+
+</div>
+<div markdown>
+
+:material-source-pull:
+
+## イメージタグと依存ファイルの更新PR
+
+対応付けたGitHubリポジトリで、すでに使っているファイルの次の部分を更新するPRを作ります。版指定を新しい設定ファイルや別の管理方法へ移す必要はありません。
+
+- Composeファイルの配布イメージのタグ
+- Kubernetesのプレーンなマニフェストのイメージタグ
+- Kustomizeの`images[].newTag`
+- Helmのvaluesのイメージタグ
+- Dockerfileのベースイメージのタグ
+- npm・pnpm・pip・uv・Goの依存ファイル
+
+</div>
+<div markdown>
+
+:material-history:
+
+## マージ・デプロイ後の解消確認
+
+利用者がPRをマージして新しいイメージをデプロイした後、次のスキャンで履歴を引き継ぎ、所見の解消を確かめます。
+
+- 更新前からの履歴を使い、稼働イメージで検出されなくなった所見を確認
+- 通知で前回からの解消と現在の未解決を確認
+
+</div>
+</div>
+
+<div class="kl-section" markdown>
+
+## デモ用リポジトリでの修正の実例（実験的）
+
+以下は古いイメージと依存を意図的に固定した[デモ用リポジトリ](https://github.com/kitsunetrail/kestrelynx-demo)での実際の出力（英語UI）で、[作成されたPR](https://github.com/kitsunetrail/kestrelynx-demo/pulls)も公開しています。
+
+Slackの修正計画には作成された3件のPRと、新たな所見が入るため「Needs a decision」となったDockerfileのベースイメージの更新候補が表示されています。
+
+![Compose・pip・npmの更新PRと、判断が必要なDockerfileのベースイメージの更新候補を示すSlackの修正計画](assets/screenshots/slack-fix-plan.png)
+
+[PR #1](https://github.com/kitsunetrail/kestrelynx-demo/pull/1)はnginx 1.27.0から1.27.5への更新を提案し、候補のスキャン比較結果として、更新対象の所見のうち17件が解消、86件が残ることを記載しています。
+
+![What・Change・Verificationを記載したGitHubのPR本文で、対象外の所見は94件残り、新たな所見は0件](assets/screenshots/pr-compose-body.png)
+
+PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ替えた後、次のスキャンでは履歴を引き継ぎ、4パッケージの所見の解消が通知されています。
+
+![nginxのイメージ更新と、libabsl20220623・libavif15・libfreetype6・liblzma5の所見の解消を示すSlackのスキャン通知](assets/screenshots/slack-resolved.png)
+
+候補やPRがあることは、稼働イメージが修正済みであることを意味しません。
+比較した範囲を確認し、マージ前にCIを実行してください。再ビルドとデプロイは別途必要です。
+
+言語パッケージとソースホストの対応範囲は次のとおりです。
+
+- 言語パッケージの取得元は公開npm・公開PyPI・公開Go module proxyのみ
+- 非公開の言語パッケージのレジストリは対象外
+- ソースホストはGitHubのみ
+
+設定、通知、権限は[修正計画と修正PR（実験的）](documentation/remediation.md)に記載しています。
+
+</div>
+
+<div class="kl-section" markdown>
+
+## スキャンと通知
+
+定期スキャンと通知は、修正に取りかかる入口と、デプロイ後の結果を確かめる手段です。
+
+<div class="kl-features" markdown>
+<div markdown>
+
+:material-history:
+
+## 前回からの変化
+
+差分通知で、前回のスキャンから変わった所見を確認できます。
+
+- 新規検出・CVE追加・修正版の提供開始・優先度の上昇・監視範囲から消えた検出を通知
+- 未解消の検出があれば、変化のない日も短い通知を送信
+- 既定では月曜の通知に全件レポートを追加
+
+</div>
+<div markdown>
+
+:material-sort-variant:
+
+## KEVとEPSSによる優先度
+
+深刻度にCISA KEVとEPSSを組み合わせ、確認する順番の判断材料を示します。
+
+- 「今すぐ対応」「要監視」「低優先度」に分類
+- その環境で悪用できるかを確定するものではない
+
+</div>
+<div markdown>
+
+:material-magnify-scan:
+
+## Trivyの結果とランタイム本体の照合
+
+Trivyでスキャンし、既定では修正版のないものも含めてHIGH・CRITICALの脆弱性を報告します。
+
+- パッケージごとに、修正版があればそのバージョンと更新リスクの目安を表示し、互換性は保証しない
+- Trivyが報告しない公式`node`・`python`イメージのランタイム本体を、各プロジェクトのセキュリティ情報と照合して検出結果に追加
+
+</div>
+</div>
+
 <figure class="kl-notification">
 <div class="kl-slack">
 <div class="kl-slack__channel"># security-alerts</div>
@@ -45,81 +196,6 @@ Docker・Compose・Kubernetes向けの[修正計画と修正PR（実験的）](d
 </div>
 <figcaption>既定の<code>diff</code>モード、<code>notify.language: ja</code>での通知のサンプルです。値は説明用で、実環境のスキャン結果ではありません。</figcaption>
 </figure>
-</div>
-
-<div class="kl-callouts" markdown>
-
-- **新規検出** 「前回のスキャンからの新規検出」でイメージとパッケージを確認
-- **修正版の有無** 「現在」と「修正版」で使用中のバージョンと修正版を確認
-- **優先度** 「現在の未解決」で優先度別の件数、KEVとEPSSで判断材料を確認
-
-</div>
-
-<div class="kl-section kl-features" markdown>
-<div markdown>
-
-:material-history:
-
-## 前回からの変化を追う
-
-差分通知で、新規検出、CVEの追加、修正版の提供開始、優先度の上昇、監視範囲から消えた検出を確認できます。未解消の検出があれば変化のない日も短い通知が届き、既定では月曜の通知に全件レポートが加わります。
-
-</div>
-<div markdown>
-
-:material-sort-variant:
-
-## KEVとEPSSを確認の優先順位に
-
-深刻度にCISA KEVとEPSSの情報を組み合わせ、「今すぐ対応」「要監視」「低優先度」に分類します。確認する順番の判断材料であり、その環境で悪用できるかを確定するものではありません。
-
-</div>
-<div markdown>
-
-:material-magnify-scan:
-
-## Trivyの結果に修正版と更新の注記を添える
-
-Trivyでスキャンし、既定では修正版のないものも含めてHIGH・CRITICALの脆弱性を報告します。パッケージごとに修正版があればそのバージョンと更新リスクの目安を示しますが、互換性は保証しません。
-
-</div>
-</div>
-
-<div class="kl-section" markdown>
-
-## 修正計画と修正PR（実験的）
-
-Kubernetesの修正計画は、配布イメージの更新候補、浮動タグの再取得の案内、言語パッケージの更新候補を提示します。
-KubernetesのPRは、プレーンなマニフェストのイメージタグ、[Kustomizeの`images[].newTag`](documentation/remediation-setup.md#kustomize-pull-requests)、[Helmのvaluesのイメージタグ](documentation/remediation-setup.md#helm-values-pull-requests)、Dockerfileのベースイメージに加え、[作業用Podを設定](documentation/remediation-setup.md#kubernetes-language-updates)するとnpm・pnpm・pip・uvの更新にも対応します。
-npm・pnpm・uvでは、対応する条件の下で依存元からの再解決も行います。
-Docker・Compose向けに、次の3種類のソースの変更を提案できます。
-
-- Composeファイルの配布イメージのタグ
-- Dockerfileのベースイメージのタグ
-- npm・pnpm・pip・uvで管理する言語パッケージの依存
-
-修正計画と修正PRは、どちらも既定で無効です。計画は候補の選定、スキャン結果の比較、
-通知を行い、GitHubへの書き込みや作業用コンテナの起動は行いません。
-PRを別途有効にすると、GitHubへの変更と、言語パッケージ更新用のDockerの作業用コンテナ、または利用者が設定したKubernetesの作業用Podを使います。
-
-以下は古いイメージと依存を意図的に固定した[デモ用リポジトリ](https://github.com/kitsunetrail/kestrelynx-demo)での実際の出力（英語UI）で、[作成されたPR](https://github.com/kitsunetrail/kestrelynx-demo/pulls)も公開しています。
-
-Slackの修正計画には作成された3件のPRと、新たな所見が入るため「Needs a decision」となったDockerfileのベース更新候補が表示されています。
-
-![Compose・pip・npmの更新PRと、判断が必要なDockerfileのベース更新候補を示すSlackの修正計画](assets/screenshots/slack-fix-plan.png)
-
-[PR #1](https://github.com/kitsunetrail/kestrelynx-demo/pull/1)はnginx 1.27.0から1.27.5への更新を提案し、候補のスキャン比較結果として、更新対象の所見のうち17件が解消、86件が残ることを記載しています。
-
-![What・Change・Verificationを記載したGitHubのPR本文で、対象外の所見は94件残り、新たな所見は0件](assets/screenshots/pr-compose-body.png)
-
-PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ替えた後、次のスキャンでは履歴を引き継ぎ、4パッケージの所見の解消が通知されています。
-
-![nginxのイメージ更新と、libabsl20220623・libavif15・libfreetype6・liblzma5の所見の解消を示すSlackのスキャン通知](assets/screenshots/slack-resolved.png)
-
-候補やPRがあることは、稼働イメージが修正済みであることを意味しません。
-比較した範囲を確認し、マージ前にCIを実行してください。再ビルドとデプロイは別途必要です。
-
-設定、通知、権限は[修正計画と修正PR（実験的）](documentation/remediation.md)に記載しています。
 
 </div>
 
@@ -127,7 +203,7 @@ PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ�
 
 ## 用途・対応範囲・必要な権限
 
-セルフホストしているサービスについて、稼働中のコンテナが使うイメージの脆弱性を継続して確認する用途に向いています。
+稼働中のコンテナが使うイメージの脆弱性を継続して確認し、修正PRを作成して、利用者によるマージ・デプロイ後に所見の解消を確かめる用途に向いています。
 
 稼働中のnginxを例にした更新PRの作成と更新前後の脆弱性の確認は[他のツールとの比較](documentation/comparison.md)を参照してください。
 
@@ -169,13 +245,9 @@ Docker Composeでの手順です。Docker Composeが使えるDockerホストと�
     ${EDITOR:-vi} config.yml
     ```
 
-3. タイムゾーンを確認して起動する
-
-    スキャン時刻は`docker-compose.yml`の`TZ`に従うため、既定の`UTC`を確認し、日本時間なら`Asia/Tokyo`に変更する
-    { .kl-step-note }
+3. 起動する
 
     ```sh
-    ${EDITOR:-vi} docker-compose.yml
     docker compose up -d
     ```
 
@@ -188,8 +260,13 @@ Docker Composeでの手順です。Docker Composeが使えるDockerホストと�
     docker compose logs -f
     ```
 
-:material-information-outline: 差分通知や初回検出日の履歴を保つため、コンテナを作り直すときも`kestrelynx-state`ボリュームは削除しない
-{ .kl-note }
+5. 修正計画を有効にする
+
+    修正計画と修正PRは、どちらも既定で無効
+    { .kl-step-note }
+
+    - [有効化の手順](documentation/remediation-setup.md)に沿って、まずGitHubへの書き込みを行わない[修正計画を有効にする](documentation/remediation-setup.md#enable-fix-plans)
+    - 計画を確認してから、[修正PRを別途有効にする](documentation/remediation-setup.md#enable-pull-requests)
 
 :material-information-outline: 動作報告は[Discussions](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx)で受け付けています。
 { .kl-note }
@@ -205,19 +282,20 @@ Docker Composeでの手順です。Docker Composeが使えるDockerホストと�
 
 ### ドキュメント
 
+- [他のツールとの比較](documentation/comparison.md)
 - [セットアップ](documentation/getting-started.md)
 - [設定](documentation/configuration.md)
+- [仕組み](documentation/how-it-works.md)
 - [修正計画と修正PR（実験的）](documentation/remediation.md)
 - [稼働時の使用状況（実験的）](documentation/runtime-usage.md)
-- [仕組み](documentation/how-it-works.md)
 
 </div>
 <div markdown>
 
 ### 開発ログ
 
-- [Kubernetes対応の開発](development/kubernetes-support.md)
-- [eBPFによる実行時証拠の観測調査](development/runtime-event-evidence.md)
+- [Go modules の修正 PR の開発](development/go-modules-remediation.md)
+- [Kubernetes での修正 PR の開発](development/kubernetes-remediation.md)
 - [開発ログの一覧 →](development/index.md){ .kl-more }
 
 </div>

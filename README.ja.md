@@ -11,13 +11,28 @@
 [設定リファレンス](docs-ja/documentation/configuration.md) ·
 [動作報告](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx)
 
-> 稼働中のDocker・KubernetesコンテナのイメージをTrivyで定期的にスキャンし、**前回からの変化と、深刻度・CISA KEV・EPSSに基づく優先度**をSlack・メール・Webhookへ通知するOSSです。Docker・Compose・Kubernetes向けの**修正計画と修正PR（実験的）**で、更新候補の比較からGitHubへのPR作成まで修正を支援します（既定で無効）。
+> KestreLynxは、更新候補を同じ条件で再スキャンして比べ、利用中のComposeファイル・Kubernetesマニフェスト・Kustomizeの設定ファイル・Helmのvaluesファイル・Dockerfile・依存ファイルを更新する修正PRをGitHubに作るOSSです。利用者がマージ・デプロイした後、次のスキャンで履歴を引き継いで所見の解消を確かめます。
+> 稼働イメージのTrivyによるスキャン、深刻度・CISA KEV・EPSSに基づく優先度、Slack・メール・Webhookへの通知が、修正の入口と結果を確かめる手段になります。
 
 [他のツールとの比較](docs-ja/documentation/comparison.md)では、稼働中のnginxコンテナを例に、更新PRの作成・イメージへのパッチ適用と、更新前後の脆弱性の確認を比較します。
 
 ## 主な機能
 
-- **イメージスキャン**：[Trivy](https://github.com/aquasecurity/trivy)のイメージスキャンで識別できるOSパッケージと言語パッケージのHIGH／CRITICALの検出（既定、言語パッケージの更新PRはnpm／pnpm／pip／uvのみ）
+### 修正
+
+- **更新候補の比較**：更新前後を同じ条件で再スキャンし、解消する所見・残る所見・新たに入る所見を比較
+- **イメージタグと依存ファイルの更新PR**：対応付けたGitHubリポジトリで次のイメージタグ・依存ファイルを更新し、版指定を新しい設定ファイルや別の管理方法へ移さずに修正PRを作成
+    - Composeファイルの配布イメージのタグ
+    - Kubernetesのプレーンなマニフェストのイメージタグ、Kustomizeの`images[].newTag`、Helmのvaluesのイメージタグ
+    - Dockerfileのベースイメージのタグ
+    - npm・pnpm・pip・uv・Goの依存ファイル
+- **依存元からの再解決**：npm・pnpm・uvでは、対応する条件の下で依存元のパッケージも更新して依存関係を再解決
+- **マージ・デプロイ後の解消確認**：次のスキャンで更新前からの履歴を引き継ぎ、稼働イメージで検出されなくなった所見と現在の未解決を通知
+
+### スキャンと通知
+
+- **イメージスキャン**：[Trivy](https://github.com/aquasecurity/trivy)のイメージスキャンで識別できるOSパッケージと言語パッケージのHIGH／CRITICALの検出（既定）
+- **Node.js・Python本体の照合**：Trivyが報告しない公式`node`・`python`イメージのランタイム本体を、各プロジェクトのセキュリティ情報と照合して検出結果に追加
 - **重複スキャンの抑制**：同一と確認できたイメージの結果共有
 - **優先順位付け**：深刻度・CISA KEV・EPSSに基づく今すぐ対応／要監視／低優先度の分類
 - **稼働時の使用状況（実験的）**：Docker向けの任意のSensorで使用中のパッケージの所見に印を付け、優先度を変えずに同じ区分内で先に表示（[稼働時の使用状況](docs-ja/documentation/runtime-usage.md)）
@@ -28,7 +43,55 @@
 - **環境の識別**：Slack見出しへの任意の環境名の表示
 - **対象コンテナの識別**：汎用Webhookへのコンテナ名・Composeプロジェクト／サービス・Kubernetes Workload情報の付加
 - **稼働イメージの検証**：digestなどによるスキャン対象の固定と実体の一致確認
-- **修正計画と修正PR（実験的）**：Docker・Kubernetes向けの配布イメージ・Dockerfileのベース・npm／pnpm／pip／uv依存の更新候補と、任意のGitHubのPR作成
+
+## 修正計画と修正PR（実験的）
+
+- 更新前後のスキャン結果を同じ条件で比較する
+    - 配布イメージとDockerfileのベースイメージは、現在と更新先のイメージを再スキャン
+    - 言語パッケージは更新前後の依存ファイルを再スキャン
+    - 解消する所見・残る所見・新たに入る所見を比較
+- すでに使っているファイルの次の部分を更新する修正PRをGitHubに作る
+    - Composeファイルの配布イメージのタグ
+    - Kubernetesのプレーンなマニフェストのイメージタグ、[Kustomizeの`images[].newTag`](docs-ja/documentation/remediation-setup.md#kustomize-pull-requests)、[Helmのvaluesのイメージタグ](docs-ja/documentation/remediation-setup.md#helm-values-pull-requests)
+    - Dockerfileのベースイメージのタグ
+    - npm・pnpm・pip・uv・Goの依存ファイル
+    - npm・pnpm・uvでは、対応する条件の下で依存元のパッケージも更新して再解決
+    - Kubernetesで言語パッケージを更新するには、[作業用Podの設定](docs-ja/documentation/remediation-setup.md#kubernetes-language-updates)が必要
+- マージ・デプロイ後の次のスキャンで解消を確かめる
+    - 利用者が変更内容を確認し、マージ前のCI、マージ、再ビルド、デプロイを実施
+    - KestreLynxが更新前からの履歴を引き継ぎ、所見の解消を通知
+
+候補やPRがあることは、稼働イメージが修正済みであることを意味しません。
+比較した範囲を確認し、マージ前のCI、再ビルド、デプロイは別途行ってください。
+
+- 言語パッケージの取得元は公開npm・公開PyPI・公開Go module proxyのみ
+- 非公開の言語パッケージのレジストリは対象外
+- ソースホストはGitHubのみ
+
+以下は古いイメージと依存を意図的に固定した[デモ用リポジトリ](https://github.com/kitsunetrail/kestrelynx-demo)での実際の出力（英語UI）で、[作成されたPR](https://github.com/kitsunetrail/kestrelynx-demo/pulls)も公開しています。
+
+Slackの修正計画には作成された3件のPRと、新たな所見が入るため「Needs a decision」となったDockerfileのベースイメージの更新候補が表示されています。
+
+![Compose・pip・npmの更新PRと、判断が必要なDockerfileのベースイメージの更新候補を示すSlackの修正計画](docs/assets/screenshots/slack-fix-plan.png)
+
+[PR #1](https://github.com/kitsunetrail/kestrelynx-demo/pull/1)はnginx 1.27.0から1.27.5への更新を提案し、候補のスキャン比較結果として、更新対象の所見のうち17件が解消、86件が残ることを記載しています。
+
+![What・Change・Verificationを記載したGitHubのPR本文で、対象外の所見は94件残り、新たな所見は0件](docs/assets/screenshots/pr-compose-body.png)
+
+PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ替えた後、次のスキャンでは履歴を引き継ぎ、4パッケージの所見の解消が通知されています。
+
+![nginxのイメージ更新と、libabsl20220623・libavif15・libfreetype6・liblzma5の所見の解消を示すSlackのスキャン通知](docs/assets/screenshots/slack-resolved.png)
+
+| 知りたいこと | 詳細ページ |
+| --- | --- |
+| 目的に合うページを探す | [修正計画の案内](docs-ja/documentation/remediation.md) |
+| 修正計画と修正PRを有効にする | [有効化の手順](docs-ja/documentation/remediation-setup.md) |
+| 候補やPRが出ない原因を切り分ける | [候補やPRが出ない場合](docs-ja/documentation/remediation-troubleshooting.md) |
+| SlackやPRの内容を読む | [結果の読み方](docs-ja/documentation/remediation-results.md) |
+| 候補の選定とPRの処理を確認する | [候補選定とPR処理の仕組み](docs-ja/documentation/remediation-logic.md) |
+| 対応する入力と理由コードを調べる | [対応形式と理由コード](docs-ja/documentation/remediation-reference.md) |
+| 設定値と必要な権限を調べる | [設定リファレンス](docs-ja/documentation/configuration.md) |
+| 通知条件、Webhook仕様、外向きの通信を確認する | [KestreLynxの仕組み](docs-ja/documentation/how-it-works.md) |
 
 ## 対応環境
 
@@ -104,38 +167,6 @@
 - **併用可能**：Slack Incoming WebhookまたはSlack Botと、汎用Webhookおよび／またはメール
 - **併用不可**：Slack Incoming WebhookとSlack Bot
 
-## 修正計画と修正PR（実験的）
-
-- Docker・Compose・Kubernetes向けに、イメージと依存パッケージの更新を提案する
-- KubernetesのPRは、プレーンなマニフェストのイメージタグ、[Kustomizeの`images[].newTag`](docs-ja/documentation/remediation-setup.md#kustomize-pull-requests)、[Helmのvaluesのイメージタグ](docs-ja/documentation/remediation-setup.md#helm-values-pull-requests)、Dockerfileのベースイメージに加え、[作業用Podを設定](docs-ja/documentation/remediation-setup.md#kubernetes-language-updates)するとnpm・pnpm・pip・uvの更新にも対応する
-- 修正計画と任意のGitHub PR作成は、どちらも既定で無効
-- 利用者が変更を確認し、マージ、配置、配置後の確認を行う
-
-以下は古いイメージと依存を意図的に固定した[デモ用リポジトリ](https://github.com/kitsunetrail/kestrelynx-demo)での実際の出力（英語UI）で、[作成されたPR](https://github.com/kitsunetrail/kestrelynx-demo/pulls)も公開しています。
-
-Slackの修正計画には作成された3件のPRと、新たな所見が入るため「Needs a decision」となったDockerfileのベース更新候補が表示されています。
-
-![Compose・pip・npmの更新PRと、判断が必要なDockerfileのベース更新候補を示すSlackの修正計画](docs/assets/screenshots/slack-fix-plan.png)
-
-[PR #1](https://github.com/kitsunetrail/kestrelynx-demo/pull/1)はnginx 1.27.0から1.27.5への更新を提案し、候補のスキャン比較結果として、更新対象の所見のうち17件が解消、86件が残ることを記載しています。
-
-![What・Change・Verificationを記載したGitHubのPR本文で、対象外の所見は94件残り、新たな所見は0件](docs/assets/screenshots/pr-compose-body.png)
-
-PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ替えた後、次のスキャンでは履歴を引き継ぎ、4パッケージの所見の解消が通知されています。
-
-![nginxのイメージ更新と、libabsl20220623・libavif15・libfreetype6・liblzma5の所見の解消を示すSlackのスキャン通知](docs/assets/screenshots/slack-resolved.png)
-
-| 知りたいこと | 詳細ページ |
-| --- | --- |
-| 目的に合うページを探す | [修正計画の案内](docs-ja/documentation/remediation.md) |
-| 修正計画と修正PRを有効にする | [有効化の手順](docs-ja/documentation/remediation-setup.md) |
-| 候補やPRが出ない原因を切り分ける | [候補やPRが出ない場合](docs-ja/documentation/remediation-troubleshooting.md) |
-| SlackやPRの内容を読む | [結果の読み方](docs-ja/documentation/remediation-results.md) |
-| 候補の選定とPRの処理を確認する | [候補選定とPR処理の仕組み](docs-ja/documentation/remediation-logic.md) |
-| 対応する入力と理由コードを調べる | [対応形式と理由コード](docs-ja/documentation/remediation-reference.md) |
-| 設定値と必要な権限を調べる | [設定リファレンス](docs-ja/documentation/configuration.md) |
-| 通知条件、Webhook仕様、外向きの通信を確認する | [KestreLynxの仕組み](docs-ja/documentation/how-it-works.md) |
-
 ## クイックスタート：Docker
 
 Dockerが動作するホストと、少なくとも1つの通知先が必要です。配布イメージにはTrivyを同梱しています。
@@ -166,6 +197,14 @@ docker logs -f kestrelynx
 - **保存内容**：差分通知の履歴・初回検出日・脅威情報キャッシュ
 - **再作成・更新時**：既存ボリュームの引き継ぎ
 - **配置単位**：ホストごとに1インスタンス（コンテナ・Composeプロジェクトごとの配置は不要）
+
+### 修正計画の有効化
+
+修正計画と修正PRは、どちらも既定で無効です。
+
+- まず[修正計画を有効にする](docs-ja/documentation/remediation-setup.md#enable-fix-plans)
+    - 修正計画だけならGitHubへの書き込みは行わない
+- 計画を確認してから、[修正PRを別途有効にする](docs-ja/documentation/remediation-setup.md#enable-pull-requests)
 
 動作報告は[Discussions](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx)で受け付けています。
 

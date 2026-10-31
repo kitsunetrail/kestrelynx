@@ -11,13 +11,28 @@
 [Configuration reference](docs/documentation/configuration.md) ·
 [Trial reports](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx)
 
-> Open-source software that regularly scans images used by running Docker and Kubernetes containers with Trivy and sends **changes since the last scan and priorities based on severity, CISA KEV, and EPSS** to Slack, email, or a webhook. **Remediation plans and pull requests (experimental)** for Docker, Compose, and Kubernetes support remediation from comparing update candidates to creating GitHub pull requests, with both features disabled by default.
+> KestreLynx is open-source software that rescans update candidates under the same conditions for comparison and creates remediation pull requests on GitHub to update the Compose files, Kubernetes manifests, Kustomize configuration files, Helm values files, Dockerfiles, and dependency files you already use. After you merge and deploy the changes, the next scan carries history forward to check for resolved findings.
+> Scanning running images with Trivy, prioritizing findings by severity, CISA KEV, and EPSS, and notifying Slack, email, or webhooks provide the starting point for remediation and a way to check the results.
 
 [Comparison with other tools](docs/documentation/comparison.md) uses a running nginx container to compare update pull requests, image patching, and vulnerability checks before and after updates.
 
 ## What it does
 
-- **Image scanning**: HIGH / CRITICAL detection by default for OS and language packages identified by [Trivy](https://github.com/aquasecurity/trivy) image scanning, with language-package update PRs limited to npm / pnpm / pip / uv
+### Remediation
+
+- **Update candidate comparison**: rescans before and after an update under the same conditions to compare resolved, remaining, and newly introduced findings
+- **Pull requests to update image tags and dependency files**: remediation PRs that update the following image tags and dependency files in mapped GitHub repositories without moving version specifications to new configuration files or a different management method
+    - Published image tags in Compose files
+    - Image tags in plain Kubernetes manifests, Kustomize `images[].newTag`, and image tags in Helm values
+    - Base image tags in Dockerfiles
+    - Dependency files for npm, pnpm, pip, uv, and Go
+- **Re-resolution through dependent packages**: updates to dependent packages and dependency re-resolution for npm, pnpm, and uv under the supported conditions
+- **Resolution checks after merge and deployment**: history carried forward from before the update into the next scan, with notifications for findings no longer detected in the running image and findings that remain open
+
+### Scanning and notifications
+
+- **Image scanning**: HIGH / CRITICAL detection by default for OS and language packages identified by [Trivy](https://github.com/aquasecurity/trivy) image scanning
+- **Node.js and Python runtime checks**: checks against each project's security information add findings for the runtimes in official `node` and `python` images that Trivy does not report
 - **Scan deduplication**: shared results for images confirmed to be identical
 - **Prioritization**: act now / watch / low, based on severity, CISA KEV, and EPSS
 - **Runtime usage (experimental)**: optional Docker Sensor marks findings for packages in use and puts them first within the same priority, without changing priority; see [Runtime usage](docs/documentation/runtime-usage.md)
@@ -28,7 +43,55 @@
 - **Environment identification**: optional environment name in Slack headers
 - **Container identification**: container names, Compose project/service, and Kubernetes workload information in the generic webhook
 - **Running-image verification**: scan pinning to observed identifiers such as digests, with identity matching
-- **Remediation plans and pull requests (experimental)**: update candidates for published images, Dockerfile bases, and npm / pnpm / pip / uv dependencies on Docker and Kubernetes, with optional GitHub pull requests
+
+## Remediation plans and pull requests (experimental)
+
+- Compare scan results before and after an update under the same conditions
+    - Rescan the current and candidate images for published images and Dockerfile bases
+    - Rescan dependency files before and after language-package updates
+    - Compare resolved, remaining, and newly introduced findings
+- Create remediation pull requests on GitHub that update the following parts of files you already use
+    - Published image tags in Compose files
+    - Image tags in plain Kubernetes manifests, [Kustomize `images[].newTag`](docs/documentation/remediation-setup.md#kustomize-pull-requests), and [image tags in Helm values](docs/documentation/remediation-setup.md#helm-values-pull-requests)
+    - Base image tags in Dockerfiles
+    - Dependency files for npm, pnpm, pip, uv, and Go
+    - Updates to dependent packages and dependency re-resolution for npm, pnpm, and uv under the supported conditions
+    - Language-package updates on Kubernetes require [work Pod configuration](docs/documentation/remediation-setup.md#kubernetes-language-updates)
+- Check for resolved findings in the next scan after merge and deployment
+    - You review the changes, run CI before merging, merge, rebuild, and deploy
+    - KestreLynx carries history forward from before the update and reports resolved findings
+
+A candidate or pull request does not mean the running image has been fixed.
+Review the comparison scope; CI before merging, rebuilding, and deployment remain separate steps.
+
+- Language packages are retrieved only from the public npm registry, public PyPI, and the public Go module proxy
+- Private language-package registries are not supported
+- GitHub is the only supported source host
+
+These screenshots show actual output from the [demo repository](https://github.com/kitsunetrail/kestrelynx-demo), which intentionally pins older images and dependencies, with the [generated PRs available on GitHub](https://github.com/kitsunetrail/kestrelynx-demo/pulls).
+
+The Slack fix plan lists three created PRs and a Dockerfile base image update candidate marked “Needs a decision” because the candidate introduces new findings.
+
+![Slack fix plan showing Compose, pip, and npm update PRs and a Dockerfile base image update candidate requiring a decision](docs/assets/screenshots/slack-fix-plan.png)
+
+[PR #1](https://github.com/kitsunetrail/kestrelynx-demo/pull/1) proposes updating nginx from 1.27.0 to 1.27.5 and records the candidate scan comparison: 17 targeted findings resolved, 86 remaining.
+
+![GitHub PR body with What, Change, and Verification sections, including 94 other findings remaining and no introduced findings](docs/assets/screenshots/pr-compose-body.png)
+
+After PR #1 was merged and the running `proxy` container was replaced with nginx 1.27.5, the next scan reported resolutions for four packages with history carried over.
+
+![Slack scan notification showing the nginx image update and resolutions for libabsl20220623, libavif15, libfreetype6, and liblzma5](docs/assets/screenshots/slack-resolved.png)
+
+| Topic | Detailed page |
+| --- | --- |
+| Find the page for your task | [Overview](docs/documentation/remediation.md) |
+| Enable remediation plans and fix pull requests | [Enabling remediation](docs/documentation/remediation-setup.md) |
+| Diagnose missing candidates or PRs | [When no candidate or pull request appears](docs/documentation/remediation-troubleshooting.md) |
+| Read Slack and PR contents | [Reading the results](docs/documentation/remediation-results.md) |
+| Understand candidate selection and PR processing | [How candidates and pull requests are decided](docs/documentation/remediation-logic.md) |
+| Look up supported inputs and reason codes | [Supported inputs and reason codes](docs/documentation/remediation-reference.md) |
+| Look up settings and required permissions | [Configuration reference](docs/documentation/configuration.md) |
+| Check notification conditions, webhook specifications, and outbound communication | [How KestreLynx works](docs/documentation/how-it-works.md) |
 
 ## Supported environments
 
@@ -104,38 +167,6 @@ Long notifications continue in additional messages with repeated section and ima
 - **Allowed combination**: either Slack Incoming Webhook or Slack Bot, plus the generic webhook and/or email
 - **Unsupported combination**: Slack Incoming Webhook and Slack Bot together
 
-## Remediation plans and pull requests (experimental)
-
-- Propose image and dependency updates for Docker, Compose, and Kubernetes
-- Kubernetes PRs support image tag updates in plain manifests, [Kustomize `images[].newTag` updates](docs/documentation/remediation-setup.md#kustomize-pull-requests), [image tag updates in Helm values](docs/documentation/remediation-setup.md#helm-values-pull-requests), and base image updates in Dockerfiles, plus npm / pnpm / pip / uv updates when [work Pods are configured](docs/documentation/remediation-setup.md#kubernetes-language-updates)
-- Remediation plans and optional GitHub PR creation are both disabled by default
-- Users check changes, merge, deploy, and verify after deployment
-
-These screenshots show actual output from the [demo repository](https://github.com/kitsunetrail/kestrelynx-demo), which intentionally pins older images and dependencies, with the [generated PRs available on GitHub](https://github.com/kitsunetrail/kestrelynx-demo/pulls).
-
-The Slack fix plan lists three created PRs and a Dockerfile base update marked “Needs a decision” because the candidate introduces new findings.
-
-![Slack fix plan showing Compose, pip, and npm update PRs and a Dockerfile base update requiring a decision](docs/assets/screenshots/slack-fix-plan.png)
-
-[PR #1](https://github.com/kitsunetrail/kestrelynx-demo/pull/1) proposes updating nginx from 1.27.0 to 1.27.5 and records the candidate scan comparison: 17 targeted findings resolved, 86 remaining.
-
-![GitHub PR body with What, Change, and Verification sections, including 94 other findings remaining and no introduced findings](docs/assets/screenshots/pr-compose-body.png)
-
-After PR #1 was merged and the running `proxy` container was replaced with nginx 1.27.5, the next scan reported resolutions for four packages with history carried over.
-
-![Slack scan notification showing the nginx image update and resolutions for libabsl20220623, libavif15, libfreetype6, and liblzma5](docs/assets/screenshots/slack-resolved.png)
-
-| Topic | Detailed page |
-| --- | --- |
-| Find the page for your task | [Overview](docs/documentation/remediation.md) |
-| Enable remediation plans and fix pull requests | [Enabling remediation](docs/documentation/remediation-setup.md) |
-| Diagnose missing candidates or PRs | [When no candidate or pull request appears](docs/documentation/remediation-troubleshooting.md) |
-| Read Slack and PR contents | [Reading the results](docs/documentation/remediation-results.md) |
-| Understand candidate selection and PR processing | [How candidates and pull requests are decided](docs/documentation/remediation-logic.md) |
-| Look up supported inputs and reason codes | [Supported inputs and reason codes](docs/documentation/remediation-reference.md) |
-| Look up settings and required permissions | [Configuration reference](docs/documentation/configuration.md) |
-| Check notification conditions, webhook specifications, and outbound communication | [How KestreLynx works](docs/documentation/how-it-works.md) |
-
 ## Quick start: Docker
 
 You need a working Docker host and at least one notification target. The distributed image includes Trivy.
@@ -166,6 +197,14 @@ docker logs -f kestrelynx
 - **Stored data**: diff history, first-seen dates, and intel cache
 - **Recreation and updates**: reuse of the existing volume
 - **Deployment unit**: one instance per host, covering all containers and Compose projects
+
+### Enabling remediation plans
+
+Remediation plans and pull requests are both disabled by default.
+
+- First, [enable remediation plans](docs/documentation/remediation-setup.md#enable-fix-plans)
+    - Plans alone do not write to GitHub
+- After reviewing the plan, [enable fix pull requests separately](docs/documentation/remediation-setup.md#enable-pull-requests)
 
 Trial reports are welcome in [Discussions](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx).
 

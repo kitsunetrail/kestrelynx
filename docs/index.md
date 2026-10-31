@@ -146,6 +146,8 @@ for setup, notifications, and permissions.
 For self-hosted services where you want to review vulnerability changes in the
 images your containers are running.
 
+See [Comparison with other tools](documentation/comparison.md) for a running nginx example covering update pull requests and vulnerability checks before and after updates.
+
 <dl class="kl-scope" markdown>
 <dt>Docker</dt>
 <dd markdown="span">One instance per host covers running containers across Compose projects and standalone deployments.</dd>

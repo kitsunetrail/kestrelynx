@@ -129,6 +129,8 @@ PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ�
 
 セルフホストしているサービスについて、稼働中のコンテナが使うイメージの脆弱性を継続して確認する用途に向いています。
 
+稼働中のnginxを例にした更新PRの作成と更新前後の脆弱性の確認は[他のツールとの比較](documentation/comparison.md)を参照してください。
+
 <dl class="kl-scope" markdown>
 <dt>Docker</dt>
 <dd markdown="span">ホストごとに1インスタンスを配置し、複数のComposeプロジェクトと単独コンテナをまとめて対象にする</dd>

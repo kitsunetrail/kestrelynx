@@ -13,6 +13,8 @@
 
 > 稼働中のDocker・KubernetesコンテナのイメージをTrivyで定期的にスキャンし、**前回からの変化と、深刻度・CISA KEV・EPSSに基づく優先度**をSlack・メール・Webhookへ通知するOSSです。Docker・Compose・Kubernetes向けの**修正計画と修正PR（実験的）**で、更新候補の比較からGitHubへのPR作成まで修正を支援します（既定で無効）。
 
+[他のツールとの比較](docs-ja/documentation/comparison.md)では、稼働中のnginxコンテナを例に、更新PRの作成・イメージへのパッチ適用と、更新前後の脆弱性の確認を比較します。
+
 ## 主な機能
 
 - **イメージスキャン**：[Trivy](https://github.com/aquasecurity/trivy)のイメージスキャンで識別できるOSパッケージと言語パッケージのHIGH／CRITICALの検出（既定、言語パッケージの更新PRはnpm／pnpm／pip／uvのみ）

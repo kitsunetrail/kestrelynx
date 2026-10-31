@@ -4,6 +4,7 @@ This section covers installing, configuring, and operating KestreLynx.
 
 ## About KestreLynx
 
+- [Comparison with other tools](comparison.md) — Update pull requests, image patching, and vulnerability checks before and after updates
 - [Setup instructions](getting-started.md) — install KestreLynx with Docker
   Compose, `docker run`, or Kubernetes.
 - [Configuration](configuration.md) — configure the schedule, notification

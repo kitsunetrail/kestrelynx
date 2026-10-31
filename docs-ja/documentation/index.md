@@ -4,6 +4,7 @@
 
 ## KestreLynxについて
 
+- [他のツールとの比較](comparison.md) — 更新PR・イメージへのパッチ適用の違いと、更新前後の脆弱性の確認
 - [セットアップ手順](getting-started.md) — Docker Compose、`docker run`、またはKubernetesで
   KestreLynxを導入します。
 - [設定](configuration.md) — 実行スケジュール、通知先、Kubernetes、環境名、状態管理、

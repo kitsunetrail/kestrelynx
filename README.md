@@ -13,6 +13,8 @@
 
 > Open-source software that regularly scans images used by running Docker and Kubernetes containers with Trivy and sends **changes since the last scan and priorities based on severity, CISA KEV, and EPSS** to Slack, email, or a webhook. **Remediation plans and pull requests (experimental)** for Docker, Compose, and Kubernetes support remediation from comparing update candidates to creating GitHub pull requests, with both features disabled by default.
 
+[Comparison with other tools](docs/documentation/comparison.md) uses a running nginx container to compare update pull requests, image patching, and vulnerability checks before and after updates.
+
 ## What it does
 
 - **Image scanning**: HIGH / CRITICAL detection by default for OS and language packages identified by [Trivy](https://github.com/aquasecurity/trivy) image scanning, with language-package update PRs limited to npm / pnpm / pip / uv

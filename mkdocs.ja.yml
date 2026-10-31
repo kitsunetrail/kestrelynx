@@ -19,6 +19,7 @@ nav:
   - ホーム: index.md
   - ドキュメント:
       - 概要: documentation/index.md
+      - 他のツールとの比較: documentation/comparison.md
       - セットアップ: documentation/getting-started.md
       - 設定: documentation/configuration.md
       - 仕組み:

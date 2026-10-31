@@ -47,6 +47,7 @@ nav:
   - Home: index.md
   - Documentation:
       - Overview: documentation/index.md
+      - Comparison with other tools: documentation/comparison.md
       - Setup: documentation/getting-started.md
       - Configuration: documentation/configuration.md
       - How it works:

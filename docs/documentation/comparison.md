@@ -1,6 +1,7 @@
 # Comparison with other tools {#comparison}
 
 - This page compares updates for fixing vulnerabilities: what each tool can fix, how it updates, and what it checks before and after
+- Based on each tool's official documentation as of October 31, 2026
 
 ## Tools compared {#tools}
 
@@ -112,7 +113,7 @@ KestreLynx creates update pull requests only when enabled in settings; this is d
 
 ## Official references {#references}
 
-Checked on 2026-10-30
+Checked on 2026-10-31
 
 - KestreLynx
     - [Overview](remediation.md), [Setup](remediation-setup.md), [Update checks and update pull request handling](remediation-logic.md)

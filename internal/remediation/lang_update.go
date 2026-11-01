@@ -33,7 +33,9 @@ type LangUpdateConfig struct {
 	Npm NpmRegistry
 	// Go reads the public Go module proxy and checksum database; a Go item
 	// fails without it.
-	Go     GoModuleRegistry
+	Go GoModuleRegistry
+	// Maven reads Maven Central; a Maven item fails without it.
+	Maven  MavenRegistry
 	GitHub GitHubReader
 	// Prepared are the cycle's scan conditions (Plan.Conditions). The stage's
 	// scans are valid only under them.
@@ -100,8 +102,10 @@ type LangUpdater struct {
 	// itemBudget, when set, makes the budget of an item that may go on to the
 	// chain update, in place of the default limits.
 	itemBudget func() *itemBudget
-	// goCache keeps the go.mod files the Go updates of the pass read.
-	goCache *goModCache
+	// goCache keeps the go.mod files the Go updates of the pass read, and
+	// mavenCache the pom files the Maven relays of the pass served.
+	goCache    *goModCache
+	mavenCache *mavenPOMCache
 }
 
 // NewLangUpdater validates cfg and returns an updater.
@@ -138,7 +142,7 @@ func NewLangUpdater(cfg LangUpdateConfig) (*LangUpdater, error) {
 		return nil, fmt.Errorf("remediation: job id: %w", err)
 	}
 	return &LangUpdater{cfg: cfg, runID: hex.EncodeToString(b[:]), chainRunners: map[DependencyManager]chainRunner{ManagerNpm: runNpmChain, ManagerPnpm: runPnpmChain, ManagerUv: runUvChain},
-		goCache: newGoModCache()}, nil
+		goCache: newGoModCache(), mavenCache: newMavenPOMCache()}, nil
 }
 
 // LangUpdateUsage records what a pass spent.
@@ -157,10 +161,6 @@ func (u *LangUpdater) Run(ctx context.Context, plan *Plan) LangUpdateUsage {
 	for i := range plan.LanguageItems {
 		it := &plan.LanguageItems[i]
 		if it.Category != CategoryDependencyUpdateCandidate {
-			continue
-		}
-		if it.Manager == ManagerMaven {
-			// Maven units are planned only: their update is not made yet.
 			continue
 		}
 		switch {
@@ -700,6 +700,11 @@ type updateRun struct {
 	// when it was found consistent: a later run of the item uses it in place of
 	// checking again.
 	baseOK *jobOutput
+	// The pom files and release lists a Maven update read from Maven Central,
+	// and the files it changed.
+	mavenPOMs      map[string]*mavenPOM
+	mavenVersions  map[string][]string
+	mavenArtifacts []ArtifactFile
 	// recheck is a lockfile a chain run judges by the chain's rules in place of
 	// making one: the first update's, which its difference check refused.
 	recheck []byte
@@ -735,6 +740,11 @@ func (r *updateRun) succeed() {
 			manualPackage(p, d.reason, d.detail)
 			p.LeftOut = true
 		}
+	}
+	if it.Manager == ManagerMaven {
+		// A Maven update changes the pom files its edits are in, and nothing else.
+		it.Artifacts = r.mavenArtifacts
+		return
 	}
 	it.Artifacts = []ArtifactFile{{
 		Path: r.src.lockPath, SHA256: sha256Hex(r.newLock), Size: int64(len(r.newLock)),

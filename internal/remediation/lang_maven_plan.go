@@ -274,7 +274,10 @@ func mavenModelProblem(rx *mavenReactor) (Reason, string) {
 				return ReasonMavenModelUnsupported, fmt.Sprintf("%s declares %s more than once among its dependencies", m.path, k)
 			}
 			seen[k] = true
-			if strings.EqualFold(d.Optional, "true") {
+			if !mavenOptionalReadable(d.Optional) {
+				return ReasonMavenModelUnsupported, fmt.Sprintf("%s writes optional %q for %s, which the scanner cannot read", m.path, d.Optional, k)
+			}
+			if mavenOptional(d.Optional) {
 				return ReasonMavenModelUnsupported, fmt.Sprintf("%s declares %s as optional", m.path, k)
 			}
 			if isMavenVersionRange(d.Version) {

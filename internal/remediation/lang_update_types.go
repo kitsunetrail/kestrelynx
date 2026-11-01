@@ -115,6 +115,7 @@ type WorkRunner interface {
 // prepared conditions (see scanner.Trivy.ScanFS).
 type FSScanner interface {
 	ScanFS(ctx context.Context, files map[string][]byte, prepared scanner.ScanConditions) (scanner.FSScan, error)
+	ScanFSWith(ctx context.Context, files map[string][]byte, prepared scanner.ScanConditions, opts scanner.FSOptions) (scanner.FSScan, error)
 }
 
 var _ FSScanner = scanner.Trivy{}
@@ -202,6 +203,8 @@ type LanguageUpdate struct {
 	Chain *ChainUpdate `json:"chain,omitempty"`
 	// Go records what a Go module update did besides moving its targets.
 	Go *GoUpdate `json:"go,omitempty"`
+	// Maven records the edits of a Maven update and what moved with them.
+	Maven *MavenUpdate `json:"maven,omitempty"`
 }
 
 // Outcomes of ChainUpdate.

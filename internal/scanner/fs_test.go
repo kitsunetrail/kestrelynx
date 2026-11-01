@@ -40,6 +40,10 @@ if [ "$1" = fs ]; then
   ls -A "$last" > %[6]q
   ls -A . > %[7]q
   env | grep '^TRIVY_' > %[8]q
+  env | grep -E '^(HOME|MAVEN_HOME|NO_PROXY|no_proxy)=' > %[11]q
+  cp "$HOME/.m2/settings.xml" %[12]q 2>/dev/null
+  (cd "$last" && find . -type f | sort) > %[13]q
+  ls -A "$HOME/../m2repo" > %[14]q 2>/dev/null
   prev=""
   for a in "$@"; do
     if [ "$prev" = --config ] || [ "$prev" = --ignorefile ]; then wc -c < "$a" >> %[10]q; fi
@@ -47,7 +51,8 @@ if [ "$1" = fs ]; then
   done
   cat %[9]q
 fi
-`, f.log, f.versionFile, f.failFile, f.cwd, f.scanDir, f.listing, f.cwdListing, f.env, reportFile, f.sizes)
+`, f.log, f.versionFile, f.failFile, f.cwd, f.scanDir, f.listing, f.cwdListing, f.env, reportFile, f.sizes,
+		filepath.Join(dir, "envall"), filepath.Join(dir, "settings.xml"), filepath.Join(dir, "files"), filepath.Join(dir, "repolisting"))
 	if err := os.WriteFile(f.bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -279,16 +284,23 @@ func TestScanFSRefusesBadFiles(t *testing.T) {
 		many[fmt.Sprintf("f%d", i)] = nil
 	}
 	for name, files := range map[string]map[string][]byte{
-		"none":      {},
-		"nil":       nil,
-		"too many":  many,
-		"parent":    {"../x": nil},
-		"nested":    {"a/b": nil},
-		"hidden":    {".trivyignore": nil},
-		"backslash": {`a\b`: nil},
-		"empty":     {"": nil},
-		"nul":       {"a\x00b": nil},
-		"too big":   {"big": make([]byte, maxFSFileBytes+1)},
+		"none":       {},
+		"nil":        nil,
+		"too many":   many,
+		"parent":     {"../x": nil},
+		"dot dir":    {"a/./b": nil},
+		"dotdot":     {"a/../b": nil},
+		"leading /":  {"/a": nil},
+		"trailing /": {"a/": nil},
+		"double /":   {"a//b": nil},
+		"deep":       {"a/b/c/d/e/f/g/h/i": nil},
+		"long":       {strings.Repeat("a", 256): nil},
+		"space":      {"a b": nil},
+		"hidden":     {".trivyignore": nil},
+		"backslash":  {`a\b`: nil},
+		"empty":      {"": nil},
+		"nul":        {"a\x00b": nil},
+		"too big":    {"big": make([]byte, maxFSFileBytes+1)},
 	} {
 		if _, err := tr.ScanFS(ctx, files, prepared); err == nil {
 			t.Errorf("%s: accepted", name)
@@ -296,6 +308,126 @@ func TestScanFSRefusesBadFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(f.listing); err == nil {
 		t.Error("trivy ran for refused files")
+	}
+}
+
+func TestScanFSNames(t *testing.T) {
+	f := newFSFake(t, fsReportJSON)
+	cache := t.TempDir()
+	writeCache(t, cache)
+	tr := Trivy{BinPath: f.bin, CacheDir: cache, SkipDBUpdate: true}
+	ctx := context.Background()
+	prepared, _ := tr.PrepareDB(ctx)
+	ok := []string{"pom.xml", "a/pom.xml", "svc-1/core_2/pom.xml", "a/b/c/d/e/f/g/pom.xml", "_x/a.b", strings.Repeat("a", 255)}
+	bad := []string{"a/b/c/d/e/f/g/h/pom.xml", "a/.m2/x", "a/..", "x\\y", "a\x00b", "a/", ""}
+	for _, n := range bad {
+		if err := checkFSName(n); err == nil {
+			t.Errorf("%q accepted", n)
+		}
+	}
+	for _, n := range ok {
+		if err := checkFSName(n); err != nil {
+			t.Errorf("%q: %v", n, err)
+		}
+	}
+	if _, err := tr.ScanFS(ctx, map[string][]byte{"pom.xml": []byte("a"), "mod/pom.xml": []byte("b"), "mod/sub/pom.xml": []byte("c")}, prepared); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Fields(read(t, filepath.Join(filepath.Dir(f.log), "files")))
+	if strings.Join(got, ",") != "./mod/pom.xml,./mod/sub/pom.xml,./pom.xml" {
+		t.Errorf("files = %v", got)
+	}
+	many := map[string][]byte{}
+	for i := 0; i < maxFSFiles; i++ {
+		many[fmt.Sprintf("d/f%d", i)] = nil
+	}
+	if _, err := tr.ScanFS(ctx, many, prepared); err != nil {
+		t.Errorf("%d files refused: %v", maxFSFiles, err)
+	}
+}
+
+func TestScanFSMavenMirror(t *testing.T) {
+	f := newFSFake(t, fsReportJSON)
+	cache := t.TempDir()
+	writeCache(t, cache)
+	tr := Trivy{BinPath: f.bin, CacheDir: cache, SkipDBUpdate: true}
+	ctx := context.Background()
+	prepared, _ := tr.PrepareDB(ctx)
+	files := map[string][]byte{"pom.xml": []byte("<project/>")}
+	t.Setenv("HOME", "/nonexistent-home")
+	t.Setenv("MAVEN_HOME", "/nonexistent-maven")
+	t.Setenv("NO_PROXY", "internal.example")
+	t.Setenv("no_proxy", "")
+	t.Setenv("HTTP_PROXY", "http://proxy.example:3128")
+
+	plain, err := tr.ScanFS(ctx, files, prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(plain.Conditions.AnalysisSettings, "maven=") {
+		t.Errorf("settings of a plain scan: %s", plain.Conditions.AnalysisSettings)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(f.log), "settings.xml")); err == nil {
+		t.Error("a plain scan had Maven settings")
+	}
+
+	mirror := "http://127.0.0.1:18081/maven2"
+	res, err := tr.ScanFSWith(ctx, files, prepared, FSOptions{MavenMirror: mirror})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(res.Conditions.AnalysisSettings, ";env=sanitized;workdir=isolated;maven=relay") || !strings.HasPrefix(res.Conditions.AnalysisSettings, "fs;") {
+		t.Errorf("settings = %s", res.Conditions.AnalysisSettings)
+	}
+	want := prepared
+	want.AnalysisSettings = res.Conditions.AnalysisSettings
+	if !res.Conditions.Equal(want) {
+		t.Errorf("conditions differ: %+v", res.Conditions)
+	}
+	dir := filepath.Dir(f.log)
+	settings := read(t, filepath.Join(dir, "settings.xml"))
+	for _, part := range []string{"<id>kestrelynx</id>", "<mirrorOf>*</mirrorOf>", "<url>" + mirror + "</url>", "<localRepository>"} {
+		if !strings.Contains(settings, part) {
+			t.Errorf("settings.xml lacks %q:\n%s", part, settings)
+		}
+	}
+	for _, bad := range []string{"<server", "<proxy", "<profile", "<repository>"} {
+		if strings.Contains(settings, bad) {
+			t.Errorf("settings.xml has %q", bad)
+		}
+	}
+	env := map[string]string{}
+	for _, l := range strings.Split(strings.TrimSpace(read(t, filepath.Join(dir, "envall"))), "\n") {
+		k, v, _ := strings.Cut(l, "=")
+		env[k] = v
+	}
+	if !strings.HasSuffix(env["HOME"], "/home") || strings.Contains(env["HOME"], "nonexistent") {
+		t.Errorf("HOME = %q", env["HOME"])
+	}
+	if !strings.HasSuffix(env["MAVEN_HOME"], "/mavenhome") {
+		t.Errorf("MAVEN_HOME = %q", env["MAVEN_HOME"])
+	}
+	if env["NO_PROXY"] != "internal.example,127.0.0.1" || env["no_proxy"] != "127.0.0.1" {
+		t.Errorf("NO_PROXY = %q, no_proxy = %q", env["NO_PROXY"], env["no_proxy"])
+	}
+	if !strings.Contains(settings, "<localRepository>"+filepath.Join(filepath.Dir(env["HOME"]), "m2repo")+"</localRepository>") {
+		t.Errorf("local repository is not the empty one beside home:\n%s", settings)
+	}
+	if got := strings.TrimSpace(read(t, filepath.Join(dir, "repolisting"))); got != "" {
+		t.Errorf("local repository held %q", got)
+	}
+	if _, err := os.Stat(env["HOME"]); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the home directory survived: %v", err)
+	}
+
+	for _, bad := range []string{
+		"http://127.0.0.1/maven2", "http://localhost:18081/maven2", "https://127.0.0.1:18081/maven2",
+		"http://127.0.0.1:18081/maven2/", "http://127.0.0.1:18081/other", "http://10.0.0.1:18081/maven2",
+		"http://127.0.0.1:0/maven2", "http://127.0.0.1:99999/maven2", "http://127.0.0.1:18081@evil/maven2", "http://127.0.0.1:18081/maven2?x=1",
+	} {
+		if _, err := tr.ScanFSWith(ctx, files, prepared, FSOptions{MavenMirror: bad}); err == nil {
+			t.Errorf("mirror %q accepted", bad)
+		}
 	}
 }
 

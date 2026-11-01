@@ -34,6 +34,8 @@ func registryName(t *prText, m DependencyManager) string {
 		return t.RegistryNpm
 	case ManagerGo:
 		return t.RegistryGo
+	case ManagerMaven:
+		return t.RegistryMaven
 	}
 	return string(m)
 }
@@ -52,6 +54,8 @@ func installCheck(m DependencyManager) string {
 		return "pip install -r requirements.txt"
 	case ManagerGo:
 		return "go build -mod=readonly ./... && go test -mod=readonly ./..."
+	case ManagerMaven:
+		return "mvn -B dependency:tree && mvn -B verify"
 	}
 	return ""
 }
@@ -249,6 +253,9 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 		if g := up.Go; g != nil {
 			writeGoUpdate(t, &b, g, it.GoBuiltWith)
 		}
+		if m := up.Maven; m != nil {
+			writeMavenUpdate(t, &b, m)
+		}
 		for _, n := range up.Notes {
 			fmt.Fprintf(&b, t.LNote, mdCode(n))
 		}
@@ -286,9 +293,12 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 	if !strings.HasSuffix(b.String(), "\n\n") {
 		b.WriteString("\n")
 	}
-	if it.Manager == ManagerGo {
+	switch it.Manager {
+	case ManagerGo:
 		fmt.Fprintf(&b, t.LGoBuildCheck, mdCode(installCheck(it.Manager)))
-	} else {
+	case ManagerMaven:
+		fmt.Fprintf(&b, t.LMavenBuildCheck, mdCode(installCheck(it.Manager)))
+	default:
 		fmt.Fprintf(&b, t.LInstallCheck, mdCode(installCheck(it.Manager)))
 	}
 
@@ -479,8 +489,59 @@ func manifestFileName(m DependencyManager) string {
 		return "requirements.txt"
 	case ManagerGo:
 		return "go.mod"
+	case ManagerMaven:
+		return "pom.xml"
 	}
 	return ""
+}
+
+// writeMavenUpdate describes the edits of a Maven update, how it was
+// checked, and the packages that moved with the targets.
+func writeMavenUpdate(t *prText, b *strings.Builder, m *MavenUpdate) {
+	b.WriteString(t.LMavenHead)
+	overrides := false
+	for i, e := range m.Edits {
+		if i == maxListedEntries {
+			fmt.Fprintf(b, t.LineMore, len(m.Edits)-maxListedEntries)
+			break
+		}
+		switch e.Kind {
+		case MavenEditVersion:
+			fmt.Fprintf(b, t.LMavenEditVersion, mdCode(e.File), mdCode(e.Package), mdCode(e.From), mdCode(e.To))
+		case MavenEditProperty:
+			fmt.Fprintf(b, t.LMavenEditProperty, mdCode(e.File), mdCode(e.Property), mdCode(e.From), mdCode(e.To), mdCode(e.Package))
+		case MavenEditPropertyOverride:
+			overrides = true
+			fmt.Fprintf(b, t.LMavenEditOverride, mdCode(e.File), mdCode(e.Property), mdCode(e.From), mdCode(e.To), mdCode(e.Package))
+		case MavenEditManagedPin:
+			overrides = true
+			fmt.Fprintf(b, t.LMavenEditPin, mdCode(e.File), mdCode(e.Package), mdCode(e.From), mdCode(e.To))
+		}
+	}
+	fmt.Fprintf(b, t.LMavenResolvedBy, t.RegistryMaven)
+	if overrides {
+		b.WriteString(t.LMavenOverrideNote)
+	}
+	if len(m.Moves) > 0 {
+		fmt.Fprintf(b, "\n**%s (%d)**\n\n", t.LMavenMovesTitle, len(m.Moves))
+		list := func(vs []string) string {
+			if len(vs) == 0 {
+				return t.LMavenMoveNone
+			}
+			var out []string
+			for _, v := range vs {
+				out = append(out, mdCode(v))
+			}
+			return strings.Join(out, ", ")
+		}
+		for i, mv := range m.Moves {
+			if i == maxListedEntries {
+				fmt.Fprintf(b, t.LineMore, len(m.Moves)-maxListedEntries)
+				break
+			}
+			fmt.Fprintf(b, t.LMavenMove, mdCode(mv.Name), list(mv.From), list(mv.To))
+		}
+	}
 }
 
 // writeGoUpdate describes what a Go module update did besides moving its

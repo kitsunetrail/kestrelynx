@@ -121,7 +121,10 @@ type prText struct {
 	RegistryGo, RegistryGoSum, LGoBuildCheck, LEnvGoBasis                                                   string
 	LGoHead, LGoLine, LGoLineForm, LGoToolchain, LGoNoToolchain, LGoProxyChecked, LGoSumChecked, LGoScanned string
 	LGoCollateralTitle, LGoRaised, LGoAdded, LGoSumAddedTitle                                               string
-	RelDirect, RelTransitive, RelMixed, RelUnknown                                                          string
+	// Maven bodies.
+	RegistryMaven, LMavenBuildCheck, LMavenHead, LMavenEditVersion, LMavenEditProperty, LMavenEditOverride string
+	LMavenEditPin, LMavenResolvedBy, LMavenOverrideNote, LMavenMovesTitle, LMavenMove, LMavenMoveNone      string
+	RelDirect, RelTransitive, RelMixed, RelUnknown                                                         string
 }
 
 // textFor returns the wording of l; any unknown value falls back to English,
@@ -322,6 +325,18 @@ var enPRText = prText{
 	LGoRaised:           "- %[1]s: %[2]s to %[3]s\n",
 	LGoAdded:            "- %[1]s: added at %[2]s\n",
 	LGoSumAddedTitle:    "go.sum lines of the versions the update moved to, added from the checksum database",
+	RegistryMaven:       "Maven Central",
+	LMavenBuildCheck:    "- Before merging, check what Maven resolves and run the build (for example %s). The check above used Trivy's resolution of the pom files, not Maven's\n",
+	LMavenHead:          "\n**Maven update**\n\n",
+	LMavenEditVersion:   "- %[1]s: the version of %[2]s goes from %[3]s to %[4]s\n",
+	LMavenEditProperty:  "- %[1]s: the property %[2]s goes from %[3]s to %[4]s (it sets the version of %[5]s)\n",
+	LMavenEditOverride:  "- %[1]s: the property %[2]s of a parent pom is set to %[4]s in place of %[3]s (it sets the version of %[5]s)\n",
+	LMavenEditPin:       "- %[1]s: %[2]s is pinned to %[4]s in dependencyManagement\n",
+	LMavenResolvedBy:    "- The releases were confirmed on %s. The pom files before and after were scanned with Trivy resolving them through Maven Central; forms whose resolution Trivy does not reproduce (profiles, other repositories, version ranges, relocations and the like) would have stopped the update\n",
+	LMavenOverrideNote:  "- An override of a parent's property or a pin in dependencyManagement stays until it is removed: take it out when the parent (Spring Boot, say) is upgraded to a release that brings the fix, or it keeps this version\n",
+	LMavenMovesTitle:    "Packages whose resolved version also changed",
+	LMavenMove:          "- %[1]s: %[2]s to %[3]s\n",
+	LMavenMoveNone:      "none",
 	RelDirect:           "direct dependency",
 	RelTransitive:       "transitive dependency",
 	RelMixed:            "direct and transitive dependency",
@@ -517,6 +532,18 @@ var jaPRText = prText{
 	LGoRaised:           "- %[1]s: %[2]s から %[3]s へ\n",
 	LGoAdded:            "- %[1]s: %[2]s を追加\n",
 	LGoSumAddedTitle:    "更新後の版について checksum database から補った go.sum の行",
+	RegistryMaven:       "Maven Central",
+	LMavenBuildCheck:    "- マージ前に、Maven が解決する依存を確かめ、ビルドを実行してください (例: %s)。上の確認は、Maven ではなく Trivy による pom ファイルの解決で行いました\n",
+	LMavenHead:          "\n**Maven の更新**\n\n",
+	LMavenEditVersion:   "- %[1]s: %[2]s の版を %[3]s から %[4]s に変えます\n",
+	LMavenEditProperty:  "- %[1]s: プロパティ %[2]s を %[3]s から %[4]s に変えます (%[5]s の版を決めています)\n",
+	LMavenEditOverride:  "- %[1]s: 親の pom のプロパティ %[2]s を、%[3]s の代わりに %[4]s で上書きします (%[5]s の版を決めています)\n",
+	LMavenEditPin:       "- %[1]s: dependencyManagement で %[2]s を %[4]s に固定します\n",
+	LMavenResolvedBy:    "- 版は %sで確かめました。更新前後の pom ファイルは、Trivy が Maven Central から解決してスキャンしました。Trivy が解決を再現できない書き方 (profile、ほかのリポジトリ、版の範囲、relocation など) があれば、更新を止めています\n",
+	LMavenOverrideNote:  "- 親のプロパティの上書きと dependencyManagement の固定は、消すまで残ります。修正を含む版に親 (Spring Boot など) を上げるときに外してください。外さないと、この版に固定されたままになります\n",
+	LMavenMovesTitle:    "あわせて解決後の版が変わったパッケージ",
+	LMavenMove:          "- %[1]s: %[2]s から %[3]s へ\n",
+	LMavenMoveNone:      "なし",
 	RelDirect:           "直接依存",
 	RelTransitive:       "間接依存",
 	RelMixed:            "直接依存かつ間接依存",

@@ -152,13 +152,17 @@ func TestParseMavenPOMBootStyle(t *testing.T) {
 	if c := p.DependencyManagement[1]; c.IsImport() || c.Classifier != "linux-x86_64" {
 		t.Errorf("classifier entry = %+v", c)
 	}
-	wantProfiles := []mavenProfile{
-		{ID: "extra", Dependencies: true},
-		{ID: "props", Properties: true},
-		{ID: "idle"},
+	if len(p.Profiles) != 3 {
+		t.Fatalf("profiles = %+v", p.Profiles)
 	}
-	if !reflect.DeepEqual(p.Profiles, wantProfiles) {
-		t.Errorf("profiles = %+v", p.Profiles)
+	if e := p.Profiles[0]; e.ID != "extra" || !e.Dependencies || !e.RuntimeDependencies || e.Activation || e.Properties {
+		t.Errorf("extra = %+v", e)
+	}
+	if e := p.Profiles[1]; e.ID != "props" || !e.Properties || !reflect.DeepEqual(e.PropertyNames, []string{"foo"}) || e.Dependencies {
+		t.Errorf("props = %+v", e)
+	}
+	if e := p.Profiles[2]; e.ID != "idle" || !e.Activation || e.Dependencies || e.Properties {
+		t.Errorf("idle = %+v", e)
 	}
 	if !reflect.DeepEqual(p.Repositories, []string{"https://example.com/repo"}) ||
 		!reflect.DeepEqual(p.PluginRepositories, []string{"https://example.com/plugins"}) {

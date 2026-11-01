@@ -15,6 +15,12 @@ import (
 
 // run reads the unit's files and carries out the update of its manager.
 func (r *updateRun) run(ctx context.Context) *updateFailure {
+	if r.it.Manager == ManagerMaven {
+		// A Maven reactor is read, edited and checked by this program alone.
+		out := r.runMaven(ctx)
+		r.upd.Notes = uniqueSorted(r.upd.Notes)
+		return out
+	}
 	src, fail := r.u.readSources(ctx, r.it)
 	if fail != nil {
 		return fail

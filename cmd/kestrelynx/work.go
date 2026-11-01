@@ -253,6 +253,7 @@ func newLanguageUpdater(cfg config.Config, tools toolSupply, work remediation.Wo
 		PyPI:     &remediation.PyPIClient{},
 		Npm:      &remediation.NpmClient{},
 		Go:       &remediation.GoClient{},
+		Maven:    &remediation.MavenClient{},
 		GitHub:   in.GitHub,
 		Prepared: in.Prepared,
 		Images:   in.Images,

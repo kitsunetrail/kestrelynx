@@ -91,8 +91,15 @@ func buildLanguageUnit(it *LanguageItem, order int) *composeUnit {
 			continue
 		}
 		ld.sources[f.Path] = f
-		if path.Base(f.Path) == it.Manager.LockfileName() {
+		if path.Base(f.Path) == it.Manager.LockfileName() && it.Manager != ManagerMaven {
 			lockPaths = append(lockPaths, f.Path)
+		}
+	}
+	if it.Manager == ManagerMaven {
+		// The root pom stands for the reactor, whose modules' pom files the plan
+		// read with it.
+		if p := mavenRootPom(*it); p != "" {
+			lockPaths = append(lockPaths, p)
 		}
 	}
 	if len(lockPaths) != 1 {

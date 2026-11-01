@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -27,6 +28,9 @@ type mavenDep struct {
 	GroupID, ArtifactID, Version, Type, Classifier, Scope string
 	Optional                                              string // trimmed text of <optional>, "" when absent
 	HasExclusions                                         bool   // at least one <exclusion>
+	// Exclusions are the groupId:artifactId of each exclusion, as written,
+	// sorted.
+	Exclusions []string
 }
 
 // IsImport reports a BOM import: type pom and scope import.
@@ -36,6 +40,20 @@ func (d mavenDep) IsImport() bool { return d.Type == "pom" && d.Scope == "import
 type mavenProfile struct {
 	ID                                                                            string
 	Dependencies, DependencyManagement, Properties, Parent, Modules, Repositories bool
+	// Activation is set when the profile names a condition it turns on by
+	// (activeByDefault, jdk, os, property or file); one without is used only
+	// when a build asks for it by name.
+	Activation bool
+	// RuntimeDependencies is set when a dependency it adds has the compile or
+	// runtime scope; ManagedNames are the groupId:artifactId (as written) of
+	// what it manages, PropertyNames the properties it sets, and
+	// ReleaseRepositories the repositories it adds that serve releases.
+	RuntimeDependencies bool
+	// ImportsBOM is set when its management imports a BOM.
+	ImportsBOM          bool
+	ManagedNames        []string
+	PropertyNames       []string
+	ReleaseRepositories []string
 }
 
 // mavenPOM is the part of a pom file the remediation reads. Only the
@@ -52,9 +70,14 @@ type mavenPOM struct {
 	DependencyManagement                    []mavenDep // <dependencyManagement><dependencies>, imports included, in order
 	Profiles                                []mavenProfile
 	Repositories                            []string // <repositories><repository><url>
+	ReleaseRepositories                     []string // the same, without those whose releases are disabled
 	PluginRepositories                      []string
-	Relocation                              bool     // <distributionManagement><relocation> present
-	PluginVersionRefs                       []string // every ${name} outside <dependencies>, <dependencyManagement> and <properties> of the project, names only, deduplicated
+	Relocation                              bool // <distributionManagement><relocation> present
+	// PluginVersionRefs are the properties referenced anywhere but in the
+	// <version> of a top-level dependency or management entry: plugins,
+	// their configuration, other properties' values, the other fields of an
+	// entry, profiles. Names only, deduplicated.
+	PluginVersionRefs []string
 }
 
 // EffectiveGroupID is the project's own groupId, else the parent's.
@@ -247,6 +270,10 @@ func parseMavenDeps(container *pomNode) []mavenDep {
 		}
 		if ex := d.child("exclusions"); ex != nil && len(ex.elements("exclusion")) > 0 {
 			dep.HasExclusions = true
+			for _, e := range ex.elements("exclusion") {
+				dep.Exclusions = append(dep.Exclusions, e.childText("groupId")+":"+e.childText("artifactId"))
+			}
+			sort.Strings(dep.Exclusions)
 		}
 		out = append(out, dep)
 	}
@@ -259,6 +286,22 @@ func parseMavenRepoURLs(container *pomNode, item string) []string {
 	}
 	var out []string
 	for _, r := range container.elements(item) {
+		out = append(out, r.childText("url"))
+	}
+	return out
+}
+
+// parseMavenReleaseRepoURLs lists the URLs of the repositories that serve
+// releases: those whose <releases><enabled> is not false.
+func parseMavenReleaseRepoURLs(container *pomNode) []string {
+	if container == nil {
+		return nil
+	}
+	var out []string
+	for _, r := range container.elements("repository") {
+		if rel := r.child("releases"); rel != nil && strings.TrimSpace(rel.childText("enabled")) == "false" {
+			continue
+		}
 		out = append(out, r.childText("url"))
 	}
 	return out
@@ -340,22 +383,71 @@ func parseMavenPOM(data []byte) (*mavenPOM, error) {
 			}
 			if dm := pr.child("dependencyManagement"); dm != nil {
 				mp.DependencyManagement = dm.child("dependencies").hasContent()
+				for _, d := range parseMavenDeps(dm.child("dependencies")) {
+					mp.ManagedNames = append(mp.ManagedNames, d.GroupID+":"+d.ArtifactID)
+					if d.IsImport() {
+						mp.ImportsBOM = true
+					}
+				}
 			}
+			if act := pr.child("activation"); act != nil {
+				mp.Activation = act.childText("activeByDefault") == "true" || act.child("jdk") != nil || act.child("os") != nil ||
+					act.child("property") != nil || act.child("file") != nil
+			}
+			for _, d := range parseMavenDeps(pr.child("dependencies")) {
+				if d.Scope == "" || d.Scope == "compile" || d.Scope == "runtime" {
+					mp.RuntimeDependencies = true
+				}
+			}
+			if props := pr.child("properties"); props != nil {
+				for _, c := range props.children {
+					mp.PropertyNames = append(mp.PropertyNames, c.name)
+				}
+			}
+			mp.ReleaseRepositories = parseMavenReleaseRepoURLs(pr.child("repositories"))
 			p.Profiles = append(p.Profiles, mp)
 		}
 	}
 	p.Repositories = parseMavenRepoURLs(root.child("repositories"), "repository")
+	p.ReleaseRepositories = parseMavenReleaseRepoURLs(root.child("repositories"))
 	p.PluginRepositories = parseMavenRepoURLs(root.child("pluginRepositories"), "pluginRepository")
 	if dm := root.child("distributionManagement"); dm != nil && dm.child("relocation") != nil {
 		p.Relocation = true
 	}
 	seen := map[string]bool{}
+	// entries collects the references of the entries of a dependencies
+	// element, their version elements apart.
+	entries := func(container *pomNode) {
+		if container == nil {
+			return
+		}
+		for _, c := range container.children {
+			if c.name != "dependency" {
+				collectPOMRefs(c, seen, &p.PluginVersionRefs)
+				continue
+			}
+			for _, f := range c.children {
+				if f.name != "version" {
+					collectPOMRefs(f, seen, &p.PluginVersionRefs)
+				}
+			}
+		}
+	}
 	for _, c := range root.children {
 		switch c.name {
-		case "dependencies", "dependencyManagement", "properties":
-			continue
+		case "dependencies":
+			entries(c)
+		case "dependencyManagement":
+			for _, cc := range c.children {
+				if cc.name == "dependencies" {
+					entries(cc)
+				} else {
+					collectPOMRefs(cc, seen, &p.PluginVersionRefs)
+				}
+			}
+		default:
+			collectPOMRefs(c, seen, &p.PluginVersionRefs)
 		}
-		collectPOMRefs(c, seen, &p.PluginVersionRefs)
 	}
 	return p, nil
 }

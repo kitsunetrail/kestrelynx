@@ -221,6 +221,7 @@ func buildResult(job worker.Job, src, repl map[string][]byte, o fakeOutcome) []b
 type fakeFS struct {
 	mu    sync.Mutex
 	calls int
+	opts  []scanner.FSOptions
 	fn    func(n int, files map[string][]byte) (scanner.FSScan, error)
 }
 
@@ -230,6 +231,14 @@ func (f *fakeFS) ScanFS(_ context.Context, files map[string][]byte, _ scanner.Sc
 	f.calls++
 	f.mu.Unlock()
 	return f.fn(n, files)
+}
+
+// ScanFSWith records opts and answers like ScanFS.
+func (f *fakeFS) ScanFSWith(ctx context.Context, files map[string][]byte, p scanner.ScanConditions, opts scanner.FSOptions) (scanner.FSScan, error) {
+	f.mu.Lock()
+	f.opts = append(f.opts, opts)
+	f.mu.Unlock()
+	return f.ScanFS(ctx, files, p)
 }
 
 // fakePyPI serves release files by name==version; with auto set, a release

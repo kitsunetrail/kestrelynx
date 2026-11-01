@@ -10,7 +10,7 @@ import (
 
 // sourceScanTypes is the scanner result type of each manager's lockfile.
 var sourceScanTypes = map[DependencyManager]string{
-	ManagerNpm: "npm", ManagerPnpm: "pnpm", ManagerUv: "uv", ManagerPip: "pip", ManagerGo: typeGoModule,
+	ManagerNpm: "npm", ManagerPnpm: "pnpm", ManagerUv: "uv", ManagerPip: "pip", ManagerGo: typeGoModule, ManagerMaven: "pom",
 }
 
 // sourceCheck scans the dependency files before and after the update under

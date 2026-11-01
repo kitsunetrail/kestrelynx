@@ -563,6 +563,14 @@ func (c ctxScanner) ScanFS(ctx context.Context, files map[string][]byte, p scann
 	return c.inner.ScanFS(ctx, files, p)
 }
 
+func (c ctxScanner) ScanFSWith(ctx context.Context, files map[string][]byte, p scanner.ScanConditions, opts scanner.FSOptions) (scanner.FSScan, error) {
+	if err := ctx.Err(); err != nil {
+		return scanner.FSScan{}, err
+	}
+	*c.scans++
+	return c.inner.ScanFSWith(ctx, files, p, opts)
+}
+
 func TestItemBudget(t *testing.T) {
 	t.Run("reserve sets amounts aside and refuses what does not fit", func(t *testing.T) {
 		b := newItemBudget()

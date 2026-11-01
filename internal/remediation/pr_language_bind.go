@@ -54,6 +54,9 @@ func LanguageInputFingerprint(it LanguageItem) string {
 // languageLockPath is the lockfile a language item updates, "" when the files
 // the plan read do not name exactly one.
 func languageLockPath(it LanguageItem) string {
+	if it.Manager == ManagerMaven {
+		return mavenRootPom(it)
+	}
 	found := ""
 	n := 0
 	for _, f := range it.Source.Files {
@@ -66,6 +69,23 @@ func languageLockPath(it LanguageItem) string {
 		return ""
 	}
 	return found
+}
+
+// mavenRootPom is the pom.xml of the directory of a Maven item, the file
+// that stands for the reactor (its modules' pom files are read with it), ""
+// when the plan did not read it.
+func mavenRootPom(it LanguageItem) string {
+	root := it.Source.Directory
+	if root == "" {
+		root = "."
+	}
+	want := pathIn(root, "pom.xml")
+	for _, f := range it.Source.Files {
+		if f.Repository == "" && f.Path == want {
+			return want
+		}
+	}
+	return ""
 }
 
 // proposalFor returns the record of a pull request of this tool made from the

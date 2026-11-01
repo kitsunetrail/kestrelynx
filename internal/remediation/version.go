@@ -18,6 +18,8 @@ const (
 	// spellings are read. Pseudo-versions are prereleases and order as
 	// such; "+incompatible" is build metadata and takes no part in ordering.
 	schemeGo
+	// schemeMaven is Maven's ComparableVersion ordering.
+	schemeMaven
 )
 
 // version is a parsed version of one scheme. Only versions of the same scheme
@@ -36,6 +38,9 @@ func parseVersion(sc scheme, s string) (version, bool) {
 		return v, ok
 	case schemeGo:
 		v, ok := parseSemver(strings.TrimPrefix(s, "v"))
+		return v, ok
+	case schemeMaven:
+		v, ok := parseMavenVersion(s)
 		return v, ok
 	}
 	v, ok := parseSemver(s)

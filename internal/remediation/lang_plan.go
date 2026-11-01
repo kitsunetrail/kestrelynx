@@ -77,6 +77,9 @@ const (
 	// ManagerGo is Go modules: go.mod is both what is required and what is
 	// matched against, and go.sum changes with it.
 	ManagerGo DependencyManager = "go"
+	// ManagerMaven is Maven: the pom files are what is required, and the
+	// versions they resolve to are not written down anywhere.
+	ManagerMaven DependencyManager = "maven"
 )
 
 // LockfileName is the file whose entries the unit's packages are matched
@@ -93,6 +96,8 @@ func (m DependencyManager) LockfileName() string {
 		return "requirements.txt"
 	case ManagerGo:
 		return "go.mod"
+	case ManagerMaven:
+		return "pom.xml"
 	}
 	return ""
 }
@@ -104,6 +109,8 @@ func (m DependencyManager) scheme() scheme {
 		return schemePEP440
 	case ManagerGo:
 		return schemeGo
+	case ManagerMaven:
+		return schemeMaven
 	}
 	return schemeSemver
 }

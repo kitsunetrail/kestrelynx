@@ -31,6 +31,11 @@ type depUnit struct {
 	// goBinsUnpinned the binaries of those scans by entity and target.
 	goPinned, goUnpinned   []srcFinding
 	goBins, goBinsUnpinned map[string]*goBinary
+	// The jar findings are kept per running image in the same way until the
+	// pom files name the project's own archives (see mavenSelect): jarScans
+	// and jarScansUnpinned are the archives of each scan.
+	jarPinned, jarUnpinned     []srcFinding
+	jarScans, jarScansUnpinned map[int]*jarScan
 }
 
 // dependencyPair is a manager's manifest and lockfile; lock is the file the
@@ -68,7 +73,9 @@ func unitsOf(ms []DependencyMapping) []*depUnit {
 				workloads: map[string]bool{},
 				goBins:    map[string]*goBinary{},
 
-				goBinsUnpinned: map[string]*goBinary{},
+				goBinsUnpinned:   map[string]*goBinary{},
+				jarScans:         map[int]*jarScan{},
+				jarScansUnpinned: map[int]*jarScan{},
 			}
 			idx[k] = u
 			out = append(out, u)
@@ -116,8 +123,10 @@ func (r *run) languagePart(inputs []ImageInput) {
 			verified := in.Scan.Pinned && in.Scan.Subject.Resolved
 			if verified {
 				goBinariesOf(rank, in.Scan, u.goBins)
+				jarPackagesOf(rank, in.Scan, u.jarScans)
 			} else {
 				goBinariesOf(rank, in.Scan, u.goBinsUnpinned)
+				jarPackagesOf(rank, in.Scan, u.jarScansUnpinned)
 			}
 			for _, f := range in.Scan.Findings {
 				lf := srcFinding{f: f, entity: entity, workloads: ws, rank: rank}
@@ -126,6 +135,10 @@ func (r *run) languagePart(inputs []ImageInput) {
 					u.goPinned = append(u.goPinned, lf)
 				case f.Type == typeGoBinary:
 					u.goUnpinned = append(u.goUnpinned, lf)
+				case f.Type == typeJar && verified:
+					u.jarPinned = append(u.jarPinned, lf)
+				case f.Type == typeJar:
+					u.jarUnpinned = append(u.jarUnpinned, lf)
 				case verified:
 					pinned = append(pinned, lf)
 				default:
@@ -135,9 +148,9 @@ func (r *run) languagePart(inputs []ImageInput) {
 		}
 		u.groups = groupLanguageFindings(pinned, cfg.Intel)
 		u.unpinned = groupLanguageFindings(unpinned, cfg.Intel)
-		// The Go findings are grouped as they are only to place the unit
-		// among the others.
-		goAll := groupLanguageFindings(append(append([]srcFinding(nil), u.goPinned...), u.goUnpinned...), cfg.Intel)
+		// The Go and jar findings are grouped as they are only to place the
+		// unit among the others.
+		goAll := groupLanguageFindings(append(append(append(append([]srcFinding(nil), u.goPinned...), u.goUnpinned...), u.jarPinned...), u.jarUnpinned...), cfg.Intel)
 		if len(u.groups) == 0 && len(u.unpinned) == 0 && len(goAll) == 0 {
 			continue
 		}
@@ -201,11 +214,12 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 		}
 	}
 	hasGo := len(u.goPinned) > 0 || len(u.goUnpinned) > 0
+	hasJar := len(u.jarPinned) > 0 || len(u.jarUnpinned) > 0
 
 	var sha string
 	var entries []github.Entry
 	var srcErr error
-	if (len(subs) > 0 || hasGo) && r.stopReason() == nil {
+	if (len(subs) > 0 || hasGo || hasJar) && r.stopReason() == nil {
 		gh := r.p.cfg.GitHub
 		if sha, srcErr = gh.ResolveBranch(r.ctx, u.repo, u.branch); srcErr == nil {
 			entries, srcErr = gh.ListDirectory(r.ctx, u.repo, sha, u.dir)
@@ -245,6 +259,18 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 		}
 	}
 
+	// A jar finding belongs to this source only if the directory is a Maven
+	// project, and then only those of the project's own archives (see
+	// mavenSelect).
+	var reactor *mavenReactor
+	if _, isMaven := byName(entries, "pom.xml"); hasJar && srcErr == nil && isMaven && r.stopReason() == nil {
+		it := newItem(typeJar)
+		var keep bool
+		if reactor, keep = r.analyseMavenUnit(&it, u, entries); keep {
+			out = append(out, it)
+		}
+	}
+
 	for _, gs := range subs {
 		it := newItem(gs[0].Type)
 		for _, g := range gs {
@@ -268,6 +294,12 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 		// The unverified scans' Go findings are those of binaries built from
 		// the module; they are listed, not matched against go.mod.
 		kept, _ := goSelect(u.goUnpinned, u.goBinsUnpinned, &goMod{module: goModule}, false)
+		unpinned = append(append([]*findingGroup(nil), unpinned...), groupLanguageFindings(kept, r.p.cfg.Intel)...)
+	}
+	if reactor != nil && len(u.jarUnpinned) > 0 {
+		// The unverified scans' jar findings are those of the project's own
+		// archives; they are listed, not matched against the pom files.
+		kept, _, _, _ := mavenSelect(u.jarUnpinned, u.jarScansUnpinned, reactor)
 		unpinned = append(append([]*findingGroup(nil), unpinned...), groupLanguageFindings(kept, r.p.cfg.Intel)...)
 	}
 	if len(unpinned) > 0 {

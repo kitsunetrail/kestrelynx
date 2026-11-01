@@ -159,6 +159,10 @@ func (u *LangUpdater) Run(ctx context.Context, plan *Plan) LangUpdateUsage {
 		if it.Category != CategoryDependencyUpdateCandidate {
 			continue
 		}
+		if it.Manager == ManagerMaven {
+			// Maven units are planned only: their update is not made yet.
+			continue
+		}
 		switch {
 		case ctx.Err() != nil:
 			deferItem(it, ReasonCycleDeadline, ctx.Err().Error())

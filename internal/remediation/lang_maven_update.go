@@ -325,9 +325,16 @@ type mavenPlace struct {
 func (r *updateRun) placesOf(ctx context.Context, mf *mavenFiles, chains map[*mavenModule][]mavenChainPOM, name string) ([]mavenPlace, *updateFailure) {
 	rx := mf.rx
 	root := rx.modules[0]
+	unknown := func(m *mavenModule) *updateFailure {
+		return manualFailure(ReasonMavenVersionSourceUnsupported, "a dependency or management entry %s reads has a name that cannot be read, so where the version of %s is decided is not known", m.path, name)
+	}
 	var mods []*mavenModule
 	for _, m := range rx.modules {
-		if ci, _ := nearestDeclaration(chains[m], name); ci >= 0 {
+		ci, _ := nearestDeclaration(chains[m], name)
+		if ci == mavenUnknown {
+			return nil, unknown(m)
+		}
+		if ci >= 0 {
 			mods = append(mods, m)
 		}
 	}
@@ -345,7 +352,11 @@ func (r *updateRun) placesOf(ctx context.Context, mf *mavenFiles, chains map[*ma
 			out = append(out, pl)
 			continue
 		}
-		if ci, i := nearestManagement(chain, name); ci >= 0 {
+		ci, i := nearestManagement(chain, name)
+		if ci == mavenUnknown {
+			return nil, unknown(m)
+		}
+		if ci >= 0 {
 			pl, fail := placeOfText(chain, ci, chain[ci].pom.DependencyManagement[i].Version, i, true, root, name)
 			if fail != nil {
 				return nil, fail
@@ -363,16 +374,34 @@ func (r *updateRun) placesOf(ctx context.Context, mf *mavenFiles, chains map[*ma
 	return dedupePlaces(out), nil
 }
 
+// mavenUnknown is what the nearest-entry lookups return when an entry
+// before any match has a name that cannot be read, so whether it is the
+// package is not known.
+const mavenUnknown = -2
+
+// entryNameIn reads the groupId:artifactId of an entry in the module's
+// context; ok is false when either cannot be read.
+func entryNameIn(chain []mavenChainPOM, d mavenDep) (string, bool) {
+	g, ok1 := chainResolve(chain, d.GroupID)
+	a, ok2 := chainResolve(chain, d.ArtifactID)
+	return g + ":" + a, ok1 && ok2
+}
+
 // nearestDeclaration finds the dependency declaration of name nearest the
 // module, at compile or runtime scope: the index of the pom in chain and of
-// the entry, or -1. What a parent declares is interpolated in the module.
+// the entry, -1 when there is none, or mavenUnknown. What a parent declares
+// is interpolated in the module.
 func nearestDeclaration(chain []mavenChainPOM, name string) (int, int) {
 	for ci, c := range chain {
 		for i, d := range c.pom.Dependencies {
 			if !mavenRuntimeScope(d) {
 				continue
 			}
-			if g, ok := chainResolve(chain, d.GroupID); ok && g+":"+d.ArtifactID == name {
+			n, ok := entryNameIn(chain, d)
+			if !ok {
+				return mavenUnknown, mavenUnknown
+			}
+			if n == name {
 				return ci, i
 			}
 		}
@@ -382,8 +411,11 @@ func nearestDeclaration(chain []mavenChainPOM, name string) (int, int) {
 
 // bomPlace is the place of a package the module's chain manages through an
 // imported BOM: the property its import version is, when exactly one BOM
-// manages it itself and that version is a property; a pin in the root
-// otherwise.
+// manages it itself (in the BOM or the BOM's parents) and that version is a
+// property; a pin in the root when no BOM manages it. A BOM moves its
+// packages together, so a package one manages otherwise (through a BOM it
+// imports, or several BOMs) is not pinned apart from the rest: it is left
+// alone.
 func (r *updateRun) bomPlace(ctx context.Context, chain []mavenChainPOM, root *mavenModule, name string) (mavenPlace, *updateFailure) {
 	var managers []mavenPlace
 	for _, c := range chain {
@@ -392,36 +424,87 @@ func (r *updateRun) bomPlace(ctx context.Context, chain []mavenChainPOM, root *m
 				continue
 			}
 			g, ok1 := chainResolve(chain, d.GroupID)
-			v, ok2 := chainResolve(chain, d.Version)
-			if !ok1 || !ok2 {
+			a, ok2 := chainResolve(chain, d.ArtifactID)
+			v, ok3 := chainResolve(chain, d.Version)
+			if !ok1 || !ok2 || !ok3 {
 				return mavenPlace{}, manualFailure(ReasonMavenVersionSourceUnsupported, "an imported BOM is named with an expression that cannot be resolved")
 			}
-			bom, fail := r.fetchPOM(ctx, g, d.ArtifactID, v)
+			direct, nested, fail := r.bomManagesDeep(ctx, g, a, v, name, 0)
 			if fail != nil {
 				return mavenPlace{}, fail
 			}
-			managed, nested := bomManages(bom, name)
-			if !managed && !nested {
+			if !direct && !nested {
 				continue
 			}
-			pl := pinPlace(root, chain, name)
-			pl.from = v
-			if p, isRef := mavenPropertyRef(d.Version); managed && isRef && propertyOwner(chain, p) >= 0 {
-				pl = mavenPlace{kind: MavenEditPropertyOverride, file: root.path, prop: p, from: v, bom: g + ":" + d.ArtifactID, chain: chain,
-					edit: mavenEdit{Kind: mavenSetProperty, Name: p}}
+			p, isRef := mavenPropertyRef(d.Version)
+			if !direct || !isRef || propertyOwner(chain, p) < 0 {
+				return mavenPlace{}, manualFailure(ReasonMavenVersionSourceUnsupported, "%s is managed by the BOM %s:%s, whose version is not a property the project can set to move the set, and a package of a BOM is not pinned apart from the rest", name, g, a)
 			}
-			pl.managed = true
-			managers = append(managers, pl)
+			managers = append(managers, mavenPlace{kind: MavenEditPropertyOverride, file: root.path, prop: p, from: v, bom: g + ":" + a, chain: chain,
+				edit: mavenEdit{Kind: mavenSetProperty, Name: p}})
 		}
 	}
 	managers = dedupePlaces(managers)
-	if len(managers) == 1 {
+	switch len(managers) {
+	case 0:
+		// Nothing manages it: a pin of the project's own decides.
+		pl := pinPlace(root, chain, name)
+		pl.managed = true
+		return pl, nil
+	case 1:
 		return managers[0], nil
 	}
-	// Several BOMs, a nested one, or none: a pin of the project's own decides.
-	pl := pinPlace(root, chain, name)
-	pl.managed = true
-	return pl, nil
+	return mavenPlace{}, manualFailure(ReasonMavenVersionSourceUnsupported, "%s is managed by more than one imported BOM", name)
+}
+
+// bomManagesDeep reports whether the BOM g:a:v manages name itself (in its
+// own management or its parents'), or only through a BOM it imports,
+// followed to a bounded depth. A BOM that cannot be followed is a failure:
+// what it manages is not known, so the package is not pinned.
+func (r *updateRun) bomManagesDeep(ctx context.Context, g, a, v, name string, depth int) (direct, nested bool, fail *updateFailure) {
+	if depth > 3 {
+		return false, false, manualFailure(ReasonMavenVersionSourceUnsupported, "the BOMs %s:%s:%s imports go deeper than this update follows", g, a, v)
+	}
+	bom, fail := r.fetchPOM(ctx, g, a, v)
+	if fail != nil {
+		return false, false, fail
+	}
+	bchain := []mavenChainPOM{{pom: bom, coord: g + ":" + a + ":" + v}}
+	for pa, up := bom.Parent, 0; pa != nil && up < maxMavenParentDepth; up++ {
+		pp, fail := r.fetchPOM(ctx, pa.GroupID, pa.ArtifactID, pa.Version)
+		if fail != nil {
+			return false, false, fail
+		}
+		bchain = append(bchain, mavenChainPOM{pom: pp, coord: pa.GroupID + ":" + pa.ArtifactID + ":" + pa.Version})
+		pa = pp.Parent
+	}
+	switch ci, _ := nearestManagement(bchain, name); {
+	case ci == mavenUnknown:
+		return false, false, manualFailure(ReasonMavenVersionSourceUnsupported, "%s:%s:%s manages a package whose name cannot be read, so whether it manages %s is not known", g, a, v, name)
+	case ci >= 0:
+		return true, false, nil
+	}
+	for _, c := range bchain {
+		for _, d := range c.pom.DependencyManagement {
+			if !d.IsImport() {
+				continue
+			}
+			ig, ok1 := chainResolve(bchain, d.GroupID)
+			ia, ok2 := chainResolve(bchain, d.ArtifactID)
+			iv, ok3 := chainResolve(bchain, d.Version)
+			if !ok1 || !ok2 || !ok3 {
+				return false, false, manualFailure(ReasonMavenVersionSourceUnsupported, "%s:%s:%s imports a BOM named with an expression that cannot be resolved", g, a, v)
+			}
+			dd, nn, fail := r.bomManagesDeep(ctx, ig, ia, iv, name, depth+1)
+			if fail != nil {
+				return false, false, fail
+			}
+			if dd || nn {
+				return false, true, nil
+			}
+		}
+	}
+	return false, false, nil
 }
 
 // pinPlace pins name in the root's management: its explicit entry's version
@@ -435,38 +518,24 @@ func pinPlace(root *mavenModule, chain []mavenChainPOM, name string) mavenPlace 
 }
 
 // nearestManagement finds the explicit management of name nearest the
-// module: the index of the pom in chain and of the entry, or -1.
+// module: the index of the pom in chain and of the entry, -1 when there is
+// none, or mavenUnknown.
 func nearestManagement(chain []mavenChainPOM, name string) (int, int) {
 	for ci, c := range chain {
 		for i, d := range c.pom.DependencyManagement {
 			if d.IsImport() || d.Classifier != "" || mavenTypeOf(d) != "jar" {
 				continue
 			}
-			if g, ok := chainResolve(chain, d.GroupID); ok && g+":"+d.ArtifactID == name {
+			n, ok := entryNameIn(chain, d)
+			if !ok {
+				return mavenUnknown, mavenUnknown
+			}
+			if n == name {
 				return ci, i
 			}
 		}
 	}
 	return -1, -1
-}
-
-// bomManages reports whether a BOM manages name itself, or only through a
-// BOM it imports.
-func bomManages(bom *mavenPOM, name string) (managed, nested bool) {
-	for _, d := range bom.DependencyManagement {
-		if d.IsImport() {
-			nested = true
-			continue
-		}
-		g := d.GroupID
-		if g == "${project.groupId}" {
-			g = bom.EffectiveGroupID()
-		}
-		if g+":"+d.ArtifactID == name && d.Classifier == "" && mavenTypeOf(d) == "jar" {
-			return true, false
-		}
-	}
-	return false, nested
 }
 
 // rootManagementIndex is the index of the root's explicit management of
@@ -730,11 +799,24 @@ func (r *updateRun) runMaven(ctx context.Context) *updateFailure {
 		plans = append(plans, pl)
 	}
 	if len(leftOut) > 0 {
-		f := &updateFailure{category: CategoryManual, reason: firstOut.reason, detail: firstOut.detail, pkgs: leftOut}
-		if len(plans) > 0 && r.attempt == 0 {
-			f.retryWithout = leftOut
+		if len(plans) == 0 {
+			return &updateFailure{category: CategoryManual, reason: firstOut.reason, detail: firstOut.detail, pkgs: leftOut}
 		}
-		return f
+		// Nothing has been edited yet, so the targets that cannot be placed are
+		// left out of this run itself; the run made again without packages, if
+		// one is needed, is kept for what only the scans can tell.
+		merged := map[string]updateFailureDetail{}
+		for k, v := range r.leftOut {
+			merged[k] = v
+		}
+		for k, v := range leftOut {
+			merged[k] = v
+		}
+		r.leftOut = merged
+		r.set = r.set.without(leftOut)
+		for n := range leftOut {
+			r.upd.Notes = append(r.upd.Notes, fmt.Sprintf("%s was left out of the update: %s", n, leftOut[n].detail))
+		}
 	}
 
 	// The values of the properties and the versions written; a property
@@ -904,7 +986,8 @@ func (r *updateRun) planTarget(ctx context.Context, mf *mavenFiles, chains map[*
 		if why == "" {
 			continue
 		}
-		if !place.managed {
+		if !place.managed || place.bom != "" {
+			// A package of a BOM moves with its set or not at all.
 			return mavenPlanned{}, manualFailure(ReasonMavenVersionSourceUnsupported, "%s", why)
 		}
 		r.upd.Notes = append(r.upd.Notes, why+"; "+n+" is pinned in the root's dependencyManagement instead")
@@ -1166,7 +1249,9 @@ func (r *updateRun) declaredNeeds(ctx context.Context, g, a, v string) ([][2]str
 			}
 			ver := d.Version
 			if ver == "" {
-				if ci, i := nearestManagement(chain, name); ci >= 0 {
+				if ci, i := nearestManagement(chain, name); ci == mavenUnknown {
+					return nil, manualFailure(ReasonMavenDependencyHeldBack, "%s:%s:%s manages a package whose name cannot be read, so the version it needs of %s is not known", g, a, v, name)
+				} else if ci >= 0 {
 					ver = chain[ci].pom.DependencyManagement[i].Version
 				} else {
 					bv, fail := r.bomManagedVersion(ctx, chain, name, 0)
@@ -1220,7 +1305,11 @@ func (r *updateRun) bomManagedVersion(ctx context.Context, chain []mavenChainPOM
 				bchain = append(bchain, mavenChainPOM{pom: pp, coord: pa.GroupID + ":" + pa.ArtifactID + ":" + pa.Version})
 				pa = pp.Parent
 			}
-			if ci, i := nearestManagement(bchain, name); ci >= 0 {
+			ci, i := nearestManagement(bchain, name)
+			if ci == mavenUnknown {
+				return "", manualFailure(ReasonMavenDependencyHeldBack, "%s manages a package whose name cannot be read", g+":"+a+":"+v)
+			}
+			if ci >= 0 {
 				// A BOM that manages the package decides its version; one whose
 				// version cannot be read leaves it unknown, not to a BOM below.
 				mv, ok := chainResolve(bchain, bchain[ci].pom.DependencyManagement[i].Version)

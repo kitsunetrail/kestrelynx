@@ -124,6 +124,7 @@ type prText struct {
 	// Maven bodies.
 	RegistryMaven, LMavenBuildCheck, LMavenHead, LMavenEditVersion, LMavenEditProperty, LMavenEditOverride string
 	LMavenEditPin, LMavenResolvedBy, LMavenOverrideNote, LMavenMovesTitle, LMavenMove, LMavenMoveNone      string
+	LMavenNoTool                                                                                           string
 	RelDirect, RelTransitive, RelMixed, RelUnknown                                                         string
 }
 
@@ -337,6 +338,7 @@ var enPRText = prText{
 	LMavenMovesTitle:    "Packages whose resolved version also changed",
 	LMavenMove:          "- %[1]s: %[2]s to %[3]s\n",
 	LMavenMoveNone:      "none",
+	LMavenNoTool:        "- No package manager was run: KestreLynx edited the pom files itself, as described below\n",
 	RelDirect:           "direct dependency",
 	RelTransitive:       "transitive dependency",
 	RelMixed:            "direct and transitive dependency",
@@ -539,11 +541,12 @@ var jaPRText = prText{
 	LMavenEditProperty:  "- %[1]s: プロパティ %[2]s を %[3]s から %[4]s に変えます (%[5]s の版を決めています)\n",
 	LMavenEditOverride:  "- %[1]s: 親の pom のプロパティ %[2]s を、%[3]s の代わりに %[4]s で上書きします (%[5]s の版を決めています)\n",
 	LMavenEditPin:       "- %[1]s: dependencyManagement で %[2]s を %[4]s に固定します\n",
-	LMavenResolvedBy:    "- 版は %sで確かめました。更新前後の pom ファイルは、Trivy が Maven Central から解決してスキャンしました。Trivy が解決を再現できない書き方 (profile、ほかのリポジトリ、版の範囲、relocation など) があれば、更新を止めています\n",
+	LMavenResolvedBy:    "- 版は %s で確かめました。更新前後の pom ファイルは、Trivy が Maven Central から解決してスキャンしました。Trivy が解決を再現できない書き方 (profile、ほかのリポジトリ、版の範囲、relocation など) があれば、更新を止めています\n",
 	LMavenOverrideNote:  "- 親のプロパティの上書きと dependencyManagement の固定は、消すまで残ります。修正を含む版に親 (Spring Boot など) を上げるときに外してください。外さないと、この版に固定されたままになります\n",
 	LMavenMovesTitle:    "あわせて解決後の版が変わったパッケージ",
 	LMavenMove:          "- %[1]s: %[2]s から %[3]s へ\n",
 	LMavenMoveNone:      "なし",
+	LMavenNoTool:        "- パッケージマネージャーは実行していません。KestreLynx が pom ファイルを直接書き換えました (内容は下記のとおり)\n",
 	RelDirect:           "直接依存",
 	RelTransitive:       "間接依存",
 	RelMixed:            "直接依存かつ間接依存",

@@ -706,9 +706,50 @@ func mavenManagementDivergences(poms []*mavenPOM, runtime func(mavenDep) bool) [
 		}
 		return typ + ":" + d.Classifier
 	}
+	// A pom read only as a parent or as an imported BOM is never resolved on
+	// its own: what it declares and manages is judged in the poms that inherit
+	// or import it, with their properties. A pom something depends on is
+	// resolved on its own whatever its packaging.
+	// Names are read as each pom resolves them, with what it inherits; a name
+	// that cannot be read might be any of them, and then every pom is judged
+	// on its own.
+	asParent, asImport, asDependency := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	unread := false
+	for _, p := range poms {
+		if p == nil {
+			continue
+		}
+		if p.Parent != nil {
+			asParent[p.Parent.GroupID+":"+p.Parent.ArtifactID+":"+p.Parent.Version] = true
+		}
+		view := mavenViewOf(p, byCoord)
+		read := func(d mavenDep, into map[string]bool) {
+			g, ok1 := resolveWith(view.props, d.GroupID)
+			a, ok2 := resolveWith(view.props, d.ArtifactID)
+			if !ok1 || !ok2 {
+				unread = true
+				return
+			}
+			into[g+":"+a] = true
+		}
+		for _, c := range view.chain {
+			for _, d := range c.Dependencies {
+				read(d, asDependency)
+			}
+			for _, d := range c.DependencyManagement {
+				if d.IsImport() {
+					read(d, asImport)
+				}
+			}
+		}
+	}
 	var out []string
 	for _, p := range poms {
 		if p == nil {
+			continue
+		}
+		name := p.EffectiveGroupID() + ":" + p.ArtifactID
+		if !unread && (asParent[name+":"+p.EffectiveVersion()] || asImport[name]) && !asDependency[name] {
 			continue
 		}
 		sc, mv, ok := mavenManagementLists(p, byCoord)

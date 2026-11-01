@@ -375,6 +375,19 @@ func TestMavenAggregateProblems(t *testing.T) {
 		{"a scope written as a property", []string{
 			relayPOM("g", "p", "1", `<properties><s>runtime</s></properties>`+deps(noVer("x", "y", "<scope>${s}</scope>"))+mgmt(aggDep("x", "y", "<optional>true</optional>"))),
 		}, []string{"declares x:y, which the scanner manages"}},
+		{"a pom of packaging pom that something depends on is judged on its own", []string{
+			relayPOM("g", "p", "1", deps(aggDep("g", "agg", "<type>pom</type>"))),
+			relayPOM("g", "agg", "1", `<packaging>pom</packaging>`+deps(noVer("x", "y", ""))+mgmt(aggDep("x", "y", "<optional>true</optional>"))),
+		}, []string{"pom g:agg:1 declares x:y, which the scanner manages"}},
+		{"a dependency named through an inherited property", []string{
+			child(`<properties><bundle>agg</bundle></properties>` + deps(noVer("g", "${bundle}", "<type>pom</type>")) + mgmt(aggDep("g", "agg", "<type>pom</type><scope>import</scope>"))),
+			relayPOM("g", "parent", "1", `<packaging>pom</packaging>`),
+			relayPOM("g", "agg", "1", `<packaging>pom</packaging>`+deps(noVer("x", "y", ""))+mgmt(aggDep("x", "y", "<optional>true</optional>"))),
+		}, []string{"pom g:agg:1 declares x:y, which the scanner manages"}},
+		{"a parent only is judged through its child", []string{
+			child(""),
+			relayPOM("g", "parent", "1", `<packaging>pom</packaging><properties><v>1</v></properties>`+mgmt(`<dependency><groupId>g</groupId><artifactId>missing</artifactId><version>${v}</version><type>pom</type><scope>import</scope></dependency>`)),
+		}, []string{"pom g:child:1 imports a BOM that cannot be followed"}},
 		{"an inherited declaration managed optional by the child", []string{
 			child(mgmt(aggDep("x", "y", "<optional>true</optional>"))),
 			relayPOM("g", "parent", "1", deps(aggDep("x", "y", ""))),

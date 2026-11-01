@@ -193,11 +193,19 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 	}
 
 	b.WriteString("\n## " + t.HeadVerification + "\n\n")
-	writeEnvironment(t, &b, in.Record)
+	if it.Manager == ManagerMaven {
+		// A Maven update runs no package manager: this program edits the pom
+		// files, and what it did is described below.
+		b.WriteString(t.LMavenNoTool)
+	} else {
+		writeEnvironment(t, &b, in.Record)
+	}
 	if up := it.Update; up != nil {
-		b.WriteString(t.LOps)
-		if len(up.Steps) == 0 {
-			b.WriteString(t.LNoOps)
+		if it.Manager != ManagerMaven {
+			b.WriteString(t.LOps)
+			if len(up.Steps) == 0 {
+				b.WriteString(t.LNoOps)
+			}
 		}
 		for _, s := range up.Steps {
 			fmt.Fprintf(&b, t.LStep, mdCode(s.Op), s.ExitCode)

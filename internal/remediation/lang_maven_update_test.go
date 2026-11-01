@@ -325,38 +325,31 @@ func TestMavenUpdateRefusals(t *testing.T) {
 		f.resolve = func(int, map[string][]byte) map[string]map[string]string { return nil }
 		wantCategory(t, f.run(), CategoryManual, ReasonMavenVersionSourceUnsupported)
 	})
-	t.Run("a BOM with no release that fixes it is pinned instead", func(t *testing.T) {
+	t.Run("a package of a BOM that no release of the BOM fixes is left alone", func(t *testing.T) {
 		f := newMavenFlow(t, map[string]string{"svc/pom.xml": appPom}, mavenPkg("com.fasterxml.jackson.core:jackson-databind", "2.13.3", "2.14.0", "CVE-J"))
-		f.vulns["com.fasterxml.jackson.core:jackson-databind@2.13.3"] = []string{"CVE-J"}
-		f.resolve = func(n int, files map[string][]byte) map[string]map[string]string {
-			v := "2.13.3"
-			if pomHas(files, "pom.xml", "<artifactId>jackson-databind</artifactId>") {
-				v = "2.14.0"
-			}
-			return map[string]map[string]string{"pom.xml": {"com.fasterxml.jackson.core:jackson-databind": v}}
-		}
+		f.resolve = func(int, map[string][]byte) map[string]map[string]string { return nil }
 		it := f.run()
-		wantCategory(t, it, CategoryPRCandidate, ReasonUpdateVerified)
-		if e := it.Update.Maven.Edits[0]; e.Kind != MavenEditManagedPin || e.To != "2.14.0" {
-			t.Errorf("edit = %+v", e)
+		wantCategory(t, it, CategoryManual, ReasonMavenVersionSourceUnsupported)
+		if !strings.Contains(it.Detail, "jackson-bom") {
+			t.Errorf("detail = %s", it.Detail)
 		}
 	})
 	t.Run("a release whose dependencies the project holds back", func(t *testing.T) {
-		f := newMavenFlow(t, map[string]string{"svc/pom.xml": appPom}, mavenPkg("com.fasterxml.jackson.core:jackson-databind", "2.13.3", "2.14.0", "CVE-J"))
-		f.reg.poms["com.fasterxml.jackson.core:jackson-databind:2.14.0"] = `<project><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId><version>2.14.0</version>
-  <properties><core.version>2.14.0</core.version></properties>
-  <dependencies><dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-core</artifactId><version>${core.version}</version></dependency></dependencies></project>`
-		f.vulns["com.fasterxml.jackson.core:jackson-databind@2.13.3"] = []string{"CVE-J"}
+		f := newMavenFlow(t, map[string]string{"svc/pom.xml": appPom}, mavenPkg("org.apache.commons:commons-lang3", "3.11", "3.12.0", "CVE-L"))
+		f.reg.poms["org.apache.commons:commons-lang3:3.12.0"] = `<project><groupId>org.apache.commons</groupId><artifactId>commons-lang3</artifactId><version>3.12.0</version>
+  <properties><y.version>2</y.version></properties>
+  <dependencies><dependency><groupId>x</groupId><artifactId>y</artifactId><version>${y.version}</version></dependency></dependencies></project>`
+		f.vulns["org.apache.commons:commons-lang3@3.11"] = []string{"CVE-L"}
 		f.resolve = func(n int, files map[string][]byte) map[string]map[string]string {
-			v := "2.13.3"
-			if pomHas(files, "pom.xml", "<artifactId>jackson-databind</artifactId>") {
-				v = "2.14.0"
+			v := "3.11"
+			if pomHas(files, "pom.xml", "<version>3.12.0</version>") {
+				v = "3.12.0"
 			}
-			return map[string]map[string]string{"pom.xml": {"com.fasterxml.jackson.core:jackson-databind": v, "com.fasterxml.jackson.core:jackson-core": "2.13.3"}}
+			return map[string]map[string]string{"pom.xml": {"org.apache.commons:commons-lang3": v, "x:y": "1"}}
 		}
 		it := f.run()
 		wantCategory(t, it, CategoryManual, ReasonMavenDependencyHeldBack)
-		if !strings.Contains(it.Detail, "jackson-core 2.13.3 (com.fasterxml.jackson.core:jackson-databind 2.14.0 declares 2.14.0)") {
+		if !strings.Contains(it.Detail, "x:y 1 (org.apache.commons:commons-lang3 3.12.0 declares 2)") {
 			t.Errorf("detail = %s", it.Detail)
 		}
 	})
@@ -538,4 +531,79 @@ func TestChainResolveParentCoordinates(t *testing.T) {
 			t.Errorf("%s = %q %v", in, got, ok)
 		}
 	}
+}
+
+// A Maven pull request lists the edits of the pom files, says the versions
+// were checked on Maven Central and resolved by Trivy, asks for Maven's own
+// resolution and build, and claims no package manager run.
+func TestLanguagePRBody_Maven(t *testing.T) {
+	for _, lang := range []BodyLanguage{BodyEN, BodyJA} {
+		in := languageBodyFixture(lang, "<!-- marker -->", true)
+		in.Item.Manager = ManagerMaven
+		in.LockPath = "svc/pom.xml"
+		in.Files = []FileChange{{Path: "svc/pom.xml"}}
+		in.Record.Manager = "maven"
+		in.Record.Chain, in.Record.ManifestEdits, in.Record.Tool, in.Record.Runtime = nil, nil, nil, nil
+		in.Item.Update.Diff, in.Item.Update.Steps = nil, nil
+		in.Item.Update.Maven = &MavenUpdate{
+			Edits: []MavenEditRecord{
+				{File: "svc/pom.xml", Kind: MavenEditPropertyOverride, Package: "org.apache.tomcat.embed:tomcat-embed-core", Property: "tomcat.version", From: "9.0.63", To: "9.0.121"},
+				{File: "svc/pom.xml", Kind: MavenEditVersion, Package: "org.apache.commons:commons-lang3", From: "3.11", To: "3.12.0"},
+			},
+			Moves: []MavenMove{{Name: "org.apache.tomcat.embed:tomcat-embed-el", From: []string{"9.0.63"}, To: []string{"9.0.121"}}},
+		}
+		body, err := buildLanguagePRBody(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"`tomcat.version`", "`9.0.121`", "`org.apache.tomcat.embed:tomcat-embed-el`", "`mvn -B dependency:tree && mvn -B verify`", "Maven Central"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s: the body lacks %q:\n%s", lang, want, body)
+			}
+		}
+		for _, not := range []string{"no record of them", "記録を残す前", "installs from the lockfile", "lockfile からのインストール"} {
+			if strings.Contains(body, not) {
+				t.Errorf("%s: the body says %q:\n%s", lang, not, body)
+			}
+		}
+	}
+}
+
+// A package a BOM manages through the BOM's parent is a package of the set,
+// not one to pin on its own.
+func TestMavenUpdateBOMParentManagement(t *testing.T) {
+	pom := strings.Replace(appPom, "</properties>", `</properties>
+  <dependencyManagement>
+    <dependencies>
+      <dependency><groupId>b</groupId><artifactId>bom</artifactId><version>1</version><type>pom</type><scope>import</scope></dependency>
+    </dependencies>
+  </dependencyManagement>`, 1)
+	f := newMavenFlow(t, map[string]string{"svc/pom.xml": pom}, mavenPkg("x:y", "1", "2", "CVE-X"))
+	f.reg.versions["x:y"] = []string{"1", "2"}
+	f.reg.poms["b:bom:1"] = `<project><parent><groupId>b</groupId><artifactId>bom-parent</artifactId><version>1</version></parent><artifactId>bom</artifactId><packaging>pom</packaging></project>`
+	f.reg.poms["b:bom-parent:1"] = `<project><groupId>b</groupId><artifactId>bom-parent</artifactId><version>1</version><packaging>pom</packaging>
+  <dependencyManagement><dependencies>
+    <dependency><groupId>x</groupId><artifactId>y</artifactId><version>1</version></dependency>
+    <dependency><groupId>x</groupId><artifactId>z</artifactId><version>1</version></dependency>
+  </dependencies></dependencyManagement></project>`
+	f.resolve = func(int, map[string][]byte) map[string]map[string]string { return nil }
+	wantCategory(t, f.run(), CategoryManual, ReasonMavenVersionSourceUnsupported)
+}
+
+// A BOM that manages the package under an artifactId written as a property
+// still manages it.
+func TestMavenUpdateBOMManagementByProperty(t *testing.T) {
+	pom := strings.Replace(appPom, "</properties>", `</properties>
+  <dependencyManagement>
+    <dependencies>
+      <dependency><groupId>b</groupId><artifactId>bom</artifactId><version>1</version><type>pom</type><scope>import</scope></dependency>
+    </dependencies>
+  </dependencyManagement>`, 1)
+	f := newMavenFlow(t, map[string]string{"svc/pom.xml": pom}, mavenPkg("x:y", "1", "2", "CVE-X"))
+	f.reg.versions["x:y"] = []string{"1", "2"}
+	f.reg.poms["b:bom:1"] = `<project><groupId>b</groupId><artifactId>bom</artifactId><version>1</version><packaging>pom</packaging>
+  <properties><lib>y</lib></properties>
+  <dependencyManagement><dependencies><dependency><groupId>x</groupId><artifactId>${lib}</artifactId><version>1</version></dependency></dependencies></dependencyManagement></project>`
+	f.resolve = func(int, map[string][]byte) map[string]map[string]string { return nil }
+	wantCategory(t, f.run(), CategoryManual, ReasonMavenVersionSourceUnsupported)
 }

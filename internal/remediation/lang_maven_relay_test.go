@@ -380,8 +380,8 @@ func TestMavenAggregateProblems(t *testing.T) {
 			relayPOM("g", "agg", "1", `<packaging>pom</packaging>`+deps(noVer("x", "y", ""))+mgmt(aggDep("x", "y", "<optional>true</optional>"))),
 		}, []string{"pom g:agg:1 declares x:y, which the scanner manages"}},
 		{"a dependency named through an inherited property", []string{
-			child(`<properties><bundle>agg</bundle></properties>` + deps(noVer("g", "${bundle}", "<type>pom</type>")) + mgmt(aggDep("g", "agg", "<type>pom</type><scope>import</scope>"))),
-			relayPOM("g", "parent", "1", `<packaging>pom</packaging>`),
+			child(deps(noVer("g", "${bundle}", "<type>pom</type>")) + mgmt(aggDep("g", "agg", "<type>pom</type><scope>import</scope>"))),
+			relayPOM("g", "parent", "1", `<packaging>pom</packaging><properties><bundle>agg</bundle></properties>`),
 			relayPOM("g", "agg", "1", `<packaging>pom</packaging>`+deps(noVer("x", "y", ""))+mgmt(aggDep("x", "y", "<optional>true</optional>"))),
 		}, []string{"pom g:agg:1 declares x:y, which the scanner manages"}},
 		{"a parent only is judged through its child", []string{

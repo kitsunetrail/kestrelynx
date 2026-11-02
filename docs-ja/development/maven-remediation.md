@@ -2,7 +2,7 @@
 
 - **状態:** 実装済み(検証用のリポジトリで PR の作成、PR のブランチで Maven によるビルドと依存の解決を確認)
 - **開始日:** 2026年11月1日
-- **最終更新:** 2026年11月1日
+- **最終更新:** 2026年11月2日
 
 ## 目的
 
@@ -220,10 +220,27 @@ Trivy では見つけられない Maven との違いが残るため、修正 PR 
 | マルチモジュールの `commons-text` | `1.10.0` |
 | Jackson | `jackson-core`・`jackson-databind` は `2.13.3` のまま |
 
+### Kubernetes での確認
+
+2026年11月2日に、Kubernetes の修正先での Maven の更新を確認した。
+
+| 確認項目 | 結果 |
+| --- | --- |
+| 検証環境と対象 | 検証用のホストの K3s(v1.36.5)で KestreLynx を動かし、「検証に使ったアプリ」の節の2つのアプリを Deployment として動かして対象にした |
+| 作業用 Pod の namespace | `remediation.worker.kubernetes.namespace` は未設定 |
+| KestreLynx のログ | 作業用 Pod の更新は `work_namespace_not_configured` で実行されず、手動対応にした候補は0件で、Maven の更新は2件とも実行された |
+| PR の作成 | 両方のアプリの修正 PR を検証用のリポジトリに作成 |
+| 単一モジュールの PR の変更 | `logback.version` を `1.2.13`、`tomcat.version` を `9.0.121` で上書き |
+| 単一モジュールの更新前後のスキャン | 脆弱性は解消28件、残存28件、新規0件 |
+| マルチモジュールの PR の変更 | 単一モジュールと同じ2つの上書きに加え、`commons-text.version` を `1.9` → `1.10.0` に更新 |
+| マルチモジュールの更新前後のスキャン | 脆弱性は解消29件、残存28件、新規0件 |
+| 手元の Docker との比較 | 両方のアプリで、PR の変更と脆弱性の件数が手元の Docker での結果と一致 |
+| `jackson-core`・`jackson-databind` | 新しい理由コード `maven_bom_series_unreached` で対象から除外 |
+| Jackson の更新の案内 | `jackson-bom.version` を `2.18.11` に上げれば修正版に届くという案内を webhook と PR の記録に追加 |
+| `spring-boot-autoconfigure` | 手元の Docker と同じく、新しい版が要求する `spring-boot` が低い版に残るため対象から除外 |
+
 ## 未検証・次の作業
 
-- Kubernetes の修正先での Maven の更新の確認
-  - 作業用 Pod は使わないが、Kubernetes の修正先での動作は未確認
 - `gradle.lockfile` がある場合の Gradle への対応
 
 ## 更新履歴
@@ -232,5 +249,9 @@ Trivy では見つけられない Maven との違いが残るため、修正 PR 
 
 - 設計・計画・更新・PR の実装
 - 実環境での PR の作成確認
+
+### 2026年11月2日
+
+- Kubernetes の修正先での Maven の更新確認
 
 ---

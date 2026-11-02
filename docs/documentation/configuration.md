@@ -279,7 +279,7 @@ The user applies the work namespace and required resources following the [setup 
 
 | Setting | Default | Format and scope |
 | --- | --- | --- |
-| `remediation.worker.kubernetes.namespace` | empty | Namespace for work Pods; when unset, language-package updates require manual action with `work_namespace_not_configured`. |
+| `remediation.worker.kubernetes.namespace` | empty | Namespace for work Pods; when unset, language-package updates other than Maven require manual action with `work_namespace_not_configured`. |
 | `remediation.worker.kubernetes.service_account` | `kestrelynx-work` | ServiceAccount for work Pods; specify one without permissions or a token. |
 | `remediation.worker.kubernetes.priority_class` | `kestrelynx-work` | PriorityClass for work Pods; specify one with `preemptionPolicy: Never`. |
 | `remediation.worker.kubernetes.receiver_image` | empty | KestreLynx image for the container receiving input files, in `repository@sha256:...` form; empty reads the digest-pinned reference from the status of KestreLynx's own Pod. |

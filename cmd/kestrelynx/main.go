@@ -148,9 +148,9 @@ func main() {
 		r.Plan.Runtimes = runtimeAdvisors
 		if cfg.Remediation.PullRequests.Enabled && len(r.Plan.Dependencies) > 0 {
 			if cfg.Kubernetes.Enabled {
-				r.Plan.Language = kubernetesLanguageConfig(cfg, log)
+				r.Plan.Language = withMavenUpdater(cfg, kubernetesLanguageConfig(cfg, log))
 			} else {
-				r.Plan.Language = buildLanguageConfig(cfg, log)
+				r.Plan.Language = withMavenUpdater(cfg, buildLanguageConfig(cfg, log))
 			}
 		}
 		l := cfg.Remediation.Limits

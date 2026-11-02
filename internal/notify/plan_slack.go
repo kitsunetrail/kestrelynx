@@ -869,7 +869,7 @@ func (b *planBuilder) languageUnit(u remediation.PRUnit) planEntry {
 	var left []leftOut
 	if l := u.Language; l != nil {
 		for _, x := range l.Remaining {
-			left = append(left, leftOut{x.Name, x.From, x.Target, x.Reason, nil})
+			left = append(left, leftOut{x.Name, x.From, x.Target, x.Reason, nil, x.MavenBOM})
 		}
 	}
 	if len(left) == 0 {
@@ -879,6 +879,21 @@ func (b *planBuilder) languageUnit(u remediation.PRUnit) planEntry {
 	}
 	b.leftOutLines(&e, left, b.lockName(u.Path, u.ItemKey))
 	return e
+}
+
+// bomRaise is the note of a package left alone because its BOM's minor version
+// does not reach the fix: the later release of the BOM that does, set through
+// its property when the project sets the BOM's version with one.
+func (b *planBuilder) bomRaise(x pkgLine) string {
+	r := x.bom
+	if r == nil || x.reason != remediation.ReasonMavenBOMSeriesUnreached {
+		return ""
+	}
+	what := r.BOM
+	if r.Property != "" {
+		what = r.Property
+	}
+	return fmt.Sprintf(b.msg.PlanBOMRaise, litMrkdwn(what), litMrkdwn(r.To))
 }
 
 func (b *planBuilder) majorPackage(name, from, to string) string {
@@ -905,6 +920,7 @@ type leftOut struct {
 	name, from, target string
 	reason             remediation.Reason
 	chain              *remediation.ChainUpdate
+	bom                *remediation.MavenBOMRaise
 }
 
 func leftOutOf(li remediation.LanguageItem) []leftOut {
@@ -915,7 +931,7 @@ func leftOutOf(li remediation.LanguageItem) []leftOut {
 	}
 	for _, p := range li.Packages {
 		if p.LeftOut {
-			out = append(out, leftOut{p.Name, p.Installed, p.SelectionLowerBound, p.Reason, chain})
+			out = append(out, leftOut{p.Name, p.Installed, p.SelectionLowerBound, p.Reason, chain, p.MavenBOM})
 		}
 	}
 	return out
@@ -932,12 +948,15 @@ type pkgLine struct {
 	// at another version than the image has.
 	lockVersions []string
 	inFile       bool // the files have the package, at another version
+	// bom is a later minor version of the package's BOM that reaches its
+	// target, for a person to raise the BOM to.
+	bom *remediation.MavenBOMRaise
 }
 
 func (b *planBuilder) leftOutLines(e *planEntry, left []leftOut, file string) {
 	items := make([]pkgLine, len(left))
 	for i, x := range left {
-		items[i] = pkgLine{name: x.name, from: x.from, target: x.target, reason: x.reason, leftOut: true, chain: x.chain}
+		items[i] = pkgLine{name: x.name, from: x.from, target: x.target, reason: x.reason, leftOut: true, chain: x.chain, bom: x.bom}
 	}
 	b.packageLines(e, tagDecide, b.msg.PlanLblDecide, file, items)
 }
@@ -948,7 +967,7 @@ func (b *planBuilder) leftOutLines(e *planEntry, left []leftOut, file string) {
 // fingerprint, the cut part too.
 func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string, items []pkgLine) {
 	for _, x := range items {
-		b.detail = append(b.detail, strings.Join([]string{"package", x.name, x.from, x.target, string(x.reason), fmt.Sprint(x.unchanged), fmt.Sprint(x.leftOut), fmt.Sprint(x.inFile), strings.Join(x.lockVersions, ",")}, "\x00"))
+		b.detail = append(b.detail, strings.Join([]string{"package", x.name, x.from, x.target, string(x.reason), fmt.Sprint(x.unchanged), fmt.Sprint(x.leftOut), fmt.Sprint(x.inFile), strings.Join(x.lockVersions, ","), b.bomRaise(x)}, "\x00"))
 	}
 	shown := items
 	if len(shown) > planLeftOuts {
@@ -997,13 +1016,13 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 		case x.reason == remediation.ReasonTargetNotUpdated:
 			line = fmt.Sprintf(b.msg.PlanNotUpdated, name, target, from, litMrkdwn(file))
 		case x.leftOut:
-			line = fmt.Sprintf(b.msg.PlanLeftOut, name, from, target, b.reason(x.reason))
+			line = fmt.Sprintf(b.msg.PlanLeftOut, name, from, target, b.reason(x.reason)) + b.bomRaise(x)
 		default:
 			note := ""
 			if x.unchanged {
 				note = b.msg.PlanLockfileUnchanged
 			}
-			line = fmt.Sprintf(b.msg.PlanPackageReason, name, from, target, b.reason(x.reason), note)
+			line = fmt.Sprintf(b.msg.PlanPackageReason, name, from, target, b.reason(x.reason), note+b.bomRaise(x))
 		}
 		e.line(tag, kv(label, line))
 	}
@@ -1196,7 +1215,7 @@ func (b *planBuilder) packageReasonLines(e *planEntry, tag planTag, label string
 	for i, p := range pkgs {
 		items[i] = pkgLine{name: p.Name, from: p.Installed, target: p.SelectionLowerBound, reason: p.Reason, chain: chain,
 			unchanged:    lockfileLeftAlone.MatchString(p.Detail) || lockfileLeftAlone.MatchString(li.Detail),
-			lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0}
+			lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0, bom: p.MavenBOM}
 	}
 	b.packageLines(e, tag, label, path.Base(languageFile(li)), items)
 }

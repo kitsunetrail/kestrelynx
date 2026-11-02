@@ -405,6 +405,9 @@ Starting from the project's `pom.xml`, follow the parent chain and look for vers
 - If the same property determines versions for multiple dependencies, check that all of them exist on Maven Central at the new value's version
 - If a property cannot be changed, try pinning through `dependencyManagement` only for targets whose versions are determined solely by management
 - For a BOM, check newer regular releases within the current major and minor version in ascending order and select one that brings the targets to at least their lower bounds
+- If no regular release within the imported BOM's major and minor version reaches the target version, require manual handling with `maven_bom_series_unreached` and do not raise the BOM's minor version in the remediation PR
+- In this case, search regular releases in later minor versions within the same major version for the lowest BOM version that manages the target at or above its target version, and show it as guidance in Slack and the webhook if found
+- Read at most eight POMs when searching for guidance, and omit the guidance if no qualifying version is found or the POMs cannot be read
 - If the property that determines the BOM version cannot be changed, multiple BOMs manage the target, or management comes through another BOM's import, require manual handling without pinning the target individually
 - Preserve formatting and comments when editing, then read the files again and verify that the diff contains only the specified version changes, property changes, and management additions
 

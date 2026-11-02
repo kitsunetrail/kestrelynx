@@ -27,13 +27,21 @@ const (
 	// (management of the project or its parents holds it back), so the
 	// release would run with older libraries than it was built for.
 	ReasonMavenDependencyHeldBack Reason = "maven_dependency_held_back"
+	// ReasonMavenBOMSeriesUnreached: a target's version is decided by a BOM,
+	// and no release of the BOM in the minor version the project imports
+	// manages it at its target. The BOM is not moved to another minor
+	// version, and a package of a BOM is not pinned apart from its set.
+	ReasonMavenBOMSeriesUnreached Reason = "maven_bom_series_unreached"
 )
 
 // Bounds of the Maven update.
 const (
 	maxMavenParentDepth   = 10
 	maxMavenBOMCandidates = 20
-	maxMavenRelayRequests = 2000
+	// maxMavenBOMRaiseLookups bounds the poms read to find the release of a
+	// later minor version that a person can raise a BOM to.
+	maxMavenBOMRaiseLookups = 8
+	maxMavenRelayRequests   = 2000
 )
 
 // MavenUpdate records what a Maven update changed in the pom files and what
@@ -663,24 +671,100 @@ func (r *updateRun) bomRelease(ctx context.Context, bom, current, name, target s
 		if fail != nil {
 			return "", "", fail
 		}
-		for _, d := range pom.DependencyManagement {
-			dg := d.GroupID
-			if dg == "${project.groupId}" {
-				dg = pom.EffectiveGroupID()
-			}
-			if d.IsImport() || dg+":"+d.ArtifactID != name || d.Classifier != "" || mavenTypeOf(d) != "jar" {
-				continue
-			}
-			mv, ok := chainResolve([]mavenChainPOM{{pom: pom}}, d.Version)
-			if !ok {
-				break
-			}
-			if c, ok := compareVersions(schemeMaven, mv, target); ok && c >= 0 {
-				return v, mv, nil
-			}
+		if mv, ok := bomManagesAt(pom, name, target); ok {
+			return v, mv, nil
 		}
 	}
 	return "", "", nil
+}
+
+// bomManagesAt returns the version a BOM's own management gives name, when it
+// is the target or above.
+func bomManagesAt(pom *mavenPOM, name, target string) (string, bool) {
+	for _, d := range pom.DependencyManagement {
+		dg := d.GroupID
+		if dg == "${project.groupId}" {
+			dg = pom.EffectiveGroupID()
+		}
+		if d.IsImport() || dg+":"+d.ArtifactID != name || d.Classifier != "" || mavenTypeOf(d) != "jar" {
+			continue
+		}
+		mv, ok := chainResolve([]mavenChainPOM{{pom: pom}}, d.Version)
+		if !ok {
+			return "", false
+		}
+		if c, ok := compareVersions(schemeMaven, mv, target); ok && c >= 0 {
+			return mv, true
+		}
+		return "", false
+	}
+	return "", false
+}
+
+// bomRaise looks for the lowest release of a BOM, of the same major version
+// as the one imported and a later minor version, that manages name at the
+// target or above: what a person can raise the BOM to when no release of the
+// imported minor version does. Releases of a BOM manage higher versions as
+// they go up, so the releases are searched by halves, a few poms at most. It
+// only informs: it returns nil when none is found within its reads or a read
+// fails, and the update goes on the same either way.
+func (r *updateRun) bomRaise(ctx context.Context, place mavenPlace, name, target string) *MavenBOMRaise {
+	g, a := strings.SplitN(place.bom, ":", 2)[0], strings.SplitN(place.bom, ":", 2)[1]
+	vs, fail := r.versions(ctx, g, a)
+	if fail != nil {
+		return nil
+	}
+	cur := place.from
+	major, ok := mavenMajor(cur)
+	if !ok {
+		return nil
+	}
+	var cands []string
+	for _, v := range vs {
+		if m, ok := mavenMajor(v); !ok || m != major {
+			continue
+		}
+		if c, ok := compareVersions(schemeMaven, v, cur); ok && c > 0 && mavenMajorMinor(v) != mavenMajorMinor(cur) && !mavenIsPrerelease(v) {
+			cands = append(cands, v)
+		}
+	}
+	if len(cands) == 0 {
+		return nil
+	}
+	sort.Slice(cands, func(i, j int) bool { c, _ := compareVersions(schemeMaven, cands[i], cands[j]); return c < 0 })
+	reads := 0
+	reaches := func(v string) (string, bool, bool) {
+		if reads >= maxMavenBOMRaiseLookups {
+			return "", false, false
+		}
+		reads++
+		pom, fail := r.fetchPOM(ctx, g, a, v)
+		if fail != nil {
+			return "", false, false
+		}
+		mv, ok := bomManagesAt(pom, name, target)
+		return mv, ok, true
+	}
+	// The highest release first: when it does not reach, none does.
+	lo, hi := 0, len(cands)-1
+	best := cands[hi]
+	managed, ok, read := reaches(best)
+	if !read || !ok {
+		return nil
+	}
+	for lo < hi {
+		mid := (lo + hi) / 2
+		mv, ok, read := reaches(cands[mid])
+		if !read {
+			break
+		}
+		if ok {
+			best, managed, hi = cands[mid], mv, mid
+		} else {
+			lo = mid + 1
+		}
+	}
+	return &MavenBOMRaise{BOM: place.bom, Property: place.prop, From: cur, To: best, Manages: managed}
 }
 
 // pluginRefs reports whether any pom of the reactor or of the modules'
@@ -978,6 +1062,16 @@ func (r *updateRun) planTarget(ctx context.Context, mf *mavenFiles, chains map[*
 			}
 			if bv == "" {
 				why = fmt.Sprintf("no release of the BOM %s of the same minor version as %s manages %s at %s or above", place.bom, place.from, n, rel)
+				// A package of a BOM moves with its set or not at all; a later
+				// minor version of the BOM is named for a person to judge.
+				raise := r.bomRaise(ctx, place, n, rel)
+				if raise != nil {
+					why += fmt.Sprintf("; its release %s, of a later minor version, manages it at %s", raise.To, raise.Manages)
+				}
+				for _, k := range r.full.byName[n] {
+					r.it.Packages[k].MavenBOM = raise
+				}
+				return mavenPlanned{}, manualFailure(ReasonMavenBOMSeriesUnreached, "%s", why)
 			} else {
 				r.upd.Notes = append(r.upd.Notes, fmt.Sprintf("%s is managed by %s, whose version %s takes it to %s", n, place.bom, bv, managed))
 				pl.bomValues[i] = bv

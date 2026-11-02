@@ -229,3 +229,54 @@ func TestWebhook_LanguageListsAreCapped(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// A package left alone because its BOM's minor version does not reach the fix
+// names the later release of the BOM that does, in Slack and the webhook.
+func TestPlanMessage_MavenBOMRaise(t *testing.T) {
+	r, changed, _ := planCycleFixture()
+	raise := &remediation.MavenBOMRaise{BOM: "com.fasterxml.jackson:jackson-bom", Property: "jackson-bom.version", From: "2.13.3", To: "2.18.6", Manages: "2.18.6"}
+	info := func() *PlanInfo {
+		p := languageFixture()
+		p.Items = p.Items[:1]
+		pkg := func(name string) remediation.LanguagePackage {
+			x := langPkg(name, "2.13.3", "2.18.6", false)
+			x.Ecosystem, x.Action, x.Reason, x.MavenBOM = "jar", remediation.ActionManual, remediation.ReasonMavenBOMSeriesUnreached, raise
+			return x
+		}
+		it := p.LanguageItems[0]
+		it.Manager, it.Category, it.Reason, it.Detail = remediation.ManagerMaven, remediation.CategoryManual, remediation.ReasonMavenBOMSeriesUnreached, "no release of the BOM"
+		it.Packages = []remediation.LanguagePackage{pkg("com.fasterxml.jackson.core:jackson-databind")}
+		p.LanguageItems = []remediation.LanguageItem{it}
+		return &PlanInfo{Plan: &p, Changed: true, SlackChanged: true}
+	}
+	for lang, want := range map[Language]string{
+		LanguageJA: "com.fasterxml.jackson.core:jackson-databind 2.13.3 → 2.18.6 は取り込んでいる BOM と同じマイナー版では修正版に届かない (jackson-bom.version を 2.18.6 に上げれば届く)",
+		LanguageEN: "com.fasterxml.jackson.core:jackson-databind 2.13.3 → 2.18.6: no release of the BOM in the minor version the project imports reaches the fixed version (raising jackson-bom.version to 2.18.6 reaches it)",
+	} {
+		got := dumpMessages(buildPlanMessages(Message{Report: r, Plan: info()}, messagesFor(lang), defaultRenderLimits))
+		if !strings.Contains(got, want) {
+			t.Errorf("%s: no line %q in\n%s", lang, want, got)
+		}
+	}
+
+	// Another reason of the package does not show the BOM.
+	other := info()
+	other.Plan.LanguageItems[0].Reason = remediation.ReasonMavenVersionSourceUnsupported
+	other.Plan.LanguageItems[0].Packages[0].Reason = remediation.ReasonMavenVersionSourceUnsupported
+	if got := dumpMessages(buildPlanMessages(Message{Report: r, Plan: other}, messagesFor(LanguageEN), defaultRenderLimits)); strings.Contains(got, "raising") {
+		t.Errorf("the BOM is named for another reason:\n%s", got)
+	}
+	otherJSON := webhookJSON(t, BuildWebhookPayloadWithPlan(r, &changed, other))
+	otherPkgs := otherJSON["remediation"].(map[string]any)["language_items"].([]any)[0].(map[string]any)["packages"].([]any)
+	if _, ok := otherPkgs[0].(map[string]any)["maven_bom"]; ok {
+		t.Errorf("the webhook names the BOM for another reason: %v", otherPkgs[0])
+	}
+
+	with := webhookJSON(t, BuildWebhookPayloadWithPlan(r, &changed, info()))
+	items := with["remediation"].(map[string]any)["language_items"].([]any)
+	pkgs := items[0].(map[string]any)["packages"].([]any)
+	bom, _ := pkgs[0].(map[string]any)["maven_bom"].(map[string]any)
+	if bom["to"] != "2.18.6" || bom["property"] != "jackson-bom.version" || bom["bom"] != "com.fasterxml.jackson:jackson-bom" {
+		t.Errorf("maven_bom = %v", bom)
+	}
+}

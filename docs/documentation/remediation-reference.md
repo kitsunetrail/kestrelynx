@@ -731,7 +731,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `pip_target_undecidable` | The environment the packages run in cannot be determined | [pip verification environment](remediation-logic.md#pip-target-environment) |
 | `pip_target_mismatch` | The environment pip resolves for differs from the one the packages run in | [pip verification environment](remediation-logic.md#pip-target-environment) |
 | `work_image_not_configured` | No work environment is available for updates | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `work_namespace_not_configured` | The work namespace required for updates on Kubernetes is not configured, so manual action is required | [Work Pod configuration](configuration.md#remediation-worker-kubernetes) |
+| `work_namespace_not_configured` | The work namespace required for language-package updates other than Maven on Kubernetes is not configured, so manual action is required | [Work Pod configuration](configuration.md#remediation-worker-kubernetes) |
 | `work_runtime_class_unsupported` | An unsupported RuntimeClass is configured for work Pods, so manual action is required | [Work Pod configuration](configuration.md#remediation-worker-kubernetes) |
 | `work_cluster_too_old` | The cluster is older than Kubernetes 1.30, which the work Pod policy requires, so manual action is required | [Prerequisites](remediation-setup.md#kubernetes-language-updates) |
 | `work_pod_limit` | The work Pod count or namespace quota is at its limit, so the update waits for the next cycle | [Work Pod configuration](configuration.md#remediation-worker-kubernetes) |
@@ -771,6 +771,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `maven_fix_in_other_major` | the fix is only in another major version | [Maven candidate selection](remediation-logic.md#maven-package-selection) |
 | `maven_version_source_unsupported` | the version is decided in a way no edit of the project's pom files changes | [Version sources and edits](remediation-logic.md#maven-version-sources) |
 | `maven_release_not_found` | Maven Central lists no release the update can take | [Target versions and Maven Central releases](remediation-logic.md#maven-target-versions) |
+| `maven_bom_series_unreached` | no release of the BOM in the minor version the project imports reaches the fixed version | [Version sources and edits](remediation-logic.md#maven-version-sources) |
 | `maven_dependency_held_back` | the update leaves a dependency of the new release below the version the release declares | [Maven update validation](remediation-logic.md#maven-update-validation) |
 | `no_fixed_version_above_installed` | There is no fixed version above the running one, or nothing to fix | [Fixed-version lower bound](remediation-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | The candidate or updated version does not satisfy the dependency constraints | [Direct dependency version specifications](remediation-logic.md#direct-dependencies), [Transitive dependency update scope](remediation-logic.md#transitive-dependencies) |

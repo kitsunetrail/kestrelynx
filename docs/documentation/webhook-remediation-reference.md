@@ -220,6 +220,12 @@ See [Verification scope by target](remediation-logic.md#verification-scope) for 
 | `packages[].action` / `packages[].reason` / `packages[].detail` | string | Action, reason, and additional details; omitted when empty. |
 | `packages[].left_out` | boolean | `true` when excluded from the planned update; omitted otherwise. |
 | `packages[].through` | array of strings | Names of dependent packages updated along with the target to reach a fixed version; omitted when empty. |
+| `packages[].maven_bom` | object | Guidance on a BOM that reaches the target version; included only when `reason` is `maven_bom_series_unreached` and guidance is available. |
+| `packages[].maven_bom.bom` | string | The BOM's `groupId:artifactId`. |
+| `packages[].maven_bom.property` | string | Name of the property that determines the BOM version; omitted when none applies. |
+| `packages[].maven_bom.from` | string | The imported BOM version. |
+| `packages[].maven_bom.to` | string | The lowest regular BOM release in a later minor version within the same major version that manages the target at or above its target version. |
+| `packages[].maven_bom.manages` | string | The target's version managed by the BOM at `to`. |
 | `packages[].occurrence_count` / `packages[].cve_count` / `packages[].origin_count` | integer | Counts of occurrences in dependency files, vulnerabilities, and original findings. |
 | `packages[].kev_count` | integer | Number of vulnerabilities listed in KEV; omitted when `0`. |
 | `packages[].occurrences` / `packages[].cves` / `packages[].origins` | array of objects | Lists of occurrences, vulnerabilities, and original findings; omitted when empty. |

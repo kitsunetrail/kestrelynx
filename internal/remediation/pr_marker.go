@@ -222,6 +222,9 @@ func (l LangRecord) wellFormed() error {
 		if x.Ecosystem == "" || x.Name == "" || x.Reason == "" {
 			return errors.New("a remaining package has no ecosystem, name or reason")
 		}
+		if b := x.MavenBOM; b != nil && (x.Reason != ReasonMavenBOMSeriesUnreached || b.BOM == "" || b.From == "" || b.To == "" || b.Manages == "") {
+			return errors.New("a remaining package names a BOM release without its reason, name or versions")
+		}
 	}
 	if r := l.Runtime; r != nil && (r.ID == "" || r.Version == "") {
 		return errors.New("the runtime record has no id or version")

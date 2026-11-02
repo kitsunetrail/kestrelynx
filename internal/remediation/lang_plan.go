@@ -282,6 +282,30 @@ type LanguagePackage struct {
 	// package to its fixed version, when the packages that held it back had to
 	// be updated too.
 	Through []string `json:"through,omitempty"`
+	// MavenBOM names, for a package whose BOM has no release in the imported
+	// minor version that manages it at its target, a release of a later minor
+	// version that does: what a person can raise the BOM to. It is read with
+	// the reason ReasonMavenBOMSeriesUnreached only.
+	MavenBOM *MavenBOMRaise `json:"maven_bom,omitempty"`
+}
+
+// BOMRaise is the package's MavenBOM when its reason is the one the field is
+// read with, else nil.
+func (p LanguagePackage) BOMRaise() *MavenBOMRaise {
+	if p.Reason != ReasonMavenBOMSeriesUnreached {
+		return nil
+	}
+	return p.MavenBOM
+}
+
+// MavenBOMRaise is a release of a BOM past the minor version the project
+// imports that manages a package at its target or above.
+type MavenBOMRaise struct {
+	BOM      string `json:"bom"`                // groupId:artifactId of the BOM
+	Property string `json:"property,omitempty"` // the property that sets the BOM's version
+	From     string `json:"from"`               // the version the project imports
+	To       string `json:"to"`                 // the lowest release found that manages the package at its target
+	Manages  string `json:"manages"`            // the version of the package that release manages
 }
 
 // KEVCount is how many of the package's vulnerabilities are KEV-listed.

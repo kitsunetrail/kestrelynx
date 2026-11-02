@@ -49,6 +49,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"maven_fix_in_other_major":           {"the fix is only in another major version", "修正版が別のメジャー版にしかない"},
 	"maven_version_source_unsupported":   {"the version is decided in a way no edit of the project's pom files changes", "版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている"},
 	"maven_release_not_found":            {"Maven Central lists no release the update can take", "更新で使える版が Maven Central にない"},
+	"maven_bom_series_unreached":         {"no release of the BOM in the minor version the project imports reaches the fixed version", "取り込んでいる BOM と同じマイナー版では修正版に届かない"},
 	"maven_dependency_held_back":         {"the update leaves a dependency of the new release below the version the release declares", "更新後も、新しい版が要求する依存が要求より低い版のまま残る"},
 	"newer_series_tag_list_incomplete":   {"the whole tag list, which newer series are chosen from, could not be read to the end", "新しい系列を選ぶためのタグ一覧の全体を最後まで取得できなかった"},
 	"newer_series_reserved":              {"checking newer series stopped to leave time and registry requests to pull requests", "PR の処理の分の時間とレジストリへの要求を残すため、新しい系列の確認を止めた"},

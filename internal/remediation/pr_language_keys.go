@@ -44,6 +44,10 @@ type LangRemaining struct {
 	Ecosystem string `json:"ecosystem"`
 	Name      string `json:"name"`
 	Reason    Reason `json:"reason"`
+	// MavenBOM is the release of a later minor version of the package's BOM
+	// that reaches its target, kept so that a later cycle tied to the pull
+	// request can still name it (see LanguagePackage.MavenBOM).
+	MavenBOM *MavenBOMRaise `json:"maven_bom,omitempty"`
 }
 
 // LangEdit is one version specifier of a manifest a language update changes.

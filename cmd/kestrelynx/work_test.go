@@ -17,6 +17,7 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/runner"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 	"github.com/kitsunetrail/kestrelynx/internal/worker"
+	"github.com/kitsunetrail/kestrelynx/internal/workexec"
 )
 
 func workTestConfig(t *testing.T) config.Config {
@@ -224,5 +225,25 @@ func TestPullRequestRepositoriesListsEachOnce(t *testing.T) {
 	})
 	if len(got) != 2 || got[0] != "Ex/App" || got[1] != "ex/libs" {
 		t.Errorf("repositories = %v, want the Dockerfile and dependency repositories once each", got)
+	}
+}
+
+func TestMavenUpdaterNeedsNoWorkClients(t *testing.T) {
+	savedA, savedB := worker.ProgramSHA256Amd64, worker.ProgramSHA256Arm64
+	worker.ProgramSHA256Amd64, worker.ProgramSHA256Arm64 = "", ""
+	t.Cleanup(func() { worker.ProgramSHA256Amd64, worker.ProgramSHA256Arm64 = savedA, savedB })
+	cfg := workTestConfig(t)
+	// No work program: the work clients cannot be set up, and the Maven
+	// items still have a stage of their own.
+	lc := withMavenUpdater(cfg, buildLanguageConfig(cfg, quietLog()))
+	if lc.Unavailable == nil || lc.NewMavenUpdater == nil {
+		t.Fatalf("config = %+v", lc)
+	}
+	u, err := lc.NewMavenUpdater(context.Background(), runner.LanguageUpdateInput{GitHub: nopGitHub{}, Prepared: scanner.ScanConditions{}})
+	if err != nil || u == nil {
+		t.Errorf("NewMavenUpdater = %v, %v", u, err)
+	}
+	if _, err := (noWork{}).RunJob(context.Background(), workexec.JobSpec{}); err == nil {
+		t.Error("the work runner of the Maven stage ran a job")
 	}
 }

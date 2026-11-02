@@ -731,7 +731,7 @@ PR記録の`state`には、次の値があります。
 | `pip_target_undecidable` | パッケージが動く環境を判断できない | [pipの検証環境](remediation-logic.md#pip-target-environment) |
 | `pip_target_mismatch` | pipの依存解決対象と、パッケージが動く環境が一致しない | [pipの検証環境](remediation-logic.md#pip-target-environment) |
 | `work_image_not_configured` | 更新用の作業環境が用意されていない | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `work_namespace_not_configured` | Kubernetesでの更新に必要な作業用namespaceが設定されていないため手動対応 | [作業用Podの設定](configuration.md#remediation-worker-kubernetes) |
+| `work_namespace_not_configured` | KubernetesでのMaven以外の言語パッケージ更新に必要な作業用namespaceが設定されていないため手動対応 | [作業用Podの設定](configuration.md#remediation-worker-kubernetes) |
 | `work_runtime_class_unsupported` | 作業用Podに未対応のRuntimeClassが設定されているため手動対応 | [作業用Podの設定](configuration.md#remediation-worker-kubernetes) |
 | `work_cluster_too_old` | クラスタが作業用Podのポリシーに必要なKubernetes 1.30より古いため手動対応 | [導入条件](remediation-setup.md#kubernetes-language-updates) |
 | `work_pod_limit` | 作業用Pod数またはnamespaceのクォータが上限で、更新を次回に持ち越す | [作業用Podの設定](configuration.md#remediation-worker-kubernetes) |
@@ -771,6 +771,7 @@ PR記録の`state`には、次の値があります。
 | `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection) |
 | `maven_version_source_unsupported` | 版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている | [版の出所と書き換え](remediation-logic.md#maven-version-sources) |
 | `maven_release_not_found` | 更新で使える版が Maven Central にない | [目標版とMaven Centralの版](remediation-logic.md#maven-target-versions) |
+| `maven_bom_series_unreached` | 取り込んでいる BOM と同じマイナー版では修正版に届かない | [版の出所と書き換え](remediation-logic.md#maven-version-sources) |
 | `maven_dependency_held_back` | 更新後も、新しい版が要求する依存が要求より低い版のまま残る | [Mavenの更新結果の検査](remediation-logic.md#maven-update-validation) |
 | `no_fixed_version_above_installed` | 稼働版より新しい修正版がない、または修正対象がない | [修正版の下限](remediation-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | 候補または更新後の版が依存の制約を満たさない | [直接依存の版指定](remediation-logic.md#direct-dependencies)・[推移的依存の更新範囲](remediation-logic.md#transitive-dependencies) |

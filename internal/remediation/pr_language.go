@@ -172,12 +172,13 @@ func sum256(b []byte) []byte {
 	return s[:]
 }
 
-// DeferLanguageUpdates leaves every dependency update candidate of the plan
-// undone with the given reason, for a cycle in which the update stage cannot
-// run. It returns how many it deferred. The packages stay as planned.
-func DeferLanguageUpdates(plan *Plan, reason Reason, detail string) int {
+// DeferLanguageUpdates leaves the dependency update candidates of the plan at
+// the indexes undone with the given reason, for a cycle in which the update
+// stage cannot run them. It returns how many it deferred. The packages stay as
+// planned.
+func DeferLanguageUpdates(plan *Plan, idx []int, reason Reason, detail string) int {
 	n := 0
-	for i := range plan.LanguageItems {
+	for _, i := range idx {
 		it := &plan.LanguageItems[i]
 		if it.Category == CategoryDependencyUpdateCandidate {
 			it.Category, it.Reason, it.Detail = CategoryDeferred, reason, detail
@@ -187,13 +188,13 @@ func DeferLanguageUpdates(plan *Plan, reason Reason, detail string) int {
 	return n
 }
 
-// MarkLanguageManual turns every dependency update candidate of the plan into
-// a manual item with the reason, for a process in which no language update can
-// ever run (not for one that failed to run it), and returns how many it
-// changed.
-func MarkLanguageManual(plan *Plan, reason Reason, detail string) int {
+// MarkLanguageManual turns the dependency update candidates of the plan at the
+// indexes into manual items with the reason, for a process in which they can
+// never be updated (not for one that failed to run them), and returns how many
+// it changed.
+func MarkLanguageManual(plan *Plan, idx []int, reason Reason, detail string) int {
 	n := 0
-	for i := range plan.LanguageItems {
+	for _, i := range idx {
 		it := &plan.LanguageItems[i]
 		if it.Category == CategoryDependencyUpdateCandidate {
 			it.Category, it.Reason, it.Detail = CategoryManual, reason, detail
@@ -201,6 +202,20 @@ func MarkLanguageManual(plan *Plan, reason Reason, detail string) int {
 		}
 	}
 	return n
+}
+
+// SplitByWork divides the indexes of language items into those whose update
+// runs in a work container or Pod and those updated by this program alone (a
+// Maven reactor), each in the order given.
+func SplitByWork(plan *Plan, idx []int) (work, alone []int) {
+	for _, i := range idx {
+		if plan.LanguageItems[i].Manager == ManagerMaven {
+			alone = append(alone, i)
+		} else {
+			work = append(work, i)
+		}
+	}
+	return work, alone
 }
 
 // fileProposal is the record of the pull request of the repository that
@@ -229,10 +244,14 @@ func languageViewOfTied(it LanguageItem, rec *PRRecord) *PRLanguage {
 			// A package the pull request leaves out is shown as left out, with the
 			// reason the record holds.
 			if x, left := leftOutIn(rec.Lang, p); left {
-				v.Remaining = append(v.Remaining, PRLanguageRemaining{
+				r := PRLanguageRemaining{
 					Name: p.Name, Ecosystem: p.Ecosystem, Relation: string(p.Relation), From: p.Installed,
 					Target: p.SelectionLowerBound, Reason: x.Reason,
-				})
+				}
+				if x.Reason == ReasonMavenBOMSeriesUnreached {
+					r.MavenBOM = x.MavenBOM
+				}
+				v.Remaining = append(v.Remaining, r)
 				continue
 			}
 			adopted := false

@@ -220,6 +220,12 @@
 | `packages[].action` / `packages[].reason` / `packages[].detail` | string | 対応・理由・補足で、空なら省略 |
 | `packages[].left_out` | boolean | 計画した更新から除外された場合は`true`で、それ以外は省略 |
 | `packages[].through` | stringの配列 | 修正版に上げるために、あわせて更新した依存元の名前で、空なら省略 |
+| `packages[].maven_bom` | object | 目標版に届くBOMの案内で、`reason`が`maven_bom_series_unreached`で案内がある場合だけ付与 |
+| `packages[].maven_bom.bom` | string | BOMの`groupId:artifactId` |
+| `packages[].maven_bom.property` | string | BOMの版を決めるプロパティ名で、なければ省略 |
+| `packages[].maven_bom.from` | string | 取り込んでいるBOMの版 |
+| `packages[].maven_bom.to` | string | 同じメジャー版の後のマイナー版の正式版のうち、対象を目標版以上で管理する最も低いBOMの版 |
+| `packages[].maven_bom.manages` | string | `to`のBOMが管理する対象の版 |
 | `packages[].occurrence_count` / `packages[].cve_count` / `packages[].origin_count` | integer | 依存ファイル内の出現箇所・脆弱性・元の所見の件数 |
 | `packages[].kev_count` | integer | KEVに掲載された脆弱性の件数で、`0`なら省略 |
 | `packages[].occurrences` / `packages[].cves` / `packages[].origins` | objectの配列 | 出現箇所・脆弱性・元の所見の一覧で、空なら省略 |

@@ -277,7 +277,7 @@ Kubernetesモードの言語パッケージ更新に使います。
 
 | 設定項目 | 既定値 | 形式・適用範囲 |
 | --- | --- | --- |
-| `remediation.worker.kubernetes.namespace` | 空 | 作業用Podを作るnamespace名で、未設定の場合は言語パッケージ更新が`work_namespace_not_configured`で手動対応になります。 |
+| `remediation.worker.kubernetes.namespace` | 空 | 作業用Podを作るnamespace名で、未設定の場合はMaven以外の言語パッケージ更新が`work_namespace_not_configured`で手動対応になります。 |
 | `remediation.worker.kubernetes.service_account` | `kestrelynx-work` | 作業用PodのServiceAccount名で、権限とトークンを持たないものを指定します。 |
 | `remediation.worker.kubernetes.priority_class` | `kestrelynx-work` | 作業用PodのPriorityClass名で、`preemptionPolicy: Never`のものを指定します。 |
 | `remediation.worker.kubernetes.receiver_image` | 空 | 入力ファイルを受け取るコンテナのKestreLynxイメージを`repository@sha256:...`で指定し、空の場合はKestreLynx自身のPodの状態からdigest付き参照を取得します。 |

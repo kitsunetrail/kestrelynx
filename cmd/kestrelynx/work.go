@@ -20,6 +20,7 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 	"github.com/kitsunetrail/kestrelynx/internal/toolfetch"
 	"github.com/kitsunetrail/kestrelynx/internal/worker"
+	"github.com/kitsunetrail/kestrelynx/internal/workexec"
 )
 
 // The program the work container runs, and the environment its container gets.
@@ -237,6 +238,25 @@ func buildLanguageConfig(cfg config.Config, log *slog.Logger) *runner.LanguageUp
 			return newLanguageUpdater(cfg, tools, set, platform, program, in)
 		},
 	}
+}
+
+// withMavenUpdater gives the stage the updater of the Maven items alone. A
+// Maven reactor is read, edited and checked by this program, without a work
+// container or Pod, so its items are updated even when the work clients are
+// missing or cannot run.
+func withMavenUpdater(cfg config.Config, lc *runner.LanguageUpdateConfig) *runner.LanguageUpdateConfig {
+	lc.NewMavenUpdater = func(ctx context.Context, in runner.LanguageUpdateInput) (runner.LanguageUpdater, error) {
+		return newLanguageUpdater(cfg, toolSupply{}, noWork{}, "linux/"+runtime.GOARCH, nil, in)
+	}
+	return lc
+}
+
+// noWork is the work runner of the stage for Maven items, which never run a
+// job.
+type noWork struct{}
+
+func (noWork) RunJob(context.Context, workexec.JobSpec) (workexec.JobResult, error) {
+	return workexec.JobResult{}, errors.New("no work container or Pod runs for this update")
 }
 
 // newLanguageUpdater builds the update stage of one cycle on top of an executor

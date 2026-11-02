@@ -563,6 +563,9 @@ type PRLanguageRemaining struct {
 	Target string `json:"target"`
 	Reason Reason `json:"reason"`
 	Detail string `json:"detail,omitempty"`
+	// MavenBOM is the release of a later minor version of the package's BOM
+	// that reaches its target (see LanguagePackage.MavenBOM).
+	MavenBOM *MavenBOMRaise `json:"maven_bom,omitempty"`
 }
 
 // PRLanguagePackage is one package a language update moves.

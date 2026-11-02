@@ -83,13 +83,18 @@ type LanguageUpdateInput struct {
 // between the plan and the pull request stage. It exists only with pull
 // requests enabled: the stage starts work containers.
 type LanguageUpdateConfig struct {
-	// Unavailable, when set, says why no update can run in this process (no
-	// work image is configured, the Docker client could not be set up). Every
-	// update candidate is then deferred with it; nothing is run instead.
+	// Unavailable, when set, says why no update that runs in a work container
+	// or Pod can run in this process (no work image is configured, the Docker
+	// client could not be set up). Those update candidates are then deferred
+	// with it, or made manual; nothing is run instead.
 	Unavailable *LanguageUnavailable
 	// NewUpdater returns the stage for one cycle. An error (the work image
-	// cannot be made ready) defers the cycle's update candidates.
+	// cannot be made ready) defers the cycle's update candidates that need it.
 	NewUpdater func(ctx context.Context, in LanguageUpdateInput) (LanguageUpdater, error)
+	// NewMavenUpdater returns the stage for the Maven items of one cycle
+	// alone. A Maven reactor is updated by this program without a work
+	// container or Pod, so its items are run with it when NewUpdater cannot be.
+	NewMavenUpdater func(ctx context.Context, in LanguageUpdateInput) (LanguageUpdater, error)
 }
 
 // LanguageUnavailable is the reason dependency updates cannot run.
@@ -448,39 +453,30 @@ func (r Runner) runLanguageUpdates(ctx context.Context, cfg *LanguageUpdateConfi
 			"pr_candidates", plan.CountLanguage(remediation.CategoryPRCandidate))
 		return
 	}
-	if cfg.Unavailable != nil && cfg.Unavailable.Manual {
-		n := remediation.MarkLanguageManual(plan, cfg.Unavailable.Reason, cfg.Unavailable.Detail)
-		log.Warn("dependency updates are not run", "reason", cfg.Unavailable.Reason, "manual", n, "tied_to_existing_pull_requests", bound)
-		return
-	}
-	if cfg.Unavailable != nil {
-		n := remediation.DeferLanguageUpdates(plan, cfg.Unavailable.Reason, cfg.Unavailable.Detail)
-		log.Warn("dependency updates are not run", "reason", cfg.Unavailable.Reason, "deferred", n, "tied_to_existing_pull_requests", bound)
-		return
-	}
-	if in.GitHub == nil || cfg.NewUpdater == nil {
-		n := remediation.DeferLanguageUpdates(plan, remediation.ReasonWorkImageUnavailable, "the dependency update stage could not be set up")
-		log.Warn("dependency updates are not run: the stage could not be set up", "deferred", n, "tied_to_existing_pull_requests", bound)
-		return
-	}
-	updater, err := cfg.NewUpdater(ctx, in)
-	var un *workexec.Unavailable
-	if errors.As(err, &un) {
-		// The executor says itself why nothing can run now (work Pods are at
-		// their limit, the admission policy is not in force, ...).
-		if un.Manual {
-			n := remediation.MarkLanguageManual(plan, remediation.Reason(un.Reason), un.Detail)
-			log.Warn("dependency updates are not run", "reason", un.Reason, "manual", n, "tied_to_existing_pull_requests", bound)
+	updater, stop := languageUpdater(ctx, cfg, in)
+	if stop != nil {
+		// What runs in a work container or Pod waits or needs a person; a
+		// Maven reactor, which this program updates alone, is still run.
+		work, maven := remediation.SplitByWork(plan, order)
+		if stop.manual {
+			n := remediation.MarkLanguageManual(plan, work, stop.reason, stop.detail)
+			log.Warn(stop.msg, "reason", stop.reason, "manual", n, "tied_to_existing_pull_requests", bound)
 		} else {
-			n := remediation.DeferLanguageUpdates(plan, remediation.Reason(un.Reason), un.Detail)
-			log.Warn("dependency updates are not run", "reason", un.Reason, "deferred", n, "tied_to_existing_pull_requests", bound)
+			args := []any{"reason", stop.reason, "deferred", remediation.DeferLanguageUpdates(plan, work, stop.reason, stop.detail), "tied_to_existing_pull_requests", bound}
+			if stop.err != nil {
+				args = append(args, "err", stop.err)
+			}
+			log.Warn(stop.msg, args...)
 		}
-		return
-	}
-	if err != nil {
-		n := remediation.DeferLanguageUpdates(plan, remediation.ReasonWorkImageUnavailable, "the work image could not be made ready: "+clipText(err.Error(), 300))
-		log.Warn("dependency updates are not run: the work image could not be made ready", "err", err, "deferred", n, "tied_to_existing_pull_requests", bound)
-		return
+		if len(maven) == 0 {
+			return
+		}
+		if updater = mavenUpdater(ctx, cfg, in); updater == nil {
+			n := remediation.DeferLanguageUpdates(plan, maven, remediation.ReasonWorkImageUnavailable, "the dependency update stage could not be set up")
+			log.Warn("Maven updates are not run: the stage could not be set up", "deferred", n)
+			return
+		}
+		order = maven
 	}
 	use := remediation.RunLanguageUpdatesInOrder(ctx, updater.Run, plan, order)
 	log.Info("dependency update stage finished",
@@ -490,6 +486,50 @@ func (r Runner) runLanguageUpdates(ctx context.Context, cfg *LanguageUpdateConfi
 		"manual", plan.CountLanguage(remediation.CategoryManual),
 		"deferred", plan.CountLanguage(remediation.CategoryDeferred),
 		"failed", plan.CountLanguage(remediation.CategoryFailed))
+}
+
+// languageStop is why the update stage cannot run the items that need a work
+// container or Pod in this cycle.
+type languageStop struct {
+	reason remediation.Reason
+	detail string
+	manual bool   // the items can never run in this process
+	msg    string // what the log says
+	err    error
+}
+
+// languageUpdater sets up the stage of the cycle, or says why it cannot run.
+func languageUpdater(ctx context.Context, cfg *LanguageUpdateConfig, in LanguageUpdateInput) (LanguageUpdater, *languageStop) {
+	if cfg.Unavailable != nil {
+		return nil, &languageStop{reason: cfg.Unavailable.Reason, detail: cfg.Unavailable.Detail, manual: cfg.Unavailable.Manual, msg: "dependency updates are not run"}
+	}
+	if in.GitHub == nil || cfg.NewUpdater == nil {
+		return nil, &languageStop{reason: remediation.ReasonWorkImageUnavailable, detail: "the dependency update stage could not be set up", msg: "dependency updates are not run: the stage could not be set up"}
+	}
+	updater, err := cfg.NewUpdater(ctx, in)
+	var un *workexec.Unavailable
+	if errors.As(err, &un) {
+		// The executor says itself why nothing can run now (work Pods are at
+		// their limit, the admission policy is not in force, ...).
+		return nil, &languageStop{reason: remediation.Reason(un.Reason), detail: un.Detail, manual: un.Manual, msg: "dependency updates are not run"}
+	}
+	if err != nil {
+		return nil, &languageStop{reason: remediation.ReasonWorkImageUnavailable, detail: "the work image could not be made ready: " + clipText(err.Error(), 300),
+			msg: "dependency updates are not run: the work image could not be made ready", err: err}
+	}
+	return updater, nil
+}
+
+// mavenUpdater sets up the stage for the Maven items alone, or returns nil.
+func mavenUpdater(ctx context.Context, cfg *LanguageUpdateConfig, in LanguageUpdateInput) LanguageUpdater {
+	if in.GitHub == nil || cfg.NewMavenUpdater == nil {
+		return nil
+	}
+	u, err := cfg.NewMavenUpdater(ctx, in)
+	if err != nil {
+		return nil
+	}
+	return u
 }
 
 // recordLanguageWaits saves the waits of the dependency update items in the

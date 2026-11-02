@@ -161,10 +161,10 @@ func buildLanguageUnit(it *LanguageItem, order int) *composeUnit {
 		if !p.LeftOut {
 			continue
 		}
-		rec.Remaining = append(rec.Remaining, LangRemaining{Ecosystem: p.Ecosystem, Name: p.matchName(), Reason: p.Reason})
+		rec.Remaining = append(rec.Remaining, LangRemaining{Ecosystem: p.Ecosystem, Name: p.matchName(), Reason: p.Reason, MavenBOM: p.BOMRaise()})
 		ld.view.Remaining = append(ld.view.Remaining, PRLanguageRemaining{
 			Name: p.Name, Ecosystem: p.Ecosystem, Relation: string(p.Relation), From: p.Installed,
-			Target: p.SelectionLowerBound, Reason: p.Reason, Detail: p.Detail,
+			Target: p.SelectionLowerBound, Reason: p.Reason, Detail: p.Detail, MavenBOM: p.BOMRaise(),
 		})
 	}
 	if it.Update != nil {

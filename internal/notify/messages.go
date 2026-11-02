@@ -454,6 +454,7 @@ type messages struct {
 	PlanPackageReason            string // "%[1]s %[2]s → %[3]s: %[4]s%[5]s" (name, installed, target, reason, the lockfile note)
 	PlanLockfileUnchanged        string // " (the lockfile did not change)"
 	PlanLeftOut                  string // "%[1]s %[2]s → %[3]s left out because %[4]s" (name, old, target, reason)
+	PlanBOMRaise                 string // " (raising %[1]s to %[2]s reaches it)" (the BOM or its property, the release)
 	PlanChangeWith               string // "%[1]s %[2]s → %[3]s (with %[4]s)" (name, old, new, the direct dependencies updated with it)
 	PlanChainNotFixed            string // "%[1]s %[2]s → %[3]s: re-resolving %[4]s ... did not reach the fixed version this time" (name, installed, target, the direct dependencies)
 	PlanChainRejected            string // "%[1]s %[2]s → %[3]s needs %[4]s updated as well, and that update was not adopted because %[5]s" (..., why)
@@ -852,6 +853,7 @@ var enMessages = messages{
 	PlanPackageReason:            "%[1]s %[2]s → %[3]s: %[4]s%[5]s",
 	PlanLockfileUnchanged:        " (the lockfile did not change)",
 	PlanLeftOut:                  "%[1]s %[2]s → %[3]s left out because %[4]s",
+	PlanBOMRaise:                 " (raising %[1]s to %[2]s reaches it)",
 	PlanChangeWith:               "%[1]s %[2]s → %[3]s (with %[4]s)",
 	PlanChainNotFixed:            "%[1]s %[2]s → %[3]s: re-resolving %[4]s within the project's ranges did not reach the fixed version this time",
 	PlanChainRejected:            "%[1]s %[2]s → %[3]s needs %[4]s updated as well, and that update was not adopted because %[5]s",
@@ -1246,6 +1248,7 @@ var jaMessages = messages{
 	PlanPackageReason:            "%[1]s %[2]s → %[3]s は%[4]s%[5]s",
 	PlanLockfileUnchanged:        " (lockfile は変わらず)",
 	PlanLeftOut:                  "%[1]s %[2]s → %[3]s は%[4]sため除外",
+	PlanBOMRaise:                 " (%[1]s を %[2]s に上げれば届く)",
 	PlanChangeWith:               "%[1]s %[2]s → %[3]s（%[4]s も更新）",
 	PlanChainNotFixed:            "%[1]s %[2]s → %[3]s: %[4]s をプロジェクトの範囲内で解決し直したが、今回の再解決では修正版に届かなかった",
 	PlanChainRejected:            "%[1]s %[2]s → %[3]s には %[4]s の更新も必要だが、%[5]sため採用しない",

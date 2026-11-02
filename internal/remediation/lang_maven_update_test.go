@@ -329,9 +329,57 @@ func TestMavenUpdateRefusals(t *testing.T) {
 		f := newMavenFlow(t, map[string]string{"svc/pom.xml": appPom}, mavenPkg("com.fasterxml.jackson.core:jackson-databind", "2.13.3", "2.14.0", "CVE-J"))
 		f.resolve = func(int, map[string][]byte) map[string]map[string]string { return nil }
 		it := f.run()
-		wantCategory(t, it, CategoryManual, ReasonMavenVersionSourceUnsupported)
+		wantCategory(t, it, CategoryManual, ReasonMavenBOMSeriesUnreached)
 		if !strings.Contains(it.Detail, "jackson-bom") {
 			t.Errorf("detail = %s", it.Detail)
+		}
+		// No pom of a later minor version could be read: nothing is named.
+		if p := it.Packages[0]; p.Reason != ReasonMavenBOMSeriesUnreached || p.MavenBOM != nil {
+			t.Errorf("package = %s, %+v", p.Reason, p.MavenBOM)
+		}
+	})
+	t.Run("a later minor version of the BOM that fixes the package is named", func(t *testing.T) {
+		f := newMavenFlow(t, map[string]string{"svc/pom.xml": appPom}, mavenPkg("com.fasterxml.jackson.core:jackson-databind", "2.13.3", "2.18.6", "CVE-J"))
+		f.reg.versions["com.fasterxml.jackson.core:jackson-databind"] = append(f.reg.versions["com.fasterxml.jackson.core:jackson-databind"], "2.18.6")
+		var boms []string
+		for _, v := range []string{"2.14.0", "2.14.3", "2.15.0", "2.15.4", "2.16.0", "2.16.2", "2.17.0", "2.17.3", "2.18.0", "2.18.5", "2.18.6", "2.18.7", "2.19.0-rc1", "3.0.0"} {
+			boms = append(boms, v)
+			managed := v
+			if v == "2.18.5" {
+				managed = "2.18.5.1"
+			}
+			f.reg.poms["com.fasterxml.jackson:jackson-bom:"+v] = jacksonBOM(v, managed)
+		}
+		f.reg.versions["com.fasterxml.jackson:jackson-bom"] = append(f.reg.versions["com.fasterxml.jackson:jackson-bom"], boms...)
+		f.resolve = func(int, map[string][]byte) map[string]map[string]string { return nil }
+		it := f.run()
+		wantCategory(t, it, CategoryManual, ReasonMavenBOMSeriesUnreached)
+		want := MavenBOMRaise{BOM: "com.fasterxml.jackson:jackson-bom", Property: "jackson-bom.version", From: "2.13.3", To: "2.18.6", Manages: "2.18.6"}
+		if p := it.Packages[0]; p.MavenBOM == nil || *p.MavenBOM != want {
+			t.Errorf("package = %+v", p.MavenBOM)
+		}
+		if !strings.Contains(it.Detail, "its release 2.18.6, of a later minor version, manages it at 2.18.6") {
+			t.Errorf("detail = %s", it.Detail)
+		}
+		n := 0
+		for _, a := range f.reg.asked {
+			if strings.HasPrefix(a, "pom com.fasterxml.jackson:jackson-bom:2.1") && !strings.HasPrefix(a, "pom com.fasterxml.jackson:jackson-bom:2.13") {
+				n++
+			}
+		}
+		if n > maxMavenBOMRaiseLookups {
+			t.Errorf("%d poms of later minor versions were read", n)
+		}
+	})
+	t.Run("no release of the BOM's major version fixes the package", func(t *testing.T) {
+		f := newMavenFlow(t, map[string]string{"svc/pom.xml": appPom}, mavenPkg("com.fasterxml.jackson.core:jackson-databind", "2.13.3", "2.14.1", "CVE-J"))
+		f.reg.versions["com.fasterxml.jackson.core:jackson-databind"] = append(f.reg.versions["com.fasterxml.jackson.core:jackson-databind"], "2.14.1")
+		f.reg.poms["com.fasterxml.jackson:jackson-bom:2.14.0"] = jacksonBOM("2.14.0", "2.14.0")
+		f.resolve = func(int, map[string][]byte) map[string]map[string]string { return nil }
+		it := f.run()
+		wantCategory(t, it, CategoryManual, ReasonMavenBOMSeriesUnreached)
+		if p := it.Packages[0]; p.MavenBOM != nil {
+			t.Errorf("package = %+v", p.MavenBOM)
 		}
 	})
 	t.Run("a release whose dependencies the project holds back", func(t *testing.T) {
@@ -606,4 +654,66 @@ func TestMavenUpdateBOMManagementByProperty(t *testing.T) {
   <dependencyManagement><dependencies><dependency><groupId>x</groupId><artifactId>${lib}</artifactId><version>1</version></dependency></dependencies></dependencyManagement></project>`
 	f.resolve = func(int, map[string][]byte) map[string]map[string]string { return nil }
 	wantCategory(t, f.run(), CategoryManual, ReasonMavenVersionSourceUnsupported)
+}
+
+// A package of a BOM the update leaves out keeps the later release of the BOM
+// that reaches its target in the pull request's record, so that a later cycle
+// tied to the pull request names it too.
+func TestMavenBOMRaiseSurvivesThePullRequestRecord(t *testing.T) {
+	f := newMavenFlow(t, map[string]string{"svc/pom.xml": appPom},
+		mavenPkg("org.yaml:snakeyaml", "1.30", "1.31", "CVE-YAML"),
+		mavenPkg("com.fasterxml.jackson.core:jackson-databind", "2.13.3", "2.14.0", "CVE-J"))
+	f.reg.poms["com.fasterxml.jackson:jackson-bom:2.14.0"] = jacksonBOM("2.14.0", "2.14.0")
+	f.vulns["org.yaml:snakeyaml@1.30"] = []string{"CVE-YAML"}
+	f.vulns["com.fasterxml.jackson.core:jackson-databind@2.13.3"] = []string{"CVE-J"}
+	f.resolve = func(n int, files map[string][]byte) map[string]map[string]string {
+		v := "1.30"
+		if pomHas(files, "pom.xml", "<snakeyaml.version>1.31</snakeyaml.version>") {
+			v = "1.31"
+		}
+		return map[string]map[string]string{"pom.xml": {"org.yaml:snakeyaml": v, "com.fasterxml.jackson.core:jackson-databind": "2.13.3"}}
+	}
+	// The item as the next cycle plans it: nothing is run yet.
+	planned := f.item
+	planned.Packages = append([]LanguagePackage(nil), f.item.Packages...)
+	got := f.run()
+	wantCategory(t, got, CategoryPRCandidate, ReasonUpdateVerified)
+	want := MavenBOMRaise{BOM: "com.fasterxml.jackson:jackson-bom", Property: "jackson-bom.version", From: "2.13.3", To: "2.14.0", Manages: "2.14.0"}
+	var left *LanguagePackage
+	for i := range got.Packages {
+		if got.Packages[i].LeftOut {
+			left = &got.Packages[i]
+		}
+	}
+	if left == nil || left.Reason != ReasonMavenBOMSeriesUnreached || left.MavenBOM == nil || *left.MavenBOM != want {
+		t.Fatalf("left out = %+v", left)
+	}
+	u := buildLanguageUnit(&got, 0)
+	rec := u.lang.record
+	if len(rec.Remaining) != 1 || rec.Remaining[0].MavenBOM == nil || *rec.Remaining[0].MavenBOM != want {
+		t.Fatalf("record remaining = %+v", rec.Remaining)
+	}
+	if len(u.lang.view.Remaining) != 1 || u.lang.view.Remaining[0].MavenBOM == nil {
+		t.Errorf("view remaining = %+v", u.lang.view.Remaining)
+	}
+	if err := rec.wellFormed(); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	v := languageViewOfTied(planned, &PRRecord{Lang: rec})
+	if len(v.Remaining) != 1 || v.Remaining[0].MavenBOM == nil || *v.Remaining[0].MavenBOM != want {
+		t.Errorf("tied view remaining = %+v", v.Remaining)
+	}
+
+	// A record that names a BOM release for another reason, or without its
+	// versions, is not well formed.
+	for _, bad := range []LangRemaining{
+		{Ecosystem: "jar", Name: "x:y", Reason: ReasonMavenVersionSourceUnsupported, MavenBOM: &want},
+		{Ecosystem: "jar", Name: "x:y", Reason: ReasonMavenBOMSeriesUnreached, MavenBOM: &MavenBOMRaise{BOM: "a:b", From: "1.0"}},
+	} {
+		r := *rec
+		r.Remaining = []LangRemaining{bad}
+		if r.wellFormed() == nil {
+			t.Errorf("%+v is well formed", bad)
+		}
+	}
 }

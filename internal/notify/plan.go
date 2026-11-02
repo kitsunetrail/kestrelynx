@@ -619,6 +619,9 @@ type languagePackagePayload struct {
 	// Through names the direct dependencies a chain update moved to bring the
 	// package to its version.
 	Through []string `json:"through,omitempty"`
+	// MavenBOM is a release of a later minor version of the package's BOM
+	// that reaches its target, when the BOM's minor version does not.
+	MavenBOM *remediation.MavenBOMRaise `json:"maven_bom,omitempty"`
 
 	OccurrenceCount      int                            `json:"occurrence_count"`
 	Occurrences          []remediation.SourceOccurrence `json:"occurrences,omitempty"`
@@ -672,7 +675,7 @@ func languageItemPayloadOf(li remediation.LanguageItem, units []remediation.PRUn
 		pp := languagePackagePayload{
 			Name: p.Name, Normalized: p.Normalized, Ecosystem: p.Ecosystem, Installed: p.Installed,
 			SelectionLowerBound: p.SelectionLowerBound, AdoptedVersion: p.AdoptedVersion,
-			Relation: string(p.Relation), Action: string(p.Action), Reason: string(p.Reason), Detail: p.Detail, LeftOut: p.LeftOut, Through: p.Through,
+			Relation: string(p.Relation), Action: string(p.Action), Reason: string(p.Reason), Detail: p.Detail, LeftOut: p.LeftOut, Through: p.Through, MavenBOM: p.BOMRaise(),
 			OccurrenceCount: len(p.Occurrences), Occurrences: p.Occurrences,
 			CVECount: len(p.CVEs), KEVCount: p.KEVCount(), CVEs: p.CVEs,
 			OriginCount: len(p.Origins), Origins: p.Origins,
@@ -696,6 +699,10 @@ func languageItemPayloadOf(li remediation.LanguageItem, units []remediation.PRUn
 				pp.LeftOut, pp.Action, pp.Reason = true, string(remediation.ActionManual), string(x.Reason)
 				if x.Detail != "" {
 					pp.Detail = x.Detail
+				}
+				pp.MavenBOM = nil
+				if x.Reason == remediation.ReasonMavenBOMSeriesUnreached {
+					pp.MavenBOM = x.MavenBOM
 				}
 				break
 			}

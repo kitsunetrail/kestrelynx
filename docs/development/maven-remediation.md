@@ -2,7 +2,7 @@
 
 - **Status:** Implemented (PR creation verified in a validation repository, and Maven builds and dependency resolution verified on the PR branches).
 - **Started:** November 1, 2026
-- **Last updated:** November 1, 2026
+- **Last updated:** November 2, 2026
 
 ## Purpose
 
@@ -220,10 +220,27 @@ The following results are from verification in a real environment on November 1,
 | `commons-text` in the project with multiple modules | `1.10.0` |
 | Jackson | `jackson-core` and `jackson-databind` remained at `2.13.3` |
 
+### Checks in Kubernetes
+
+Verified Maven updates for Kubernetes remediation targets on November 2, 2026.
+
+| Check | Result |
+| --- | --- |
+| Verification environment and targets | Ran KestreLynx on K3s (v1.36.5) on a validation host, targeting the two applications described in the Applications used for verification section running as Deployments |
+| Worker Pod namespace | Left `remediation.worker.kubernetes.namespace` unset |
+| KestreLynx logs | Worker Pod updates were skipped with `work_namespace_not_configured`, no candidates required manual action, and both Maven updates ran |
+| PR creation | Created remediation PRs for both applications in the validation repository |
+| Changes in the PR for the single module | Overrode `logback.version` with `1.2.13` and `tomcat.version` with `9.0.121` |
+| Scans before and after the single-module update | 28 vulnerabilities resolved, 28 remaining, 0 new |
+| Changes in the PR for multiple modules | Applied the same two overrides as for the single module and updated `commons-text.version` from `1.9` → `1.10.0` |
+| Scans before and after the update for multiple modules | 29 vulnerabilities resolved, 28 remaining, 0 new |
+| Comparison with local Docker | PR changes and vulnerability counts for both applications matched the results from local Docker |
+| `jackson-core` and `jackson-databind` | Excluded with the new reason code `maven_bom_series_unreached` |
+| Jackson update guidance | Added guidance to the webhook and PR records that raising `jackson-bom.version` to `2.18.11` would reach the fixed versions |
+| `spring-boot-autoconfigure` | Excluded because `spring-boot`, required by the new version, remains at a lower version, as with local Docker |
+
 ## Unverified areas and next steps
 
-- Verify Maven updates for Kubernetes remediation targets
-  - Worker Pods are not used, but operation with Kubernetes remediation targets has not been verified
 - Add support for Gradle when `gradle.lockfile` is present
 
 ## Update history
@@ -232,5 +249,9 @@ The following results are from verification in a real environment on November 1,
 
 - Completed the design and implemented planning, updates, and PR creation.
 - Verified PR creation in a real environment.
+
+### November 2, 2026
+
+- Verified Maven updates for Kubernetes remediation targets.
 
 ---

@@ -131,6 +131,82 @@ func TestRunLanguageUpdates(t *testing.T) {
 		}
 	})
 
+	t.Run("Maven items run without the work clients", func(t *testing.T) {
+		mavenPlan := func() *remediation.Plan {
+			p := languagePlanWith(remediation.CategoryDependencyUpdateCandidate, remediation.CategoryDependencyUpdateCandidate, remediation.CategoryDependencyUpdateCandidate)
+			p.LanguageItems[0].Manager, p.LanguageItems[0].Key = remediation.ManagerNpm, "npm"
+			p.LanguageItems[1].Manager, p.LanguageItems[1].Key = remediation.ManagerMaven, "maven"
+			p.LanguageItems[2].Manager, p.LanguageItems[2].Key = remediation.ManagerGo, "go"
+			return p
+		}
+		failing := func(context.Context, LanguageUpdateInput) (LanguageUpdater, error) {
+			return nil, errors.New("pull failed")
+		}
+		for _, tc := range []struct {
+			name     string
+			cfg      LanguageUpdateConfig
+			category remediation.Category
+			reason   remediation.Reason
+		}{
+			{"no work namespace", LanguageUpdateConfig{Unavailable: &LanguageUnavailable{Reason: remediation.ReasonWorkNamespaceNotConfigured, Detail: "no namespace", Manual: true}},
+				remediation.CategoryManual, remediation.ReasonWorkNamespaceNotConfigured},
+			{"no work image", LanguageUpdateConfig{Unavailable: &LanguageUnavailable{Reason: remediation.ReasonWorkImageNotConfigured, Detail: "no work image"}},
+				remediation.CategoryDeferred, remediation.ReasonWorkImageNotConfigured},
+			{"a work image that cannot be made ready", LanguageUpdateConfig{NewUpdater: failing},
+				remediation.CategoryDeferred, remediation.ReasonWorkImageUnavailable},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				var seen []string
+				u := &recordingUpdater{mark: func(p *remediation.Plan) {
+					for i := range p.LanguageItems {
+						seen = append(seen, p.LanguageItems[i].Key)
+						p.LanguageItems[i].Category = remediation.CategoryPRCandidate
+					}
+				}}
+				cfg := tc.cfg
+				cfg.NewMavenUpdater = func(context.Context, LanguageUpdateInput) (LanguageUpdater, error) { return u, nil }
+				p := mavenPlan()
+				Runner{}.runLanguageUpdates(ctx, &cfg, p, nil, LanguageUpdateInput{GitHub: fakeReader{}})
+				if u.ran != 1 || len(seen) != 1 || seen[0] != "maven" || p.LanguageItems[1].Category != remediation.CategoryPRCandidate {
+					t.Errorf("ran %d over %v, Maven item %s", u.ran, seen, p.LanguageItems[1].Category)
+				}
+				for _, i := range []int{0, 2} {
+					if it := p.LanguageItems[i]; it.Category != tc.category || it.Reason != tc.reason {
+						t.Errorf("%s item = %s/%s", it.Key, it.Category, it.Reason)
+					}
+				}
+			})
+		}
+
+		t.Run("a Maven stage that cannot be set up defers the Maven items", func(t *testing.T) {
+			cfg := &LanguageUpdateConfig{
+				Unavailable:     &LanguageUnavailable{Reason: remediation.ReasonWorkNamespaceNotConfigured, Manual: true},
+				NewMavenUpdater: failing,
+			}
+			p := mavenPlan()
+			Runner{}.runLanguageUpdates(ctx, cfg, p, nil, LanguageUpdateInput{GitHub: fakeReader{}})
+			if it := p.LanguageItems[1]; it.Category != remediation.CategoryDeferred || it.Reason != remediation.ReasonWorkImageUnavailable {
+				t.Errorf("Maven item = %s/%s", it.Category, it.Reason)
+			}
+		})
+
+		t.Run("with the work clients the Maven items run in the one stage", func(t *testing.T) {
+			u := &recordingUpdater{}
+			mavenBuilt := 0
+			cfg := &LanguageUpdateConfig{
+				NewUpdater: func(context.Context, LanguageUpdateInput) (LanguageUpdater, error) { return u, nil },
+				NewMavenUpdater: func(context.Context, LanguageUpdateInput) (LanguageUpdater, error) {
+					mavenBuilt++
+					return &recordingUpdater{}, nil
+				},
+			}
+			Runner{}.runLanguageUpdates(ctx, cfg, mavenPlan(), nil, LanguageUpdateInput{GitHub: fakeReader{}})
+			if u.ran != 1 || mavenBuilt != 0 {
+				t.Errorf("ran %d, Maven stage built %d times", u.ran, mavenBuilt)
+			}
+		})
+	})
+
 	t.Run("without a GitHub reader nothing runs", func(t *testing.T) {
 		u := &recordingUpdater{}
 		cfg := &LanguageUpdateConfig{NewUpdater: func(context.Context, LanguageUpdateInput) (LanguageUpdater, error) { return u, nil }}

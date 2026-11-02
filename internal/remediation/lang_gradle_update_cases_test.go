@@ -92,6 +92,7 @@ func catalogProject(catalog, deps string) map[string]string {
 	f := gradleFiles()
 	f["build.gradle.kts"] = strings.Replace(f["build.gradle.kts"], `	implementation("org.apache.commons:commons-text:1.9")`, deps, 1)
 	f["gradle/libs.versions.toml"] = catalog
+	f["settings-gradle.lockfile"] = settingsLockForCatalog
 	return f
 }
 

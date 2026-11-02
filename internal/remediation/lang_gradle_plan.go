@@ -254,6 +254,14 @@ func (r *run) analyseGradleUnit(it *LanguageItem, u *depUnit, entries []github.E
 			return manual(ReasonGradleLockingUnenforced, "%s lists no %s, so it does not cover the application", lockPath, c)
 		}
 	}
+	// With a version catalog, Gradle locks the configuration the settings
+	// resolve the catalog through and writes settings-gradle.lockfile with
+	// --write-locks (an "empty=incomingCatalogFor..." line). A project that
+	// does not keep the file gets it from the update as a file nobody asked
+	// for, so the lock state the build was given is not the whole of it.
+	if hasCatalog && !present["settings-gradle.lockfile"] {
+		return manual(ReasonGradleLockingUnenforced, "%s is missing: with a version catalog, Gradle writes it with --write-locks", pathIn(u.dir, "settings-gradle.lockfile"))
+	}
 
 	direct := map[string][]string{}
 	for _, d := range script.decls {

@@ -339,6 +339,11 @@ func (g *gradleReader) buildStmt(s gradleStmt) error {
 			return err
 		}
 		return g.configurationsBlock(s)
+	case named(s, "application"):
+		if err := g.once(s, "application"); err != nil {
+			return err
+		}
+		return g.applicationBlock(s)
 	case named(s, "test"), s.hasBlock && (shape(s.head) == "tasks . withType < Test >" || shape(s.head) == "tasks . withType ( Test )" ||
 		shape(s.head) == `tasks . named < Test > ( "test" )` || shape(s.head) == `tasks . named ( "test" )`):
 		return g.eachShape(s.block, "useJUnitPlatform ( )", "only useJUnitPlatform() is accepted in the test task")
@@ -368,6 +373,32 @@ func (g *gradleReader) buildStmt(s gradleStmt) error {
 		}
 	}
 	return g.unsupportedStmt(s)
+}
+
+// applicationBlock accepts the main class of the application plugin written
+// as a literal: mainClass = "app.Main", or mainClass.set("app.Main") in
+// Kotlin. The class name only says what the start scripts and the run task
+// start; it does not take part in resolving dependencies.
+func (g *gradleReader) applicationBlock(s gradleStmt) error {
+	if len(s.block) != 1 || s.block[0].hasBlock {
+		return g.refuse(ReasonGradleBuildUnsupported, s, "only mainClass is accepted in the application block")
+	}
+	b := s.block[0]
+	c := &gradleCur{t: b.head}
+	ok := c.ident("mainClass")
+	switch {
+	case ok && c.punct("="):
+		_, ok = c.str()
+	case ok && g.kotlin && c.punct(".") && c.ident("set") && c.punct("("):
+		_, ok = c.str()
+		ok = ok && c.punct(")")
+	default:
+		ok = false
+	}
+	if !ok || !c.done() {
+		return g.refuse(ReasonGradleBuildUnsupported, b, "the main class must be mainClass = \"...\" written literally")
+	}
+	return nil
 }
 
 // eachShape accepts a block whose statements are all the given form.

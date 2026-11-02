@@ -225,6 +225,8 @@ func TestGradleRecognizerAccepts(t *testing.T) {
 			"kotlin config":   "configurations { compileOnly { extendsFrom(configurations.annotationProcessor.get()) } }\ndependencyLocking { lockAllConfigurations(); lockMode = LockMode.STRICT }",
 			"extra":           "extra[\"snakeyaml.version\"] = \"2.7\"\ndependencyLocking { lockAllConfigurations(); lockMode = LockMode.STRICT }",
 			"developmentOnly": "plugins { id(\"org.springframework.boot\") version \"4.1.2\" }\ndependencies { developmentOnly(\"org.springframework.boot:spring-boot-devtools\") }\ndependencyLocking { lockAllConfigurations(); lockMode = LockMode.STRICT }",
+			"main class":      "plugins { application }\napplication { mainClass = \"app.App\" }\ndependencyLocking { lockAllConfigurations(); lockMode = LockMode.STRICT }",
+			"main class set":  "plugins { application }\napplication { mainClass.set(\"app.App\") }\ndependencyLocking { lockAllConfigurations(); lockMode = LockMode.STRICT }",
 		} {
 			if _, err := recognizeGradleScript("build.gradle.kts", []byte(src), false, nil, "9.8.2"); err != nil {
 				t.Errorf("%s: %v", name, err)
@@ -240,51 +242,59 @@ func TestGradleRecognizerRefuses(t *testing.T) {
 		file, src, gradle string
 		want              Reason
 	}{
-		"no locking":       {"build.gradle.kts", "plugins { java }\n", "9.8.2", ReasonGradleLockingUnenforced},
-		"default mode":     {"build.gradle.kts", "dependencyLocking { lockAllConfigurations(); lockMode = LockMode.DEFAULT }\n", "9.8.2", ReasonGradleLockingUnenforced},
-		"lenient":          {"build.gradle.kts", "dependencyLocking { lockAllConfigurations(); lockMode = LockMode.LENIENT }\n", "9.8.2", ReasonGradleLockingUnenforced},
-		"no lock all":      {"build.gradle.kts", "dependencyLocking { lockMode = LockMode.STRICT }\n", "9.8.2", ReasonGradleLockingUnenforced},
-		"no mode":          {"build.gradle.kts", "dependencyLocking { lockAllConfigurations() }\n", "9.8.2", ReasonGradleLockingUnenforced},
-		"ignored":          {"build.gradle.kts", "dependencyLocking { lockAllConfigurations(); lockMode = LockMode.STRICT; ignoredDependencies.add(\"a:*\") }\n", "9.8.2", ReasonGradleLockingUnenforced},
-		"mode twice":       {"build.gradle.kts", "dependencyLocking { lockAllConfigurations(); lockMode = LockMode.STRICT; lockMode = LockMode.LENIENT }\n", "9.8.2", ReasonGradleLockingUnenforced},
-		"locking twice":    {"build.gradle.kts", lock + lock, "9.8.2", ReasonGradleLockingUnenforced},
-		"unknown plugin":   {"build.gradle.kts", "plugins { id(\"com.example.x\") version \"1.0\" }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
-		"boot version":     {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") version \"4.1.1\" }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
-		"boot gradle":      {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") version \"4.1.2\" }\n" + lock, "8.14.6", ReasonGradlePluginUnsupported},
-		"no version":       {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
-		"alias":            {"build.gradle.kts", "plugins { alias(libs.plugins.boot) }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
-		"variable ver":     {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") version bootVersion }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
-		"plugin template":  {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") version \"$v\" }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"settings plugin":  {"build.gradle.kts", "plugins { id(\"org.gradle.toolchains.foojay-resolver-convention\") version \"1.0.0\" }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
-		"apply from":       {"build.gradle", "apply from: 'other.gradle'\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"buildscript":      {"build.gradle.kts", "buildscript { repositories { mavenCentral() } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"allprojects":      {"build.gradle.kts", "allprojects { }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"subprojects":      {"build.gradle.kts", "subprojects { }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"resolution":       {"build.gradle.kts", "configurations.all { resolutionStrategy { force(\"a:b:1\") } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"resolution in":    {"build.gradle.kts", "configurations { all { resolutionStrategy { } } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"dep management":   {"build.gradle.kts", "dependencyManagement { imports { } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"interpolation":    {"build.gradle.kts", "dependencies { implementation(\"a:b:$v\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"interp braces":    {"build.gradle", "dependencies { implementation \"a:b:${v}\" }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"other repo":       {"build.gradle.kts", "repositories { maven { url = uri(\"https://example.com\") } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"google":           {"build.gradle.kts", "repositories { mavenCentral(); google() }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"other conf":       {"build.gradle.kts", "dependencies { kapt(\"a:b:1\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"developmentOnly":  {"build.gradle.kts", "dependencies { developmentOnly(\"a:b:1\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"platform":         {"build.gradle.kts", "dependencies { implementation(platform(\"a:b:1\")) }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"classifier":       {"build.gradle.kts", "dependencies { implementation(\"a:b:1:c\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"dynamic":          {"build.gradle.kts", "dependencies { implementation(\"a:b:1.+\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"range":            {"build.gradle.kts", "dependencies { implementation(\"a:b:[1,2)\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"closure":          {"build.gradle.kts", "dependencies { implementation(\"a:b:1\") { isTransitive = false } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"unknown alias":    {"build.gradle.kts", "dependencies { implementation(libs.nope) }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"kotlin no paren":  {"build.gradle.kts", "dependencies { implementation \"a:b:1\" }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"task":             {"build.gradle.kts", "tasks.withType<Test> { jvmArgs(\"-javaagent:x.jar\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"val":              {"build.gradle.kts", "val x = 1\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"extra variable":   {"build.gradle.kts", "extra[\"a\"] = x\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"toolchain vend":   {"build.gradle.kts", "java { toolchain { languageVersion = JavaLanguageVersion.of(17); vendor = JvmVendorSpec.ADOPTIUM } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
-		"settings include": {"settings.gradle", "include 'a'\n", "9.8.2", ReasonGradleBuildUnsupported},
-		"include build":    {"settings.gradle.kts", "includeBuild(\"x\")\n", "9.8.2", ReasonGradleBuildUnsupported},
-		"settings repo":    {"settings.gradle.kts", "pluginManagement { repositories { maven { } } }\n", "9.8.2", ReasonGradleBuildUnsupported},
-		"foojay":           {"settings.gradle.kts", "plugins { id(\"org.gradle.toolchains.foojay-resolver-convention\") version \"1.0.0\" }\n", "9.8.2", ReasonGradlePluginUnsupported},
-		"settings dep":     {"settings.gradle.kts", "dependencyResolutionManagement { }\n", "9.8.2", ReasonGradleBuildUnsupported},
+		"no locking":        {"build.gradle.kts", "plugins { java }\n", "9.8.2", ReasonGradleLockingUnenforced},
+		"default mode":      {"build.gradle.kts", "dependencyLocking { lockAllConfigurations(); lockMode = LockMode.DEFAULT }\n", "9.8.2", ReasonGradleLockingUnenforced},
+		"lenient":           {"build.gradle.kts", "dependencyLocking { lockAllConfigurations(); lockMode = LockMode.LENIENT }\n", "9.8.2", ReasonGradleLockingUnenforced},
+		"no lock all":       {"build.gradle.kts", "dependencyLocking { lockMode = LockMode.STRICT }\n", "9.8.2", ReasonGradleLockingUnenforced},
+		"no mode":           {"build.gradle.kts", "dependencyLocking { lockAllConfigurations() }\n", "9.8.2", ReasonGradleLockingUnenforced},
+		"ignored":           {"build.gradle.kts", "dependencyLocking { lockAllConfigurations(); lockMode = LockMode.STRICT; ignoredDependencies.add(\"a:*\") }\n", "9.8.2", ReasonGradleLockingUnenforced},
+		"mode twice":        {"build.gradle.kts", "dependencyLocking { lockAllConfigurations(); lockMode = LockMode.STRICT; lockMode = LockMode.LENIENT }\n", "9.8.2", ReasonGradleLockingUnenforced},
+		"locking twice":     {"build.gradle.kts", lock + lock, "9.8.2", ReasonGradleLockingUnenforced},
+		"unknown plugin":    {"build.gradle.kts", "plugins { id(\"com.example.x\") version \"1.0\" }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
+		"boot version":      {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") version \"4.1.1\" }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
+		"boot gradle":       {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") version \"4.1.2\" }\n" + lock, "8.14.6", ReasonGradlePluginUnsupported},
+		"no version":        {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
+		"alias":             {"build.gradle.kts", "plugins { alias(libs.plugins.boot) }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
+		"variable ver":      {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") version bootVersion }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
+		"plugin template":   {"build.gradle.kts", "plugins { id(\"org.springframework.boot\") version \"$v\" }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"settings plugin":   {"build.gradle.kts", "plugins { id(\"org.gradle.toolchains.foojay-resolver-convention\") version \"1.0.0\" }\n" + lock, "9.8.2", ReasonGradlePluginUnsupported},
+		"apply from":        {"build.gradle", "apply from: 'other.gradle'\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"jvm args":          {"build.gradle.kts", "application { mainClass = \"app.App\"; applicationDefaultJvmArgs = listOf(\"-javaagent:x.jar\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"groovy main call":  {"build.gradle", "application { mainClass 'app.App' }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"groovy main set":   {"build.gradle", "application { mainClass.set('app.App') }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"main concat":       {"build.gradle.kts", "application { mainClass = \"app.\" + \"App\" }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"main nested":       {"build.gradle.kts", "application { run { mainClass = \"app.App\" } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"main from prop":    {"build.gradle.kts", "application { mainClass = mainName }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"main template":     {"build.gradle.kts", "application { mainClass = \"app.$x\" }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"application twice": {"build.gradle.kts", "application { mainClass = \"a.A\" }\napplication { mainClass = \"a.B\" }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"buildscript":       {"build.gradle.kts", "buildscript { repositories { mavenCentral() } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"allprojects":       {"build.gradle.kts", "allprojects { }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"subprojects":       {"build.gradle.kts", "subprojects { }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"resolution":        {"build.gradle.kts", "configurations.all { resolutionStrategy { force(\"a:b:1\") } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"resolution in":     {"build.gradle.kts", "configurations { all { resolutionStrategy { } } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"dep management":    {"build.gradle.kts", "dependencyManagement { imports { } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"interpolation":     {"build.gradle.kts", "dependencies { implementation(\"a:b:$v\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"interp braces":     {"build.gradle", "dependencies { implementation \"a:b:${v}\" }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"other repo":        {"build.gradle.kts", "repositories { maven { url = uri(\"https://example.com\") } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"google":            {"build.gradle.kts", "repositories { mavenCentral(); google() }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"other conf":        {"build.gradle.kts", "dependencies { kapt(\"a:b:1\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"developmentOnly":   {"build.gradle.kts", "dependencies { developmentOnly(\"a:b:1\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"platform":          {"build.gradle.kts", "dependencies { implementation(platform(\"a:b:1\")) }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"classifier":        {"build.gradle.kts", "dependencies { implementation(\"a:b:1:c\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"dynamic":           {"build.gradle.kts", "dependencies { implementation(\"a:b:1.+\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"range":             {"build.gradle.kts", "dependencies { implementation(\"a:b:[1,2)\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"closure":           {"build.gradle.kts", "dependencies { implementation(\"a:b:1\") { isTransitive = false } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"unknown alias":     {"build.gradle.kts", "dependencies { implementation(libs.nope) }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"kotlin no paren":   {"build.gradle.kts", "dependencies { implementation \"a:b:1\" }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"task":              {"build.gradle.kts", "tasks.withType<Test> { jvmArgs(\"-javaagent:x.jar\") }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"val":               {"build.gradle.kts", "val x = 1\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"extra variable":    {"build.gradle.kts", "extra[\"a\"] = x\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"toolchain vend":    {"build.gradle.kts", "java { toolchain { languageVersion = JavaLanguageVersion.of(17); vendor = JvmVendorSpec.ADOPTIUM } }\n" + lock, "9.8.2", ReasonGradleBuildUnsupported},
+		"settings include":  {"settings.gradle", "include 'a'\n", "9.8.2", ReasonGradleBuildUnsupported},
+		"include build":     {"settings.gradle.kts", "includeBuild(\"x\")\n", "9.8.2", ReasonGradleBuildUnsupported},
+		"settings repo":     {"settings.gradle.kts", "pluginManagement { repositories { maven { } } }\n", "9.8.2", ReasonGradleBuildUnsupported},
+		"foojay":            {"settings.gradle.kts", "plugins { id(\"org.gradle.toolchains.foojay-resolver-convention\") version \"1.0.0\" }\n", "9.8.2", ReasonGradlePluginUnsupported},
+		"settings dep":      {"settings.gradle.kts", "dependencyResolutionManagement { }\n", "9.8.2", ReasonGradleBuildUnsupported},
 	} {
 		settings := strings.HasPrefix(c.file, "settings")
 		_, err := recognizeGradleScript(c.file, []byte(c.src), settings, cat, c.gradle)
@@ -750,6 +760,7 @@ func TestLanguagePlan_GradleCatalogAndProperties(t *testing.T) {
 	files := gradleFiles()
 	files["build.gradle.kts"] = strings.Replace(springKotlin, "\timplementation(\"org.springframework.boot:spring-boot-starter-webmvc\")", "\timplementation(libs.commons.text)\n\timplementation(\"org.springframework.boot:spring-boot-starter-webmvc\")", 1)
 	files["gradle/libs.versions.toml"] = catalogToml
+	files["settings-gradle.lockfile"] = settingsLockForCatalog
 	files["gradle.properties"] = "org.gradle.parallel=true\nsnakeyaml.version=2.7\n"
 	it, ok := gradlePlanItem(t, files)
 	if !ok || it.Category != CategoryDependencyUpdateCandidate {
@@ -763,6 +774,20 @@ func TestLanguagePlan_GradleCatalogAndProperties(t *testing.T) {
 	}
 	if containsString(it.Source.Absent, "svc/gradle.properties") || containsString(it.Source.Absent, "svc/gradle/libs.versions.toml") {
 		t.Errorf("absent = %v", it.Source.Absent)
+	}
+}
+
+// settingsLockForCatalog is the settings-gradle.lockfile Gradle writes with
+// --write-locks for a build that uses gradle/libs.versions.toml.
+const settingsLockForCatalog = "# This is a Gradle generated file for dependency locking.\n# Manual edits can break the build and are not advised.\n# This file is expected to be part of source control.\nempty=incomingCatalogForLibs0\n"
+
+func TestLanguagePlan_GradleCatalogNeedsTheSettingsLockfile(t *testing.T) {
+	files := gradleFiles()
+	files["build.gradle.kts"] = strings.Replace(springKotlin, "\timplementation(\"org.springframework.boot:spring-boot-starter-webmvc\")", "\timplementation(libs.commons.text)\n\timplementation(\"org.springframework.boot:spring-boot-starter-webmvc\")", 1)
+	files["gradle/libs.versions.toml"] = catalogToml
+	it, _ := gradlePlanItem(t, files)
+	if it.Category != CategoryManual || it.Reason != ReasonGradleLockingUnenforced || !strings.Contains(it.Detail, "settings-gradle.lockfile") {
+		t.Errorf("item = %s %s %q; a catalog without settings-gradle.lockfile is manual", it.Category, it.Reason, it.Detail)
 	}
 }
 

@@ -125,11 +125,17 @@ See [Tool downloads and verification](remediation-logic.md#tool-verification) fo
 | KestreLynx | `pypi.org` | Retrieve dependency version requirements and distribution upload dates and times using package names and versions | Checking requirements that block updates or whether 72 hours have elapsed since publication during uv re-resolution. |
 | KestreLynx | `proxy.golang.org` | Retrieve version information from `.info`, `go.mod` from `.mod`, and the latest version from `@latest` using module paths and versions | Checking Go target versions, retractions, required Go versions, and dependency requirements. |
 | KestreLynx | `sum.golang.org` | Retrieve module zip and `go.mod` hashes through `lookup` using module paths and versions | Checking Go update results and completing `go.sum`. |
+| KestreLynx | `repo.maven.apache.org` | Retrieve `maven-metadata.xml` and parent, BOM, and dependency `.pom` files using groupId, artifactId, and version | Checking Maven releases, version sources, dependency requirements, and resolution results before and after updates. |
+| Trivy | An available port on `127.0.0.1` | Request `.pom` files from the Maven Central relay | Checking Maven dependency files before and after updates. |
 | Work container | Public npm registry, PyPI, and distribution download destinations | Retrieve metadata and distributions for dependency resolution, lockfile generation, and checks | Running npm, pnpm, pip, or uv dependency updates. |
 | Work container | `proxy.golang.org` and `sum.golang.org` | Retrieve module metadata, distributions, and information needed to verify hashes | Running Go dependency updates. |
 | Work container | `storage.googleapis.com` | Retrieve module zip files from the proxy's redirect destination | Distribution downloads are redirected during Go dependency updates. |
 
 See [Update processing by package manager](remediation-logic.md#manager-update-methods) for update processing.
+
+- KestreLynx connects to Maven Central and includes `kestrelynx` in the `User-Agent`
+- For Maven dependency resolution, Trivy connects only to the relay on `127.0.0.1`, without connecting directly to Maven Central
+- The relay does not forward requests for `.pom` files of modules read from the project to Maven Central
 
 Re-resolution retrieves information about the update target `minimist`, its dependent package `mkdirp`, and newly introduced versions.
 See [Re-resolution support and limits](remediation-reference.md#dependent-reresolution-limits) for limits on data transfer and other processing.

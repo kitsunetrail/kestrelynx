@@ -16,7 +16,7 @@ See [Setup steps](remediation-setup.md) to enable them.
 | Language update runtimes | Series listed in [Supported runtimes](#supported-runtimes) |
 | Sensor | Not required for remediation plans or fix pull requests |
 | Kubernetes plans | Published-image and Dockerfile base-image update candidates, guidance for pulling floating tags again, and language-package update candidates |
-| Kubernetes PRs | Image tag updates in plain manifests, Kustomize `images[].newTag` updates, image tag updates in Helm values, and base image updates in Dockerfiles, plus npm / pnpm / pip / uv / Go updates with [work Pods configured](remediation-setup.md#kubernetes-language-updates) |
+| Kubernetes PRs | Supports image tag updates in plain manifests, Kustomize `images[].newTag` updates, image tag updates in Helm values, base image updates in Dockerfiles, and Maven `pom.xml` updates; npm / pnpm / pip / uv / Go updates require [work Pods configured](remediation-setup.md#kubernetes-language-updates) |
 
 ### docker run containers {#docker-run-containers}
 
@@ -44,6 +44,7 @@ See [Mapping docker run containers](remediation-setup.md#docker-run-mappings) fo
 | npm and pnpm dependencies | Public npm registry | A dependency-directory mapping is required from the planning stage |
 | pip and uv dependencies | Public PyPI | A dependency-directory mapping is required from the planning stage |
 | Go module dependencies | Public Go module proxy (`proxy.golang.org`) and `sum.golang.org` | A dependency-directory mapping is required from the planning stage |
+| Maven dependencies (`pom.xml`) | Maven Central | A dependency-directory mapping is required from the planning stage |
 
 Private npm registries, private PyPI sources, and private Go modules are not supported for updates.
 Image registry authentication is not used to retrieve dependency packages.
@@ -334,6 +335,31 @@ Readable `[tool.uv]` keys still require supported dependency sources and project
 | Standard library `stdlib` | No PR is created; the remediation plan recommends building with a newer Go version |
 
 See [Go candidate selection](remediation-logic.md#go-package-selection) for candidate selection and standard library guidance, and [Go update validation](remediation-logic.md#go-update-validation) for acceptance conditions.
+
+### Maven dependency files {#maven-inputs}
+
+| Input | Support |
+| --- | --- |
+| Required files | `pom.xml` in the mapped dependency directory and each module's `pom.xml` reached through `modules` |
+| Target findings | Findings from Java archives in the running image that Trivy detects as `jar` |
+| Target dependencies | Compile and runtime dependencies; test, provided, and system dependencies are excluded from updates |
+| Source | Maven Central only |
+| Module paths | Relative paths beneath the mapped directory; absolute paths, `..`, hidden directories, and paths specified by POM filename require manual handling |
+| Module structure | A missing `pom.xml`, duplicate `groupId:artifactId`, a parent cycle, more than 100 modules including the root, or more than 8 levels below the root requires manual handling with `maven_reactor_unsupported` |
+| Root inheritance | All modules must inherit from the root's `pom.xml` for updates; otherwise, manual handling is required |
+| Parent lookup locations | Check the `relativePath` destination and `../pom.xml`; a POM with the same artifactId as the parent must also match its groupId and version and be among the modules read |
+| Parent mismatch | A POM with the same artifactId as the parent that has a different groupId or version or is not among the modules read, or a `relativePath` pointing outside the repository requires manual handling with `maven_parent_mismatch` |
+| Project profiles | Changes to dependencies, management, properties, parents, modules, or repositories require manual handling |
+| Project retrieval settings | `repositories` or `pluginRepositories` declarations, or `.mvn/maven.config` or `.mvn/extensions.xml` at the root, require manual handling |
+| Dependency and management declarations | `optional` on direct dependencies, version ranges, relocation, duplicate dependency or management declarations, or `optional` or `exclusions` in management require manual handling |
+| Target versions and types | A SNAPSHOT version in the running image or a target direct dependency, or a classifier or non-jar type on a target direct dependency, requires manual handling |
+| Multiple running versions | Multiple running versions of the same package require manual handling |
+| Version sources | Supports directly written versions, properties, parent property overrides, BOM version properties, and pins through `dependencyManagement`; targets whose edit locations cannot be determined require manual handling |
+
+- Maven updates do not use work containers or Pods; KestreLynx rewrites `pom.xml`
+- Gradle dependency files are excluded from fix pull requests
+
+See [Maven candidate selection](remediation-logic.md#maven-package-selection) for candidates and edit methods, and [Maven update validation](remediation-logic.md#maven-update-validation) for acceptance conditions.
 
 ### Node.js version declarations {#node-declarations}
 
@@ -652,6 +678,11 @@ The following tables give each code's meaning and related decision rules or chec
 | `go_replace_unsupported` | `go.mod` has a `replace` directive, which is not handled | [Go dependency files](#go-inputs) |
 | `go_exclude_unsupported` | `go.mod` has an `exclude` directive, which is not handled | [Go dependency files](#go-inputs) |
 | `go_binary_not_from_source` | The Go binary of the image does not match this `go.mod`, or its package list is incomplete and cannot be compared | [Go dependency files](#go-inputs) |
+| `jar_bundled_copy` | a copy of the package is bundled inside another archive, which no change of the pom files reaches | [Maven candidate selection](remediation-logic.md#maven-package-selection) |
+| `maven_app_jar_ambiguous` | the image's archive of this project cannot be told apart | [Maven dependency files](#maven-inputs) |
+| `maven_model_unsupported` | the pom files use a form whose resolution the check of the update does not reproduce | [Maven dependency files](#maven-inputs) |
+| `maven_parent_mismatch` | a pom file where the parent is looked for does not match the declared parent | [Maven dependency files](#maven-inputs) |
+| `maven_reactor_unsupported` | the modules of the project cannot be read as one build | [Maven dependency files](#maven-inputs) |
 | `workspace_unsupported` | The project's workspace layout is not supported | |
 | `workspace_settings_unsupported` | The workspace settings file contains unsupported settings | |
 | `dynamic_metadata` | The project's metadata is dynamic | |
@@ -737,6 +768,10 @@ The following tables give each code's meaning and related decision rules or chec
 | `go_release_retracted` | The module's author retracted the target version | [Go candidate selection](remediation-logic.md#go-package-selection) |
 | `go_line_raised_too_far` | A changed `go` or `toolchain` line exceeds the lowest Go version the running binaries were built with, or a line's version changes while the build version is unknown | [Go update validation](remediation-logic.md#go-update-validation) |
 | `go_dependencies_uncheckable` | The module versions followed to check the updated dependency requirements cannot all be checked because there are too many | [Go update validation](remediation-logic.md#go-update-validation) |
+| `maven_fix_in_other_major` | the fix is only in another major version | [Maven candidate selection](remediation-logic.md#maven-package-selection) |
+| `maven_version_source_unsupported` | the version is decided in a way no edit of the project's pom files changes | [Version sources and edits](remediation-logic.md#maven-version-sources) |
+| `maven_release_not_found` | Maven Central lists no release the update can take | [Target versions and Maven Central releases](remediation-logic.md#maven-target-versions) |
+| `maven_dependency_held_back` | the update leaves a dependency of the new release below the version the release declares | [Maven update validation](remediation-logic.md#maven-update-validation) |
 | `no_fixed_version_above_installed` | There is no fixed version above the running one, or nothing to fix | [Fixed-version lower bound](remediation-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | The candidate or updated version does not satisfy the dependency constraints | [Direct dependency version specifications](remediation-logic.md#direct-dependencies), [Transitive dependency update scope](remediation-logic.md#transitive-dependencies) |
 | `constraint_not_evaluable` | The version constraint cannot be evaluated, or the fixed version is a prerelease pip does not select | [Direct dependency version specifications](remediation-logic.md#direct-dependencies) |

@@ -102,6 +102,11 @@ remediation:
 ```
 
 依存ファイルやDockerfileの指定方法、複数の対応付けを使う場合の制約は[ソースの対応付け](configuration.md#remediation-mappings)を参照してください。
+
+- Mavenでは`dependencies.directory`に`pom.xml`のあるディレクトリを指定する
+- マルチモジュールでは、`modules`で各モジュールをたどれるルートの`pom.xml`のディレクトリを指定する
+- リポジトリのルートに`pom.xml`がある場合は`.`を指定する
+
 有効化キーの詳細は[有効化設定](configuration.md#remediation-enablement)に記載しています。
 
 ### docker runのコンテナの対応付け {#docker-run-mappings}
@@ -303,6 +308,8 @@ KestreLynxはHelmを描画しないため、このキーがイメージの最終
 
 npm・pnpm・pip・uv・Goの更新は、利用者が用意した作業用namespaceにKestreLynxが作る使い捨てのPodで実行します。
 npm・pnpm・uvの[依存元からの再解決](remediation-reference.md#dependent-reresolution-limits)にも同じPodを使います。
+
+Mavenの更新はKestreLynxによる`pom.xml`の編集とTrivyの検査で行うため、作業用Podの設定は不要です。
 
 #### 導入条件
 

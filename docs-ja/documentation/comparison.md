@@ -25,7 +25,7 @@
 
 | ツール | 配布イメージのタグ | Dockerfileのベースイメージ（`FROM`） | イメージ内のOSパッケージへの直接パッチ | 言語パッケージ |
 | --- | --- | --- | --- | --- |
-| [KestreLynx](remediation-reference.md#supported-targets) | 同じメジャー・マイナー版内のみ：Compose・Kubernetes・Kustomize・Helm values | 同じメジャー・マイナー版内のみ | 対応なし：イメージやベースイメージを更新 | npm・pnpm・pip・uv・Goのみ |
+| [KestreLynx](remediation-reference.md#supported-targets) | 同じメジャー・マイナー版内のみ：Compose・Kubernetes・Kustomize・Helm values | 同じメジャー・マイナー版内のみ | 対応なし：イメージやベースイメージを更新 | npm・pnpm・pip・uv・Go・Maven (`pom.xml`)のみ |
 | [Dependabot](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories) | 対応：Compose・Kubernetes・Helm | 対応 | 対応なし | npm・pnpm・pip・uv・Goほか、[対応一覧](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories)を参照 |
 | [Renovate](https://docs.renovatebot.com/modules/manager/) | 対応：Compose・Kubernetes・Kustomize・Helm values | 対応 | 対応なし | npm・pnpm・pip・uv・Goほか、[対応一覧](https://docs.renovatebot.com/modules/manager/)を参照 |
 | [Copacetic](https://project-copacetic.github.io/copacetic/website/faq) | 対応なし | 対応なし | 対応：DPKG・RPM・APK | npm・pip・Go・.NET（実験的） |
@@ -85,7 +85,7 @@ KestreLynxの更新PR作成は設定で有効にした場合だけで、既定�
 - この監視は、CIでのスキャンの代わりにはならない
 - 修正計画と更新PRは実験的な機能で既定では無効とし、有効化の方法は[設定手順](remediation-setup.md)に記載
 - ファイルを書き換えるには稼働中のコンテナとGitHubリポジトリのファイルの対応付けを設定する必要があり、対応形式と条件は[リファレンス](remediation-reference.md)に記載
-- 言語パッケージの取得元は公開npm・公開PyPI・公開Go module proxyと`sum.golang.org`のみ
+- 言語パッケージの取得元は公開npm・公開PyPI・公開Go module proxyと`sum.golang.org`・Maven Centralのみ
 - 更新前の比較では再ビルドしたアプリケーション全体のイメージや動作は確認せず、詳細は[更新先の確認範囲](remediation-logic.md#verification-scope)に記載
 
 ## 他のツールの補足 {#tool-notes}

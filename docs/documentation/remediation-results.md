@@ -149,9 +149,31 @@ go build -mod=readonly ./... && go test -mod=readonly ./...
 
 See [Go update validation](remediation-logic.md#go-update-validation) for acceptance conditions.
 
+### Maven PRs and CI checks {#maven-pull-requests}
+
+Maven PRs propose updates to `pom.xml` and include the following information in the body.
+
+- Changed files and details of directly written versions, properties, parent property overrides, and pins through `dependencyManagement`
+- Version checks against Maven Central and Trivy's dependency resolution and scan results before and after the update
+- Packages outside the targets whose resolved versions changed, and packages that were added or removed
+- That KestreLynx rewrote the POMs without running Maven
+
+Before merging, check the dependencies resolved by Maven and run the build and verification in CI.
+
+```sh
+mvn -B dependency:tree
+mvn -B verify
+```
+
+- For multiple modules, run the checks in the directory containing the root's `pom.xml`
+- KestreLynx checks POM resolution by Trivy; these results do not confirm a successful Maven build
+- Parent property overrides and `dependencyManagement` pins remain until removed; remove them when upgrading the parent to a version that includes the fix
+
+See [Maven update validation](remediation-logic.md#maven-update-validation) for acceptance conditions.
+
 ### Partial PRs {#partial-pull-requests}
 
-For npm, pnpm, and uv, a PR may include only the planned package updates that passed the checks.
+For npm, pnpm, uv, and Maven, a PR may include only the planned package updates that passed the checks.
 
 | Result | Interpretation |
 | --- | --- |
@@ -164,7 +186,7 @@ For npm, pnpm, and uv, a PR may include only the planned package updates that pa
 An item being a PR candidate also does not mean that every package was updated.
 
 Pinned-version pip updates and Go updates are not split into partial PRs.
-For eligibility conditions, see [Partial PR selection](remediation-logic.md#partial-pr-selection); for checks to perform, see [Checking update failures](remediation-troubleshooting.md#check-update-failure).
+For eligibility conditions, see [Partial PR selection](remediation-logic.md#partial-pr-selection) and [Maven target exclusion conditions](remediation-logic.md#maven-update-exclusions); for checks to perform, see [Checking update failures](remediation-troubleshooting.md#check-update-failure).
 
 ### Results of re-resolution through dependent packages {#dependent-reresolution-results}
 

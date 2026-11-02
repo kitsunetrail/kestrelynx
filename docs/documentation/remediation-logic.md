@@ -12,7 +12,7 @@ Creating a remediation plan and creating fix pull requests involve different ope
 | Execution scope | What KestreLynx does |
 | --- | --- |
 | Remediation plans only | Selects candidates from running-image findings, reads mapped sources, and compares scan results for image candidates. |
-| Fix pull requests enabled | Performs planning, runs language package updates and checks in work containers in Docker mode, and creates and manages eligible PRs within each mode's supported scope. |
+| Fix pull requests enabled | Performs planning, runs language package updates and checks, and creates and manages eligible PRs within each mode's supported scope. |
 
 - Planning alone does not run package managers, create work containers, or write to GitHub
 - Planning alone still saves plan and delivery records locally
@@ -371,6 +371,53 @@ Reaching the lower bound alone is insufficient; the checks in [Adopting update r
 
 See [Go dependency files](remediation-reference.md#go-inputs) for required files and inputs that need manual handling.
 
+### Maven candidate selection {#maven-package-selection}
+
+- From the running image's `jar` findings, look for the application's own jar whose `groupId:artifactId` matches a project module and which contains other jars
+- If there is one application jar, select only findings inside it; if there is none, match the image's jar findings by name and version
+- Require manual handling with `maven_app_jar_ambiguous` if there are multiple application jars or the package list is truncated
+- If a finding's location is not the target's own `artifactId-version.jar`, treat it as a copy bundled inside another archive and require manual handling with `jar_bundled_copy`
+- Also require manual handling for a package if it has both a regular jar and a bundled copy
+
+#### Target versions and Maven Central releases {#maven-target-versions}
+
+- For each CVE, select the lowest fixed version above the running version within the same major version, then use the highest of these versions as the target's lower bound
+- Do not select a prerelease unless the running version is a prerelease, and preserve variants such as `-jre` and `-android`
+- Require manual handling with `maven_fix_in_other_major` if fixes exist only in another major version
+- During the update, check Maven Central's `maven-metadata.xml` and select the lowest release at or above the lower bound within the same major version and variant
+- Require manual handling with `maven_release_not_found` if no published version meets the conditions
+
+#### Version sources and edits {#maven-version-sources}
+
+Starting from the project's `pom.xml`, follow the parent chain and look for version sources in this order: direct dependency declarations with versions, explicit `dependencyManagement`, and imported BOMs.
+
+| Version source | Edit |
+| --- | --- |
+| A version written directly in a dependency or management declaration within the project | Change that version string |
+| A property defined within the project | Change its value in the `pom.xml` that defines it |
+| A property defined by a parent retrieved from Maven Central | Override it with a property of the same name in the root's `properties` |
+| A version written directly in a parent's management declaration, or an unmanaged transitive dependency | Pin the target's version in the root's `dependencyManagement` |
+| Managed by one BOM whose import version is specified by a property | Change or override that property to update the set of dependencies managed by the BOM |
+| A version written directly in a direct dependency inherited from a parent outside the project | Require manual handling with `maven_version_source_unsupported` |
+
+- Update through property changes, property overrides, or target version pins without raising the parent version
+- Do not change a property if it is also used by plugins, configuration, other properties, or similar settings, or if it is referenced as part of a version string
+- If the same property determines versions for multiple dependencies, check that all of them exist on Maven Central at the new value's version
+- If a property cannot be changed, try pinning through `dependencyManagement` only for targets whose versions are determined solely by management
+- For a BOM, check newer regular releases within the current major and minor version in ascending order and select one that brings the targets to at least their lower bounds
+- If the property that determines the BOM version cannot be changed, multiple BOMs manage the target, or management comes through another BOM's import, require manual handling without pinning the target individually
+- Preserve formatting and comments when editing, then read the files again and verify that the diff contains only the specified version changes, property changes, and management additions
+
+#### Multiple modules {#maven-multi-module}
+
+- Follow the root's `modules` and read each module's `pom.xml` from the same commit
+- During planning, inspect the application module, the project modules it depends on in compile and runtime scopes, and their parents; inspect all modules if the image has no application jar
+- During the update, check declarations in all modules and change each version source if the target is declared in multiple modules
+- Check property references across all modules and their parent chains, and place parent property overrides and version pins in the root's `pom.xml`
+- Updates require all modules to inherit from the root's `pom.xml`; require manual handling with `maven_reactor_unsupported` if any module does not
+
+See [Maven dependency files](remediation-reference.md#maven-inputs) for required files and inputs that need manual handling.
+
 ### Direct dependency version specifications {#direct-dependencies}
 
 If a direct dependency's version specification excludes the update target, KestreLynx edits the version portion while preserving the operator, but only for supported forms.
@@ -618,7 +665,7 @@ See [Tool version declarations](remediation-reference.md#tool-declarations) for 
 
 ### Work Pod execution {#kubernetes-work-pods}
 
-On Kubernetes, language-package updates and supported re-resolution through dependent packages run in disposable Pods in the configured work namespace.
+On Kubernetes, npm, pnpm, pip, uv, and Go updates and supported re-resolution through dependent packages run in disposable Pods in the configured work namespace.
 The user applies the required resources following the [setup steps](remediation-setup.md#kubernetes-language-updates).
 
 - Fix the permitted Pod configuration through ValidatingAdmissionPolicy
@@ -633,7 +680,7 @@ Failure to verify the Pod creation rules requires manual action with `work_admis
 Failure to retrieve the cluster version defers updates with the same reason code, while Pod count or resource limits defer updates with `work_pod_limit`.
 ### Pinning official images {#worker-images}
 
-Language package updates use official Node.js, Python, and Go (`golang`) images.
+npm, pnpm, pip, uv, and Go updates use official Node.js, Python, and Go (`golang`) images.
 Their content is pinned by digest in the bundled table and does not follow changes to the same tag.
 
 - Docker or the Kubernetes node's container runtime retrieves the required images
@@ -754,6 +801,7 @@ After rechecking the update inputs, KestreLynx edits direct dependency version s
 | uv | Updates the lockfile with a specified target version for each target package. | Checks consistency between the lockfile and project declarations before and after the update. |
 | pip | Rewrites pinned versions and updates existing hashes from PyPI wheel information. | Checks dependency resolution before and after the update using dry runs targeting the running image's environment. |
 | Go | Updates all targets with one `go get <module>@<version> ...` command, without running `go mod tidy`. | Checks the `go.mod` diff, `go.sum`, dependency requirements, and scan results before and after the update. |
+| Maven | KestreLynx rewrites version, property, and management declarations in `pom.xml`. | Trivy resolves and scans dependencies before and after the update through the Maven Central relay. |
 
 When pnpm updates only transitive dependencies, direct dependency entries may also be temporarily removed to trigger resolution.
 
@@ -824,6 +872,45 @@ For Go, update results are adopted only when all of the following conditions are
 - With `-mod=readonly`, builds use only the written versions and stop if a required module is missing or its version is too low
 
 See [Go PRs and CI checks](remediation-results.md#go-pull-requests) for a CI command example to run before merging and the information included in PR bodies.
+
+### Maven update validation {#maven-update-validation}
+
+Without running Maven, KestreLynx passes all `pom.xml` files from before and after the update to Trivy at the same relative paths as in the repository.
+
+#### Maven Central relay and comparison conditions {#maven-scan-validation}
+
+- Scan before and after the update with the same Trivy, vulnerability database, and severity settings, retrieving the `.pom` files needed for dependency resolution through the Maven Central relay
+- Give Trivy dedicated `HOME` and `MAVEN_HOME` directories and an empty local repository, and fix its Maven retrieval source to the relay on `127.0.0.1`
+- Treat the results as not comparable with `source_scan_incomplete` if retrieval fails, parsing fails, coordinates differ from the request, or a package's version cannot be determined
+- Do not forward requests for project modules' `.pom` files externally; treat the results as not comparable if a different version of the same name is requested
+
+KestreLynx checks the retrieved parent, BOM, and dependency POMs and the project's POMs, and also treats forms whose resolution cannot be reproduced as not comparable, as follows.
+
+| Check target | Forms that make results not comparable |
+| --- | --- |
+| Retrieved POMs | Version ranges, relocation, uninterpretable `optional` values, or duplicate management declarations for the same dependency |
+| Repositories in retrieved POMs | Declarations that retrieve releases from sources other than Maven Central |
+| Profiles with activation conditions | Forms that change compile or runtime dependencies, parents, or modules; manage dependencies in use; import BOMs; or set properties referenced by versions or groupId |
+| Duplicate dependencies | A declaration for test or another scope with the same name precedes a compile or runtime declaration, or compile or runtime declarations are duplicated |
+| type and classifier | Dependencies with different types and versions share the same name, or the way management is applied causes Maven and Trivy to resolve dependencies differently |
+| dependencyManagement | Versions, scopes, optional values, or exclusions differ after Maven and Trivy apply management, or an imported BOM cannot be followed |
+
+#### Target versions and new findings {#maven-target-validation}
+
+- Check target versions and findings using both the root's aggregated results and each module's results
+- Check that targets reach at least the selected published versions and that target findings confirmed before the update remain in no occurrence after the update
+- For each resolved target version after the update, read the required versions of non-optional compile and runtime dependencies from its POM, parents, and BOMs, and check that resolved dependencies do not remain below their required versions
+- Compare new findings by each module's `pom.xml` path; reject an update if it introduces a finding to a module, even if that finding already exists in another module
+- List dependencies outside the targets whose resolved versions changed, and dependencies that were added or removed, in the PR body
+
+#### Conditions for excluding targets and updating the rest {#maven-update-exclusions}
+
+- Exclude targets whose version sources cannot be changed or for which no usable published version or BOM version exists, and continue updating the remaining targets
+- Exclude targets with `maven_dependency_held_back` if dependencies required by their new versions remain at lower versions; if other targets remain, rerun the update from the original inputs only once
+- Apply all checks to the remaining updates; excluding targets does not bypass results that are not comparable or findings newly introduced to a module
+- Re-resolution through dependent packages for npm, pnpm, and uv does not apply
+
+See [Maven PRs and CI checks](remediation-results.md#maven-pull-requests) for checks before merging and the information included in PR bodies.
 
 ### Partial PR conditions {#partial-pr-selection}
 

@@ -102,6 +102,11 @@ remediation:
 ```
 
 For dependency file and Dockerfile settings and restrictions on multiple mappings, see [Source mappings](configuration.md#remediation-mappings).
+
+- For Maven, set `dependencies.directory` to the directory containing `pom.xml`
+- For multiple modules, specify the directory containing the root's `pom.xml` from which `modules` can reach each module
+- If `pom.xml` is at the repository root, specify `.`
+
 For details on the enablement keys, see [Enablement settings](configuration.md#remediation-enablement).
 
 ### Mapping docker run containers {#docker-run-mappings}
@@ -303,6 +308,8 @@ See [Helm values PRs](remediation-logic.md#helm-values-prs) for checks across al
 
 npm, pnpm, pip, uv, and Go updates run in disposable Pods that KestreLynx creates in a user-provided work namespace.
 The same Pods also run [re-resolution through dependent packages](remediation-reference.md#dependent-reresolution-limits) for npm, pnpm, and uv.
+
+Maven updates use KestreLynx's edits to `pom.xml` and Trivy checks, so work Pod configuration is not required.
 
 #### Prerequisites
 

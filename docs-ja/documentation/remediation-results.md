@@ -149,9 +149,31 @@ go build -mod=readonly ./... && go test -mod=readonly ./...
 
 採用条件は[Goの更新結果の検査](remediation-logic.md#go-update-validation)を参照してください。
 
+### MavenのPRとCIでの確認 {#maven-pull-requests}
+
+MavenのPRは`pom.xml`の更新を提案し、本文に次の情報を載せます。
+
+- 変更したファイルと、版の直書き・プロパティ・親のプロパティの上書き・`dependencyManagement`での固定の内容
+- Maven Centralでの版の確認と、Trivyによる更新前後の依存の解決・スキャンの結果
+- 対象以外に解決後の版が変わったパッケージと、追加・削除されたパッケージ
+- Mavenを実行せず、KestreLynxがPOMを書き換えたこと
+
+マージ前に、CIでMavenが解決する依存を確認し、ビルドと検証を実行します。
+
+```sh
+mvn -B dependency:tree
+mvn -B verify
+```
+
+- マルチモジュールではルートの`pom.xml`のディレクトリで確認する
+- KestreLynxの検査はTrivyによるPOMの解決を対象とし、Mavenによるビルドの成功を確認した結果ではない
+- 親のプロパティの上書きと`dependencyManagement`の固定は消すまで残るため、修正を含む版に親を上げるときに外す
+
+採用条件は[Mavenの更新結果の検査](remediation-logic.md#maven-update-validation)を参照してください。
+
 ### 部分PR {#partial-pull-requests}
 
-npm・pnpm・uvでは、計画したパッケージのうち、検査を通った更新だけがPRに含まれる場合があります。
+npm・pnpm・uv・Mavenでは、計画したパッケージのうち、検査を通った更新だけがPRに含まれる場合があります。
 
 | 結果 | 読み方 |
 | --- | --- |
@@ -164,7 +186,7 @@ npm・pnpm・uvでは、計画したパッケージのうち、検査を通っ�
 また、項目全体がPR候補でも、すべてのパッケージが更新されたとは限りません。
 
 pipの固定版更新とGoの更新は部分PRに分けません。
-成立条件は[部分PRの成立条件](remediation-logic.md#partial-pr-selection)、確認操作は[更新を実行できない場合の確認](remediation-troubleshooting.md#check-update-failure)を参照してください。
+成立条件は[部分PRの成立条件](remediation-logic.md#partial-pr-selection)と[Mavenで対象を外す条件](remediation-logic.md#maven-update-exclusions)、確認操作は[更新を実行できない場合の確認](remediation-troubleshooting.md#check-update-failure)を参照してください。
 
 ### 依存元からの再解決の結果 {#dependent-reresolution-results}
 

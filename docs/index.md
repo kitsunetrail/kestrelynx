@@ -83,7 +83,7 @@ KestreLynx creates PRs that update the following parts of files already used in 
 - Kustomize `images[].newTag`
 - Image tags in Helm values
 - Base image tags in Dockerfiles
-- Dependency files for npm, pnpm, pip, uv, and Go
+- Dependency files for npm, pnpm, pip, uv, Go, and Maven (`pom.xml`)
 
 </div>
 <div markdown>
@@ -124,7 +124,7 @@ deploying remain separate steps.
 
 Supported language-package sources and source hosts are limited to the following.
 
-- Language packages are retrieved only from the public npm registry, public PyPI, and the public Go module proxy
+- Language packages are retrieved only from the public npm registry, public PyPI, the public Go module proxy, and Maven Central
 - Private language-package registries are not supported
 - GitHub is the only supported source host
 

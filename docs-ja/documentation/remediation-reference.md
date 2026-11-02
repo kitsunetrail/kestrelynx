@@ -16,7 +16,7 @@
 | 言語更新の実行環境 | [対応する実行環境](#supported-runtimes)に記載した系列 |
 | Sensor | 修正計画と修正PRの利用には不要 |
 | Kubernetesの計画 | 配布イメージ・Dockerfileのベースイメージの更新候補、浮動タグの再取得の案内、言語パッケージの更新候補の提示 |
-| KubernetesのPR | プレーンなマニフェストのイメージタグ、Kustomizeの`images[].newTag`、Helmのvaluesのイメージタグ、Dockerfileのベースイメージの更新に加え、[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)によりnpm・pnpm・pip・uv・Goの更新に対応 |
+| KubernetesのPR | プレーンなマニフェストのイメージタグ、Kustomizeの`images[].newTag`、Helmのvaluesのイメージタグ、Dockerfileのベースイメージ、Mavenの`pom.xml`の更新に対応し、npm・pnpm・pip・uv・Goの更新には[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)が必要 |
 
 ### docker runのコンテナ {#docker-run-containers}
 
@@ -44,6 +44,7 @@ containerdで古いイメージが消えた場合は、コンテナを新しい�
 | npm・pnpmの依存パッケージ | 公開npmレジストリ | 計画の作成から依存ディレクトリの対応付けが必要 |
 | pip・uvの依存パッケージ | 公開PyPI | 計画の作成から依存ディレクトリの対応付けが必要 |
 | Goの依存モジュール | 公開のGo module proxy (`proxy.golang.org`)と`sum.golang.org` | 計画の作成から依存ディレクトリの対応付けが必要 |
+| Mavenの依存パッケージ (`pom.xml`) | Maven Central | 計画の作成から依存ディレクトリの対応付けが必要 |
 
 非公開npmレジストリ・非公開PyPI・非公開Goモジュールは更新対象にできません。
 イメージレジストリの認証は、依存パッケージの取得には使いません。
@@ -334,6 +335,31 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 | 標準ライブラリの`stdlib` | PRを作らず、ビルドに使うGoの版を上げる案内を修正計画に表示 |
 
 候補の決め方と標準ライブラリの案内は[Goの候補選定](remediation-logic.md#go-package-selection)、採用条件は[Goの更新結果の検査](remediation-logic.md#go-update-validation)を参照してください。
+
+### Mavenの依存ファイル {#maven-inputs}
+
+| 入力 | 対応範囲 |
+| --- | --- |
+| 必須ファイル | 対応付けた依存ディレクトリの`pom.xml`と、`modules`がたどる各モジュールの`pom.xml` |
+| 対象の所見 | 稼働イメージのJavaアーカイブをTrivyが`jar`として検出した所見 |
+| 対象の依存 | compile・runtimeの依存で、test・provided・systemの依存は更新対象外 |
+| 取得元 | Maven Centralのみ |
+| モジュールのパス | 対応付けたディレクトリの下の相対パスで、絶対パス・`..`・隠しディレクトリ・POMファイル名による指定は手動対応 |
+| モジュールの構成 | `pom.xml`がない、同じ`groupId:artifactId`が重複する、親が循環する、ルートを含め100モジュール、またはルートから8階層を超える場合は`maven_reactor_unsupported`で手動対応 |
+| ルートの継承 | 更新時に全モジュールがルートの`pom.xml`を継承する必要があり、満たさなければ手動対応 |
+| 親を探す場所 | `relativePath`の指定先と`../pom.xml`を確認し、親と同じartifactIdのPOMがあればgroupId・versionも一致し、読み取ったモジュールに含まれることが必要 |
+| 親の不一致 | 親と同じartifactIdのPOMでgroupId・versionが一致しない、読み取ったモジュールに含まれない、または`relativePath`がリポジトリの外を指す場合は`maven_parent_mismatch`で手動対応 |
+| プロジェクトのprofile | 依存・管理・プロパティ・親・モジュール・リポジトリを変える場合は手動対応 |
+| プロジェクトの取得設定 | `repositories`・`pluginRepositories`の宣言、ルートの`.mvn/maven.config`・`.mvn/extensions.xml`がある場合は手動対応 |
+| 依存・管理の宣言 | 直接依存の`optional`、版の範囲指定、relocation、依存や管理の重複、管理の`optional`・`exclusions`がある場合は手動対応 |
+| 対象の版と種類 | 稼働版や対象の直接依存のSNAPSHOT、対象の直接依存のclassifier・jar以外のtypeは手動対応 |
+| 複数の稼働版 | 同じパッケージが複数の版で稼働している場合は手動対応 |
+| 版の出所 | 直書き・プロパティ・親のプロパティの上書き・BOMの版のプロパティ・`dependencyManagement`での固定に対応し、変更する場所を決められない対象は手動対応 |
+
+- Mavenの更新では作業用コンテナ・Podを使わず、KestreLynxが`pom.xml`を書き換える
+- Gradleの依存ファイルは修正PRの対象外
+
+候補と編集方法は[Mavenの候補選定](remediation-logic.md#maven-package-selection)、採用条件は[Mavenの更新結果の検査](remediation-logic.md#maven-update-validation)を参照してください。
 
 ### Node.jsの版宣言 {#node-declarations}
 
@@ -652,6 +678,11 @@ PR記録の`state`には、次の値があります。
 | `go_replace_unsupported` | `go.mod`に`replace`があり、対応していない | [Goの依存ファイル](#go-inputs) |
 | `go_exclude_unsupported` | `go.mod`に`exclude`があり、対応していない | [Goの依存ファイル](#go-inputs) |
 | `go_binary_not_from_source` | イメージのGoバイナリが、この`go.mod`と一致しない、またはパッケージ一覧が不完全で照合できない | [Goの依存ファイル](#go-inputs) |
+| `jar_bundled_copy` | パッケージの写しが別のアーカイブに同梱されていて、pom ファイルの変更では直らない | [Mavenの候補選定](remediation-logic.md#maven-package-selection) |
+| `maven_app_jar_ambiguous` | イメージの中で、このプロジェクトのアーカイブを特定できない | [Mavenの依存ファイル](#maven-inputs) |
+| `maven_model_unsupported` | pom ファイルが、更新の確認で解決を再現できない書き方をしている | [Mavenの依存ファイル](#maven-inputs) |
+| `maven_parent_mismatch` | 親を探す場所にある pom ファイルが、宣言された親と一致しない | [Mavenの依存ファイル](#maven-inputs) |
+| `maven_reactor_unsupported` | プロジェクトのモジュールを、1つのビルドとして読めない | [Mavenの依存ファイル](#maven-inputs) |
 | `workspace_unsupported` | プロジェクトのworkspace構成に対応していない | |
 | `workspace_settings_unsupported` | workspace設定ファイルの内容に対応していない | |
 | `dynamic_metadata` | プロジェクトのメタデータが動的に決まる | |
@@ -737,6 +768,10 @@ PR記録の`state`には、次の値があります。
 | `go_release_retracted` | 対象の版が、モジュールの作者によって撤回されている | [Goの候補選定](remediation-logic.md#go-package-selection) |
 | `go_line_raised_too_far` | 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える、またはビルドした版が不明なまま行の版が変わる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
 | `go_dependencies_uncheckable` | 更新後の依存の要求を確かめるためにたどるモジュールの版が多すぎる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
+| `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection) |
+| `maven_version_source_unsupported` | 版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている | [版の出所と書き換え](remediation-logic.md#maven-version-sources) |
+| `maven_release_not_found` | 更新で使える版が Maven Central にない | [目標版とMaven Centralの版](remediation-logic.md#maven-target-versions) |
+| `maven_dependency_held_back` | 更新後も、新しい版が要求する依存が要求より低い版のまま残る | [Mavenの更新結果の検査](remediation-logic.md#maven-update-validation) |
 | `no_fixed_version_above_installed` | 稼働版より新しい修正版がない、または修正対象がない | [修正版の下限](remediation-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | 候補または更新後の版が依存の制約を満たさない | [直接依存の版指定](remediation-logic.md#direct-dependencies)・[推移的依存の更新範囲](remediation-logic.md#transitive-dependencies) |
 | `constraint_not_evaluable` | 版の制約を評価できない、または修正版がpipで選ばれないプレリリースである | [直接依存の版指定](remediation-logic.md#direct-dependencies) |

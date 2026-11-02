@@ -83,7 +83,7 @@ KestreLynxは、更新候補を同じ条件で再スキャンして比べ、利�
 - Kustomizeの`images[].newTag`
 - Helmのvaluesのイメージタグ
 - Dockerfileのベースイメージのタグ
-- npm・pnpm・pip・uv・Goの依存ファイル
+- npm・pnpm・pip・uv・Go・Maven (`pom.xml`)の依存ファイル
 
 </div>
 <div markdown>
@@ -123,7 +123,7 @@ PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ�
 
 言語パッケージとソースホストの対応範囲は次のとおりです。
 
-- 言語パッケージの取得元は公開npm・公開PyPI・公開Go module proxyのみ
+- 言語パッケージの取得元は公開npm・公開PyPI・公開Go module proxy・Maven Centralのみ
 - 非公開の言語パッケージのレジストリは対象外
 - ソースホストはGitHubのみ
 

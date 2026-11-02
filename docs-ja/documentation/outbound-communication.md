@@ -125,11 +125,17 @@ PRには、イメージ参照とdigest、Workload名、リポジトリ名、ソ�
 | KestreLynx | `pypi.org` | パッケージ名・版を指定し、依存先の版指定と配布物のアップロード日時を取得 | uvの再解決で、更新を妨げる指定や公開後72時間の経過を確認する場合 |
 | KestreLynx | `proxy.golang.org` | モジュールパスと版を指定し、版情報の`.info`・`go.mod`の`.mod`・最新版の`@latest`を取得 | Goの目標版、撤回、必要なGoの版、依存の要求を確認する場合 |
 | KestreLynx | `sum.golang.org` | モジュールパスと版を指定し、`lookup`でモジュールのzipと`go.mod`のハッシュを取得 | Goの更新結果の照合と`go.sum`の補完を行う場合 |
+| KestreLynx | `repo.maven.apache.org` | groupId・artifactId・版を指定し、`maven-metadata.xml`と親・BOM・依存の`.pom`を取得 | Mavenの公開版・版の出所・依存の要求と更新前後の解決結果を確認する場合 |
+| Trivy | `127.0.0.1`の空きポート | Maven Centralの中継に`.pom`を要求 | Mavenの更新前後の依存ファイルを検査する場合 |
 | 作業用コンテナ | 公開npmレジストリ・PyPIと配布物の取得先 | 依存解決、lockfile生成、検査に必要な情報・配布物を取得 | npm・pnpm・pip・uvの依存更新を実行する場合 |
 | 作業用コンテナ | `proxy.golang.org`・`sum.golang.org` | モジュールの情報・配布物とハッシュの検証に必要な情報を取得 | Goの依存更新を実行する場合 |
 | 作業用コンテナ | `storage.googleapis.com` | proxyからの転送先でモジュールのzipを取得 | Goの依存更新で配布物の取得先が転送される場合 |
 
 更新処理は、[マネージャー別の更新処理](remediation-logic.md#manager-update-methods)を参照してください。
+
+- Maven Centralへの接続はKestreLynxが行い、`User-Agent`に`kestrelynx`を付ける
+- Mavenの依存解決でTrivyが接続する先は`127.0.0.1`の中継だけで、Maven Centralには直接接続しない
+- 中継は読み取ったプロジェクト内のモジュールの`.pom`の要求をMaven Centralへ転送しない
 
 再解決では、更新対象の`minimist`だけでなく、依存元の`mkdirp`や新たに入る版の情報も取得します。
 通信量などの上限は、[再解決の対応範囲と上限](remediation-reference.md#dependent-reresolution-limits)を参照してください。

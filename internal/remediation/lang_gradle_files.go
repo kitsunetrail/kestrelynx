@@ -208,6 +208,14 @@ type gradleLock struct {
 	configs map[string]bool
 }
 
+// maxGradleLockLine bounds a line of gradle.lockfile. Trivy reads the file with
+// a scanner that stops at a line over 64 KiB without reporting it, which drops
+// every line after it from the scan. A line of the file is a coordinate and
+// the configurations it is locked in, a few hundred bytes in the largest
+// lockfiles seen, so a bound of 8 KiB is far above any real line and well
+// below what Trivy stops at.
+const maxGradleLockLine = 8 << 10
+
 var gradleConfRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
 
 // parseGradleLockfile reads gradle.lockfile: "#" comments, lines of
@@ -230,10 +238,20 @@ func parseGradleLockfile(file string, data []byte) (*gradleLock, error) {
 		}
 		return out, nil
 	}
+	text := strings.TrimPrefix(string(data), "\xef\xbb\xbf")
+	// Gradle ends a line at a lone carriage return too, while Trivy and this
+	// reader do not, so a line after one would be read by the build and by
+	// neither check.
+	if loneCR(text) {
+		return nil, bad(1, "a carriage return that does not end a CRLF line break")
+	}
 	seenEmpty := false
 	seen := map[string]bool{}
-	for i, raw := range strings.Split(strings.TrimPrefix(string(data), "\xef\xbb\xbf"), "\n") {
+	for i, raw := range strings.Split(text, "\n") {
 		n := i + 1
+		if len(raw) > maxGradleLockLine {
+			return nil, bad(n, fmt.Sprintf("a line of more than %d bytes", maxGradleLockLine))
+		}
 		line := strings.TrimSuffix(raw, "\r")
 		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
 			continue

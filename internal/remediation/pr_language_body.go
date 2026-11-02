@@ -34,7 +34,7 @@ func registryName(t *prText, m DependencyManager) string {
 		return t.RegistryNpm
 	case ManagerGo:
 		return t.RegistryGo
-	case ManagerMaven:
+	case ManagerMaven, ManagerGradle:
 		return t.RegistryMaven
 	}
 	return string(m)
@@ -56,6 +56,8 @@ func installCheck(m DependencyManager) string {
 		return "go build -mod=readonly ./... && go test -mod=readonly ./..."
 	case ManagerMaven:
 		return "mvn -B dependency:tree && mvn -B verify"
+	case ManagerGradle:
+		return "./gradlew dependencies && ./gradlew build"
 	}
 	return ""
 }
@@ -264,6 +266,9 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 		if m := up.Maven; m != nil {
 			writeMavenUpdate(t, &b, m)
 		}
+		if g := up.Gradle; g != nil {
+			writeGradleUpdate(t, &b, g, up)
+		}
 		for _, n := range up.Notes {
 			fmt.Fprintf(&b, t.LNote, mdCode(n))
 		}
@@ -306,6 +311,8 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 		fmt.Fprintf(&b, t.LGoBuildCheck, mdCode(installCheck(it.Manager)))
 	case ManagerMaven:
 		fmt.Fprintf(&b, t.LMavenBuildCheck, mdCode(installCheck(it.Manager)))
+	case ManagerGradle:
+		fmt.Fprintf(&b, t.LGradleBuildCheck, mdCode(installCheck(it.Manager)))
 	default:
 		fmt.Fprintf(&b, t.LInstallCheck, mdCode(installCheck(it.Manager)))
 	}
@@ -499,6 +506,8 @@ func manifestFileName(m DependencyManager) string {
 		return "go.mod"
 	case ManagerMaven:
 		return "pom.xml"
+	case ManagerGradle:
+		return "build.gradle"
 	}
 	return ""
 }
@@ -603,6 +612,90 @@ func writeGoUpdate(t *prText, b *strings.Builder, g *GoUpdate, builtWith string)
 				break
 			}
 			fmt.Fprintf(b, "- %s\n", mdCode(l))
+		}
+	}
+}
+
+// writeGradleUpdate describes the edits of a Gradle update, how the lockfile
+// was made and checked, and the packages that moved with the targets.
+func writeGradleUpdate(t *prText, b *strings.Builder, g *GradleUpdate, up *LanguageUpdate) {
+	b.WriteString(t.LGradleHead)
+	// Whether an override or a constraint is among the edits is judged over all
+	// of them, not only the ones listed.
+	overrides, constraints := false, false
+	for _, e := range g.Edits {
+		switch e.Kind {
+		case GradleEditProperty:
+			overrides = overrides || g.BOM != ""
+		case GradleEditPropertyOverride:
+			overrides = true
+		case GradleEditConstraint:
+			constraints = true
+		}
+	}
+	for i, e := range g.Edits {
+		if i == maxListedEntries {
+			fmt.Fprintf(b, t.LineMore, len(g.Edits)-maxListedEntries)
+			break
+		}
+		switch e.Kind {
+		case GradleEditCatalogVersion:
+			fmt.Fprintf(b, t.LGradleEditCatalogVersion, mdCode(e.File), mdCode(e.Property), mdCode(e.From), mdCode(e.To), mdCode(e.Package))
+		case GradleEditCatalogLibrary:
+			fmt.Fprintf(b, t.LGradleEditCatalogLibrary, mdCode(e.File), mdCode(e.Package), mdCode(e.From), mdCode(e.To))
+		case GradleEditDeclaration:
+			fmt.Fprintf(b, t.LGradleEditDeclaration, mdCode(e.File), mdCode(e.Package), mdCode(e.From), mdCode(e.To))
+		case GradleEditProperty:
+			fmt.Fprintf(b, t.LGradleEditProperty, mdCode(e.File), mdCode(e.Property), mdCode(e.From), mdCode(e.To), mdCode(e.Package))
+		case GradleEditPropertyOverride:
+			fmt.Fprintf(b, t.LGradleEditOverride, mdCode(e.File), mdCode(e.Property), mdCode(e.From), mdCode(e.To), mdCode(e.Package))
+		case GradleEditConstraint:
+			fmt.Fprintf(b, t.LGradleEditConstraint, mdCode(e.File), mdCode(e.Package), mdCode(e.From), mdCode(e.To))
+		}
+	}
+	version := ""
+	if up.Runtime != nil {
+		version = up.Runtime.Version
+	}
+	fmt.Fprintf(b, t.LGradleChecked, mdCode(version), t.RegistryMaven)
+	if overrides {
+		b.WriteString(t.LGradleOverrideNote)
+	}
+	if constraints {
+		b.WriteString(t.LGradleConstraintNote)
+	}
+	if len(g.Companions) > 0 {
+		fmt.Fprintf(b, "\n**%s (%d)**\n\n", t.LGradleCompanionsTitle, len(g.Companions))
+		for i, c := range g.Companions {
+			if i == maxListedEntries {
+				fmt.Fprintf(b, t.LineMore, len(g.Companions)-maxListedEntries)
+				break
+			}
+			var names []string
+			for _, p := range c.Packages {
+				names = append(names, mdCode(p))
+			}
+			fmt.Fprintf(b, t.LGradleCompanion, mdCode(c.Key), mdCode(c.Value), strings.Join(names, ", "))
+		}
+	}
+	if len(g.Moves) > 0 {
+		fmt.Fprintf(b, "\n**%s (%d)**\n\n", t.LGradleMovesTitle, len(g.Moves))
+		list := func(vs []string) string {
+			if len(vs) == 0 {
+				return t.LGradleMoveNone
+			}
+			var out []string
+			for _, v := range vs {
+				out = append(out, mdCode(v))
+			}
+			return strings.Join(out, ", ")
+		}
+		for i, mv := range g.Moves {
+			if i == maxListedEntries {
+				fmt.Fprintf(b, t.LineMore, len(g.Moves)-maxListedEntries)
+				break
+			}
+			fmt.Fprintf(b, t.LGradleMove, mdCode(mv.Name), list(mv.From), list(mv.To))
 		}
 	}
 }

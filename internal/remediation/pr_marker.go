@@ -206,7 +206,7 @@ func (m PRMarker) wellFormed() error {
 // wellFormed checks the language record of a marker.
 func (l LangRecord) wellFormed() error {
 	switch DependencyManager(l.Manager) {
-	case ManagerNpm, ManagerPnpm, ManagerUv, ManagerPip, ManagerGo, ManagerMaven:
+	case ManagerNpm, ManagerPnpm, ManagerUv, ManagerPip, ManagerGo, ManagerMaven, ManagerGradle:
 	default:
 		return fmt.Errorf("unknown manager %q", l.Manager)
 	}

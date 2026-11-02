@@ -3,6 +3,7 @@ package remediation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
@@ -10,7 +11,7 @@ import (
 
 // sourceScanTypes is the scanner result type of each manager's lockfile.
 var sourceScanTypes = map[DependencyManager]string{
-	ManagerNpm: "npm", ManagerPnpm: "pnpm", ManagerUv: "uv", ManagerPip: "pip", ManagerGo: typeGoModule, ManagerMaven: "pom",
+	ManagerNpm: "npm", ManagerPnpm: "pnpm", ManagerUv: "uv", ManagerPip: "pip", ManagerGo: typeGoModule, ManagerMaven: "pom", ManagerGradle: "gradle",
 }
 
 // sourceCheck scans the dependency files before and after the update under
@@ -94,6 +95,16 @@ func (r *updateRun) evaluateSourceCheck(sc *SourceCheck, before, after scanner.I
 	}
 	m := r.it.Manager
 	typ := sourceScanTypes[m]
+	if m == ManagerGradle {
+		// Trivy reads a lockfile line by line and can stop part way without
+		// saying so; every entry this program read must be in its result.
+		for i, s := range []scanner.ImageScan{before, after} {
+			if why := gradleScanGap(r.gradleLocks[i], s, typ); why != "" {
+				return &updateFailure{category: CategoryNotComparable, reason: ReasonSourceScanIncomplete,
+					detail: fmt.Sprintf("the scan of the %s files does not list %s", [2]string{"original", "updated"}[i], why)}
+			}
+		}
+	}
 	key := func(n string) string {
 		if m.scheme() == schemePEP440 {
 			return normalizePyName(n)
@@ -220,3 +231,25 @@ func (r *updateRun) evaluateSourceCheck(sc *SourceCheck, before, after scanner.I
 
 // maxSourceVulns bounds each list of findings kept in a SourceCheck.
 const maxSourceVulns = 500
+
+// gradleScanGap names a package of the lockfile the scan does not list at its
+// version, "" when it lists them all.
+func gradleScanGap(l *gradleLock, s scanner.ImageScan, typ string) string {
+	if l == nil {
+		return ""
+	}
+	have := map[string]bool{}
+	for _, rp := range s.Packages {
+		if rp.Type == typ {
+			for _, p := range rp.Packages {
+				have[p.Name+"@"+p.Version] = true
+			}
+		}
+	}
+	for _, e := range l.entries {
+		if !have[e.name+"@"+e.version] {
+			return e.name + " at " + e.version
+		}
+	}
+	return ""
+}

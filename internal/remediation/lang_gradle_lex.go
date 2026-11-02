@@ -32,6 +32,9 @@ type gradleTok struct {
 	nl bool
 	// quoted: an identifier written in backticks.
 	quoted bool
+	// start and end are the byte offsets of the token in the script without
+	// its byte order mark; a string includes its quotes.
+	start, end int
 }
 
 func (t gradleTok) isPunct(p string) bool { return t.kind == gtPunct && t.text == p }
@@ -66,16 +69,25 @@ func lexGradle(src []byte, kotlin bool) ([]gradleTok, error) {
 	}
 	var toks []gradleTok
 	line, nl := 1, false
+	i := 0
 	add := func(t gradleTok) error {
 		if len(toks) >= maxGradleTokens {
 			return &gradleSyntaxError{line, "too many tokens"}
 		}
 		t.nl = nl
+		t.start = i
 		toks = append(toks, t)
 		nl = false
 		return nil
 	}
-	for i := 0; i < len(s); {
+	// closed is how many tokens have their end set: a token ends where the
+	// pass that read it left off.
+	closed := 0
+	for i < len(s) {
+		if closed < len(toks) {
+			toks[len(toks)-1].end = i
+			closed = len(toks)
+		}
 		c := s[i]
 		switch {
 		case c == '\n':
@@ -172,6 +184,9 @@ func lexGradle(src []byte, kotlin bool) ([]gradleTok, error) {
 		default:
 			return nil, &gradleSyntaxError{line, fmt.Sprintf("the character %q is not handled", rune(c))}
 		}
+	}
+	if closed < len(toks) {
+		toks[len(toks)-1].end = i
 	}
 	return toks, nil
 }

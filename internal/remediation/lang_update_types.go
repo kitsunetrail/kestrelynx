@@ -205,6 +205,8 @@ type LanguageUpdate struct {
 	Go *GoUpdate `json:"go,omitempty"`
 	// Maven records the edits of a Maven update and what moved with them.
 	Maven *MavenUpdate `json:"maven,omitempty"`
+	// Gradle records the edits of a Gradle update and what moved with them.
+	Gradle *GradleUpdate `json:"gradle,omitempty"`
 }
 
 // Outcomes of ChainUpdate.

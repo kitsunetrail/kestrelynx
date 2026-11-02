@@ -21,6 +21,13 @@ func (r *updateRun) run(ctx context.Context) *updateFailure {
 		r.upd.Notes = uniqueSorted(r.upd.Notes)
 		return out
 	}
+	if r.it.Manager == ManagerGradle {
+		// A Gradle project's files are edited by this program, and a work
+		// container only updates the lockfile of what it has edited.
+		out := r.runGradle(ctx)
+		r.upd.Notes = uniqueSorted(r.upd.Notes)
+		return out
+	}
 	src, fail := r.u.readSources(ctx, r.it)
 	if fail != nil {
 		return fail

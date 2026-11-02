@@ -34,7 +34,7 @@ type LangUpdateConfig struct {
 	// Go reads the public Go module proxy and checksum database; a Go item
 	// fails without it.
 	Go GoModuleRegistry
-	// Maven reads Maven Central; a Maven item fails without it.
+	// Maven reads Maven Central; a Maven or Gradle item fails without it.
 	Maven  MavenRegistry
 	GitHub GitHubReader
 	// Prepared are the cycle's scan conditions (Plan.Conditions). The stage's
@@ -161,10 +161,6 @@ func (u *LangUpdater) Run(ctx context.Context, plan *Plan) LangUpdateUsage {
 	for i := range plan.LanguageItems {
 		it := &plan.LanguageItems[i]
 		if it.Category != CategoryDependencyUpdateCandidate {
-			continue
-		}
-		if it.Manager == ManagerGradle {
-			// Gradle units are planned only: their update is not made yet.
 			continue
 		}
 		switch {
@@ -709,6 +705,10 @@ type updateRun struct {
 	mavenPOMs      map[string]*mavenPOM
 	mavenVersions  map[string][]string
 	mavenArtifacts []ArtifactFile
+	// gradleArtifacts are the files a Gradle update changed.
+	gradleArtifacts []ArtifactFile
+	// gradleLocks are the lockfiles before and after, as this program read them.
+	gradleLocks [2]*gradleLock
 	// recheck is a lockfile a chain run judges by the chain's rules in place of
 	// making one: the first update's, which its difference check refused.
 	recheck []byte
@@ -745,9 +745,14 @@ func (r *updateRun) succeed() {
 			p.LeftOut = true
 		}
 	}
-	if it.Manager == ManagerMaven {
+	switch it.Manager {
+	case ManagerMaven:
 		// A Maven update changes the pom files its edits are in, and nothing else.
 		it.Artifacts = r.mavenArtifacts
+		return
+	case ManagerGradle:
+		// A Gradle update changes the files its edits are in and gradle.lockfile.
+		it.Artifacts = r.gradleArtifacts
 		return
 	}
 	it.Artifacts = []ArtifactFile{{

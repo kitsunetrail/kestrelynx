@@ -71,7 +71,9 @@ func (r *prRun) languageFiles(c *unitCtx, base string) (files []editedFile, inpu
 			c.set(PRStatusFailed, ReasonArtifactsUnusable, fmt.Sprintf("the content of %s is not what the item recorded", p))
 			return nil, "", false
 		}
-		if _, known := ld.sources[p]; !known {
+		// A file the plan looked for and did not find may be made by the update
+		// (the gradle.properties a Gradle update writes a property into).
+		if _, known := ld.sources[p]; !known && !containsString(ld.item.Source.Absent, p) {
 			c.set(PRStatusFailed, ReasonArtifactsUnusable, fmt.Sprintf("%s is not among the files the plan read", p))
 			return nil, "", false
 		}

@@ -279,9 +279,17 @@ func stepSucceeded(s worker.StepResult) bool {
 }
 
 // expectedOutputs are the files a successful step of the job returns: the
-// manager's own files, and the install report of a pip step.
-func expectedOutputs(m worker.Manager, op worker.Op) []string {
-	out := worker.RequiredInputNames(m)
+// manager's own files, and the install report of a pip step. A Gradle step
+// returns every input file the job carried: the lockfile it may change and
+// the others, which come back to be compared with what was sent.
+func expectedOutputs(job worker.Job, op worker.Op) []string {
+	out := worker.RequiredInputNames(job.Manager)
+	if job.Manager == worker.ManagerGradle {
+		out = out[:0]
+		for _, in := range job.Inputs {
+			out = append(out, in.Path)
+		}
+	}
 	if op == worker.OpPipDryRun {
 		out = append(out, worker.PipReportName)
 	}
@@ -321,7 +329,7 @@ func checkStatusAgainstSteps(job worker.Job, res worker.Result) error {
 			if !stepSucceeded(s) {
 				return fmt.Errorf("step %q did not end cleanly, but a later step or the job is reported as done", s.ID)
 			}
-			if !sameOutputs(expectedOutputs(job.Manager, s.Op), s.Outputs) {
+			if !sameOutputs(expectedOutputs(job, s.Op), s.Outputs) {
 				return fmt.Errorf("step %q does not list the files it should return", s.ID)
 			}
 		}
@@ -334,7 +342,7 @@ func checkStatusAgainstSteps(job worker.Job, res worker.Result) error {
 		if res.Error != "" {
 			return errors.New("result.json says completed and carries an error")
 		}
-		if !sameOutputs(sortedNames(worker.RequiredInputNames(job.Manager)), res.Final) {
+		if !sameOutputs(expectedOutputs(job, ""), res.Final) {
 			return errors.New("result.json says completed but does not list the final files")
 		}
 	case worker.StatusStepFailed:

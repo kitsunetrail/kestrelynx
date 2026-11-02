@@ -1,7 +1,6 @@
 package remediation
 
 import (
-	"context"
 	"errors"
 	"path"
 	"reflect"
@@ -939,18 +938,6 @@ func TestLanguagePlan_GradleManagerBasics(t *testing.T) {
 	}
 	if DependencyManager("nope").LockfileName() != "" {
 		t.Error("an unknown manager has a lockfile")
-	}
-}
-
-func TestLangUpdater_LeavesGradleUnitsAlone(t *testing.T) {
-	plan := Plan{LanguageItems: []LanguageItem{{
-		Key: "deps:ex/app@main:svc#gradle", Manager: ManagerGradle, Category: CategoryDependencyUpdateCandidate,
-		Reason: ReasonUpdateCandidateInSource, Packages: []LanguagePackage{{Name: "a:b", Action: ActionUpdate}},
-	}}}
-	use := (&LangUpdater{}).Run(context.Background(), &plan)
-	it := plan.LanguageItems[0]
-	if use.Jobs != 0 || it.Category != CategoryDependencyUpdateCandidate || it.UpdateExecuted || it.Update != nil {
-		t.Fatalf("item = %+v, use = %+v; a planned Gradle unit was handled by the update stage", it, use)
 	}
 }
 

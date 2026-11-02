@@ -80,6 +80,9 @@ const (
 	// ManagerMaven is Maven: the pom files are what is required, and the
 	// versions they resolve to are not written down anywhere.
 	ManagerMaven DependencyManager = "maven"
+	// ManagerGradle is Gradle: gradle.lockfile lists the versions the build
+	// resolves, and the build files say how they are decided.
+	ManagerGradle DependencyManager = "gradle"
 )
 
 // LockfileName is the file whose entries the unit's packages are matched
@@ -98,6 +101,8 @@ func (m DependencyManager) LockfileName() string {
 		return "go.mod"
 	case ManagerMaven:
 		return "pom.xml"
+	case ManagerGradle:
+		return "gradle.lockfile"
 	}
 	return ""
 }
@@ -109,7 +114,7 @@ func (m DependencyManager) scheme() scheme {
 		return schemePEP440
 	case ManagerGo:
 		return schemeGo
-	case ManagerMaven:
+	case ManagerMaven, ManagerGradle:
 		return schemeMaven
 	}
 	return schemeSemver
@@ -337,6 +342,9 @@ type LanguageItem struct {
 	// binaries built from it were built with ("" when one did not record
 	// it): the highest go line an update may write.
 	GoBuiltWith string `json:"go_built_with,omitempty"`
+	// Gradle is what the plan read of a Gradle project that the later stages
+	// go on from.
+	Gradle *GradleRecord `json:"gradle,omitempty"`
 
 	Source   SourceRecord      `json:"source"`
 	Packages []LanguagePackage `json:"packages,omitempty"`

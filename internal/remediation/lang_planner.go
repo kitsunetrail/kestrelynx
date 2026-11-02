@@ -263,10 +263,26 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 	// project, and then only those of the project's own archives (see
 	// mavenSelect).
 	var reactor *mavenReactor
-	if _, isMaven := byName(entries, "pom.xml"); hasJar && srcErr == nil && isMaven && r.stopReason() == nil {
+	_, isMaven := byName(entries, "pom.xml")
+	if hasJar && srcErr == nil && isMaven && r.stopReason() == nil {
 		it := newItem(typeJar)
 		var keep bool
 		if reactor, keep = r.analyseMavenUnit(&it, u, entries); keep {
+			out = append(out, it)
+		}
+	}
+
+	// A directory with a gradle.lockfile or a build script and no pom.xml is
+	// a Gradle project. The application's own coordinates cannot be read from
+	// it, so every jar finding is matched by name and version.
+	gradleUnit := false
+	_, hasLock := byName(entries, "gradle.lockfile")
+	_, hasBuild := byName(entries, "build.gradle")
+	_, hasBuildKts := byName(entries, "build.gradle.kts")
+	if isGradle := hasLock || hasBuild || hasBuildKts; hasJar && srcErr == nil && !isMaven && isGradle && r.stopReason() == nil {
+		gradleUnit = true
+		it := newItem(typeJar)
+		if r.analyseGradleUnit(&it, u, entries) {
 			out = append(out, it)
 		}
 	}
@@ -301,6 +317,11 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 		// archives; they are listed, not matched against the pom files.
 		kept, _, _, _ := mavenSelect(u.jarUnpinned, u.jarScansUnpinned, reactor)
 		unpinned = append(append([]*findingGroup(nil), unpinned...), groupLanguageFindings(kept, r.p.cfg.Intel)...)
+	}
+	if gradleUnit && len(u.jarUnpinned) > 0 {
+		// The unverified scans' jar findings are listed, not matched against
+		// the lockfile.
+		unpinned = append(append([]*findingGroup(nil), unpinned...), groupLanguageFindings(u.jarUnpinned, r.p.cfg.Intel)...)
 	}
 	if len(unpinned) > 0 {
 		it := newItem("unverified")

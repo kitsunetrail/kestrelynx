@@ -305,6 +305,2564 @@
       "tested": {
         "linux/amd64": "sha256:5bbe76a31abbe0f1449d7820e550131c020b097c24d3bcfc5ad1231779982c1c"
       }
+    },
+    {
+      "id": "gradle8.0.1-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.0.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.0.1-jdk17",
+      "exact_tag": "8.0.1-jdk17",
+      "index_digest": "sha256:f4f2d83cdb8e2159e0ccdf1d743db83054b1cde8b808bfef6d10f1fd8951df90",
+      "platforms": {
+        "linux/amd64": "sha256:4a29d98888b1edbb619f0b158226ea3e8a0cad9b23d1d436884182e5fc5666ce",
+        "linux/arm64": "sha256:155c937ffc899f962c34cf41482b2db823ecc22c132a52411482d43f4ae34204"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.0.2-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.0.2",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.0.2-jdk17",
+      "exact_tag": "8.0.2-jdk17",
+      "index_digest": "sha256:17010c51f4076139d4aeb5a188466e9e716abbdb71cef6621ed861f76396c913",
+      "platforms": {
+        "linux/amd64": "sha256:93e09b55c0ffbda35f7105510227409a55eb9242f1f723467d4a81c8670cc357",
+        "linux/arm64": "sha256:f24bb2ad62ecce7feb4b7b89b260eb5065de18ba2e72077318316b10f83ed44e"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.1.1-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.1.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.1.1-jdk17",
+      "exact_tag": "8.1.1-jdk17",
+      "index_digest": "sha256:e7a4bc8f4ee27feae2eac4de61ca64406b7137e6f6b107052accd24bf0806043",
+      "platforms": {
+        "linux/amd64": "sha256:20d1a8bae7dfd212c64a9abe3e9f80e833ad86a3418b10a34197fd0e769b25f3",
+        "linux/arm64": "sha256:844486b473ed751c8a7203a137cfe1858f1b03d9b870b66856a21b4b470eec68"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.2.1-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.2.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.2.1-jdk17",
+      "exact_tag": "8.2.1-jdk17",
+      "index_digest": "sha256:16ef1894635126ef2040faa8c042c479b992b5167a976be7a2dc82e389712a94",
+      "platforms": {
+        "linux/amd64": "sha256:262aca96ccb3da480018493116be465f1f16a018bb5623303a2ebdee97073021",
+        "linux/arm64": "sha256:b95af475fe5c7e9636ca685e4befe199114a7c8b2077a3b8049dcb254c20a824"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.3-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.3",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.3-jdk17",
+      "exact_tag": "8.3-jdk17",
+      "index_digest": "sha256:461018d754af5e85ca08b8f38e5f583d65ebadf83be8ad01f3bff03740ccef4f",
+      "platforms": {
+        "linux/amd64": "sha256:05084968493d4cda45759ba15dde424f0c1f14d680524a9a4479c4880fe02532",
+        "linux/arm64": "sha256:96370ef10a488dc497bc1c729fd2f0d9d7edb86e8ed1a3da291bcbd389786cb2"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.4-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.4",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.4-jdk17",
+      "exact_tag": "8.4-jdk17",
+      "index_digest": "sha256:70da12adf27e83bcc125af9d2bc6f9432590e89c96609625aa688135b27e75fb",
+      "platforms": {
+        "linux/amd64": "sha256:034439da57b44518172cdd588d7aa30b1058762dbfcb17711ed5a2c6966f7ea0",
+        "linux/arm64": "sha256:184d2741c042cb7d640657a4e6239a6d1008ffc49c0b0dd57fe5a33b69053f99"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.5-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.5",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.5-jdk17",
+      "exact_tag": "8.5-jdk17",
+      "index_digest": "sha256:7704366590930c03de7e514008ba3d7b7031b92591bd5a74fae79c16f3a17726",
+      "platforms": {
+        "linux/amd64": "sha256:f59836e46ad7a565813de06768ff2884700d12b7ceedacb1701a2983dc859010",
+        "linux/arm64": "sha256:03e6069b221f5e1e1ffffa631953a8b975a19070a908a486ecbcc832e82a6100"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.5-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.5",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.5-jdk21",
+      "exact_tag": "8.5-jdk21",
+      "index_digest": "sha256:873def2b8a73d00f5616043ac9ff65576b055942701391ad66499f1a1f53f1b2",
+      "platforms": {
+        "linux/amd64": "sha256:6fbc64efc26b6b092b7ba0b2584de23985817edc65e0db6f105e1bbfb83b5314",
+        "linux/arm64": "sha256:d2c6294f2d88cd2822895d3c1c32ab29bebfe3f476a8df52d6bd587d750370b8"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.6-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.6",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.6-jdk17",
+      "exact_tag": "8.6-jdk17",
+      "index_digest": "sha256:27ed98487dd9c155d555955084dfd33f32d9f7ac5a90a79b1323ab002a1a8b6e",
+      "platforms": {
+        "linux/amd64": "sha256:06a233bd47b63daa969cf0b93479bcea4a3d4fcb65d5f442c4a8c4c47604e15f",
+        "linux/arm64": "sha256:9172219ab1a3a7e20caf8356107fec7c1a3a9b209ede68d9b6d43228348d6bec"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.6-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.6",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.6-jdk21",
+      "exact_tag": "8.6-jdk21",
+      "index_digest": "sha256:a337805a93ad42a5c7df5d81b8b3d44d8e1c8088f48ff11cc9e80eef15459ca6",
+      "platforms": {
+        "linux/amd64": "sha256:d7c9827aa7c7f6555921e1c31fdd1f3ab3f2eaec8a4931a896afd3eea6fb032a",
+        "linux/arm64": "sha256:1658d2c33c14dbe46bf0e6c42d74a41d238e92560063e0c2712bd605aca7098e"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.7-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.7",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.7-jdk17",
+      "exact_tag": "8.7-jdk17",
+      "index_digest": "sha256:4ad3845d9ee2843537747bd5f067cc6c7a18e737d0079a880a5a074feda392a4",
+      "platforms": {
+        "linux/amd64": "sha256:35c6336af139feb738be170611a02fac050e1445aa3dceec84eaedf9c7ffb01a",
+        "linux/arm64": "sha256:26399074fea8d4c5a92e095f9e45768c9236dde9da9162599888dec314775b35"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.7-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.7",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.7-jdk21",
+      "exact_tag": "8.7-jdk21",
+      "index_digest": "sha256:afba668dbed80665ed2cee8b16010c51e9639be3424c3f897637701bdd89371b",
+      "platforms": {
+        "linux/amd64": "sha256:74a6f26aca52584132a2c5a99d81e7b8db11ce712ea941835755a577d2226ebc",
+        "linux/arm64": "sha256:4b43d35c5bafb98d5042bd3d2cababc18de9154da32bc01036ffadea92535223"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.8-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.8",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.8-jdk17",
+      "exact_tag": "8.8-jdk17",
+      "index_digest": "sha256:6ff0b959f7da8ba5109f815697f174549668f1a44659d1177eaf8ef11132f476",
+      "platforms": {
+        "linux/amd64": "sha256:d10faa7fc33084c617d883f07c23b2c72b22a9881e6f9fb0a41e31fb0c44a2af",
+        "linux/arm64": "sha256:112fd0616251d4a6b443dd5ac46e377fca8933bdf36ce7706157353ebade396f"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.8-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.8",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.8-jdk21",
+      "exact_tag": "8.8-jdk21",
+      "index_digest": "sha256:62c8919321bb78566534c4688a3399b86013ef8a4c45147d9099763d93c4376a",
+      "platforms": {
+        "linux/amd64": "sha256:03bc6e8633ff8c2759c6974b1cde48e1639506e5d2448582776832574b3faebe",
+        "linux/arm64": "sha256:f917418a1df7e3188689202716e5badac3b87da260ea200b349fa274ce3450e6"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.9-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.9",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.9-jdk17",
+      "exact_tag": "8.9-jdk17",
+      "index_digest": "sha256:682c0245826af1e6f5f7b95306cc7039d3d8d8e8de06b1a330e6f9015ee757a0",
+      "platforms": {
+        "linux/amd64": "sha256:060a5f46d62bc9f0d153eeaf34a3068d8d8a2aa1a211a51d6e8867593ed2a932",
+        "linux/arm64": "sha256:859b7cce0e9a07f35e195647fa191ae935eb757b2158cf8fe4845c78040e5a1d"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.9-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.9",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.9-jdk21",
+      "exact_tag": "8.9-jdk21",
+      "index_digest": "sha256:0c13b320f227a67179fca5d5746ab889c011ed143023c80c5fc8520609fe427f",
+      "platforms": {
+        "linux/amd64": "sha256:8a7e116207e70fd3bee6b60169d76b8fef559a81f1d5f43177869a863a09f5a7",
+        "linux/arm64": "sha256:21db73a644eca83667cbe55f03728d0b3bcfe856d831144ed73a7de2bdaf2f09"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.10.1-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.10.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.10.1-jdk17",
+      "exact_tag": "8.10.1-jdk17",
+      "index_digest": "sha256:d359e6587ec3ecbb0378d26eebf93adcf2b20ac05d49ea07c87c6d528ad1a863",
+      "platforms": {
+        "linux/amd64": "sha256:a3a8c176dd408e6b781be8e2659593265af36fced3d7f7a5ec72645f3df7cf80",
+        "linux/arm64": "sha256:ab953c56959f7bbb22b64a59382e26a5bd7bbb2a60355f8f0bf25898a88449b5"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.10.1-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.10.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.10.1-jdk21",
+      "exact_tag": "8.10.1-jdk21",
+      "index_digest": "sha256:531ce792814362746c055d558be9b44f051ba8742126176e5349ae5d185dd559",
+      "platforms": {
+        "linux/amd64": "sha256:67c8e3ec422f1c64c29a04c011f50796ec85f981a1163f1c0f992b5d3e190657",
+        "linux/arm64": "sha256:0b3644fa2a7aebdb3b41e3c1894a417a779ee5936721981a2a529d556f122759"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.10.2-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.10.2",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.10.2-jdk17",
+      "exact_tag": "8.10.2-jdk17",
+      "index_digest": "sha256:c2900027f3f0681c2cbfb09d527813851ad67aeafbb409997297efa2df20e748",
+      "platforms": {
+        "linux/amd64": "sha256:400c05c15ea5b9539bbd43ddb96a12f59c50a4756ec672fca09f26cefd9d0aa1",
+        "linux/arm64": "sha256:0e79cf8b8084da503b70f6a15d5a674c5ee895e14107ea010071d6739eaf027c"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.10.2-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.10.2",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.10.2-jdk21",
+      "exact_tag": "8.10.2-jdk21",
+      "index_digest": "sha256:963d59f7f22767da4efbcf46b661361b61af5fb88b0309da1071c4234c647eba",
+      "platforms": {
+        "linux/amd64": "sha256:1555ef99312c037aa60fc06a39fb5f7e4c16414687e9352d1a53947954f43f92",
+        "linux/arm64": "sha256:8138f42c372a7dff62d98f5b695216e6a75253dba196441f4239c9cf7bdceaf5"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.11.1-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.11.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.11.1-jdk17",
+      "exact_tag": "8.11.1-jdk17",
+      "index_digest": "sha256:91d559b8d55f522de5bc6882f73bcedc4e2cc7b0a58e839a9fa0ed95811a988d",
+      "platforms": {
+        "linux/amd64": "sha256:57c522766eac40e1b989f5325cd853d30c3af1f56f78550dc50f1b65902c33d4",
+        "linux/arm64": "sha256:d70782a1a774c92eda3b4165e9fa8762938f26e94e2eae4aa71fc09599d3e416"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.11.1-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.11.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.11.1-jdk21",
+      "exact_tag": "8.11.1-jdk21",
+      "index_digest": "sha256:7990a44ed0ad609ee740426d3becc69ae7d10a5ed14da7e354ad83cf7ef1d087",
+      "platforms": {
+        "linux/amd64": "sha256:5a47f7ac6ef430387108f8d2cd26a3ed3bdd12baedec4c6861cd848911730b75",
+        "linux/arm64": "sha256:96435c05301f42e48acf2e34a8130e33a157e4aee0b452536470ff1c32dd85e5"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.12.1-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.12.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.12.1-jdk17",
+      "exact_tag": "8.12.1-jdk17",
+      "index_digest": "sha256:deb3ed64f189e9b326e4147de66335286eea9f8b6677e53514af62370cbf7a4a",
+      "platforms": {
+        "linux/amd64": "sha256:1dcc699a1915de771ca8e27771ef842f4b7e8aa0699e1dd9935e440334d7f9fc",
+        "linux/arm64": "sha256:d2900e5708887206591172fe95df1d4bb88a206aab8ab452178afe29d7b6d990"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.12.1-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.12.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.12.1-jdk21",
+      "exact_tag": "8.12.1-jdk21",
+      "index_digest": "sha256:4c01ef2d5b57f88578b20891d8640dc799855731b977850940057c1ea37ba8a6",
+      "platforms": {
+        "linux/amd64": "sha256:f8e34f2afdf9f9314c718cfcc327f865721b7abad681e9aea2e00d66b6ee1522",
+        "linux/arm64": "sha256:f25380269d1b20d4ef966e279e21eead8c4e7db1d13352d7ebdeee761ecaca5a"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.13-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.13",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.13-jdk17",
+      "exact_tag": "8.13-jdk17",
+      "index_digest": "sha256:ec973fb6579488ecba8cd24f4728cd819eda45d6b26f7f44a81682e1c034898f",
+      "platforms": {
+        "linux/amd64": "sha256:9f31f23bd02d8273cad77b8c9f3809085fecf42e5182735e4ee5abedabdb340c",
+        "linux/arm64": "sha256:44af42e3c539bbe8106eab109dd73db35fcd70d3001d8bcda9d1b915c99044e2"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.13-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.13",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.13-jdk21",
+      "exact_tag": "8.13-jdk21",
+      "index_digest": "sha256:67b8c4bfd2b064e58a7307e2da1fc3881bc03ecc7a57cf61d8b570a02ebfaea2",
+      "platforms": {
+        "linux/amd64": "sha256:00d5cd60c3e9abb733d9716c5d15142b7b87647ad3932252068f1edcc426df37",
+        "linux/arm64": "sha256:6573e910575c0f8b4cbded78296a08ff32faea625ba624935fc42e38904bbcfa"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.1-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.14.1-jdk17",
+      "exact_tag": "8.14.1-jdk17",
+      "index_digest": "sha256:bbb9cf9df01cc9122ae99a0a3a4898f172b8f11334afdd04ba4c07d1f019b570",
+      "platforms": {
+        "linux/amd64": "sha256:9def5ef375f316aad6f6b58106194a69193dc49ff05e01a7a054d982b163f78d",
+        "linux/arm64": "sha256:ed215f820f395bd423372fe8fa240b6f50e00e1d7ccda12dad9cb5b2e57fabb6"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.1-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.14.1-jdk21",
+      "exact_tag": "8.14.1-jdk21",
+      "index_digest": "sha256:1e5eb0ac3e485dddf4a2bff5a901599c1126cc613e19b1d76ebfa402ce525c9c",
+      "platforms": {
+        "linux/amd64": "sha256:887ec88cf6197215def4806c1875e26d270e420e5c49aaa3affc59d16c91cc60",
+        "linux/arm64": "sha256:db96685c47f21b478b7da12016e87730f20c4ee4a8f24a3281252df6f5dfd7e6"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.2-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.2",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.14.2-jdk17",
+      "exact_tag": "8.14.2-jdk17",
+      "index_digest": "sha256:9ba82ad61f9e5729d14d43268b970b7f5007ab2300c1b0bbfa767a2c78dc1c7b",
+      "platforms": {
+        "linux/amd64": "sha256:253a4e3dc6296eb71412aa461c411db3adc472abd801d02becf95435f6a482f7",
+        "linux/arm64": "sha256:3dd33ec05967c73725baede4ef447b79acd058f12adc5023e629549a79916454"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.2-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.2",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.14.2-jdk21",
+      "exact_tag": "8.14.2-jdk21",
+      "index_digest": "sha256:cf0caeaac06e2824fac26daa6a55728fcb0e0e0e2ff28a430d2292547fe84dff",
+      "platforms": {
+        "linux/amd64": "sha256:3bdf44afba0cc9d97b96c14be8cbdd0920538da6fd8fb4ca9ba54f65450cf633",
+        "linux/arm64": "sha256:5df5aaea20d8df89e59bd03af7a979df248a6121f17d56c7075eca6049f6d47f"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.3-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.3",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.14.3-jdk17",
+      "exact_tag": "8.14.3-jdk17",
+      "index_digest": "sha256:ce50078d456e497bc86b76d386503e84aa45416d85069ad66bc072bf07566b25",
+      "platforms": {
+        "linux/amd64": "sha256:b6db376528d71be79c82e173c2e85769b8cc78fccbf3dc6810b9a54706076b99",
+        "linux/arm64": "sha256:bf5ce7ffd9b3ceeddc0959455e7e64d29eebfdf54339d7778aa74674d8d2a554"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.3-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.3",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.14.3-jdk21",
+      "exact_tag": "8.14.3-jdk21",
+      "index_digest": "sha256:21bd311ed01360c189b8870c6b6e988199ff10f72d445d02fb39d3cff9da91d7",
+      "platforms": {
+        "linux/amd64": "sha256:29ce2a983b946396c31d98d0b7625065ae131d6aa7e76bb21b90358d029ea8d8",
+        "linux/arm64": "sha256:94b6bb52c1b5aa7b454d5ebcf0ceacbdabc4cc058b81878323c77d73d5cd5d4f"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.4-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.4",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.14.4-jdk17",
+      "exact_tag": "8.14.4-jdk17",
+      "index_digest": "sha256:634d4b7fdb3c635091c122d94989066c17d8ec43ead10400638f47529d44f395",
+      "platforms": {
+        "linux/amd64": "sha256:8b1893ab43821aa15674528812681da57099f48d0c94718ed90cf677f7a60180",
+        "linux/arm64": "sha256:7be9e75385877e513e1150a37c5b9bb33115d0b4b5681e300c88648ebc859a63"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.4-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.4",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.14.4-jdk21",
+      "exact_tag": "8.14.4-jdk21",
+      "index_digest": "sha256:cc90b5198f747c454f4a3e17495b626fbdfa7ac77f1ad08502c355e6f81e6772",
+      "platforms": {
+        "linux/amd64": "sha256:ceec0e5520c4f2e40a9fa706fae9cf0dc3282a85a0829d73a2ee6dd9c18d860d",
+        "linux/arm64": "sha256:1189e1100dfcaa73a3c7ff1aa1ef073b5aeb49a21663dbbeaaa9daba21ffaa38"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.5-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.5",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.14.5-jdk17",
+      "exact_tag": "8.14.5-jdk17",
+      "index_digest": "sha256:38cc14c6936a74fba051090399b592fec24a618174719a6a94b8b7e0e8c2632e",
+      "platforms": {
+        "linux/amd64": "sha256:f61a0b1f0a00d08a0cedec4048d3ea0c7c353ecd953c1e5a6dfa54c5e52cd53a",
+        "linux/arm64": "sha256:532c9d1754d765b0576b2723881a82816e424d7de952db8d7c27009b765c8bd1"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.5-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.5",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.14.5-jdk21",
+      "exact_tag": "8.14.5-jdk21",
+      "index_digest": "sha256:c3dbf585165204a35635e0d6c4c15bc8f9b1effe787f18ded27805e1766992b5",
+      "platforms": {
+        "linux/amd64": "sha256:643bf5ab61f111be61756025374f81d2f1d4e6541f1ae3cbcbca9eb6ce9afdbb",
+        "linux/arm64": "sha256:f9b998efee6e550ea3ed19025115c228ba91714fe727e759e292c070585ea9ba"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.6-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.6",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.14.6-jdk17",
+      "exact_tag": "8.14.6-jdk17",
+      "index_digest": "sha256:b8caa5aace505bd8be799fd2b11bdf19fb175c7a81960327916a905880c92fcb",
+      "platforms": {
+        "linux/amd64": "sha256:aa47d892a4019c39eae67ee738af969883e732a3e8f81925d91d6a6b9acc0961",
+        "linux/arm64": "sha256:89b4f55181603a17706324f37607442bef27896207c5261e40afe271a85c3040"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.6-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.6",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.14.6-jdk21",
+      "exact_tag": "8.14.6-jdk21",
+      "index_digest": "sha256:aa72246029828dd4b4ddb5d4aba31f72ee070cafe52dc85ad5cc3296007ace6f",
+      "platforms": {
+        "linux/amd64": "sha256:e9e7c1b6eae0e2d5f21756477b5344cd02584fcca44c885c7197f46ab17a9fd7",
+        "linux/arm64": "sha256:f4800972ce76c0fcbb183df6d2a8ebee0460c2de47021ec56e5e1edadb8bbc67"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {
+        "linux/amd64": "sha256:e9e7c1b6eae0e2d5f21756477b5344cd02584fcca44c885c7197f46ab17a9fd7"
+      }
+    },
+    {
+      "id": "gradle9.0.0-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.0.0",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.0.0-jdk17",
+      "exact_tag": "9.0.0-jdk17",
+      "index_digest": "sha256:1290cb65d942fe637de804b87507ba376ef1e48d27f927f8a233ddf6d941dfcb",
+      "platforms": {
+        "linux/amd64": "sha256:9111b8c18e60af0bb752f5d572f40360585463cc14694eb3acbe040581ede72b",
+        "linux/arm64": "sha256:64263dcaded03c72a3dd8cd16f6fe7f8685521c3865e136ce7cbce36cb19a229"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.0.0-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.0.0",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.0.0-jdk21",
+      "exact_tag": "9.0.0-jdk21",
+      "index_digest": "sha256:8894a410d9e3e2f744718ad7b3caff179b88f9f1ba2e35d247633eaf807d5a7e",
+      "platforms": {
+        "linux/amd64": "sha256:b23eeabdcb570632b368b042afc4dac629e35050349b8377513f0c31a77182b7",
+        "linux/arm64": "sha256:894219925bde08765bd01cc65b9232632d09fd363e27cae389c6a27111539b73"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.1.0-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.1.0",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.1.0-jdk17",
+      "exact_tag": "9.1.0-jdk17",
+      "index_digest": "sha256:ea24a69916fbe8840f85a0a7df253cd3c3d821adda1f6023ee10dcbe471c85d5",
+      "platforms": {
+        "linux/amd64": "sha256:70fc0976131505c08fb5f8074edce47ec0a17abbfeb3f3992a5cad94d9f5fc87",
+        "linux/arm64": "sha256:d98dabcba31ae27536063c8014bd194a7e14fffbf369158821e14e27e918f221"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.1.0-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.1.0",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.1.0-jdk21",
+      "exact_tag": "9.1.0-jdk21",
+      "index_digest": "sha256:db12d4789367d4676ef3d8aa672685e0e451705776b53f7d81c953fba3b1d55b",
+      "platforms": {
+        "linux/amd64": "sha256:77d554d837f6584871b098822afb99ffdd5e6826ea3d558da6e19e904f0d01f7",
+        "linux/arm64": "sha256:d78d1cbf15b1952cab33e4d0fba3689e70321fded4755b8e7981ecbfb52dec71"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.1.0-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.1.0",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.1.0-jdk25",
+      "exact_tag": "9.1.0-jdk25",
+      "index_digest": "sha256:d2f954187670397de6dd42c5c3a9d4535409b590059c6d248ff2a59ba67cecc3",
+      "platforms": {
+        "linux/amd64": "sha256:0a0fe3f8fb6e4ddd7ecf3f4d53b6f3f758add80e868bb95d72e3bbff420c1f68",
+        "linux/arm64": "sha256:e26c2e7342c6b4b2656032ce3ee941763850570e23cbeba8941cc510e97ca997"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.2.0-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.2.0",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.2.0-jdk17",
+      "exact_tag": "9.2.0-jdk17",
+      "index_digest": "sha256:91ece2aa1a6288c74effe3fd2b664c1da3020c3239ae6352131c6423f65a41d8",
+      "platforms": {
+        "linux/amd64": "sha256:07b19c6bcae08b98a290359d4c84bf7555388e73d04f20f8db3394db613c4a38",
+        "linux/arm64": "sha256:ee3849d0a3179f581e4af1d6bf4bba4e3e59d6ad50e1b7f85bb660e2bb5e4053"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.2.0-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.2.0",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.2.0-jdk21",
+      "exact_tag": "9.2.0-jdk21",
+      "index_digest": "sha256:f73b9e12248ea459a1118f40da095c5305e90e2ebb22b790bcf0bfb9fcb1e39b",
+      "platforms": {
+        "linux/amd64": "sha256:799dbeb8700db402718ced4efb92d2f924a49064ef75d2f24ff6c8e3363e5a9a",
+        "linux/arm64": "sha256:ffad40aa3c15cae1fc2a454195a3796585e354d19ba74b5470d266596ae8688f"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.2.0-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.2.0",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.2.0-jdk25",
+      "exact_tag": "9.2.0-jdk25",
+      "index_digest": "sha256:a15a2cd0303eb40d079f97c8e48c906a8f92b3a71e1a365bb06616afb76ee565",
+      "platforms": {
+        "linux/amd64": "sha256:136194654d99b7dabbd81f870a4b94f5165da67b9df4aa72efe8cd3e5df900c9",
+        "linux/arm64": "sha256:5d1c54b6cc43e4a9f6ad2548cb04d2fc5c0822462fd8f0c6315b8306ffc7c3e1"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.2.1-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.2.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.2.1-jdk17",
+      "exact_tag": "9.2.1-jdk17",
+      "index_digest": "sha256:05d38d400f4d2b452a69b2484948a1931d594293870cab58523c06a9ced21f93",
+      "platforms": {
+        "linux/amd64": "sha256:32b7f0fb01280978d76ebec6e45ac93f68f959450e4489522d1b59f40972e196",
+        "linux/arm64": "sha256:f2bb9ed913607bf68c13bcdb0178863afea6ca23b23aefbca3640f35822a0917"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.2.1-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.2.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.2.1-jdk21",
+      "exact_tag": "9.2.1-jdk21",
+      "index_digest": "sha256:f1d5be114f4f16e780eee51a942449eaa98808887dddd5da4a5b608971c90aa4",
+      "platforms": {
+        "linux/amd64": "sha256:d5dd38d022b3d7bca5ddd7789d5937396c27320123e5121bf06a6c06934222c0",
+        "linux/arm64": "sha256:a88de092a213715a190d89ebae2d97f012532b3a958db04095189346704d2760"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.2.1-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.2.1",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.2.1-jdk25",
+      "exact_tag": "9.2.1-jdk25",
+      "index_digest": "sha256:2212a01f25c1e5554be919dabfe1122821d814ac2cdf0c21b4a2e9bfdb08f3e9",
+      "platforms": {
+        "linux/amd64": "sha256:5b3ce4536702f096b904af4ccc9660d213396cb6cff4fb94fbf5c128c6073162",
+        "linux/arm64": "sha256:d11119107392a76925b9e59ae53e3a6f8f018ba50033c364b45187e7be8cc93e"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.3.0-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.3.0",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.3.0-jdk17",
+      "exact_tag": "9.3.0-jdk17",
+      "index_digest": "sha256:7ccb06bc0433c79dd320accdb41785e70f8edf578fccd47c6e71cde160d6e6f0",
+      "platforms": {
+        "linux/amd64": "sha256:fcff9caa38ff9ca6d3809bef8b9c8f7838fd3797525df9e2112592a9eb265ff5",
+        "linux/arm64": "sha256:361032a8576ab6dd515ef65f803d72c492fa866867db871ab8f27d72838cd143"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.3.0-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.3.0",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.3.0-jdk21",
+      "exact_tag": "9.3.0-jdk21",
+      "index_digest": "sha256:c81b8eca24ce89252df6f8e81cb61266d62dbc84ab5f969ea22fc00804f995e2",
+      "platforms": {
+        "linux/amd64": "sha256:e0d62e64a98e1b8c514e884f38ba1ea29c0b7bf9fe5528151861d3653b1ef04d",
+        "linux/arm64": "sha256:5b45b79f489a94b7c22bf54a14f5d86616993350b0b73b32df7105bc0bad1783"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.3.0-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.3.0",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.3.0-jdk25",
+      "exact_tag": "9.3.0-jdk25",
+      "index_digest": "sha256:2e614dffcc0266a28f70b323a3044472dfa75a7f6873d94a759a4fb785dc78da",
+      "platforms": {
+        "linux/amd64": "sha256:9523988cbc939905df31e4223513ce0efa05154b6111fe66a6af8d2fe2c044c9",
+        "linux/arm64": "sha256:6767fcd6d1511b0866f051f3b24803a54973e000c4a702122764d3e21a1988b2"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.3.1-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.3.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.3.1-jdk17",
+      "exact_tag": "9.3.1-jdk17",
+      "index_digest": "sha256:5fb7d4ea7ddf10b24c317bc7d665a7da6aae9104042091625f3061f98661b487",
+      "platforms": {
+        "linux/amd64": "sha256:8d5302fb15e0b8c28d72d99bff4bd9e81fdc4e2a7e49271865ece4c15efd9fcc",
+        "linux/arm64": "sha256:70063e063f6db0d7cef0d31a2bec593757c3afa6a20c53f55983fe259f0b92f4"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.3.1-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.3.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.3.1-jdk21",
+      "exact_tag": "9.3.1-jdk21",
+      "index_digest": "sha256:f3784cc59d7fbab1e0ddb09c4cd082f13e16d3fb8c50b7922b7aeae8e9507da5",
+      "platforms": {
+        "linux/amd64": "sha256:ff4c34562fe6a5fe487d73bf6eb2d0dd9c71df8abfe1ed196996cf9f8b0c8f17",
+        "linux/arm64": "sha256:7d4c3f0a5a784bcc325085bf92aa9e678f0b67f1a862d8e79104d548c1a916df"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.3.1-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.3.1",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.3.1-jdk25",
+      "exact_tag": "9.3.1-jdk25",
+      "index_digest": "sha256:85aec999629f4774a383cb792da4b598bdf5a7e69c4b9570bb70c0f919179183",
+      "platforms": {
+        "linux/amd64": "sha256:4512833c2e52d0ae6032ae3b658e284fca45f18f1f20d6e1ca6d2267f4b83890",
+        "linux/arm64": "sha256:03fd2964350e6a07185df82e443d12c7e561fffe76e7f0e91046d2e412f450d5"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.4.0-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.4.0",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.4.0-jdk17",
+      "exact_tag": "9.4.0-jdk17",
+      "index_digest": "sha256:dd45e5bf9a7e9f8c30a4d07ab6acddc6e01df16e0c0e0b20aeb64eee3d757577",
+      "platforms": {
+        "linux/amd64": "sha256:7c0ee3f48e4c0ef4fa0e367d72beb2eee3189f91d7bc1de6ffa729d26f8b6f86",
+        "linux/arm64": "sha256:1235ace1742a53752f9ff6ade8c71c943a1ca8861a915bd6a01e8ad56c68d378"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.4.0-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.4.0",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.4.0-jdk21",
+      "exact_tag": "9.4.0-jdk21",
+      "index_digest": "sha256:a45bbf6995c17e646e4e0260ca2af53e6ec6424ff9b03896fef3a8ce91a57891",
+      "platforms": {
+        "linux/amd64": "sha256:259a828231e4153c622d11e439d42a5e5f58315902634edbdfa6402a6a3ad819",
+        "linux/arm64": "sha256:2aa5453c0914429dd9756a83a5cab4a252d4864ea79a08643a065d4ee71dbca5"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.4.0-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.4.0",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.4.0-jdk25",
+      "exact_tag": "9.4.0-jdk25",
+      "index_digest": "sha256:6df8be4f28ce6fb9fc10ea49451490697751b3738100708b6fe19409d2c8b339",
+      "platforms": {
+        "linux/amd64": "sha256:04553d13e40cf18e705b02d5576a9616f2144528fd95294cef1814a65dc5e52b",
+        "linux/arm64": "sha256:fbfc32291ddfc7fd1d79d6bd6074f4426a4450b5396e162ed03175223197f6c9"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.4.1-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.4.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.4.1-jdk17",
+      "exact_tag": "9.4.1-jdk17",
+      "index_digest": "sha256:549ab76a04fc532f37945d689207a3fb2642350b1235901eb652c93dae218dd0",
+      "platforms": {
+        "linux/amd64": "sha256:eaff036230bfcdfd16ce22a9c2dda2676c8cfd3dd5f6c1ca9240f871bc9b93fc",
+        "linux/arm64": "sha256:e09c6a7021a4413039b78ca0017374f9fc12977fb8574f69ae055ce7fdcd64d9"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.4.1-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.4.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.4.1-jdk21",
+      "exact_tag": "9.4.1-jdk21",
+      "index_digest": "sha256:2d34fc215310891039e1b2b7797632de8d59eab54496c134bc2da711ba651c50",
+      "platforms": {
+        "linux/amd64": "sha256:f4479eaf8f1ba5e722d7d1a0735e07b46c57da81a325eb4c4b531a549dc04b62",
+        "linux/arm64": "sha256:f85d328a7b03819b6a54804bbf0d5b00c90869fd57b1a39b2d0f8bc9eb760aa3"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.4.1-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.4.1",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.4.1-jdk25",
+      "exact_tag": "9.4.1-jdk25",
+      "index_digest": "sha256:8e41f079ca18bf00994f0ba7ca5cbfb7b0c2fdafd72bee98e6c3785bd9ac2939",
+      "platforms": {
+        "linux/amd64": "sha256:dffca0235f3db91383a81eab3b0df7466b4180f6a586437eb3f6cdc1bd381784",
+        "linux/arm64": "sha256:31a09e28f37955bdc2fabf8c0d2b9bc4380cde05788fd43ff31ce225ecb24656"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.5.0-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.5.0",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.5.0-jdk17",
+      "exact_tag": "9.5.0-jdk17",
+      "index_digest": "sha256:dfb52c9c5247cf6129770cd60597bbc1e67cdcfb7fd3691ed450d1c60737ea9e",
+      "platforms": {
+        "linux/amd64": "sha256:b7649a9548535343eea0a2d89d841e0feb36892f62664ad4d95f43e7585fa14c",
+        "linux/arm64": "sha256:5797e8fda8fe76b581b8e33983b4a2556b65dc8d924cd809807eb22fd68c0740"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.5.0-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.5.0",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.5.0-jdk21",
+      "exact_tag": "9.5.0-jdk21",
+      "index_digest": "sha256:41cd88d5934d5880ea7e3ebd53d711155e7e1c989390f0f9fa3dfd7d6b742a28",
+      "platforms": {
+        "linux/amd64": "sha256:d54eaf19938e79d61327e1f9d33c438a23f7a2f75dc691867c5180cf107fd275",
+        "linux/arm64": "sha256:85933cf4550943054296e21996ae014367b55bb12e0411044c47226e6c79cdf5"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.5.0-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.5.0",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.5.0-jdk25",
+      "exact_tag": "9.5.0-jdk25",
+      "index_digest": "sha256:03305b464e024b29cfaad1c4a41fed61d06d15453176d2180f65bd4358b789a6",
+      "platforms": {
+        "linux/amd64": "sha256:1e67ad760351a76afd1e596e2372bcc29481a5dfae72762c1070180295f86ef9",
+        "linux/arm64": "sha256:a9145e1bf7689655787f901808f3b88fa41603f2882eb0b996e4619323146e6b"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.5.1-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.5.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.5.1-jdk17",
+      "exact_tag": "9.5.1-jdk17",
+      "index_digest": "sha256:1d769ab80e82b12346e106ad8536a8f659d02167089bebef44448311ee6fb16f",
+      "platforms": {
+        "linux/amd64": "sha256:c82c99b03b1a30654e32d2fd7cf9c77b48c7c07afdd955fe508daade3ce5f7a2",
+        "linux/arm64": "sha256:fc16b2d8464ad042bea2b1dd408aea9122080273b905a43575371285e4849a62"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.5.1-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.5.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.5.1-jdk21",
+      "exact_tag": "9.5.1-jdk21",
+      "index_digest": "sha256:b1210616becadef85acbafeeb09b44bb64f4b982f3d876e7621341125ae3c431",
+      "platforms": {
+        "linux/amd64": "sha256:445de3d3cdfd49330cdd40ac12fab9fa5bb1469540d0628a21396d77281c5f9c",
+        "linux/arm64": "sha256:78e4d2d665b703730f1905af7b0525ffd64f5b289a96a34b3c806e0b472ea394"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.5.1-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.5.1",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.5.1-jdk25",
+      "exact_tag": "9.5.1-jdk25",
+      "index_digest": "sha256:b1220e480f72dd26482af4606e4bc541dda5e0ef350f90b51cf1c5092639ab61",
+      "platforms": {
+        "linux/amd64": "sha256:25ffbd061df275926fe866d7ca5dfba5ec57b7377de778d81197efb5db5bed25",
+        "linux/arm64": "sha256:47da50ff24a721ce26baabd9ae4763d2359969db3f772a07d7156f9da5d01b1e"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.6.0-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.6.0",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.6.0-jdk17",
+      "exact_tag": "9.6.0-jdk17",
+      "index_digest": "sha256:e9f58500306b743df32ebb2729bb9d96e1853547a155f1f4d759d3118c2fc47a",
+      "platforms": {
+        "linux/amd64": "sha256:4272dc1ffbf8a211976854e4f56e54e8939a68605458ecb2d6f39ecdea5e188a",
+        "linux/arm64": "sha256:c932f23c02de21e7c01fbafca4c41f8db4730e41de9159f5d9b1cc94c4be7bdf"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.6.0-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.6.0",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.6.0-jdk21",
+      "exact_tag": "9.6.0-jdk21",
+      "index_digest": "sha256:6b71d4d40e45200709c178ca0ab10125e1d99e6e44dec6bcbabd0a3371f8e650",
+      "platforms": {
+        "linux/amd64": "sha256:d9c993646726ccda5fcf7467cb176b8958d6b12c3952d6ad2be7fca2dfb4feae",
+        "linux/arm64": "sha256:b16d0bf83f8d1eb7d8e7702898e4e1106136cf72ec75e984a827e5c153f4691a"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.6.0-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.6.0",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.6.0-jdk25",
+      "exact_tag": "9.6.0-jdk25",
+      "index_digest": "sha256:e3905233ae349e72016daf8a0e19f085a1dd89ded8ec88b3d8335d3fd0b350f4",
+      "platforms": {
+        "linux/amd64": "sha256:a28533ed8190c41976cc97946f8c2bb92b12bfc5d5d6381ef4f4fc4be94e5c75",
+        "linux/arm64": "sha256:339409da544cc5a01a9d6d26eba26f670150b733fbfc0d8af16ff187aaebf5d7"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.6.1-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.6.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.6.1-jdk17",
+      "exact_tag": "9.6.1-jdk17",
+      "index_digest": "sha256:aba72d36b08b131dfb7bd420802a629d137b98840e039d25eb0bfaff7206e4a9",
+      "platforms": {
+        "linux/amd64": "sha256:fa33dca2e6ee5f9fc33496cddc8997cab775f26d3bba508b8e6cbf51e6c4a7c0",
+        "linux/arm64": "sha256:63b0570ebed52873dbb826701a1795865f0173a238f1a0bbb083ea04ec38b24d"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.6.1-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.6.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.6.1-jdk21",
+      "exact_tag": "9.6.1-jdk21",
+      "index_digest": "sha256:a91a96d5f8530b4a6766f6502f563510bb5df157dc864ef50659c4214611a3d9",
+      "platforms": {
+        "linux/amd64": "sha256:8a4f5539a0cead17d7cb701ca18759d3d8d23b33eeb3eb3c7dcb3ce2a474f9d0",
+        "linux/arm64": "sha256:ce0973ead8cbb9c59fbcf4e315eef713691c3c0d9d65aff2ead232aa686757c2"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.6.1-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.6.1",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.6.1-jdk25",
+      "exact_tag": "9.6.1-jdk25",
+      "index_digest": "sha256:e8aeffb8197b17151ce24607811f60e91125f0018f7a3b08dc504ba9168a9c4f",
+      "platforms": {
+        "linux/amd64": "sha256:4e13951cd3b9486bb10c8420c97246a08e658d2ad73bd0ffa9ff967b6e39e297",
+        "linux/arm64": "sha256:60ecf6c389ecbb7b4e260eb0210915ae4bdf1bfc15abaed3268048fba90bca4a"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.7.0-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.7.0",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.7.0-jdk17",
+      "exact_tag": "9.7.0-jdk17",
+      "index_digest": "sha256:ed84839d5ce787a3b78a0599a3de454e9adaafc591ef236988be680885f049fa",
+      "platforms": {
+        "linux/amd64": "sha256:85c5964deb358155c8cbb0dcc6f16f379c8aa9eb51ec339402dc3b0d7cd5e8fb",
+        "linux/arm64": "sha256:c519ee59d5fe43360078bed494268e828408bda11a92b5a8b7032a28c0fe6390"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.7.0-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.7.0",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.7.0-jdk21",
+      "exact_tag": "9.7.0-jdk21",
+      "index_digest": "sha256:0e7bf60670121777c3366f97e33f5fc26298c31118e38b88043f1d6a7a7f8a74",
+      "platforms": {
+        "linux/amd64": "sha256:5d1b2540780aecbd4e9c79f28ee8a027d392aed14f540bf57a979eea1ca59f2f",
+        "linux/arm64": "sha256:e3a7806fdfe4f43f936170a614f780a4c0a4f2e87f3e5eb76ff9ed2f8b59ec7f"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.7.0-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.7.0",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.7.0-jdk25",
+      "exact_tag": "9.7.0-jdk25",
+      "index_digest": "sha256:35b2b4054977b95348bdd126e808e245fc1e28e56537b51cfd90c7f355b5a105",
+      "platforms": {
+        "linux/amd64": "sha256:24bfb4bc1b96afef848086d39a7f585c0b7217bf9581fa228a06ff305ecd9b20",
+        "linux/arm64": "sha256:16f0290ee90388da4fa0061804e343108f6c4f153ee5446ce9c25c4b68ab0c2a"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.7.1-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.7.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.7.1-jdk17",
+      "exact_tag": "9.7.1-jdk17",
+      "index_digest": "sha256:b0405bbcff65a32f4acc253cf6ba9c70b5c1553c80128fe6051cc6945e0e5529",
+      "platforms": {
+        "linux/amd64": "sha256:efc89e5294c0ab216e67cb55b9a7f34b7bdb45281822d81ddbba21f900f35247",
+        "linux/arm64": "sha256:422504f1f32804c04b053cb9933696cc28a4b2e088996d7e13718898deb83c79"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.7.1-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.7.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.7.1-jdk21",
+      "exact_tag": "9.7.1-jdk21",
+      "index_digest": "sha256:3695cd3c4b617ccb7b351ff1481c0f141c5e87a89872dc8ca1e5a8eeac6a85e3",
+      "platforms": {
+        "linux/amd64": "sha256:1e11e6b7d3424da72d8f105e25e7fa6173cf42240aa6c06e1660f8629abc4401",
+        "linux/arm64": "sha256:e8aebcd97d64c98f9d0866330d99503730c6932c48fbd70f7844b8f863ae6f73"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.7.1-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.7.1",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.7.1-jdk25",
+      "exact_tag": "9.7.1-jdk25",
+      "index_digest": "sha256:e06837018d077ee7f1218e53499425ca7615702ad58856d980c154caa17eb093",
+      "platforms": {
+        "linux/amd64": "sha256:610e076ce8bc3767d1130ece2f7656b49aab295a85ce431fe88c2bb7cf8739ac",
+        "linux/arm64": "sha256:eb5cbbdc66e703d48e692b850759f4ebf469bab799adc2f2d9bde8aa7f7b3ca2"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.8.0-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.8.0",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.8.0-jdk17",
+      "exact_tag": "9.8.0-jdk17",
+      "index_digest": "sha256:bd162795e369419e55970faca7e65c138385c4cbdb31fc7220641133bf62316c",
+      "platforms": {
+        "linux/amd64": "sha256:14eac54340baaf4513746077da37f10eedac60e8282fc40615b651def78579d4",
+        "linux/arm64": "sha256:149fb53ae0d37b1983024a35aff5ac45b6b4e8a3711200444bfbd2d1793dae7e"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.8.0-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.8.0",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.8.0-jdk21",
+      "exact_tag": "9.8.0-jdk21",
+      "index_digest": "sha256:4debe478645a3ad9208f3403ac021859fdf4d1a819d59970d75309b098f28f76",
+      "platforms": {
+        "linux/amd64": "sha256:6e6f79f27975d958b268ec47d571c009f09d9784bfbf619a16e27911932fa9c1",
+        "linux/arm64": "sha256:89de7cf83780475e9802085b8ca61564b3a6f95e51f4ba0b3679f7fee97b61ab"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.8.0-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.8.0",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.8.0-jdk25",
+      "exact_tag": "9.8.0-jdk25",
+      "index_digest": "sha256:7086a4cd10d568b35cafd6d5d30323865f3ce1f23ccddc9570ff3e3c9c8cd6e9",
+      "platforms": {
+        "linux/amd64": "sha256:b7b9164dcd19fea3ddc6ef143159b056591f898c3ae32d3151a0f0fe0f22fe47",
+        "linux/arm64": "sha256:69cd36e03e832976f6c128b31f363aa81231c178744e445a40bf0ae855075860"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.8.1-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.8.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.8.1-jdk17",
+      "exact_tag": "9.8.1-jdk17",
+      "index_digest": "sha256:47f780b3062115192d991c37276702c515a1349be5c288fd5ee422b408503fa9",
+      "platforms": {
+        "linux/amd64": "sha256:4ffad4544c79d7a2fca3bca7583cc84b7a11132562f855f16055abc5732f5289",
+        "linux/arm64": "sha256:93610d0d5805882a0372b8733b8b5e066c4b42743a7b4426b09a623e9eaabc8e"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.8.1-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.8.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.8.1-jdk21",
+      "exact_tag": "9.8.1-jdk21",
+      "index_digest": "sha256:5ec5f726f14851a11a1bac6e6a5720e41062c33357053e7717eb0d189a6f1db9",
+      "platforms": {
+        "linux/amd64": "sha256:6cdb60f57f62bc333b4bd840805186e03a8f2c95ddf4c38b8c4b04576ed77c00",
+        "linux/arm64": "sha256:5c19e920f729fd2c9f7cede4397504d08ad2b37eb1f12aad4aca8f239aff6466"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.8.1-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.8.1",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.8.1-jdk25",
+      "exact_tag": "9.8.1-jdk25",
+      "index_digest": "sha256:4a80c8083135754f689c3e31bb858a22282c66f5625cafb09ed217814b363ee5",
+      "platforms": {
+        "linux/amd64": "sha256:bec737b2038c8abdc47cf1d801a9131111c11c20ddd68fcdc7bc274db1b712b5",
+        "linux/arm64": "sha256:5d1443ce0a29a79427b399251d1cd6f586fc6a4537e7f9c7aad9732d43b21630"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.8.2-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.8.2",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.8.2-jdk17",
+      "exact_tag": "9.8.2-jdk17",
+      "index_digest": "sha256:2ec771e6a429a3aca72d38aca70a4ea05b41bf4098e4e22868b425a215fa4d0f",
+      "platforms": {
+        "linux/amd64": "sha256:f59b79e1b07aea48e682276f322a89594f1f065cdf31249ccf1a3d3782ea2b7e",
+        "linux/arm64": "sha256:ca1f665fcad6a26def875bb5cfbea173e66a1329033a0f459fb712056784d6a6"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {
+        "linux/amd64": "sha256:f59b79e1b07aea48e682276f322a89594f1f065cdf31249ccf1a3d3782ea2b7e"
+      }
+    },
+    {
+      "id": "gradle9.8.2-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.8.2",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.8.2-jdk21",
+      "exact_tag": "9.8.2-jdk21",
+      "index_digest": "sha256:85f8f572045bfb31874d66d7d8a2bd0c17d8cb9ad34b6a4d02f5d552b4b92c04",
+      "platforms": {
+        "linux/amd64": "sha256:771201176072cfb7eb17d660c9e6fa6c1fbe996739f389da34a0fa9d97f857bb",
+        "linux/arm64": "sha256:9f6d2382505a7a2a582d3d0419146e6df570fdb1488da20ee143f7a3631c65d6"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {
+        "linux/amd64": "sha256:771201176072cfb7eb17d660c9e6fa6c1fbe996739f389da34a0fa9d97f857bb"
+      }
+    },
+    {
+      "id": "gradle9.8.2-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.8.2",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.8.2-jdk25",
+      "exact_tag": "9.8.2-jdk25",
+      "index_digest": "sha256:e46e15353757ef9c9be0197a243653e88d25ebcd4c3c841057cf839c11fcf898",
+      "platforms": {
+        "linux/amd64": "sha256:eda6be8c9e0beaa24b5264b12ca6f1a86972d35b1f2d8aa6f156b993fc0e3dd4",
+        "linux/arm64": "sha256:7cd3d2d52231de55ee98e7945e655baed0eecb692dccc08b4e51149b8156a805"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-02",
+      "tested": {}
     }
   ]
 }

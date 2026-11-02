@@ -54,11 +54,13 @@ const (
 
 // DefaultRuntimeIDs are the runtimes update jobs run in, which the process
 // that starts the containers sets up a client for: every row of the runtime
-// table that pins an image.
+// table that pins an image, except the Gradle rows. Those are one for each pair
+// of a version of Gradle and a JDK, far more than a start should set up, and
+// the client of one is made when a job asks for it.
 func DefaultRuntimeIDs() []string {
 	var ids []string
 	for _, r := range worker.Runtimes() {
-		if r.HasImage() {
+		if r.HasImage() && r.Kind != worker.KindGradle {
 			ids = append(ids, r.ID)
 		}
 	}

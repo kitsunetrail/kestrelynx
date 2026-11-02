@@ -1,5 +1,6 @@
 import contextlib
 import datetime
+import hashlib
 import io
 import json
 import os
@@ -273,12 +274,13 @@ class NewSeriesTest(unittest.TestCase):
         self.assertEqual(keys, [k for k in u.FIELD_ORDER if k in keys])
 
     def test_resolve_adds_the_row_after_the_last_of_its_kind_and_runs_the_checks(self):
-        saved = (u.cycles_of, u.tag_exists, u.resolve_row, u.support_dates)
+        saved = (u.cycles_of, u.tag_exists, u.resolve_row, u.support_dates, u.cmd_resolve_gradle)
         checked = []
         try:
             u.cycles_of = lambda kind: NODE_CYCLES if kind == "node" else PYTHON_CYCLES
             u.tag_exists = lambda kind, series: True
             u.support_dates = lambda today: {}
+            u.cmd_resolve_gradle = lambda *a, **k: False
 
             def fake_resolve(row, facts, today, report):
                 checked.append(row["id"])
@@ -299,7 +301,7 @@ class NewSeriesTest(unittest.TestCase):
                 with open(rep) as f:
                     self.assertIn("node26: added", f.read())
         finally:
-            u.cycles_of, u.tag_exists, u.resolve_row, u.support_dates = saved
+            u.cycles_of, u.tag_exists, u.resolve_row, u.support_dates, u.cmd_resolve_gradle = saved
         self.assertEqual([r["id"] for r in got["runtimes"]], ["node24", "node26", "python3.14"])
         self.assertEqual(checked, ["node26"])
         self.assertEqual(got["runtimes"][1]["tested"], {})
@@ -530,6 +532,250 @@ class TrivyTest(unittest.TestCase):
             self.assertEqual(u.trivy("node@sha256:x", "linux/amd64"), [])
         finally:
             u.run = saved
+
+
+def digest_of(raw):
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+class FakeRegistry:
+    """Serves the manifests and blobs of tags it is given, and counts the
+    requests."""
+
+    def __init__(self, env=None, volumes=None, healthcheck=None, platforms=("linux/amd64", "linux/arm64"), limit_after=None):
+        self.tags, self.blobs, self.gets, self.heads = {}, {}, [], []
+        self.env, self.volumes, self.healthcheck, self.platforms, self.limit_after = env, volumes, healthcheck, platforms, limit_after
+
+    def add(self, tag, version, jdk, **over):
+        env = self.env or ["GRADLE_VERSION=" + version, "JAVA_HOME=/opt/java/openjdk", "JAVA_VERSION=jdk-%s.0.1+1" % jdk]
+        manifests, per = [], {}
+        for plat in self.platforms:
+            os_, arch = plat.split("/")
+            cfg = {"os": os_, "architecture": arch, "config": {"Env": env, "Volumes": self.volumes if self.volumes is not None else {"/home/gradle/.gradle": {}}}}
+            if self.healthcheck:
+                cfg["config"]["Healthcheck"] = self.healthcheck
+            cfg.update(over)
+            blob = json.dumps(cfg).encode()
+            self.blobs[digest_of(blob)] = blob
+            man = json.dumps({"config": {"digest": digest_of(blob)}}).encode()
+            self.blobs[digest_of(man)] = man
+            per[plat] = digest_of(man)
+            manifests.append({"digest": digest_of(man), "platform": {"os": os_, "architecture": arch}})
+        manifests.append({"digest": "sha256:" + "9" * 64, "platform": {"os": "unknown", "architecture": "unknown"},
+                          "annotations": {"vnd.docker.reference.type": "attestation-manifest"}})
+        raw = json.dumps({"manifests": manifests}).encode()
+        self.tags[tag] = raw
+        return digest_of(raw), per
+
+    def head(self, repo, tag):
+        self.heads.append(tag)
+        return digest_of(self.tags[tag]) if tag in self.tags else None
+
+    def get(self, repo, kind, ref):
+        self.gets.append((kind, ref))
+        if self.limit_after is not None and len(self.gets) > self.limit_after:
+            raise u.RateLimited("limit")
+        if kind == "manifests" and ref in self.tags:
+            return 200, {}, self.tags[ref]
+        if ref in self.blobs:
+            return 200, {}, self.blobs[ref]
+        return 404, {}, b""
+
+
+class GradleVersionsTest(unittest.TestCase):
+    def test_only_final_releases_of_the_majors_are_kept(self):
+        entries = [{"version": v} for v in ("9.8.2", "8.14", "8.0.2", "7.6.4", "10.0.0", "9.9.0-rc-1", "9.8.0-milestone-1", "9.10.0-20261102002359+0000")]
+        entries += [dict(version="9.8.3", broken=True), dict(version="9.8.4", snapshot=True), dict(version="9.8.5", nightly=True),
+                    dict(version="9.8.6", releaseNightly=True), dict(version="9.8.7", activeRc=True), dict(version="9.8.8", rcFor="9.8.8"),
+                    dict(version="9.8.9", milestoneFor="9.8.9"), dict(version="9.8.2")]
+        self.assertEqual(u.final_gradle_versions(entries), ["8.0.2", "8.14", "9.8.2"])
+
+    def test_versions_are_ordered_by_number(self):
+        got = u.final_gradle_versions([{"version": v} for v in ("8.9", "8.10", "8.2.1", "8.14.6", "8.14")])
+        self.assertEqual(got, ["8.2.1", "8.9", "8.10", "8.14", "8.14.6"])
+
+    def test_a_jdk_is_paired_with_the_versions_that_run_on_it(self):
+        pairs = u.gradle_pairs(["8.0.2", "8.4", "8.5", "8.14.6", "9.0.0", "9.1.0", "9.8.2"])
+        by_jdk = {}
+        for v, jdk in pairs:
+            by_jdk.setdefault(jdk, []).append(v)
+        self.assertEqual(by_jdk["17"], ["8.0.2", "8.4", "8.5", "8.14.6", "9.0.0", "9.1.0", "9.8.2"])
+        self.assertEqual(by_jdk["21"], ["8.5", "8.14.6", "9.0.0", "9.1.0", "9.8.2"])
+        self.assertEqual(by_jdk["25"], ["9.1.0", "9.8.2"])
+        self.assertEqual(u.gradle_row_id("9.8.2", "21"), "gradle9.8.2-jdk21")
+
+    def test_the_row_of_a_pair_names_the_exact_tag(self):
+        row = u.gradle_skeleton("8.14", "17", "2026-11-02")
+        self.assertEqual((row["id"], row["series"], row["tag"], row["exact_tag"]), ("gradle8.14-jdk17", "8", "8.14-jdk17", "8.14-jdk17"))
+        self.assertEqual(row["volumes"], ["/home/gradle/.gradle"])
+        self.assertIn("/home/gradle/.gradle", row["covered_paths"])
+        self.assertNotIn("volumes_empty", row)
+
+
+class GradleImageTest(unittest.TestCase):
+    def test_the_index_and_the_platforms_are_read_without_pulling_layers(self):
+        reg = FakeRegistry()
+        index, per = reg.add("9.8.2-jdk21", "9.8.2", "21")
+        got_index, got_per, configs = u.gradle_image(reg, "9.8.2-jdk21")
+        self.assertEqual((got_index, got_per), (index, per))
+        self.assertEqual(set(configs), set(u.PLATFORMS))
+        self.assertEqual(configs["linux/arm64"]["Volumes"], {"/home/gradle/.gradle": {}})
+        # The index, then the manifest and the config blob of each platform: no layer.
+        self.assertEqual([k for k, _ in reg.gets], ["manifests"] + ["manifests", "blobs"] * 2)
+
+    def test_a_missing_tag_and_a_tag_of_one_platform_are_not_rows(self):
+        self.assertIsNone(u.gradle_image(FakeRegistry(), "1.0-jdk17"))
+        reg = FakeRegistry(platforms=("linux/amd64",))
+        reg.add("9.8.2-jdk21", "9.8.2", "21")
+        self.assertIsNone(u.gradle_image(reg, "9.8.2-jdk21"))
+
+    def test_a_config_blob_that_does_not_match_its_digest_is_a_failure(self):
+        reg = FakeRegistry()
+        reg.add("9.8.2-jdk21", "9.8.2", "21")
+        blob = next(d for d, b in reg.blobs.items() if b"architecture" in b)
+        reg.blobs[blob] = reg.blobs[blob] + b" "
+        with self.assertRaises(u.Failure):
+            u.gradle_image(reg, "9.8.2-jdk21")
+
+    def test_a_platform_manifest_that_does_not_match_its_digest_is_a_failure(self):
+        reg = FakeRegistry()
+        _, per = reg.add("9.8.2-jdk21", "9.8.2", "21")
+        reg.blobs[per["linux/arm64"]] = reg.blobs[per["linux/arm64"]] + b" "
+        with self.assertRaisesRegex(u.Failure, "does not match its digest"):
+            u.gradle_image(reg, "9.8.2-jdk21")
+
+    def test_a_config_of_another_platform_is_a_failure(self):
+        reg = FakeRegistry()
+        reg.add("9.8.2-jdk21", "9.8.2", "21", architecture="s390x")
+        with self.assertRaises(u.Failure):
+            u.gradle_image(reg, "9.8.2-jdk21")
+
+
+class GradleRowTest(unittest.TestCase):
+    def resolve(self, reg, version="9.8.2", jdk="21", row=None):
+        report = []
+        return u.resolve_gradle_row(reg, row or u.gradle_skeleton(version, jdk, "2026-11-02"), "2026-11-02", report), report
+
+    def test_a_new_row_gets_the_digests_and_no_test_record(self):
+        reg = FakeRegistry()
+        index, per = reg.add("9.8.2-jdk21", "9.8.2", "21")
+        row, report = self.resolve(reg)
+        self.assertEqual((row["index_digest"], row["platforms"], row["tested"]), (index, per, {}))
+        self.assertEqual(report, ["- gradle9.8.2-jdk21: added, " + index[:19]])
+
+    def test_the_configuration_has_to_say_what_the_table_records(self):
+        for name, kw in {
+            "version": dict(env=["GRADLE_VERSION=9.8.1", "JAVA_HOME=/opt/java/openjdk", "JAVA_VERSION=jdk-21.0.1+1"]),
+            "java home": dict(env=["GRADLE_VERSION=9.8.2", "JAVA_HOME=/usr/lib/jvm/x", "JAVA_VERSION=jdk-21.0.1+1"]),
+            "jdk": dict(env=["GRADLE_VERSION=9.8.2", "JAVA_HOME=/opt/java/openjdk", "JAVA_VERSION=jdk-17.0.1+1"]),
+            "volume": dict(volumes={"/home/gradle/.gradle": {}, "/data": {}}),
+            "health check": dict(healthcheck={"Test": ["CMD", "true"]}),
+        }.items():
+            reg = FakeRegistry(**kw)
+            reg.add("9.8.2-jdk21", "9.8.2", "21")
+            # An existing row is not skipped for a tag that moved to this image.
+            old = u.gradle_skeleton("9.8.2", "21", "2026-10-01")
+            old["index_digest"] = "sha256:" + "0" * 64
+            with self.assertRaises(u.Failure, msg=name):
+                self.resolve(reg, row=old)
+
+    def test_a_tag_that_is_an_older_alias_is_not_a_row_of_that_version(self):
+        reg = FakeRegistry(env=["GRADLE_VERSION=8.0.2", "JAVA_HOME=/opt/java/openjdk", "JAVA_VERSION=jdk-17.0.1+1"])
+        reg.add("8.0-jdk17", "8.0", "17")
+        row, report = self.resolve(reg, "8.0", "17")
+        self.assertIsNone(row)
+        self.assertIn("is the image of Gradle 8.0.2, not of 8.0", report[0])
+
+    def test_a_row_whose_tag_still_has_its_digest_costs_no_pull(self):
+        reg = FakeRegistry()
+        index, per = reg.add("9.8.2-jdk21", "9.8.2", "21")
+        old = dict(u.gradle_skeleton("9.8.2", "21", "2026-10-01"), index_digest=index, platforms=per, tested={"linux/amd64": per["linux/amd64"]})
+        row, report = self.resolve(reg, row=old)
+        self.assertEqual((reg.gets, report), ([], []))
+        self.assertEqual((row["checked"], row["tested"]), ("2026-11-02", old["tested"]))
+
+    def test_a_moved_tag_resets_the_test_record(self):
+        reg = FakeRegistry()
+        index, per = reg.add("9.8.2-jdk21", "9.8.2", "21")
+        old = dict(u.gradle_skeleton("9.8.2", "21", "2026-10-01"), index_digest="sha256:" + "0" * 64, platforms=per,
+                   tested={"linux/amd64": per["linux/amd64"]})
+        row, report = self.resolve(reg, row=old)
+        self.assertEqual((row["index_digest"], row["tested"]), (index, {}))
+        self.assertIn("image changed", report[0])
+
+
+class GradleTableTest(unittest.TestCase):
+    def table(self):
+        return {"schema": 1, "runtimes": [{"id": "node24", "kind": "node", "series": "24"}]}
+
+    def test_missing_rows_are_added_and_the_other_kinds_are_left_alone(self):
+        reg = FakeRegistry()
+        for v, jdk in u.gradle_pairs(["8.14.6", "9.8.2"]):
+            reg.add("%s-jdk%s" % (v, jdk), v, jdk)
+        table, report = self.table(), []
+        changed = u.cmd_resolve_gradle(table, None, "2026-11-02", report, registry=reg, versions=["8.14.6", "9.8.2"])
+        self.assertTrue(changed)
+        self.assertEqual([r["id"] for r in table["runtimes"]], ["node24", "gradle8.14.6-jdk17", "gradle8.14.6-jdk21", "gradle9.8.2-jdk17", "gradle9.8.2-jdk21", "gradle9.8.2-jdk25"])
+        self.assertEqual(table["runtimes"][0], {"id": "node24", "kind": "node", "series": "24"})
+        # A second run changes nothing and pulls nothing.
+        reg.gets.clear()
+        self.assertFalse(u.cmd_resolve_gradle(table, None, "2026-11-03", [], registry=reg, versions=["8.14.6", "9.8.2"]))
+        self.assertEqual(reg.gets, [])
+
+    def test_only_names_the_rows_to_look_at(self):
+        reg = FakeRegistry()
+        for v, jdk in u.gradle_pairs(["9.8.2"]):
+            reg.add("%s-jdk%s" % (v, jdk), v, jdk)
+        table = self.table()
+        u.cmd_resolve_gradle(table, ["gradle9.8.2-jdk21"], "2026-11-02", [], registry=reg, versions=["9.8.2"])
+        self.assertEqual([r["id"] for r in table["runtimes"]], ["node24", "gradle9.8.2-jdk21"])
+        self.assertEqual(reg.heads, [])
+
+    def test_the_limit_on_pulls_keeps_the_rows_done_and_reports_the_rest(self):
+        reg = FakeRegistry(limit_after=5)
+        for v, jdk in u.gradle_pairs(["9.8.2"]):
+            reg.add("%s-jdk%s" % (v, jdk), v, jdk)
+        table, report = self.table(), []
+        with contextlib.redirect_stderr(io.StringIO()):
+            changed = u.cmd_resolve_gradle(table, None, "2026-11-02", report, registry=reg, versions=["9.8.2"])
+        self.assertTrue(changed)
+        self.assertEqual([r["id"] for r in table["runtimes"]], ["node24", "gradle9.8.2-jdk17"])
+        self.assertIn("stopped at gradle9.8.2-jdk21", report[-1])
+        self.assertIn("2 row(s) not looked at yet", report[-1])
+
+    def test_another_failure_ends_the_run(self):
+        reg = FakeRegistry()
+        reg.add("9.8.2-jdk17", "9.8.2", "17", architecture="s390x")
+        with self.assertRaises(u.Failure):
+            u.cmd_resolve_gradle(self.table(), None, "2026-11-02", [], registry=reg, versions=["9.8.2"])
+
+    def test_resolve_leaves_gradle_rows_to_their_own_path(self):
+        table = {"schema": 1, "runtimes": [{"id": "gradle9.8.2-jdk21", "kind": "gradle", "image": "gradle"}]}
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            u.save(p, table)
+            saved = u.cmd_resolve_gradle, u.support_dates, u.add_new_series
+            u.cmd_resolve_gradle = lambda *a, **k: False
+            u.support_dates = lambda today: {}
+            u.add_new_series = lambda *a, **k: False
+            try:
+                args = type("A", (), {"table": p, "report": os.path.join(d, "r.md"), "only": None})()
+                self.assertEqual(u.cmd_resolve(args), 0)  # no docker command ran for the Gradle row
+            finally:
+                u.cmd_resolve_gradle, u.support_dates, u.add_new_series = saved
+
+    def test_mark_tested_records_a_gradle_row_like_any_other(self):
+        table = {"schema": 1, "runtimes": [{"id": "gradle9.8.2-jdk21", "kind": "gradle", "image": "gradle", "platforms": {"linux/amd64": "sha256:a"}, "tested": {}}]}
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            u.save(p, table)
+            u.cmd_mark_tested(type("A", (), {"table": p, "platform": "linux/amd64", "only": ["gradle9.8.2-jdk21"]})())
+            self.assertEqual(u.load(p)["runtimes"][0]["tested"], {"linux/amd64": "sha256:a"})
+
+    def test_fields_are_written_in_the_table_order(self):
+        row = u.ordered(u.gradle_skeleton("9.8.2", "21", "2026-11-02"))
+        self.assertEqual(list(row)[:6], ["id", "kind", "series", "version", "jdk", "image"])
+        self.assertLess(list(row).index("volumes"), list(row).index("healthcheck"))
 
 
 if __name__ == "__main__":

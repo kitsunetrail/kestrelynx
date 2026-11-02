@@ -15,6 +15,9 @@ var inputNames = map[Manager][]string{
 	ManagerUv:   {"pyproject.toml", "uv.lock"},
 	ManagerPip:  {"requirements.txt"},
 	ManagerGo:   {"go.mod", "go.sum"},
+	// A Gradle job needs the lockfile it rewrites; the rest of the project it
+	// reads is optional (see optionalInputNames).
+	ManagerGradle: {"gradle.lockfile"},
 }
 
 // optionalInputNames are the files a job may carry besides the required ones.
@@ -23,6 +26,21 @@ var inputNames = map[Manager][]string{
 // returned.
 var optionalInputNames = map[Manager][]string{
 	ManagerPnpm: {"pnpm-workspace.yaml"},
+	// The files of a Gradle project the build reads, at the paths they have in
+	// the repository. At most one script of each pair is carried (see
+	// gradleExclusive).
+	ManagerGradle: {
+		"settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts", "gradle.properties",
+		"gradle/libs.versions.toml", "gradle/wrapper/gradle-wrapper.properties",
+		"settings-gradle.lockfile", "buildscript-gradle.lockfile",
+	},
+}
+
+// gradleExclusive are the pairs of files of a Gradle project of which a job
+// carries at most one: the Groovy and the Kotlin form of the same script.
+var gradleExclusive = [][2]string{
+	{"settings.gradle", "settings.gradle.kts"},
+	{"build.gradle", "build.gradle.kts"},
 }
 
 // opManager is the manager each operation belongs to.
@@ -35,6 +53,8 @@ var opManager = map[Op]Manager{
 	OpUvUpgradeChain: ManagerUv,
 	OpPipDryRun:      ManagerPip,
 	OpGoGet:          ManagerGo,
+
+	OpGradleUpdateLocks: ManagerGradle,
 }
 
 // RequiredInputNames returns the file names a job for m must carry.
@@ -54,11 +74,17 @@ func InputNames(m Manager) []string {
 }
 
 // OutputNames returns the file names a job for m may ask to have collected:
-// the required inputs, which a step may change, and the report of pip.
+// the required inputs, which a step may change, and the report of pip. A
+// Gradle job may collect every input file: the lockfile is the one it may
+// change, and the others come back as they were after the run, for the caller
+// to compare.
 func OutputNames(m Manager) []string {
 	out := RequiredInputNames(m)
-	if m == ManagerPip {
+	switch m {
+	case ManagerPip:
 		out = append(out, PipReportName)
+	case ManagerGradle:
+		out = InputNames(m)
 	}
 	return out
 }
@@ -84,6 +110,14 @@ var (
 	// where a pseudo-version keeps its time and commit) and the one build
 	// suffix a module version may carry.
 	goVersionRe = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+incompatible)?$`)
+
+	// Gradle dependencies: group:artifact with the characters of a Maven
+	// coordinate. A version, a wildcard or a classifier is not part of it.
+	gradleDepRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*:[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
+	// Gradle versions: two or three numbers (8.14, 9.8.2), as the official
+	// image tags them.
+	gradleVersionRe = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))?$`)
+	jdkRe           = regexp.MustCompile(`^[1-9][0-9]?$`)
 
 	pyMinorRe   = regexp.MustCompile(`^3\.[0-9]{1,2}$`)
 	platformRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.]{0,63}$`)
@@ -130,6 +164,14 @@ func ValidGoModulePath(s string) bool {
 	}
 	return true
 }
+
+// ValidGradleDependency reports whether s names a dependency as group:artifact
+// with the characters of a Maven coordinate, and does not start with '-'.
+func ValidGradleDependency(s string) bool { return len(s) <= 200 && gradleDepRe.MatchString(s) }
+
+// ValidGradleVersion reports whether s is a version of Gradle as the official
+// image tags it: two or three numbers.
+func ValidGradleVersion(s string) bool { return len(s) <= 32 && gradleVersionRe.MatchString(s) }
 
 // ValidGoVersion reports whether s is the version of a Go module: a semantic
 // version with a leading v, which may be a pseudo-version and may end in
@@ -245,6 +287,14 @@ func (j *Job) validateRuntime() error {
 	if spec.Kind != KindFor(j.Manager) {
 		return fmt.Errorf("runtime %q is not one %s runs in", j.Runtime.ID, j.Manager)
 	}
+	if spec.Kind == KindGradle {
+		// The runtime is one version of Gradle on one JDK, so the job names
+		// exactly the version of its row.
+		if j.Runtime.Version != spec.Version || j.Runtime.Pip != "" {
+			return fmt.Errorf("runtime version %q is not the version of %s", j.Runtime.Version, j.Runtime.ID)
+		}
+		return nil
+	}
 	if !ValidSemver(j.Runtime.Version) || !strings.HasPrefix(j.Runtime.Version, spec.Series+".") {
 		return fmt.Errorf("runtime version %q is not a version of %s", j.Runtime.Version, j.Runtime.ID)
 	}
@@ -262,8 +312,8 @@ func (j *Job) validateRuntime() error {
 }
 
 // RunsFromImage reports whether the manager is the one the runtime image
-// carries, so that a job for it brings no tool: pip and the go command.
-func RunsFromImage(m Manager) bool { return m == ManagerPip || m == ManagerGo }
+// carries, so that a job for it brings no tool: pip, the go command and gradle.
+func RunsFromImage(m Manager) bool { return m == ManagerPip || m == ManagerGo || m == ManagerGradle }
 
 // validateTool requires the tool a manager needs, and none for pip and go, with
 // every field in its form.
@@ -366,6 +416,13 @@ func (j *Job) validateInputs() error {
 			return fmt.Errorf("input %q is missing", name)
 		}
 	}
+	if j.Manager == ManagerGradle {
+		for _, pair := range gradleExclusive {
+			if seen[pair[0]] && seen[pair[1]] {
+				return fmt.Errorf("inputs %q and %q are both present", pair[0], pair[1])
+			}
+		}
+	}
 	return nil
 }
 
@@ -453,7 +510,7 @@ func (s *Step) Validate(m Manager) error {
 	if len(s.Packages) > MaxPackages {
 		return fmt.Errorf("%d packages exceed %d", len(s.Packages), MaxPackages)
 	}
-	needPkgs := s.Op == OpUvUpgrade || s.Op == OpUvUpgradeChain || s.Op == OpGoGet
+	needPkgs := s.Op == OpUvUpgrade || s.Op == OpUvUpgradeChain || s.Op == OpGoGet || s.Op == OpGradleUpdateLocks
 	if needPkgs != (len(s.Packages) > 0) {
 		if needPkgs {
 			return fmt.Errorf("%s needs packages", s.Op)
@@ -479,14 +536,24 @@ func (s *Step) Validate(m Manager) error {
 	return nil
 }
 
-// validatePackage checks a package of a uv.upgrade, uv.upgrade_chain or go.get
-// step. For go.get it is a module path and an exact version. For uv it is a
+// validatePackage checks a package of a uv.upgrade, uv.upgrade_chain, go.get or
+// gradle.update_locks step. For gradle.update_locks it is a group:artifact name
+// alone. For go.get it is a module path and an exact version. For uv it is a
 // Python project name and normalized versions. uv.upgrade needs a version and
 // takes no lowest version; uv.upgrade_chain takes a version, a lowest version
 // or neither, and not both.
 func validatePackage(op Op, p Package) error {
 	if strings.HasPrefix(p.Name, "-") || strings.HasPrefix(p.Version, "-") || strings.HasPrefix(p.AtLeast, "-") {
 		return fmt.Errorf("value starting with '-' is refused")
+	}
+	if op == OpGradleUpdateLocks {
+		if !ValidGradleDependency(p.Name) {
+			return fmt.Errorf("invalid dependency %q", p.Name)
+		}
+		if p.Version != "" || p.AtLeast != "" {
+			return fmt.Errorf("%s takes no version", op)
+		}
+		return nil
 	}
 	if op == OpGoGet {
 		if !ValidGoModulePath(p.Name) {

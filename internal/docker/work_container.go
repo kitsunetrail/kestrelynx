@@ -151,6 +151,17 @@ func validateResources(r Resources) error {
 // buildCreateBody generates the one container configuration this client
 // creates. Only the job id and resource values vary between jobs.
 func (c *WorkClient) buildCreateBody(jobID string, r Resources) createBody {
+	tmpfs := map[string]string{
+		tmpMount:    tmpfsOpts(r.TmpSizeBytes, "mode=1777"),
+		homeMount:   tmpfsOpts(r.HomeSizeBytes, fmt.Sprintf("uid=%d,gid=%d,mode=0700", workUID, workGID)),
+		toolsMount:  tmpfsOpts(r.ToolsSizeBytes, fmt.Sprintf("exec,uid=%d,gid=%d,mode=0755", workUID, workGID)),
+		varTmpMount: tmpfsOpts(coveredTmpfsBytes, "mode=0755"),
+		lockMount:   tmpfsOpts(coveredTmpfsBytes, "mode=0755"),
+		goMount:     tmpfsOpts(coveredTmpfsBytes, "mode=0755"),
+	}
+	for _, p := range c.cfg.CoverPaths {
+		tmpfs[p] = tmpfsOpts(coveredTmpfsBytes, "mode=0755")
+	}
 	return createBody{
 		Image:      c.cfg.Image,
 		Entrypoint: append([]string(nil), c.cfg.Entrypoint...),
@@ -170,15 +181,10 @@ func (c *WorkClient) buildCreateBody(jobID string, r Resources) createBody {
 			// manager is unpacked into allows execution. /var/tmp and
 			// /run/lock, which the official images leave writable by anyone,
 			// are covered by tiny tmpfs that root owns, and so is /go, the
-			// GOPATH of the Go images (the other images do not have it).
-			Tmpfs: map[string]string{
-				tmpMount:    tmpfsOpts(r.TmpSizeBytes, "mode=1777"),
-				homeMount:   tmpfsOpts(r.HomeSizeBytes, fmt.Sprintf("uid=%d,gid=%d,mode=0700", workUID, workGID)),
-				toolsMount:  tmpfsOpts(r.ToolsSizeBytes, fmt.Sprintf("exec,uid=%d,gid=%d,mode=0755", workUID, workGID)),
-				varTmpMount: tmpfsOpts(coveredTmpfsBytes, "mode=0755"),
-				lockMount:   tmpfsOpts(coveredTmpfsBytes, "mode=0755"),
-				goMount:     tmpfsOpts(coveredTmpfsBytes, "mode=0755"),
-			},
+			// GOPATH of the Go images (the other images do not have it), and
+			// whatever else an image needs covered (the Gradle images make
+			// /home/gradle writable and declare a volume below it).
+			Tmpfs:         tmpfs,
 			CapDrop:       []string{"ALL"},
 			SecurityOpt:   []string{"no-new-privileges"},
 			NetworkMode:   "bridge",
@@ -315,7 +321,13 @@ func verifyInspect(want createBody, got workInspect) []string {
 	chk(!h.Privileged, "Privileged")
 	chk(!h.PublishAllPorts && len(h.PortBindings) == 0, "ports")
 	chk(len(h.Binds) == 0 && len(h.Mounts) == 0 && len(h.Devices) == 0, "Binds/Mounts/Devices")
-	chk(len(got.Mounts) == 0 && len(got.Config.Volumes) == 0, "Mounts/Volumes")
+	// A volume the image declares is acceptable only where a tmpfs of the
+	// container takes its place; the daemon then makes no volume for it.
+	chk(len(got.Mounts) == 0, "Mounts")
+	for v := range got.Config.Volumes {
+		_, covered := w.Tmpfs[v]
+		chk(covered, "Volumes "+v)
+	}
 	chk(got.Config.Healthcheck != nil && slices.Equal(got.Config.Healthcheck.Test, healthcheckNone), "Healthcheck")
 	chk(h.NetworkMode == w.NetworkMode, "NetworkMode")
 	chk(h.PidMode != "host" && !strings.HasPrefix(h.PidMode, "container:"), "PidMode")

@@ -60,6 +60,9 @@ const (
 	ManagerUv   Manager = "uv"
 	ManagerPip  Manager = "pip"
 	ManagerGo   Manager = "go"
+	// ManagerGradle updates the dependency locks of a Gradle project with the
+	// gradle command of the image the job runs in.
+	ManagerGradle Manager = "gradle"
 )
 
 // Op is one fixed operation. The program turns it into a command line itself;
@@ -80,6 +83,10 @@ const (
 	// OpGoGet is one go get of every module of the step, each at an exact
 	// version.
 	OpGoGet Op = "go.get"
+	// OpGradleUpdateLocks is one gradle run that rewrites gradle.lockfile for
+	// the dependencies of the step, each named group:artifact. The versions
+	// they move to come from the project's own declarations.
+	OpGradleUpdateLocks Op = "gradle.update_locks"
 )
 
 // PipReportName is the file pip.dry_run writes its install report to, in the

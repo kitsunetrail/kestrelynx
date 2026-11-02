@@ -245,6 +245,13 @@ func execute(cfg Config, job *worker.Job, base string, files map[string][]byte, 
 			names = append(names, in.Path)
 		}
 	}
+	// The entries the working tree may hold at its top: the files and the
+	// directories leading to them, and for Gradle the two directories it makes
+	// there, which are never returned.
+	allowedTop := topLevelNames(names)
+	if job.Manager == worker.ManagerGradle {
+		allowedTop = append(allowedTop, ".gradle", "build")
+	}
 	outBudget := int64(worker.MaxOutTotalBytes)
 	mainTree := filepath.Join(base, "main")
 	if err := copyTree(filepath.Join(cfg.WorkDir, worker.SrcDirName), mainTree, names); err != nil {
@@ -310,7 +317,7 @@ func execute(cfg Config, job *worker.Job, base string, files map[string][]byte, 
 			}
 			return fail(worker.StatusStepFailed, "step %q changed the input file %q, which it may not", step.ID, name)
 		}
-		paths, count, err := unexpectedEntries(tree, names)
+		paths, count, err := unexpectedEntries(tree, allowedTop)
 		if err != nil {
 			return fail(worker.StatusStepFailed, "step %q: inspect working tree: %v", step.ID, err)
 		}

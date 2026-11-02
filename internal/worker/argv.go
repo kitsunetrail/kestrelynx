@@ -98,6 +98,16 @@ func Argv(j Job, s Step) ([]string, error) {
 		for _, p := range s.Packages {
 			a = append(a, p.Name+"@"+p.Version)
 		}
+	case OpGradleUpdateLocks:
+		// The gradle of the image, never the wrapper of the project. The JDK
+		// toolchain downloads are off, so a toolchain the image does not carry
+		// fails instead of being fetched.
+		deps := make([]string, 0, len(s.Packages))
+		for _, p := range s.Packages {
+			deps = append(deps, p.Name)
+		}
+		a = []string{"gradle", "--no-daemon", "--no-build-cache", "-q", "-Porg.gradle.java.installations.auto-download=false",
+			"dependencies", "--update-locks", strings.Join(deps, ",")}
 	case OpPipDryRun:
 		a = []string{spec.InterpreterName(), "-m", "pip", "--isolated", "install", "--dry-run", "--ignore-installed",
 			"--only-binary=:all:", "--disable-pip-version-check", "--no-input",

@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -71,6 +72,12 @@ type WorkConfig struct {
 	// Entrypoint is the fixed program the container runs. Job input never
 	// reaches it.
 	Entrypoint []string
+	// CoverPaths are directories of the image, besides the ones every
+	// container covers, that anyone may write to or that the image declares
+	// as volumes. Each gets a small tmpfs that root owns, so that nothing is
+	// written below it and no anonymous volume is created for a declared
+	// volume. The paths are absolute, clean and distinct.
+	CoverPaths []string
 	// Env is the complete environment of the container ("KEY=value"); the
 	// host process environment is never inherited.
 	Env []string
@@ -145,6 +152,23 @@ var (
 	jobIDRE      = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$`)
 )
 
+// fixedMounts are the tmpfs mounts every work container has.
+var fixedMounts = []string{tmpMount, homeMount, toolsMount, varTmpMount, lockMount, goMount}
+
+func validateCoverPaths(paths []string) error {
+	seen := map[string]bool{}
+	for _, p := range paths {
+		if p == "" || !strings.HasPrefix(p, "/") || path.Clean(p) != p || p == "/" || strings.ContainsAny(p, ",:\x00\\") {
+			return fmt.Errorf("work cover path %q is not an absolute clean path", p)
+		}
+		if seen[p] || slices.Contains(fixedMounts, p) {
+			return fmt.Errorf("work cover path %q is repeated or already a mount of every work container", p)
+		}
+		seen[p] = true
+	}
+	return nil
+}
+
 var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // secretLikeNames are substrings that mark an environment variable as a
@@ -213,6 +237,9 @@ func newWorkClient(baseURL string, hc *http.Client, cfg WorkConfig) (*WorkClient
 	}
 	if len(cfg.AllowedEnvKeys) == 0 {
 		return nil, errors.New("work AllowedEnvKeys is required")
+	}
+	if err := validateCoverPaths(cfg.CoverPaths); err != nil {
+		return nil, err
 	}
 	if err := validateEnv(cfg.Env, cfg.AllowedEnvKeys); err != nil {
 		return nil, err
@@ -447,7 +474,8 @@ var errPlatformAbsent = errors.New("the image is not held for the platform")
 // pinned: the operating system and architecture (an empty answer counts as
 // different, which is what a daemon gives for a platform it does not hold),
 // that its repository and digest are among the repo digests, that it declares
-// no volumes, and the versions in its environment.
+// no volumes except where the client covers the path with a tmpfs of its own,
+// and the versions in its environment.
 func (c *WorkClient) verifyImage(img imageInspect) error {
 	os, arch, _ := strings.Cut(c.platform, "/")
 	if img.Os != os || img.Architecture != arch {
@@ -464,8 +492,10 @@ func (c *WorkClient) verifyImage(img imageInspect) error {
 	if !found {
 		return fmt.Errorf("work image %s is present but its repo digests %v do not include the pinned reference", c.cfg.Image, img.RepoDigests)
 	}
-	if len(img.Config.Volumes) != 0 {
-		return fmt.Errorf("work image %s declares volumes, which would create anonymous volumes", c.cfg.Image)
+	for v := range img.Config.Volumes {
+		if !slices.Contains(c.cfg.CoverPaths, v) {
+			return fmt.Errorf("work image %s declares the volume %s, which would create an anonymous volume", c.cfg.Image, v)
+		}
 	}
 	for k, v := range c.cfg.ExpectEnv {
 		if !slices.Contains(img.Config.Env, k+"="+v) {

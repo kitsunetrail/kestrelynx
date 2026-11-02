@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -39,6 +40,24 @@ func regularFile(path string) (*os.File, os.FileInfo, error) {
 		return nil, nil, fmt.Errorf("%s changed while being opened", filepath.Base(path))
 	}
 	return f, fi, nil
+}
+
+// realDirs requires every directory on the way from root to the file name (a
+// slash-separated path below root) to be a directory and not a symbolic link.
+// A file at the top of root has none. The step that ran may have replaced a
+// directory of its working tree, so this is checked again whenever a file is
+// read from it.
+func realDirs(root, name string) error {
+	for d := path.Dir(name); d != "."; d = path.Dir(d) {
+		li, err := os.Lstat(filepath.Join(root, filepath.FromSlash(d)))
+		if err != nil {
+			return err
+		}
+		if !li.IsDir() {
+			return fmt.Errorf("%s is not a directory", d)
+		}
+	}
+	return nil
 }
 
 // hashFile returns the size and SHA-256 of a regular file, reading at most
@@ -88,30 +107,24 @@ func copyFile(src, dst string, limit int64) (int64, string, error) {
 }
 
 // checkInputs verifies that srcDir holds exactly the files the job declares,
-// each a plain file with the declared size and hash.
+// each a plain file with the declared size and hash. A declared path may have
+// directories in it (a Gradle project's gradle/wrapper/...); every directory on
+// the way must be a real directory, and nothing may be in srcDir that is neither
+// a declared file nor a directory leading to one.
 func checkInputs(srcDir string, inputs []worker.Input) error {
-	li, err := os.Lstat(srcDir)
-	if err != nil {
-		return err
-	}
-	if !li.IsDir() {
-		return errors.New("src is not a directory")
-	}
-	entries, err := os.ReadDir(srcDir)
-	if err != nil {
-		return err
-	}
 	declared := map[string]worker.Input{}
+	dirs := map[string]bool{".": true}
 	for _, in := range inputs {
 		declared[in.Path] = in
-	}
-	for _, e := range entries {
-		if _, ok := declared[e.Name()]; !ok {
-			return fmt.Errorf("undeclared entry %q in src", e.Name())
+		for d := path.Dir(in.Path); d != "."; d = path.Dir(d) {
+			dirs[d] = true
 		}
 	}
+	if err := checkSrcTree(srcDir, ".", declared, dirs); err != nil {
+		return err
+	}
 	for _, in := range inputs {
-		size, sum, err := hashFile(filepath.Join(srcDir, in.Path), worker.MaxInputFileBytes)
+		size, sum, err := hashFile(filepath.Join(srcDir, filepath.FromSlash(in.Path)), worker.MaxInputFileBytes)
 		if err != nil {
 			return fmt.Errorf("input %q: %w", in.Path, err)
 		}
@@ -120,6 +133,44 @@ func checkInputs(srcDir string, inputs []worker.Input) error {
 		}
 		if sum != in.SHA256 {
 			return fmt.Errorf("input %q does not match its declared sha256", in.Path)
+		}
+	}
+	return nil
+}
+
+// checkSrcTree walks the directory rel of srcDir. A directory is never entered
+// through a symbolic link, and an entry is either a declared file or a
+// directory on the way to one.
+func checkSrcTree(srcDir, rel string, declared map[string]worker.Input, dirs map[string]bool) error {
+	dir := filepath.Join(srcDir, filepath.FromSlash(rel))
+	li, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !li.IsDir() {
+		if rel == "." {
+			return errors.New("src is not a directory")
+		}
+		return fmt.Errorf("%q is not a directory", rel)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if rel != "." {
+			name = rel + "/" + name
+		}
+		switch {
+		case dirs[name]:
+			if err := checkSrcTree(srcDir, name, declared, dirs); err != nil {
+				return err
+			}
+		default:
+			if _, ok := declared[name]; !ok {
+				return fmt.Errorf("undeclared entry %q in src", name)
+			}
 		}
 	}
 	return nil
@@ -172,6 +223,9 @@ func changedSettings(tree string, job *worker.Job) (string, error) {
 		if contains(outputs, in.Path) {
 			continue
 		}
+		if err := realDirs(tree, in.Path); err != nil {
+			return in.Path, err
+		}
 		size, sum, err := hashFile(filepath.Join(tree, in.Path), worker.MaxInputFileBytes)
 		if err != nil || size != in.Size || sum != in.SHA256 {
 			return in.Path, err
@@ -187,8 +241,16 @@ func copyTree(src, dst string, names []string) error {
 		return err
 	}
 	for _, n := range names {
+		if err := realDirs(src, n); errors.Is(err, os.ErrNotExist) {
+			continue
+		} else if err != nil {
+			return err
+		}
 		if _, err := os.Lstat(filepath.Join(src, n)); errors.Is(err, os.ErrNotExist) {
 			continue
+		}
+		if err := os.MkdirAll(filepath.Join(dst, filepath.Dir(n)), 0o700); err != nil {
+			return err
 		}
 		if _, _, err := copyFile(filepath.Join(src, n), filepath.Join(dst, n), worker.MaxInputFileBytes); err != nil {
 			return err
@@ -205,6 +267,11 @@ func collect(tree, prefix string, names []string, budget *int64, files map[strin
 	var list []worker.OutputFile
 	for _, n := range names {
 		src := filepath.Join(tree, n)
+		if err := realDirs(tree, n); errors.Is(err, os.ErrNotExist) {
+			continue
+		} else if err != nil {
+			return nil, fmt.Errorf("output %q: %w", n, err)
+		}
 		if _, err := os.Lstat(src); errors.Is(err, os.ErrNotExist) {
 			continue
 		}
@@ -266,6 +333,19 @@ func unexpectedEntries(tree string, allowed []string) ([]string, int, error) {
 		}
 	}
 	return paths, count, nil
+}
+
+// topLevelNames returns the first element of each of the slash-separated paths,
+// without repeats.
+func topLevelNames(paths []string) []string {
+	var out []string
+	for _, p := range paths {
+		first, _, _ := strings.Cut(p, "/")
+		if !contains(out, first) {
+			out = append(out, first)
+		}
+	}
+	return out
 }
 
 func contains(list []string, s string) bool {

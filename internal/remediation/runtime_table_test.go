@@ -69,8 +69,8 @@ func checkDefaultManagers(t *testing.T) {
 			managers = []toolfetch.Manager{toolfetch.ManagerNpm, toolfetch.ManagerPnpm}
 		case worker.KindPython:
 			managers = []toolfetch.Manager{toolfetch.ManagerUv}
-		case worker.KindGolang:
-			// The go command comes with the image.
+		case worker.KindGolang, worker.KindGradle:
+			// The go command and gradle come with the image.
 		default:
 			t.Errorf("%s is of the kind %q, which has no managers listed here", r.ID, r.Kind)
 		}
@@ -144,5 +144,35 @@ func TestANewerSeriesInTheTableIsSelectable(t *testing.T) {
 	}
 	if got, uerr := RequestedRuntimes(ToolSpecInput{Manager: ManagerNpm, Manifest: []byte(npmManifest)}); uerr != nil || got[len(got)-1] != "node27" {
 		t.Errorf("requested = %v %v", got, uerr)
+	}
+}
+
+// The Gradle rows are one for each pair of a version and a JDK, too many for a
+// client each at the start: the runtimes the clients are set up for are the
+// rows of the other kinds, and a Gradle row is looked up when a job names it.
+func TestDefaultRuntimeIDsLeaveOutTheGradleRows(t *testing.T) {
+	gradle := 0
+	for _, r := range worker.Runtimes() {
+		if r.Kind == worker.KindGradle {
+			gradle++
+		}
+	}
+	if gradle == 0 {
+		t.Fatal("the table has no Gradle row")
+	}
+	ids := DefaultRuntimeIDs()
+	for _, id := range ids {
+		if r, ok := worker.LookupRuntime(id); !ok || !r.HasImage() || r.Kind == worker.KindGradle {
+			t.Errorf("%s is among the runtimes with a client", id)
+		}
+	}
+	withImage := 0
+	for _, r := range worker.Runtimes() {
+		if r.HasImage() {
+			withImage++
+		}
+	}
+	if len(ids) != withImage-gradle {
+		t.Errorf("%d ids, want %d", len(ids), withImage-gradle)
 	}
 }

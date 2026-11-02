@@ -121,6 +121,15 @@ func buildKubernetesLanguageConfig(cfg config.Config, log *slog.Logger) *runner.
 	rn, err := kubework.NewRunner(kubework.Config{
 		API: api, Namespace: k.Namespace, ServiceAccount: k.ServiceAccount, PriorityClass: k.PriorityClass,
 		Arch: goarch, ReceiverImage: receiver, Images: images,
+		// The Gradle runtimes are too many to list; the image of one is looked
+		// up when a job asks for it.
+		ImageFor: func(key string) (string, bool) {
+			spec, err := onDemandRuntime(key, "linux/"+goarch)
+			if err != nil {
+				return "", false
+			}
+			return kubernetesWorkImageRef(spec, rc.Worker.Registry), true
+		},
 		Entrypoint: workKubernetesEntrypoint, Env: workEnv, InstanceID: id, SessionID: session,
 		MaxConcurrent: k.MaxConcurrentPods, Limits: limits,
 		MaxResultTarBytes: worker.DefaultResultLimits().MaxTarBytes, Log: log,

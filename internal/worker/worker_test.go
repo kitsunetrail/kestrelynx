@@ -109,6 +109,8 @@ func testRuntime(m Manager) Runtime {
 		id = "python3.13"
 	case KindGolang:
 		id = "golang1.26"
+	case KindGradle:
+		id = "gradle9.8.2-jdk21"
 	}
 	spec, ok := LookupRuntime(id)
 	if !ok {

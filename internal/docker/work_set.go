@@ -21,6 +21,9 @@ var ErrImageUnavailable = workexec.ErrImageUnavailable
 type WorkSet struct {
 	mu      sync.Mutex
 	clients map[string]*setClient
+	// factory makes the client of a runtime key that was not added, when the
+	// first job for it arrives.
+	factory func(key string) (*WorkClient, error)
 }
 
 type setClient struct {
@@ -30,6 +33,16 @@ type setClient struct {
 
 // NewWorkSet returns an empty set.
 func NewWorkSet() *WorkSet { return &WorkSet{clients: map[string]*setClient{}} }
+
+// SetFactory sets how the client of a runtime key that was not added is made.
+// A table with many runtimes of one kind (every pair of a Gradle version and a
+// JDK) has a client made, and an image pulled, only for the ones a job asks
+// for. A key the factory refuses has no client.
+func (s *WorkSet) SetFactory(f func(key string) (*WorkClient, error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.factory = f
+}
 
 // Add registers the client for a runtime key. A key is added once.
 func (s *WorkSet) Add(key string, c *WorkClient) error {
@@ -80,16 +93,50 @@ func (s *WorkSet) CleanupStale(ctx context.Context) (int, error) {
 
 // RunJob runs the job on the client of spec.Runtime.
 func (s *WorkSet) RunJob(ctx context.Context, spec JobSpec) (JobResult, error) {
-	s.mu.Lock()
-	sc, ok := s.clients[spec.Runtime]
-	s.mu.Unlock()
-	if !ok {
-		return JobResult{}, fmt.Errorf("no work client for runtime %q", spec.Runtime)
+	sc, err := s.client(spec.Runtime)
+	if err != nil {
+		return JobResult{}, err
 	}
 	if err := s.ensure(ctx, sc); err != nil {
 		return JobResult{}, fmt.Errorf("%w: %v", ErrImageUnavailable, err)
 	}
 	return sc.client.RunJob(ctx, spec)
+}
+
+// client returns the client of a runtime key, making it with the factory the
+// first time.
+func (s *WorkSet) client(key string) (*setClient, error) {
+	s.mu.Lock()
+	sc, ok := s.clients[key]
+	factory := s.factory
+	s.mu.Unlock()
+	if ok {
+		return sc, nil
+	}
+	if factory == nil {
+		return nil, fmt.Errorf("no work client for runtime %q", key)
+	}
+	c, err := factory(key)
+	if err != nil {
+		return nil, fmt.Errorf("no work client for runtime %q: %w", key, err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sc, ok := s.clients[key]; ok {
+		return sc, nil
+	}
+	if c == nil {
+		return nil, fmt.Errorf("no work client for runtime %q", key)
+	}
+	for _, o := range s.clients {
+		if o.client.cfg.InstanceID != c.cfg.InstanceID {
+			return nil, errors.New("the clients of a work set share one instance id")
+		}
+		break
+	}
+	sc = &setClient{client: c}
+	s.clients[key] = sc
+	return sc, nil
 }
 
 func (s *WorkSet) ensure(ctx context.Context, sc *setClient) error {

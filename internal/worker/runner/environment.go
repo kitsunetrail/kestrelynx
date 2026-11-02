@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -46,6 +47,9 @@ type EnvironmentConfig struct {
 	ArchiveUID uint32
 	// VersionTimeout bounds each of the version checks.
 	VersionTimeout time.Duration
+	// JavaHome is where a Gradle runtime has its JDK; empty means the place in
+	// the official image.
+	JavaHome string
 }
 
 // DefaultEnvironment is the layout inside the work container.
@@ -58,6 +62,12 @@ func DefaultEnvironment() *EnvironmentConfig {
 				{Path: "/var/tmp"},
 				{Path: "/run/lock"},
 				{Path: "/go"},
+				// What the Gradle images need covered: the home of their user,
+				// the volume they declare below it and the directory of their
+				// service manager.
+				{Path: "/home/gradle"},
+				{Path: "/home/gradle/.gradle"},
+				{Path: "/var/lib/pebble/default"},
 				{Path: worker.HomeDir},
 				{Path: worker.ToolsRoot, Exec: true},
 			},
@@ -165,6 +175,8 @@ func (c *Config) checkRuntime(spec worker.RuntimeSpec, job *worker.Job, interp s
 	case worker.KindGolang:
 		want = "go version go" + job.Runtime.Version + " linux/" + runtime.GOARCH
 		got, err = run("version")
+	case worker.KindGradle:
+		return c.checkGradle(spec, job, interp, timeout)
 	default:
 		return fmt.Errorf("the runtime %s is of the unknown kind %q", spec.ID, spec.Kind)
 	}
@@ -183,6 +195,46 @@ func (c *Config) checkRuntime(spec worker.RuntimeSpec, job *worker.Job, interp s
 	}
 	if f := strings.Fields(got); len(f) < 2 || f[0] != "pip" || f[1] != job.Runtime.Pip {
 		return fmt.Errorf("pip reports %q, the job asks for %s", clipVersion(got), job.Runtime.Pip)
+	}
+	return nil
+}
+
+// gradleVersionRE and gradleJVMRE pick the version of Gradle and the JDK out
+// of the output of "gradle --version". Gradle 9 names the JVM that launches it
+// "Launcher JVM", Gradle 8 "JVM".
+var (
+	gradleVersionRE = regexp.MustCompile(`(?m)^Gradle (\S+)\s*$`)
+	gradleJVMRE     = regexp.MustCompile(`(?m)^(?:Launcher )?JVM:\s+(\d+)[.\d_+-]*\s`)
+)
+
+// checkGradle requires gradle to report exactly the version of the job and to
+// run on the JDK of the row.
+func (c *Config) checkGradle(spec worker.RuntimeSpec, job *worker.Job, interp string, timeout time.Duration) error {
+	home := c.Environment.JavaHome
+	if home == "" {
+		home = worker.GradleJavaHome
+	}
+	if st, err := os.Stat(filepath.Join(home, "bin", "java")); err != nil || !st.Mode().IsRegular() {
+		return fmt.Errorf("the JDK of the %s image is not in %s", spec.Label(), home)
+	}
+	// gradle makes its user home on its own, but the cache directory above it
+	// is made here.
+	if err := c.prepareCache(); err != nil {
+		return fmt.Errorf("prepare cache: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	pr := runExe(ctx, c, job.Manager, interp, []string{"gradle", "--version"}, c.TmpDir)
+	if pr.err != nil || pr.timedOut || pr.exitCode != 0 {
+		return fmt.Errorf("gradle --version did not report its version (exit %d)", pr.exitCode)
+	}
+	v := gradleVersionRE.FindStringSubmatch(pr.stdout)
+	if v == nil || v[1] != job.Runtime.Version {
+		return fmt.Errorf("%s reports %q, the job asks for Gradle %s", spec.Label(), clipVersion(strings.TrimSpace(pr.stdout)), job.Runtime.Version)
+	}
+	jvm := gradleJVMRE.FindStringSubmatch(pr.stdout)
+	if jvm == nil || jvm[1] != spec.JDK {
+		return fmt.Errorf("%s runs on another JDK than %s", spec.Label(), spec.JDK)
 	}
 	return nil
 }

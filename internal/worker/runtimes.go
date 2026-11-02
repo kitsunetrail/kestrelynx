@@ -3,6 +3,7 @@ package worker
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -10,7 +11,7 @@ import (
 	"time"
 )
 
-// runtimesJSON is the table of runtimes (official Node.js, Python and Go images)
+// runtimesJSON is the table of runtimes (official Node.js, Python, Go and Gradle images)
 // jobs may run in. It is part of the build: a runtime is selected only when
 // the table pins an image for it.
 //
@@ -24,20 +25,27 @@ const (
 	KindNode   RuntimeKind = "node"
 	KindPython RuntimeKind = "python"
 	KindGolang RuntimeKind = "golang"
+	// KindGradle is one version of Gradle on one JDK, in the official gradle
+	// image of that pair.
+	KindGradle RuntimeKind = "gradle"
 )
 
 // RuntimeSpec is one row of the runtime table.
 type RuntimeSpec struct {
-	// ID names the runtime in a job ("node24", "python3.13", "golang1.26").
+	// ID names the runtime in a job ("node24", "python3.13", "golang1.26",
+	// "gradle9.8.2-jdk21").
 	ID   string      `json:"id"`
 	Kind RuntimeKind `json:"kind"`
-	// Series is the major version of Node.js or the X.Y of Python and Go.
+	// Series is the major version of Node.js and Gradle or the X.Y of Python
+	// and Go.
 	Series string `json:"series"`
-	// Version is the exact Node.js, Python or Go version of the pinned image, and
-	// Pip the version of the pip it carries (Python only). Both are empty for
-	// a runtime that has no image.
+	// Version is the exact Node.js, Python, Go or Gradle version of the pinned
+	// image, and Pip the version of the pip it carries (Python only). Both are
+	// empty for a runtime that has no image.
 	Version string `json:"version,omitempty"`
 	Pip     string `json:"pip,omitempty"`
+	// JDK is the major version of the JDK a Gradle image carries.
+	JDK string `json:"jdk,omitempty"`
 	// Image is the repository of the official image on Docker Hub, Tag the
 	// series tag the table is updated from and ExactTag the tag of the exact
 	// version. IndexDigest is the digest of the image index, and Platforms
@@ -52,11 +60,15 @@ type RuntimeSpec struct {
 	// and that the container covers with a tmpfs of its own.
 	CoveredPaths []string `json:"covered_paths,omitempty"`
 	// VolumesEmpty and Healthcheck record what the image's configuration
-	// holds: no declared volumes, and whether it declares a health check.
-	VolumesEmpty bool `json:"volumes_empty,omitempty"`
-	Healthcheck  bool `json:"healthcheck,omitempty"`
+	// holds: no declared volumes, and whether it declares a health check. An
+	// image that declares volumes lists them in Volumes instead, each also one
+	// of the CoveredPaths, so that the container's own tmpfs takes its place.
+	VolumesEmpty bool     `json:"volumes_empty,omitempty"`
+	Volumes      []string `json:"volumes,omitempty"`
+	Healthcheck  bool     `json:"healthcheck,omitempty"`
 	// Support is the maintenance state and EOL the date support ends (the
-	// first of the month where only the month is published, EOLMonthOnly).
+	// first of the month where only the month is published, EOLMonthOnly). A
+	// Gradle row has neither: Gradle publishes no end of support.
 	Support      string `json:"support"`
 	EOL          string `json:"eol"`
 	EOLMonthOnly bool   `json:"eol_month_only,omitempty"`
@@ -112,11 +124,23 @@ func parseRuntimes(raw []byte) ([]RuntimeSpec, error) {
 			if r.ID != "golang"+r.Series {
 				return nil, fmt.Errorf("runtime %q does not match its series %q", r.ID, r.Series)
 			}
+		case KindGradle:
+			if !ValidGradleVersion(r.Version) || !jdkRe.MatchString(r.JDK) || r.ID != "gradle"+r.Version+"-jdk"+r.JDK ||
+				!strings.HasPrefix(r.Version, r.Series+".") {
+				return nil, fmt.Errorf("runtime %q does not match its Gradle version %q, JDK %q and series %q", r.ID, r.Version, r.JDK, r.Series)
+			}
 		default:
 			return nil, fmt.Errorf("runtime %q has the unknown kind %q", r.ID, r.Kind)
 		}
-		if _, err := time.Parse("2006-01-02", r.EOL); err != nil {
-			return nil, fmt.Errorf("runtime %q: eol %q is not a date", r.ID, r.EOL)
+		if r.Kind != KindGradle {
+			if _, err := time.Parse("2006-01-02", r.EOL); err != nil {
+				return nil, fmt.Errorf("runtime %q: eol %q is not a date", r.ID, r.EOL)
+			}
+		} else if r.EOL != "" || r.Support != "" || r.LTSFrom != "" || r.Pip != "" {
+			return nil, fmt.Errorf("runtime %q: a Gradle row has no end of support, long-term support or pip", r.ID)
+		}
+		if r.Kind != KindGradle && r.JDK != "" {
+			return nil, fmt.Errorf("runtime %q: only a Gradle row has a JDK", r.ID)
 		}
 		if r.LTSFrom != "" {
 			if _, err := time.Parse("2006-01-02", r.LTSFrom); err != nil || r.Kind != KindNode {
@@ -129,7 +153,7 @@ func parseRuntimes(raw []byte) ([]RuntimeSpec, error) {
 			}
 			continue
 		}
-		if !ValidSemver(r.Version) || !strings.HasPrefix(r.Version, r.Series+".") {
+		if r.Kind != KindGradle && (!ValidSemver(r.Version) || !strings.HasPrefix(r.Version, r.Series+".")) {
 			return nil, fmt.Errorf("runtime %q: version %q is not in the series %q", r.ID, r.Version, r.Series)
 		}
 		if r.Kind == KindPython && !ValidPythonVersion(r.Pip) {
@@ -143,13 +167,34 @@ func parseRuntimes(raw []byte) ([]RuntimeSpec, error) {
 				return nil, fmt.Errorf("runtime %q: no valid manifest digest for %s", r.ID, p)
 			}
 		}
-		if len(r.CoveredPaths) == 0 || !r.VolumesEmpty {
+		if len(r.CoveredPaths) == 0 || !volumesRecorded(r) {
 			return nil, fmt.Errorf("runtime %q: its safety record is incomplete", r.ID)
+		}
+		if r.Kind == KindGradle && r.ExactTag != r.Tag {
+			return nil, fmt.Errorf("runtime %q: the tag of a Gradle image names its exact version", r.ID)
 		}
 	}
 	out := append([]RuntimeSpec(nil), t.Runtimes...)
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
+}
+
+// volumesRecorded reports whether the row says what the image does about
+// volumes: it declares none, or it lists the ones it declares and each is
+// covered by a tmpfs of the container.
+func volumesRecorded(r RuntimeSpec) bool {
+	if r.VolumesEmpty {
+		return len(r.Volumes) == 0
+	}
+	if len(r.Volumes) == 0 {
+		return false
+	}
+	for _, v := range r.Volumes {
+		if !contains(r.CoveredPaths, v) {
+			return false
+		}
+	}
+	return true
 }
 
 // Runtimes returns every row of the table, ordered by id.
@@ -185,6 +230,8 @@ func (r RuntimeSpec) VersionEnv() string {
 		return "PYTHON_VERSION"
 	case KindGolang:
 		return "GOLANG_VERSION"
+	case KindGradle:
+		return "GRADLE_VERSION"
 	}
 	return ""
 }
@@ -199,6 +246,8 @@ func (r RuntimeSpec) Interpreter() string {
 		return "/usr/local/bin/" + r.ID
 	case KindGolang:
 		return "/usr/local/go/bin/go"
+	case KindGradle:
+		return GradleExecutable
 	}
 	return ""
 }
@@ -213,9 +262,18 @@ func (r RuntimeSpec) InterpreterName() string {
 		return r.ID
 	case KindGolang:
 		return "go"
+	case KindGradle:
+		return "gradle"
 	}
 	return ""
 }
+
+// The places of the official gradle image: the command, and the JDK it
+// carries, which the command finds through JAVA_HOME.
+const (
+	GradleExecutable = "/opt/gradle/bin/gradle"
+	GradleJavaHome   = "/opt/java/openjdk"
+)
 
 // EOLDate is the date support for the runtime ends.
 func (r RuntimeSpec) EOLDate() time.Time {
@@ -225,6 +283,9 @@ func (r RuntimeSpec) EOLDate() time.Time {
 
 // EndOfLife reports whether the date of now is past the end of support.
 func (r RuntimeSpec) EndOfLife(now time.Time) bool {
+	if r.EOL == "" {
+		return false
+	}
 	y, m, d := now.UTC().Date()
 	today := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 	return today.After(r.EOLDate())
@@ -296,6 +357,8 @@ func (r RuntimeSpec) Label() string {
 		return "Python " + r.Series
 	case KindGolang:
 		return "Go " + r.Series
+	case KindGradle:
+		return "Gradle " + r.Version + " on JDK " + r.JDK
 	}
 	return string(r.Kind) + " " + r.Series
 }
@@ -315,6 +378,51 @@ func KindFor(m Manager) RuntimeKind {
 		return KindPython
 	case ManagerGo:
 		return KindGolang
+	case ManagerGradle:
+		return KindGradle
 	}
 	return ""
+}
+
+// IsTestedOn reports whether an integration test has run the row's image on
+// the platform (such as linux/amd64): the platform's manifest digest is
+// recorded and is the one the row pins. A run on another platform does not
+// count.
+func (r RuntimeSpec) IsTestedOn(platform string) bool {
+	d := r.Tested[platform]
+	return d != "" && r.Platforms[platform] == d
+}
+
+// Why a Gradle runtime was not found.
+var (
+	// ErrGradleVersionUnsupported: the table has no tested image for the
+	// version of Gradle on any JDK.
+	ErrGradleVersionUnsupported = errors.New("no runtime for this version of Gradle")
+	// ErrGradleToolchainUnsupported: the table has tested images for the
+	// version of Gradle, but none on this JDK.
+	ErrGradleToolchainUnsupported = errors.New("no runtime for this version of Gradle on this JDK")
+)
+
+// FindGradleRuntime returns the row for exactly this version of Gradle on this
+// major version of the JDK, for jobs on the platform. Only a row that has an
+// image and has been run by an integration test on that platform is trusted:
+// of the rows the table lists for the compatible pairs, the ones nobody ran
+// there are not found. The error is
+// ErrGradleVersionUnsupported when no trusted row has the version and
+// ErrGradleToolchainUnsupported when some do but none has the JDK.
+func FindGradleRuntime(version string, jdk int, platform string) (RuntimeSpec, error) {
+	known := false
+	for _, r := range runtimeSpecs {
+		if r.Kind != KindGradle || !r.HasImage() || !r.IsTestedOn(platform) || r.Version != version {
+			continue
+		}
+		known = true
+		if r.JDK == strconv.Itoa(jdk) {
+			return r, nil
+		}
+	}
+	if known {
+		return RuntimeSpec{}, ErrGradleToolchainUnsupported
+	}
+	return RuntimeSpec{}, ErrGradleVersionUnsupported
 }

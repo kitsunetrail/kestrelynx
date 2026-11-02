@@ -2,6 +2,7 @@ package worker
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +46,18 @@ func TestRuntimeTableIsConsistent(t *testing.T) {
 				r.Image != "golang" || r.Label() != "Go "+r.Series || !slices.Contains(r.CoveredPaths, "/go") {
 				t.Errorf("%s: %+v", r.ID, r)
 			}
+		case KindGradle:
+			if r.VersionEnv() != "GRADLE_VERSION" || r.Interpreter() != GradleExecutable || r.InterpreterName() != "gradle" || r.Pip != "" ||
+				r.Image != "gradle" || r.ID != "gradle"+r.Version+"-jdk"+r.JDK || r.Tag != r.Version+"-jdk"+r.JDK || r.Tag != r.ExactTag ||
+				r.EOL != "" || r.Support != "" || r.EndOfLife(time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)) {
+				t.Errorf("%s: %+v", r.ID, r)
+			}
+			if !gradleRunsOn(r.Version, r.JDK) {
+				t.Errorf("%s: Gradle %s does not run on JDK %s", r.ID, r.Version, r.JDK)
+			}
+			if !slices.Contains(r.Volumes, "/home/gradle/.gradle") || !slices.Contains(r.CoveredPaths, "/home/gradle") {
+				t.Errorf("%s: volumes %v, covered %v", r.ID, r.Volumes, r.CoveredPaths)
+			}
 		default:
 			t.Errorf("%s: unexpected kind %q", r.ID, r.Kind)
 		}
@@ -71,6 +84,26 @@ func TestRuntimeTableIsConsistent(t *testing.T) {
 	if len(specs) < 11 {
 		t.Errorf("%d rows", len(specs))
 	}
+}
+
+// gradleRunsOn is Gradle's compatibility matrix for running Gradle itself: JDK
+// 17 from Gradle 8.0, JDK 21 from 8.5 and JDK 25 from 9.1.0.
+func gradleRunsOn(version, jdk string) bool {
+	var v [3]int
+	for i, p := range strings.Split(version, ".") {
+		v[i], _ = strconv.Atoi(p)
+	}
+	least := map[string][3]int{"17": {8, 0, 0}, "21": {8, 5, 0}, "25": {9, 1, 0}}
+	l, ok := least[jdk]
+	if !ok {
+		return false
+	}
+	for i := range v {
+		if v[i] != l[i] {
+			return v[i] > l[i]
+		}
+	}
+	return true
 }
 
 func TestParseRuntimesRejects(t *testing.T) {

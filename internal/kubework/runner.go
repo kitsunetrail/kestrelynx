@@ -47,7 +47,12 @@ type Config struct {
 	Arch          string
 	ReceiverImage string
 	// Images maps a runtime key to its work image, "repository@sha256:...".
-	Images     map[string]string
+	Images map[string]string
+	// ImageFor, when set, gives the image of a runtime key that Images does
+	// not list. A table with many runtimes of one kind (every pair of a
+	// Gradle version and a JDK) is not listed whole; the image of one is
+	// looked up when a job asks for it.
+	ImageFor   func(runtime string) (string, bool)
 	Entrypoint []string
 	Env        []string
 	InstanceID string
@@ -205,6 +210,9 @@ func unavailable(manual bool, reason, format string, args ...any) *workexec.Unav
 // block the update stage decodes. The Pod is deleted whatever happens.
 func (r *Runner) RunJob(ctx context.Context, spec workexec.JobSpec) (res workexec.JobResult, err error) {
 	image, ok := r.cfg.Images[spec.Runtime]
+	if !ok && r.cfg.ImageFor != nil {
+		image, ok = r.cfg.ImageFor(spec.Runtime)
+	}
 	if !ok {
 		return workexec.JobResult{}, fmt.Errorf("no work image for runtime %q", spec.Runtime)
 	}

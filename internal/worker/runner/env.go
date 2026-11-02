@@ -106,6 +106,14 @@ func (c *Config) childEnv(m worker.Manager) []string {
 		env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
 		env["PYTHONDONTWRITEBYTECODE"] = "1"
 		env["PYTHONNOUSERSITE"] = "1"
+	case worker.ManagerGradle:
+		// The gradle of the image runs without a daemon, with the JDK of the
+		// image and with its user home, the cache of its downloads and its
+		// settings in the tmpfs, so that no init script or property of the
+		// image's user is read. Nothing else reaches it: no GRADLE_OPTS,
+		// JAVA_OPTS or proxy setting.
+		env["JAVA_HOME"] = worker.GradleJavaHome
+		env["GRADLE_USER_HOME"] = filepath.Join(cache, "gradle")
 	case worker.ManagerGo:
 		// Only these go settings reach the command: modules come from the
 		// public proxy and are checked against the public checksum database,

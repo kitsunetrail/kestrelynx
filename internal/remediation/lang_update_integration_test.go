@@ -419,7 +419,9 @@ func TestIntegrationLangUpdate(t *testing.T) {
 	// have run and passed here; one that did not fails the test (and so the
 	// table update), whatever the reason.
 	for _, r := range worker.Runtimes() {
-		if r.HasImage() && !r.EndOfLife(now) && !ran[r.ID] {
+		// A Gradle row is one of many pairs of a version and a JDK; the ones its
+		// own integration test runs are recorded by that test.
+		if r.HasImage() && r.Kind != worker.KindGradle && !r.EndOfLife(now) && !ran[r.ID] {
 			t.Errorf("the runtime %s is in the table and in support, and no case ran in it and passed", r.ID)
 		}
 	}

@@ -41,12 +41,14 @@ const podSecurityMark = `violates PodSecurity "restricted:`
 type expectKind int
 
 const (
-	expectRule    expectKind = iota // refused by the policy's rule
-	expectAnyRule                   // refused by the policy, by any rule
-	expectPodSec                    // refused by Pod Security
+	expectRule     expectKind = iota // refused by the policy's rule
+	expectAnyRule                    // refused by the policy, by any rule
+	expectPodSec                     // refused by Pod Security
+	expectAccepted                   // a right Pod of another shape, accepted
 )
 
-// probe is a right Pod with one thing wrong.
+// probe is a right Pod with one thing wrong, or, for expectAccepted, a right
+// Pod of another shape.
 type probe struct {
 	// id names the probe; for expectRule it is also the rule's id.
 	id     string
@@ -65,6 +67,20 @@ func resourcesOf(c pm) pm { return c["resources"].(pm) }
 
 func deepCopy(m pm) pm { return normalized(m).(pm) }
 
+// withCover adds the volume that covers a declared one, as BuildPod does,
+// mounted at path and read only or not; change, when set, alters the volume.
+func withCover(path string, readOnly bool, change func(vol pm)) func(pm) {
+	return func(p pm) {
+		w, s := workOf(p), specOf(p)
+		w["volumeMounts"] = append(w["volumeMounts"].([]any), pm{"name": volCover, "mountPath": path, "readOnly": readOnly})
+		vol := pm{"name": volCover, "emptyDir": pm{"medium": "Memory", "sizeLimit": quantity(coverVolumeBytes)}}
+		if change != nil {
+			change(vol)
+		}
+		s["volumes"] = append(s["volumes"].([]any), vol)
+	}
+}
+
 // probes is the list of wrong Pods. Every rule of the policy that can be tried
 // by creating a Pod has one; the rules about changing a placed Pod and about
 // ephemeral containers need a running Pod and are checked in the real cluster
@@ -73,6 +89,8 @@ func deepCopy(m pm) pm { return normalized(m).(pm) }
 // (CheckPod) covers what the policy does not.
 func probes() []probe {
 	return []probe{
+		// The Pod of an image that declares a volume is accepted too.
+		{"cover", expectAccepted, withCover(CoverablePaths[0], true, nil)},
 		{"name", expectRule, func(p pm) { p["metadata"].(pm)["name"] = "kestrelynx-work-other" }},
 		{"labels", expectRule, func(p pm) { labelsOf(p)["extra"] = "x" }},
 		{"metadata", expectRule, func(p pm) { p["metadata"].(pm)["annotations"] = pm{"a": "b"} }},
@@ -119,6 +137,9 @@ func probes() []probe {
 			s["volumes"] = append(s["volumes"].([]any), pm{"name": "extra", "emptyDir": pm{"medium": "Memory", "sizeLimit": "1Mi"}})
 		}},
 		{"mounts", expectRule, func(p pm) { workOf(p)["volumeMounts"].([]any)[0].(pm)["readOnly"] = false }},
+		{"mounts", expectRule, withCover(CoverablePaths[0], false, nil)},
+		{"mounts", expectRule, withCover("/etc/kestrelynx-cover", true, nil)},
+		{"volumes", expectRule, withCover(CoverablePaths[0], true, func(v pm) { delete(v["emptyDir"].(pm), "medium") })},
 		{"resources", expectRule, func(p pm) { delete(resourcesOf(workOf(p))["limits"].(pm), "ephemeral-storage") }},
 		{"workdir", expectRule, func(p pm) { workOf(p)["workingDir"] = "/tmp" }},
 
@@ -213,7 +234,16 @@ func (r *Runner) probeAdmission(ctx context.Context) *workexec.Unavailable {
 	for _, pr := range probes() {
 		pod := deepCopy(good)
 		pr.mutate(pod)
-		_, err := r.cfg.API.CreatePod(ctx, pod, true)
+		got, err := r.cfg.API.CreatePod(ctx, pod, true)
+		if pr.expect == expectAccepted {
+			if err != nil {
+				return unavailable(true, ReasonAdmissionUnverified, "the right Pod with the %q change was not accepted in a dry run: %s", pr.id, clip(err.Error(), 300))
+			}
+			if _, err := CheckPod(pod, got, false, ""); err != nil {
+				return unavailable(true, ReasonAdmissionUnverified, "the server changes Pods in a way not allowed for: %v", err)
+			}
+			continue
+		}
 		var ae *APIError
 		if !errors.As(err, &ae) {
 			if err == nil {

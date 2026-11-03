@@ -17,8 +17,9 @@ import (
 // place of the Docker ones. The layout differs: the root filesystem is read
 // only, /work is a read-only mount of a memory volume that another container
 // (uid WorkUID) filled, the scratch directories are memory volumes whose mount
-// options the Pod cannot set (they carry no nosuid, nodev or noexec), and the
-// kubelet bind-mounts the termination message file. The check is not looser
+// options the Pod cannot set (they carry no nosuid, nodev or noexec), a volume
+// the image declares is covered by an empty memory volume mounted read only,
+// and the kubelet bind-mounts the termination message file. The check is not looser
 // where it can be strict: it opens the paths that must not be reachable and
 // tries the writes that must fail.
 type KubernetesCheck struct {
@@ -30,6 +31,9 @@ type KubernetesCheck struct {
 	// file at. They may be mounts, and the job user must not be able to open
 	// them.
 	TerminationPaths []string
+	// CoverPaths are the volumes an image may declare. Each may be a
+	// read-only memory volume with a size limit, and nothing else.
+	CoverPaths []string
 	// DefaultTerminationPath is the kubelet's default, which must not exist.
 	DefaultTerminationPath string
 	// TokenDir is where a service account token would be; it must not exist.
@@ -82,16 +86,20 @@ func (osProbe) CanCreate(p string) bool {
 func DefaultKubernetesCheck() *KubernetesCheck {
 	return &KubernetesCheck{
 		WorkPath: worker.WorkDir, WorkUID: worker.ReceiverUID,
-		TerminationPaths:       []string{worker.TerminationDir + "/work"},
+		TerminationPaths: []string{worker.TerminationDir + "/work"},
+		// The volume the Gradle images declare.
+		CoverPaths:             []string{"/home/gradle/.gradle"},
 		DefaultTerminationPath: "/dev/termination-log",
 		TokenDir:               "/var/run/secrets/kubernetes.io",
-		WriteProbes:            []string{"/.kestrelynx-selfcheck", worker.WorkDir + "/.kestrelynx-selfcheck"},
+		WriteProbes: []string{"/.kestrelynx-selfcheck", worker.WorkDir + "/.kestrelynx-selfcheck",
+			"/home/gradle/.gradle/.kestrelynx-selfcheck"},
 	}
 }
 
 // checkKubernetesMounts is checkMounts for a work Pod: the root filesystem is
 // read only; the only other mounts are the engine's, the read-only input, the
-// scratch memory volumes and the termination message file. It returns the
+// scratch memory volumes, the covers of declared volumes and the termination
+// message file. It returns the
 // mount points the walk leaves out.
 func (c *SelfCheckConfig) checkKubernetesMounts(mounts []mountEntry) (map[string]bool, error) {
 	k := c.Kubernetes
@@ -111,6 +119,11 @@ func (c *SelfCheckConfig) checkKubernetesMounts(mounts []mountEntry) (map[string
 		case underPrefixAny(m.point, systemMountPrefixes):
 		case containsString(systemFileMounts, m.point):
 		case m.point == k.WorkPath:
+			if m.fstype != "tmpfs" || !hasOpt(m.options, "ro") || !hasOptPrefix(m.super, "size=") {
+				return nil, fmt.Errorf("%s is not a read-only memory volume with a size limit", m.point)
+			}
+			skip[m.point] = true
+		case containsString(k.CoverPaths, m.point):
 			if m.fstype != "tmpfs" || !hasOpt(m.options, "ro") || !hasOptPrefix(m.super, "size=") {
 				return nil, fmt.Errorf("%s is not a read-only memory volume with a size limit", m.point)
 			}

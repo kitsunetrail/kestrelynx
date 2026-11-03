@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -56,7 +57,18 @@ const (
 	volHome  = "home"
 	volTools = "tools"
 	volShm   = "shm"
+	volCover = "cover"
 )
+
+// CoverablePaths are the paths a work image may declare as a volume: the
+// Gradle images declare the Gradle home of their user. The container runtime
+// would make a directory on the node's disk for it, writable and without a
+// size limit, so the Pod covers it with an empty memory volume mounted read
+// only. The admission policy lists the same paths.
+var CoverablePaths = []string{"/home/gradle/.gradle"}
+
+// coverVolumeBytes is the size of the volume that covers a declared one.
+const coverVolumeBytes = 1 << 20
 
 var (
 	// nameRE is the shape of a work Pod's name.
@@ -94,6 +106,9 @@ type Params struct {
 	// ReceiverImage and WorkImage are references with a digest.
 	ReceiverImage string
 	WorkImage     string
+	// Cover is the volume the work image declares, one of CoverablePaths, or
+	// empty when it declares none.
+	Cover string
 	// Entrypoint is the command of the work container, Env its complete
 	// environment ("KEY=value").
 	Entrypoint []string
@@ -112,6 +127,8 @@ func (p Params) Validate() error {
 		return errors.New("the instance or session identifier of a work Pod is malformed")
 	case !strings.Contains(p.ReceiverImage, "@sha256:") || !strings.Contains(p.WorkImage, "@sha256:"):
 		return errors.New("a work Pod's images are pinned by digest")
+	case p.Cover != "" && !slices.Contains(CoverablePaths, p.Cover):
+		return fmt.Errorf("the work image declares a volume at %s, which a work Pod cannot cover", p.Cover)
 	case len(p.Entrypoint) < 2:
 		return errors.New("a work Pod needs the command of its work container")
 	case p.ActiveDeadlineSeconds <= 0 || p.ActiveDeadlineSeconds > MaxActiveDeadlineSeconds:
@@ -216,6 +233,17 @@ func BuildPod(p Params) map[string]any {
 			map[string]any{"name": volShm, "mountPath": "/dev/shm"},
 		},
 	}
+	volumes := []any{
+		vol(volWork, workVolumeBytes()),
+		vol(volTmp, p.Resources.TmpSizeBytes),
+		vol(volHome, p.Resources.HomeSizeBytes),
+		vol(volTools, p.Resources.ToolsSizeBytes),
+		vol(volShm, p.Resources.ShmSizeBytes),
+	}
+	if p.Cover != "" {
+		work["volumeMounts"] = append(work["volumeMounts"].([]any), map[string]any{"name": volCover, "mountPath": p.Cover, "readOnly": true})
+		volumes = append(volumes, vol(volCover, coverVolumeBytes))
+	}
 	labels := map[string]any{}
 	for k, v := range p.Labels() {
 		labels[k] = v
@@ -235,13 +263,7 @@ func BuildPod(p Params) map[string]any {
 		},
 		"initContainers": []any{receive},
 		"containers":     []any{work},
-		"volumes": []any{
-			vol(volWork, workVolumeBytes()),
-			vol(volTmp, p.Resources.TmpSizeBytes),
-			vol(volHome, p.Resources.HomeSizeBytes),
-			vol(volTools, p.Resources.ToolsSizeBytes),
-			vol(volShm, p.Resources.ShmSizeBytes),
-		},
+		"volumes":        volumes,
 	}
 	return map[string]any{
 		"apiVersion": "v1", "kind": "Pod",

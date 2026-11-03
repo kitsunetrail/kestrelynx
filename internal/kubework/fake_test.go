@@ -47,17 +47,20 @@ type fakeAPI struct {
 	attachErr     error
 
 	// What happened.
-	creates    int
-	reads      int
-	attached   [][]byte
-	deleted    []string
-	deleteUID  []string
-	lastLog    []byte
-	probes     []map[string]any // dry-run creations after the first
-	refuse     func(id string, kind expectKind) *APIError
-	good       map[string]any
-	sealed     []byte
-	attachedAt string
+	creates   int
+	reads     int
+	attached  [][]byte
+	deleted   []string
+	deleteUID []string
+	lastLog   []byte
+	probes    []map[string]any // dry-run creations after the first
+	refuse    func(id string, kind expectKind) *APIError
+	// refuseAccepted refuses the right Pods of other shapes as an older
+	// policy would.
+	refuseAccepted bool
+	good           map[string]any
+	sealed         []byte
+	attachedAt     string
 }
 
 func newFake() *fakeAPI {
@@ -113,6 +116,14 @@ func (f *fakeAPI) dryRun(pod map[string]any) (map[string]any, error) {
 		w, _ := json.Marshal(normalized(want))
 		if !bytes.Equal(got, w) {
 			continue
+		}
+		if pr.expect == expectAccepted {
+			if f.refuseAccepted {
+				return nil, &APIError{Code: 422, Message: refusalPrefix() + "KRW-volumes"}
+			}
+			out := deepCopy(pod)
+			specOf(out)["preemptionPolicy"] = "Never"
+			return out, nil
 		}
 		if f.refuse != nil {
 			if e := f.refuse(pr.id, pr.expect); e != nil {

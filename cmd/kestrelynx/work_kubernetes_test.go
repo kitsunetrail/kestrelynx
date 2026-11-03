@@ -142,3 +142,27 @@ func TestKubernetesLanguageConfigRefusesARuntimeClass(t *testing.T) {
 		t.Errorf("config = %+v", lc)
 	}
 }
+
+// Every volume an image of the table declares is one a work Pod covers, so a
+// row whose image declares another is noticed when the table is updated.
+func TestKubernetesCoversEveryDeclaredVolume(t *testing.T) {
+	covered := 0
+	for _, spec := range worker.Runtimes() {
+		cover, ok := kubernetesCover(spec)
+		if !ok {
+			t.Errorf("%s: the volumes %v cannot be covered in a work Pod", spec.ID, spec.Volumes)
+		}
+		if cover != "" {
+			covered++
+		}
+	}
+	if covered == 0 {
+		t.Error("no row declares a volume; the Gradle rows do")
+	}
+	if _, ok := kubernetesCover(worker.RuntimeSpec{Volumes: []string{"/data"}}); ok {
+		t.Error("a volume outside the list was accepted")
+	}
+	if _, ok := kubernetesCover(worker.RuntimeSpec{Volumes: []string{"/home/gradle/.gradle", "/data"}}); ok {
+		t.Error("two volumes were accepted")
+	}
+}

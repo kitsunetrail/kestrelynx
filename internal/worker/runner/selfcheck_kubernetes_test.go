@@ -58,6 +58,25 @@ func TestKubernetesSelfCheckAcceptsAWorkPod(t *testing.T) {
 	}
 }
 
+// k8sGradleMount is the empty memory volume, mounted read only, that covers
+// the volume a Gradle image declares; k8sGradleDisk is the directory on the
+// node's disk the container runtime mounts there without it.
+const (
+	k8sGradleMount = "11 1 0:31 / /home/gradle/.gradle ro,relatime - tmpfs tmpfs ro,size=1024k\n"
+	k8sGradleDisk  = "11 1 8:1 /var/lib/containerd/x/volumes/y /home/gradle/.gradle rw,relatime - ext4 /dev/sda1 rw\n"
+)
+
+func TestKubernetesSelfCheckAcceptsTheCoverOfADeclaredVolume(t *testing.T) {
+	img := k8sImage()
+	img["/"].children = append(img["/"].children, "home")
+	img["/home"] = &fakeEntry{mode: fs.ModeDir | 0o755, children: []string{"gradle"}}
+	img["/home/gradle"] = &fakeEntry{mode: fs.ModeDir | 0o755, children: []string{".gradle"}}
+	img["/home/gradle/.gradle"] = &fakeEntry{mode: fs.ModeDir | 0o755}
+	if err := k8sCfg(t, k8sMountInfo+k8sGradleMount, img, fakeProbe{}).selfCheck(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestKubernetesSelfCheckRefuses(t *testing.T) {
 	cases := map[string]struct {
 		mounts string
@@ -81,6 +100,10 @@ func TestKubernetesSelfCheckRefuses(t *testing.T) {
 		"work file of root":         {k8sMountInfo, func(f fakeFS) { f["/work/src"].uid = 0 }, fakeProbe{}, "owned by uid"},
 		"work file writable":        {k8sMountInfo, func(f fakeFS) { f["/work/job.json"].writable = true }, fakeProbe{}, "writable"},
 		"work link":                 {k8sMountInfo, func(f fakeFS) { f["/work/job.json"].mode = fs.ModeSymlink | 0o777 }, fakeProbe{}, "link"},
+		"declared volume on disk":   {k8sMountInfo + k8sGradleDisk, nil, fakeProbe{}, "/home/gradle/.gradle is not a read-only memory volume"},
+		"cover writable":            {k8sMountInfo + strings.Replace(k8sGradleMount, "ro,relatime - tmpfs tmpfs ro,", "rw,relatime - tmpfs tmpfs rw,", 1), nil, fakeProbe{}, "read-only memory volume"},
+		"cover without size":        {k8sMountInfo + strings.Replace(k8sGradleMount, "ro,size=1024k", "ro", 1), nil, fakeProbe{}, "read-only memory volume"},
+		"cover creatable":           {k8sMountInfo + k8sGradleMount, nil, fakeProbe{create: map[string]bool{"/home/gradle/.gradle/.kestrelynx-selfcheck": true}}, "can be created"},
 	}
 	for name, c := range cases {
 		img := k8sImage()

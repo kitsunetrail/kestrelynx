@@ -52,7 +52,10 @@ type Config struct {
 	// not list. A table with many runtimes of one kind (every pair of a
 	// Gradle version and a JDK) is not listed whole; the image of one is
 	// looked up when a job asks for it.
-	ImageFor   func(runtime string) (string, bool)
+	ImageFor func(runtime string) (string, bool)
+	// CoverFor gives the volume the work image of a runtime key declares, as
+	// Params.Cover; nil or "" means none.
+	CoverFor   func(runtime string) string
 	Entrypoint []string
 	Env        []string
 	InstanceID string
@@ -132,9 +135,17 @@ func (r *Runner) params(spec workexec.JobSpec, image string) Params {
 	return Params{
 		Namespace: r.cfg.Namespace, Instance: r.cfg.InstanceID, Session: r.cfg.SessionID, JobID: spec.JobID,
 		ServiceAccount: r.cfg.ServiceAccount, PriorityClass: r.cfg.PriorityClass, Arch: r.cfg.Arch,
-		ReceiverImage: r.cfg.ReceiverImage, WorkImage: image, Entrypoint: r.cfg.Entrypoint, Env: r.cfg.Env,
+		ReceiverImage: r.cfg.ReceiverImage, WorkImage: image, Cover: r.cover(spec.Runtime),
+		Entrypoint: r.cfg.Entrypoint, Env: r.cfg.Env,
 		Resources: spec.Resources, ActiveDeadlineSeconds: int64(spec.Timeout/time.Second) + 60,
 	}
+}
+
+func (r *Runner) cover(runtime string) string {
+	if r.cfg.CoverFor == nil {
+		return ""
+	}
+	return r.cfg.CoverFor(runtime)
 }
 
 func (r *Runner) selector() string {

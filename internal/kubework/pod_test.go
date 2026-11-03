@@ -64,6 +64,7 @@ func TestParamsValidate(t *testing.T) {
 		"no command":        func(p *Params) { p.Entrypoint = nil },
 		"deadline too long": func(p *Params) { p.ActiveDeadlineSeconds = MaxActiveDeadlineSeconds + 1 },
 		"no memory":         func(p *Params) { p.Resources.MemoryBytes = 0 },
+		"other cover":       func(p *Params) { p.Cover = "/var/lib/data" },
 	}
 	for name, mutate := range bad {
 		p := testParams()
@@ -74,6 +75,25 @@ func TestParamsValidate(t *testing.T) {
 	}
 	if err := testParams().Validate(); err != nil {
 		t.Errorf("good params: %v", err)
+	}
+}
+
+// The Pod of an image that declares a volume covers it with an empty memory
+// volume mounted read only, the same Pod the admission check tries.
+func TestBuildPodCoversTheDeclaredVolume(t *testing.T) {
+	p := testParams()
+	if n := len(specOf(BuildPod(p))["volumes"].([]any)); n != 5 {
+		t.Fatalf("%d volumes without a cover", n)
+	}
+	p.Cover = CoverablePaths[0]
+	if err := p.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	got := BuildPod(p)
+	want := BuildPod(testParams())
+	withCover(CoverablePaths[0], true, nil)(want)
+	if mustJSON(normalized(got)) != mustJSON(normalized(want)) {
+		t.Errorf("the Pod with a cover differs from the one the admission check tries:\n%s\n%s", mustJSON(got), mustJSON(want))
 	}
 }
 

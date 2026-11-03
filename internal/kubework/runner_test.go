@@ -387,6 +387,9 @@ func TestVerifyAdmission(t *testing.T) {
 	})
 	t.Run("a rule that does not refuse", func(t *testing.T) {
 		for _, pr := range probes() {
+			if pr.expect == expectAccepted {
+				continue
+			}
 			f := newFake()
 			f.refuse = func(id string, _ expectKind) *APIError {
 				if id == pr.id {
@@ -404,6 +407,14 @@ func TestVerifyAdmission(t *testing.T) {
 			if !p.Manual && p.Reason != ReasonAdmissionUnverified {
 				t.Errorf("%s: %+v", pr.id, p)
 			}
+		}
+	})
+	t.Run("a policy that refuses the Pod of an image with a volume", func(t *testing.T) {
+		f := newFake()
+		f.refuseAccepted = true
+		p := testRunner(t, f).VerifyAdmission(context.Background())
+		if p == nil || p.Reason != ReasonAdmissionUnverified || !p.Manual || !strings.Contains(p.Detail, `"cover"`) {
+			t.Fatalf("%+v", p)
 		}
 	})
 	t.Run("a refusal by another rule", func(t *testing.T) {

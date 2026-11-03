@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/kitsunetrail/kestrelynx/internal/config"
@@ -128,7 +129,18 @@ func buildKubernetesLanguageConfig(cfg config.Config, log *slog.Logger) *runner.
 			if err != nil {
 				return "", false
 			}
+			if _, ok := kubernetesCover(spec); !ok {
+				return "", false
+			}
 			return kubernetesWorkImageRef(spec, rc.Worker.Registry), true
+		},
+		CoverFor: func(key string) string {
+			spec, ok := worker.LookupRuntime(key)
+			if !ok {
+				return ""
+			}
+			cover, _ := kubernetesCover(spec)
+			return cover
 		},
 		Entrypoint: workKubernetesEntrypoint, Env: workEnv, InstanceID: id, SessionID: session,
 		MaxConcurrent: k.MaxConcurrentPods, Limits: limits,
@@ -156,6 +168,19 @@ func buildKubernetesLanguageConfig(cfg config.Config, log *slog.Logger) *runner.
 			return newLanguageUpdater(cfg, tools, rn, platform, program, in)
 		},
 	}
+}
+
+// kubernetesCover is the volume the image of a runtime declares, which its work
+// Pods cover with an empty memory volume; ok is false when the image declares
+// more than one or one a work Pod cannot cover.
+func kubernetesCover(spec worker.RuntimeSpec) (cover string, ok bool) {
+	switch len(spec.Volumes) {
+	case 0:
+		return "", true
+	case 1:
+		return spec.Volumes[0], slices.Contains(kubework.CoverablePaths, spec.Volumes[0])
+	}
+	return "", false
 }
 
 // kubernetesWorkImageRef is the reference a work Pod names its image by: always

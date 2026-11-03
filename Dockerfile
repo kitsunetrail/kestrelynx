@@ -36,7 +36,7 @@ RUN CGO_ENABLED=0 go build -trimpath -tags timetzdata \
 
 # Final image is the official Trivy image (Trivy + its DB tooling already on PATH),
 # so KestreLynx shells out to a pinned trivy version (ADR-002). It is Alpine-based.
-FROM aquasec/trivy:0.71.2
+FROM aquasec/trivy:0.76.1
 COPY --from=build /out/kestrelynx /usr/local/bin/kestrelynx
 COPY --from=worker --chmod=0755 /out/libexec/ /usr/local/libexec/kestrelynx/
 # A separate copy, not a symlink or hardlink to /usr/local/bin/kestrelynx:

@@ -11,6 +11,7 @@ import (
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
@@ -67,20 +68,12 @@ func shortDigest(contentID string) string {
 	return hex
 }
 
-// imagesByRef indexes the report's identity inventory by reference, serving
-// two different kinds of lookup that must not be confused:
-//   - Per-entity renderers with an analyze.ImageFindings in hand (imageLabel,
-//     imagePayloads) use it only for the reference's aggregate Ambiguous
-//     status and RegistryDigests — never for IdentityResolved, since that
-//     aggregate would misreport a pinned entity as unresolved whenever a
-//     sibling under the same reference fell back to scanning by reference.
-//     Per-entity resolution is ImageFindings.Pinned's own job.
-//   - Reference-only renderers with nothing but a bare ref string (refLabel:
-//     diff/EOSL/scan-error lines that are reference-keyed by design) have no
-//     per-entity ContentID to fall back on, so the reference's aggregate
-//     IdentityResolved — "did every entity under this ref resolve this
-//     cycle" — is the coarsest signal available and the correct one to use
-//     there.
+// imagesByRef indexes the report's identity inventory by reference. The
+// renderers use it for the reference's aggregate Ambiguous status,
+// RegistryDigests and Containers — never for ConfigIdentityResolved, since that
+// aggregate would misreport a pinned entity as unresolved whenever a sibling
+// under the same reference fell back to scanning by reference. Per-entity
+// resolution is ImageFindings.Pinned's own job.
 //
 // Ambiguous is also computed report-wide here rather than re-derived from the
 // status sections, which — split across Actionable/Watch/WontFix — could miss
@@ -93,21 +86,14 @@ func imagesByRef(r analyze.Report) map[string]analyze.ImageObservation {
 	return out
 }
 
-// imageLabel is the display name for one ImageFindings entry, annotated per
-// the identity model: not pinned this cycle (a reference-fallback scan, or a
-// resolved entity this cycle failed to confirm) gets an explicit warning
-// that the entity actually running there was never confirmed;
-// pinned-but-ambiguous (more than one distinct entity currently running
-// under the same reference) gets the short digest appended so the
-// per-entity sections can be told apart — a registry-kind digest also
-// carries its platform, since unlike a config digest it doesn't pin one on
-// its own. The ordinary single-entity case (the vast majority) renders
-// exactly as before.
-func imageLabel(img analyze.ImageFindings, byRef map[string]analyze.ImageObservation, msg messages) string {
+// imageLabel is the display name for one ImageFindings entry: the reference,
+// with the short digest appended when more than one distinct entity is
+// running under the same reference, so the per-entity sections can be told
+// apart — a registry-kind digest also carries its platform, since unlike a
+// config digest it doesn't pin one on its own.
+func imageLabel(img analyze.ImageFindings, byRef map[string]analyze.ImageObservation) string {
 	switch {
-	case !img.Pinned:
-		return img.Image + " — " + msg.IdentityUnconfirmed
-	case byRef[img.Image].Ambiguous:
+	case byRef[img.Image].Ambiguous && img.Subject.Resolved:
 		digest := shortDigest(img.Subject.Key.Digest.String())
 		if img.Subject.Key.Digest.Kind == inventory.DigestRegistry {
 			digest += " " + platformString(img.Subject.Key.Platform)
@@ -126,47 +112,6 @@ func platformString(p inventory.Platform) string {
 		s += "/" + p.Variant
 	}
 	return s
-}
-
-// refLabel is the reference-level counterpart of imageLabel, for renderers
-// that only ever have a bare reference string — not an analyze.ImageFindings
-// entry with its own ContentID — because they sit downstream of the
-// reference-keyed diff history or the per-reference EOSL/scan-error lists
-// (state.Change.Image, state.Resolved.Image, analyze.ScanError.Image, an EOSL
-// image name: diff history stays reference-keyed on purpose, so per-entity
-// ContentID is not available to restore here). It appends the same warning
-// whenever the reference's identity inventory (analyze.Report.Images, looked
-// up by ref) says at least one entity running under it was unresolved this
-// cycle. Unlike imageLabel it never appends a short digest for an Ambiguous
-// reference: a diff/EOSL/error line is already a union across every entity
-// running under the reference, so there is no single content id to show. A
-// reference absent from byRef — not scanned this cycle, e.g. a Resolved/gone
-// image — is left unannotated: no data is not the same claim as
-// "unconfirmed".
-func refLabel(ref string, byRef map[string]analyze.ImageObservation, msg messages) string {
-	if obs, ok := byRef[ref]; ok && !obs.IdentityResolved {
-		return ref + " — " + msg.IdentityUnconfirmed
-	}
-	return ref
-}
-
-// unresolvedRefsLine is the cross-cutting summary of every reference with an
-// unresolved entity this cycle, each reference escaped.
-func unresolvedRefsLine(r analyze.Report, msg messages) string {
-	var refs []string
-	for _, o := range r.Images {
-		if !o.IdentityResolved {
-			refs = append(refs, o.Ref)
-		}
-	}
-	if len(refs) == 0 {
-		return ""
-	}
-	sort.Strings(refs)
-	for i := range refs {
-		refs[i] = escMrkdwn(refs[i])
-	}
-	return fmt.Sprintf(msg.UnresolvedRefsLine, msg.IdentityUnconfirmed, strings.Join(refs, ", "))
 }
 
 // unconfirmedRefsLine is the summary of every reference whose previous
@@ -285,7 +230,7 @@ const newIDsMax = 3
 // resolvedParts is writeResolved's content as values: the heading count and
 // the list lines, without their trailing newlines. The count is 0 when
 // nothing was resolved.
-func resolvedParts(d state.Diff, byRef map[string]analyze.ImageObservation, msg messages) (int, []string) {
+func resolvedParts(d state.Diff, msg messages) (int, []string) {
 	type pkgKey struct{ image, pkg string }
 	seen := map[pkgKey]bool{}
 	var gone []pkgKey
@@ -321,7 +266,7 @@ func resolvedParts(d state.Diff, byRef map[string]analyze.ImageObservation, msg 
 		lines = append(lines, strings.TrimSuffix(fmt.Sprintf(format, args...), "\n"))
 	}
 	for _, img := range d.ResolvedEOSL {
-		line(msg.BaseOSNoLongerEOL, escMrkdwn(refLabel(img, byRef, msg)))
+		line(msg.BaseOSNoLongerEOL, escMrkdwn(img))
 	}
 	byImage := map[string][]string{}
 	var imgOrder []string
@@ -332,10 +277,10 @@ func resolvedParts(d state.Diff, byRef map[string]analyze.ImageObservation, msg 
 		byImage[k.image] = append(byImage[k.image], escMrkdwn(k.pkg))
 	}
 	for _, img := range imgOrder {
-		line(msg.ResolvedImagePackages, escMrkdwn(refLabel(img, byRef, msg)), strings.Join(byImage[img], ", "))
+		line(msg.ResolvedImagePackages, escMrkdwn(img), strings.Join(byImage[img], ", "))
 	}
 	for _, res := range leftEOL {
-		line(msg.NoLongerEndOfLife, escMrkdwn(refLabel(res.Image, byRef, msg)), escMrkdwn(res.Package))
+		line(msg.NoLongerEndOfLife, escMrkdwn(res.Image), escMrkdwn(res.Package))
 	}
 	return len(gone) + len(leftEOL) + len(d.ResolvedEOSL), lines
 }
@@ -730,7 +675,7 @@ type imagePayload struct {
 	// (single confirmed entity — the ordinary case, or one entry of an
 	// Ambiguous reference); a registry-digest entity never populates it.
 	// IdentityResolved mirrors this entity's own Pinned — never the
-	// reference's aggregate IdentityResolved (analyze.Report.Images), so a
+	// reference's aggregate ConfigIdentityResolved (analyze.Report.Images), so a
 	// pinned entity is never reported as unresolved just because a sibling
 	// under the same reference wasn't. ScanTargetKind names which identity
 	// kind was pinned ("content_id" | "registry_digest"), or "reference" when
@@ -868,8 +813,10 @@ type refPayload struct {
 }
 
 type errorPayload struct {
-	Image string `json:"image"`
-	Error string `json:"error"`
+	Image    string `json:"image"`
+	Error    string `json:"error"`
+	Cause    string `json:"cause"`
+	Registry string `json:"registry,omitempty"`
 }
 
 // BuildWebhookPayload produces the structured JSON payload for the generic
@@ -1182,7 +1129,11 @@ func workloadKindPayload(k inventory.WorkloadKind) string {
 func errorPayloads(errs []analyze.ScanError) []errorPayload {
 	out := make([]errorPayload, 0, len(errs))
 	for _, e := range errs {
-		out = append(out, errorPayload{Image: e.Image, Error: e.Err})
+		cause := string(e.Cause)
+		if cause == "" {
+			cause = string(scanner.CauseUnknown)
+		}
+		out = append(out, errorPayload{Image: e.Image, Error: e.Err, Cause: cause, Registry: e.Registry})
 	}
 	return out
 }

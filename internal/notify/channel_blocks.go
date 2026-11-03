@@ -97,14 +97,9 @@ func footerText(f ChannelFooter, msg messages, lim RenderLimits) string {
 	return ""
 }
 
-// unresolvedNoteHead is what the identity-unconfirmed note is about: the
-// note's own wording up to the reference list. A later message of a long
-// list starts with it.
-func unresolvedNoteHead(msg messages) string {
-	return strings.TrimSuffix(trimNL(fmt.Sprintf(msg.UnresolvedRefsLine, msg.IdentityUnconfirmed, "")), " — ")
-}
-
-// unconfirmedNoteHead is unresolvedNoteHead for the held-findings note.
+// unconfirmedNoteHead is what the held-findings note is about: the note's
+// own wording up to the reference list. A later message of a long list
+// starts with it.
 func unconfirmedNoteHead(msg messages) string {
 	head, _, _ := strings.Cut(msg.UnconfirmedRefsLine, "%s")
 	return strings.TrimSuffix(strings.TrimSpace(head), " —")
@@ -222,7 +217,7 @@ func (v *chView) fullBody(intel bool) {
 				v.l.section(v.rd.lim, lines, false)
 			}
 		}
-		v.segs = triageSegments(r, pv, msg)
+		v.segs = withScanFailedSeg(triageSegments(r, pv, msg), r, msg)
 	} else {
 		p := summarize(r)
 		v.prioritySection(headlineSegments(p, msg))
@@ -244,7 +239,7 @@ func (v *chView) fullBody(intel bool) {
 				v.l.section(v.rd.lim, []string{fmt.Sprintf(trimNL(note), collapsed)}, false)
 			}
 		}()
-		v.segs = nonTriageSegments(r, msg)
+		v.segs = withScanFailedSeg(nonTriageSegments(r, msg), r, msg)
 	}
 	cats()
 
@@ -291,18 +286,11 @@ func (v *chView) intelSection() {
 }
 
 func (v *chView) scanErrorsSection() {
-	lines := []string{trimNL(v.msg.ScanFailuresHeading)}
-	for _, e := range v.r.ScanErrors {
-		lines = append(lines, trimNL(fmt.Sprintf(v.msg.ScanFailureLine, escMrkdwn(refLabel(e.Image, v.byRef, v.msg)), escMrkdwn(e.Err))))
-	}
-	v.l.section(v.rd.lim, lines, false)
+	v.l.section(v.rd.lim, scanFailureLines(v.r, v.byRef, v.msg), false)
 }
 
 // unresolvedNotes emits the cross-cutting identity notes as contexts.
 func (v *chView) unresolvedNotes(tail bool) {
-	if line := unresolvedRefsLine(v.r, v.msg); line != "" {
-		v.l.note(v.rd.lim, unresolvedNoteHead(v.msg), trimNL(line), tail)
-	}
 	if line := unconfirmedRefsLine(v.r, v.msg); line != "" {
 		v.l.note(v.rd.lim, unconfirmedNoteHead(v.msg), trimNL(line), tail)
 	}
@@ -342,7 +330,7 @@ func (v *chView) imageHeadingOf(label string) imageView {
 }
 
 func (v *chView) imageOf(img analyze.ImageFindings, counts bool) imageView {
-	label := imageLabel(img, v.byRef, v.msg)
+	label := imageLabel(img, v.byRef)
 	iv := v.imageHeadingOf(label)
 	if counts {
 		iv.extra = []string{imageEmoji(img) + " " + countsLine(v.msg, img.Counts())}
@@ -413,7 +401,7 @@ func (v *chView) eoslCategory(imgs []string) {
 	}
 	views := make([]imageView, 0, len(imgs))
 	for _, img := range imgs {
-		iv := v.imageHeadingOf(refLabel(img, v.byRef, v.msg))
+		iv := v.imageHeadingOf(img)
 		lines := []string{kv(v.msg.LblStatus, v.msg.CardEOSLStatus)}
 		if n := v.r.FoldedEOLCount(img); n > 0 {
 			lines = append(lines, fmt.Sprintf(v.msg.CardFoldedEOL, n))
@@ -603,7 +591,7 @@ func (v *chView) buildDiff() {
 	} else {
 		newN = v.changes(d.Changes)
 	}
-	resolvedN, resolvedLines := resolvedParts(d, v.byRef, msg)
+	resolvedN, resolvedLines := resolvedParts(d, msg)
 	if resolvedN > 0 {
 		v.l.group()
 		v.l.section(v.rd.lim, append([]string{trimNL(fmt.Sprintf(msg.ResolvedHeading, resolvedN))}, resolvedLines...), false)
@@ -641,7 +629,7 @@ func (v *chView) diffSegs(newN, resolvedN, eolNew, replaced, refChanged int) {
 	if refChanged > 0 {
 		seg = append(seg, fmt.Sprintf(msg.FbSegRefChanged, refChanged))
 	}
-	if n := len(v.r.ScanErrors); n > 0 {
+	if n := scanFailedImages(v.r); n > 0 {
 		seg = append(seg, fmt.Sprintf(msg.FbSegScanFailed, n))
 	}
 	v.segs = seg
@@ -718,7 +706,7 @@ func (v *chView) newEOSLCategory(d state.Diff, eol eolChangeView) {
 	}
 	views := make([]imageView, 0, len(d.NewEOSL))
 	for _, img := range d.NewEOSL {
-		iv := v.imageHeadingOf(refLabel(img, v.byRef, v.msg))
+		iv := v.imageHeadingOf(img)
 		lines := []string{kv(v.msg.LblStatus, v.msg.CardEOSLStatus)}
 		if n := eol.newEOSLNote[img]; n > 0 {
 			lines = append(lines, fmt.Sprintf(v.msg.CardNewEOSLNote, n))
@@ -755,7 +743,7 @@ func (v *chView) eolChangesCategory(eol eolChangeView) int {
 	lastImage := ""
 	for _, c := range rows {
 		if c.Image != lastImage || len(views) == 0 {
-			views = append(views, v.imageHeadingOf(refLabel(c.Image, v.byRef, msg)))
+			views = append(views, v.imageHeadingOf(c.Image))
 			lastImage = c.Image
 		}
 		iv := &views[len(views)-1]
@@ -772,7 +760,7 @@ func (v *chView) eolChangesCategory(eol eolChangeView) int {
 		if f.withNewCVEs > 0 {
 			parts = append(parts, fmt.Sprintf(msg.EOLFoldWithNewCVEs, f.withNewCVEs))
 		}
-		iv := v.imageHeadingOf(refLabel(f.ref, v.byRef, msg))
+		iv := v.imageHeadingOf(f.ref)
 		iv.cards = []cardView{pseudo(strings.Join(parts, ", ") + " (" + msg.CardBaseEOL + ")")}
 		views = append(views, iv)
 	}
@@ -839,7 +827,7 @@ func (v *chView) changeList(visible []visibleChange) int {
 	lastImage := ""
 	for _, vc := range visible {
 		if vc.change.Image != lastImage || len(views) == 0 {
-			views = append(views, v.imageHeadingOf(refLabel(vc.change.Image, v.byRef, v.msg)))
+			views = append(views, v.imageHeadingOf(vc.change.Image))
 			lastImage = vc.change.Image
 		}
 		iv := &views[len(views)-1]

@@ -276,7 +276,7 @@ func TestBuild_InventorySingleResolvedEntity(t *testing.T) {
 	if len(o.ContentIDs) != 1 || o.ContentIDs[0] != contentA {
 		t.Errorf("ContentIDs = %v, want [%s]", o.ContentIDs, contentA)
 	}
-	if !o.IdentityResolved || o.Ambiguous || o.ScanFailed || o.PartialFailure {
+	if !o.ConfigIdentityResolved || o.Ambiguous || o.ScanFailed || o.PartialFailure {
 		t.Errorf("flags = %+v, want resolved/non-ambiguous/non-failed", o)
 	}
 	if len(o.RegistryDigests) != 1 || o.RegistryDigests[0] != "web@sha256:reg1" {
@@ -301,8 +301,8 @@ func TestBuild_InventoryUnresolvedReferenceExcludesFallbackAttributes(t *testing
 	if len(o.RegistryDigests) != 0 {
 		t.Errorf("RegistryDigests = %v, want empty (fallback attributes excluded)", o.RegistryDigests)
 	}
-	if o.IdentityResolved {
-		t.Error("IdentityResolved should be false")
+	if o.ConfigIdentityResolved {
+		t.Error("ConfigIdentityResolved should be false")
 	}
 }
 
@@ -322,8 +322,8 @@ func TestBuild_InventoryAmbiguousReference(t *testing.T) {
 	if len(o.RegistryDigests) != 2 {
 		t.Errorf("RegistryDigests = %v, want union of both entities", o.RegistryDigests)
 	}
-	if !o.IdentityResolved {
-		t.Error("IdentityResolved should be true when every entity resolved")
+	if !o.ConfigIdentityResolved {
+		t.Error("ConfigIdentityResolved should be true when every entity resolved")
 	}
 }
 
@@ -357,8 +357,8 @@ func TestBuild_InventoryPartialFailure(t *testing.T) {
 	if !o.Ambiguous {
 		t.Error("Ambiguous should be true: two distinct verified ContentIDs are running, regardless of scan outcome")
 	}
-	if !o.IdentityResolved {
-		t.Error("IdentityResolved should be true: every entity had a Docker-observed ContentID, independent of scan success")
+	if !o.ConfigIdentityResolved {
+		t.Error("ConfigIdentityResolved should be true: every entity had a Docker-observed ContentID, independent of scan success")
 	}
 	if len(o.RegistryDigests) != 0 {
 		t.Errorf("RegistryDigests = %v, want empty: the failed entity never produced Trivy Metadata", o.RegistryDigests)
@@ -378,8 +378,8 @@ func TestBuild_InventoryFailedResolvedEntityStillContributesIdentity(t *testing.
 	if !o.ScanFailed {
 		t.Error("ScanFailed should be true: the only entity's scan failed")
 	}
-	if !o.IdentityResolved {
-		t.Error("IdentityResolved should be true: Docker still resolved the ContentID even though the scan failed")
+	if !o.ConfigIdentityResolved {
+		t.Error("ConfigIdentityResolved should be true: Docker still resolved the ContentID even though the scan failed")
 	}
 	if len(o.ContentIDs) != 1 || o.ContentIDs[0] != contentA {
 		t.Errorf("ContentIDs = %v, want [%s] even though the scan failed", o.ContentIDs, contentA)
@@ -390,7 +390,7 @@ func TestBuild_InventoryFailedResolvedEntityStillContributesIdentity(t *testing.
 // state.Compute relies on to blank Entry.ContentID: one entity resolves a
 // ContentID and scans fine, a sibling under the same reference never had one
 // (reference-fallback). The reference is not Ambiguous (only one verified
-// ContentID exists) but is not fully IdentityResolved either.
+// ContentID exists) but is not fully ConfigIdentityResolved either.
 func TestBuild_InventoryMixedResolvedAndUnresolvedEntities(t *testing.T) {
 	r := Build([]scanner.ImageScan{
 		resolvedScan("web:1", contentA, nil),
@@ -401,8 +401,8 @@ func TestBuild_InventoryMixedResolvedAndUnresolvedEntities(t *testing.T) {
 	if o.Ambiguous {
 		t.Error("Ambiguous should be false: only one verified ContentID exists")
 	}
-	if o.IdentityResolved {
-		t.Error("IdentityResolved should be false: one entity never resolved a ContentID")
+	if o.ConfigIdentityResolved {
+		t.Error("ConfigIdentityResolved should be false: one entity never resolved a ContentID")
 	}
 	if len(o.ContentIDs) != 1 || o.ContentIDs[0] != contentA {
 		t.Errorf("ContentIDs = %v, want the one verified entity [%s]", o.ContentIDs, contentA)

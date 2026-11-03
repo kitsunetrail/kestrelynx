@@ -86,7 +86,7 @@ func (v *chView) buildThread() {
 	if n := len(r.EOSLImages); n > 0 {
 		views := make([]imageView, 0, n)
 		for _, img := range r.EOSLImages {
-			iv := v.imageHeadingOf(refLabel(img, v.byRef, msg))
+			iv := v.imageHeadingOf(img)
 			lines := []string{kv(msg.LblStatus, msg.CardEOSLStatus)}
 			if k := r.FoldedEOLCount(img); k > 0 {
 				lines = append(lines, fmt.Sprintf(msg.CardFoldedEOL, k))
@@ -146,12 +146,6 @@ func (v *chView) buildThread() {
 		v.l.closeCat()
 		v.l.group()
 		v.l.section(v.rd.lim, []string{trimNL(fmt.Sprintf(msg.MutedLine, n))}, false)
-	}
-	// Same cross-cutting "identity unconfirmed" summary as the channel message.
-	if line := unresolvedRefsLine(r, msg); line != "" {
-		v.l.closeCat()
-		v.l.group()
-		v.l.note(v.rd.lim, unresolvedNoteHead(msg), trimNL(line), false)
 	}
 }
 

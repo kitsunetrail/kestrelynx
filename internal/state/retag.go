@@ -47,7 +47,7 @@ func workloadKeys(containers []inventory.Container) []string {
 // settles what is running under it: the scan succeeded in full, nothing is
 // unconfirmed, and every container resolves to the same single image entity.
 // Resolution is judged per container with inventory.EntityKeyOf (the same
-// rule scan pinning uses) rather than IdentityResolved, which only recognises
+// rule scan pinning uses) rather than ConfigIdentityResolved, which only recognises
 // config digests.
 func entityConfirmed(o analyze.ImageObservation) bool {
 	if o.ScanFailed || o.PartialFailure || o.Unconfirmed || o.Ambiguous || len(o.Containers) == 0 {

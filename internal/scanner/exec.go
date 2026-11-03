@@ -210,6 +210,7 @@ func reconcileTarget(scan ImageScan, target ScanTarget) ImageScan {
 			Subject:    target.Subject,
 			Source:     target.Source,
 			ScannedKey: scan.ScannedKey,
+			Cause:      CauseImageMismatch,
 			Err: fmt.Errorf("trivy scan %s: scanned content %q does not match expected %q",
 				target.Subject.Ref, scan.ScannedKey.Digest.String(), target.Subject.Key.Digest.String()),
 		}
@@ -220,6 +221,7 @@ func reconcileTarget(scan ImageScan, target ScanTarget) ImageScan {
 				Image:   target.Subject.Ref,
 				Subject: target.Subject,
 				Source:  target.Source,
+				Cause:   CauseImageMismatch,
 				Err: fmt.Errorf("trivy scan %s: registry target inconsistent: Subject.Key.Digest %q does not match Registry.Digest %q it was fetched from",
 					target.Subject.Ref, target.Subject.Key.Digest.String(), target.Registry.Digest.String()),
 			}
@@ -230,6 +232,7 @@ func reconcileTarget(scan ImageScan, target ScanTarget) ImageScan {
 				Subject:    target.Subject,
 				Source:     target.Source,
 				ScannedKey: scan.ScannedKey,
+				Cause:      CauseImageMismatch,
 				Err: fmt.Errorf("trivy scan %s: registry digest %s not confirmed by scan metadata (repoDigests=%v, imageConfig platform=%q/%q, want platform %s/%s)",
 					target.Subject.Ref, target.Registry.Digest.String(), scan.RegistryDigests,
 					scan.Platform.OS, scan.Platform.Architecture,
@@ -249,6 +252,18 @@ func reconcileTarget(scan ImageScan, target ScanTarget) ImageScan {
 // pulled) is reported via ImageScan.Err rather than a returned error, so one bad
 // image never aborts a whole run; callers iterate and surface Err per image.
 func (t Trivy) Scan(ctx context.Context, target ScanTarget) (result ImageScan) {
+	// Registered first so that it runs last, on the error as returned.
+	defer func() {
+		if result.Err == nil {
+			return
+		}
+		if result.Cause == "" {
+			result.Cause = classifyFailure(target, result.Err)
+		}
+		if target.Source == SourceRemote {
+			result.RegistryHost = registryHostOf(target)
+		}
+	}()
 	if t.SkipDBUpdate {
 		// Comparison mode runs elsewhere with a clean environment, so the
 		// binary and cache must be absolute and explicit.

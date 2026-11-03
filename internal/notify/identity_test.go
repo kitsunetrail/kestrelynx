@@ -229,10 +229,9 @@ func TestBuildWebhookPayload_ImageIdentityFields(t *testing.T) {
 
 // TestIdentity_ReferenceFallback is the "reference fallback" test: a scan
 // whose Subject never resolved (so it can't be Pinned, and
-// ImageFindings.ContentID() is empty too) must surface that on both delivery
-// paths — an explicit warning on the Slack heading, and
-// scan_target_kind="reference" (identity_resolved=false, content_id omitted)
-// in the webhook payload.
+// ImageFindings.ContentID() is empty too) is shown in Slack under its plain
+// reference, and the webhook payload says so: scan_target_kind="reference"
+// (identity_resolved=false, content_id omitted).
 //
 // The fallback scan still returns a real-looking ScannedKey / RegistryDigests:
 // whatever Trivy happened to resolve on its own when there was no
@@ -254,8 +253,8 @@ func TestIdentity_ReferenceFallback(t *testing.T) {
 	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 
 	out := renderFull(r)
-	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference") {
-		t.Errorf("expected the unresolved-identity warning on the image heading:\n%s", out)
+	if !strings.Contains(out, "*Image: legacy:1*") || strings.Contains(out, "identity unconfirmed") {
+		t.Errorf("expected the plain reference on the image heading:\n%s", out)
 	}
 
 	data, err := json.Marshal(BuildWebhookPayload(r, nil))
@@ -285,12 +284,12 @@ func TestIdentity_ReferenceFallback(t *testing.T) {
 // TestIdentity_MixedResolvedAndFallbackUnderSameRef verifies that
 // identity_resolved/scan_target_kind must be entity-level (this
 // ImageFindings' own ContentID), not the reference's aggregate
-// IdentityResolved. A reference running one entity Docker resolved a
+// ConfigIdentityResolved. A reference running one entity Docker resolved a
 // ContentID for alongside a sibling entity that fell back to reference
-// scanning makes the aggregate analyze.ImageObservation.IdentityResolved
+// scanning makes the aggregate analyze.ImageObservation.ConfigIdentityResolved
 // false for the whole reference — but the resolved entity's own
-// payload/Slack line must still say resolved, and only the fallback
-// entity's line gets the "unconfirmed" treatment.
+// payload entry must still say resolved, and only the fallback entity's
+// entry says unresolved.
 func TestIdentity_MixedResolvedAndFallbackUnderSameRef(t *testing.T) {
 	cid := "sha256:" + strings.Repeat("e", 64)
 	scans := []scanner.ImageScan{
@@ -303,7 +302,7 @@ func TestIdentity_MixedResolvedAndFallbackUnderSameRef(t *testing.T) {
 	}
 	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
 
-	// Sanity-check the premise: the reference's aggregate IdentityResolved is
+	// Sanity-check the premise: the reference's aggregate ConfigIdentityResolved is
 	// false because one of its two entities never resolved.
 	var refObs analyze.ImageObservation
 	for _, o := range r.Images {
@@ -311,24 +310,17 @@ func TestIdentity_MixedResolvedAndFallbackUnderSameRef(t *testing.T) {
 			refObs = o
 		}
 	}
-	if refObs.IdentityResolved {
-		t.Fatal("test premise broken: expected the mixed reference's aggregate IdentityResolved to be false")
+	if refObs.ConfigIdentityResolved {
+		t.Fatal("test premise broken: expected the mixed reference's aggregate ConfigIdentityResolved to be false")
 	}
 
-	// Slack: the inline heading annotation must attach only to the fallback
-	// entity's heading line, not the resolved entity's. The reference-level
-	// cross-cutting summary (the unresolved-refs note) is expected to *also*
-	// mention mixed:1 (it has an unresolved entity) — that doubling-up is
-	// correct, not a bug.
+	// Slack: both entities' headings render plainly (no warning, no digest).
 	out := renderFull(r)
-	if n := strings.Count(out, "mixed:1 — identity unconfirmed: scanned by reference"); n != 1 {
-		t.Errorf("expected the unresolved warning on exactly the fallback entity's heading, got %d:\n%s", n, out)
-	}
 	if !strings.Contains(out, "*Image: mixed:1*\n🔴 CRITICAL 1 / HIGH 0") {
-		t.Errorf("expected the resolved entity's heading to render plainly (no warning, no digest):\n%s", out)
+		t.Errorf("expected the resolved entity's heading to render plainly:\n%s", out)
 	}
-	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — mixed:1") {
-		t.Errorf("expected the cross-cutting unresolved-refs summary to list mixed:1:\n%s", out)
+	if strings.Contains(out, "identity unconfirmed") {
+		t.Errorf("no heading carries an identity warning:\n%s", out)
 	}
 
 	// Webhook: each entity's own payload entry must carry its own verdict.
@@ -374,38 +366,6 @@ func TestIdentity_MixedResolvedAndFallbackUnderSameRef(t *testing.T) {
 	}
 	if fallbackEntry["scan_target_kind"] != "reference" {
 		t.Errorf("fallback entity scan_target_kind = %v, want reference", fallbackEntry["scan_target_kind"])
-	}
-}
-
-// TestChannel_TriageUnresolvedWarning is the same warning wired
-// through the triage-mode act-now bucket (writeActNow), not just the
-// non-triage fixable section.
-func TestChannel_TriageUnresolvedWarning(t *testing.T) {
-	scans := []scanner.ImageScan{{
-		Image: "legacy:1",
-		Findings: []scanner.Finding{
-			{Image: "legacy:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "", Status: scanner.StatusAffected, Severity: scanner.SeverityHigh, VulnID: "CVE-K"},
-		},
-	}}
-	out := renderFull(analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-K": {KEV: true}}), genTime))
-	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference") {
-		t.Errorf("expected the unresolved-identity warning in the triage act-now heading:\n%s", out)
-	}
-}
-
-// TestThread_UnresolvedIdentityWarning wires the same warning
-// through the thread report (threadBucket).
-func TestThread_UnresolvedIdentityWarning(t *testing.T) {
-	scans := []scanner.ImageScan{{
-		Image: "legacy:1",
-		Findings: []scanner.Finding{
-			{Image: "legacy:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
-		},
-	}}
-	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
-	out := renderThread(r, Ages{})
-	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference") {
-		t.Errorf("expected the unresolved-identity warning in the thread report:\n%s", out)
 	}
 }
 
@@ -458,53 +418,7 @@ func TestChannel_SingleEntityNoDigestSuffix(t *testing.T) {
 	}
 }
 
-// --- diff-mode Ref-level identity annotations ---
-//
-// state.Change/state.Resolved only ever carry a bare reference string (diff
-// history stays reference-keyed on purpose), so the per-entity ContentID
-// that imageLabel uses cannot be restored there. refLabel instead annotates
-// using the reference's aggregate analyze.ImageObservation.IdentityResolved:
-// "does any entity currently running under this reference have an
-// unresolved identity this cycle".
-
-// TestChannelDiff_UnresolvedRefAnnotation_Changes covers the Changes
-// heading line for an unresolved reference.
-func TestChannelDiff_UnresolvedRefAnnotation_Changes(t *testing.T) {
-	scan := scanner.ImageScan{Image: "legacy:1", Findings: []scanner.Finding{
-		{Image: "legacy:1", Class: scanner.ClassOS, Package: "openssl", InstalledVer: "1", FixedVer: "2", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
-	}}
-	r := analyze.Build([]scanner.ImageScan{scan}, nil, analyze.Triage{}, genTime)
-	d, _ := state.Compute(state.State{}, r)
-	out := renderDiff(r, d, false, false)
-
-	if !strings.Contains(out, "New since last scan") {
-		t.Fatalf("expected a Changes section:\n%s", out)
-	}
-	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference") {
-		t.Errorf("expected the unresolved warning on the Changes heading line:\n%s", out)
-	}
-}
-
-// TestChannelDiff_UnresolvedRefAnnotation_Resolved covers the
-// Resolved line: a package that disappeared from a still-unresolved
-// reference must carry the warning too.
-func TestChannelDiff_UnresolvedRefAnnotation_Resolved(t *testing.T) {
-	prevState := state.State{Version: 1, Findings: map[string]state.Entry{
-		"legacy:1\topenssl": {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-1"}},
-	}, EOSL: map[string]time.Time{}}
-	// This cycle's scan of the same (still unresolved) reference is clean:
-	// the package resolved, but its identity is still never confirmed.
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, analyze.Triage{}, genTime)
-	d, _ := state.Compute(prevState, r)
-	out := renderDiff(r, d, false, false)
-
-	if !strings.Contains(out, "Resolved since last scan") {
-		t.Fatalf("expected a Resolved section:\n%s", out)
-	}
-	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference: openssl") {
-		t.Errorf("expected the unresolved warning on the Resolved line:\n%s", out)
-	}
-}
+// --- diff-mode reference lines ---
 
 // TestChannelDiff_AmbiguousRefNoDigest: an Ambiguous reference's diff
 // line is a reference-wide union across every entity running there, so it
@@ -538,80 +452,58 @@ func TestChannelDiff_AmbiguousRefNoDigest(t *testing.T) {
 	}
 }
 
-// --- clean/EOSL/scan-error identity coverage ---
+// --- no identity note in Slack ---
 
-// TestChannel_CleanUnresolvedStillWarns is a regression test: a
-// report with zero findings, built entirely from an unresolved
-// (reference-fallback) scan, must not silently say "All clear" with no
-// mention of the unconfirmed identity.
-func TestChannel_CleanUnresolvedStillWarns(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, analyze.Triage{}, genTime)
-	if r.HasIssues() {
-		t.Fatal("test premise broken: expected a clean report with no issues")
+// TestSlack_NoIdentityNote: a reference scanned without a confirmed entity is
+// shown under its plain reference in every view, with no note listing such
+// references: the full, triage and diff channel messages, the all-clear and
+// no-change messages, an EOSL line and the thread report.
+func TestSlack_NoIdentityNote(t *testing.T) {
+	finding := []scanner.Finding{{Image: "legacy:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"}}
+	withFinding := analyze.Build([]scanner.ImageScan{{Image: "legacy:1", Findings: finding}}, nil, analyze.Triage{}, genTime)
+	triaged := analyze.Build([]scanner.ImageScan{{Image: "legacy:1", Findings: finding}}, nil, triageRules(map[string]analyze.Enrichment{"CVE-1": {KEV: true}}), genTime)
+	clean := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, analyze.Triage{}, genTime)
+	eosl := analyze.Build([]scanner.ImageScan{{Image: "legacy:1", OSEOSL: true}}, nil, analyze.Triage{}, genTime)
+	newDiff, _ := state.Compute(state.State{}, withFinding)
+	prevState := state.State{Version: 1, Findings: map[string]state.Entry{
+		"legacy:1\topenssl": {FirstSeen: genTime, Fixable: true, VulnIDs: []string{"CVE-1"}},
+	}, EOSL: map[string]time.Time{}}
+	resolvedDiff, _ := state.Compute(prevState, clean)
+	cleanDiff, _ := state.Compute(state.State{}, clean)
+	outs := map[string]string{
+		"full":          renderFull(withFinding),
+		"full ja":       renderFull(withFinding, LanguageJA),
+		"triage":        renderFull(triaged),
+		"all clear":     renderFull(clean),
+		"eosl":          renderFull(eosl),
+		"diff new":      renderDiff(withFinding, newDiff, false, false),
+		"diff resolved": renderDiff(clean, resolvedDiff, false, false),
+		"diff none":     renderDiff(clean, cleanDiff, false, false),
+		"thread":        renderThread(withFinding, Ages{}),
 	}
-	out := renderFull(r)
-	if !strings.Contains(out, "All clear") {
-		t.Errorf("expected the All clear line to still be present:\n%s", out)
-	}
-	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — legacy:1") {
-		t.Errorf("expected the unresolved-refs summary even on an all-clear report:\n%s", out)
+	for name, out := range outs {
+		if !strings.Contains(out, "legacy:1") && name != "all clear" && name != "diff none" {
+			t.Errorf("%s: the reference is not shown:\n%s", name, out)
+		}
+		for _, bad := range []string{"identity unconfirmed", "実体未確認", "scanned by reference", "参照によるスキャン"} {
+			if strings.Contains(out, bad) {
+				t.Errorf("%s: carries %q:\n%s", name, bad, out)
+			}
+		}
 	}
 }
 
-// TestChannel_TriageCleanUnresolvedStillWarns is the same check with
-// triage on, exercising the channel message's shared (mode-agnostic) All-clear
-// short-circuit.
-func TestChannel_TriageCleanUnresolvedStillWarns(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, triageRules(nil), genTime)
-	out := renderFull(r)
-	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — legacy:1") {
-		t.Errorf("expected the unresolved-refs summary in triage mode too:\n%s", out)
-	}
-}
-
-// TestChannelDiff_CleanUnresolvedStillWarns is the diff-mode
-// (heartbeat / "No changes") counterpart.
-func TestChannelDiff_CleanUnresolvedStillWarns(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1"}}, nil, analyze.Triage{}, genTime)
-	d, _ := state.Compute(state.State{}, r)
-	out := renderDiff(r, d, false, false)
-	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — legacy:1") {
-		t.Errorf("expected the unresolved-refs summary on the diff heartbeat:\n%s", out)
-	}
-}
-
-// TestChannel_EOSLUnresolvedRef: an EOSL base-image warning for an
-// unresolved reference must carry the same annotation inline.
-func TestChannel_EOSLUnresolvedRef(t *testing.T) {
-	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1", OSEOSL: true}}, nil, analyze.Triage{}, genTime)
-	out := renderFull(r)
-	if !strings.Contains(out, "*Image: legacy:1 — identity unconfirmed: scanned by reference*\nStatus: base OS is EOL") {
-		t.Errorf("expected the unresolved warning inline on the EOSL line:\n%s", out)
-	}
-}
-
-// TestChannel_ScanErrorUnresolvedRef: a scan-failure line for an
-// unresolved reference must carry the same annotation inline.
+// TestChannel_ScanErrorUnresolvedRef: a scan-failure line names the image
+// alone, without the identity annotation or the error text.
 func TestChannel_ScanErrorUnresolvedRef(t *testing.T) {
 	r := analyze.Build([]scanner.ImageScan{{Image: "legacy:1", Err: errString("pull failed")}}, nil, analyze.Triage{}, genTime)
 	out := renderFull(r)
-	if !strings.Contains(out, "legacy:1 — identity unconfirmed: scanned by reference — pull failed") {
-		t.Errorf("expected the unresolved warning inline on the scan-error line:\n%s", out)
+	if !strings.Contains(out+"\n", "\n  • legacy:1\n") {
+		t.Errorf("expected the image alone on the scan-failure line:\n%s", out)
 	}
-}
-
-// TestThread_UnresolvedRefsSummarySection wires the same
-// cross-cutting summary into the thread report.
-func TestThread_UnresolvedRefsSummarySection(t *testing.T) {
-	scans := []scanner.ImageScan{{
-		Image: "legacy:1",
-		Findings: []scanner.Finding{
-			{Image: "legacy:1", Class: scanner.ClassOS, Package: "libx", InstalledVer: "1.0", FixedVer: "1.1", Status: scanner.StatusFixed, Severity: scanner.SeverityCritical, VulnID: "CVE-1"},
-		},
-	}}
-	r := analyze.Build(scans, nil, analyze.Triage{}, genTime)
-	out := renderThread(r, Ages{})
-	if !strings.Contains(out, "⚠️ identity unconfirmed: scanned by reference — legacy:1") {
-		t.Errorf("expected the cross-cutting unresolved-refs summary section in the thread report:\n%s", out)
+	for _, bad := range []string{"legacy:1 — identity unconfirmed", "pull failed"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("scan-failure output carries %q:\n%s", bad, out)
+		}
 	}
 }

@@ -98,7 +98,7 @@ func TestImageLabel_AmbiguousRegistryDigestCarriesPlatform(t *testing.T) {
 		Pinned: true,
 	}
 	byRef := map[string]analyze.ImageObservation{"app:1": {Ref: "app:1", Ambiguous: true}}
-	got := imageLabel(img, byRef, enMessages)
+	got := imageLabel(img, byRef)
 	want := "app:1 (" + strings.Repeat("a", 12) + " linux/arm64)"
 	if got != want {
 		t.Errorf("imageLabel = %q, want %q", got, want)

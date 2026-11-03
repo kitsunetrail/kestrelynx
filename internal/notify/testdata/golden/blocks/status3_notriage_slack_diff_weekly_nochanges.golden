@@ -1,5 +1,5 @@
 ===== message 1/1 =====
-TEXT: KestreLynx 2026-06-24 09:00 📋 Weekly full report — everything currently open — ✅ 3 fixable · ℹ️ 3 no fix yet · 🔕 2 with no fix planned for this OS release
+TEXT: KestreLynx 2026-06-24 09:00 📋 Weekly full report — everything currently open — ✅ 3 fixable · ℹ️ 3 no fix yet · 🔕 2 with no fix planned for this OS release · ⚠️ 1 image(s) not scanned
 --- section ---
 🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
 3 images scanned, 2 affected
@@ -61,10 +61,9 @@ Installed: 1.2.13 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
 --- divider ---
 --- section ---
-*⚠️ Scan failures*
-• broken:1 — identity unconfirmed: scanned by reference — pull failed
---- context ---
-⚠️ identity unconfirmed: scanned by reference — broken:1
+*⚠️ 1 image(s) could not be scanned (vulnerabilities not checked)*
+• The cause could not be determined (see the log)
+  • broken:1
 --- section ---
 _1 lower-risk fix(es) summarized._
 --- divider ---

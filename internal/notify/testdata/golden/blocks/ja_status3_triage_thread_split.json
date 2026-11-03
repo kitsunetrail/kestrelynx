@@ -132,30 +132,16 @@
             "text": "⏱ 未解決20日 · 初回検出2026-06-04"
           }
         ]
-      }
-    ]
-  },
-  {
-    "text": "未解決の所見の全体 — 🔕 低優先度",
-    "blocks": [
+      },
+      {
+        "type": "divider"
+      },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "*🔕 低優先度 (4件)* — 悪用の兆候なし"
         }
-      },
-      {
-        "type": "divider"
-      },
-      {
-        "type": "context",
-        "elements": [
-          {
-            "type": "mrkdwn",
-            "text": "⚠️ 実体未確認: 参照によるスキャン — broken:1"
-          }
-        ]
       }
     ]
   }

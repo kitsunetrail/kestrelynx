@@ -77,7 +77,7 @@ Kubernetesでは、必要な一覧の一部だけを取得できた場合も、�
 実体を識別できない場合は、イメージ参照でスキャンします。
 
 参照によるスキャン結果だけでは、稼働中の実体をスキャンしたことは確認できません。
-通知上の注釈は[スキャンの警告](slack-display.md#scan-warnings)を参照してください。
+参照によるスキャンかどうかはSlackには表示せず、Webhookの[イメージの識別情報](webhook-reference.md#image-identity)の`identity_resolved`と`scan_target_kind`で確認できます。
 
 ### スキャン失敗時の扱い {#scan-failures}
 

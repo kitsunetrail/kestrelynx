@@ -55,8 +55,6 @@ type messages struct {
 	RefChangeLine string // "🔄 Image reference updated: %[1]s %[2]s → %[3]s (history carried over)\n" (repository, old tag, new tag)
 
 	// --- identity / unresolved references ---
-	IdentityUnconfirmed string // "identity unconfirmed: scanned by reference"
-	UnresolvedRefsLine  string // "⚠️ %[1]s — %[2]s\n" (IdentityUnconfirmed text, comma-joined refs)
 	UnconfirmedRefsLine string // "⏳ unconfirmed this cycle, holding previous findings — %s\n" (comma-joined refs)
 	// RuntimeUncheckedLine says a language runtime of some images was not
 	// matched against advisories this cycle: "ℹ️ Advisories for %[1]s could not be fetched, so the runtime of %[2]d image(s) was not checked.\n"
@@ -99,8 +97,20 @@ type messages struct {
 	PriorityLine  string // "*Priority:* %s\n" (joined segments)
 
 	// --- scan failures ---
-	ScanFailuresHeading string // "\n*⚠️ Scan failures*\n"
-	ScanFailureLine     string // "• %[1]s — %[2]s\n" (ref, error text)
+	ScanFailuresHeading    string // "\n*⚠️ %d image(s) could not be scanned (vulnerabilities not checked)*\n" (distinct images)
+	ScanFailureCauseLine   string // "• %s\n" (one of the cause texts below)
+	ScanFailureItem        string // "  • %[1]s — %[2]s\n" (workloads, image)
+	ScanFailureItemImage   string // "  • %s\n" (image, when no workload is known)
+	ScanCauseLocalRegistry string // "Images in the local registry (%s) cannot be fetched by KestreLynx" (registry host)
+	ScanCauseRegistryAuth  string // "No valid login for the registry (%s), so the images could not be fetched" (registry host)
+	ScanCauseNotFound      string // "The images were not found in the registry (%s)" (registry host)
+	ScanCauseRateLimited   string // "The registry (%s) refused too many requests, so the images could not be fetched" (registry host)
+	ScanCauseUnreachable   string // "Could not connect to the registry (%s), so the images could not be fetched" (registry host)
+	ScanCauseVulnDB        string // "Could not get the vulnerability database"
+	ScanCauseMismatch      string // "The image scanned did not match the one running"
+	ScanCauseUnknown       string // "The cause could not be determined (see the log)"
+	WorkloadCompose        string // "Compose %s" (project/service)
+	WorkloadContainer      string // "container %s" (container name)
 
 	// --- status sections, triage off ---
 	ActionableTitle     string // "✅ Actionable now (fixed)" (bare title; format.go wraps it "\n*%s*\n", thread.go wraps it "*%s*")
@@ -356,7 +366,7 @@ type messages struct {
 	FbRoleWeekly         string // "📋 Weekly full report — everything currently open"
 	FbSegNew             string // "🆕 %d new"
 	FbSegResolved        string // "✅ %d resolved"
-	FbSegScanFailed      string // "⚠️ %d scan failure(s)"
+	FbSegScanFailed      string // "⚠️ %d image(s) not scanned"
 	FbSegEOLNew          string // "⛔ %d new EOL"
 	FbSegReplaced        string // "🔄 %d image(s) updated"
 	FbSegRefChanged      string // "🔄 %d reference update(s)"
@@ -507,8 +517,6 @@ var enMessages = messages{
 
 	RefChangeLine: "🔄 Image reference updated: %[1]s %[2]s → %[3]s (history carried over)\n",
 
-	IdentityUnconfirmed:  "identity unconfirmed: scanned by reference",
-	UnresolvedRefsLine:   "⚠️ %[1]s — %[2]s\n",
 	UnconfirmedRefsLine:  "⏳ unconfirmed this cycle, holding previous findings — %s\n",
 	RuntimeUncheckedLine: "ℹ️ Advisories for %[1]s could not be fetched, so the runtime of %[2]d image(s) was not checked.\n",
 	RuntimeNameSeparator: ", ",
@@ -543,8 +551,20 @@ var enMessages = messages{
 	SegLow:        "🔕 %d low",
 	PriorityLine:  "*Priority:* %s\n",
 
-	ScanFailuresHeading: "\n*⚠️ Scan failures*\n",
-	ScanFailureLine:     "• %[1]s — %[2]s\n",
+	ScanFailuresHeading:    "\n*⚠️ %d image(s) could not be scanned (vulnerabilities not checked)*\n",
+	ScanFailureCauseLine:   "• %s\n",
+	ScanFailureItem:        "  • %[1]s — %[2]s\n",
+	ScanFailureItemImage:   "  • %s\n",
+	ScanCauseLocalRegistry: "Images in the local registry (%s) cannot be fetched by KestreLynx",
+	ScanCauseRegistryAuth:  "No valid login for the registry (%s), so the images could not be fetched",
+	ScanCauseNotFound:      "The images were not found in the registry (%s)",
+	ScanCauseRateLimited:   "The registry (%s) refused too many requests, so the images could not be fetched",
+	ScanCauseUnreachable:   "Could not connect to the registry (%s), so the images could not be fetched",
+	ScanCauseVulnDB:        "Could not get the vulnerability database",
+	ScanCauseMismatch:      "The image scanned did not match the one running",
+	ScanCauseUnknown:       "The cause could not be determined (see the log)",
+	WorkloadCompose:        "Compose %s",
+	WorkloadContainer:      "container %s",
 
 	ActionableTitle:     "✅ Actionable now (fixed)",
 	WatchSectionTitle:   "ℹ️ No fix yet (affected / waiting on upstream)",
@@ -762,7 +782,7 @@ var enMessages = messages{
 	FbRoleWeekly:         "📋 Weekly full report — everything currently open",
 	FbSegNew:             "🆕 %d new",
 	FbSegResolved:        "✅ %d resolved",
-	FbSegScanFailed:      "⚠️ %d scan failure(s)",
+	FbSegScanFailed:      "⚠️ %d image(s) not scanned",
 	FbSegEOLNew:          "⛔ %d new EOL",
 	FbSegReplaced:        "🔄 %d image(s) updated",
 	FbSegRefChanged:      "🔄 %d reference update(s)",
@@ -901,8 +921,6 @@ var jaMessages = messages{
 
 	RefChangeLine: "🔄 イメージ参照の更新: %[1]s %[2]s → %[3]s(検出履歴を引き継ぎ)\n",
 
-	IdentityUnconfirmed:  "実体未確認: 参照によるスキャン",
-	UnresolvedRefsLine:   "⚠️ %[1]s — %[2]s\n",
 	UnconfirmedRefsLine:  "⏳ 今回は未確認、前回の所見を保持 — %s\n",
 	RuntimeUncheckedLine: "ℹ️ %[1]s の脆弱性情報を取得できなかったため、%[2]d 件のイメージの本体を照合していません。\n",
 	RuntimeNameSeparator: "・",
@@ -937,8 +955,20 @@ var jaMessages = messages{
 	SegLow:        "🔕 低優先度%d件",
 	PriorityLine:  "*優先度:* %s\n",
 
-	ScanFailuresHeading: "\n*⚠️ スキャン失敗*\n",
-	ScanFailureLine:     "• %[1]s — %[2]s\n",
+	ScanFailuresHeading:    "\n*⚠️ スキャンできなかったイメージ %d件（脆弱性は確認できていない）*\n",
+	ScanFailureCauseLine:   "• %s\n",
+	ScanFailureItem:        "  • %[1]s — %[2]s\n",
+	ScanFailureItemImage:   "  • %s\n",
+	ScanCauseLocalRegistry: "ローカルレジストリ（%s）のイメージは KestreLynx から取得できない",
+	ScanCauseRegistryAuth:  "レジストリ（%s）のログイン情報が無い、または違うため、イメージを取得できない",
+	ScanCauseNotFound:      "レジストリ（%s）にイメージが見つからない",
+	ScanCauseRateLimited:   "レジストリ（%s）の取得回数の制限にかかり、イメージを取得できなかった",
+	ScanCauseUnreachable:   "レジストリ（%s）に接続できず、イメージを取得できなかった",
+	ScanCauseVulnDB:        "脆弱性データベースを取得できなかった",
+	ScanCauseMismatch:      "スキャンしたイメージが、動いているイメージと一致しなかった",
+	ScanCauseUnknown:       "原因を分類できなかった（詳細はログ）",
+	WorkloadCompose:        "Compose %s",
+	WorkloadContainer:      "コンテナ %s",
 
 	ActionableTitle:     "✅ 今すぐ対応可能 (fixed)",
 	WatchSectionTitle:   "ℹ️ 修正版なし (affected / 上流の対応待ち)",
@@ -1157,7 +1187,7 @@ var jaMessages = messages{
 	FbRoleWeekly:         "📋 週次全体レポート — 未解決の所見の全体",
 	FbSegNew:             "🆕 新規検出%d件",
 	FbSegResolved:        "✅ 解消%d件",
-	FbSegScanFailed:      "⚠️ スキャン失敗%d件",
+	FbSegScanFailed:      "⚠️ スキャンできなかったイメージ%d件",
 	FbSegEOLNew:          "⛔ 新規EOL%d件",
 	FbSegReplaced:        "🔄 イメージ更新%d件",
 	FbSegRefChanged:      "🔄 参照の更新%d件",

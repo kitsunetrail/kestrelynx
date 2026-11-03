@@ -29,7 +29,7 @@ func TestThread_TriageLayout(t *testing.T) {
 		"📊 *Everything open now — 2026-06-24 09:00*",
 		"*⛔ EOL base images (1)*",
 		"*🚨 ACT NOW (1) — exploited or likely to be*",
-		"*Image: web:1.0 — identity unconfirmed: scanned by reference*",
+		"*Image: web:1.0*",
 		"*◆ openssl*\nInstalled: 3.0.7\nFixed in: 3.0.11",
 		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> · CRITICAL · EPSS 94%\nExploitation: CISA KEV (exploited in the wild)",
 		"⏱ open 3 day(s) · first seen 2026-06-21",
@@ -211,7 +211,7 @@ func TestThread_TriageOffFallback(t *testing.T) {
 	out := renderThread(sampleReport(), Ages{Finding: seenDaysAgo(1)})
 	mustContain := []string{
 		"*✅ Actionable now (fixed)*",
-		"*Image: web:1.0 — identity unconfirmed: scanned by reference*",
+		"*Image: web:1.0*",
 		"🔴", // triage off: no bucket signal, severity emoji stays
 		"*◆ libc-bin*",
 		"*◆ setuptools*", // low-risk fixes are NOT collapsed in the thread

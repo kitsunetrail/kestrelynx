@@ -77,7 +77,7 @@ A result that cannot be verified against the requested identity is treated as a 
 When the identity is unknown, the image is scanned by reference.
 
 A reference scan alone cannot confirm that the running image content was scanned.
-See [Scan warnings](slack-display.md#scan-warnings) for notification annotations.
+Slack does not indicate whether an image is scanned by reference; this information is available in `identity_resolved` and `scan_target_kind` under the webhook's [Image identity](webhook-reference.md#image-identity).
 
 ### Handling scan failures {#scan-failures}
 

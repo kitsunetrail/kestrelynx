@@ -1,5 +1,5 @@
 ===== message 1/1 =====
-TEXT: KestreLynx 2026-06-24 09:00 📋 Weekly full report — everything currently open — 🚨 3 act now · 👀 5 watch
+TEXT: KestreLynx 2026-06-24 09:00 📋 Weekly full report — everything currently open — 🚨 3 act now · 👀 5 watch · ⚠️ 1 image(s) not scanned
 --- section ---
 🛡️ *KestreLynx* — scan results for 2026-06-24 09:00
 3 images scanned, 2 affected
@@ -107,10 +107,9 @@ Installed: 3.0.7 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
 --- divider ---
 --- section ---
-*⚠️ Scan failures*
-• broken:1 — identity unconfirmed: scanned by reference — pull failed
---- context ---
-⚠️ identity unconfirmed: scanned by reference — broken:1
+*⚠️ 1 image(s) could not be scanned (vulnerabilities not checked)*
+• The cause could not be determined (see the log)
+  • broken:1
 --- divider ---
 --- context ---
 📊 Everything open now is in this message's thread ↓

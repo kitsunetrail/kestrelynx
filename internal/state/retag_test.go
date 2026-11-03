@@ -421,7 +421,7 @@ func TestRefChange_TwoRefsMergeIntoOne(t *testing.T) {
 // The Kubernetes adapter reports a running container with a registry digest
 // and the node platform (no config digest), named "namespace/pod/container";
 // its scans are remote and, when pinned, carry a registry-kind Subject.Key.
-// analyze therefore leaves IdentityResolved false for such a reference.
+// analyze therefore leaves ConfigIdentityResolved false for such a reference.
 
 var k8sPlatform = inventory.Platform{OS: "linux", Architecture: "amd64"}
 
@@ -476,8 +476,8 @@ func TestRefChange_KubernetesPinnedCarriesOver(t *testing.T) {
 
 	r2 := buildAt(day2, []scanner.ImageScan{k8sScan(b, 'b', k8sPlatform, true, k8sFinding(b))},
 		k8sCtr(b, 'b', k8sPlatform, "web-2", "app"))
-	if len(r2.Images) != 1 || r2.Images[0].IdentityResolved {
-		t.Fatalf("fixture must reproduce the adapter's IdentityResolved=false, got %+v", r2.Images)
+	if len(r2.Images) != 1 || r2.Images[0].ConfigIdentityResolved {
+		t.Fatalf("fixture must reproduce the adapter's ConfigIdentityResolved=false, got %+v", r2.Images)
 	}
 	d, st2 := Compute(st1, r2)
 	wantKinds(t, "ref changes", refChangePairs(d), a+" -> "+b)

@@ -342,7 +342,8 @@
   "scan_errors": [
     {
       "image": "broken:1",
-      "error": "pull failed"
+      "error": "pull failed",
+      "cause": "unclassified"
     }
   ],
   "diff": {

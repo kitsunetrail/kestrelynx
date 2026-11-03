@@ -50,7 +50,7 @@ See [Configuration](configuration.md) for language settings and their scope.
 | Headings, sections, changes, warnings, runtime usage, and guidance | Displayed in Japanese |
 | CVE IDs, package names, versions, paths, commands, and image names | Original notation preserved |
 | Severities such as `CRITICAL` and `HIGH` | Original notation preserved |
-| Trivy descriptions, scan failure errors, and discussion link labels | Displayed without translation |
+| Trivy descriptions and discussion link labels | Displayed without translation |
 
 ## Section order {#section-order}
 
@@ -71,7 +71,7 @@ Sections without applicable content are omitted.
 | End | Weekly current-state report, or scan failures and current unresolved state |
 
 Unchanged notifications outside the weekly report day show `No changes since last scan.` followed by scan failures and the current unresolved state.
-Identity-unconfirmed and holding annotations follow the unresolved state or full report.
+Holding annotations follow the unresolved state or full report.
 
 With triage enabled, ordinary new or changed findings are ordered by priority, image name, and package name.
 
@@ -459,19 +459,45 @@ Scan, threat intelligence, and Sensor warnings cover different areas.
 
 | Display | Meaning |
 | --- | --- |
-| `⚠️ Scan failures` | Scan failure or digest or platform verification failure |
-| `identity unconfirmed: scanned by reference` | Reference containing an identity that could not be identified by a Docker config digest at discovery |
-| `⚠️ identity unconfirmed: scanned by reference — reference list` | Annotation listing those references |
+| `⚠️ N image(s) could not be scanned (vulnerabilities not checked)` | Number of images with scan failures or digest or platform verification failures |
 | `⏳ unconfirmed this cycle, holding previous findings — reference list` | Kubernetes references containing targets whose identities could not be pinned despite successful scans |
 
-Identity-unconfirmed annotations use discovery information independently of scan results.
-They may list every Kubernetes reference.
+Slack does not indicate whether an image is scanned by reference; this information is available in `identity_resolved` and `scan_target_kind` under the webhook's [Image identity](webhook-reference.md#image-identity).
 
 The holding annotation may also appear for references without previous history.
 References whose scans all failed this cycle are excluded from this holding list.
 
-Slack's identity-unconfirmed annotation and each image's identity verification result in the webhook cover different scopes.
-See [Image identity](webhook-reference.md#image-identity) for the corresponding data and [Failed scans](scan-logic.md#scan-failures) for retention behavior.
+See [Failed scans](scan-logic.md#scan-failures) for retention behavior.
+
+#### Images that could not be scanned {#scan-failure-causes}
+
+Images with the same cause are grouped together, with registry-related causes separated by registry host, and every image is listed as `workload — image name` below its cause.
+When multiple workloads use the same image, each workload appears on a separate line as `workload — image name`.
+
+| Target | Workload notation |
+| --- | --- |
+| Kubernetes | `kind namespace/name`, where kind is `Deployment`, `StatefulSet`, `DaemonSet`, `Job`, `CronJob`, or `Pod` |
+| Compose | `Compose project/service` |
+| Container name is known | `container name` |
+| None is known | Only the image name is shown, listed last within the same cause and registry host group |
+
+In the table, `host` represents the registry host from which the image is fetched.
+
+Causes are determined from the error text, with vulnerability database errors taking precedence.
+For scans that fetch images from a registry, authentication, missing images, request limits, and connection failures are checked in that order.
+
+| Cause display | Display conditions |
+| --- | --- |
+| `Images in the local registry (host) cannot be fetched by KestreLynx` | The registry host is in 127.0.0.0/8, is localhost, or is [::1], and the connection fails |
+| `No valid login for the registry (host), so the images could not be fetched` | The error indicates required authentication, denied access, or login information that is not passed on |
+| `The images were not found in the registry (host)` | The error indicates a missing repository or manifest, or a 404 response |
+| `The registry (host) refused too many requests, so the images could not be fetched` | The error indicates a request limit or a 429 response |
+| `Could not connect to the registry (host), so the images could not be fetched` | For a registry other than a local registry, the error indicates a refused connection, failed name resolution, timeout, unreachable network, connection reset, or similar connection failure |
+| `Could not get the vulnerability database` | The error indicates a failure to download or initialize the vulnerability database |
+| `The image scanned did not match the one running` | The digest or platform of the scan result or fetch target does not match the running image, or the match cannot be confirmed |
+| `The cause could not be determined (see the log)` | The cause cannot be classified, or a registry-related cause has no known registry host |
+
+The original error text remains in the log and the webhook's [`scan_errors`](webhook-reference.md#scan-errors).
 
 ### Threat intelligence warnings {#intel-warnings}
 

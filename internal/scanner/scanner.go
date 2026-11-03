@@ -147,6 +147,12 @@ type ImageScan struct {
 	OSEOSL   bool // base OS is end-of-life: no more security updates
 	Findings []Finding
 	Err      error
+	// Cause is why the scan failed, "" when it did not. RegistryHost is the
+	// registry host a failed scan of a registry was to fetch the image from
+	// ("docker.io" for a reference without a host), "" for a scan of the
+	// local image store or when none can be read.
+	Cause        FailureCause
+	RegistryHost string
 
 	// Identity fields. They describe what was actually scanned, separately
 	// from Image (the display name pinned to the caller's reference). See

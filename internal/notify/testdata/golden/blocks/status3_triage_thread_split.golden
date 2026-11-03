@@ -1,4 +1,4 @@
-===== message 1/3 =====
+===== message 1/2 =====
 TEXT: Everything currently open — 🚨 ACT NOW · web:1.0 +1 more image(s) (2 package(s))
 --- section ---
 📊 *Everything open now — 2026-06-24 09:00*
@@ -33,7 +33,7 @@ References: <https://avd.example/CVE-2031-0006|advisory>
 Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 2/3 =====
+===== message 2/2 =====
 TEXT: Everything currently open — 🚨 ACT NOW (cont.) · api:2.0 +1 more image(s) (2 package(s))
 --- section ---
 *🚨 ACT NOW (3) — exploited or likely to be* _(cont.)_
@@ -62,10 +62,6 @@ Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> · CRITI
 Summary: e2fsprogs: out-of-bounds write
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
-===== message 3/3 =====
-TEXT: Everything currently open — 🔕 LOW
+--- divider ---
 --- section ---
 *🔕 LOW (4)* — no exploitation signal
---- divider ---
---- context ---
-⚠️ identity unconfirmed: scanned by reference — broken:1

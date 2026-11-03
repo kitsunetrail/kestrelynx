@@ -91,7 +91,8 @@ func TestChannel_Sections(t *testing.T) {
 		"e2fsprogs",             // affected
 		"gcc-8-base",            // wont_fix
 		"broken:1",              // scan error
-		"pull failed",
+		"1 image(s) could not be scanned",
+		"The cause could not be determined",
 	}
 	for _, s := range mustContain {
 		if !strings.Contains(out, s) {
@@ -173,7 +174,7 @@ func TestChannelDiff_NewFindings(t *testing.T) {
 		"setuptools",
 		"📌 *Open now:* ⛔ 1 EOL base / CRITICAL 1 / HIGH 3",
 		"broken:1", // scan errors always shown
-		"pull failed",
+		"1 image(s) could not be scanned",
 	}
 	for _, s := range mustContain {
 		if !strings.Contains(out, s) {

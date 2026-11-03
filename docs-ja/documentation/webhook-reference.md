@@ -83,6 +83,21 @@ Node.jsまたはPython本体を照合できなかったイメージは、対応�
 | --- | --- | --- |
 | `image` | string | スキャンに失敗したイメージ参照 |
 | `error` | string | エラー内容 |
+| `cause` | string | 原因 |
+| `registry` | string | 取得元のレジストリのホストで、分からなければ省略 |
+
+| 値 | 意味 |
+| --- | --- |
+| `local_registry` | ローカルレジストリのイメージをKestreLynxから取得できない |
+| `registry_auth` | レジストリのログイン情報が無い、または違うため、イメージを取得できない |
+| `image_not_found` | レジストリにイメージが見つからない |
+| `registry_rate_limited` | レジストリの取得回数の制限にかかり、イメージを取得できない |
+| `registry_unreachable` | レジストリに接続できず、イメージを取得できない |
+| `vulnerability_db` | 脆弱性データベースを取得できない |
+| `image_mismatch` | スキャンしたイメージが、動いているイメージと一致しない |
+| `unclassified` | 原因を分類できない |
+
+`cause`の値に対応する表示と条件は、[スキャンできなかったイメージの表示](slack-display.md#scan-failure-causes)を参照してください。
 
 失敗時の結果の扱いは、[スキャン失敗時の扱い](scan-logic.md#scan-failures)を参照してください。
 
@@ -107,7 +122,6 @@ Node.jsまたはPython本体を照合できなかったイメージは、対応�
 | `severity_counts.UNKNOWN` | integer | UNKNOWN件数（認識できない深刻度を含む）で、`0`なら省略 |
 
 `registry_digests`は同じ参照全体の情報ですが、`identity_resolved`と`scan_target_kind`は各要素の情報です。
-Slackの注釈との対応は、[スキャンの警告](slack-display.md#scan-warnings)を参照してください。
 
 ### コンテナ {#containers}
 

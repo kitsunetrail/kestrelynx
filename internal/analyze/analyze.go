@@ -254,6 +254,14 @@ type RuntimeUncheckedRef struct {
 type ScanError struct {
 	Image string
 	Err   string
+	// Cause is why the scan failed and Registry the registry host the image
+	// was to be fetched from, as the scanner told them ("" when it did not).
+	Cause    scanner.FailureCause
+	Registry string
+	// Subject is the identity the failed scan was asked to confirm, which
+	// tells the containers running the failed image from others running a
+	// different image under the same reference.
+	Subject inventory.ImageSubject
 }
 
 // ImageObservation is the identity inventory for one scanned reference,
@@ -289,12 +297,15 @@ type ImageObservation struct {
 	// set of EntityKeys observed, not just the config-digest subset ContentIDs
 	// projects.
 	Ambiguous bool
-	// IdentityResolved is true when every entity running under Ref had a
-	// Docker-observed ContentID this cycle (false if any entity used the
-	// reference-fallback path, or resolved to a non-config-digest identity).
-	// This is independent of scan success: it reflects what was reported,
-	// not what Trivy managed to scan.
-	IdentityResolved bool
+	// ConfigIdentityResolved is true when every entity running under Ref had a
+	// Docker-observed ContentID (a config digest) this cycle. It is false if
+	// any entity used the reference-fallback path or resolved to a
+	// non-config-digest identity, so it is always false for a Kubernetes
+	// reference, whose entities resolve to a registry digest and platform: it
+	// says nothing of whether such an entity was confirmed, which is
+	// ImageFindings.Pinned's job. This is independent of scan success: it
+	// reflects what was reported, not what Trivy managed to scan.
+	ConfigIdentityResolved bool
 	// ScanFailed is true when every entity running under Ref failed to scan
 	// this cycle (the existing full-failure case: state carries findings over
 	// untouched).
@@ -518,10 +529,10 @@ type obsAcc struct {
 	// narrowed to the config-digest subset contentIDs tracks. For Docker,
 	// every resolved entity is config-kind, so the two sets are in bijection
 	// and Ambiguous is unchanged.
-	entityKeys      map[inventory.EntityKey]bool
-	registryDigests map[string]bool
-	anyUnresolved   bool // some scan target under this ref did not resolve a config-kind entity (tallied regardless of scan success/failure)
-	seenEOSL        bool
+	entityKeys       map[inventory.EntityKey]bool
+	registryDigests  map[string]bool
+	anyWithoutConfig bool // some scan target under this ref did not resolve a config-kind entity (tallied regardless of scan success/failure)
+	seenEOSL         bool
 }
 
 // Build triages and aggregates scan results into a Report. tr supplies the
@@ -556,18 +567,18 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 			} else {
 				// A resolved-but-non-config-digest entity is not the
 				// pre-generalization "ContentID" set's business.
-				a.anyUnresolved = true
+				a.anyWithoutConfig = true
 			}
 		} else {
 			// Reference-fallback identity data describes whatever Trivy
 			// happened to resolve, not a specific running entity, so it never
 			// joins the verified set.
-			a.anyUnresolved = true
+			a.anyWithoutConfig = true
 		}
 
 		if s.Err != nil {
 			a.failed++
-			r.ScanErrors = append(r.ScanErrors, ScanError{Image: s.Image, Err: s.Err.Error()})
+			r.ScanErrors = append(r.ScanErrors, ScanError{Image: s.Image, Err: s.Err.Error(), Cause: s.Cause, Registry: s.RegistryHost, Subject: s.Subject})
 			continue
 		}
 		if !s.Pinned && s.Source == scanner.SourceRemote {
@@ -724,11 +735,11 @@ func buildInventory(obs map[string]*obsAcc, byRef map[string][]inventory.Contain
 			Ambiguous:       len(a.entityKeys) > 1,
 			// Docker-observed, independent of scan success (see the
 			// accumulation loop above) — a scan failure never demotes this.
-			IdentityResolved: a.total > 0 && !a.anyUnresolved,
-			ScanFailed:       a.total > 0 && a.failed == a.total,
-			PartialFailure:   (a.failed > 0 && a.failed < a.total) || a.unconfirmed > 0,
-			Unconfirmed:      a.unconfirmed > 0,
-			Containers:       byRef[ref],
+			ConfigIdentityResolved: a.total > 0 && !a.anyWithoutConfig,
+			ScanFailed:             a.total > 0 && a.failed == a.total,
+			PartialFailure:         (a.failed > 0 && a.failed < a.total) || a.unconfirmed > 0,
+			Unconfirmed:            a.unconfirmed > 0,
+			Containers:             byRef[ref],
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Ref < out[j].Ref })

@@ -83,6 +83,21 @@ Notification and history handling are described in [Unavailable language runtime
 | --- | --- | --- |
 | `image` | string | Image reference whose scan failed. |
 | `error` | string | Error details. |
+| `cause` | string | Cause of the failure. |
+| `registry` | string | Registry host from which the image is fetched; omitted when unknown. |
+
+| Value | Meaning |
+| --- | --- |
+| `local_registry` | Images in the local registry cannot be fetched by KestreLynx. |
+| `registry_auth` | No valid login for the registry, so the images cannot be fetched. |
+| `image_not_found` | The images cannot be found in the registry. |
+| `registry_rate_limited` | The registry's request limit prevents the images from being fetched. |
+| `registry_unreachable` | The registry cannot be reached, so the images cannot be fetched. |
+| `vulnerability_db` | The vulnerability database cannot be retrieved. |
+| `image_mismatch` | The image scanned does not match the one running. |
+| `unclassified` | The cause cannot be classified. |
+
+See [Images that could not be scanned](slack-display.md#scan-failure-causes) for the displays and conditions corresponding to `cause` values.
 
 See [Handling scan failures](scan-logic.md#scan-failures) for how results are handled after a failure.
 
@@ -107,7 +122,6 @@ Each element of `actionable`, `watch`, `wont_fix`, and `eol_packages` represents
 | `severity_counts.UNKNOWN` | integer | UNKNOWN count, including unrecognized severities; omitted when `0`. |
 
 `registry_digests` covers the entire reference, while `identity_resolved` and `scan_target_kind` describe each element.
-See [Scan warnings](slack-display.md#scan-warnings) for the corresponding Slack annotations.
 
 ### Containers {#containers}
 

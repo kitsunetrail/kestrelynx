@@ -1,13 +1,14 @@
 ===== message 1/1 =====
-TEXT: KestreLynx 2026-06-25 09:00 No changes since last scan — ⚠️ 1 scan failure(s)
+TEXT: KestreLynx 2026-06-25 09:00 No changes since last scan — ⚠️ 1 image(s) not scanned
 --- section ---
 🛡️ *KestreLynx* — scan results for 2026-06-25 09:00
 2 images scanned, 1 affected
 No changes since last scan.
 --- divider ---
 --- section ---
-*⚠️ Scan failures*
-• web:1.0 — pull failed
+*⚠️ 1 image(s) could not be scanned (vulnerabilities not checked)*
+• The cause could not be determined (see the log)
+  • web:1.0
 --- divider ---
 --- section ---
 📌 *Open now:* ⛔ 1 EOL base / 🚨 3 act-now / 👀 1 watch / 🔕 3 low

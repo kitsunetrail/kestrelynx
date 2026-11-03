@@ -401,7 +401,7 @@ func TestEscaping_ExternalValuesNeverReachSlackSyntax(t *testing.T) {
 		Severity: scanner.SeverityCritical, VulnID: "CVE-2041-0001", URL: "https://avd.example/x y",
 		Title: "<!channel> & <@U123> &lt;kept&gt;",
 	}}}, goldenContentWeb)
-	failed := scanner.ImageScan{Image: "bad<img>:1", Err: errString("pull failed: a & b <c>")}
+	failed := scanner.ImageScan{Image: "bad<img>:1", Err: errString("pull failed: a & b <c>"), Source: scanner.SourceRemote, Cause: scanner.CauseRegistryAuth, RegistryHost: "reg<&>"}
 	r := analyze.Build([]scanner.ImageScan{scan, failed}, nil, triageRules(enrich), genTime)
 	r.Environment.Name = "prod<&>"
 
@@ -416,12 +416,13 @@ func TestEscaping_ExternalValuesNeverReachSlackSyntax(t *testing.T) {
 
 	for _, want := range []string{
 		"&lt;!channel&gt; &amp; &lt;@U123&gt; &amp;lt;kept&amp;gt;", // a Title is escaped once
-		"*◆ a&lt;b*",                       // package name
-		"Installed: 1&lt;2",                // version
-		"web&lt;1&gt;&amp;co:1",            // image reference
-		"pull failed: a &amp; b &lt;c&gt;", // scan error text
-		"[prod&lt;&amp;&gt;]",              // environment name (fallback)
-		"prod&lt;&amp;&gt;",                // environment name (header)
+		"*◆ a&lt;b*",            // package name
+		"Installed: 1&lt;2",     // version
+		"web&lt;1&gt;&amp;co:1", // image reference
+		"bad&lt;img&gt;:1",      // image of a failed scan
+		"(reg&lt;&amp;&gt;)",    // registry host of a failed scan
+		"[prod&lt;&amp;&gt;]",   // environment name (fallback)
+		"prod&lt;&amp;&gt;",     // environment name (header)
 	} {
 		if !strings.Contains(text+fallback, want) {
 			t.Errorf("escaped text %q not found", want)
@@ -483,11 +484,11 @@ func TestEscaping_GeneratedLiteralsAndLinks(t *testing.T) {
 func TestContextBlocksRespectTheTextLimit(t *testing.T) {
 	r := bigReport(3, "")
 	for i := 0; i < 400; i++ {
-		r.Images = append(r.Images, analyze.ImageObservation{Ref: fmt.Sprintf("registry.example/team/app-%03d:1.0", i)})
+		r.UnconfirmedRefs = append(r.UnconfirmedRefs, fmt.Sprintf("registry.example/team/app-%03d:1.0", i))
 	}
 	footer := ChannelFooter{Kind: FooterLastReport, Permalink: "https://example.slack.com/archives/C1/p1?" + strings.Repeat("a=1&", 1200) + "z=1"}
 	msgs := buildChannelMessages(Message{Report: r}, footer, jaMessages, defaultRenderLimits)
-	checkMessageConstraints(t, "400 unresolved refs", msgs, defaultRenderLimits)
+	checkMessageConstraints(t, "400 held refs", msgs, defaultRenderLimits)
 	notes := 0
 	for _, m := range msgs {
 		for i, b := range m.Blocks {
@@ -694,13 +695,13 @@ func TestEscaping_TriageOffCollapsedNamesAndWeekly(t *testing.T) {
 	}
 }
 
-func TestThreadLongNoteSpillsWithAHeading(t *testing.T) {
+func TestChannelLongNoteSpillsWithAHeading(t *testing.T) {
 	r := bigReport(3, "")
 	for i := 0; i < 400; i++ {
-		r.Images = append(r.Images, analyze.ImageObservation{Ref: fmt.Sprintf("registry.example/team/app-%03d:1.0", i)})
+		r.UnconfirmedRefs = append(r.UnconfirmedRefs, fmt.Sprintf("registry.example/team/app-%03d:1.0", i))
 	}
-	msgs := buildThreadBlockMessages(r, Ages{}, jaMessages, defaultRenderLimits)
-	checkMessageConstraints(t, "thread 400 refs", msgs, defaultRenderLimits)
+	msgs := buildChannelMessages(Message{Report: r}, ChannelFooter{}, jaMessages, defaultRenderLimits)
+	checkMessageConstraints(t, "channel 400 refs", msgs, defaultRenderLimits)
 	all := strings.ReplaceAll(allBlocksText(msgs), "\n", "")
 	for i := 0; i < 400; i++ {
 		if !strings.Contains(all, fmt.Sprintf("app-%03d:1.0", i)) {
@@ -709,9 +710,9 @@ func TestThreadLongNoteSpillsWithAHeading(t *testing.T) {
 	}
 	// With small limits the note must spill across messages, each headed.
 	lim := RenderLimits{MaxBlocks: 50, MaxTextUnits: 3000, MaxMessageUnits: 2500, MaxFallbackUnits: 4000}
-	msgs = buildThreadBlockMessages(r, Ages{}, jaMessages, lim)
-	checkMessageConstraints(t, "thread 400 refs small", msgs, lim)
-	head := unresolvedNoteHead(jaMessages)
+	msgs = buildChannelMessages(Message{Report: r}, ChannelFooter{}, jaMessages, lim)
+	checkMessageConstraints(t, "channel 400 refs small", msgs, lim)
+	head := unconfirmedNoteHead(jaMessages)
 	spilled := 0
 	for _, m := range msgs[1:] {
 		if m.Blocks[0].Kind != BlockSection {

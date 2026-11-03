@@ -497,7 +497,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 	// refContentID holds, for each reference, the single verified ContentID
 	// safe to publish as "the" entity running there this cycle: every entity
 	// under the reference had a Docker-observed ContentID this cycle
-	// (IdentityResolved — independent of scan success), there is exactly one
+	// (ConfigIdentityResolved — independent of scan success), there is exactly one
 	// distinct value among them (not Ambiguous), and the reference did not
 	// (partially) fail to scan. Every other case — Ambiguous, a mix of
 	// resolved and reference-fallback entities, or a (partial) scan failure —
@@ -521,7 +521,7 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		if o.PartialFailure {
 			partiallyFailedRef[o.Ref] = true
 		}
-		if o.IdentityResolved && !o.Ambiguous && !o.ScanFailed && !o.PartialFailure && len(o.ContentIDs) == 1 {
+		if o.ConfigIdentityResolved && !o.Ambiguous && !o.ScanFailed && !o.PartialFailure && len(o.ContentIDs) == 1 {
 			refContentID[o.Ref] = o.ContentIDs[0]
 		}
 	}

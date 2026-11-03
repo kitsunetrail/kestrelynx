@@ -61,6 +61,3 @@ Summary: e2fsprogs: out-of-bounds write
 --- divider ---
 --- section ---
 *🔕 LOW (4)* — no exploitation signal
---- divider ---
---- context ---
-⚠️ identity unconfirmed: scanned by reference — broken:1

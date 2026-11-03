@@ -69,6 +69,7 @@ nav:
       - Runtime usage (experimental): documentation/runtime-usage.md
   - Development:
       - Overview: development/index.md
+      - Gradle remediation pull request development: development/gradle-remediation.md
       - Maven remediation pull request development: development/maven-remediation.md
       - Go modules remediation pull request development: development/go-modules-remediation.md
       - Newer series check development: development/newer-series-check.md

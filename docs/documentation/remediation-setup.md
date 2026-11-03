@@ -106,6 +106,10 @@ For dependency file and Dockerfile settings and restrictions on multiple mapping
 - For Maven, set `dependencies.directory` to the directory containing `pom.xml`
 - For multiple modules, specify the directory containing the root's `pom.xml` from which `modules` can reach each module
 - If `pom.xml` is at the repository root, specify `.`
+- For Gradle, set `dependencies.directory` to the directory containing `gradle.lockfile`, the build script, and settings
+    - Set `lockAllConfigurations()` and `lockMode = LockMode.STRICT` in `dependencyLocking`
+    - If using a catalog, also commit `settings-gradle.lockfile`
+    - See [Gradle dependency files](remediation-reference.md#gradle-inputs) for required files and supported forms
 
 For details on the enablement keys, see [Enablement settings](configuration.md#remediation-enablement).
 
@@ -306,7 +310,7 @@ This update uses only the read-only scanning RBAC.
 See [Helm values PRs](remediation-logic.md#helm-values-prs) for checks across all containers, [Source mappings](configuration.md#remediation-mappings) for configuration constraints, and [Helm values formats](remediation-reference.md#helm-values-formats) for editable inputs.
 ### Kubernetes language-package updates {#kubernetes-language-updates}
 
-npm, pnpm, pip, uv, and Go updates run in disposable Pods that KestreLynx creates in a user-provided work namespace.
+npm, pnpm, pip, uv, Go, and Gradle updates run in disposable Pods that KestreLynx creates in a user-provided work namespace.
 The same Pods also run [re-resolution through dependent packages](remediation-reference.md#dependent-reresolution-limits) for npm, pnpm, and uv.
 
 Maven updates use KestreLynx's edits to `pom.xml` and Trivy checks, so work Pod configuration is not required.
@@ -329,7 +333,7 @@ Adjust the following settings in `deploy/kubernetes/work/` for the installation.
 - Set the RoleBinding's `subjects` in `10-rbac.yaml` to the ServiceAccount name and namespace used by KestreLynx
 - Keep `preemptionPolicy: Never` in `20-priorityclass.yaml`, and match the configuration and `priorityClass` in `52-policy-params.yaml` if renaming it
 - Set `receiverRepository` in `52-policy-params.yaml` to the KestreLynx image repository, `workRepositories` to the official image repositories or configured mirror repositories, and `arch` to the architecture of the KestreLynx Pod and execution nodes
-- The default `workRepositories` are the official `node`, `python`, and `golang` repositories on Docker Hub; when using a mirror, adjust all three to match the download sources
+- The default `workRepositories` are the official `node`, `python`, `golang`, and `gradle` repositories on Docker Hub; when using a mirror, adjust all four to match the download sources
 - Adjust the DNS selectors and excluded address ranges in `40-networkpolicy.yaml` for the cluster's DNS, Pod, Service, and node networks
 - Keep the ValidatingAdmissionPolicy and its binding's `metadata.name` as `kestrelynx-work`, which the verification checks use
 

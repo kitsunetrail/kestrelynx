@@ -83,7 +83,7 @@ KestreLynxは、更新候補を同じ条件で再スキャンして比べ、利�
 - Kustomizeの`images[].newTag`
 - Helmのvaluesのイメージタグ
 - Dockerfileのベースイメージのタグ
-- npm・pnpm・pip・uv・Go・Maven (`pom.xml`)の依存ファイル
+- npm・pnpm・pip・uv・Go・Maven(`pom.xml`)・Gradle(`gradle.lockfile`)の依存ファイル
 
 </div>
 <div markdown>

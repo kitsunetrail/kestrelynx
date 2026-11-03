@@ -16,7 +16,7 @@
 | 言語更新の実行環境 | [対応する実行環境](#supported-runtimes)に記載した系列 |
 | Sensor | 修正計画と修正PRの利用には不要 |
 | Kubernetesの計画 | 配布イメージ・Dockerfileのベースイメージの更新候補、浮動タグの再取得の案内、言語パッケージの更新候補の提示 |
-| KubernetesのPR | プレーンなマニフェストのイメージタグ、Kustomizeの`images[].newTag`、Helmのvaluesのイメージタグ、Dockerfileのベースイメージ、Mavenの`pom.xml`の更新に対応し、npm・pnpm・pip・uv・Goの更新には[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)が必要 |
+| KubernetesのPR | プレーンなマニフェストのイメージタグ、Kustomizeの`images[].newTag`、Helmのvaluesのイメージタグ、Dockerfileのベースイメージ、Mavenの`pom.xml`の更新に対応し、npm・pnpm・pip・uv・Go・Gradleの更新には[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)が必要 |
 
 ### docker runのコンテナ {#docker-run-containers}
 
@@ -45,6 +45,7 @@ containerdで古いイメージが消えた場合は、コンテナを新しい�
 | pip・uvの依存パッケージ | 公開PyPI | 計画の作成から依存ディレクトリの対応付けが必要 |
 | Goの依存モジュール | 公開のGo module proxy (`proxy.golang.org`)と`sum.golang.org` | 計画の作成から依存ディレクトリの対応付けが必要 |
 | Mavenの依存パッケージ (`pom.xml`) | Maven Central | 計画の作成から依存ディレクトリの対応付けが必要 |
+| Gradleの依存パッケージ(`gradle.lockfile`) | Maven Central | 計画の作成から依存ディレクトリの対応付けが必要 |
 
 非公開npmレジストリ・非公開PyPI・非公開Goモジュールは更新対象にできません。
 イメージレジストリの認証は、依存パッケージの取得には使いません。
@@ -357,9 +358,80 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 | 版の出所 | 直書き・プロパティ・親のプロパティの上書き・BOMの版のプロパティ・`dependencyManagement`での固定に対応し、変更する場所を決められない対象は手動対応 |
 
 - Mavenの更新では作業用コンテナ・Podを使わず、KestreLynxが`pom.xml`を書き換える
-- Gradleの依存ファイルは修正PRの対象外
 
 候補と編集方法は[Mavenの候補選定](remediation-logic.md#maven-package-selection)、採用条件は[Mavenの更新結果の検査](remediation-logic.md#maven-update-validation)を参照してください。
+
+### Gradleの依存ファイル {#gradle-inputs}
+
+| 入力 | 対応範囲 |
+| --- | --- |
+| 必須ファイル | 対応付けた依存ディレクトリの`gradle.lockfile`、`build.gradle`または`build.gradle.kts`、`settings.gradle`または`settings.gradle.kts`、`gradle/wrapper/gradle-wrapper.properties` |
+| 任意のファイル | `gradle.properties`・`gradle/libs.versions.toml`・`settings-gradle.lockfile`・`buildscript-gradle.lockfile`を読み、catalogを使う場合は`settings-gradle.lockfile`も必須 |
+| 対象の所見 | 稼働イメージのJavaアーカイブをTrivyが`jar`として検出した所見 |
+| 対象の依存 | `gradle.lockfile`の`compileClasspath`・`runtimeClasspath`・`productionRuntimeClasspath`にある、所見の名前と稼働版が一致する依存 |
+| 取得元 | 依存はMaven Centralのみで、プラグインの取得にはGradle Plugin PortalとMaven Centralを使用 |
+| lockの設定 | `dependencyLocking`に`lockAllConfigurations()`と`lockMode = LockMode.STRICT`をそれぞれ1回書き、lockfileのエントリまたは`empty=`に`compileClasspath`・`runtimeClasspath`があることが必要 |
+| Gradleの版 | wrapperの`distributionUrl`が指す版と同じ版を使用し、URLは`https://services.gradle.org/distributions/gradle-<版>-bin.zip`または`-all.zip`の形式に限定 |
+| JDK | `java.toolchain`の`languageVersion`で指定した版を使用し、宣言がなければ21 |
+| 実行環境の組 | [対応する実行環境](#supported-runtimes)にあるGradleの版・JDK・platformの組に限定 |
+| プロジェクトの構成 | 単一プロジェクトに対応し、`include`・`includeBuild`・`allprojects`・`subprojects`・`buildSrc`・`gradle/dependency-locks`がある場合は手動対応 |
+| スクリプトの選択 | GroovyとKotlinのビルドスクリプトが両方ある場合や、settingsが両方ある場合は手動対応 |
+| 複数の稼働版 | 同じパッケージが複数の版で稼働している場合は手動対応 |
+
+#### ビルドスクリプトの書き方 {#gradle-build-forms}
+
+ビルドスクリプトは、次の文と引数の形を受け付けます。
+
+| 文 | 対応範囲 |
+| --- | --- |
+| `plugins { }` | `java`・`java-library`・`application`は版なし、外部プラグインは[許可表](#gradle-plugins)のIDと版を直書き |
+| `group`・`version`・`description` | 文字列の直書き |
+| `java { }` | `toolchain { languageVersion = JavaLanguageVersion.of(N) }`と、`sourceCompatibility`・`targetCompatibility`への文字列・数値・`JavaVersion.VERSION_n`の代入 |
+| `repositories { }` | `mavenCentral()`のみ |
+| `configurations { }` | `compileOnly { extendsFrom(configurations.annotationProcessor.get()) }`で、Groovyでは`compileOnly { extendsFrom annotationProcessor }`も対応 |
+| `dependencies { }` | `構成名("g:a:v")`・`構成名("g:a")`・`構成名(libs.x)`・`構成名(libs.bundles.x)`と、`constraints { }`内の同じ形 |
+| `dependencyLocking { }` | `lockAllConfigurations()`と`lockMode = LockMode.STRICT`のみで、ブロックはファイル全体で1回 |
+| `extra`・`ext` | Kotlinの`extra["p"] = "v"`、Groovyの`ext["p"] = "v"`・`ext.p = "v"`で、名前と値を直書き |
+| テストタスク | `test { }`・`tasks.withType<Test> { }`・`tasks.withType(Test) { }`・`tasks.named<Test>("test") { }`・`tasks.named("test") { }`内の`useJUnitPlatform()`のみ |
+| `application { }` | `mainClass = "..."`で、Kotlinでは`mainClass.set("...")`も対応 |
+
+- Groovyの依存宣言は`implementation 'g:a:v'`のように括弧を省略できる
+- Groovyではトップレベルの`sourceCompatibility`・`targetCompatibility`の直書きも受け付ける
+- 依存とconstraintsの構成名は`implementation`・`api`・`compileOnly`・`runtimeOnly`・`testImplementation`・`testCompileOnly`・`testRuntimeOnly`・`annotationProcessor`・`testAnnotationProcessor`を受け付ける
+    - Spring Bootプラグインを使う場合は`developmentOnly`も読み取るが、対象の直接依存かどうかを標準の構成の継承から判定できなければ手動対応にする
+- settingsには`rootProject.name = "..."`と、`pluginManagement { repositories { } }`内の`gradlePluginPortal()`・`mavenCentral()`を置ける
+    - settingsのプラグインは[許可表](#gradle-plugins)で判定し、現時点で許可する組はない
+
+`gradle.properties`は次のキーと値に限ります。
+
+| キー | 対応範囲 |
+| --- | --- |
+| `org.gradle.parallel`・`org.gradle.caching`・`org.gradle.daemon`・`org.gradle.configuration-cache` | `true`または`false` |
+| `org.gradle.jvmargs` | `-Xmx`・`-Xms`・`-XX:MaxMetaspaceSize=`のメモリ指定と`-Dfile.encoding=UTF-8`を空白で区切った値 |
+| `.version`で終わるキー | 版の直書きで、使用するSpring BootのBOMが定義するプロパティに限定 |
+
+- `extra`・`ext`で設定するプロパティも、更新時にSpring BootのBOMと親を読み、定義されている名前であることを確認する
+- catalogは`gradle/libs.versions.toml`の`[versions]`・`[libraries]`・`[bundles]`・`[plugins]`だけを受け付ける
+    - ライブラリは`"g:a:v"`または`module`か`group`・`name`を持つ表で、版は文字列の直書き・`version.ref`・省略を受け付ける
+    - bundleはライブラリの別名の一覧とし、同じアクセサーになる別名の重複は手動対応にする
+    - `[plugins]`から参照する`[versions]`の値は更新せず、`alias(libs.plugins.x)`によるプラグインの適用も手動対応にする
+- `apply from`・`buildscript { }`・`dependencyManagement { }`・`dependencyResolutionManagement { }`・`resolutionStrategy`・`configurations.all`など、表にない文は手動対応にする
+- 文字列の補間・組み立て、動的な版・版の範囲、依存宣言の`platform(...)`など、表にない引数の形は手動対応にする
+- `gradle.properties`のほかのキー、Javaエージェントや許可したもの以外のJVM引数、行の継続・エスケープ・重複キーは手動対応にする
+
+#### プラグインの許可 {#gradle-plugins}
+
+| プラグイン | 許可する版 | Gradleの版 |
+| --- | --- | --- |
+| `java`・`java-library`・`application` | 版を指定しない | [対応する実行環境](#supported-runtimes)のGradle |
+| `org.springframework.boot` | `4.1.2` | `9.8.2` |
+| `io.spring.dependency-management` | `1.1.7` | `9.8.2` |
+| `org.gradle.toolchains.foojay-resolver-convention`(settings) | 許可する組なし | 許可する組なし |
+
+- 外部プラグインは版を確かめた組だけを許可し、版の文字列が完全に一致しない場合や表にない組は`gradle_plugin_unsupported`で手動対応にする
+- Gradleの更新では作業用コンテナ・Podを使い、ビルドスクリプトと許可したプラグインのコードがその中で動く
+
+候補と編集方法は[Gradleの候補選定](remediation-logic.md#gradle-package-selection)、採用条件は[Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation)を参照してください。
 
 ### Node.jsの版宣言 {#node-declarations}
 
@@ -413,7 +485,7 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 
 ## 対応する実行環境 {#supported-runtimes}
 
-対応する実行環境は、同梱の表にあるサポート中の系列(現時点で Node.js 22・24・26、Python 3.11〜3.15、Go 1.26・1.27)です。
+Node.js・Python・Goで対応する実行環境は、同梱の表にあるサポート中の系列(現時点でNode.js 22・24・26、Python 3.11〜3.15、Go 1.26・1.27)です。
 次の版と期限はKestreLynxが持つ情報であり、KestreLynxの更新に伴って変わります。
 
 | 系列 | 同梱の表の実行版 | サポート終了日 |
@@ -428,6 +500,12 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 | Python 3.15 | `3.15.1` | 2031-10-31 |
 | Go 1.26 | `1.26.10` | 2027-02-10 |
 | Go 1.27 | `1.27.3` | 2027-08-19 |
+| Gradle 8 / JDK 21 | `8.14.6` | 終了日は設定していない |
+| Gradle 9 / JDK 17・21 | `9.8.2` | 終了日は設定していない |
+
+- Gradleは上の版とJDKの組を統合テストで動かした`linux/amd64`だけに対応する
+- Gradleの同梱表にイメージがあっても、そのplatformで統合テストを通ったdigestの記録がなければ使わない
+- それ以外のGradleの版・JDK・platformの組は`gradle_version_unsupported`または`gradle_toolchain_unsupported`で手動対応にする
 
 | 用途 | 既定の実行環境 |
 | --- | --- |
@@ -435,6 +513,7 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 | pip更新の作業用コンテナ | Python 3.13 |
 | uv更新 | Pythonの宣言に従って選定 |
 | Go更新 | go.mod と目標版の go の行から選ぶ |
+| Gradle更新 | wrapperと同じGradleの版と、toolchainで指定したJDK(宣言がなければ21) |
 
 | 同梱の表にある終了済み系列 | サポート終了日 |
 | --- | --- |
@@ -678,11 +757,14 @@ PR記録の`state`には、次の値があります。
 | `go_replace_unsupported` | `go.mod`に`replace`があり、対応していない | [Goの依存ファイル](#go-inputs) |
 | `go_exclude_unsupported` | `go.mod`に`exclude`があり、対応していない | [Goの依存ファイル](#go-inputs) |
 | `go_binary_not_from_source` | イメージのGoバイナリが、この`go.mod`と一致しない、またはパッケージ一覧が不完全で照合できない | [Goの依存ファイル](#go-inputs) |
-| `jar_bundled_copy` | パッケージの写しが別のアーカイブに同梱されていて、pom ファイルの変更では直らない | [Mavenの候補選定](remediation-logic.md#maven-package-selection) |
+| `jar_bundled_copy` | パッケージの写しが別のアーカイブに同梱されていて、pom ファイルの変更では直らない | [Mavenの候補選定](remediation-logic.md#maven-package-selection)・[Gradleの候補選定](remediation-logic.md#gradle-package-selection) |
 | `maven_app_jar_ambiguous` | イメージの中で、このプロジェクトのアーカイブを特定できない | [Mavenの依存ファイル](#maven-inputs) |
 | `maven_model_unsupported` | pom ファイルが、更新の確認で解決を再現できない書き方をしている | [Mavenの依存ファイル](#maven-inputs) |
 | `maven_parent_mismatch` | 親を探す場所にある pom ファイルが、宣言された親と一致しない | [Mavenの依存ファイル](#maven-inputs) |
 | `maven_reactor_unsupported` | プロジェクトのモジュールを、1つのビルドとして読めない | [Mavenの依存ファイル](#maven-inputs) |
+| `gradle_build_unsupported` | ビルドの定義に、確かめられない書き方がある | [ビルドスクリプトの書き方](#gradle-build-forms) |
+| `gradle_locking_unenforced` | lockfile のとおりにビルドされる設定(lockMode の STRICT と全構成の lock)になっていない | [Gradleの依存ファイル](#gradle-inputs) |
+| `gradle_plugin_unsupported` | 許可していないプラグインか版を使っている | [プラグインの許可](#gradle-plugins) |
 | `workspace_unsupported` | プロジェクトのworkspace構成に対応していない | |
 | `workspace_settings_unsupported` | workspace設定ファイルの内容に対応していない | |
 | `dynamic_metadata` | プロジェクトのメタデータが動的に決まる | |
@@ -725,6 +807,8 @@ PR記録の`state`には、次の値があります。
 | `go_version_too_old` | `go.mod`に`go`の版の指定がない、または1.21より古い | [Goの依存ファイル](#go-inputs) |
 | `go_toolchain_unsupported` | `go.mod`の`toolchain`の行が、公開されたGoの版ではない | [Goの依存ファイル](#go-inputs) |
 | `go_runtime_unavailable` | 更新に必要な版以上の、サポート中のGoを選べない | [Goの選定](remediation-logic.md#go-runtime-selection) |
+| `gradle_version_unsupported` | 対応していない Gradle の版を使っている | [Gradleの依存ファイル](#gradle-inputs) |
+| `gradle_toolchain_unsupported` | 対応していない Java の toolchain を指定している | [Gradleの実行設定](remediation-logic.md#gradle-worker-settings) |
 | `runtime_eol` | 更新対象の実行環境がサポート終了している | [実行環境の選定](remediation-logic.md#runtime-and-tool-versions) |
 | `runtime_engines_mismatch` | 更新した依存が、プロジェクトの宣言する最小Node.js版に対応していない | [Node.jsの互換条件](remediation-logic.md#node-compatibility) |
 | `requires_python_unsupported` | 必要なPython版の条件を満たせない、または条件がない・解釈できない | [uv用Pythonの選定](remediation-logic.md#uv-python-selection) |
@@ -768,11 +852,15 @@ PR記録の`state`には、次の値があります。
 | `go_release_retracted` | 対象の版が、モジュールの作者によって撤回されている | [Goの候補選定](remediation-logic.md#go-package-selection) |
 | `go_line_raised_too_far` | 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える、またはビルドした版が不明なまま行の版が変わる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
 | `go_dependencies_uncheckable` | 更新後の依存の要求を確かめるためにたどるモジュールの版が多すぎる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
-| `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection) |
+| `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection)・[Gradleの目標版](remediation-logic.md#gradle-target-versions) |
 | `maven_version_source_unsupported` | 版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている | [版の出所と書き換え](remediation-logic.md#maven-version-sources) |
-| `maven_release_not_found` | 更新で使える版が Maven Central にない | [目標版とMaven Centralの版](remediation-logic.md#maven-target-versions) |
-| `maven_bom_series_unreached` | 取り込んでいる BOM と同じマイナー版では修正版に届かない | [版の出所と書き換え](remediation-logic.md#maven-version-sources) |
+| `maven_release_not_found` | 更新で使える版が Maven Central にない | [目標版とMaven Centralの版](remediation-logic.md#maven-target-versions)・[Gradleの目標版](remediation-logic.md#gradle-target-versions) |
+| `maven_bom_series_unreached` | 取り込んでいる BOM と同じマイナー版では修正版に届かない | [版の出所と書き換え](remediation-logic.md#maven-version-sources)・[Gradleの版の宣言と書き換え](remediation-logic.md#gradle-version-sources) |
 | `maven_dependency_held_back` | 更新後も、新しい版が要求する依存が要求より低い版のまま残る | [Mavenの更新結果の検査](remediation-logic.md#maven-update-validation) |
+| `gradle_version_source_unsupported` | 版が、プロジェクトのファイルの変更では変えられない形で決まっている | [版の宣言と書き換え](remediation-logic.md#gradle-version-sources) |
+| `gradle_lock_entry_removed` | 更新で gradle.lockfile のエントリが削除された | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
+| `gradle_lock_configurations_changed` | 更新で gradle.lockfile が lock する構成が変わった | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
+| `gradle_lock_version_unsupported` | 更新後の gradle.lockfile にスナップショット版が含まれる | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
 | `no_fixed_version_above_installed` | 稼働版より新しい修正版がない、または修正対象がない | [修正版の下限](remediation-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | 候補または更新後の版が依存の制約を満たさない | [直接依存の版指定](remediation-logic.md#direct-dependencies)・[推移的依存の更新範囲](remediation-logic.md#transitive-dependencies) |
 | `constraint_not_evaluable` | 版の制約を評価できない、または修正版がpipで選ばれないプレリリースである | [直接依存の版指定](remediation-logic.md#direct-dependencies) |

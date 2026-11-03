@@ -171,9 +171,32 @@ mvn -B verify
 
 See [Maven update validation](remediation-logic.md#maven-update-validation) for acceptance conditions.
 
+### Gradle PRs and CI checks {#gradle-pull-requests}
+
+Gradle PRs propose updates to version declarations and `gradle.lockfile` and include the following information in the body.
+
+- Changed files and details of catalog and dependency declaration changes, property changes or overrides, and added constraints
+- The work container's Gradle version, and check results for returned lockfile entries, configurations, target versions, and Maven Central `.pom` files
+- Other packages whose versions are determined by the same property or catalog value and were checked on Maven Central
+- Packages outside the targets whose locked versions changed, and packages that were added
+- Trivy scan results before and after the update, and checks to perform in CI before merging
+
+Before merging, list the dependencies in CI and run the build and tests using `gradle.lockfile` unchanged.
+
+```sh
+./gradlew dependencies && ./gradlew build
+```
+
+- Do not run `--write-locks` or `--update-locks` before this check, because they replace the checked lockfile
+- KestreLynx checks the lockfile and scan results; these results do not confirm a successful application build or tests
+- Spring Boot BOM property overrides remain until removed; remove them when upgrading the Spring Boot plugin to a version that includes the fix
+- Added constraints remain until removed; remove them when the dependency that brings in the package is upgraded to a version that requires a fixed version
+
+See [Gradle update validation](remediation-logic.md#gradle-update-validation) for acceptance conditions.
+
 ### Partial PRs {#partial-pull-requests}
 
-For npm, pnpm, uv, and Maven, a PR may include only the planned package updates that passed the checks.
+For npm, pnpm, uv, Maven, and Gradle, a PR may include only the planned package updates that passed the checks.
 
 | Result | Interpretation |
 | --- | --- |
@@ -186,7 +209,7 @@ For npm, pnpm, uv, and Maven, a PR may include only the planned package updates 
 An item being a PR candidate also does not mean that every package was updated.
 
 Pinned-version pip updates and Go updates are not split into partial PRs.
-For eligibility conditions, see [Partial PR selection](remediation-logic.md#partial-pr-selection) and [Maven target exclusion conditions](remediation-logic.md#maven-update-exclusions); for checks to perform, see [Checking update failures](remediation-troubleshooting.md#check-update-failure).
+For eligibility conditions, see [Partial PR selection](remediation-logic.md#partial-pr-selection), [Maven target exclusion conditions](remediation-logic.md#maven-update-exclusions), and [Gradle target exclusion conditions](remediation-logic.md#gradle-update-exclusions); for checks to perform, see [Checking update failures](remediation-troubleshooting.md#check-update-failure).
 
 ### Results of re-resolution through dependent packages {#dependent-reresolution-results}
 

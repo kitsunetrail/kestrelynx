@@ -171,9 +171,32 @@ mvn -B verify
 
 採用条件は[Mavenの更新結果の検査](remediation-logic.md#maven-update-validation)を参照してください。
 
+### GradleのPRとCIでの確認 {#gradle-pull-requests}
+
+GradleのPRは版の宣言と`gradle.lockfile`の更新を提案し、本文に次の情報を載せます。
+
+- 変更したファイルと、catalog・依存宣言・プロパティの変更や上書き・constraintsの追記の内容
+- 作業用コンテナのGradleの版と、返されたlockfileのエントリ・構成・対象の版・Maven Centralの`.pom`の確認結果
+- 同じプロパティやcatalogの値で版が決まり、Maven Centralで確認したほかのパッケージ
+- 対象以外にlockされた版が変わったパッケージと、追加されたパッケージ
+- Trivyによる更新前後のスキャン結果と、マージ前のCIでの確認事項
+
+マージ前に、CIで依存の一覧を表示し、`gradle.lockfile`をそのまま使ってビルドとテストを実行します。
+
+```sh
+./gradlew dependencies && ./gradlew build
+```
+
+- この確認の前に`--write-locks`・`--update-locks`を実行すると検査したlockfileが置き換わるため、先に実行しない
+- KestreLynxの検査はlockfileとスキャンの結果を対象とし、アプリケーションのビルドとテストの成功を確認した結果ではない
+- Spring BootのBOMのプロパティの上書きは消すまで残るため、修正を含む版にSpring Bootプラグインを上げるときに外す
+- 追記したconstraintsは消すまで残るため、そのパッケージを持ち込む依存が修正版を要求する版に上がったら外す
+
+採用条件は[Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation)を参照してください。
+
 ### 部分PR {#partial-pull-requests}
 
-npm・pnpm・uv・Mavenでは、計画したパッケージのうち、検査を通った更新だけがPRに含まれる場合があります。
+npm・pnpm・uv・Maven・Gradleでは、計画したパッケージのうち、検査を通った更新だけがPRに含まれる場合があります。
 
 | 結果 | 読み方 |
 | --- | --- |
@@ -186,7 +209,7 @@ npm・pnpm・uv・Mavenでは、計画したパッケージのうち、検査を
 また、項目全体がPR候補でも、すべてのパッケージが更新されたとは限りません。
 
 pipの固定版更新とGoの更新は部分PRに分けません。
-成立条件は[部分PRの成立条件](remediation-logic.md#partial-pr-selection)と[Mavenで対象を外す条件](remediation-logic.md#maven-update-exclusions)、確認操作は[更新を実行できない場合の確認](remediation-troubleshooting.md#check-update-failure)を参照してください。
+成立条件は[部分PRの成立条件](remediation-logic.md#partial-pr-selection)・[Mavenで対象を外す条件](remediation-logic.md#maven-update-exclusions)・[Gradleで対象を外す条件](remediation-logic.md#gradle-update-exclusions)、確認操作は[更新を実行できない場合の確認](remediation-troubleshooting.md#check-update-failure)を参照してください。
 
 ### 依存元からの再解決の結果 {#dependent-reresolution-results}
 

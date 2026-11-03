@@ -421,6 +421,51 @@ Starting from the project's `pom.xml`, follow the parent chain and look for vers
 
 See [Maven dependency files](remediation-reference.md#maven-inputs) for required files and inputs that need manual handling.
 
+### Gradle candidate selection {#gradle-package-selection}
+
+- Read files in the mapped dependency directory and match the running image's `jar` findings to `gradle.lockfile` by `group:artifact` and version
+- Select dependencies whose running versions are in `compileClasspath`, `runtimeClasspath`, or `productionRuntimeClasspath` as candidates
+- If a finding's location is not the target's own `artifactId-version.jar`, treat it as a copy bundled inside another archive and require manual handling with `jar_bundled_copy`
+- Read dependency declarations in the build script and catalog references, and treat a dependency as direct if standard inheritance connects its declared configuration to a target configuration in which the running version is locked
+    - Do not count `constraints` as direct dependency declarations, and include the supported form in which `compileOnly` inherits from `annotationProcessor` in this determination
+    - Even if a declaration exists, require manual handling with `gradle_build_unsupported` if standard inheritance cannot establish the relationship, as with `developmentOnly`
+- Require manual handling if multiple versions of the same package are running
+
+#### Target versions {#gradle-target-versions}
+
+The target version's lower bound and the published version selected from Maven Central follow the [same rules as Maven](#maven-target-versions).
+
+#### Version declarations and edits {#gradle-version-sources}
+
+Determine the edit method in this order: dependency declarations with the target's version, Spring Boot BOM properties, and added constraints.
+
+| Declaration location | Edit |
+| --- | --- |
+| Catalog `[versions]`, library `version` or `"g:a:v"` | Change the value if the declared version matches the running version; versions shared with `[plugins]` require manual handling |
+| `"g:a:v"` in the build script | Change the version if the declared version matches the running version and the string occurs only once in the entire file |
+| Spring Boot BOM property | Change the value if it is set exactly once in `gradle.properties` or the build script's `extra` or `ext`; if unset, add it to `gradle.properties` |
+| A target with neither a dependency declaration containing a version nor management by the Spring Boot BOM | Append `dependencies { constraints { implementation("g:a:v") } }` to the build script, using the corresponding syntax for Groovy |
+| Other forms | Require manual handling with `gradle_version_source_unsupported` |
+
+- Require manual handling if declarations with and without versions are mixed, or if the BOM does not manage a direct dependency declared without a version
+- Catalog edits support `key = "value"` in `[versions]`, a library's `"g:a:v"` on one line, or `version = "..."` in an inline table
+- Add constraints only if all configurations in which the target is locked are among `compileClasspath`, `runtimeClasspath`, `productionRuntimeClasspath`, `testCompileClasspath`, and `testRuntimeClasspath`
+
+Updates through Spring Boot BOM properties apply when both the Spring Boot and dependency-management plugins are used.
+
+- Read `org.springframework.boot:spring-boot-dependencies` at the same version as the Spring Boot plugin and its parents from Maven Central, and identify the property that determines the target's version
+    - If the target's managed version is `${p}`, change `p`
+    - If an imported BOM's version is `${p}` and that BOM directly manages the target, change `p` to update the set of dependencies
+    - Require manual handling if the property to change cannot be determined, including directly written versions, expressions using a property as part of a version, or management through multiple BOMs or another BOM's import
+- Select the lowest regular BOM release within the current major and minor version that brings the target to at least its target version; require manual handling with `maven_bom_series_unreached` if none does
+    - Search for guidance on a BOM in a later minor version that reaches the target using the [same rules as Maven](#maven-version-sources)
+- If multiple targets change the same property or catalog value, use the highest of the required versions
+    - Also check that other packages whose versions are determined by the same value exist on Maven Central at that version
+- Preserve formatting and comments when editing, then read the files again with the same parser and verify that dependency declaration, catalog, property, and constraint changes match the planned edits
+- Also read and check declarations that the update leaves unchanged, including the Gradle version, toolchain, and plugins
+
+See [Gradle dependency files](remediation-reference.md#gradle-inputs) for required files and inputs that need manual handling.
+
 ### Direct dependency version specifications {#direct-dependencies}
 
 If a direct dependency's version specification excludes the update target, KestreLynx edits the version portion while preserving the operator, but only for supported forms.
@@ -668,7 +713,7 @@ See [Tool version declarations](remediation-reference.md#tool-declarations) for 
 
 ### Work Pod execution {#kubernetes-work-pods}
 
-On Kubernetes, npm, pnpm, pip, uv, and Go updates and supported re-resolution through dependent packages run in disposable Pods in the configured work namespace.
+On Kubernetes, npm, pnpm, pip, uv, Go, and Gradle updates and supported re-resolution through dependent packages run in disposable Pods in the configured work namespace.
 The user applies the required resources following the [setup steps](remediation-setup.md#kubernetes-language-updates).
 
 - Fix the permitted Pod configuration through ValidatingAdmissionPolicy
@@ -683,11 +728,12 @@ Failure to verify the Pod creation rules requires manual action with `work_admis
 Failure to retrieve the cluster version defers updates with the same reason code, while Pod count or resource limits defer updates with `work_pod_limit`.
 ### Pinning official images {#worker-images}
 
-npm, pnpm, pip, uv, and Go updates use official Node.js, Python, and Go (`golang`) images.
+npm, pnpm, pip, uv, Go, and Gradle updates use official Node.js, Python, Go (`golang`), and Gradle (`gradle`) images.
 Their content is pinned by digest in the bundled table and does not follow changes to the same tag.
 
 - Docker or the Kubernetes node's container runtime retrieves the required images
 - Mirrors must provide content with the same digest as the bundled table
+- Gradle images are pinned by digest for each Gradle version and JDK combination, and only combinations that passed integration tests on the execution platform are used
 - Language package updates are deferred if the image cannot be retrieved
 - Retrieval failures do not cause package managers to run inside the KestreLynx container as a fallback
 
@@ -751,7 +797,8 @@ Work containers have restrictions on privileges, resources, writable locations, 
 - Run as non-root with all Linux capabilities dropped and `no-new-privileges` enabled
 - Limit memory, CPU, process count, output size, and execution time, using node-level PID limits for process counts on Kubernetes
 - Restrict writable locations to capacity-limited temporary storage
-- Disable package scripts and source builds
+- For npm, pnpm, pip, and uv, disable package scripts and source builds
+- For Gradle, run build scripts and allowed plugin code, and update the lockfile with `dependencies --update-locks`
 - Verify that the runtime, tools, and work program match the specified content
 
 Docker's root filesystem setting itself is not read-only.
@@ -781,6 +828,31 @@ Go jobs receive the following fixed environment variables.
 
 See [Dependency downloads](outbound-communication.md#dependency-downloads) for network destinations.
 
+### Gradle execution settings {#gradle-worker-settings}
+
+Gradle jobs run the following command with the targets' `group:artifact` coordinates separated by commas.
+
+```sh
+gradle --no-daemon --no-build-cache -q -Porg.gradle.java.installations.auto-download=false dependencies --update-locks g1:a1,g2:a2
+```
+
+| Environment variable | Value or treatment |
+| --- | --- |
+| `JAVA_HOME` | `/opt/java/openjdk` |
+| `GRADLE_USER_HOME` | `/tmp/kestrelynx-cache/gradle` |
+| `HOME` | `/home/worker` |
+
+- Use `/opt/gradle/bin/gradle` from the official image for `gradle`, without using `gradlew` or `gradle-wrapper.jar`
+- Check the Gradle version and the JDK version used for execution at startup, and disable automatic JDK downloads
+- Build the child process environment from a fixed list, without inheriting `GRADLE_OPTS`, `JAVA_OPTS`, or proxy settings
+- Place `GRADLE_USER_HOME` and `HOME` in temporary storage, without loading the image user's init scripts or settings
+- On Docker, mount tmpfs over `/home/gradle/.gradle`, which the image declares as a `VOLUME`, and verify that no anonymous volume was created
+- On Kubernetes, prevent the container runtime from creating a volume on the node's disk by mounting an empty memory volume with a 1 MiB size limit read-only over `/home/gradle/.gradle` in the work Pod, enforce the volume type, mount path, and read-only setting through the admission policy, and verify at job startup that the mount is a read-only memory volume with a size limit
+- Pass input files using paths relative to the dependency directory, and return `gradle.lockfile` and the supplied build script, settings, properties, catalog, wrapper configuration, and auxiliary lockfiles in the results
+- Exclude `.gradle/` and `build/` created by Gradle from the results
+
+See [Supported runtimes](remediation-reference.md#supported-runtimes) for supported versions and [Dependency downloads](outbound-communication.md#dependency-downloads) for network destinations.
+
 ### Result collection {#worker-results}
 
 After collecting results from standard output on Docker, or collecting and decrypting encrypted results from Pod logs on Kubernetes, KestreLynx attempts to remove the work container or Pod.
@@ -805,6 +877,7 @@ After rechecking the update inputs, KestreLynx edits direct dependency version s
 | pip | Rewrites pinned versions and updates existing hashes from PyPI wheel information. | Checks dependency resolution before and after the update using dry runs targeting the running image's environment. |
 | Go | Updates all targets with one `go get <module>@<version> ...` command, without running `go mod tidy`. | Checks the `go.mod` diff, `go.sum`, dependency requirements, and scan results before and after the update. |
 | Maven | KestreLynx rewrites version, property, and management declarations in `pom.xml`. | Trivy resolves and scans dependencies before and after the update through the Maven Central relay. |
+| Gradle | KestreLynx rewrites version declarations, then runs `dependencies --update-locks` in a work container or Pod. | Checks the returned files and lockfile, then scans the lockfile before and after the update with Trivy. |
 
 When pnpm updates only transitive dependencies, direct dependency entries may also be temporarily removed to trigger resolution.
 
@@ -914,6 +987,39 @@ KestreLynx checks the retrieved parent, BOM, and dependency POMs and the project
 - Re-resolution through dependent packages for npm, pnpm, and uv does not apply
 
 See [Maven PRs and CI checks](remediation-results.md#maven-pull-requests) for checks before merging and the information included in PR bodies.
+
+### Gradle update validation {#gradle-update-validation}
+
+KestreLynx passes the files it has rewritten to the work container or Pod, then checks the returned results against the following conditions.
+
+| Check target | Acceptance conditions |
+| --- | --- |
+| Returned files | All input files are present, and the work container or Pod changed only `gradle.lockfile` |
+| Build definitions and auxiliary lockfiles | The rewritten files, `settings-gradle.lockfile`, and `buildscript-gradle.lockfile` retain the content passed to the work container or Pod |
+| Lockfile configurations | The set of configurations and the set of configurations listed in `empty=` are unchanged before and after the update |
+| Removed entries | No package has been removed from any configuration that contained it before the update |
+| Target versions | In every configuration that contained the target before the update, its version is at least the selected Maven Central release |
+| Added or changed coordinates | Maven Central has a `.pom` for the requested coordinates and version |
+| SNAPSHOT | Added or changed versions do not contain `SNAPSHOT`, ignoring case |
+| Comments and duplicates | New comments use the form generated by Gradle, and no configuration contains multiple versions of the same package |
+
+- Require manual handling with `gradle_lock_entry_removed` for removed entries, including dependencies no longer needed by the new version
+- Require manual handling with `gradle_lock_configurations_changed` for changes to the set of configurations or `empty=`, and with `gradle_lock_version_unsupported` for added or changed SNAPSHOT versions
+- Read lockfile comments, `group:artifact:version=configurations`, and at most one `empty=` line; reject standalone CR characters and lines longer than 8192 bytes
+    - Count line length excluding LF but including the CR in CRLF
+- Scan only `gradle.lockfile` before and after the update with the same Trivy, vulnerability database, and severity settings
+    - Check that the names and versions of all entries read are present in the respective Trivy `gradle` package lists; if any are missing, treat the results as not comparable with `source_scan_incomplete`
+    - Check that target findings are confirmed before the update, remain in no occurrence after the update, and that no new findings appear, including outside the targets
+- List packages outside the targets whose locked versions changed, and packages that were added, in the PR body
+
+#### Conditions for excluding targets and updating the rest {#gradle-update-exclusions}
+
+- Before editing, check each target's published versions and version declarations; exclude targets with no usable published version, declarations that cannot be changed, or no BOM version in the same series that reaches the target, and continue updating the rest
+- Do not adopt the result if checks of shared values, rereading after edits, work container or Pod output, or scans fail
+- If a target does not reach its target version after the lockfile update, do not exclude that target and rerun the update to produce a partial PR
+- Re-resolution through dependent packages for npm, pnpm, and uv does not apply
+
+See [Gradle PRs and CI checks](remediation-results.md#gradle-pull-requests) for checks before merging and the information included in PR bodies.
 
 ### Partial PR conditions {#partial-pr-selection}
 

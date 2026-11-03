@@ -83,7 +83,7 @@ KestreLynx creates PRs that update the following parts of files already used in 
 - Kustomize `images[].newTag`
 - Image tags in Helm values
 - Base image tags in Dockerfiles
-- Dependency files for npm, pnpm, pip, uv, Go, and Maven (`pom.xml`)
+- Dependency files for npm, pnpm, pip, uv, Go, Maven (`pom.xml`), and Gradle (`gradle.lockfile`)
 
 </div>
 <div markdown>

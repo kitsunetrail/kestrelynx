@@ -25,7 +25,7 @@
     - Composeファイルの配布イメージのタグ
     - Kubernetesのプレーンなマニフェストのイメージタグ、Kustomizeの`images[].newTag`、Helmのvaluesのイメージタグ
     - Dockerfileのベースイメージのタグ
-    - npm・pnpm・pip・uv・Go・Maven (`pom.xml`)の依存ファイル
+    - npm・pnpm・pip・uv・Go・Maven(`pom.xml`)・Gradle(`gradle.lockfile`)の依存ファイル
 - **依存元からの再解決**：npm・pnpm・uvでは、対応する条件の下で依存元のパッケージも更新して依存関係を再解決
 - **マージ・デプロイ後の解消確認**：次のスキャンで更新前からの履歴を引き継ぎ、稼働イメージで検出されなくなった所見と現在の未解決を通知
 
@@ -54,9 +54,9 @@
     - Composeファイルの配布イメージのタグ
     - Kubernetesのプレーンなマニフェストのイメージタグ、[Kustomizeの`images[].newTag`](docs-ja/documentation/remediation-setup.md#kustomize-pull-requests)、[Helmのvaluesのイメージタグ](docs-ja/documentation/remediation-setup.md#helm-values-pull-requests)
     - Dockerfileのベースイメージのタグ
-    - npm・pnpm・pip・uv・Go・Maven (`pom.xml`)の依存ファイル
+    - npm・pnpm・pip・uv・Go・Maven(`pom.xml`)・Gradle(`gradle.lockfile`)の依存ファイル
     - npm・pnpm・uvでは、対応する条件の下で依存元のパッケージも更新して再解決
-    - Kubernetesでnpm・pnpm・pip・uv・Goを更新するには、[作業用Podの設定](docs-ja/documentation/remediation-setup.md#kubernetes-language-updates)が必要
+    - Kubernetesでnpm・pnpm・pip・uv・Go・Gradleを更新するには、[作業用Podの設定](docs-ja/documentation/remediation-setup.md#kubernetes-language-updates)が必要
 - マージ・デプロイ後の次のスキャンで解消を確かめる
     - 利用者が変更内容を確認し、マージ前のCI、マージ、再ビルド、デプロイを実施
     - KestreLynxが更新前からの履歴を引き継ぎ、所見の解消を通知

@@ -25,7 +25,7 @@
 
 | Tool | Distributed image tags | Dockerfile base images (`FROM`) | Direct patches to OS packages inside images | Language packages |
 | --- | --- | --- | --- | --- |
-| [KestreLynx](remediation-reference.md#supported-targets) | Same major/minor only: Compose, Kubernetes, Kustomize, Helm values | Same major/minor only | No: updates images or base images | npm, pnpm, pip, uv, Go, Maven (`pom.xml`) only |
+| [KestreLynx](remediation-reference.md#supported-targets) | Same major/minor only: Compose, Kubernetes, Kustomize, Helm values | Same major/minor only | No: updates images or base images | npm, pnpm, pip, uv, Go, Maven (`pom.xml`), Gradle (`gradle.lockfile`) only |
 | [Dependabot](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories) | Yes: Compose, Kubernetes, Helm | Yes | No | npm, pnpm, pip, uv, Go, and others; see the [supported list](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories) |
 | [Renovate](https://docs.renovatebot.com/modules/manager/) | Yes: Compose, Kubernetes, Kustomize, Helm values | Yes | No | npm, pnpm, pip, uv, Go, and others; see the [supported list](https://docs.renovatebot.com/modules/manager/) |
 | [Copacetic](https://project-copacetic.github.io/copacetic/website/faq) | No | No | Yes: DPKG, RPM, APK | npm, pip, Go, .NET (experimental) |

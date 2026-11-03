@@ -5,6 +5,7 @@ This section covers the problems being addressed, approaches tried, lessons lear
 Development logs record how features were explored and implemented.
 For instructions on currently available features, see [Documentation](../documentation/index.md).
 
+- November 2, 2026 — [Gradle remediation pull request development](gradle-remediation.md) — rewriting version declarations from jar findings in running images, updating gradle.lockfile with official Gradle, and comparing the result before and after the update with Trivy (implemented; PR creation verified in a validation repository)
 - November 1, 2026 — [Maven remediation pull request development](maven-remediation.md) — rewriting pom.xml files without running Maven from jar findings in running images, and comparing the result before and after the update with Trivy (implemented; PR creation verified in a validation repository)
 - October 29, 2026 — [Go modules remediation pull request development](go-modules-remediation.md) — updating mapped go.mod and go.sum files from findings in Go binaries in running images (implemented; PR creation verified in a validation repository)
 - October 29, 2026 — [Newer series check development](newer-series-check.md) — comparing up to two newer-series versions and reporting resolution results in remediation plans and cards, with capacity reserved for PR processing (implemented; local verification only)

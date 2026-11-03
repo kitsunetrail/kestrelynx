@@ -241,7 +241,7 @@ Trivy では見つけられない Maven との違いが残るため、修正 PR 
 
 ## 未検証・次の作業
 
-- `gradle.lockfile` がある場合の Gradle への対応
+- `gradle.lockfile` がある場合の Gradle への対応は[Gradle の修正 PR の開発](gradle-remediation.md)で実装
 
 ## 更新履歴
 

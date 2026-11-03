@@ -25,7 +25,7 @@
     - Published image tags in Compose files
     - Image tags in plain Kubernetes manifests, Kustomize `images[].newTag`, and image tags in Helm values
     - Base image tags in Dockerfiles
-    - Dependency files for npm, pnpm, pip, uv, Go, and Maven (`pom.xml`)
+    - Dependency files for npm, pnpm, pip, uv, Go, Maven (`pom.xml`), and Gradle (`gradle.lockfile`)
 - **Re-resolution through dependent packages**: updates to dependent packages and dependency re-resolution for npm, pnpm, and uv under the supported conditions
 - **Resolution checks after merge and deployment**: history carried forward from before the update into the next scan, with notifications for findings no longer detected in the running image and findings that remain open
 
@@ -54,9 +54,9 @@
     - Published image tags in Compose files
     - Image tags in plain Kubernetes manifests, [Kustomize `images[].newTag`](docs/documentation/remediation-setup.md#kustomize-pull-requests), and [image tags in Helm values](docs/documentation/remediation-setup.md#helm-values-pull-requests)
     - Base image tags in Dockerfiles
-    - Dependency files for npm, pnpm, pip, uv, Go, and Maven (`pom.xml`)
+    - Dependency files for npm, pnpm, pip, uv, Go, Maven (`pom.xml`), and Gradle (`gradle.lockfile`)
     - Updates to dependent packages and dependency re-resolution for npm, pnpm, and uv under the supported conditions
-    - npm, pnpm, pip, uv, and Go updates on Kubernetes require [work Pod configuration](docs/documentation/remediation-setup.md#kubernetes-language-updates)
+    - npm, pnpm, pip, uv, Go, and Gradle updates on Kubernetes require [work Pod configuration](docs/documentation/remediation-setup.md#kubernetes-language-updates)
 - Check for resolved findings in the next scan after merge and deployment
     - You review the changes, run CI before merging, merge, rebuild, and deploy
     - KestreLynx carries history forward from before the update and reports resolved findings

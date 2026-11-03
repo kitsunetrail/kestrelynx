@@ -4,6 +4,7 @@
 
 開発ログは検討・実装の過程の記録です。現在利用できる機能の導入・運用方法は[ドキュメント](../documentation/index.md)を参照してください。
 
+- 2026年11月2日 — [Gradle の修正 PR の開発](gradle-remediation.md) — 稼働イメージの jar の所見から版の宣言を書き換え、公式の Gradle で gradle.lockfile を更新し、Trivy で更新前後を比べる仕組み(実装済み、検証用のリポジトリで PR の作成を確認)
 - 2026年11月1日 — [Maven の修正 PR の開発](maven-remediation.md) — 稼働イメージの jar の所見から、Maven を実行せずに pom.xml を書き換え、Trivy で更新前後を比べる仕組み(実装済み、検証用のリポジトリで PR の作成を確認)
 - 2026年10月29日 — [Go modules の修正 PR の開発](go-modules-remediation.md) — 稼働イメージの Go バイナリの所見から、対応付けた go.mod・go.sum を更新する仕組み(実装済み、検証用のリポジトリで PR の作成を確認)
 - 2026年10月29日 — [新しい系列での解消確認の開発](newer-series-check.md) — 同じ系列で直らない固定タグを新しい系列の最大2つの版で比較し、PR を作らず修正計画とカードで知らせる仕組み(実装済み、手元での検証まで)

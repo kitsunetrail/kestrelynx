@@ -241,7 +241,7 @@ Verified Maven updates for Kubernetes remediation targets on November 2, 2026.
 
 ## Unverified areas and next steps
 
-- Add support for Gradle when `gradle.lockfile` is present
+- Support for Gradle when `gradle.lockfile` is present was implemented as described in [Gradle remediation pull request development](gradle-remediation.md)
 
 ## Update history
 

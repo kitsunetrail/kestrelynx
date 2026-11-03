@@ -25,7 +25,7 @@
 
 | ツール | 配布イメージのタグ | Dockerfileのベースイメージ（`FROM`） | イメージ内のOSパッケージへの直接パッチ | 言語パッケージ |
 | --- | --- | --- | --- | --- |
-| [KestreLynx](remediation-reference.md#supported-targets) | 同じメジャー・マイナー版内のみ：Compose・Kubernetes・Kustomize・Helm values | 同じメジャー・マイナー版内のみ | 対応なし：イメージやベースイメージを更新 | npm・pnpm・pip・uv・Go・Maven (`pom.xml`)のみ |
+| [KestreLynx](remediation-reference.md#supported-targets) | 同じメジャー・マイナー版内のみ：Compose・Kubernetes・Kustomize・Helm values | 同じメジャー・マイナー版内のみ | 対応なし：イメージやベースイメージを更新 | npm・pnpm・pip・uv・Go・Maven(`pom.xml`)・Gradle(`gradle.lockfile`)のみ |
 | [Dependabot](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories) | 対応：Compose・Kubernetes・Helm | 対応 | 対応なし | npm・pnpm・pip・uv・Goほか、[対応一覧](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories)を参照 |
 | [Renovate](https://docs.renovatebot.com/modules/manager/) | 対応：Compose・Kubernetes・Kustomize・Helm values | 対応 | 対応なし | npm・pnpm・pip・uv・Goほか、[対応一覧](https://docs.renovatebot.com/modules/manager/)を参照 |
 | [Copacetic](https://project-copacetic.github.io/copacetic/website/faq) | 対応なし | 対応なし | 対応：DPKG・RPM・APK | npm・pip・Go・.NET（実験的） |

@@ -99,7 +99,7 @@ See [Image registry authentication](configuration.md#remediation-registries) for
 
 | Sender | Destination | Information retrieved or sent | When |
 | --- | --- | --- | --- |
-| Docker or the Kubernetes node's container runtime | Docker Hub or the configured mirror | Download official Node.js, Python, and Go (`golang`) work images | An image required for a language-package update is not available locally. |
+| Docker or the Kubernetes node's container runtime | Docker Hub or the configured mirror | Download official Node.js, Python, Go (`golang`), and Gradle (`gradle`) work images | An image required for a language-package update is not available locally. |
 | Kubernetes node's container runtime | KestreLynx image registry | Download the image for the container receiving input files | An image required for a work Pod is not available locally. |
 
 See [Work image source](configuration.md#remediation-worker-registry) for mirror settings and [Pinning official images](remediation-logic.md#worker-images) for pinning and handling unavailable images.
@@ -126,14 +126,19 @@ See [Tool downloads and verification](remediation-logic.md#tool-verification) fo
 | KestreLynx | `proxy.golang.org` | Retrieve version information from `.info`, `go.mod` from `.mod`, and the latest version from `@latest` using module paths and versions | Checking Go target versions, retractions, required Go versions, and dependency requirements. |
 | KestreLynx | `sum.golang.org` | Retrieve module zip and `go.mod` hashes through `lookup` using module paths and versions | Checking Go update results and completing `go.sum`. |
 | KestreLynx | `repo.maven.apache.org` | Retrieve `maven-metadata.xml` and parent, BOM, and dependency `.pom` files using groupId, artifactId, and version | Checking Maven releases, version sources, dependency requirements, and resolution results before and after updates. |
+| KestreLynx | `repo.maven.apache.org` | Retrieve `maven-metadata.xml` and Spring Boot BOM, parent, imported BOM, and dependency `.pom` files using groupId, artifactId, and version | Checking published versions, BOM properties, and added or changed coordinates for dependencies updated by Gradle. |
 | Trivy | An available port on `127.0.0.1` | Request `.pom` files from the Maven Central relay | Checking Maven dependency files before and after updates. |
 | Work container | Public npm registry, PyPI, and distribution download destinations | Retrieve metadata and distributions for dependency resolution, lockfile generation, and checks | Running npm, pnpm, pip, or uv dependency updates. |
 | Work container | `proxy.golang.org` and `sum.golang.org` | Retrieve module metadata, distributions, and information needed to verify hashes | Running Go dependency updates. |
 | Work container | `storage.googleapis.com` | Retrieve module zip files from the proxy's redirect destination | Distribution downloads are redirected during Go dependency updates. |
+| Work container | Maven Central (`repo.maven.apache.org`) | Retrieve metadata and distributions needed for dependency resolution and lockfile updates | Running Gradle dependency updates. |
+| Work container | Gradle Plugin Portal (`plugins.gradle.org` and `plugins-artifacts.gradle.org`) and Maven Central | Retrieve metadata and distributions for allowed plugins and their dependencies | Gradle build scripts apply plugins. |
 
 See [Update processing by package manager](remediation-logic.md#manager-update-methods) for update processing.
 
-- KestreLynx connects to Maven Central and includes `kestrelynx` in the `User-Agent`
+- KestreLynx connects to Maven Central and includes `kestrelynx` in the `User-Agent` when relaying Maven checks and checking Maven and Gradle versions or POMs
+- Gradle work containers also connect to the [download destination for `mavenCentral()`](https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.dsl.RepositoryHandler.html)
+- Gradle Plugin Portal distributions are retrieved through [redirects to `plugins-artifacts.gradle.org`](https://plugins.gradle.org/docs/mirroring)
 - For Maven dependency resolution, Trivy connects only to the relay on `127.0.0.1`, without connecting directly to Maven Central
 - The relay does not forward requests for `.pom` files of modules read from the project to Maven Central
 

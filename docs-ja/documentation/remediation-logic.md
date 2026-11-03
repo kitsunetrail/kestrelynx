@@ -421,6 +421,51 @@ majorが`0`の場合は、同じmajorのまとまりをminor単位で扱いま�
 
 必要なファイルと手動対応になる入力は[Mavenの依存ファイル](remediation-reference.md#maven-inputs)を参照してください。
 
+### Gradleの候補選定 {#gradle-package-selection}
+
+- 対応付けた依存ディレクトリのファイルを読み、稼働イメージの`jar`の所見を`gradle.lockfile`の`group:artifact`と版で照合する
+- 稼働版が`compileClasspath`・`runtimeClasspath`・`productionRuntimeClasspath`のいずれかにある依存を候補にする
+- 所見の場所が対象自身の`artifactId-version.jar`でない場合は、別のアーカイブに同梱された写しとして`jar_bundled_copy`で手動対応にする
+- ビルドスクリプトの依存宣言とcatalogの参照を読み、宣言した構成から、稼働版がlockされた対象の構成へ標準の継承で届く場合を直接依存とする
+    - `constraints`は直接依存の宣言に数えず、`compileOnly`が`annotationProcessor`を継承する対応形式も判定に含める
+    - 宣言があっても`developmentOnly`など標準の継承で関係を決められない場合は`gradle_build_unsupported`で手動対応にする
+- 同じパッケージが複数の版で稼働している場合は手動対応にする
+
+#### 目標版 {#gradle-target-versions}
+
+目標版の下限とMaven Centralから選ぶ公開版は、[Mavenと同じ規則](#maven-target-versions)で決めます。
+
+#### 版の宣言と書き換え {#gradle-version-sources}
+
+対象の版を持つ依存宣言、Spring BootのBOMのプロパティ、constraintsの追記の順に、書き換え方を決めます。
+
+| 宣言の場所 | 書き換え |
+| --- | --- |
+| catalogの`[versions]`、ライブラリの`version`・`"g:a:v"` | 宣言した版が稼働版と一致する場合にその値を変更し、`[plugins]`と共有する版は手動対応 |
+| ビルドスクリプトの`"g:a:v"` | 宣言した版が稼働版と一致し、その文字列がファイル全体で1回だけある場合に版を変更 |
+| Spring BootのBOMのプロパティ | `gradle.properties`かビルドスクリプトの`extra`・`ext`に1回だけ設定されていればその値を変更し、未設定なら`gradle.properties`に追記 |
+| 版を持つ依存宣言もSpring BootのBOMによる管理もない対象 | ビルドスクリプトの末尾に`dependencies { constraints { implementation("g:a:v") } }`を追記し、Groovyでは対応する書式を使用 |
+| それ以外 | `gradle_version_source_unsupported`で手動対応 |
+
+- 版あり・版なしの宣言が混在する場合や、版なしの直接依存をBOMが管理しない場合は手動対応にする
+- catalogの編集は`[versions]`の`key = "value"`、1行のライブラリの`"g:a:v"`またはインライン表の`version = "..."`に対応する
+- constraintsの追記は、対象がlockされている全構成が`compileClasspath`・`runtimeClasspath`・`productionRuntimeClasspath`・`testCompileClasspath`・`testRuntimeClasspath`の範囲にある場合に限る
+
+Spring BootのBOMのプロパティによる更新は、Spring Bootとdependency-managementの両プラグインを使う場合に行います。
+
+- Spring Bootプラグインと同じ版の`org.springframework.boot:spring-boot-dependencies`と親をMaven Centralから読み、対象の版を決めるプロパティを調べる
+    - 対象の管理版が`${p}`なら`p`を変更する
+    - 取り込むBOMの版が`${p}`で、そのBOMが対象を直接管理する場合は`p`を変更して一式を更新する
+    - 版の直書き、プロパティを版の一部に使う式、複数のBOMや別のBOMのimportを通す管理など、変更するプロパティを決められない場合は手動対応にする
+- BOMの版は現在と同じメジャー・マイナー版で対象を目標版以上にする最も低い正式版を選び、届かなければ`maven_bom_series_unreached`で手動対応にする
+    - 後のマイナー版で届くBOMの案内は[Mavenと同じ規則](#maven-version-sources)で調べる
+- 複数の対象が同じプロパティやcatalogの値を変更する場合は、必要な値のうち最も高い版にまとめる
+    - 同じ値で版が決まるほかのパッケージも、その版がMaven Centralにあることを確認する
+- 書式とコメントを保って編集し、同じ認識器で読み直して、依存宣言・catalog・プロパティ・constraintsの変更が予定した内容と一致することを確かめる
+- Gradleの版・toolchain・プラグインなど、更新で変えない宣言も読み直して照合する
+
+必要なファイルと手動対応になる入力は[Gradleの依存ファイル](remediation-reference.md#gradle-inputs)を参照してください。
+
 ### 直接依存の版指定 {#direct-dependencies}
 
 直接依存の版指定が更新目標を許さない場合は、対応する形式に限り、演算子を保って版の部分を編集します。
@@ -668,7 +713,7 @@ pipには、作業用の公式Pythonイメージに含まれる版を使いま�
 
 ### 作業用Podの実行 {#kubernetes-work-pods}
 
-Kubernetesでは、npm・pnpm・pip・uv・Goの更新と対応する依存元からの再解決を、設定した作業用namespaceの使い捨てPodで実行します。
+Kubernetesでは、npm・pnpm・pip・uv・Go・Gradleの更新と対応する依存元からの再解決を、設定した作業用namespaceの使い捨てPodで実行します。
 必要なリソースは利用者が[導入手順](remediation-setup.md#kubernetes-language-updates)に従って適用します。
 
 - ValidatingAdmissionPolicyで、許可するPodの形を固定する
@@ -683,11 +728,12 @@ Pod作成規則を確認できない場合は`work_admission_unverified`で手�
 クラスタの版を取得できない場合は同じ理由コードで延期し、Pod数や資源の上限に達した場合は`work_pod_limit`で延期します。
 ### 公式イメージの固定 {#worker-images}
 
-npm・pnpm・pip・uv・Goの更新には、公式Node.js・Python・Go (`golang`)イメージを使います。
+npm・pnpm・pip・uv・Go・Gradleの更新には、公式Node.js・Python・Go(`golang`)・Gradle(`gradle`)イメージを使います。
 使用する内容は同梱表のdigestで固定し、同じタグの内容が変わっても追従しません。
 
 - 必要なイメージをDocker、またはKubernetesノードのコンテナランタイムが取得する
 - ミラーを使う場合も、同梱表と同じdigestの内容を取得する
+- GradleはGradleの版とJDKの組ごとにdigestで固定し、実行するplatformで統合テストを通った組だけを使う
 - イメージを取得できない場合は、言語パッケージの更新を保留する
 - 取得に失敗しても、KestreLynxのコンテナ内で代わりにパッケージマネージャーを実行しない
 
@@ -751,7 +797,8 @@ Kubernetesでは、作成したPodを確認した後、受信用コンテナを�
 - 非rootで実行し、Linux capabilitiesをすべて削除して`no-new-privileges`を設定する
 - メモリ、CPU、プロセス数、出力量、実行時間を制限し、Kubernetesのプロセス数はノード側のPID上限で制限する
 - 書き込み可能な場所を、容量制限付きの一時領域に限定する
-- パッケージのスクリプトとソースのビルドを無効にする
+- npm・pnpm・pip・uvではパッケージのスクリプトとソースのビルドを無効にする
+- Gradleではビルドスクリプトと許可したプラグインのコードを実行し、`dependencies --update-locks`でlockfileを更新する
 - 実行環境、ツール、作業プログラムが指定した内容に一致することを確認する
 
 Dockerのroot filesystem設定自体は読み取り専用ではありません。
@@ -781,6 +828,31 @@ Goのジョブには、次の環境変数を固定して渡します。
 
 通信先は[依存パッケージの取得](outbound-communication.md#dependency-downloads)を参照してください。
 
+### Gradleの実行設定 {#gradle-worker-settings}
+
+Gradleのジョブは、対象の`group:artifact`をカンマで並べて次のコマンドを実行します。
+
+```sh
+gradle --no-daemon --no-build-cache -q -Porg.gradle.java.installations.auto-download=false dependencies --update-locks g1:a1,g2:a2
+```
+
+| 環境変数 | 値・扱い |
+| --- | --- |
+| `JAVA_HOME` | `/opt/java/openjdk` |
+| `GRADLE_USER_HOME` | `/tmp/kestrelynx-cache/gradle` |
+| `HOME` | `/home/worker` |
+
+- `gradle`は公式イメージの`/opt/gradle/bin/gradle`を使い、`gradlew`・`gradle-wrapper.jar`は使わない
+- 起動時にGradleの版と実行するJDKの版を照合し、JDKの自動取得を無効にする
+- 子プロセスの環境は固定した一覧から作り、`GRADLE_OPTS`・`JAVA_OPTS`・プロキシ設定を引き継がない
+- `GRADLE_USER_HOME`と`HOME`を一時領域に置き、イメージの利用者のinitスクリプトや設定を読み込まない
+- Dockerではイメージが宣言する`VOLUME`の`/home/gradle/.gradle`をtmpfsで覆い、匿名ボリュームが作られていないことを確認する
+- Kubernetesではノードのディスク上にボリュームが作られないよう、作業用Podの`/home/gradle/.gradle`を容量上限1MiBの空のメモリボリュームで読み取り専用に覆い、admission policyでボリュームの種類・マウント先・読み取り専用を制限し、ジョブの起動時に容量上限付きの読み取り専用メモリボリュームであることを確認する
+- 入力ファイルを依存ディレクトリからの相対パスで渡し、結果には`gradle.lockfile`と渡したビルドスクリプト・settings・properties・catalog・wrapperの設定・補助lockfileを返す
+- Gradleが作る`.gradle/`・`build/`は結果に含めない
+
+対応する版は[対応する実行環境](remediation-reference.md#supported-runtimes)、通信先は[依存パッケージの取得](outbound-communication.md#dependency-downloads)を参照してください。
+
 ### 結果の回収 {#worker-results}
 
 Dockerでは標準出力から、KubernetesではPodのログから暗号化した結果を回収して復号した後、作業用コンテナまたはPodの削除を試みます。
@@ -805,6 +877,7 @@ Dockerでは標準出力から、KubernetesではPodのログから暗号化し�
 | pip | 固定版を書き換え、既存のハッシュがあればPyPIのwheel情報から更新します。 | 稼働イメージの環境を対象に、更新前後の依存解決をdry-runで確認します。 |
 | Go | すべての対象を1回の`go get <module>@<version> ...`で更新し、`go mod tidy`は実行しない | `go.mod`の差分、`go.sum`、依存の要求、更新前後のスキャン結果を確認 |
 | Maven | KestreLynxが`pom.xml`の版・プロパティ・管理の宣言を書き換える | Maven Centralの中継を通して、Trivyが更新前後の依存を解決・スキャン |
+| Gradle | KestreLynxが版の宣言を書き換え、作業用コンテナ・Podで`dependencies --update-locks`を実行 | 返されたファイルとlockfileを検査し、更新前後のlockfileをTrivyでスキャン |
 
 pnpmで推移的依存だけを更新する場合は、再解決を促すために直接依存の記録も一時的に取り除くことがあります。
 
@@ -914,6 +987,39 @@ Mavenは実行せず、更新前後のすべての`pom.xml`をリポジトリと
 - npm・pnpm・uvの依存元からの再解決は適用しない
 
 マージ前の確認とPR本文の記載内容は[MavenのPRとCIでの確認](remediation-results.md#maven-pull-requests)を参照してください。
+
+### Gradleの更新結果の検査 {#gradle-update-validation}
+
+KestreLynxが書き換えたファイルを作業用コンテナ・Podへ渡し、返された結果を次の条件で検査します。
+
+| 検査対象 | 採用条件 |
+| --- | --- |
+| 返すファイル | 入力したファイルがすべてあり、作業用コンテナ・Podが変更したのは`gradle.lockfile`だけであること |
+| ビルド定義と補助lockfile | 書き換えて渡したファイル、`settings-gradle.lockfile`・`buildscript-gradle.lockfile`が渡した内容のままであること |
+| lockfileの構成 | 構成の集合と`empty=`に列挙した構成の集合が更新前後で同じであること |
+| エントリの削除 | 更新前の各構成にあるパッケージが削除されていないこと |
+| 対象の版 | 更新前に対象があったすべての構成で、選んだMaven Centralの公開版以上になっていること |
+| 追加・変更した座標 | Maven Centralに要求した座標と版の`.pom`があること |
+| SNAPSHOT | 追加・変更した版に、大文字・小文字を区別せず`SNAPSHOT`を含まないこと |
+| コメントと重複 | 新しいコメントがGradleの生成する形式であり、同じ構成で同じパッケージに複数の版がないこと |
+
+- 新しい版で不要になった依存も含め、エントリの削除は`gradle_lock_entry_removed`で手動対応にする
+- 構成の集合や`empty=`の変更は`gradle_lock_configurations_changed`、追加・変更したSNAPSHOT版は`gradle_lock_version_unsupported`で手動対応にする
+- lockfileはコメント・`group:artifact:version=configurations`・最大1行の`empty=`を読み取り、単独のCRや8192バイトを超える行を受け付けない
+    - 行長はLFを除き、CRLFのCRを含めて数える
+- 更新前後の`gradle.lockfile`だけを同じTrivy・脆弱性データベース・重大度でスキャンする
+    - 読み取った全エントリの名前と版が、それぞれのTrivyの`gradle`のパッケージ一覧にあることを確かめ、欠けていれば`source_scan_incomplete`で比較不能にする
+    - 更新前に対象の所見が確認でき、更新後にはどの出現箇所にも残らず、対象外を含めて新しい所見がないことを確かめる
+- 対象以外にlockされた版が変わったパッケージや、追加されたパッケージをPR本文に載せる
+
+#### 対象を外して残りを更新する条件 {#gradle-update-exclusions}
+
+- 書き換え前に対象ごとの公開版と版の宣言を調べ、使える公開版がない、宣言を変更できない、BOMの同じ系列で届かない対象は外して残りの更新を続ける
+- 共有する値の照合、書き換え後の読み直し、作業用コンテナ・Podの出力、スキャンの検査に失敗した場合は、その結果を採用しない
+- lockfileの更新後に対象が目標版へ届かなかった場合は、その対象を外して再実行する部分PRにはしない
+- npm・pnpm・uvの依存元からの再解決は適用しない
+
+マージ前の確認とPR本文の記載内容は[GradleのPRとCIでの確認](remediation-results.md#gradle-pull-requests)を参照してください。
 
 ### 部分PRの成立条件 {#partial-pr-selection}
 

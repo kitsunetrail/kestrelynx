@@ -16,7 +16,7 @@ See [Setup steps](remediation-setup.md) to enable them.
 | Language update runtimes | Series listed in [Supported runtimes](#supported-runtimes) |
 | Sensor | Not required for remediation plans or fix pull requests |
 | Kubernetes plans | Published-image and Dockerfile base-image update candidates, guidance for pulling floating tags again, and language-package update candidates |
-| Kubernetes PRs | Supports image tag updates in plain manifests, Kustomize `images[].newTag` updates, image tag updates in Helm values, base image updates in Dockerfiles, and Maven `pom.xml` updates; npm / pnpm / pip / uv / Go updates require [work Pods configured](remediation-setup.md#kubernetes-language-updates) |
+| Kubernetes PRs | Supports image tag updates in plain manifests, Kustomize `images[].newTag` updates, image tag updates in Helm values, base image updates in Dockerfiles, and Maven `pom.xml` updates; npm / pnpm / pip / uv / Go / Gradle updates require [work Pods configured](remediation-setup.md#kubernetes-language-updates) |
 
 ### docker run containers {#docker-run-containers}
 
@@ -45,6 +45,7 @@ See [Mapping docker run containers](remediation-setup.md#docker-run-mappings) fo
 | pip and uv dependencies | Public PyPI | A dependency-directory mapping is required from the planning stage |
 | Go module dependencies | Public Go module proxy (`proxy.golang.org`) and `sum.golang.org` | A dependency-directory mapping is required from the planning stage |
 | Maven dependencies (`pom.xml`) | Maven Central | A dependency-directory mapping is required from the planning stage |
+| Gradle dependencies (`gradle.lockfile`) | Maven Central | A dependency-directory mapping is required from the planning stage |
 
 Private npm registries, private PyPI sources, and private Go modules are not supported for updates.
 Image registry authentication is not used to retrieve dependency packages.
@@ -357,9 +358,80 @@ See [Go candidate selection](remediation-logic.md#go-package-selection) for cand
 | Version sources | Supports directly written versions, properties, parent property overrides, BOM version properties, and pins through `dependencyManagement`; targets whose edit locations cannot be determined require manual handling |
 
 - Maven updates do not use work containers or Pods; KestreLynx rewrites `pom.xml`
-- Gradle dependency files are excluded from fix pull requests
 
 See [Maven candidate selection](remediation-logic.md#maven-package-selection) for candidates and edit methods, and [Maven update validation](remediation-logic.md#maven-update-validation) for acceptance conditions.
+
+### Gradle dependency files {#gradle-inputs}
+
+| Input | Support |
+| --- | --- |
+| Required files | `gradle.lockfile`, `build.gradle` or `build.gradle.kts`, `settings.gradle` or `settings.gradle.kts`, and `gradle/wrapper/gradle-wrapper.properties` in the mapped dependency directory |
+| Optional files | Reads `gradle.properties`, `gradle/libs.versions.toml`, `settings-gradle.lockfile`, and `buildscript-gradle.lockfile`; `settings-gradle.lockfile` is also required when using a catalog |
+| Target findings | Findings from Java archives in the running image that Trivy detects as `jar` |
+| Target dependencies | Dependencies in `gradle.lockfile`'s `compileClasspath`, `runtimeClasspath`, or `productionRuntimeClasspath` that match the finding's name and running version |
+| Sources | Dependencies come only from Maven Central; plugins are retrieved from Gradle Plugin Portal and Maven Central |
+| Locking configuration | `dependencyLocking` must contain `lockAllConfigurations()` and `lockMode = LockMode.STRICT` exactly once each, and lockfile entries or `empty=` must include `compileClasspath` and `runtimeClasspath` |
+| Gradle version | Uses the same version as the wrapper's `distributionUrl`; URLs must have the form `https://services.gradle.org/distributions/gradle-<version>-bin.zip` or `-all.zip` |
+| JDK | Uses the version specified by `languageVersion` in `java.toolchain`, or 21 if not declared |
+| Runtime combinations | Limited to the Gradle version, JDK, and platform combinations in [Supported runtimes](#supported-runtimes) |
+| Project structure | Supports a single project; `include`, `includeBuild`, `allprojects`, `subprojects`, `buildSrc`, or `gradle/dependency-locks` requires manual handling |
+| Script selection | Having both Groovy and Kotlin build scripts, or both settings files, requires manual handling |
+| Multiple running versions | Multiple running versions of the same package require manual handling |
+
+#### Build script forms {#gradle-build-forms}
+
+Build scripts accept the following statements and argument forms.
+
+| Statement | Support |
+| --- | --- |
+| `plugins { }` | `java`, `java-library`, and `application` without versions; external plugin IDs and versions written directly as listed in the [allowed plugins table](#gradle-plugins) |
+| `group`, `version`, and `description` | String literals |
+| `java { }` | `toolchain { languageVersion = JavaLanguageVersion.of(N) }`, and assignments of strings, numbers, or `JavaVersion.VERSION_n` to `sourceCompatibility` and `targetCompatibility` |
+| `repositories { }` | Only `mavenCentral()` |
+| `configurations { }` | `compileOnly { extendsFrom(configurations.annotationProcessor.get()) }`; Groovy also supports `compileOnly { extendsFrom annotationProcessor }` |
+| `dependencies { }` | `configurationName("g:a:v")`, `configurationName("g:a")`, `configurationName(libs.x)`, and `configurationName(libs.bundles.x)`, and the same forms inside `constraints { }` |
+| `dependencyLocking { }` | Only `lockAllConfigurations()` and `lockMode = LockMode.STRICT`, with the block appearing once in the entire file |
+| `extra` and `ext` | Kotlin's `extra["p"] = "v"`, and Groovy's `ext["p"] = "v"` or `ext.p = "v"`, with names and values written directly |
+| Test tasks | Only `useJUnitPlatform()` inside `test { }`, `tasks.withType<Test> { }`, `tasks.withType(Test) { }`, `tasks.named<Test>("test") { }`, or `tasks.named("test") { }` |
+| `application { }` | `mainClass = "..."`; Kotlin also supports `mainClass.set("...")` |
+
+- Groovy dependency declarations can omit parentheses, as in `implementation 'g:a:v'`
+- Groovy also accepts directly written top-level `sourceCompatibility` and `targetCompatibility` values
+- Dependency and constraint configuration names can be `implementation`, `api`, `compileOnly`, `runtimeOnly`, `testImplementation`, `testCompileOnly`, `testRuntimeOnly`, `annotationProcessor`, or `testAnnotationProcessor`
+    - When using the Spring Boot plugin, `developmentOnly` is also read, but manual handling is required if standard configuration inheritance cannot determine whether the target is a direct dependency
+- Settings can contain `rootProject.name = "..."` and `gradlePluginPortal()` or `mavenCentral()` inside `pluginManagement { repositories { } }`
+    - Settings plugins are checked against the [allowed plugins table](#gradle-plugins); no combinations are currently allowed
+
+`gradle.properties` is limited to the following keys and values.
+
+| Key | Support |
+| --- | --- |
+| `org.gradle.parallel`, `org.gradle.caching`, `org.gradle.daemon`, and `org.gradle.configuration-cache` | `true` or `false` |
+| `org.gradle.jvmargs` | Space-separated memory settings using `-Xmx`, `-Xms`, or `-XX:MaxMetaspaceSize=`, and `-Dfile.encoding=UTF-8` |
+| Keys ending in `.version` | Versions written directly, limited to properties defined by the Spring Boot BOM in use |
+
+- For properties set through `extra` or `ext`, also read the Spring Boot BOM and its parents during the update and check that the names are defined
+- Catalogs accept only `[versions]`, `[libraries]`, `[bundles]`, and `[plugins]` in `gradle/libs.versions.toml`
+    - Libraries can be `"g:a:v"` or tables with `module` or `group` and `name`; versions can be string literals, `version.ref`, or omitted
+    - Bundles are lists of library aliases; duplicate aliases that map to the same accessor require manual handling
+    - Do not update `[versions]` values referenced by `[plugins]`; applying plugins through `alias(libs.plugins.x)` also requires manual handling
+- Statements absent from the table, including `apply from`, `buildscript { }`, `dependencyManagement { }`, `dependencyResolutionManagement { }`, `resolutionStrategy`, and `configurations.all`, require manual handling
+- Argument forms absent from the table, including string interpolation or construction, dynamic versions or version ranges, and `platform(...)` in dependency declarations, require manual handling
+- Other `gradle.properties` keys, Java agents, JVM arguments other than those allowed, line continuations, escapes, and duplicate keys require manual handling
+
+#### Allowed plugins {#gradle-plugins}
+
+| Plugin | Allowed version | Gradle version |
+| --- | --- | --- |
+| `java`, `java-library`, and `application` | No version specified | Gradle versions in [Supported runtimes](#supported-runtimes) |
+| `org.springframework.boot` | `4.1.2` | `9.8.2` |
+| `io.spring.dependency-management` | `1.1.7` | `9.8.2` |
+| `org.gradle.toolchains.foojay-resolver-convention` (settings) | No allowed combination | No allowed combination |
+
+- External plugins are allowed only in combinations whose versions have been checked; a version string that does not match exactly or a combination absent from the table requires manual handling with `gradle_plugin_unsupported`
+- Gradle updates use work containers or Pods, where build scripts and allowed plugin code run
+
+See [Gradle candidate selection](remediation-logic.md#gradle-package-selection) for candidates and edit methods, and [Gradle update validation](remediation-logic.md#gradle-update-validation) for acceptance conditions.
 
 ### Node.js version declarations {#node-declarations}
 
@@ -413,7 +485,7 @@ See [Tool version selection](remediation-logic.md#tool-version-selection) for ch
 
 ## Supported runtimes {#supported-runtimes}
 
-Supported runtimes are the supported series in the bundled table, currently Node.js 22, 24, and 26, Python 3.11–3.15, and Go 1.26 and 1.27.
+Supported runtimes for Node.js, Python, and Go are the supported series in the bundled table, currently Node.js 22, 24, and 26, Python 3.11–3.15, and Go 1.26 and 1.27.
 The following versions and dates are information held by KestreLynx and change with KestreLynx updates.
 
 | Series | Execution version in the bundled table | Support end date |
@@ -428,6 +500,12 @@ The following versions and dates are information held by KestreLynx and change w
 | Python 3.15 | `3.15.1` | 2031-10-31 |
 | Go 1.26 | `1.26.10` | 2027-02-10 |
 | Go 1.27 | `1.27.3` | 2027-08-19 |
+| Gradle 8 / JDK 21 | `8.14.6` | No end date is set |
+| Gradle 9 / JDK 17 and 21 | `9.8.2` | No end date is set |
+
+- Gradle supports only `linux/amd64`, on which the Gradle version and JDK combinations above have been run in integration tests
+- Even if an image is in the bundled Gradle table, it is not used unless its digest is recorded as having passed integration tests on that platform
+- Other Gradle version, JDK, and platform combinations require manual handling with `gradle_version_unsupported` or `gradle_toolchain_unsupported`
 
 | Use | Default runtime |
 | --- | --- |
@@ -435,6 +513,7 @@ The following versions and dates are information held by KestreLynx and change w
 | Work containers for pip updates | Python 3.13 |
 | uv updates | Selected according to Python declarations |
 | Go updates | Selected from go.mod and the target versions' go lines |
+| Gradle updates | The same Gradle version as the wrapper, with the JDK specified by the toolchain (21 if not declared) |
 
 | Series in the bundled table whose support has ended | Support end date |
 | --- | --- |
@@ -678,11 +757,14 @@ The following tables give each code's meaning and related decision rules or chec
 | `go_replace_unsupported` | `go.mod` has a `replace` directive, which is not handled | [Go dependency files](#go-inputs) |
 | `go_exclude_unsupported` | `go.mod` has an `exclude` directive, which is not handled | [Go dependency files](#go-inputs) |
 | `go_binary_not_from_source` | The Go binary of the image does not match this `go.mod`, or its package list is incomplete and cannot be compared | [Go dependency files](#go-inputs) |
-| `jar_bundled_copy` | a copy of the package is bundled inside another archive, which no change of the pom files reaches | [Maven candidate selection](remediation-logic.md#maven-package-selection) |
+| `jar_bundled_copy` | a copy of the package is bundled inside another archive, which no change of the pom files reaches | [Maven candidate selection](remediation-logic.md#maven-package-selection), [Gradle candidate selection](remediation-logic.md#gradle-package-selection) |
 | `maven_app_jar_ambiguous` | the image's archive of this project cannot be told apart | [Maven dependency files](#maven-inputs) |
 | `maven_model_unsupported` | the pom files use a form whose resolution the check of the update does not reproduce | [Maven dependency files](#maven-inputs) |
 | `maven_parent_mismatch` | a pom file where the parent is looked for does not match the declared parent | [Maven dependency files](#maven-inputs) |
 | `maven_reactor_unsupported` | the modules of the project cannot be read as one build | [Maven dependency files](#maven-inputs) |
+| `gradle_build_unsupported` | the build definition has a form that cannot be checked | [Build script forms](#gradle-build-forms) |
+| `gradle_locking_unenforced` | the build is not set to build exactly what gradle.lockfile lists (lock mode STRICT with every configuration locked) | [Gradle dependency files](#gradle-inputs) |
+| `gradle_plugin_unsupported` | the build uses a plugin or a plugin version that is not allowed | [Allowed plugins](#gradle-plugins) |
 | `workspace_unsupported` | The project's workspace layout is not supported | |
 | `workspace_settings_unsupported` | The workspace settings file contains unsupported settings | |
 | `dynamic_metadata` | The project's metadata is dynamic | |
@@ -725,6 +807,8 @@ The following tables give each code's meaning and related decision rules or chec
 | `go_version_too_old` | `go.mod` declares no `go` version, or one below 1.21 | [Go dependency files](#go-inputs) |
 | `go_toolchain_unsupported` | The `toolchain` line of `go.mod` is not a released Go version | [Go dependency files](#go-inputs) |
 | `go_runtime_unavailable` | No supported Go is as new as the update needs | [Go selection](remediation-logic.md#go-runtime-selection) |
+| `gradle_version_unsupported` | the build uses a Gradle version that is not supported | [Gradle dependency files](#gradle-inputs) |
+| `gradle_toolchain_unsupported` | the build asks for a Java toolchain that is not supported | [Gradle execution settings](remediation-logic.md#gradle-worker-settings) |
 | `runtime_eol` | The runtime targeted by the update is past the end of its support | [Runtime selection](remediation-logic.md#runtime-and-tool-versions) |
 | `runtime_engines_mismatch` | An updated dependency does not support the minimum Node.js version declared by the project | [Node.js compatibility requirements](remediation-logic.md#node-compatibility) |
 | `requires_python_unsupported` | The Python version requirement cannot be satisfied, is missing, or cannot be interpreted | [Python selection for uv](remediation-logic.md#uv-python-selection) |
@@ -768,11 +852,15 @@ The following tables give each code's meaning and related decision rules or chec
 | `go_release_retracted` | The module's author retracted the target version | [Go candidate selection](remediation-logic.md#go-package-selection) |
 | `go_line_raised_too_far` | A changed `go` or `toolchain` line exceeds the lowest Go version the running binaries were built with, or a line's version changes while the build version is unknown | [Go update validation](remediation-logic.md#go-update-validation) |
 | `go_dependencies_uncheckable` | The module versions followed to check the updated dependency requirements cannot all be checked because there are too many | [Go update validation](remediation-logic.md#go-update-validation) |
-| `maven_fix_in_other_major` | the fix is only in another major version | [Maven candidate selection](remediation-logic.md#maven-package-selection) |
+| `maven_fix_in_other_major` | the fix is only in another major version | [Maven candidate selection](remediation-logic.md#maven-package-selection), [Gradle target versions](remediation-logic.md#gradle-target-versions) |
 | `maven_version_source_unsupported` | the version is decided in a way no edit of the project's pom files changes | [Version sources and edits](remediation-logic.md#maven-version-sources) |
-| `maven_release_not_found` | Maven Central lists no release the update can take | [Target versions and Maven Central releases](remediation-logic.md#maven-target-versions) |
-| `maven_bom_series_unreached` | no release of the BOM in the minor version the project imports reaches the fixed version | [Version sources and edits](remediation-logic.md#maven-version-sources) |
+| `maven_release_not_found` | Maven Central lists no release the update can take | [Target versions and Maven Central releases](remediation-logic.md#maven-target-versions), [Gradle target versions](remediation-logic.md#gradle-target-versions) |
+| `maven_bom_series_unreached` | no release of the BOM in the minor version the project imports reaches the fixed version | [Version sources and edits](remediation-logic.md#maven-version-sources), [Gradle version declarations and edits](remediation-logic.md#gradle-version-sources) |
 | `maven_dependency_held_back` | the update leaves a dependency of the new release below the version the release declares | [Maven update validation](remediation-logic.md#maven-update-validation) |
+| `gradle_version_source_unsupported` | the version is decided in a way no edit of the project's files changes | [Version declarations and edits](remediation-logic.md#gradle-version-sources) |
+| `gradle_lock_entry_removed` | the update took an entry out of gradle.lockfile | [Gradle update validation](remediation-logic.md#gradle-update-validation) |
+| `gradle_lock_configurations_changed` | the update changed the configurations gradle.lockfile locks | [Gradle update validation](remediation-logic.md#gradle-update-validation) |
+| `gradle_lock_version_unsupported` | the updated gradle.lockfile locks a snapshot version | [Gradle update validation](remediation-logic.md#gradle-update-validation) |
 | `no_fixed_version_above_installed` | There is no fixed version above the running one, or nothing to fix | [Fixed-version lower bound](remediation-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | The candidate or updated version does not satisfy the dependency constraints | [Direct dependency version specifications](remediation-logic.md#direct-dependencies), [Transitive dependency update scope](remediation-logic.md#transitive-dependencies) |
 | `constraint_not_evaluable` | The version constraint cannot be evaluated, or the fixed version is a prerelease pip does not select | [Direct dependency version specifications](remediation-logic.md#direct-dependencies) |

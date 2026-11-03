@@ -99,7 +99,7 @@ PRには、イメージ参照とdigest、Workload名、リポジトリ名、ソ�
 
 | 通信主体 | 通信先 | 取得・送信する情報 | 発生条件 |
 | --- | --- | --- | --- |
-| DockerまたはKubernetesノードのコンテナランタイム | Docker Hubまたは設定したミラー | 作業用の公式Node.js・Python・Go (`golang`)イメージを取得 | 言語パッケージの更新に必要なイメージがローカルにない場合 |
+| DockerまたはKubernetesノードのコンテナランタイム | Docker Hubまたは設定したミラー | 作業用の公式Node.js・Python・Go(`golang`)・Gradle(`gradle`)イメージを取得 | 言語パッケージの更新に必要なイメージがローカルにない場合 |
 | Kubernetesノードのコンテナランタイム | KestreLynxイメージのレジストリ | 入力ファイルを受け取るコンテナのイメージを取得 | 作業用Podに必要なイメージがローカルにない場合 |
 
 ミラーの設定は[作業用イメージの取得先](configuration.md#remediation-worker-registry)、固定と取得不能時の扱いは[公式イメージの固定](remediation-logic.md#worker-images)を参照してください。
@@ -126,14 +126,19 @@ PRには、イメージ参照とdigest、Workload名、リポジトリ名、ソ�
 | KestreLynx | `proxy.golang.org` | モジュールパスと版を指定し、版情報の`.info`・`go.mod`の`.mod`・最新版の`@latest`を取得 | Goの目標版、撤回、必要なGoの版、依存の要求を確認する場合 |
 | KestreLynx | `sum.golang.org` | モジュールパスと版を指定し、`lookup`でモジュールのzipと`go.mod`のハッシュを取得 | Goの更新結果の照合と`go.sum`の補完を行う場合 |
 | KestreLynx | `repo.maven.apache.org` | groupId・artifactId・版を指定し、`maven-metadata.xml`と親・BOM・依存の`.pom`を取得 | Mavenの公開版・版の出所・依存の要求と更新前後の解決結果を確認する場合 |
+| KestreLynx | `repo.maven.apache.org` | groupId・artifactId・版を指定し、`maven-metadata.xml`とSpring BootのBOM・親・取り込むBOM・依存の`.pom`を取得 | Gradleで更新する依存の公開版・BOMのプロパティ・追加や変更した座標を確認する場合 |
 | Trivy | `127.0.0.1`の空きポート | Maven Centralの中継に`.pom`を要求 | Mavenの更新前後の依存ファイルを検査する場合 |
 | 作業用コンテナ | 公開npmレジストリ・PyPIと配布物の取得先 | 依存解決、lockfile生成、検査に必要な情報・配布物を取得 | npm・pnpm・pip・uvの依存更新を実行する場合 |
 | 作業用コンテナ | `proxy.golang.org`・`sum.golang.org` | モジュールの情報・配布物とハッシュの検証に必要な情報を取得 | Goの依存更新を実行する場合 |
 | 作業用コンテナ | `storage.googleapis.com` | proxyからの転送先でモジュールのzipを取得 | Goの依存更新で配布物の取得先が転送される場合 |
+| 作業用コンテナ | Maven Central(`repo.maven.apache.org`) | 依存の解決とlockfileの更新に必要なメタデータ・配布物を取得 | Gradleの依存更新を実行する場合 |
+| 作業用コンテナ | Gradle Plugin Portal(`plugins.gradle.org`・`plugins-artifacts.gradle.org`)とMaven Central | 許可したプラグインとその依存のメタデータ・配布物を取得 | Gradleのビルドスクリプトがプラグインを適用する場合 |
 
 更新処理は、[マネージャー別の更新処理](remediation-logic.md#manager-update-methods)を参照してください。
 
-- Maven Centralへの接続はKestreLynxが行い、`User-Agent`に`kestrelynx`を付ける
+- Mavenの検査の中継と、Maven・Gradleの版やPOMの照合では、KestreLynxがMaven Centralへ接続し、`User-Agent`に`kestrelynx`を付ける
+- Gradleの作業用コンテナも[`mavenCentral()`の取得先](https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.dsl.RepositoryHandler.html)へ接続する
+- Gradle Plugin Portalの配布物は[`plugins-artifacts.gradle.org`へのリダイレクト](https://plugins.gradle.org/docs/mirroring)で取得する
 - Mavenの依存解決でTrivyが接続する先は`127.0.0.1`の中継だけで、Maven Centralには直接接続しない
 - 中継は読み取ったプロジェクト内のモジュールの`.pom`の要求をMaven Centralへ転送しない
 

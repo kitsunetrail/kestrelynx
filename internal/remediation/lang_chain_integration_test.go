@@ -371,12 +371,23 @@ func TestIntegrationUvChain(t *testing.T) {
 		got := run(t, "uv_chain_no_solution", group(typePythonPkg, "cryptography", "41.0.7", pyOrigin("cryptography", "41.0.7"),
 			CVERef{VulnID: "CVE-2024-26130", FixedVers: []string{"42.0.4"}}))
 		wantCategory(t, got, CategoryManual, ReasonUpdateStepFailed)
+		// uv, asked for the fixed cryptography, finds no resolution within the
+		// project's range for pyopenssl: the chain is recorded as not fixed,
+		// with the reason and the hints.
 		c := got.Update.Chain
-		if c == nil || c.Outcome != ChainFailed || c.Source != "chain_job" || c.Usage.Containers != 2 {
-			t.Fatalf("chain = %+v: the chain job failed too and the first update's reason stands", c)
+		if c == nil || c.Outcome != ChainNotFixed || c.Reason != ReasonNoResolution || c.Source != "chain_job" || c.Usage.Containers != 2 {
+			t.Fatalf("chain = %+v", c)
 		}
-		if p := packageOf(t, got, "cryptography"); p.Reason != ReasonUpdateStepFailed {
+		if p := packageOf(t, got, "cryptography"); p.Reason != ReasonDependentsNotFixed {
 			t.Errorf("cryptography = %+v", p)
+		}
+		if len(c.Hints) != 1 {
+			t.Fatalf("hints = %+v", c.Hints)
+		}
+		h := c.Hints[0]
+		if h.Package != "cryptography" || h.Parent != "pyopenssl" || !h.Direct || h.Spec != ">=23.2,<24" ||
+			h.InSpec == nil || h.InSpec.Version != "23.3.0" || h.InSpec.Fixes || h.Latest == nil || !h.Latest.Fixes {
+			t.Errorf("hint = %+v (in spec %+v, latest %+v)", h, h.InSpec, h.Latest)
 		}
 	})
 }

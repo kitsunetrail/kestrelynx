@@ -422,6 +422,114 @@ func (b *planBuilder) chainTops(c *remediation.ChainUpdate) string {
 	return b.cut(tops)
 }
 
+// chainHolders names the dependents that hold the package back and what each
+// requires of it, from the requirements the chain update found; "" when it
+// recorded none for the package.
+func (b *planBuilder) chainHolders(x pkgLine) string {
+	type holder struct{ parent, version, rng string }
+	seen := map[holder]bool{}
+	var parts []string
+	for _, k := range x.chain.Blocked {
+		h := holder{k.Parent, k.ParentVersion, k.Range}
+		if k.Package != x.name || seen[h] {
+			continue
+		}
+		seen[h] = true
+		parts = append(parts, fmt.Sprintf(b.msg.PlanChainHolder, litMrkdwn(k.Parent), litMrkdwn(k.ParentVersion), litMrkdwn(k.Package), litMrkdwn(k.Range)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return b.cut(parts)
+}
+
+// hintLines are the lines under a package's chain line that say what newer
+// releases of the dependents holding it back declare for it. A dependent is
+// named in them when the project does not declare it or when more than one
+// dependent holds the package.
+func (b *planBuilder) hintLines(x pkgLine) []string {
+	if x.chain == nil {
+		return nil
+	}
+	var hints []remediation.ChainHint
+	for _, h := range x.chain.Hints {
+		if h.Package == x.name {
+			hints = append(hints, h)
+		}
+	}
+	// The dependents are named when the line above names more than one,
+	// whether or not each has a hint.
+	type holder struct{ parent, version string }
+	holders := map[holder]bool{}
+	for _, k := range x.chain.Blocked {
+		if k.Package == x.name {
+			holders[holder{k.Parent, k.ParentVersion}] = true
+		}
+	}
+	pkg := litMrkdwn(x.name)
+	var out []string
+	add := func(line string) { out = append(out, fmt.Sprintf(b.msg.PlanHintBullet, line)) }
+	for _, h := range hints {
+		parent, spec := litMrkdwn(h.Parent), litMrkdwn(h.Spec)
+		named := h.Spec == "" || len(hints) > 1 || len(holders) > 1
+		if r := h.InSpec; r != nil && h.Spec != "" {
+			version := litMrkdwn(r.Version)
+			switch {
+			case r.Version == h.ParentVersion && named:
+				add(fmt.Sprintf(b.msg.PlanHintInSpecCurrentNamed, spec, version, parent))
+			case r.Version == h.ParentVersion:
+				add(fmt.Sprintf(b.msg.PlanHintInSpecCurrent, spec, version))
+			case named:
+				add(b.hintRelease(fmt.Sprintf(b.msg.PlanHintInSpecNamed, spec, version, parent), pkg, r))
+			default:
+				add(b.hintRelease(fmt.Sprintf(b.msg.PlanHintInSpec, spec, version), pkg, r))
+			}
+		}
+		if r := h.Latest; r != nil {
+			version := litMrkdwn(r.Version)
+			switch {
+			case r.Version == h.ParentVersion:
+				add(fmt.Sprintf(b.msg.PlanHintLatestCurrent, parent, version))
+			case named:
+				add(b.hintRelease(fmt.Sprintf(b.msg.PlanHintLatestNamed, litMrkdwn(seriesOf(r.Version)), version, parent), pkg, r))
+			default:
+				add(b.hintRelease(fmt.Sprintf(b.msg.PlanHintLatest, litMrkdwn(seriesOf(r.Version)), version), pkg, r))
+			}
+			if h.Spec == "" && len(h.Via) > 0 && (r.Fixes || r.Dropped) {
+				via := make([]string, len(h.Via))
+				for i, v := range h.Via {
+					via[i] = litMrkdwn(v)
+				}
+				add(fmt.Sprintf(b.msg.PlanHintVia, b.cut(via), parent))
+			}
+		}
+	}
+	return out
+}
+
+// hintRelease completes a hint line: what the release named by subject
+// declares for the package.
+func (b *planBuilder) hintRelease(subject, pkg string, r *remediation.ChainHintRelease) string {
+	switch {
+	case r.Dropped:
+		return fmt.Sprintf(b.msg.PlanHintDropped, subject, pkg)
+	case r.Fixes:
+		return fmt.Sprintf(b.msg.PlanHintFixes, subject, pkg, litMrkdwn(r.Range))
+	}
+	return fmt.Sprintf(b.msg.PlanHintNoFix, subject, pkg, litMrkdwn(r.Range))
+}
+
+// seriesOf is the series a version is released in, as npm ranges read
+// compatibility: the major version, or for a 0.x version the minor one too
+// ("12", "0.5").
+func seriesOf(version string) string {
+	parts := strings.SplitN(version, ".", 3)
+	if len(parts) >= 2 && parts[0] == "0" {
+		return parts[0] + "." + parts[1]
+	}
+	return parts[0]
+}
+
 // chainLine is the line about a package a chain update was meant for and did
 // not take to its version, "" when the update's record does not say enough.
 func (b *planBuilder) chainLine(x pkgLine) string {
@@ -435,7 +543,10 @@ func (b *planBuilder) chainLine(x pkgLine) string {
 	name, from, target := litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.target)
 	switch x.reason {
 	case remediation.ReasonDependentsNotFixed:
-		return fmt.Sprintf(b.msg.PlanChainNotFixed, name, from, target, tops)
+		if holders := b.chainHolders(x); holders != "" {
+			return fmt.Sprintf(b.msg.PlanChainNotFixed, name, from, target, holders)
+		}
+		return fmt.Sprintf(b.msg.PlanChainNotFixedTops, name, from, target, tops)
 	case remediation.ReasonDependentsRejected:
 		return fmt.Sprintf(b.msg.PlanChainRejected, name, from, target, tops, b.reason(x.chain.Reason))
 	case remediation.ReasonDependentsUnsupported, remediation.ReasonDependentsLimit:
@@ -1010,9 +1121,11 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 		}
 		name, from, target := litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.target)
 		var line string
+		var hints []string
 		switch {
 		case b.chainLine(x) != "":
 			line = b.chainLine(x)
+			hints = b.hintLines(x)
 		case x.reason == remediation.ReasonTargetNotUpdated:
 			line = fmt.Sprintf(b.msg.PlanNotUpdated, name, target, from, litMrkdwn(file))
 		case x.leftOut:
@@ -1025,6 +1138,9 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 			line = fmt.Sprintf(b.msg.PlanPackageReason, name, from, target, b.reason(x.reason), note+b.bomRaise(x))
 		}
 		e.line(tag, kv(label, line))
+		for _, h := range hints {
+			e.line(tag, h)
+		}
 	}
 	for _, g := range groups {
 		e.line(tag, kv(label, g.header))

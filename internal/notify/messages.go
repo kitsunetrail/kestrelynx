@@ -466,7 +466,21 @@ type messages struct {
 	PlanLeftOut                  string // "%[1]s %[2]s → %[3]s left out because %[4]s" (name, old, target, reason)
 	PlanBOMRaise                 string // " (raising %[1]s to %[2]s reaches it)" (the BOM or its property, the release)
 	PlanChangeWith               string // "%[1]s %[2]s → %[3]s (with %[4]s)" (name, old, new, the direct dependencies updated with it)
-	PlanChainNotFixed            string // "%[1]s %[2]s → %[3]s: re-resolving %[4]s ... did not reach the fixed version this time" (name, installed, target, the direct dependencies)
+	PlanChainNotFixed            string // "%[1]s %[2]s → %[3]s: not raised, as %[4]s" (name, installed, target, the PlanChainHolder clauses)
+	PlanChainHolder              string // "the dependent %[1]s %[2]s requires %[3]s %[4]s" (dependent, its version, package, range)
+	PlanChainNotFixedTops        string // "%[1]s %[2]s → %[3]s: re-resolving %[4]s ... did not reach the fixed version this time" (name, installed, target, the direct dependencies), when no holder is recorded
+	PlanHintInSpec               string // "the newest %[2]s within the package.json range (%[1]s)" (range, version)
+	PlanHintInSpecNamed          string // the same naming the dependent: (range, version, dependent)
+	PlanHintInSpecCurrent        string // "within the package.json range (%[1]s), the current %[2]s is the newest" (range, version)
+	PlanHintInSpecCurrentNamed   string // the same naming the dependent: (range, version, dependent)
+	PlanHintLatest               string // "the newest %[2]s of the %[1]s series" (series, version)
+	PlanHintLatestNamed          string // the same naming the dependent: (series, version, dependent)
+	PlanHintLatestCurrent        string // "%[1]s %[2]s is the newest release" (dependent, version)
+	PlanHintFixes                string // "%[1]s requires %[2]s %[3]s (a fixed version included)" (release phrase, package, range)
+	PlanHintNoFix                string // "%[1]s also requires %[2]s %[3]s (no fixed version included)" (release phrase, package, range)
+	PlanHintDropped              string // "%[1]s does not depend on %[2]s directly" (release phrase, package)
+	PlanHintVia                  string // "which release of %[1]s brings in this %[2]s is not checked" (direct dependencies, dependent)
+	PlanHintBullet               string // "  • %s"
 	PlanChainRejected            string // "%[1]s %[2]s → %[3]s needs %[4]s updated as well, and that update was not adopted because %[5]s" (..., why)
 	PlanChainHeld                string // "%[1]s %[2]s → %[3]s is held back by %[4]s, and updating %[4]s was not tried because %[5]s" (..., why)
 	PlanChainWaiting             string // "... a version it brings in is less than 72 hours old, so it is tried again after %[5]s" (..., the time)
@@ -875,7 +889,21 @@ var enMessages = messages{
 	PlanLeftOut:                  "%[1]s %[2]s → %[3]s left out because %[4]s",
 	PlanBOMRaise:                 " (raising %[1]s to %[2]s reaches it)",
 	PlanChangeWith:               "%[1]s %[2]s → %[3]s (with %[4]s)",
-	PlanChainNotFixed:            "%[1]s %[2]s → %[3]s: re-resolving %[4]s within the project's ranges did not reach the fixed version this time",
+	PlanChainNotFixed:            "%[1]s %[2]s → %[3]s: not raised, as %[4]s",
+	PlanChainHolder:              "the dependent %[1]s %[2]s requires %[3]s %[4]s",
+	PlanChainNotFixedTops:        "%[1]s %[2]s → %[3]s: re-resolving %[4]s within the project's ranges did not reach the fixed version this time",
+	PlanHintInSpec:               "the newest %[2]s within the package.json range (%[1]s)",
+	PlanHintInSpecNamed:          "the newest %[3]s %[2]s within the package.json range (%[1]s)",
+	PlanHintInSpecCurrent:        "within the package.json range (%[1]s), the current %[2]s is the newest",
+	PlanHintInSpecCurrentNamed:   "within the package.json range of %[3]s (%[1]s), the current %[2]s is the newest",
+	PlanHintLatest:               "the newest %[2]s of the %[1]s series",
+	PlanHintLatestNamed:          "the newest %[3]s %[2]s of the %[1]s series",
+	PlanHintLatestCurrent:        "%[1]s %[2]s is the newest release",
+	PlanHintFixes:                "%[1]s requires %[2]s %[3]s (a fixed version included)",
+	PlanHintNoFix:                "%[1]s also requires %[2]s %[3]s (no fixed version included)",
+	PlanHintDropped:              "%[1]s does not depend on %[2]s directly",
+	PlanHintVia:                  "which release of %[1]s brings in this %[2]s is not checked",
+	PlanHintBullet:               "  • %s",
 	PlanChainRejected:            "%[1]s %[2]s → %[3]s needs %[4]s updated as well, and that update was not adopted because %[5]s",
 	PlanChainHeld:                "%[1]s %[2]s → %[3]s is held back by %[4]s, and updating %[4]s was not tried because %[5]s",
 	PlanChainWaiting:             "%[1]s %[2]s → %[3]s needs %[4]s updated as well; a version it brings in is less than 72 hours old, so it is tried again after %[5]s",
@@ -1280,7 +1308,21 @@ var jaMessages = messages{
 	PlanLeftOut:                  "%[1]s %[2]s → %[3]s は%[4]sため除外",
 	PlanBOMRaise:                 " (%[1]s を %[2]s に上げれば届く)",
 	PlanChangeWith:               "%[1]s %[2]s → %[3]s（%[4]s も更新）",
-	PlanChainNotFixed:            "%[1]s %[2]s → %[3]s: %[4]s をプロジェクトの範囲内で解決し直したが、今回の再解決では修正版に届かなかった",
+	PlanChainNotFixed:            "%[1]s %[2]s → %[3]s: 依存元の %[4]s と指定しているため上げられない",
+	PlanChainHolder:              "%[1]s %[2]s が %[3]s を %[4]s",
+	PlanChainNotFixedTops:        "%[1]s %[2]s → %[3]s: %[4]s をプロジェクトの範囲内で解決し直したが、今回の再解決では修正版に届かなかった",
+	PlanHintInSpec:               "package.json の指定（%[1]s）の範囲で最新の %[2]s",
+	PlanHintInSpecNamed:          "package.json の %[3]s の指定（%[1]s）の範囲で最新の %[2]s",
+	PlanHintInSpecCurrent:        "package.json の指定（%[1]s）の範囲では、今の %[2]s が最新",
+	PlanHintInSpecCurrentNamed:   "package.json の %[3]s の指定（%[1]s）の範囲では、今の %[2]s が最新",
+	PlanHintLatest:               "%[1]s 系の最新の %[2]s",
+	PlanHintLatestNamed:          "%[3]s %[1]s 系の最新の %[2]s",
+	PlanHintLatestCurrent:        "%[1]s は今の %[2]s が最新の版",
+	PlanHintFixes:                "%[1]s は、%[2]s を %[3]s と指定（修正版を含む）",
+	PlanHintNoFix:                "%[1]s も、%[2]s を %[3]s と指定（修正版を含まない）",
+	PlanHintDropped:              "%[1]s は、%[2]s を直接は使っていない",
+	PlanHintVia:                  "%[1]s のどの版でこの %[2]s が入るかは未確認",
+	PlanHintBullet:               "  • %s",
 	PlanChainRejected:            "%[1]s %[2]s → %[3]s には %[4]s の更新も必要だが、%[5]sため採用しない",
 	PlanChainHeld:                "%[1]s %[2]s → %[3]s は %[4]s に止められていて、%[5]sため %[4]s の更新を試していない",
 	PlanChainWaiting:             "%[1]s %[2]s → %[3]s には %[4]s の更新も必要だが、入る版の公開から72時間経っていないため %[5]s 以降に再試行する",

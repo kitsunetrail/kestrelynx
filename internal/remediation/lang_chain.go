@@ -78,6 +78,10 @@ type chainScope struct {
 	// peers are the names, by the key of the entry that requires them, that
 	// the registry declares as peer dependencies only.
 	peers map[string]map[string]bool
+	// directParents are the dependents of the pinning requirements that the
+	// project requires itself, as name@version: an entry of the same name
+	// further down is not one of them.
+	directParents map[string]bool
 }
 
 // inGraph returns the scope with its keys written as a comparison graph writes
@@ -509,7 +513,8 @@ func buildChainScope(ctx context.Context, r *updateRun, g0 *depGraph, U []string
 	s := &chainScoper{ctx: ctx, r: &sr, g: g, norms: map[int]*chainNorm{}, names: cand}
 
 	scope := &chainScope{Names: map[string]bool{}, Be: map[string]bool{}, Anc: map[string]bool{},
-		RAnc: map[string]bool{}, RTgt: map[string]bool{}, RNest: map[string]bool{}, Targets: map[string]bool{}, Scheme: sc}
+		RAnc: map[string]bool{}, RTgt: map[string]bool{}, RNest: map[string]bool{}, Targets: map[string]bool{}, Scheme: sc,
+		directParents: map[string]bool{}}
 
 	// Which occurrences of each package are held, and by what.
 	var pinParents []int
@@ -568,6 +573,9 @@ func buildChainScope(ctx context.Context, r *updateRun, g0 *depGraph, U []string
 				case edgePinning:
 					h.blocks = append(h.blocks, ChainBlock{Package: n, Version: node.version, Parent: p.name, ParentVersion: p.version, Range: ne.spec, Proof: proof})
 					h.parent = append(h.parent, p.id)
+					if len(rev.roots[p.id]) > 0 {
+						scope.directParents[p.name+"@"+p.version] = true
+					}
 				}
 			}
 			occs = append(occs, h)

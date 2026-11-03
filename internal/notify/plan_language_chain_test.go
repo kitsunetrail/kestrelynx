@@ -61,8 +61,8 @@ func TestPlanSlack_PackagesTheChainUpdateDidNotTake(t *testing.T) {
 		en, ja string
 	}{
 		{"not fixed", remediation.ReasonDependentsNotFixed, remediation.ChainUpdate{Outcome: remediation.ChainNotFixed},
-			"express 4.18.2 → 4.19.2: re-resolving mkdirp 0.5.1 within the project's ranges did not reach the fixed version this time",
-			"express 4.18.2 → 4.19.2: mkdirp 0.5.1 をプロジェクトの範囲内で解決し直したが、今回の再解決では修正版に届かなかった"},
+			"express 4.18.2 → 4.19.2: not raised, as the dependent mkdirp 0.5.1 requires express 4.18.2",
+			"express 4.18.2 → 4.19.2: 依存元の mkdirp 0.5.1 が express を 4.18.2 と指定しているため上げられない"},
 		{"rejected", remediation.ReasonDependentsRejected, remediation.ChainUpdate{Outcome: remediation.ChainRejected, Reason: remediation.ReasonSourceIntroduced},
 			"express 4.18.2 → 4.19.2 needs mkdirp 0.5.1 updated as well, and that update was not adopted because the update brings new findings into the dependency files",
 			"express 4.18.2 → 4.19.2 には mkdirp 0.5.1 の更新も必要だが、更新で依存関係ファイルに新たな所見が入るため採用しない"},
@@ -173,5 +173,114 @@ func TestWebhook_ThroughIsKeptWhenThePlanTiesTheItemToItsPullRequest(t *testing.
 	pkg := rem["language_items"].([]any)[0].(map[string]any)["packages"].([]any)[0].(map[string]any)
 	if th, _ := pkg["through"].([]any); len(th) != 1 || th[0] != "mkdirp" {
 		t.Errorf("package = %v", pkg)
+	}
+}
+
+// A chain update that recorded no requirement for the package itself still
+// names the direct dependencies it re-resolved.
+func TestPlanSlack_ChainNotFixedWithoutHolder(t *testing.T) {
+	r, _, _ := planCycleFixture()
+	p := languageFixture()
+	li := chainItem(&p)
+	li.Update.Chain = &remediation.ChainUpdate{Outcome: remediation.ChainNotFixed,
+		Blocked: []remediation.ChainBlock{{Package: "other", Version: "1.0.0", Parent: "mkdirp", ParentVersion: "0.5.1", Range: "1.0.0", Proof: "exact"}},
+		Tops:    []remediation.ChainMove{{Name: "mkdirp", From: "0.5.1", Kind: "top"}}}
+	li.Category, li.Reason = remediation.CategoryManual, remediation.ReasonTargetNotUpdated
+	li.Packages[0].Action, li.Packages[0].Reason = remediation.ActionManual, remediation.ReasonDependentsNotFixed
+	if got := slackPlanText(r, &PlanInfo{Plan: &p, Changed: true}, LanguageJA); !strings.Contains(got, "express 4.18.2 → 4.19.2: mkdirp 0.5.1 をプロジェクトの範囲内で解決し直したが、今回の再解決では修正版に届かなかった") {
+		t.Errorf("ja:\n%s", got)
+	}
+}
+
+// The hints are listed under the package's chain line: what the newest
+// release within the project's range and the newest release of all declare.
+func TestPlanSlack_ChainHints(t *testing.T) {
+	r, _, _ := planCycleFixture()
+	held := remediation.ChainBlock{Package: "express", Version: "4.18.2", Parent: "mkdirp", ParentVersion: "0.5.1", Range: "4.18.2", Proof: "exact", Via: []string{"mkdirp"}}
+	cases := []struct {
+		name    string
+		outcome string
+		reason  remediation.Reason
+		blocked []remediation.ChainBlock
+		hints   []remediation.ChainHint
+		ja, en  []string
+	}{
+		{"in spec and latest", remediation.ChainNotFixed, remediation.ReasonDependentsNotFixed, []remediation.ChainBlock{held},
+			[]remediation.ChainHint{{Package: "express", Parent: "mkdirp", ParentVersion: "0.5.1", Spec: "^0.5.1",
+				InSpec: &remediation.ChainHintRelease{Version: "0.5.6", Range: "4.18.2"},
+				Latest: &remediation.ChainHintRelease{Version: "1.0.4", Range: "^4.19.2", Fixes: true}}},
+			[]string{
+				"express 4.18.2 → 4.19.2: 依存元の mkdirp 0.5.1 が express を 4.18.2 と指定しているため上げられない\n  • package.json の指定（^0.5.1）の範囲で最新の 0.5.6 も、express を 4.18.2 と指定（修正版を含まない）\n  • 1 系の最新の 1.0.4 は、express を ^4.19.2 と指定（修正版を含む）",
+			},
+			[]string{
+				"  • the newest 0.5.6 within the package.json range (^0.5.1) also requires express 4.18.2 (no fixed version included)\n  • the newest 1.0.4 of the 1 series requires express ^4.19.2 (a fixed version included)",
+			}},
+		{"current is the newest in range, and a 0.x series", remediation.ChainNotFixed, remediation.ReasonDependentsNotFixed, []remediation.ChainBlock{held},
+			[]remediation.ChainHint{{Package: "express", Parent: "mkdirp", ParentVersion: "0.5.1", Spec: "^0.5.1",
+				InSpec: &remediation.ChainHintRelease{Version: "0.5.1", Range: "4.18.2"},
+				Latest: &remediation.ChainHintRelease{Version: "0.6.2", Range: "4.18.2"}}},
+			[]string{"  • package.json の指定（^0.5.1）の範囲では、今の 0.5.1 が最新\n  • 0.6 系の最新の 0.6.2 も、express を 4.18.2 と指定（修正版を含まない）"},
+			[]string{"  • within the package.json range (^0.5.1), the current 0.5.1 is the newest\n  • the newest 0.6.2 of the 0.6 series also requires express 4.18.2 (no fixed version included)"}},
+		{"a dependent below a direct dependency", remediation.ChainNotFixed, remediation.ReasonDependentsNotFixed,
+			[]remediation.ChainBlock{{Package: "express", Version: "4.18.2", Parent: "mkdirp", ParentVersion: "0.5.1", Range: "4.18.2", Proof: "exact", Via: []string{"app-kit"}}},
+			[]remediation.ChainHint{{Package: "express", Parent: "mkdirp", ParentVersion: "0.5.1", Via: []string{"app-kit"},
+				Latest: &remediation.ChainHintRelease{Version: "0.5.6", Range: "^4.19.2", Fixes: true}}},
+			[]string{"  • mkdirp 0.5 系の最新の 0.5.6 は、express を ^4.19.2 と指定（修正版を含む）\n  • app-kit のどの版でこの mkdirp が入るかは未確認"},
+			[]string{"  • the newest mkdirp 0.5.6 of the 0.5 series requires express ^4.19.2 (a fixed version included)\n  • which release of app-kit brings in this mkdirp is not checked"}},
+		{"a dependent below, already at its newest", remediation.ChainNotFixed, remediation.ReasonDependentsNotFixed,
+			[]remediation.ChainBlock{{Package: "express", Version: "4.18.2", Parent: "mkdirp", ParentVersion: "0.5.1", Range: "4.18.2", Proof: "exact", Via: []string{"app-kit"}}},
+			[]remediation.ChainHint{{Package: "express", Parent: "mkdirp", ParentVersion: "0.5.1", Via: []string{"app-kit"},
+				Latest: &remediation.ChainHintRelease{Version: "0.5.1", Range: "4.18.2"}}},
+			[]string{"  • mkdirp は今の 0.5.1 が最新の版"},
+			[]string{"  • mkdirp 0.5.1 is the newest release"}},
+		{"dropped", remediation.ChainNotFixed, remediation.ReasonDependentsNotFixed, []remediation.ChainBlock{held},
+			[]remediation.ChainHint{{Package: "express", Parent: "mkdirp", ParentVersion: "0.5.1", Spec: "^0.5.1",
+				Latest: &remediation.ChainHintRelease{Version: "1.0.4", Dropped: true}}},
+			[]string{"  • 1 系の最新の 1.0.4 は、express を直接は使っていない"},
+			[]string{"  • the newest 1.0.4 of the 1 series does not depend on express directly"}},
+		{"two dependents are named", remediation.ChainNotFixed, remediation.ReasonDependentsNotFixed,
+			[]remediation.ChainBlock{held, {Package: "express", Version: "4.18.2", Parent: "optimist", ParentVersion: "0.6.1", Range: "~4.18.0", Proof: "upper_bound", Via: []string{"optimist"}}},
+			[]remediation.ChainHint{
+				{Package: "express", Parent: "mkdirp", ParentVersion: "0.5.1", Spec: "^0.5.1", InSpec: &remediation.ChainHintRelease{Version: "0.5.6", Range: "^4.19.2", Fixes: true}},
+				{Package: "express", Parent: "optimist", ParentVersion: "0.6.1", Spec: "^0.6.1", InSpec: &remediation.ChainHintRelease{Version: "0.6.1", Range: "~4.18.0"}},
+			},
+			[]string{
+				"依存元の mkdirp 0.5.1 が express を 4.18.2、optimist 0.6.1 が express を `~4.18.0` と指定しているため上げられない",
+				"  • package.json の mkdirp の指定（^0.5.1）の範囲で最新の 0.5.6 は、express を ^4.19.2 と指定（修正版を含む）\n  • package.json の optimist の指定（^0.6.1）の範囲では、今の 0.6.1 が最新",
+			},
+			[]string{"  • the newest mkdirp 0.5.6 within the package.json range (^0.5.1) requires express ^4.19.2 (a fixed version included)\n  • within the package.json range of optimist (^0.6.1), the current 0.6.1 is the newest"}},
+		{"two dependents, one hint: still named", remediation.ChainNotFixed, remediation.ReasonDependentsNotFixed,
+			[]remediation.ChainBlock{held, {Package: "express", Version: "4.18.2", Parent: "optimist", ParentVersion: "0.6.1", Range: "~4.18.0", Proof: "upper_bound", Via: []string{"optimist"}}},
+			[]remediation.ChainHint{{Package: "express", Parent: "mkdirp", ParentVersion: "0.5.1", Spec: "^0.5.1", Latest: &remediation.ChainHintRelease{Version: "1.0.4", Range: "^4.19.2", Fixes: true}}},
+			[]string{"  • mkdirp 1 系の最新の 1.0.4 は、express を ^4.19.2 と指定（修正版を含む）"},
+			[]string{"  • the newest mkdirp 1.0.4 of the 1 series requires express ^4.19.2 (a fixed version included)"}},
+		{"rejected keeps its line and gets the hints", remediation.ChainRejected, remediation.ReasonDependentsRejected, []remediation.ChainBlock{held},
+			[]remediation.ChainHint{{Package: "express", Parent: "mkdirp", ParentVersion: "0.5.1", Spec: "^0.5.1",
+				Latest: &remediation.ChainHintRelease{Version: "1.0.4", Range: "^4.19.2", Fixes: true}}},
+			[]string{"express 4.18.2 → 4.19.2 には mkdirp 0.5.1 の更新も必要だが、", "\n  • 1 系の最新の 1.0.4 は、express を ^4.19.2 と指定（修正版を含む）"},
+			[]string{"\n  • the newest 1.0.4 of the 1 series requires express ^4.19.2 (a fixed version included)"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := languageFixture()
+			li := chainItem(&p)
+			li.Update.Chain = &remediation.ChainUpdate{Outcome: c.outcome, Reason: remediation.ReasonSourceIntroduced, Blocked: c.blocked,
+				Tops: []remediation.ChainMove{{Name: "mkdirp", From: "0.5.1", Kind: "top"}}, Hints: c.hints}
+			li.Category, li.Reason = remediation.CategoryManual, remediation.ReasonTargetNotUpdated
+			li.Packages[0].Action, li.Packages[0].Reason = remediation.ActionManual, c.reason
+			info := &PlanInfo{Plan: &p, Changed: true}
+			ja := slackPlanText(r, info, LanguageJA)
+			for _, want := range c.ja {
+				if !strings.Contains(ja, want) {
+					t.Errorf("ja lacks %q:\n%s", want, ja)
+				}
+			}
+			en := slackPlanText(r, info, LanguageEN)
+			for _, want := range c.en {
+				if !strings.Contains(en, want) {
+					t.Errorf("en lacks %q:\n%s", want, en)
+				}
+			}
+		})
 	}
 }

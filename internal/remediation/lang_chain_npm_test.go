@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -299,8 +300,21 @@ func TestNpmChainOfTwoTopsOneStuck(t *testing.T) {
 	if pin := packageOf(t, it, "minimist"); pin.Reason != ReasonDependentsNotFixed {
 		t.Errorf("minimist = %+v", pin)
 	}
-	if c := it.Update.Chain; c == nil || c.Outcome != ChainNotFixed {
-		t.Errorf("chain = %+v", c)
+	c := it.Update.Chain
+	if c == nil || c.Outcome != ChainNotFixed {
+		t.Fatalf("chain = %+v", c)
+	}
+	// The hints say what the newest releases the project's ranges allow
+	// declare: mkdirp 0.5.6 allows the fix, optimist has nothing newer.
+	got := map[string]ChainHint{}
+	for _, h := range c.Hints {
+		got[h.Parent] = h
+	}
+	if h := got["mkdirp"]; h.Spec != "^0.5.1" || !reflect.DeepEqual(h.InSpec, &ChainHintRelease{Version: "0.5.6", Range: "^1.2.6", Fixes: true}) || h.Latest != nil {
+		t.Errorf("mkdirp hint = %+v (in spec %+v)", h, h.InSpec)
+	}
+	if h := got["optimist"]; h.Spec != "^0.6.1" || !reflect.DeepEqual(h.InSpec, &ChainHintRelease{Version: "0.6.1", Range: "~0.0.1"}) || h.Latest != nil {
+		t.Errorf("optimist hint = %+v (in spec %+v)", h, h.InSpec)
 	}
 }
 

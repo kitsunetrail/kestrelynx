@@ -234,6 +234,10 @@ type ChainUpdate struct {
 	Moves     []ChainMove  `json:"moves,omitempty"`
 	Truncated bool         `json:"truncated,omitempty"`
 	Usage     ChainUsage   `json:"usage"`
+	// Hints say, for the packages held back, what newer releases of the
+	// dependents holding them declare (see ChainHint); empty when none could
+	// be told.
+	Hints []ChainHint `json:"hints,omitempty"`
 }
 
 // ChainBlock is a requirement that holds a package at a version below the

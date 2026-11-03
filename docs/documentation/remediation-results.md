@@ -225,7 +225,8 @@ The requirement in `rc 1.2.8` is `minimist ^1.2.0`, which allows a normal update
 | Slack display excerpt | Meaning |
 | --- | --- |
 | `with mkdirp 0.5.1 → 0.5.6` | The dependent package `mkdirp` also updates to fix `minimist`. |
-| `did not reach the fixed version this time` | Selecting dependent packages again does not bring the target to a fixed version in this attempt. |
+| `not raised, as the dependent … requires …` | Names the dependent package, its version, and the requirement that prevents the target from reaching a fixed version. |
+| `did not reach the fixed version this time` | Appears when no dependent requirement is recorded for that package, and selecting dependent packages again does not bring the target to a fixed version in this attempt. |
 | `needs … updated as well, and that update was not adopted because …` | The update is not adopted because of failed checks or another reason. |
 | `updating … was not tried` | The attempt is skipped because of unsupported forms, processing limits, or similar conditions. |
 | `a version it brings in is less than 72 hours old, so it is tried again after …` | Processing waits until the displayed date and time. |
@@ -250,6 +251,56 @@ A PR may include normal updates that pass the checks even when re-resolution is 
 
 See [Re-resolution through dependent packages](remediation-logic.md#dependent-reresolution) for the processing flow in npm, pnpm, and uv.
 Other fields are described in [Re-resolution results](webhook-remediation-reference.md#language-chain-fields) and [Scan comparisons](webhook-remediation-reference.md#language-chain-scan-fields).
+
+#### Fixing release hints {#fix-hints}
+
+For npm and pnpm, hints appear below a package's line when a dependent package's requirement blocks a fixed version and the outcome is `not_fixed`, `rejected`, or `not_tried`.
+The hints show what the checked releases of the dependent package declare for that package.
+
+```text
+multer 2.4.0 → 2.5.0: not raised, as the dependent @nestjs/platform-express 11.2.7 requires multer 2.4.0
+  • the newest 11.2.8 within the package.json range (^11.2.0) also requires multer 2.4.0 (no fixed version included)
+  • the newest 12.3.2 of the 12 series requires multer 2.5.0 (a fixed version included)
+```
+
+The checks cover these two releases of the dependent package.
+
+- The newest stable release within the package.json range, when the dependent package is a direct dependency of the project.
+- The newest published stable release, with its display omitted when it is the same as the newest release within the range.
+
+The newest published stable release appears with its series and version.
+The series is the major version, or the major and minor versions for 0.x.
+
+The following table shows examples for each condition.
+
+| Slack display excerpt | Meaning |
+| --- | --- |
+| `the newest 11.2.8 within the package.json range (^11.2.0)` | The newest dependent release within the project's range, followed by its requirement for the target package and whether that requirement includes a fixed version. |
+| `within the package.json range (^11.2.0), the current 11.2.7 is the newest` | The current dependent version is the newest within the range. |
+| `the newest 12.3.2 of the 12 series requires multer 2.5.0 (a fixed version included)` | The newest stable release's requirement includes a published stable version that fixes all target vulnerabilities in the package. |
+| `the newest 12.3.2 of the 12 series also requires multer 2.4.0 (no fixed version included)` | The newest stable release's requirement still excludes published stable versions that fix all target vulnerabilities in the package. |
+| `the newest 12.3.2 of the 12 series does not depend on multer directly` | That release does not declare the target package as a direct dependency, but another path may still bring it in. |
+| `@nestjs/platform-express 11.2.7 is the newest release` | The current dependent version is the newest published stable release. |
+| `which release of app-framework brings in this @nestjs/platform-express is not checked` | A note for a dependent package that is not a direct dependency, indicating that the direct dependency release bringing in the displayed dependent release is not checked. |
+
+Release hints include the dependent package's name when it is not a direct dependency or when hints cover multiple dependent packages.
+The note about a direct dependency appears when a checked release includes a fixed version or drops the direct requirement, and the direct dependency path is known.
+
+- Intermediate releases are not checked, so the hints do not identify the minimum release needed for a fix.
+- The checks do not establish whether updating to the displayed release resolves dependencies successfully or whether the application works.
+- “A fixed version included” describes the declared range and does not guarantee that updating to that release fixes the vulnerability.
+- “Does not depend on … directly” does not establish that the target package leaves the project or that the vulnerability is fixed.
+
+Lines are omitted for information that cannot be evaluated or retrieved.
+
+- Evaluation is unavailable because of peer dependencies, aliases, conflicting ranges, unsupported ranges, a bundled shrinkwrap, or similar conditions.
+- Registry queries fail or the lookup time limit is reached.
+
+Queries run after the update decision, with limits of three target-package and dependent-package pairs and 30 seconds in total per item.
+The presence or content of hints does not affect the plan or PR.
+
+Hints apply only to npm and pnpm; uv is excluded.
+The webhook includes the checked information in `language_items[].update.chain.hints`.
 
 ### Re-pull guidance {#repull-guidance}
 

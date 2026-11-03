@@ -336,6 +336,22 @@ Check `language_items[].update.chain.outcome` for the re-resolution result.
 | `blocked[].range` | string | Version requirement declared by the dependent package, such as `0.0.8`. |
 | `blocked[].proof` | string | `exact` for a pin to an older version, or `upper_bound` when the required range's upper bound excludes fixed versions. |
 | `blocked[].via` | array of strings | Names of direct dependencies that lead to that dependent package; omitted when empty. |
+| `hints` | array of objects | [Fixing release hints](remediation-results.md#fix-hints) checked for npm and pnpm when the outcome is `not_fixed`, `rejected`, or `not_tried`; omitted when empty. |
+| `hints[].package` | string | Name of the target package whose update is blocked. |
+| `hints[].parent` | string | Name of the dependent package whose requirement blocks the update. |
+| `hints[].parent_version` | string | Current version of the dependent package whose requirement blocks the update. |
+| `hints[].via` | array of strings | Names of direct dependencies that lead to the dependent package; omitted when empty and does not identify which direct dependency release brings in the displayed dependent release. |
+| `hints[].spec` | string | The package.json range for the dependent package when it is a direct dependency; omitted when empty. |
+| `hints[].in_spec` | object | Information about the newest stable release within the package.json range; omitted when the dependent package is not a direct dependency or information is unavailable. |
+| `hints[].latest` | object | Information about the newest published stable release; omitted when it is the same as the newest release within the range or information is unavailable. |
+| `hints[].in_spec.version` | string | Dependent version checked as the newest within the range; always included when `in_spec` is present. |
+| `hints[].in_spec.range` | string | The range that release declares for the target package; omitted when empty. |
+| `hints[].in_spec.fixes` | boolean | `true` when the declared range includes a published stable version that fixes all target vulnerabilities in the package; always included, even when `false`, if `in_spec` is present and does not guarantee that an update fixes the vulnerabilities. |
+| `hints[].in_spec.dropped` | boolean | `true` when that release does not declare the target package as a direct dependency; omitted otherwise, and another path may still bring the package in. |
+| `hints[].latest.version` | string | Dependent version checked as the newest published stable release; always included when `latest` is present. |
+| `hints[].latest.range` | string | The range that release declares for the target package; omitted when empty. |
+| `hints[].latest.fixes` | boolean | `true` when the declared range includes a published stable version that fixes all target vulnerabilities in the package; always included, even when `false`, if `latest` is present and does not guarantee that an update fixes the vulnerabilities. |
+| `hints[].latest.dropped` | boolean | `true` when that release does not declare the target package as a direct dependency; omitted otherwise, and another path may still bring the package in. |
 | `tops` | array of objects | Direct dependencies whose versions are selected again; `[]` when no information is available. |
 | `tops[].name` | string | Direct dependency name, such as `mkdirp`. |
 | `tops[].from` / `tops[].to` | string | Versions before and after the update; omitted when unavailable and equal when the version stays unchanged. |

@@ -78,6 +78,7 @@ func (u *LangUpdater) chainStage(ctx context.Context, it *LanguageItem, n int, s
 			chain.Outcome = ChainRejected
 		}
 		u.finishFirst(ctx, ctx, it, n, set, first, firstFail, chain, held(reason, detail))
+		u.settledHints(ctx, it, set, scope, first.shared, chain)
 		return true
 	}
 
@@ -181,7 +182,18 @@ func (u *LangUpdater) chainStage(ctx context.Context, it *LanguageItem, n int, s
 		first.check = cr.check
 	}
 	u.finishFirst(workCtx, ctx, it, n, set, first, firstFail, chain, heldBy)
+	u.settledHints(ctx, it, set, scope, first.shared, chain)
 	return true
+}
+
+// settledHints looks up the hints of the chain once the item is settled with
+// it: an item that went on to wait instead records another chain, and its
+// hints would be lost.
+func (u *LangUpdater) settledHints(ctx context.Context, it *LanguageItem, set updateSet, scope *chainScope, sh *itemShared, chain *ChainUpdate) {
+	if it.Update == nil || it.Update.Chain != chain {
+		return
+	}
+	u.fixHints(ctx, it, set, scope, sh, chain)
 }
 
 // firstReason is why the first update did not take the package to its target:

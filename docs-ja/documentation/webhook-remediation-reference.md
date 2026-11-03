@@ -336,6 +336,22 @@
 | `blocked[].range` | string | 依存元による版指定（例: `0.0.8`） |
 | `blocked[].proof` | string | `exact`は古い版への固定、`upper_bound`は指定範囲の上限が修正版に届かない場合 |
 | `blocked[].via` | stringの配列 | その依存元につながる直接依存の名前で、空なら省略 |
+| `hints` | objectの配列 | npm・pnpmで結果が`not_fixed`・`rejected`・`not_tried`の場合に確認する[直る版の案内](remediation-results.md#fix-hints)で、空なら省略 |
+| `hints[].package` | string | 更新を妨げられている対象パッケージの名前 |
+| `hints[].parent` | string | 更新を妨げる版指定を持つ依存元の名前 |
+| `hints[].parent_version` | string | 更新を妨げる版指定を持つ依存元の現在の版 |
+| `hints[].via` | stringの配列 | その依存元につながる直接依存の名前で、空なら省略し、表示した依存元の版をどの直接依存の版が持ち込むかは示さない |
+| `hints[].spec` | string | 依存元が直接依存の場合のpackage.jsonの指定範囲で、値がなければ省略 |
+| `hints[].in_spec` | object | package.jsonの指定範囲内で最新の正式版についての情報で、依存元が直接依存でない場合や情報がなければ省略 |
+| `hints[].latest` | object | 公開されている正式版の最新についての情報で、範囲内の最新と同じ場合や情報がなければ省略 |
+| `hints[].in_spec.version` | string | 範囲内の最新として確認する依存元の版で、`in_spec`がある場合は常に出力 |
+| `hints[].in_spec.range` | string | その版が対象パッケージに指定する範囲で、値がなければ省略 |
+| `hints[].in_spec.fixes` | boolean | 指定範囲が対象パッケージのすべての対象脆弱性を直す公開済みの正式版を含む場合は`true`で、`in_spec`がある場合は`false`も常に出力し、更新による解消を保証しない |
+| `hints[].in_spec.dropped` | boolean | その版が対象パッケージを直接の依存として宣言していない場合は`true`で、それ以外は省略し、別の経路で入る可能性は残る |
+| `hints[].latest.version` | string | 最新の正式版として確認する依存元の版で、`latest`がある場合は常に出力 |
+| `hints[].latest.range` | string | その版が対象パッケージに指定する範囲で、値がなければ省略 |
+| `hints[].latest.fixes` | boolean | 指定範囲が対象パッケージのすべての対象脆弱性を直す公開済みの正式版を含む場合は`true`で、`latest`がある場合は`false`も常に出力し、更新による解消を保証しない |
+| `hints[].latest.dropped` | boolean | その版が対象パッケージを直接の依存として宣言していない場合は`true`で、それ以外は省略し、別の経路で入る可能性は残る |
 | `tops` | objectの配列 | 選び直す直接依存で、情報がなければ空配列 |
 | `tops[].name` | string | 直接依存の名前（例: `mkdirp`） |
 | `tops[].from` / `tops[].to` | string | 更新前後の版で、情報がなければ省略し、版が変わらない場合は同じ値 |

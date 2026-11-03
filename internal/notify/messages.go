@@ -485,6 +485,8 @@ type messages struct {
 	PlanWrongVersion             string // "packages whose version in the image differs from %s (...)" (lockfile)
 	PlanBulletVersions           string // "  • %[1]s: the image has %[2]s, %[3]s has %[4]s" (name, image version, lockfile, lockfile versions)
 	PlanBullet                   string // "  • %[1]s %[2]s" (name, installed)
+	PlanGlobalModules            string // "packages in a global node_modules (...)" (lockfile)
+	PlanBulletPartOf             string // "  • %[1]s %[2]s (part of %[3]s)" (name, installed, the packages of the global node_modules it is part of)
 	PlanRebuildValue             string // "%[1]s %[2]s: a rebuild is expected to pick up %[3]s or later" (name, installed, lowest fixed version)
 	PlanDockerfileRebuild        string // "which base the running image was built from cannot be confirmed; rebuilding with `docker compose build --pull` picks up the current base"
 	PlanDockerfileRebuildMapping string // the same for an image built outside Compose: pull the base again, rebuild and deploy again
@@ -904,6 +906,8 @@ var enMessages = messages{
 	PlanWrongVersion:             "packages whose version in the image differs from %s (the image may not have been built from the current %[1]s, so rebuild it and check again)",
 	PlanBulletVersions:           "  • %[1]s: the image has %[2]s, %[3]s has %[4]s",
 	PlanBullet:                   "  • %[1]s %[2]s",
+	PlanGlobalModules:            "packages in a global node_modules (%s did not install them, so updating %[1]s cannot fix them)",
+	PlanBulletPartOf:             "  • %[1]s %[2]s (part of %[3]s)",
 	PlanRebuildValue:             "%[1]s %[2]s: a rebuild is expected to pick up %[3]s or later",
 	PlanDockerfileRebuild:        "which base the running image was built from cannot be confirmed; rebuilding with `docker compose build --pull` picks up the current base",
 	PlanDockerfileRebuildMapping: "which base the running image was built from cannot be confirmed; pull the base again, rebuild the image (for example with `docker build --pull`) and deploy it again",
@@ -1319,6 +1323,8 @@ var jaMessages = messages{
 	PlanWrongVersion:             "イメージに入っている版が %s と違うパッケージ（イメージが今の %[1]s から作られていない可能性があるため、作り直してから確認してください）",
 	PlanBulletVersions:           "  • %[1]s: イメージは %[2]s、%[3]s は %[4]s",
 	PlanBullet:                   "  • %[1]s %[2]s",
+	PlanGlobalModules:            "グローバルな node_modules にあるパッケージ（%s で入れたものではないため、%[1]s の更新では直せない）",
+	PlanBulletPartOf:             "  • %[1]s %[2]s（%[3]s に含まれる）",
 	PlanRebuildValue:             "%[1]s %[2]s: 再ビルドで %[3]s 以上が入る見込み",
 	PlanDockerfileRebuild:        "稼働中のイメージの作成元のベースを確認できない。`docker compose build --pull` で再ビルドすると現在のベースが入る",
 	PlanDockerfileRebuildMapping: "稼働中のイメージの作成元のベースを確認できない。ベースを取り直して再ビルドし(`docker build --pull` など)、デプロイし直す",

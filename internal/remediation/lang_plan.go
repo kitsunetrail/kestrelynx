@@ -55,6 +55,11 @@ const (
 	ReasonNoFixedVersion     Reason = "no_fixed_version_above_installed"
 	ReasonRangeExcludesFix   Reason = "constraint_excludes_fix"
 	ReasonRangeNotEvaluable  Reason = "constraint_not_evaluable"
+	// ReasonGlobalNodeModules: the image has the node package under a global
+	// node_modules (<prefix>/lib/node_modules), where npm installs with -g and
+	// the official node images keep npm and corepack; the project's dependency
+	// files do not install it.
+	ReasonGlobalNodeModules Reason = "global_node_modules"
 
 	// Reasons for reading the source.
 	ReasonSourceNotFound     Reason = "source_not_found"

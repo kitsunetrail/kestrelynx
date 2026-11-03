@@ -15,6 +15,60 @@ const (
 	typePythonPkg = "python-pkg"
 )
 
+// GlobalNodeModule reports whether the scanner found a node package (at
+// pkgPath, rooted at the image's root) under a global node_modules: one whose
+// parent directory is lib, as in <prefix>/lib/node_modules, where npm installs
+// with -g and the official node images keep npm and corepack. Owner is the
+// package installed there that the package is part of: npm for
+// usr/local/lib/node_modules/npm/node_modules/semver/package.json. Only the
+// first node_modules of the path is looked at, so the packages of a project in
+// app (app/node_modules/...) are not global; those of a project in a
+// directory named lib would be taken for global ones.
+func GlobalNodeModule(pkgPath string) (owner string, ok bool) {
+	segs := strings.Split(strings.Trim(pkgPath, "/"), "/")
+	for i, s := range segs {
+		if s != "node_modules" {
+			continue
+		}
+		if i == 0 || segs[i-1] != "lib" || i+1 >= len(segs) {
+			return "", false
+		}
+		owner = segs[i+1]
+		if strings.HasPrefix(owner, "@") && i+2 < len(segs) {
+			owner += "/" + segs[i+2]
+		}
+		return owner, true
+	}
+	return "", false
+}
+
+// globalNodeFinding reports whether a finding is of a node package in a
+// global node_modules (see GlobalNodeModule).
+func globalNodeFinding(f scanner.Finding) bool {
+	if f.Type != typeNodePkg {
+		return false
+	}
+	_, ok := GlobalNodeModule(f.PkgPath)
+	return ok
+}
+
+// globalNodePackages lists the packages of a global node_modules: none of them
+// is matched against the dependency files.
+func globalNodePackages(gs []*findingGroup) []LanguagePackage {
+	out := make([]LanguagePackage, 0, len(gs))
+	for _, g := range gs {
+		var paths []string
+		for _, o := range g.origins {
+			if !containsString(paths, o.PkgPath) {
+				paths = append(paths, o.PkgPath)
+			}
+		}
+		out = append(out, unitPackages([]*findingGroup{g}, ActionManual, ReasonGlobalNodeModules,
+			fmt.Sprintf("the image has the package in a global node_modules (%s), which the dependency files do not install", strings.Join(paths, ", ")))...)
+	}
+	return out
+}
+
 // findingGroup is one package version running in an image, with every fixed
 // vulnerability reported for it.
 type findingGroup struct {

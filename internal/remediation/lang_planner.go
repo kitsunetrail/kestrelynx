@@ -25,6 +25,9 @@ type depUnit struct {
 	unpinned  []*findingGroup // findings of scans that did not confirm the running image
 	priority  Priority
 	rank      int // the best position among the planner's inputs of an image that maps to the unit
+	// global are the node findings of verified scans in a global
+	// node_modules, which no dependency file installs.
+	global []*findingGroup
 	// The Go findings are kept per running image and binary until go.mod
 	// names the module they must come from (see goSelect): goPinned and
 	// goUnpinned are those of verified and other scans, goBins and
@@ -103,7 +106,7 @@ func (r *run) languagePart(inputs []ImageInput) {
 	units := unitsOf(cfg.Dependencies)
 	var active []*depUnit
 	for _, u := range units {
-		var pinned, unpinned []srcFinding
+		var pinned, global, unpinned []srcFinding
 		for rank, in := range inputs {
 			if in.Scan.Err != nil {
 				continue
@@ -139,6 +142,8 @@ func (r *run) languagePart(inputs []ImageInput) {
 					u.jarPinned = append(u.jarPinned, lf)
 				case f.Type == typeJar:
 					u.jarUnpinned = append(u.jarUnpinned, lf)
+				case verified && globalNodeFinding(f):
+					global = append(global, lf)
 				case verified:
 					pinned = append(pinned, lf)
 				default:
@@ -147,15 +152,16 @@ func (r *run) languagePart(inputs []ImageInput) {
 			}
 		}
 		u.groups = groupLanguageFindings(pinned, cfg.Intel)
+		u.global = groupLanguageFindings(global, cfg.Intel)
 		u.unpinned = groupLanguageFindings(unpinned, cfg.Intel)
 		// The Go and jar findings are grouped as they are only to place the
 		// unit among the others.
 		goAll := groupLanguageFindings(append(append(append(append([]srcFinding(nil), u.goPinned...), u.goUnpinned...), u.jarPinned...), u.jarUnpinned...), cfg.Intel)
-		if len(u.groups) == 0 && len(u.unpinned) == 0 && len(goAll) == 0 {
+		if len(u.groups) == 0 && len(u.global) == 0 && len(u.unpinned) == 0 && len(goAll) == 0 {
 			continue
 		}
 		u.rank = int(^uint(0) >> 1)
-		for _, g := range append(append(append([]*findingGroup(nil), u.groups...), u.unpinned...), goAll...) {
+		for _, g := range append(append(append(append([]*findingGroup(nil), u.groups...), u.global...), u.unpinned...), goAll...) {
 			if g.priority.Rank() > u.priority.Rank() {
 				u.priority = g.priority
 			}
@@ -207,11 +213,18 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 			python = append(python, g)
 		}
 	}
-	var subs [][]*findingGroup
-	for _, gs := range [][]*findingGroup{node, python} {
-		if len(gs) > 0 {
-			subs = append(subs, gs)
-		}
+	// The node packages of a global node_modules are in the node item, listed
+	// apart from those matched against the files.
+	type sub struct {
+		typ            string
+		groups, global []*findingGroup
+	}
+	var subs []sub
+	if len(node) > 0 || len(u.global) > 0 {
+		subs = append(subs, sub{typeNodePkg, node, u.global})
+	}
+	if len(python) > 0 {
+		subs = append(subs, sub{typePythonPkg, python, nil})
 	}
 	hasGo := len(u.goPinned) > 0 || len(u.goUnpinned) > 0
 	hasJar := len(u.jarPinned) > 0 || len(u.jarUnpinned) > 0
@@ -287,20 +300,25 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 		}
 	}
 
-	for _, gs := range subs {
-		it := newItem(gs[0].Type)
-		for _, g := range gs {
+	for _, s := range subs {
+		it := newItem(s.typ)
+		all := append(append([]*findingGroup(nil), s.groups...), s.global...)
+		for _, g := range all {
 			if g.priority.Rank() > it.Priority.Rank() {
 				it.Priority = g.priority
 			}
 		}
 		switch h := r.stopReason(); {
 		case h != nil:
-			r.deferUnit(&it, gs, h.reason, h.detail)
+			r.deferUnit(&it, s.groups, h.reason, h.detail)
+			it.Packages = append(it.Packages, globalNodePackages(s.global)...)
 		case srcErr != nil:
-			r.sourceFailure(&it, gs, srcErr, false)
+			r.sourceFailure(&it, s.groups, srcErr, false)
+			it.Packages = append(it.Packages, globalNodePackages(s.global)...)
+		case len(s.groups) == 0:
+			globalOnlyUnit(&it, u, s.global, entries)
 		default:
-			r.analyseUnit(&it, u, gs, entries)
+			r.analyseUnit(&it, u, s.groups, s.global, entries)
 		}
 		out = append(out, it)
 	}
@@ -340,8 +358,17 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 }
 
 // analyseUnit reads and matches the dependency files for one ecosystem's
-// findings of a unit (Go has its own, analyseGoUnit).
-func (r *run) analyseUnit(it *LanguageItem, u *depUnit, groups []*findingGroup, entries []github.Entry) {
+// findings of a unit (Go has its own, analyseGoUnit). The packages of a global
+// node_modules are not matched; they are added to the item's packages with
+// their own reason, and the item is classified with them once the files have
+// been matched. An item that ends before that keeps the outcome of the files.
+func (r *run) analyseUnit(it *LanguageItem, u *depUnit, groups, global []*findingGroup, entries []github.Entry) {
+	matched := false
+	defer func() {
+		if !matched {
+			it.Packages = append(it.Packages, globalNodePackages(global)...)
+		}
+	}()
 	gh := r.p.cfg.GitHub
 	sha := it.Source.CommitSHA
 	pair, reason, detail := detectPair(entries, groups[0].Type)
@@ -463,9 +490,25 @@ func (r *run) analyseUnit(it *LanguageItem, u *depUnit, groups []*findingGroup, 
 		pkgs = append(pkgs, matchPackage(lock, g))
 	}
 	reconcileVersions(lock, pkgs)
-	it.Packages = pkgs
+	it.Packages = append(pkgs, globalNodePackages(global)...)
+	matched = true
 	classify(it)
-	return
+}
+
+// globalOnlyUnit records a node item whose findings are all in a global
+// node_modules. The files are not read; the item is named after the pair the
+// directory has, as an analysed one is, so that the plan names its lockfile. A
+// directory without one usable pair keeps that outcome.
+func globalOnlyUnit(it *LanguageItem, u *depUnit, global []*findingGroup, entries []github.Entry) {
+	it.Packages = globalNodePackages(global)
+	pair, reason, detail := detectPair(entries, typeNodePkg)
+	if reason != "" {
+		it.Category, it.Reason, it.Detail = CategoryManual, reason, detail
+		return
+	}
+	it.Manager = pair.manager
+	it.Key = u.key + "#" + string(pair.manager)
+	classify(it)
 }
 
 // analyseGoUnit plans the Go item of a unit whose directory has a go.mod:

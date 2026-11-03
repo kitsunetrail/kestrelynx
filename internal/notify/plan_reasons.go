@@ -202,6 +202,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"unsupported_source_settings":      {"the project sets a package source that is not supported", "対応していないパッケージ取得元の設定がある"},
 	"scan_not_pinned":                  {"the scan is not tied to one image", "スキャンが特定のイメージに結び付いていない"},
 	"not_found_in_source":              {"the dependency files do not list the package at the running version", "依存関係ファイルに稼働中の版のパッケージが載っていない"},
+	"global_node_modules":              {"the package is in a global node_modules, which the dependency files do not install", "パッケージがグローバルな node_modules にあり、依存関係ファイルで入れたものではない"},
 	"non_registry_source":              {"the package does not come from the registry", "パッケージがレジストリ以外から取得されている"},
 	"sdist_only":                       {"the package has only a source distribution", "パッケージがソース配布物しかない"},
 	"forced_by_override":               {"the version is forced by an override", "版が override で固定されている"},

@@ -285,6 +285,14 @@ func TestBuildChainScope(t *testing.T) {
 			t.Fatalf("failure = %+v", fail)
 		}
 	})
+	t.Run("an ancestor's copy in a global node_modules", func(t *testing.T) {
+		global := LanguagePackage{Name: "mkdirp", Installed: "0.5.1", Action: ActionManual, Reason: ReasonGlobalNodeModules}
+		r := chainRun(t, mkdirpManifest, mkdirpLock(), mkdirpDists, minimistPkg(), global)
+		g0, _ := buildGraph(bg, ManagerNpm, r.src.lock)
+		if scope, fail := buildChainScope(bg, r, g0, []string{"minimist"}); fail != nil || scope == nil {
+			t.Fatalf("scope = %v, failure = %+v", scope, fail)
+		}
+	})
 	t.Run("the item's lookups run out", func(t *testing.T) {
 		r := chainRun(t, mkdirpManifest, mkdirpLock(), mkdirpDists, minimistPkg())
 		r.shared.budget.maxLookups, r.shared.budget.enforced = 1, true

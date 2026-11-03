@@ -780,7 +780,9 @@ func buildChainScope(ctx context.Context, r *updateRun, g0 *depGraph, U []string
 		}
 	}
 	for _, p := range r.it.Packages {
-		if p.Action == ActionManual && !p.LeftOut && scope.Names[p.matchName()] {
+		// A copy in a global node_modules is not in the lockfile the update
+		// rewrites.
+		if p.Action == ActionManual && !p.LeftOut && p.Reason != ReasonGlobalNodeModules && scope.Names[p.matchName()] {
 			return nil, unsupportedChain(bn, ReasonDependentsUnsupported, "%s is left to a person for another reason: %s", p.Name, p.Detail)
 		}
 	}

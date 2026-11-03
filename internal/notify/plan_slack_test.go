@@ -1029,6 +1029,45 @@ func TestPlanMessage_PackagesNotInTheLockfile(t *testing.T) {
 	}
 }
 
+// The frontend of production once npm's own packages are told apart: one
+// heading for the packages of a global node_modules, each bullet naming the
+// package it is part of unless it is that package.
+func TestPlanMessage_PackagesInAGlobalNodeModules(t *testing.T) {
+	li := languageUpdated("deps:YYAC-project/regfis-frontend@main:.#pnpm")
+	li.Manager = remediation.ManagerPnpm
+	li.Category, li.Reason = remediation.CategoryManual, remediation.ReasonGlobalNodeModules
+	li.Packages = nil
+	const npm = "usr/local/lib/node_modules/npm/"
+	for _, p := range [][3]string{
+		{"brace-expansion", "2.0.2", npm + "node_modules/brace-expansion/package.json"},
+		{"pacote", "20.0.1", npm + "node_modules/@npmcli/metavuln-calculator/node_modules/pacote/package.json"},
+		{"npm", "10.9.2", npm + "package.json"},
+	} {
+		li.Packages = append(li.Packages, remediation.LanguagePackage{Name: p[0], Installed: p[1], Action: remediation.ActionManual,
+			Reason: remediation.ReasonGlobalNodeModules, Origins: []remediation.FindingOrigin{{PkgPath: p[2]}}})
+	}
+	r := planReport()
+	for lang, want := range map[Language]string{
+		LanguageJA: "要判断: グローバルな node_modules にあるパッケージ（pnpm-lock.yaml で入れたものではないため、pnpm-lock.yaml の更新では直せない）\n  • brace-expansion 2.0.2（npm に含まれる）\n  • pacote 20.0.1（npm に含まれる）\n  • npm 10.9.2",
+		LanguageEN: "Needs a decision: packages in a global node_modules (pnpm-lock.yaml did not install them, so updating pnpm-lock.yaml cannot fix them)\n  • brace-expansion 2.0.2 (part of npm)\n  • pacote 20.0.1 (part of npm)\n  • npm 10.9.2",
+	} {
+		got := slackPlanText(r, languagePlanOf(li), lang)
+		if !strings.Contains(got, want) || strings.Contains(got, "→") {
+			t.Errorf("%s: missing %q (or an arrow) in\n%s", lang, want, got)
+		}
+		if strings.Count(got, "要判断:")+strings.Count(got, "Needs a decision:") != 1 {
+			t.Errorf("%s: more than one heading:\n%s", lang, got)
+		}
+	}
+	// What a package is part of is in the fingerprint.
+	other := li
+	other.Packages = append([]remediation.LanguagePackage(nil), li.Packages...)
+	other.Packages[0].Origins = []remediation.FindingOrigin{{PkgPath: "usr/local/lib/node_modules/corepack/node_modules/brace-expansion/package.json"}}
+	if languagePlanOf(li).SlackFingerprint() == languagePlanOf(other).SlackFingerprint() {
+		t.Error("the package a package is part of is not in the fingerprint")
+	}
+}
+
 // A package left out because it could not be raised gets the same sentence as
 // an item that is manual for it.
 func TestPlanMessage_LeftOutNotUpdatedSentence(t *testing.T) {

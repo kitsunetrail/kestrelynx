@@ -27,6 +27,7 @@ KestreLynx resolves the mapped branch to a commit before reading its source.
 For language package updates, it rechecks the file contents and version declarations recorded in the plan.
 
 - Language packages are checked by matching names and versions detected in the running image against dependency-file records
+- Packages whose image paths are under `<prefix>/lib/node_modules` (the parent of the first `node_modules` is `lib`), including those bundled with npm or corepack in official node images, are handled manually without matching them against dependency files
 - If the base branch has advanced when a PR is created, the files used for the update and the relevant settings files are checked again
 - If source changes no longer match the planning inputs, writes for that update are deferred
 - For `container/<name>`, KestreLynx verifies that the scanned image matches the running image's ID, then checks base layers for Dockerfiles or detected package names and versions for dependency files

@@ -53,3 +53,27 @@ func TestWebhookPayload_LeftOutOfTheTiedPullRequest(t *testing.T) {
 		t.Errorf("multer = %+v", m)
 	}
 }
+
+// A copy of a left-out package in a global node_modules keeps its own reason:
+// the pull request's view speaks of the lockfile's.
+func TestWebhookPayload_GlobalCopyIsNotLeftOut(t *testing.T) {
+	p := leftOutFixture()
+	li := p.LanguageItems[0]
+	li.Packages[1].LeftOut, li.Packages[1].Action, li.Packages[1].Reason = false, remediation.ActionUpdate, ""
+	li.Packages = append(li.Packages, remediation.LanguagePackage{Name: "multer", Ecosystem: "node-pkg", Installed: "2.1.1",
+		Action: remediation.ActionManual, Reason: remediation.ReasonGlobalNodeModules})
+	units := []remediation.PRUnit{{
+		Kind: "language", ItemKey: li.Key, Number: 12, Status: remediation.PRStatusOpen,
+		Language: &remediation.PRLanguage{
+			Packages:  []remediation.PRLanguagePackage{{Name: "multer", Ecosystem: "node-pkg", From: "2.1.1", To: "2.3.0", Through: []string{"x"}}},
+			Remaining: []remediation.PRLanguageRemaining{{Name: "multer", Ecosystem: "node-pkg", From: "2.1.1", Target: "2.3.0", Reason: remediation.ReasonTargetNotUpdated}},
+		},
+	}}
+	pl := languageItemPayloadOf(li, units)
+	if len(pl.Packages) != 3 || !pl.Packages[1].LeftOut {
+		t.Fatalf("packages = %+v", pl.Packages)
+	}
+	if g := pl.Packages[2]; g.LeftOut || g.Reason != string(remediation.ReasonGlobalNodeModules) || len(g.Through) != 0 {
+		t.Errorf("global copy = %+v", g)
+	}
+}

@@ -1034,6 +1034,9 @@ type pkgLine struct {
 	bom *remediation.MavenBOMRaise
 	// manager is the item's, which names the manifest the hints speak of.
 	manager remediation.DependencyManager
+	// partOf are the packages of a global node_modules a package in one is
+	// part of, the package itself left out.
+	partOf []string
 }
 
 func (b *planBuilder) leftOutLines(e *planEntry, left []leftOut, file string) {
@@ -1050,7 +1053,11 @@ func (b *planBuilder) leftOutLines(e *planEntry, left []leftOut, file string) {
 // fingerprint, the cut part too.
 func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string, items []pkgLine) {
 	for _, x := range items {
-		b.detail = append(b.detail, strings.Join([]string{"package", x.name, x.from, x.target, string(x.reason), fmt.Sprint(x.unchanged), fmt.Sprint(x.leftOut), fmt.Sprint(x.inFile), strings.Join(x.lockVersions, ","), b.bomRaise(x)}, "\x00"))
+		d := strings.Join([]string{"package", x.name, x.from, x.target, string(x.reason), fmt.Sprint(x.unchanged), fmt.Sprint(x.leftOut), fmt.Sprint(x.inFile), strings.Join(x.lockVersions, ","), b.bomRaise(x)}, "\x00")
+		if len(x.partOf) > 0 {
+			d += "\x00" + strings.Join(x.partOf, ",")
+		}
+		b.detail = append(b.detail, d)
 	}
 	shown := items
 	if len(shown) > planLeftOuts {
@@ -1066,6 +1073,16 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 		if x.target == "" {
 			key, header := string(x.reason), b.reason(x.reason)
 			bullet := fmt.Sprintf(b.msg.PlanBullet, litMrkdwn(x.name), litMrkdwn(x.from))
+			if x.reason == remediation.ReasonGlobalNodeModules {
+				header = fmt.Sprintf(b.msg.PlanGlobalModules, litMrkdwn(file))
+				if len(x.partOf) > 0 {
+					owners := make([]string, len(x.partOf))
+					for i, o := range x.partOf {
+						owners[i] = litMrkdwn(o)
+					}
+					bullet = fmt.Sprintf(b.msg.PlanBulletPartOf, litMrkdwn(x.name), litMrkdwn(x.from), strings.Join(owners, b.msg.PlanListSep))
+				}
+			}
 			if x.reason == remediation.ReasonNotFoundInSource {
 				if !x.inFile {
 					header = fmt.Sprintf(b.msg.PlanNotInFile, litMrkdwn(file))
@@ -1287,6 +1304,22 @@ func lockVersions(p remediation.LanguagePackage) []string {
 	return out
 }
 
+// globalOwners are the packages of a global node_modules a package in one is
+// part of (npm for npm's own dependencies), the package itself left out.
+func globalOwners(p remediation.LanguagePackage) []string {
+	if p.Reason != remediation.ReasonGlobalNodeModules {
+		return nil
+	}
+	var out []string
+	for _, o := range p.Origins {
+		if owner, ok := remediation.GlobalNodeModule(o.PkgPath); ok && owner != p.Name {
+			out = appendOnce(out, owner)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // lockfileLeftAlone matches the detail of an update that changed nothing.
 var lockfileLeftAlone = regexp.MustCompile(`^the (?:update|rewrite) left .+ unchanged$`)
 
@@ -1303,7 +1336,7 @@ func (b *planBuilder) packageReasonLines(e *planEntry, tag planTag, label string
 	for i, p := range pkgs {
 		items[i] = pkgLine{name: p.Name, from: p.Installed, target: p.SelectionLowerBound, reason: p.Reason, chain: chain,
 			unchanged:    lockfileLeftAlone.MatchString(p.Detail) || lockfileLeftAlone.MatchString(li.Detail),
-			lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0, bom: p.MavenBOM, manager: li.Manager}
+			lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0, bom: p.MavenBOM, manager: li.Manager, partOf: globalOwners(p)}
 	}
 	b.packageLines(e, tag, label, path.Base(languageFile(li)), items)
 }

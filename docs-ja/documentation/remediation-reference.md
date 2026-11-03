@@ -773,6 +773,7 @@ PR記録の`state`には、次の値があります。
 | `unsupported_source_settings` | 対応していないパッケージ取得元の設定がある | |
 | `scan_not_pinned` | スキャン結果が特定のイメージに結び付いていない | [ソースの確認](remediation-logic.md#source-verification) |
 | `not_found_in_source` | 依存ファイルに稼働版のパッケージが載っていない | [ソースの確認](remediation-logic.md#source-verification) |
+| `global_node_modules` | グローバルな`node_modules`にあるため、依存ファイルの更新では修正できない | [ソースの確認](remediation-logic.md#source-verification) |
 | `non_registry_source` | 対応する公開レジストリ以外から取得されるパッケージである | |
 | `sdist_only` | パッケージにソース配布物しかない | |
 | `forced_by_override` | パッケージの版がoverrideで固定されている | |

@@ -680,10 +680,13 @@ func languageItemPayloadOf(li remediation.LanguageItem, units []remediation.PRUn
 			CVECount: len(p.CVEs), KEVCount: p.KEVCount(), CVEs: p.CVEs,
 			OriginCount: len(p.Origins), Origins: p.Origins,
 		}
+		// A copy in a global node_modules is not what the pull request
+		// changes, even when a package of the lockfile has its name.
+		global := p.Reason == remediation.ReasonGlobalNodeModules
 		// An item tied to a pull request made in an earlier cycle was not
 		// updated again and does not say which direct dependencies the update
 		// moved; the pull request's view does.
-		if len(pp.Through) == 0 {
+		if len(pp.Through) == 0 && !global {
 			for _, x := range moved {
 				if x.Name == p.Name && x.Ecosystem == p.Ecosystem && len(x.Through) > 0 {
 					pp.Through = x.Through
@@ -695,7 +698,7 @@ func languageItemPayloadOf(li remediation.LanguageItem, units []remediation.PRUn
 		// updated again and holds no left-out marks; the pull request's view
 		// says which packages it leaves out.
 		for _, x := range leftOut {
-			if x.Name == p.Name && x.Ecosystem == p.Ecosystem {
+			if x.Name == p.Name && x.Ecosystem == p.Ecosystem && !global {
 				pp.LeftOut, pp.Action, pp.Reason = true, string(remediation.ActionManual), string(x.Reason)
 				if x.Detail != "" {
 					pp.Detail = x.Detail

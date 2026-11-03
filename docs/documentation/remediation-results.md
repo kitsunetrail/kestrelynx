@@ -225,7 +225,7 @@ The requirement in `rc 1.2.8` is `minimist ^1.2.0`, which allows a normal update
 | Slack display excerpt | Meaning |
 | --- | --- |
 | `with mkdirp 0.5.1 → 0.5.6` | The dependent package `mkdirp` also updates to fix `minimist`. |
-| `not raised, as the dependent … requires …` | Names the dependent package, its version, and the requirement that prevents the target from reaching a fixed version. |
+| `starlette 0.32.0.post1 cannot be raised to the fixed 1.3.1 (the dependent fastapi 0.108.0 limits the version of starlette)` | Appears when the outcome is `not_fixed` and updating the dependent chain within the declared ranges does not reach a fixed version; multiple dependents are listed with their names and versions, and uv's `no_resolution`, where resolving again for the fixed version finds no solution, uses the same display. |
 | `did not reach the fixed version this time` | Appears when no dependent requirement is recorded for that package, and selecting dependent packages again does not bring the target to a fixed version in this attempt. |
 | `needs … updated as well, and that update was not adopted because …` | The update is not adopted because of failed checks or another reason. |
 | `updating … was not tried` | The attempt is skipped because of unsupported forms, processing limits, or similar conditions. |
@@ -254,53 +254,54 @@ Other fields are described in [Re-resolution results](webhook-remediation-refere
 
 #### Fixing release hints {#fix-hints}
 
-For npm and pnpm, hints appear below a package's line when a dependent package's requirement blocks a fixed version and the outcome is `not_fixed`, `rejected`, or `not_tried`.
-The hints show what the checked releases of the dependent package declare for that package.
+For npm, pnpm, and uv, hints appear below a package's line when a dependent package's requirement blocks a fixed version and the outcome is `not_fixed`, `rejected`, or `not_tried`.
+Each line shows the dependent package's name and version, which release it is, and whether it can use a fixed version of the target package.
 
 ```text
-multer 2.4.0 → 2.5.0: not raised, as the dependent @nestjs/platform-express 11.2.7 requires multer 2.4.0
-  • the newest 11.2.8 within the package.json range (^11.2.0) also requires multer 2.4.0 (no fixed version included)
-  • the newest 12.3.2 of the 12 series requires multer 2.5.0 (a fixed version included)
+starlette 0.32.0.post1 cannot be raised to the fixed 1.3.1 (the dependent fastapi 0.108.0 limits the version of starlette)
+  • fastapi 0.109.0 (newest within the range pyproject.toml specifies): cannot use a fixed starlette
+  • fastapi 0.162.0 (newest): can use a fixed starlette
 ```
 
 The checks cover these two releases of the dependent package.
 
-- The newest stable release within the package.json range, when the dependent package is a direct dependency of the project.
+- The newest stable release within the package.json range for npm and pnpm, or the pyproject.toml range for uv, when the dependent package is a direct dependency of the project.
 - The newest published stable release, with its display omitted when it is the same as the newest release within the range.
 
-The newest published stable release appears with its series and version.
-The series is the major version, or the major and minor versions for 0.x.
+Prereleases are excluded from the version list, and for uv, releases whose files are all yanked are also excluded from the list retrieved from PyPI.
 
-The following table shows examples for each condition.
+For uv, dependent requirements are read from PyPI metadata (`requires_dist`), and all requirements are considered regardless of environment markers.
+
+The following table describes the display types.
 
 | Slack display excerpt | Meaning |
 | --- | --- |
-| `the newest 11.2.8 within the package.json range (^11.2.0)` | The newest dependent release within the project's range, followed by its requirement for the target package and whether that requirement includes a fixed version. |
-| `within the package.json range (^11.2.0), the current 11.2.7 is the newest` | The current dependent version is the newest within the range. |
-| `the newest 12.3.2 of the 12 series requires multer 2.5.0 (a fixed version included)` | The newest stable release's requirement includes a published stable version that fixes all target vulnerabilities in the package. |
-| `the newest 12.3.2 of the 12 series also requires multer 2.4.0 (no fixed version included)` | The newest stable release's requirement still excludes published stable versions that fix all target vulnerabilities in the package. |
-| `the newest 12.3.2 of the 12 series does not depend on multer directly` | That release does not declare the target package as a direct dependency, but another path may still bring it in. |
-| `@nestjs/platform-express 11.2.7 is the newest release` | The current dependent version is the newest published stable release. |
-| `which release of app-framework brings in this @nestjs/platform-express is not checked` | A note for a dependent package that is not a direct dependency, indicating that the direct dependency release bringing in the displayed dependent release is not checked. |
+| `newest within the range package.json specifies` / `newest within the range pyproject.toml specifies` | The newest stable dependent release within the project's range, using package.json for npm and pnpm or pyproject.toml for uv. |
+| `newest` | The newest published stable release of the dependent package. |
+| `can use a fixed starlette` | That dependent release's requirement includes a published stable version that fixes all target vulnerabilities in the package. |
+| `cannot use a fixed starlette` | That dependent release's requirement does not include a published stable version that fixes all target vulnerabilities in the package. |
+| `can use a fixed starlette, but this update did not raise it` | Shown for the newest release within the package.json or pyproject.toml range when the dependent release's requirement allows a fixed version, but constraints such as other packages or the Python version prevent re-resolution within the range from reaching it, leaving the chain update outcome as `not_fixed`. |
+| `does not use starlette directly` | That dependent release does not declare the target package as a direct dependency, but another path may still bring it in. |
+| `which release of express brings in this mkdirp is not checked` | A note for a dependent package that is not a direct dependency, indicating that the direct dependency release bringing in the displayed dependent release is not checked. |
 
-Release hints include the dependent package's name when it is not a direct dependency or when hints cover multiple dependent packages.
-The note about a direct dependency appears when a checked release includes a fixed version or drops the direct requirement, and the direct dependency path is known.
+For a dependent package that is not a direct dependency, the note appears below the newest release line when that release can use a fixed version or drops the direct requirement, and the direct dependency path is known.
 
 - Intermediate releases are not checked, so the hints do not identify the minimum release needed for a fix.
 - The checks do not establish whether updating to the displayed release resolves dependencies successfully or whether the application works.
-- “A fixed version included” describes the declared range and does not guarantee that updating to that release fixes the vulnerability.
-- “Does not depend on … directly” does not establish that the target package leaves the project or that the vulnerability is fixed.
+- “can use a fixed starlette” describes the dependent package's declared range and does not guarantee that updating to that release fixes the vulnerability.
+- “does not use starlette directly” does not establish that the target package leaves the project or that the vulnerability is fixed.
 
 Lines are omitted for information that cannot be evaluated or retrieved.
 
-- Evaluation is unavailable because of peer dependencies, aliases, conflicting ranges, unsupported ranges, a bundled shrinkwrap, or similar conditions.
+- For npm and pnpm, evaluation is unavailable because of peer dependencies, aliases, conflicting ranges, unsupported ranges, a bundled shrinkwrap, or similar conditions.
+- For uv, evaluation is unavailable when there are differing requirements for the same package, unreadable requirements, or unsupported version specifications.
 - Registry queries fail or the lookup time limit is reached.
 
 Queries run after the update decision, with limits of three target-package and dependent-package pairs and 30 seconds in total per item.
 The presence or content of hints does not affect the plan or PR.
 
-Hints apply only to npm and pnpm; uv is excluded.
-The webhook includes the checked information in `language_items[].update.chain.hints`.
+Hints apply to npm, pnpm, and uv.
+Range values are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints`.
 
 ### Re-pull guidance {#repull-guidance}
 

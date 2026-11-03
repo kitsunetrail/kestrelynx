@@ -319,7 +319,7 @@
 | `outcome` | 意味 | 例 |
 | --- | --- | --- |
 | `adopted` | 採用 | `mkdirp`を`0.5.6`、`minimist`を`1.2.8`に更新し、検査に合格 |
-| `not_fixed` | 修正版に届かない | 依存元を選び直しても、対象が修正版に上がらない |
+| `not_fixed` | 修正版に届かない（uvで修正版を指定した再解決が成立しない場合を含む） | 依存元を選び直しても、対象が修正版に上がらない |
 | `rejected` | 不採用、または待機の繰り返しによる停止 | 更新によって別の脆弱性が新たに入る |
 | `failed` | 処理に失敗 | パッケージマネージャーがエラーで終了 |
 | `not_tried` | 見送り | 選び直す直接依存が5パッケージを超える |
@@ -328,7 +328,7 @@
 | `update.chain`からのフィールド名 | 型 | 意味・省略条件 |
 | --- | --- | --- |
 | `outcome` | string | 上表の結果 |
-| `reason` / `detail` | string | 理由コードと補足で、空なら省略 |
+| `reason` / `detail` | string | 理由コードと補足で、空なら省略。uvで修正版を指定した再解決が成立しない場合は、`outcome`が`not_fixed`、`reason`が`no_resolution` |
 | `source` | string | `chain_job`は追加の再解決、`first_run`はuvの最初の更新結果の再判定 |
 | `blocked` | objectの配列 | 修正版への更新を妨げる版指定で、確認できなければ空配列 |
 | `blocked[].package` / `blocked[].version` | string | 更新を妨げられているパッケージの名前と版（例: `minimist`・`0.0.8`） |
@@ -336,20 +336,21 @@
 | `blocked[].range` | string | 依存元による版指定（例: `0.0.8`） |
 | `blocked[].proof` | string | `exact`は古い版への固定、`upper_bound`は指定範囲の上限が修正版に届かない場合 |
 | `blocked[].via` | stringの配列 | その依存元につながる直接依存の名前で、空なら省略 |
-| `hints` | objectの配列 | npm・pnpmで結果が`not_fixed`・`rejected`・`not_tried`の場合に確認する[直る版の案内](remediation-results.md#fix-hints)で、空なら省略 |
+| `hints` | objectの配列 | npm・pnpm・uvで結果が`not_fixed`・`rejected`・`not_tried`の場合に確認する[直る版の案内](remediation-results.md#fix-hints)で、空なら省略 |
 | `hints[].package` | string | 更新を妨げられている対象パッケージの名前 |
 | `hints[].parent` | string | 更新を妨げる版指定を持つ依存元の名前 |
 | `hints[].parent_version` | string | 更新を妨げる版指定を持つ依存元の現在の版 |
 | `hints[].via` | stringの配列 | その依存元につながる直接依存の名前で、空なら省略し、表示した依存元の版をどの直接依存の版が持ち込むかは示さない |
-| `hints[].spec` | string | 依存元が直接依存の場合のpackage.jsonの指定範囲で、値がなければ省略 |
-| `hints[].in_spec` | object | package.jsonの指定範囲内で最新の正式版についての情報で、依存元が直接依存でない場合や情報がなければ省略 |
+| `hints[].direct` | boolean | 依存元がプロジェクトの直接依存の場合は`true`で、それ以外は省略 |
+| `hints[].spec` | string | 依存元が直接依存の場合の指定範囲（npm・pnpmではpackage.json、uvではpyproject.toml）で、直接依存でない場合や、直接依存でも範囲を指定していない場合は省略 |
+| `hints[].in_spec` | object | 指定範囲（npm・pnpmではpackage.json、uvではpyproject.toml）内で最新の正式版についての情報で、`direct`が`true`の場合だけ出力し、範囲を指定していない場合は版の制限なしとして確認し、情報がなければ省略 |
 | `hints[].latest` | object | 公開されている正式版の最新についての情報で、範囲内の最新と同じ場合や情報がなければ省略 |
 | `hints[].in_spec.version` | string | 範囲内の最新として確認する依存元の版で、`in_spec`がある場合は常に出力 |
-| `hints[].in_spec.range` | string | その版が対象パッケージに指定する範囲で、値がなければ省略 |
+| `hints[].in_spec.range` | string | その版が対象パッケージに指定する範囲で、値がなければ省略（版を制限していない場合を含む） |
 | `hints[].in_spec.fixes` | boolean | 指定範囲が対象パッケージのすべての対象脆弱性を直す公開済みの正式版を含む場合は`true`で、`in_spec`がある場合は`false`も常に出力し、更新による解消を保証しない |
 | `hints[].in_spec.dropped` | boolean | その版が対象パッケージを直接の依存として宣言していない場合は`true`で、それ以外は省略し、別の経路で入る可能性は残る |
 | `hints[].latest.version` | string | 最新の正式版として確認する依存元の版で、`latest`がある場合は常に出力 |
-| `hints[].latest.range` | string | その版が対象パッケージに指定する範囲で、値がなければ省略 |
+| `hints[].latest.range` | string | その版が対象パッケージに指定する範囲で、値がなければ省略（版を制限していない場合を含む） |
 | `hints[].latest.fixes` | boolean | 指定範囲が対象パッケージのすべての対象脆弱性を直す公開済みの正式版を含む場合は`true`で、`latest`がある場合は`false`も常に出力し、更新による解消を保証しない |
 | `hints[].latest.dropped` | boolean | その版が対象パッケージを直接の依存として宣言していない場合は`true`で、それ以外は省略し、別の経路で入る可能性は残る |
 | `tops` | objectの配列 | 選び直す直接依存で、情報がなければ空配列 |

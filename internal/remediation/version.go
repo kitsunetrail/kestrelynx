@@ -358,6 +358,16 @@ func cmpLocal(a, b []string) int {
 	return cmpNum(strconv.Itoa(len(a)), strconv.Itoa(len(b)))
 }
 
+// SameDependencyName reports whether two names of a manager's packages name
+// one package: for Python, after the PEP 503 normalization ("PyYAML" is
+// "pyyaml"); otherwise as written.
+func SameDependencyName(m DependencyManager, a, b string) bool {
+	if m == ManagerUv || m == ManagerPip {
+		return normalizePyName(a) == normalizePyName(b)
+	}
+	return a == b
+}
+
 // normalizePyName applies the PEP 503 name normalization: lower case, with
 // runs of "-", "_" and "." collapsed to one "-".
 func normalizePyName(s string) string {

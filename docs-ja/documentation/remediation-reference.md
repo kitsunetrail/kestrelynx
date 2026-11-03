@@ -909,6 +909,7 @@ PR記録の`state`には、次の値があります。
 | `source_scan_incomplete` | 依存ファイルのスキャンが不完全だった | [比較条件](remediation-logic.md#comparison-conditions) |
 | `update_verified` | 更新結果の検証が完了した | [対象別の検証範囲](remediation-logic.md#verification-scope) |
 | `dependents_update_not_fixed` | 依存元を解決し直したが、今回の再解決では修正版に届かなかった | [依存元からの再解決](remediation-logic.md#dependent-reresolution) |
+| `no_resolution` | 修正版を指定した再解決は成立しなかった | [依存元からの再解決](remediation-logic.md#dependent-reresolution) |
 | `dependents_update_rejected` | 依存元の更新が検査を通らなかった | [再解決の検査条件](#dependent-reresolution-rules) |
 | `dependents_update_unsupported` | 依存元をこのツールでは更新できない | [再解決の対応範囲と上限](#dependent-reresolution-limits) |
 | `dependents_update_limit` | 依存元の更新が上限を超える | [再解決の対応範囲と上限](#dependent-reresolution-limits) |

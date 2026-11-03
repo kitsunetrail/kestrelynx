@@ -92,7 +92,7 @@ func TestFixHints_InSpecAndLatest(t *testing.T) {
 	it, set, scope, chain := hintItem("@nestjs/platform-express", "11.2.7", "^11.2.0")
 	u.fixHints(context.Background(), it, set, scope, nil, chain)
 	want := []ChainHint{{
-		Package: "multer", Parent: "@nestjs/platform-express", ParentVersion: "11.2.7", Via: []string{"@nestjs/platform-express"}, Spec: "^11.2.0",
+		Package: "multer", Parent: "@nestjs/platform-express", ParentVersion: "11.2.7", Via: []string{"@nestjs/platform-express"}, Direct: true, Spec: "^11.2.0",
 		InSpec: &ChainHintRelease{Version: "11.2.8", Range: "2.4.0"},
 		Latest: &ChainHintRelease{Version: "12.3.2", Range: "2.5.0", Fixes: true},
 	}}

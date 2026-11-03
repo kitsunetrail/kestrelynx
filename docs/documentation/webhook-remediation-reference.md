@@ -319,7 +319,7 @@ Check `language_items[].update.chain.outcome` for the re-resolution result.
 | `outcome` | Meaning | Example |
 | --- | --- | --- |
 | `adopted` | Adoption | `mkdirp` updates to `0.5.6` and `minimist` to `1.2.8`, and the checks pass. |
-| `not_fixed` | Fixed version not reached | Selecting dependent packages again does not bring the target to a fixed version. |
+| `not_fixed` | Fixed version not reached, including when resolving again for the fixed version with uv found no solution | Selecting dependent packages again does not bring the target to a fixed version. |
 | `rejected` | Rejection or a stop after repeated waits | The update introduces another vulnerability. |
 | `failed` | Processing failure | The package manager exits with an error. |
 | `not_tried` | Skipped attempt | More than five direct dependencies need their versions selected again. |
@@ -328,7 +328,7 @@ Check `language_items[].update.chain.outcome` for the re-resolution result.
 | Field relative to `update.chain` | Type | Meaning and omission conditions |
 | --- | --- | --- |
 | `outcome` | string | Result from the table above. |
-| `reason` / `detail` | string | Reason code and additional details; omitted when empty. |
+| `reason` / `detail` | string | Reason code and additional details; omitted when empty. When resolving again for the fixed version with uv found no solution, `outcome` is `not_fixed` and `reason` is `no_resolution`. |
 | `source` | string | `chain_job` for additional re-resolution, or `first_run` for reassessment of the initial uv update result. |
 | `blocked` | array of objects | Version requirements that prevent updates to fixed versions; `[]` when none are confirmed. |
 | `blocked[].package` / `blocked[].version` | string | Name and version of the package whose update is blocked, such as `minimist` and `0.0.8`. |
@@ -336,20 +336,21 @@ Check `language_items[].update.chain.outcome` for the re-resolution result.
 | `blocked[].range` | string | Version requirement declared by the dependent package, such as `0.0.8`. |
 | `blocked[].proof` | string | `exact` for a pin to an older version, or `upper_bound` when the required range's upper bound excludes fixed versions. |
 | `blocked[].via` | array of strings | Names of direct dependencies that lead to that dependent package; omitted when empty. |
-| `hints` | array of objects | [Fixing release hints](remediation-results.md#fix-hints) checked for npm and pnpm when the outcome is `not_fixed`, `rejected`, or `not_tried`; omitted when empty. |
+| `hints` | array of objects | [Fixing release hints](remediation-results.md#fix-hints) checked for npm, pnpm, and uv when the outcome is `not_fixed`, `rejected`, or `not_tried`; omitted when empty. |
 | `hints[].package` | string | Name of the target package whose update is blocked. |
 | `hints[].parent` | string | Name of the dependent package whose requirement blocks the update. |
 | `hints[].parent_version` | string | Current version of the dependent package whose requirement blocks the update. |
 | `hints[].via` | array of strings | Names of direct dependencies that lead to the dependent package; omitted when empty and does not identify which direct dependency release brings in the displayed dependent release. |
-| `hints[].spec` | string | The package.json range for the dependent package when it is a direct dependency; omitted when empty. |
-| `hints[].in_spec` | object | Information about the newest stable release within the package.json range; omitted when the dependent package is not a direct dependency or information is unavailable. |
+| `hints[].direct` | boolean | `true` when the dependent package is a direct dependency of the project; omitted otherwise. |
+| `hints[].spec` | string | The range for the dependent package when it is a direct dependency (package.json for npm and pnpm, or pyproject.toml for uv); omitted when it is not a direct dependency or when the direct dependency has no version range. |
+| `hints[].in_spec` | object | Information about the newest stable release within the range (package.json for npm and pnpm, or pyproject.toml for uv); included only when `direct` is `true`, checked with no version limit when no range is specified, and omitted when information is unavailable. |
 | `hints[].latest` | object | Information about the newest published stable release; omitted when it is the same as the newest release within the range or information is unavailable. |
 | `hints[].in_spec.version` | string | Dependent version checked as the newest within the range; always included when `in_spec` is present. |
-| `hints[].in_spec.range` | string | The range that release declares for the target package; omitted when empty. |
+| `hints[].in_spec.range` | string | The range that release declares for the target package; omitted when empty, including when the release does not limit the target package's version. |
 | `hints[].in_spec.fixes` | boolean | `true` when the declared range includes a published stable version that fixes all target vulnerabilities in the package; always included, even when `false`, if `in_spec` is present and does not guarantee that an update fixes the vulnerabilities. |
 | `hints[].in_spec.dropped` | boolean | `true` when that release does not declare the target package as a direct dependency; omitted otherwise, and another path may still bring the package in. |
 | `hints[].latest.version` | string | Dependent version checked as the newest published stable release; always included when `latest` is present. |
-| `hints[].latest.range` | string | The range that release declares for the target package; omitted when empty. |
+| `hints[].latest.range` | string | The range that release declares for the target package; omitted when empty, including when the release does not limit the target package's version. |
 | `hints[].latest.fixes` | boolean | `true` when the declared range includes a published stable version that fixes all target vulnerabilities in the package; always included, even when `false`, if `latest` is present and does not guarantee that an update fixes the vulnerabilities. |
 | `hints[].latest.dropped` | boolean | `true` when that release does not declare the target package as a direct dependency; omitted otherwise, and another path may still bring the package in. |
 | `tops` | array of objects | Direct dependencies whose versions are selected again; `[]` when no information is available. |

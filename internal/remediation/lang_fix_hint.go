@@ -17,8 +17,10 @@ type ChainHint struct {
 	Parent        string   `json:"parent"`
 	ParentVersion string   `json:"parent_version"`
 	Via           []string `json:"via,omitempty"`
-	// Spec is the range the project declares for Parent when Parent is one of
-	// its direct dependencies, "" otherwise.
+	// Direct says Parent is one of the project's direct dependencies, and Spec
+	// is the range the project declares for it ("" for none, which allows
+	// every version).
+	Direct bool              `json:"direct,omitempty"`
 	Spec   string            `json:"spec,omitempty"`
 	InSpec *ChainHintRelease `json:"in_spec,omitempty"`
 	Latest *ChainHintRelease `json:"latest,omitempty"`
@@ -57,19 +59,13 @@ func (u *LangUpdater) fixHints(ctx context.Context, it *LanguageItem, set update
 	if chain == nil || scope == nil || !hintOutcomes[chain.Outcome] || len(chain.Blocked) == 0 {
 		return
 	}
-	if it.Manager != ManagerNpm && it.Manager != ManagerPnpm {
-		return
-	}
-	if u.cfg.Npm == nil {
-		return
-	}
-	reg, ok := u.cfg.Npm.(NpmPublishTimes)
-	if !ok {
+	src := u.hintSourceFor(it.Manager, sh)
+	if src == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, hintTimeout)
 	defer cancel()
-	l := &hintLookup{ctx: ctx, m: it.Manager, npm: u.cfg.Npm, times: reg, sh: sh, timesOf: map[string]map[string]time.Time{}}
+	l := &hintLookup{ctx: ctx, sc: it.Manager.scheme(), src: src, rels: map[string][]string{}}
 
 	specs := map[string]string{}
 	for _, t := range scope.Tops {
@@ -99,7 +95,7 @@ func (u *LangUpdater) fixHints(ctx context.Context, it *LanguageItem, set update
 		// requires that entry itself, not another entry of the same name
 		// further down.
 		if spec, top := specs[b.Parent]; top && scope.directParents[b.Parent+"@"+b.ParentVersion] {
-			h.Spec = spec
+			h.Direct, h.Spec = true, spec
 		}
 		l.hint(&h, b.Range, cves)
 		if h.InSpec != nil || h.Latest != nil {
@@ -109,37 +105,67 @@ func (u *LangUpdater) fixHints(ctx context.Context, it *LanguageItem, set update
 	chain.Hints = hints
 }
 
-// hintLookup reads the registry for the hints of one item, reusing what the
-// item's runs have read.
-type hintLookup struct {
-	ctx     context.Context
-	m       DependencyManager
-	npm     NpmRegistry
-	times   NpmPublishTimes
-	sh      *itemShared
-	timesOf map[string]map[string]time.Time
+// hintSource reads, for the hints of one manager, what the index publishes.
+type hintSource interface {
+	// versions returns the versions of name the index offers; ok is false
+	// when they cannot be told.
+	versions(ctx context.Context, name string) (vs []string, ok bool)
+	// requirement returns what parent at version declares for pkg: its range,
+	// or dropped when it declares no requirement for pkg at all; ok is false
+	// when that cannot be told.
+	requirement(ctx context.Context, parent, version, pkg string) (rng string, dropped, ok bool)
+	// allows reports whether rng allows version; evaluable is false when that
+	// cannot be told.
+	allows(rng, version string) (allowed, evaluable bool)
 }
 
-// releases returns the released versions of a package, newest first.
-func (l *hintLookup) releases(name string) ([]string, bool) {
-	t, ok := l.timesOf[name]
-	if !ok && l.sh != nil {
-		t, ok = l.sh.cache.times[name]
-	}
-	if !ok {
-		var err error
-		if t, _, err = l.times.PublishTimes(l.ctx, name); err != nil {
-			return nil, false
+// hintSourceFor is the source of the hints of a manager, nil for a manager
+// without one or when the index client cannot list the versions of a package.
+func (u *LangUpdater) hintSourceFor(m DependencyManager, sh *itemShared) hintSource {
+	switch m {
+	case ManagerNpm, ManagerPnpm:
+		if u.cfg.Npm == nil {
+			return nil
+		}
+		if t, ok := u.cfg.Npm.(NpmPublishTimes); ok {
+			return &npmHints{m: m, npm: u.cfg.Npm, times: t, sh: sh}
+		}
+	case ManagerUv:
+		if u.cfg.PyPI == nil {
+			return nil
+		}
+		if v, ok := u.cfg.PyPI.(PyPIVersions); ok {
+			return &pyHints{py: u.cfg.PyPI, vers: v, sh: sh}
 		}
 	}
-	l.timesOf[name] = t
+	return nil
+}
+
+// hintLookup judges the releases of the dependents of one item.
+type hintLookup struct {
+	ctx  context.Context
+	sc   scheme
+	src  hintSource
+	rels map[string][]string
+}
+
+// releases returns the released versions of a package (pre-releases left
+// out), newest first.
+func (l *hintLookup) releases(name string) ([]string, bool) {
+	if rs, ok := l.rels[name]; ok {
+		return rs, len(rs) > 0
+	}
+	vs, ok := l.src.versions(l.ctx, name)
+	if !ok {
+		return nil, false
+	}
 	type rel struct {
 		s string
-		v semver
+		v version
 	}
 	var rs []rel
-	for s := range t {
-		if v, ok := parseSemver(s); ok && !v.isPrerelease() {
+	for _, s := range vs {
+		if v, ok := parseVersion(l.sc, s); ok && !isPre(v) {
 			rs = append(rs, rel{s, v})
 		}
 	}
@@ -148,18 +174,8 @@ func (l *hintLookup) releases(name string) ([]string, bool) {
 	for i, r := range rs {
 		out[i] = r.s
 	}
+	l.rels[name] = out
 	return out, len(out) > 0
-}
-
-// dist returns what the registry declares for name at version.
-func (l *hintLookup) dist(name, version string) (NpmDist, bool) {
-	if l.sh != nil {
-		if d, ok := l.sh.cache.npm[name+"@"+version]; ok {
-			return d, true
-		}
-	}
-	d, err := l.npm.VersionDist(l.ctx, name, version)
-	return d, err == nil
 }
 
 // hint fills the releases of h: the newest release the project's range
@@ -176,26 +192,24 @@ func (l *hintLookup) hint(h *ChainHint, held string, cves []CVERef) {
 	if !ok {
 		return
 	}
-	sc := l.m.scheme()
-	cur, ok := parseSemver(h.ParentVersion)
+	cur, ok := parseVersion(l.sc, h.ParentVersion)
 	if !ok {
 		return
 	}
 	at := func(s string) *ChainHintRelease {
-		v, _ := parseSemver(s)
+		v, _ := parseVersion(l.sc, s)
 		switch c := v.compare(cur); {
 		case c == 0:
 			return &ChainHintRelease{Version: s, Range: held}
 		case c > 0:
-			return l.release(h.Parent, s, h.Package, children, sc, cves)
+			return l.release(h.Parent, s, h.Package, children, cves)
 		}
 		return nil
 	}
 	inSpec := ""
-	if h.Spec != "" {
+	if h.Direct {
 		for _, s := range parents {
-			v, _ := parseSemver(s)
-			allowed, evaluable := npmRangeAllows(h.Spec, v)
+			allowed, evaluable := l.src.allows(h.Spec, s)
 			if !evaluable {
 				break
 			}
@@ -213,45 +227,153 @@ func (l *hintLookup) hint(h *ChainHint, held string, cves []CVERef) {
 	}
 }
 
-// release judges what one release of the dependent declares for the
-// package, or nil when that cannot be told: the declaration is not one
-// requirement (a peer dependency, an alias of the package, ranges that
-// differ), the range cannot be evaluated, or the release carries its own
-// shrinkwrap.
-func (l *hintLookup) release(parent, version, pkg string, children []string, sc scheme, cves []CVERef) *ChainHintRelease {
-	d, ok := l.dist(parent, version)
-	if !ok || d.HasShrinkwrap {
+// release judges what one release of the dependent declares for the package,
+// or nil when that cannot be told.
+func (l *hintLookup) release(parent, version, pkg string, children []string, cves []CVERef) *ChainHintRelease {
+	rng, dropped, ok := l.src.requirement(l.ctx, parent, version, pkg)
+	switch {
+	case !ok:
 		return nil
-	}
-	if aliases(d, pkg) {
-		return nil
-	}
-	edges, unsupported := normalizeParentEdges(l.m, nil, d)
-	for _, n := range unsupported {
-		if n == pkg {
-			return nil
-		}
-	}
-	e, found := edges[pkg]
-	if !found {
+	case dropped:
 		return &ChainHintRelease{Version: version, Dropped: true}
-	}
-	if e.peerOnly {
-		return nil
 	}
 	fixes := false
 	for _, s := range children {
-		v, _ := parseSemver(s)
-		allowed, evaluable := npmRangeAllows(e.spec, v)
+		allowed, evaluable := l.src.allows(rng, s)
 		if !evaluable {
 			return nil
 		}
-		if allowed && fixedAt(sc, s, cves) {
+		if allowed && fixedAt(l.sc, s, cves) {
 			fixes = true
 			break
 		}
 	}
-	return &ChainHintRelease{Version: version, Range: e.spec, Fixes: fixes}
+	return &ChainHintRelease{Version: version, Range: rng, Fixes: fixes}
+}
+
+// npmHints reads the npm registry, reusing what the item's runs have read.
+type npmHints struct {
+	m     DependencyManager
+	npm   NpmRegistry
+	times NpmPublishTimes
+	sh    *itemShared
+}
+
+func (n *npmHints) versions(ctx context.Context, name string) ([]string, bool) {
+	t, ok := map[string]time.Time(nil), false
+	if n.sh != nil {
+		t, ok = n.sh.cache.times[name]
+	}
+	if !ok {
+		var err error
+		if t, _, err = n.times.PublishTimes(ctx, name); err != nil {
+			return nil, false
+		}
+	}
+	out := make([]string, 0, len(t))
+	for v := range t {
+		out = append(out, v)
+	}
+	return out, true
+}
+
+// requirement reads the registry's declaration of the release, reduced as the
+// chain update reduces it. A peer dependency, an alias of the package, ranges
+// that differ, or a shrinkwrap the release carries cannot be told as one
+// requirement.
+func (n *npmHints) requirement(ctx context.Context, parent, version, pkg string) (string, bool, bool) {
+	d, ok := NpmDist{}, false
+	if n.sh != nil {
+		d, ok = n.sh.cache.npm[parent+"@"+version]
+	}
+	if !ok {
+		var err error
+		if d, err = n.npm.VersionDist(ctx, parent, version); err != nil {
+			return "", false, false
+		}
+	}
+	if d.HasShrinkwrap || aliases(d, pkg) {
+		return "", false, false
+	}
+	edges, unsupported := normalizeParentEdges(n.m, nil, d)
+	for _, u := range unsupported {
+		if u == pkg {
+			return "", false, false
+		}
+	}
+	e, found := edges[pkg]
+	switch {
+	case !found:
+		return "", true, true
+	case e.peerOnly:
+		return "", false, false
+	}
+	return e.spec, false, true
+}
+
+func (n *npmHints) allows(rng, v string) (bool, bool) {
+	sv, ok := parseSemver(v)
+	if !ok {
+		return false, false
+	}
+	return npmRangeAllows(rng, sv)
+}
+
+// pyHints reads PyPI, reusing what the item's runs have read.
+type pyHints struct {
+	py   PyPIFiles
+	vers PyPIVersions
+	sh   *itemShared
+}
+
+func (p *pyHints) versions(ctx context.Context, name string) ([]string, bool) {
+	vs, _, err := p.vers.Versions(ctx, name)
+	return vs, err == nil
+}
+
+// requirement reads the release's requires_dist as the chain update does: a
+// requirement counts whatever its marker says, as a uv.lock holds every
+// environment at once, and a package required with different specifiers, or a
+// requirement that cannot be read, cannot be told as one requirement.
+func (p *pyHints) requirement(ctx context.Context, parent, version, pkg string) (string, bool, bool) {
+	key := normalizePyName(parent) + "==" + version
+	rel, ok := PyPIRelease{}, false
+	if p.sh != nil {
+		rel, ok = p.sh.cache.py[key]
+	}
+	if !ok {
+		var err error
+		if rel, err = p.py.Release(ctx, parent, version); err != nil {
+			return "", false, false
+		}
+	}
+	want := normalizePyName(pkg)
+	found, spec := false, ""
+	for _, rd := range rel.RequiresDist {
+		name, constraint, _, ok := requirementOf(rd)
+		if !ok {
+			return "", false, false
+		}
+		if normalizePyName(name) != want {
+			continue
+		}
+		if found && constraint != spec {
+			return "", false, false
+		}
+		found, spec = true, constraint
+	}
+	if !found {
+		return "", true, true
+	}
+	return spec, false, true
+}
+
+func (p *pyHints) allows(rng, v string) (bool, bool) {
+	pv, ok := parsePEP440(v)
+	if !ok {
+		return false, false
+	}
+	return pySatisfies(pv, rng)
 }
 
 // aliases reports whether a release declares the package under another name:

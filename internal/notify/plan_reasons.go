@@ -299,6 +299,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 
 	// Updating the packages that hold a package back.
 	"dependents_update_not_fixed":   {"re-resolving the packages that depend on it did not reach the fixed version this time", "依存元を解決し直したが、今回の再解決では修正版に届かなかった"},
+	"no_resolution":                 {"resolving again for the fixed version found no solution", "修正版を指定した再解決は成立しなかった"},
 	"dependents_update_rejected":    {"updating the packages that depend on it did not pass the checks", "依存元の更新が検査を通らなかった"},
 	"dependents_update_unsupported": {"the packages that depend on it cannot be updated by this tool", "依存元をこのツールでは更新できない"},
 	"dependents_update_limit":       {"updating the packages that depend on it exceeds a limit", "依存元の更新が上限を超える"},

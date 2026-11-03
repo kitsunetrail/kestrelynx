@@ -404,9 +404,20 @@ func jobStatusFailure(res worker.Result) *updateFailure {
 	case stepBaseline:
 		return manualFailure(ReasonLockfileInconsistent, "the original input does not pass %s: %s", s.Op, detail)
 	case stepUpdate:
-		return manualFailure(ReasonUpdateStepFailed, "%s", detail)
+		f := manualFailure(ReasonUpdateStepFailed, "%s", detail)
+		f.unsatisfiable = (s.Op == worker.OpUvUpgrade || s.Op == worker.OpUvUpgradeChain) && uvUnsatisfiable(s.Stderr)
+		return f
 	}
 	return manualFailure(ReasonPostUpdateCheckFailed, "%s", detail)
+}
+
+// uvUnsatisfiable reports whether uv's output says it found no resolution
+// ("No solution found when resolving dependencies", ending in "... the
+// requirements are unsatisfiable"). The whole output kept is read, as the
+// detail keeps only its last lines and uv may print hints after the reason.
+func uvUnsatisfiable(stderr string) bool {
+	return strings.Contains(stderr, "No solution found when resolving dependencies") ||
+		strings.Contains(stderr, "requirements are unsatisfiable")
 }
 
 // pnpmWarnings returns the warnings pnpm printed about the pnpm version the

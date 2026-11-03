@@ -909,6 +909,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `source_scan_incomplete` | The dependency-file scan was incomplete | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 | `update_verified` | Verification of the update result is complete | [Verification scope by target](remediation-logic.md#verification-scope) |
 | `dependents_update_not_fixed` | Re-resolution of dependent packages does not reach a fixed version in this attempt | [Re-resolution through dependent packages](remediation-logic.md#dependent-reresolution) |
+| `no_resolution` | Resolving again for the fixed version found no solution | [Re-resolution through dependent packages](remediation-logic.md#dependent-reresolution) |
 | `dependents_update_rejected` | The dependent-package update fails the checks | [Re-resolution check conditions](#dependent-reresolution-rules) |
 | `dependents_update_unsupported` | KestreLynx cannot update the dependent packages | [Re-resolution support and limits](#dependent-reresolution-limits) |
 | `dependents_update_limit` | The dependent-package update exceeds a limit | [Re-resolution support and limits](#dependent-reresolution-limits) |

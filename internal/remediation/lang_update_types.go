@@ -90,7 +90,12 @@ const (
 	// Re-resolving the packages that depend on a package that is held back by
 	// them: the package reasons of an item whose update needed that, and the
 	// reasons below them that say why it did not go through.
-	ReasonDependentsNotFixed    Reason = "dependents_update_not_fixed"
+	ReasonDependentsNotFixed Reason = "dependents_update_not_fixed"
+	// ReasonNoResolution is the reason of a chain update that did not reach
+	// the fix because uv, asked for the fixed version, found no resolution:
+	// what stood in the way may be a dependent's range or another
+	// requirement, such as the Python versions the project supports.
+	ReasonNoResolution          Reason = "no_resolution"
 	ReasonDependentsRejected    Reason = "dependents_update_rejected"
 	ReasonDependentsUnsupported Reason = "dependents_update_unsupported"
 	ReasonDependentsLimit       Reason = "dependents_update_limit"

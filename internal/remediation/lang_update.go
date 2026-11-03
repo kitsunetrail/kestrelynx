@@ -200,6 +200,10 @@ type updateFailure struct {
 	// rejectedLock is the lockfile a uv update made whose difference from the
 	// original the checks refused, after its baseline was found consistent.
 	rejectedLock []byte
+	// unsatisfiable says the update step failed because uv found no
+	// resolution: the packages it was asked to raise cannot reach the
+	// versions asked for within what the project and its dependents allow.
+	unsatisfiable bool
 	// wait, when set, says the item is to be tried again later and why (see
 	// RecordLanguageWaits).
 	wait *langWaitIntent

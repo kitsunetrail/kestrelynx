@@ -156,8 +156,14 @@ func (u *LangUpdater) chainStage(ctx context.Context, it *LanguageItem, n int, s
 	}
 	var heldBy map[string]updateFailureDetail
 	switch {
-	case cfail.reason == ReasonTargetNotUpdated:
+	case cfail.reason == ReasonTargetNotUpdated, cfail.unsatisfiable:
+		// uv, asked for the fixed version, finds no resolution where npm and
+		// pnpm make a lockfile short of it: either way the dependents cannot
+		// be moved within the project's ranges to a version that fixes it.
 		chain.Outcome, chain.Reason, chain.Detail = ChainNotFixed, "", cfail.detail
+		if cfail.unsatisfiable {
+			chain.Reason = ReasonNoResolution
+		}
 		heldBy = held(ReasonDependentsNotFixed, cfail.detail)
 	case cfail.category == CategoryFailed || cfail.reason == ReasonUpdateStepFailed:
 		chain.Outcome, chain.Reason, chain.Detail = ChainFailed, cfail.reason, cfail.detail

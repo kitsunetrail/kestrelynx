@@ -208,6 +208,40 @@ func TestPRStageDockerfileMerged(t *testing.T) {
 	wantStatus(t, onlyUnit(t, h.run(plan)), PRStatusMerged, "")
 }
 
+// After the merge the FROM names the new base while the image running is still
+// the one the pull request was proposed for: the stage says the merge is not
+// deployed, until a rebuilt image runs.
+func TestPRStageDockerfileMergedNotDeployed(t *testing.T) {
+	h := newDFPRHarness(t)
+	h.run(dfPlan(dfPlanItem("3.12.5-slim", '5', []string{"CVE-1"}, nil)))
+	h.gh.editPull(testRepo, 1, func(p *github.PullRequest) { p.State, p.Merged = "closed", true })
+
+	after := func(entity byte) Plan {
+		it := dfPlanItem("3.12.5-slim", '5', []string{"CVE-1"}, nil)
+		it.Category, it.Reason, it.BaseRef, it.Candidate = CategoryNotComparable, ReasonBaseLayersMismatch, "python:3.12.5-slim", nil
+		e := dfEntityOf("myapp:1", entity, dfCandidate("3.12.5-slim", '5'), nil, nil)
+		e.Category, e.Reason, e.CandidateBase, e.Comparison = CategoryNotComparable, ReasonBaseLayersMismatch, nil, nil
+		it.Entities = []DockerfileEntity{e}
+		return dfPlan(it)
+	}
+	// No mapping names the repository any more: the item's own repository is
+	// confirmed for the check.
+	h.mappings = nil
+	plan := after('a')
+	res := h.run(plan)
+	m, ok := res.Undeployed[plan.DockerfileItems[0].Key]
+	if !ok || m.Number != 1 || m.From != dfBase || m.To != "3.12.5-slim" || m.URL == "" {
+		t.Fatalf("undeployed = %+v", res.Undeployed)
+	}
+	res.Attach(&plan)
+	if it := plan.DockerfileItems[0]; it.Reason != ReasonBaseUpdateNotDeployed || it.AwaitingDeploy == nil {
+		t.Errorf("item = %s %+v", it.Reason, it.AwaitingDeploy)
+	}
+	if res := h.run(after('b')); len(res.Undeployed) != 0 {
+		t.Errorf("a rebuilt image is not the merge left undeployed: %+v", res.Undeployed)
+	}
+}
+
 func TestPRStageDockerfileUserModified(t *testing.T) {
 	h := newDFPRHarness(t)
 	h.run(dfPlan(dfPlanItem("3.12.5-slim", '5', []string{"CVE-1"}, nil)))

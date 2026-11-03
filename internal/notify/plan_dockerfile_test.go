@@ -2,6 +2,7 @@ package notify
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -233,5 +234,65 @@ func TestDockerfileKEVCountsPerEntityTargets(t *testing.T) {
 	// resolved on the image that has it.
 	if n := dockerfileKEVResolved(it); n != 2 {
 		t.Errorf("KEV resolved = %d, want 2", n)
+	}
+}
+
+// esItem is the elasticsearch item of production: the FROM names 8.19.24 and
+// the running image was built from 8.19.23.
+func esItem() remediation.DockerfileItem {
+	stage := 0
+	return remediation.DockerfileItem{
+		Key: "dockerfile:yyac-project/regfis-infra@main:elasticsearch/Dockerfile#stages[0]", Workloads: []string{"compose/regfis-infra/elasticsearch"},
+		Category: remediation.CategoryNotComparable, Reason: remediation.ReasonBaseLayersMismatch,
+		Source:  remediation.DockerfileSource{Repository: "YYAC-project/regfis-infra", BaseBranch: "main", Path: "elasticsearch/Dockerfile", Stage: &stage},
+		BaseRef: "docker.elastic.co/elasticsearch/elasticsearch:8.19.24", BaseKind: remediation.TagPinned,
+	}
+}
+
+func esInfo(it remediation.DockerfileItem) *PlanInfo {
+	p := planFixture()
+	p.Items = nil
+	p.DockerfileItems = []remediation.DockerfileItem{it}
+	return &PlanInfo{Plan: &p, Changed: true}
+}
+
+// A base the running image was not built from names the FROM's image and the
+// likely causes.
+func TestPlanMessage_BaseLayersMismatch(t *testing.T) {
+	for lang, want := range map[Language]string{
+		LanguageJA: "比較不能: 稼働中のイメージが FROM の docker.elastic.co/elasticsearch/elasticsearch:8.19.24 から作られていない（Dockerfile を変えた後にイメージを作り直していないか、タグの中身が作成後に差し替わった）",
+		LanguageEN: "Not comparable: the running image was not built from docker.elastic.co/elasticsearch/elasticsearch:8.19.24, which the FROM names (the image was not rebuilt after the Dockerfile changed, or the tag was moved after the build)",
+	} {
+		if got := slackPlanText(planReport(), esInfo(esItem()), lang); !strings.Contains(got, want) {
+			t.Errorf("%s: missing %q in\n%s", lang, want, got)
+		}
+	}
+}
+
+// A merged base update whose image was not rebuilt names the pull request and
+// both bases, under the rebuild label.
+func TestPlanMessage_BaseUpdateNotDeployed(t *testing.T) {
+	it := esItem()
+	it.Reason = remediation.ReasonBaseUpdateNotDeployed
+	it.AwaitingDeploy = &remediation.BaseUpdateMerged{Number: 2, URL: "https://github.com/YYAC-project/regfis-infra/pull/2",
+		From: "docker.elastic.co/elasticsearch/elasticsearch:8.19.23", To: "8.19.24"}
+	for lang, want := range map[Language]string{
+		LanguageJA: "再ビルド: PR <https://github.com/YYAC-project/regfis-infra/pull/2|#2>（ベースイメージ docker.elastic.co/elasticsearch/elasticsearch 8.19.23 → 8.19.24）はマージ済みだが、稼働中のイメージはまだ 8.19.23 から作られている",
+		LanguageEN: "Rebuild: PR <https://github.com/YYAC-project/regfis-infra/pull/2|#2> (base image docker.elastic.co/elasticsearch/elasticsearch 8.19.23 → 8.19.24) is merged, but the running image is still built from 8.19.23",
+	} {
+		got := slackPlanText(planReport(), esInfo(it), lang)
+		if !slices.Contains(strings.Split(got, "\n"), want) || strings.Contains(got, "比較不能") || strings.Contains(got, "Not comparable") {
+			t.Errorf("%s: missing %q (or a comparison line) in\n%s", lang, want, got)
+		}
+	}
+	// Without a URL the number stands alone.
+	it.AwaitingDeploy.URL = ""
+	if got := slackPlanText(planReport(), esInfo(it), LanguageEN); !strings.Contains(got, "Rebuild: PR #2 (base image") {
+		t.Errorf("no plain number in\n%s", got)
+	}
+	// The webhook carries the pull request.
+	pl := dockerfileItemPayloadOf(it, nil, nil)
+	if pl.Reason != string(remediation.ReasonBaseUpdateNotDeployed) || pl.AwaitingDeploy == nil || pl.AwaitingDeploy.Number != 2 {
+		t.Errorf("payload = %+v", pl)
 	}
 }

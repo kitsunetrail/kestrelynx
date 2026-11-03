@@ -157,6 +157,11 @@ See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for
 | `dockerfile_items[].newer_series.candidates[].candidate` | object | Candidate image information; omitted if its content cannot be resolved. |
 | `dockerfile_items[].newer_series.candidates[].counts` | object | Integer counts named `targets`, `resolved`, `remaining`, `unknown`, `undetected`, `introduced`, and `introduced_kev`, as defined in [Published image fields](#remediation-image-fields). |
 | `dockerfile_items[].entities[].newer_series` | object | Per-running-image result, including candidate, comparison, and scan records in the same format as `items[].newer_series`; omitted when no result is available. |
+| `dockerfile_items[].awaiting_deploy` | object | Merged PR information for `base_update_not_deployed`; omitted when not applicable. |
+| `dockerfile_items[].awaiting_deploy.number` | integer | PR number. |
+| `dockerfile_items[].awaiting_deploy.url` | string | PR URL; omitted when empty. |
+| `dockerfile_items[].awaiting_deploy.from` | string | Base-image reference used by `FROM` before the PR, from which the running images were built. |
+| `dockerfile_items[].awaiting_deploy.to` | string | Tag set by the PR. |
 | `dockerfile_items[].final_image_verified` | boolean | Whether the rebuilt application image has been verified; always `false`. |
 | `dockerfile_items[].pull_request` | object | Matching [PR processing](#remediation-pr-fields); omitted when there is no match. |
 

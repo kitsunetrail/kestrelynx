@@ -98,6 +98,9 @@ type dockerfileItemPayload struct {
 	// NewerSeries is the check of newer series of a pinned base over all the
 	// running images; each entity holds its own comparisons.
 	NewerSeries *newerSeriesPayload `json:"newer_series,omitempty"`
+	// AwaitingDeploy is the merged pull request that set the base the FROM
+	// names, when the running images were not rebuilt since.
+	AwaitingDeploy *remediation.BaseUpdateMerged `json:"awaiting_deploy,omitempty"`
 }
 
 // dockerfileEntityPayload is one running image of an item, with the three
@@ -139,7 +142,7 @@ func dockerfileItemPayloadOf(it remediation.DockerfileItem, scans map[string]rem
 		FinalImageVerified: it.FinalImageVerified,
 		Category:           string(it.Category), Reason: string(it.Reason), Detail: it.Detail, Priority: string(it.Priority),
 		Workloads: it.Workloads, Source: it.Source, BaseRef: it.BaseRef, BaseKind: string(it.BaseKind), Counts: it.Counts,
-		RebuildRuntimes: it.RebuildRuntimes,
+		RebuildRuntimes: it.RebuildRuntimes, AwaitingDeploy: it.AwaitingDeploy,
 	}
 	if out.Workloads == nil {
 		out.Workloads = []string{}

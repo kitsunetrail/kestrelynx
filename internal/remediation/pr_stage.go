@@ -457,6 +457,13 @@ func (s *PRStage) Run(ctx context.Context, in PRStageInput) PRStageResult {
 	for _, u := range units {
 		addRepo(u.repo)
 	}
+	// A merged base update is looked for in the repository of a Dockerfile
+	// whose running images do not start with the base it names.
+	for _, it := range in.Plan.DockerfileItems {
+		if it.Reason == ReasonBaseLayersMismatch && it.Source.Repository != "" {
+			addRepo(it.Source.Repository)
+		}
+	}
 
 	unlock, err := s.cfg.Store.Lock()
 	if err != nil {
@@ -496,7 +503,17 @@ func (s *PRStage) Run(ctx context.Context, in PRStageInput) PRStageResult {
 		views[i] = r.processUnit(in.Plan, u)
 	}
 	r.resumeReplacements()
-	return r.finish(units, views)
+	res := r.finish(units, views)
+	confirmed := map[string]int64{}
+	for _, rs := range r.repos {
+		if rs.ok {
+			confirmed[strings.ToLower(rs.name)] = rs.info.ID
+		}
+	}
+	if found := undeployedBaseUpdates(in.Plan, r.file.PRs, confirmed); len(found) > 0 {
+		res.Undeployed = found
+	}
+	return res
 }
 
 // result builds the outcome of a run that could not use the records.

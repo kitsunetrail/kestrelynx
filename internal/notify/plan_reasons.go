@@ -88,7 +88,8 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"unsupported_tag_format": {"the format of the tag is not supported", "対応していない形式のタグである"},
 
 	// Base images of Dockerfiles.
-	"base_layers_mismatch":           {"the base image behind the tag is not the start of the layers of the running image", "タグが指すベースイメージが稼働中のイメージの下層と一致しない"},
+	"base_layers_mismatch":           {"the running image was not built from the base image the FROM names", "稼働中のイメージが FROM のベースイメージから作られていない"},
+	"base_update_not_deployed":       {"the image was not rebuilt after the base image update was merged", "ベースイメージの更新をマージした後にイメージが作り直されていない"},
 	"base_layers_unusable":           {"the layers of the running image or the base image cannot be compared", "稼働中のイメージとベースイメージのレイヤーを比較できない"},
 	"base_onbuild":                   {"the base image has ONBUILD triggers", "ベースイメージに ONBUILD トリガーがある"},
 	"no_base_derived_findings":       {"no fixable finding of the running image lies in the layers of the base image", "稼働中のイメージの修正できる所見がベースイメージのレイヤーにない"},

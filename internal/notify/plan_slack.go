@@ -865,6 +865,19 @@ func (b *planBuilder) dockerfileItem(it remediation.DockerfileItem) planEntry {
 			e.plain(kv(b.msg.PlanLblCandidate, candidate()))
 		}
 		e.line(tagDecide, kv(b.msg.PlanLblDecide, b.reason(it.Reason)))
+	case it.Reason == remediation.ReasonBaseUpdateNotDeployed && it.AwaitingDeploy != nil:
+		m := it.AwaitingDeploy
+		image, _ := splitImageRef(it.BaseRef)
+		_, from := splitImageRef(m.From)
+		link := fmt.Sprintf("#%d", m.Number)
+		if m.URL != "" {
+			link = mrkdwnLink(m.URL, link)
+		}
+		e.plain(file)
+		e.line(tagRebuild, kv(b.msg.PlanLblRebuild, fmt.Sprintf(b.msg.PlanBaseNotDeployed, link, litMrkdwn(image), litMrkdwn(from), litMrkdwn(m.To))))
+	case it.Category == remediation.CategoryNotComparable && it.Reason == remediation.ReasonBaseLayersMismatch && it.BaseRef != "":
+		e.plain(file)
+		e.line(tagNotComparable, kv(b.msg.PlanLblNotComparable, fmt.Sprintf(b.msg.PlanBaseLayersMismatch, litMrkdwn(it.BaseRef))))
 	case it.Category == remediation.CategoryNotComparable && it.Reason == remediation.ReasonFloatingBaseUnconfirmed:
 		e.plain(file)
 		guide := b.msg.PlanDockerfileRebuild

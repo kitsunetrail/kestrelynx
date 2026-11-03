@@ -317,6 +317,7 @@ It does not mean that running containers have been replaced with that content.
 | --- | --- |
 | `a rebuild is expected to pick up … or later` | The pip dependency range permits a fixed version, so a rebuild is expected to resolve the finding. |
 | Guidance to rebuild the Go standard library with a newer Go | `stdlib` findings do not produce a PR; a separate remediation plan item recommends rebuilding with at least the Go version that fixes all CVEs. |
+| `Rebuild: PR #… (base image … … → …) is merged, but the running image is still built from …` | The base-update PR is merged and the running images are unchanged since the PR was created, so deploying an image built from the merged Dockerfile puts the update in place. |
 | `which base the running image was built from cannot be confirmed` | The base behind a floating tag could not be confirmed, so the guidance is to pull the current base and rebuild. |
 | Guidance to run `docker compose build --pull` | Instructions to pull the base again and rebuild when the Dockerfile was discovered through Compose `build`. |
 | pull the base again, rebuild the image (for example with `docker build --pull`) and deploy it again | Guidance when the Dockerfile was found only through a configured mapping, including images built in CI. |

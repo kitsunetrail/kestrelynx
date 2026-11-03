@@ -592,6 +592,9 @@ type PRStageResult struct {
 	Operations []OperationEvent `json:"operations,omitempty"`
 	LastSeq    int64            `json:"last_seq,omitempty"`
 	Problems   []PRStageProblem `json:"problems,omitempty"`
+	// Undeployed are the merged base updates of Dockerfile items whose running
+	// images were not rebuilt since, by item key.
+	Undeployed map[string]BaseUpdateMerged `json:"undeployed,omitempty"`
 }
 
 // Attach copies the stage result into the plan.
@@ -599,4 +602,5 @@ func (r PRStageResult) Attach(p *Plan) {
 	p.PullRequests = r.Units
 	p.PROperations = r.Operations
 	p.PRProblems = r.Problems
+	markUndeployed(p, r.Undeployed)
 }

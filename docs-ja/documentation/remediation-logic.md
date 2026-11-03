@@ -317,6 +317,18 @@ DockerfileやComposeから変更先を特定できる入力の条件は、[Docke
     - 上のレイヤーで`node`や`python`の実行ファイルだけを差し替えていても、版の環境変数が同じなら区別できない
     - Dockerfileでランタイムを入れ直す場合や、`ENV`で版を上書きする場合は、再ビルドの見込みが外れることがある
 
+PRの記録を使うため、次の判定は`pull_requests`の設定によるPR処理が動いているときだけ行います。
+`base_layers_mismatch`の項目が次の条件をすべて満たす場合、項目の理由を`base_update_not_deployed`に変えます。
+
+- そのリポジトリを今回の周期でGitHubから確認でき、記録のリポジトリIDと一致する
+- KestreLynxが作ったDockerfileのPRがマージ済みで、同じリポジトリ・ベースブランチ・ファイル・ステージを対象としている
+- そのPRのブランチやベースが他者に変更されず、KestreLynxが作った内容のままである
+- そのPRが`FROM`を、現在の`FROM`が指す同じイメージ（`python`と`docker.io/library/python`などの表記ゆれを含む）の同じタグに変更している
+- すべての稼働イメージのイメージIDが、そのPRの作成時に記録した稼働イメージのIDと一致する
+
+該当するPRが複数あれば、番号が最も大きいものを使います。
+項目の区分は`not_comparable`のまま、稼働イメージごとの判定は`base_layers_mismatch`のままです。
+
 浮動タグのベースに関する案内の読み方は、[再ビルドの案内](remediation-results.md#rebuild-guidance)を参照してください。
 
 Composeの`build:`と`container/<名前>`の対応付けが同じDockerfileを使う場合、再ビルドの案内には`docker compose build --pull`と`docker build --pull`の両方を示します。

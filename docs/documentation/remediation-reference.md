@@ -652,6 +652,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `unparsable` | The image reference cannot be parsed | [Distributed image tags](remediation-logic.md#published-image-tags) |
 | `unsupported_tag_format` | The format of the tag is not supported | [Distributed image tags](remediation-logic.md#published-image-tags) |
 | `base_layers_mismatch` | The base image behind the tag does not match the start of the running image's layers | [Base layer matching](remediation-logic.md#base-layer-matching) |
+| `base_update_not_deployed` | The base-update PR is merged, but the running images are unchanged since the PR was created | [Base layer matching](remediation-logic.md#base-layer-matching) |
 | `base_layers_unusable` | The layers of the running image and base image cannot be compared | [Base layer matching](remediation-logic.md#base-layer-matching) |
 | `base_onbuild` | The base image has `ONBUILD` triggers | [Base image selection](remediation-logic.md#base-image-selection) |
 | `no_base_derived_findings` | No fixable finding lies in the base image's layers | [Base layer matching](remediation-logic.md#base-layer-matching) |

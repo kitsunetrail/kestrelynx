@@ -317,6 +317,18 @@ Base remediation targets include findings that Trivy reports as belonging to the
     - Replacing only the `node` or `python` executable in an upper layer cannot be distinguished if the version environment variable stays the same
     - Reinstalling the runtime in the Dockerfile or overriding its version with `ENV` can invalidate the rebuild estimate
 
+The following check uses PR records and runs only when PR processing is active through the `pull_requests` configuration.
+For a `base_layers_mismatch` item, the item reason changes to `base_update_not_deployed` when all of these conditions hold.
+
+- The repository was confirmed through GitHub in the current cycle and its repository ID matches the record
+- A Dockerfile PR created by KestreLynx is merged and targets the same repository, base branch, file, and stage
+- No one else has changed the PR branch or base, and its content remains as KestreLynx created it
+- That PR changed `FROM` to the same tag of the same image referenced by the current `FROM`, treating names such as `python` and `docker.io/library/python` as the same image
+- Every running image has the same image ID as recorded for it when that PR was created
+
+If multiple PRs qualify, the one with the highest number is used.
+The item's category remains `not_comparable`, and the per-running-image outcome remains `base_layers_mismatch`.
+
 See [Rebuild guidance](remediation-results.md#rebuild-guidance) for interpreting guidance about floating-tag bases.
 
 When Compose `build:` and a `container/<name>` mapping use the same Dockerfile, rebuild guidance includes both `docker compose build --pull` and `docker build --pull`.

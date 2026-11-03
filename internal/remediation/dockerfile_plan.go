@@ -203,6 +203,11 @@ type DockerfileItem struct {
 	// candidate that resolves their targets. Its candidates carry no
 	// comparison; each entity holds its own.
 	NewerSeries *NewerSeries `json:"newer_series,omitempty"`
+
+	// AwaitingDeploy is the merged pull request of this tool that set the base
+	// the FROM names, when the running images were not rebuilt since; the
+	// pull request stage sets it.
+	AwaitingDeploy *BaseUpdateMerged `json:"awaiting_deploy,omitempty"`
 }
 
 // CountDockerfile returns how many Dockerfile items are in category c.

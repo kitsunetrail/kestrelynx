@@ -157,6 +157,11 @@
 | `dockerfile_items[].newer_series.candidates[].candidate` | object | 候補のイメージ情報で、内容を解決できなければ省略 |
 | `dockerfile_items[].newer_series.candidates[].counts` | object | 整数値の`targets`・`resolved`・`remaining`・`unknown`・`undetected`・`introduced`・`introduced_kev`による集計で、[配布イメージのフィールド](#remediation-image-fields)と同じ定義 |
 | `dockerfile_items[].entities[].newer_series` | object | 稼働イメージごとの結果で、`items[].newer_series`と同じ形式の候補・比較・スキャン記録を含み、結果がなければ省略 |
+| `dockerfile_items[].awaiting_deploy` | object | `base_update_not_deployed`に該当するマージ済みPRの情報で、該当しなければ省略 |
+| `dockerfile_items[].awaiting_deploy.number` | integer | PR番号 |
+| `dockerfile_items[].awaiting_deploy.url` | string | PRのURLで、空なら省略 |
+| `dockerfile_items[].awaiting_deploy.from` | string | PR前に`FROM`が指していたベースイメージ参照で、稼働イメージの作成元 |
+| `dockerfile_items[].awaiting_deploy.to` | string | PRが設定したタグ |
 | `dockerfile_items[].final_image_verified` | boolean | 再ビルド後のアプリケーションイメージの検証有無で、常に`false` |
 | `dockerfile_items[].pull_request` | object | 対応する[PR処理](#remediation-pr-fields)で、対応がなければ省略 |
 

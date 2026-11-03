@@ -652,6 +652,7 @@ PR記録の`state`には、次の値があります。
 | `unparsable` | イメージ参照を解釈できない | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
 | `unsupported_tag_format` | 対応していない形式のタグである | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
 | `base_layers_mismatch` | タグが指すベースのレイヤーが、稼働イメージの先頭部分と一致しない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
+| `base_update_not_deployed` | ベース更新のPRはマージ済みだが、稼働イメージはPR作成時のまま | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
 | `base_layers_unusable` | 稼働イメージとベースイメージのレイヤーを比較できない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
 | `base_onbuild` | ベースイメージに`ONBUILD`トリガーがある | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
 | `no_base_derived_findings` | 修正可能な所見が、ベースイメージのレイヤーにない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |

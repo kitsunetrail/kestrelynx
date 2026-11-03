@@ -95,16 +95,17 @@ func Fingerprint(p Plan) string {
 		Newer      *newerFP `json:"newer_series,omitempty"`
 	}
 	type dfItem struct {
-		Key       string           `json:"key"`
-		Category  Category         `json:"category"`
-		Reason    Reason           `json:"reason,omitempty"`
-		Workloads []string         `json:"workloads"`
-		Path      string           `json:"path"`
-		Base      string           `json:"base,omitempty"`
-		Candidate *image           `json:"candidate,omitempty"`
-		Entities  []dfEntity       `json:"entities,omitempty"`
-		Counts    DockerfileCounts `json:"counts"`
-		Newer     *newerFP         `json:"newer_series,omitempty"`
+		Key       string            `json:"key"`
+		Category  Category          `json:"category"`
+		Reason    Reason            `json:"reason,omitempty"`
+		Workloads []string          `json:"workloads"`
+		Path      string            `json:"path"`
+		Base      string            `json:"base,omitempty"`
+		Candidate *image            `json:"candidate,omitempty"`
+		Entities  []dfEntity        `json:"entities,omitempty"`
+		Counts    DockerfileCounts  `json:"counts"`
+		Newer     *newerFP          `json:"newer_series,omitempty"`
+		Deploy    *BaseUpdateMerged `json:"awaiting_deploy,omitempty"`
 	}
 	type prUnit struct {
 		Key          string       `json:"key"`
@@ -153,7 +154,7 @@ func Fingerprint(p Plan) string {
 	})
 	for _, di := range p.DockerfileItems {
 		fd := dfItem{Key: di.Key, Category: di.Category, Reason: di.Reason, Workloads: append([]string(nil), di.Workloads...),
-			Path: di.Source.Path, Base: di.BaseRef, Counts: di.Counts, Newer: newerFingerprint(di.NewerSeries, nil)}
+			Path: di.Source.Path, Base: di.BaseRef, Counts: di.Counts, Newer: newerFingerprint(di.NewerSeries, nil), Deploy: di.AwaitingDeploy}
 		sort.Strings(fd.Workloads)
 		if c := di.Candidate; c != nil {
 			fd.Candidate = &image{Ref: c.Ref, Config: c.ConfigDigest, Manifest: c.ManifestDigest, Top: c.TopDigest}

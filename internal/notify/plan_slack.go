@@ -1132,12 +1132,14 @@ func (b *planBuilder) languageUnit(u remediation.PRUnit) planEntry {
 			left = append(left, leftOut{x.Name, x.From, x.Target, x.Reason, nil, x.MavenBOM, li.Manager, remainingHint(li, x)})
 		}
 	}
-	if len(left) == 0 {
-		if li, ok := b.langItems[u.ItemKey]; ok {
+	var planned []pkgLine
+	if li, ok := b.langItems[u.ItemKey]; ok {
+		if len(left) == 0 {
 			left = leftOutOf(li)
 		}
+		planned = b.plannedManual(li, false)
 	}
-	b.leftOutLines(&e, left, b.lockName(u.Path, u.ItemKey))
+	b.leftOutLines(&e, left, planned, b.lockName(u.Path, u.ItemKey))
 	return e
 }
 
@@ -1234,12 +1236,32 @@ type pkgLine struct {
 	hint *remediation.FixHint
 }
 
-func (b *planBuilder) leftOutLines(e *planEntry, left []leftOut, file string) {
-	items := make([]pkgLine, len(left))
-	for i, x := range left {
-		items[i] = pkgLine{name: x.name, from: x.from, target: x.target, reason: x.reason, leftOut: true, chain: x.chain, bom: x.bom, manager: x.manager, hint: x.hint}
+// leftOutLines lists the packages left out of an update, then the packages
+// the plan left to a person before any update (planned), under one label.
+func (b *planBuilder) leftOutLines(e *planEntry, left []leftOut, planned []pkgLine, file string) {
+	items := make([]pkgLine, 0, len(left)+len(planned))
+	for _, x := range left {
+		items = append(items, pkgLine{name: x.name, from: x.from, target: x.target, reason: x.reason, leftOut: true, chain: x.chain, bom: x.bom, manager: x.manager, hint: x.hint})
 	}
+	items = append(items, planned...)
 	b.packageLines(e, tagDecide, b.msg.PlanLblDecide, file, items)
+}
+
+// plannedManual are the packages of an item that the plan left to a person
+// before any update ran, as lines: they are named whatever else the item
+// proposes, so that a pull request of the other packages does not hide them.
+// The packages an update left out are not among them, nor those that only
+// share an update set another package of which could not be updated, nor,
+// with ownReason, the packages the item's own reason covers.
+func (b *planBuilder) plannedManual(li remediation.LanguageItem, ownReason bool) []pkgLine {
+	var out []pkgLine
+	for _, p := range li.Packages {
+		if p.Action != remediation.ActionManual || p.LeftOut || p.Reason == remediation.ReasonUpdateSetNotApplied || (ownReason && ofItemReason(li, p)) {
+			continue
+		}
+		out = append(out, b.pkgLineOf(li, p))
+	}
+	return out
 }
 
 // packageLines lists packages with their reasons, ten at most: a package with
@@ -1378,6 +1400,7 @@ func (b *planBuilder) languageItem(li remediation.LanguageItem) planEntry {
 		}
 		e.plain(file)
 		e.line(tagCandidate, kv(b.msg.PlanLblCandidate, value))
+		b.plannedLines(&e, li)
 	case remediation.CategoryRebuildExpected:
 		var pkgs []remediation.LanguagePackage
 		for _, p := range li.Packages {
@@ -1398,6 +1421,7 @@ func (b *planBuilder) languageItem(li remediation.LanguageItem) planEntry {
 			e.line(tagRebuild, kv(b.msg.PlanLblRebuild, fmt.Sprintf(b.msg.PlanRebuildValue,
 				litMrkdwn(p.Name), litMrkdwn(p.Installed), litMrkdwn(p.SelectionLowerBound))))
 		}
+		b.plannedLines(&e, li)
 	case remediation.CategoryPRCandidate:
 		var changes []string
 		move := func(string) (string, string, bool) { return "", "", false }
@@ -1421,7 +1445,7 @@ func (b *planBuilder) languageItem(li remediation.LanguageItem) planEntry {
 			e.plain(file)
 			e.line(tagCandidate, kv(b.msg.PlanLblCandidate, b.joined(changes)))
 		}
-		b.leftOutLines(&e, leftOutOf(li), path.Base(languageFile(li)))
+		b.leftOutLines(&e, leftOutOf(li), b.plannedManual(li, false), path.Base(languageFile(li)))
 	case remediation.CategoryManual, remediation.CategoryNotComparable, remediation.CategoryFailed, remediation.CategoryDeferred:
 		label, tag, _ := b.outcome(li.Category)
 		why := b.reason(li.Reason)
@@ -1433,16 +1457,36 @@ func (b *planBuilder) languageItem(li remediation.LanguageItem) planEntry {
 			}
 		}
 		e.plain(file)
-		if b.chainWaiting(&e, tag, label, li) {
-			break
-		}
-		if pkgs := packagesOfReason(li); len(pkgs) > 0 && li.RuntimeEOL == nil {
-			b.packageReasonLines(&e, tag, label, li, pkgs)
-		} else {
+		// The packages the item's reason does not cover need a decision
+		// whatever the item's state is: they are named after its own lines,
+		// in the same list when those need a decision too.
+		pkgs := packagesOfReason(li)
+		planned := b.plannedManual(li, true)
+		switch {
+		case b.chainWaiting(&e, tag, label, li):
+		case len(pkgs) > 0 && li.RuntimeEOL == nil:
+			if tag == tagDecide {
+				b.packageReasonLines(&e, tag, label, li, pkgs, planned)
+				planned = nil
+			} else {
+				b.packageReasonLines(&e, tag, label, li, pkgs, nil)
+			}
+		default:
 			e.line(tag, kv(label, why))
+		}
+		if len(planned) > 0 {
+			b.packageLines(&e, tagDecide, b.msg.PlanLblDecide, path.Base(languageFile(li)), planned)
 		}
 	}
 	return e
+}
+
+// plannedLines names, under the label of what needs a decision, the packages
+// the plan left to a person in an item that proposes an update or a rebuild.
+func (b *planBuilder) plannedLines(e *planEntry, li remediation.LanguageItem) {
+	if planned := b.plannedManual(li, false); len(planned) > 0 {
+		b.packageLines(e, tagDecide, b.msg.PlanLblDecide, path.Base(languageFile(li)), planned)
+	}
 }
 
 // chainWaiting adds the lines of an item that waits for a version of the chain
@@ -1492,16 +1536,18 @@ func chainPackageReason(r remediation.Reason) bool {
 // packages that hold them back was meant for are among them, whatever the
 // item's reason is.
 func packagesOfReason(li remediation.LanguageItem) []remediation.LanguagePackage {
-	if li.Reason == "" {
-		return nil
-	}
 	var out []remediation.LanguagePackage
 	for _, p := range li.Packages {
-		if p.Action == remediation.ActionManual && (p.Reason == li.Reason || chainPackageReason(p.Reason)) {
+		if ofItemReason(li, p) {
 			out = append(out, p)
 		}
 	}
 	return out
+}
+
+// ofItemReason reports whether p is one of the packages of packagesOfReason.
+func ofItemReason(li remediation.LanguageItem, p remediation.LanguagePackage) bool {
+	return li.Reason != "" && p.Action == remediation.ActionManual && (p.Reason == li.Reason || chainPackageReason(p.Reason))
 }
 
 // lockVersions are the versions the files list for a package that is listed
@@ -1539,19 +1585,25 @@ var lockfileLeftAlone = regexp.MustCompile(`^the (?:update|rewrite) left .+ unch
 // packageReasonLines names the packages an item is manual for, with the
 // reason, as the lines of the packages left out of an update are. The lockfile
 // is said not to have changed only when the detail says the update left it
-// unchanged.
-func (b *planBuilder) packageReasonLines(e *planEntry, tag planTag, label string, li remediation.LanguageItem, pkgs []remediation.LanguagePackage) {
+// unchanged. The lines of planned follow them.
+func (b *planBuilder) packageReasonLines(e *planEntry, tag planTag, label string, li remediation.LanguageItem, pkgs []remediation.LanguagePackage, planned []pkgLine) {
+	items := make([]pkgLine, 0, len(pkgs)+len(planned))
+	for _, p := range pkgs {
+		items = append(items, b.pkgLineOf(li, p))
+	}
+	items = append(items, planned...)
+	b.packageLines(e, tag, label, path.Base(languageFile(li)), items)
+}
+
+// pkgLineOf is the line of a package of an item that needs a person.
+func (b *planBuilder) pkgLineOf(li remediation.LanguageItem, p remediation.LanguagePackage) pkgLine {
 	var chain *remediation.ChainUpdate
 	if li.Update != nil {
 		chain = li.Update.Chain
 	}
-	items := make([]pkgLine, len(pkgs))
-	for i, p := range pkgs {
-		items[i] = pkgLine{name: p.Name, from: p.Installed, target: p.SelectionLowerBound, reason: p.Reason, chain: chain,
-			unchanged:    lockfileLeftAlone.MatchString(p.Detail) || lockfileLeftAlone.MatchString(li.Detail),
-			lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0, bom: p.MavenBOM, manager: li.Manager, partOf: globalOwners(p), hint: p.Hint()}
-	}
-	b.packageLines(e, tag, label, path.Base(languageFile(li)), items)
+	return pkgLine{name: p.Name, from: p.Installed, target: p.SelectionLowerBound, reason: p.Reason, chain: chain,
+		unchanged:    lockfileLeftAlone.MatchString(p.Detail) || lockfileLeftAlone.MatchString(li.Detail),
+		lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0, bom: p.MavenBOM, manager: li.Manager, partOf: globalOwners(p), hint: p.Hint()}
 }
 
 // --- the message ---

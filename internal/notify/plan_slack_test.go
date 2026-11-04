@@ -296,16 +296,16 @@ func TestPlanMessage_ProposalsWithoutPullRequests(t *testing.T) {
 	r, _, _ := planCycleFixture()
 	for lang, want := range map[Language][]string{
 		LanguageJA: {
-			"更新候補 3件 · 再pull 1件 · 再ビルド 2件 · 要判断 3件",
+			"更新候補 3件 · 再pull 1件 · 再ビルド 2件 · 要判断 4件",
 			"*イメージ: web:latest*\n再pull: 所見4件中3件が解消 (KEV 2件)",
 			"更新候補: api 2.0.1 → 2.0.4 (所見1件が解消)",
 			"修正するファイル: ex/app の requirements.txt\n再ビルド: urllib3 1.26.5: 再ビルドで 1.26.18 以上が入る見込み",
-			"更新候補: express 4.18.2 → 4.19.2、lodash 4.17.20 → 4.17.21、qs 6.11.0 → 6.11.3 (KEV 1件)",
+			"更新候補: express 4.18.2 → 4.19.2、lodash 4.17.20 → 4.17.21、qs 6.11.0 → 6.11.3 (KEV 1件)\n要判断: package-lock.json に無いパッケージ（lockfile 以外の経路でイメージに入ったものとみられ、lockfile の更新では直せない）\n  • ghost 1.0.0",
 			"要判断: 候補でKEV掲載の脆弱性が新たに入る",
 			"再ビルド: 稼働中のイメージの作成元のベースを確認できない。ベースを取り直して再ビルドし(`docker build --pull` など)、デプロイし直す",
 		},
 		LanguageEN: {
-			"3 update candidate(s) · 1 re-pull · 2 rebuild · 3 need a decision",
+			"3 update candidate(s) · 1 re-pull · 2 rebuild · 4 need a decision",
 			"Update candidate: express 4.18.2 → 4.19.2, lodash 4.17.20 → 4.17.21, qs 6.11.0 → 6.11.3 (1 KEV)",
 		},
 	} {
@@ -935,8 +935,9 @@ func TestPlanReasonTextOfAnUnknownCodeIsLiteral(t *testing.T) {
 }
 
 // An item that is manual as a whole for a reason its packages have names those
-// packages, like the lines of the packages left out. The line for a package
-// that could not be raised says what is known and what is not.
+// packages, like the lines of the packages left out, then the packages the plan
+// left to a person for another reason. The line for a package that could not
+// be raised says what is known and what is not.
 func TestPlanMessage_ItemReasonNamesItsPackages(t *testing.T) {
 	item := func(detail string, extra int) *PlanInfo {
 		li := languageUpdated("deps:ex/app@main:.#npm")
@@ -959,13 +960,13 @@ func TestPlanMessage_ItemReasonNamesItsPackages(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("%s: missing %q in\n%s", lang, want, got)
 		}
-		if strings.Contains(got, "other 1") {
-			t.Errorf("%s: a package with another reason is listed:\n%s", lang, got)
+		if !strings.Contains(got, "  • other 1") {
+			t.Errorf("%s: the package with another reason is not listed:\n%s", lang, got)
 		}
 	}
 	// More than ten packages are cut at ten.
 	got := slackPlanText(r, item("", 11), LanguageEN)
-	if n := strings.Count(got, "Needs a decision: "); n != 11 || !strings.Contains(got, "Needs a decision: and 2 more") {
+	if n := strings.Count(got, "Needs a decision: "); n != 11 || !strings.Contains(got, "Needs a decision: and 3 more") {
 		t.Errorf("%d lines in\n%s", n, got)
 	}
 	// Every package, and what is known of the lockfile, is in the fingerprint.

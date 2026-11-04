@@ -1,8 +1,8 @@
 ===== message 1/1 =====
-TEXT: KestreLynx 2026-06-24 09:00 fix plan — 3 update candidate(s) · 1 re-pull · 2 rebuild · 3 need a decision · 1 not comparable · 1 failed · 2 deferred
+TEXT: KestreLynx 2026-06-24 09:00 fix plan — 3 update candidate(s) · 1 re-pull · 2 rebuild · 4 need a decision · 1 not comparable · 1 failed · 2 deferred
 --- section ---
 *🔧 Fix plan*
-3 update candidate(s) · 1 re-pull · 2 rebuild · 3 need a decision · 1 not comparable · 1 failed · 2 deferred
+3 update candidate(s) · 1 re-pull · 2 rebuild · 4 need a decision · 1 not comparable · 1 failed · 2 deferred
 --- divider ---
 --- section ---
 *Image: web:latest*
@@ -47,6 +47,8 @@ Rebuild: urllib3 1.26.5: a rebuild is expected to pick up 1.26.18 or later
 *Service: api*
 File to change: backend/package-lock.json in ex/app
 Update candidate: express 4.18.2 → 4.19.2, lodash 4.17.20 → 4.17.21, qs 6.11.0 → 6.11.3 (1 KEV)
+Needs a decision: packages that are not in package-lock.json (they probably came into the image by a route other than the lockfile, so updating the lockfile cannot fix them)
+  • ghost 1.0.0
 --- divider ---
 --- section ---
 *Service: old*

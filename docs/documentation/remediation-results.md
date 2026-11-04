@@ -82,6 +82,8 @@ This summary also includes “need a decision,” “deferred,” and “blocked
 - An item with both a candidate and a need for a decision counts once in each category
 - Even when several packages in the same item need a decision, the decision count does not necessarily match the package count
 - Packages left out of a created PR still need a decision
+- In Slack remediation plans, packages identified as requiring manual action before an update is attempted appear under “need a decision” with their reasons, even when the same file has update candidates or a created PR
+- Packages left out because another package in the same update group cannot be updated are not listed separately, since the reason appears in the row for the package causing the issue
 
 ### Finding omitted details {#omitted-details}
 

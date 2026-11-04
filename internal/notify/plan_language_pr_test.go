@@ -151,3 +151,94 @@ func TestWebhook_LanguageItemWithoutUpdateHasNoNewKeys(t *testing.T) {
 		t.Error("pull_requests present without units")
 	}
 }
+
+// A package the plan left to a person before any update is named whatever else
+// its item proposes: beside the update of the other packages, beside the pull
+// request made of them, and after the lines of a manual item's own reason. A
+// package left out only because another package of its update set could not
+// be updated is not.
+func TestPlanSlack_PlannedManualNamed(t *testing.T) {
+	r := planReport()
+	planned := remediation.LanguagePackage{Name: "github.com/x/y", Ecosystem: "gobinary", Installed: "v1.1.1", Action: remediation.ActionManual,
+		Reason: remediation.ReasonFixInOtherMajor, FixHint: &remediation.FixHint{Fix: &remediation.FixRelease{Version: "v2.0.0"}, Direct: true}}
+	setOnly := remediation.LanguagePackage{Name: "z", Ecosystem: "node-pkg", Installed: "1.0.0", SelectionLowerBound: "1.0.1", Action: remediation.ActionManual,
+		Reason: remediation.ReasonUpdateSetNotApplied}
+	ja := "要判断: github.com/x/y v1.1.1 の修正版は別のメジャー版（v2.0.0）にしかない（go.mod で直接指定・import の書き換えが必要）"
+	en := "Needs a decision: github.com/x/y v1.1.1 has its fixes only in another major version (v2.0.0) (go.mod requires it directly, so the imports need rewriting)"
+	item := func(category remediation.Category) remediation.LanguageItem {
+		li := languageUpdated("deps:ex/app@main:.#npm")
+		li.Category = category
+		li.Packages = append(li.Packages, planned, setOnly)
+		return li
+	}
+	manual := item(remediation.CategoryManual)
+	manual.Reason = remediation.ReasonTargetNotUpdated
+	manual.Packages[0].Action, manual.Packages[0].Reason, manual.Packages[0].SelectionLowerBound = remediation.ActionManual, remediation.ReasonTargetNotUpdated, "1.2.6"
+	candidate := item(remediation.CategoryDependencyUpdateCandidate)
+	for i := range candidate.Packages[:2] {
+		candidate.Packages[i].SelectionLowerBound = candidate.Packages[i].AdoptedVersion
+	}
+	for name, info := range map[string]*PlanInfo{
+		"update candidate":   languagePlanOf(candidate),
+		"pr candidate":       languagePlanOf(item(remediation.CategoryPRCandidate)),
+		"pull request":       languagePlanOf(item(remediation.CategoryPRCandidate), languageUnit(remediation.PRStatusCreated, 4, "")),
+		"manual, own reason": languagePlanOf(manual),
+	} {
+		for lang, want := range map[Language]string{LanguageJA: ja, LanguageEN: en} {
+			got := slackPlanText(r, info, lang)
+			if !strings.Contains(got, want) {
+				t.Errorf("%s, %s: missing %q in\n%s", name, lang, want, got)
+			}
+			if strings.Contains(got, " z ") || strings.Contains(got, "• z ") {
+				t.Errorf("%s, %s: a package of a failed update set is named:\n%s", name, lang, got)
+			}
+		}
+	}
+	got := slackPlanText(r, languagePlanOf(manual), LanguageJA)
+	if own := strings.Index(got, "minimist 1.2.5 を修正版の 1.2.6 に上げられない"); own < 0 || own > strings.Index(got, ja) {
+		t.Errorf("the item's own reason does not come first:\n%s", got)
+	}
+}
+
+// The packages the plan left to a person need a decision whatever the item's
+// own state is: beside a deferred item they are not shown as deferred, and
+// they count among the items that need a decision.
+func TestPlanSlack_PlannedManualOfDeferredItem(t *testing.T) {
+	r := planReport()
+	li := languageUpdated("deps:ex/app@main:.#npm")
+	li.Category, li.Reason = remediation.CategoryDeferred, remediation.ReasonReleaseTooNew
+	li.Packages = append(li.Packages, remediation.LanguagePackage{Name: "github.com/x/y", Ecosystem: "gobinary", Installed: "v1.1.1", Action: remediation.ActionManual,
+		Reason: remediation.ReasonFixInOtherMajor, FixHint: &remediation.FixHint{Fix: &remediation.FixRelease{Version: "v2.0.0"}, Direct: true}})
+	for lang, want := range map[Language][]string{
+		LanguageJA: {"保留: ", "要判断: github.com/x/y v1.1.1 の修正版は別のメジャー版（v2.0.0）にしかない", "要判断 1件"},
+		LanguageEN: {"Deferred: ", "Needs a decision: github.com/x/y v1.1.1 has its fixes only in another major version (v2.0.0)", "1 need a decision"},
+	} {
+		got := slackPlanText(r, languagePlanOf(li), lang)
+		for _, w := range want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: missing %q in\n%s", lang, w, got)
+			}
+		}
+	}
+}
+
+// A package of the item's reason and a copy of the same name and version in a
+// global node_modules are told apart: each is named once, with its own reason.
+func TestPlanSlack_PlannedManualSameNameApart(t *testing.T) {
+	r := planReport()
+	li := languageUpdated("deps:ex/app@main:.#npm")
+	li.Category, li.Reason = remediation.CategoryManual, remediation.ReasonTargetNotUpdated
+	li.Packages = []remediation.LanguagePackage{
+		{Name: "multer", Ecosystem: "node-pkg", Installed: "2.1.1", SelectionLowerBound: "2.3.0", Action: remediation.ActionManual, Reason: remediation.ReasonTargetNotUpdated},
+		{Name: "multer", Ecosystem: "node-pkg", Installed: "2.1.1", Action: remediation.ActionManual, Reason: remediation.ReasonGlobalNodeModules},
+	}
+	got := slackPlanText(r, languagePlanOf(li), LanguageJA)
+	for _, w := range []string{
+		"要判断: multer 2.1.1 を修正版の 2.3.0 に上げられない（原因は確かめられなかった）",
+		"要判断: グローバルな node_modules にあるパッケージ（package-lock.json で入れたものではないため、package-lock.json の更新では直せない）\n  • multer 2.1.1",
+	} {
+		if strings.Count(got, w) != 1 {
+			t.Errorf("%q is not named once in\n%s", w, got)
+		}
+	}
+}

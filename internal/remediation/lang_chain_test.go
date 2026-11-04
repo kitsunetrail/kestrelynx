@@ -190,19 +190,6 @@ func TestBuildChainScope(t *testing.T) {
 			t.Errorf("counted %d lookups", r.shared.budget.lookups)
 		}
 	})
-	t.Run("a package the project declares is not held back by a chain", func(t *testing.T) {
-		manifest := `{"name":"app","version":"1.0.0","dependencies":{"mkdirp":"^0.5.1","rc":"^1.2.0","minimist":"^1.2.0"}}`
-		r := chainRun(t, manifest, mkdirpLock(), mkdirpDists, minimistPkg())
-		g0, _ := buildGraph(bg, ManagerNpm, r.src.lock)
-		scope, fail := buildChainScope(bg, r, g0, []string{"minimist"})
-		if scope != nil || fail != nil {
-			t.Fatalf("scope = %v, failure = %+v", scope, fail)
-		}
-		npm := r.u.cfg.Npm.(*fakeNpm)
-		if len(npm.lookups) != 0 {
-			t.Errorf("looked up %v for a package that is excluded", npm.lookups)
-		}
-	})
 	t.Run("a range that cannot be judged", func(t *testing.T) {
 		dists := map[string]NpmDist{
 			"mkdirp@0.5.1": {Dependencies: map[string]string{"minimist": "latest"}},
@@ -560,58 +547,68 @@ func TestChainRemovalLeavesOnlyAllowedReferences(t *testing.T) {
 	}
 }
 
-func TestExcludeDeclared(t *testing.T) {
-	// minimist is a dependency of the project, its range allows the fix, and the
-	// finding is on a nested old copy only: the ordinary update's set does not
-	// see it as direct, and the chain update leaves it alone.
+func TestBuildChainScopeDeclared(t *testing.T) {
+	// minimist is a dependency of the project too. mkdirp holds a nested copy
+	// at 0.0.8 whatever the project's own copy is.
 	manifest := `{"name":"app","version":"1.0.0","dependencies":{"mkdirp":"^0.5.1","minimist":"^1.2.0"}}`
 	root := map[string]string{"mkdirp": "^0.5.1", "minimist": "^1.2.0"}
-	lock := npmLock(root, map[string]npmEntry{
-		"node_modules/mkdirp":                       {ver: "0.5.1", deps: map[string]string{"minimist": "0.0.8"}},
-		"node_modules/mkdirp/node_modules/minimist": {ver: "0.0.8"},
-		"node_modules/minimist":                     {ver: "1.2.8"},
-	})
-	g0 := graphOf(t, lock)
-	pkg := minimistPkg()
-	pkg.Occurrences = []SourceOccurrence{{Path: "node_modules/mkdirp/node_modules/minimist", Version: "0.0.8", Matched: true}}
-	it := &LanguageItem{Manager: ManagerNpm, Packages: []LanguagePackage{pkg}}
-	set, _ := newUpdateSet(it)
-	if set.direct["minimist"] {
-		t.Fatal("the ordinary set takes it as direct")
+	lock := func(own string) []byte {
+		return npmLock(root, map[string]npmEntry{
+			"node_modules/mkdirp":                       {ver: "0.5.1", deps: map[string]string{"minimist": "0.0.8"}},
+			"node_modules/mkdirp/node_modules/minimist": {ver: "0.0.8"},
+			"node_modules/minimist":                     {ver: own},
+		})
 	}
-	if got := excludeDeclared(ManagerNpm, []byte(manifest), g0, []string{"minimist", "other"}); strings.Join(got, ",") != "other" {
-		t.Errorf("excluded = %v", got)
+	dists := map[string]NpmDist{"mkdirp@0.5.1": {Dependencies: map[string]string{"minimist": "0.0.8"}}}
+	pkg := func(occs ...SourceOccurrence) LanguagePackage {
+		p := minimistPkg()
+		p.Occurrences = occs
+		return p
 	}
-	if set.direct["minimist"] {
-		t.Error("the update set changed")
-	}
-	t.Run("not in the manifest but required by the project's lockfile record", func(t *testing.T) {
-		g := graphOf(t, lock)
-		got := excludeDeclared(ManagerNpm, []byte(`{"name":"app","version":"1.0.0"}`), g, []string{"minimist"})
-		if len(got) != 0 {
-			t.Errorf("excluded = %v", got)
+	nested := SourceOccurrence{Path: "node_modules/mkdirp/node_modules/minimist", Version: "0.0.8", Matched: true}
+
+	t.Run("its own copy is fixed and a nested copy is held", func(t *testing.T) {
+		r := chainRun(t, manifest, lock("1.2.8"), dists, pkg(nested, SourceOccurrence{Path: "node_modules/minimist", Version: "1.2.8", Direct: true}))
+		if r.set.direct["minimist"] {
+			t.Fatal("the update set takes it as direct")
+		}
+		g0, _ := buildGraph(bg, ManagerNpm, r.src.lock)
+		scope, fail := buildChainScope(bg, r, g0, []string{"minimist"})
+		if fail != nil || scope == nil {
+			t.Fatalf("scope = %v, failure = %+v", scope, fail)
+		}
+		if strings.Join(scope.Bn, ",") != "minimist" || len(scope.Tops) != 1 || scope.Tops[0].Name != "mkdirp" {
+			t.Errorf("Bn = %v, Tops = %+v", scope.Bn, scope.Tops)
+		}
+		if !scope.Be["node_modules/mkdirp/node_modules/minimist"] || scope.Be["node_modules/minimist"] {
+			t.Errorf("Be = %v", scope.Be)
+		}
+		if len(scope.Blocked) != 1 || scope.Blocked[0].Parent != "mkdirp" || scope.Blocked[0].Proof != "exact" {
+			t.Errorf("Blocked = %+v", scope.Blocked)
+		}
+		if !scope.directParents["mkdirp@0.5.1"] {
+			t.Errorf("direct parents = %v", scope.directParents)
 		}
 	})
-	t.Run("declared in any field", func(t *testing.T) {
-		for _, field := range manifestDepFields {
-			m := fmt.Sprintf(`{"name":"app","version":"1.0.0","%s":{"minimist":"*"}}`, field)
-			g := graphOf(t, npmLock(map[string]string{}, map[string]npmEntry{"node_modules/minimist": {ver: "0.0.8"}}))
-			if got := excludeDeclared(ManagerNpm, []byte(m), g, []string{"minimist"}); len(got) != 0 {
-				t.Errorf("%s: excluded = %v", field, got)
-			}
+	t.Run("its own copy is below the fix and the update takes it as direct", func(t *testing.T) {
+		r := chainRun(t, manifest, lock("1.2.0"), dists, pkg(nested, SourceOccurrence{Path: "node_modules/minimist", Version: "1.2.0", Direct: true, Matched: true}))
+		if !r.set.direct["minimist"] {
+			t.Fatal("the update set does not take it as direct")
+		}
+		g0, _ := buildGraph(bg, ManagerNpm, r.src.lock)
+		scope, fail := buildChainScope(bg, r, g0, []string{"minimist"})
+		if fail != nil || scope == nil {
+			t.Fatalf("scope = %v, failure = %+v", scope, fail)
+		}
+		if !scope.Be["node_modules/mkdirp/node_modules/minimist"] || scope.Be["node_modules/minimist"] || len(scope.Blocked) != 1 {
+			t.Errorf("Be = %v, Blocked = %+v: only mkdirp's requirement holds it", scope.Be, scope.Blocked)
 		}
 	})
-	t.Run("a manifest that cannot be read judges nothing", func(t *testing.T) {
-		if got := excludeDeclared(ManagerNpm, []byte(`[`), g0, []string{"x"}); got != nil {
-			t.Errorf("got %v", got)
-		}
-	})
-	t.Run("uv declarations", func(t *testing.T) {
-		py := "[project]\nname = \"p\"\nversion = \"1\"\ndependencies = [\"Requests>=2\"]\n[dependency-groups]\ndev = [\"idna\"]\n"
-		g := &depGraph{nodes: map[string]*depNode{}}
-		got := excludeDeclared(ManagerUv, []byte(py), g, []string{"requests", "idna", "urllib3"})
-		if strings.Join(got, ",") != "urllib3" {
-			t.Errorf("excluded = %v", got)
+	t.Run("its own copy is below the fix and the update does not take it as direct", func(t *testing.T) {
+		r := chainRun(t, manifest, lock("1.2.0"), dists, pkg(nested))
+		g0, _ := buildGraph(bg, ManagerNpm, r.src.lock)
+		if scope, fail := buildChainScope(bg, r, g0, []string{"minimist"}); scope != nil || fail != nil {
+			t.Fatalf("scope = %v, failure = %+v: the first update's reason stands", scope, fail)
 		}
 	})
 }

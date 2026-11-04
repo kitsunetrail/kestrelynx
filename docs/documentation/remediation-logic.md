@@ -569,9 +569,13 @@ flowchart TD
 
 This mechanism applies to a package that does not reach a fixed version through a normal update when all the following conditions hold.
 
-- The target is an indirect dependency brought in through a package such as `mkdirp`, like the example's `minimist`, which is absent from the project's direct declarations in `package.json`.
-- The dependent package's requirement excludes fixed versions through a pin to an older version or an upper bound, such as `mkdirp 0.5.1` requiring exactly `minimist 0.0.8`.
-- The project uses npm, pnpm, or uv, with npm used in this example.
+- The target is brought in through a dependent package such as `mkdirp`, including targets that the project also declares directly in `package.json`, `pyproject.toml`, or the lockfile's root requirements
+- The dependent package's requirement excludes fixed versions through a pin to an older version or an upper bound, such as `mkdirp 0.5.1` requiring exactly `minimist 0.0.8`
+- If the project uses the target directly, that version is at or above the fixed version or matches the version found in the running image
+- The project uses npm, pnpm, or uv, with npm used in this example
+
+The project's own declarations follow the same rules as [Direct dependency version specifications](#direct-dependencies).
+A declaration that allows the fixed version is preserved; otherwise, it is rewritten if its form is supported.
 
 ##### Examples of eligible and ineligible cases {#dependent-reresolution-eligibility-examples}
 
@@ -580,14 +584,16 @@ This mechanism applies to a package that does not reach a fixed version through 
 | `mkdirp 0.5.1` → exactly `minimist 0.0.8` | Yes | `minimist` is pinned to an older version that excludes fixed versions |
 | A dependent package requires `minimist` below `1.0`, assuming fixed versions are available only at `1.2.6` or later | Yes | The upper bound excludes fixed versions |
 | `rc 1.2.8` → `minimist ^1.2.0` (`1.2.0` or later, below `2.0.0`) | No | A normal update can select a fixed version of `1.2.6` or later |
-| The project's `package.json` declares `minimist` directly | No | Direct project declarations are handled by normal updates |
+| `package.json` specifies `minimist ^1.2.0` and `mkdirp ^0.5.1`, with the direct `minimist` at the fixed `1.2.8` and the copy under `mkdirp 0.5.1` pinned to exactly `0.0.8` | Yes | Updating `mkdirp` to `0.5.6` within its range leaves `package.json` unchanged and can produce a PR if the checks pass |
+| `pyproject.toml` specifies `cryptography>=41`, and `pyopenssl` requires `cryptography<42` | Yes | A solution within the declared ranges produces a PR if the checks pass; if no solution is found, KestreLynx identifies the dependent package blocking the update and reports whether each of two releases can use the fixed version: its latest release within the project's declared range and its latest published release |
+| The target version used directly by the project is below the fixed version and differs from the version found in the running image | No | There is no basis for rewriting the project's declaration |
 | A pip project | No | This mechanism supports npm, pnpm, and uv |
 
 KestreLynx checks the information for `mkdirp 0.5.1` in the public npm registry to confirm its requirement for `minimist`.
 
 ##### Excluded changes {#dependent-reresolution-non-goals}
 
-- Re-resolution does not widen declared ranges in files such as `package.json`.
+- Re-resolution does not widen the ranges declared in files such as `package.json` for dependent packages selected again to resolve the target
 - Re-resolution does not force versions through `overrides`.
 
 See [Re-resolution support and limits](remediation-reference.md#dependent-reresolution-limits) for supported version specifications and limits on package counts, processing time, and other resources.

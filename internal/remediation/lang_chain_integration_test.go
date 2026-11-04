@@ -139,14 +139,25 @@ func TestIntegrationNpmChain(t *testing.T) {
 			t.Errorf("artifacts = %+v", got.Artifacts)
 		}
 	})
-	t.Run("npm_chain_mixed_direct", func(t *testing.T) {
+	// The project declares minimist itself; mkdirp holds a nested copy at
+	// 0.0.8. The chain update raises mkdirp within ^0.5.1.
+	t.Run("npm_chain_declared", func(t *testing.T) {
 		got, _ := run(t, "npm_chain_mixed_direct")
-		wantCategory(t, got, CategoryManual, ReasonTargetNotUpdated)
-		if got.Update != nil && got.Update.Chain != nil {
-			t.Errorf("chain = %+v: a package the project declares is left to the ordinary update", got.Update.Chain)
+		if got.Category != CategoryPRCandidate || got.Reason != ReasonUpdateVerified {
+			t.Fatalf("category = %s/%s (%s)", got.Category, got.Reason, got.Detail)
 		}
-		if min := packageOf(t, got, "minimist"); min.Reason != ReasonTargetNotUpdated || len(min.Through) != 0 {
-			t.Errorf("minimist = %+v", min)
+		c := got.Update.Chain
+		if c == nil || c.Outcome != ChainAdopted || len(c.Tops) != 1 || c.Tops[0].Name != "mkdirp" || c.Tops[0].From != "0.5.1" ||
+			len(c.Blocked) != 1 || c.Blocked[0].Parent != "mkdirp" {
+			t.Fatalf("chain = %+v", c)
+		}
+		for _, v := range versions(t, got.Artifacts[0].Content)["minimist"] {
+			if cmp, _ := compareVersions(schemeSemver, v, "1.2.6"); cmp < 0 {
+				t.Errorf("minimist %s is left", v)
+			}
+		}
+		if len(got.Artifacts) != 1 || len(got.Update.ManifestEdits) != 0 {
+			t.Errorf("artifacts = %d, manifest edits = %+v", len(got.Artifacts), got.Update.ManifestEdits)
 		}
 	})
 }
@@ -250,6 +261,22 @@ func TestIntegrationPnpmChain(t *testing.T) {
 				t.Errorf("a vulnerable minimist is left:\n%s", after)
 			}
 			if !strings.Contains(after, "  rc@1.2.8:\n    dependencies:") || !strings.Contains(after, "mkdirp@0.5.6") {
+				t.Errorf("lockfile:\n%s", after)
+			}
+		})
+		t.Run("pnpm_chain_declared_"+release, func(t *testing.T) {
+			// The project declares minimist itself at 1.2.8; mkdirp holds
+			// another entry at 0.0.8.
+			got, _ := run(t, "pnpm_chain_declared", release)
+			if got.Category != CategoryPRCandidate || got.Reason != ReasonUpdateVerified {
+				t.Fatalf("category = %s/%s (%s)", got.Category, got.Reason, got.Detail)
+			}
+			c := got.Update.Chain
+			if c == nil || c.Outcome != ChainAdopted || len(c.Tops) != 1 || c.Tops[0].Name != "mkdirp" || len(c.Blocked) != 1 {
+				t.Fatalf("chain = %+v", c)
+			}
+			after := string(got.Artifacts[0].Content)
+			if strings.Contains(after, "minimist@0.0.8") || !strings.Contains(after, "mkdirp@0.5.6") {
 				t.Errorf("lockfile:\n%s", after)
 			}
 		})
@@ -365,6 +392,24 @@ func TestIntegrationUvChain(t *testing.T) {
 		}
 		if !carried || !refused || sc.Basis != "package_version_vuln_edges_positions" {
 			t.Errorf("carried = %+v, refusals = %+v, basis = %q", sc.ChainCarried, sc.ChainPositionRefusals, sc.Basis)
+		}
+	})
+	t.Run("uv_chain_declared", func(t *testing.T) {
+		// The project declares cryptography itself, and pyopenssl >=23.2,<24
+		// holds it below 42: the chain is tried as for a package the project
+		// does not declare, and finds no resolution within the range.
+		got := run(t, "uv_chain_declared", group(typePythonPkg, "cryptography", "41.0.7", pyOrigin("cryptography", "41.0.7"),
+			CVERef{VulnID: "CVE-2024-26130", FixedVers: []string{"42.0.4"}}))
+		wantCategory(t, got, CategoryManual, ReasonUpdateStepFailed)
+		c := got.Update.Chain
+		if c == nil || c.Outcome != ChainNotFixed || c.Reason != ReasonNoResolution || len(c.Blocked) != 1 || c.Blocked[0].Parent != "pyopenssl" {
+			t.Fatalf("chain = %+v", c)
+		}
+		if p := packageOf(t, got, "cryptography"); p.Reason != ReasonDependentsNotFixed {
+			t.Errorf("cryptography = %+v", p)
+		}
+		if len(c.Hints) != 1 || c.Hints[0].Parent != "pyopenssl" || !c.Hints[0].Direct || c.Hints[0].Latest == nil || !c.Hints[0].Latest.Fixes {
+			t.Errorf("hints = %+v", c.Hints)
 		}
 	})
 	t.Run("uv_chain_no_solution", func(t *testing.T) {

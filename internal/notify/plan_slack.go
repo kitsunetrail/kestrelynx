@@ -1129,7 +1129,7 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 			line = b.chainLine(x)
 			hints = b.hintLines(x)
 		case x.reason == remediation.ReasonTargetNotUpdated:
-			line = fmt.Sprintf(b.msg.PlanNotUpdated, name, target, from, litMrkdwn(file))
+			line = fmt.Sprintf(b.msg.PlanNotUpdated, name, from, target)
 		case x.leftOut:
 			line = fmt.Sprintf(b.msg.PlanLeftOut, name, from, target, b.reason(x.reason)) + b.bomRaise(x)
 		default:

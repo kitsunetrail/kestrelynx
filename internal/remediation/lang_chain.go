@@ -193,55 +193,6 @@ func chainCandidates(r *updateRun, f *updateFailure) []string {
 	return names
 }
 
-// excludeDeclared drops, from the names, those the project declares itself:
-// in a dependency field of the manifest, in the project's own requirements in
-// the lockfile, or by a requirement of the project that points to any entry of
-// the package. Such a package is updated by the ordinary update only, which
-// edits the declaration. The set the ordinary update works on is not changed.
-func excludeDeclared(m DependencyManager, manifest []byte, g0 *depGraph, names []string) []string {
-	declared := map[string]bool{}
-	switch m {
-	case ManagerNpm, ManagerPnpm:
-		pj, err := readManifest(manifest)
-		if err != nil {
-			return nil
-		}
-		for _, f := range manifestDepFields {
-			for n := range pj.deps[f] {
-				declared[n] = true
-			}
-		}
-	case ManagerUv:
-		py, err := parseTOML(manifest)
-		if err != nil {
-			return nil
-		}
-		for _, e := range pyprojectRequirementEntries(py) {
-			if name, _, ok := pythonRequirement(e.text); ok {
-				declared[name] = true
-			} else if nm := pipNameRE.FindStringSubmatch(strings.TrimSpace(e.text)); nm != nil {
-				declared[normalizePyName(nm[1])] = true
-			}
-		}
-	default:
-		return nil
-	}
-	g0.link()
-	for _, e := range g0.roots {
-		declared[normalizeIfPython(m, e.name)] = true
-		if n := g0.target(e); n != nil {
-			declared[n.name] = true
-		}
-	}
-	var out []string
-	for _, n := range names {
-		if !declared[n] {
-			out = append(out, n)
-		}
-	}
-	return out
-}
-
 // normEdge is a parent's requirement for a name as the registry declares it.
 type normEdge struct {
 	spec     string
@@ -486,10 +437,12 @@ func unsupportedChain(names []string, reason Reason, format string, args ...any)
 	return f
 }
 
-// buildChainScope finds, in the original graph g0, the packages of U that the
-// project does not declare and that a requirement holds at a version below the
-// fixed one, the entries that require them, and the direct dependencies the
-// chain starts from. It returns no scope and no failure when there is nothing
+// buildChainScope finds, in the original graph g0, the packages of U that a
+// requirement of another package holds at a version below the fixed one, the
+// entries that require them, and the direct dependencies the chain starts from.
+// A package the project declares itself is one of them too: its own
+// requirement is left to the edit of its declaration, which the attempt makes
+// as the first update does. It returns no scope and no failure when there is nothing
 // to try: no package is held back, or the first update's reason stands. It
 // returns a failure when the attempt is refused (unsupported inputs or over a
 // limit, with a reason for each package held back), or an item's limit or time
@@ -499,10 +452,7 @@ func buildChainScope(ctx context.Context, r *updateRun, g0 *depGraph, U []string
 	if m != ManagerNpm && m != ManagerPnpm && m != ManagerUv {
 		return nil, nil
 	}
-	cand := excludeDeclared(m, r.src.manifest, g0, U)
-	if len(cand) == 0 {
-		return nil, nil
-	}
+	cand := U
 	sc := m.scheme()
 	g := g0.cloneEdges()
 	rev := g.reverseIndex()
@@ -536,7 +486,10 @@ func buildChainScope(ctx context.Context, r *updateRun, g0 *depGraph, U []string
 			if node.name != n || fixedAt(sc, node.version, cves) {
 				continue
 			}
-			if len(rev.roots[node.id]) > 0 {
+			// The project's own requirement of the entry is settled by the
+			// edit of its declaration, which only a package the update treats
+			// as direct gets; for any other, the first update's reason stands.
+			if len(rev.roots[node.id]) > 0 && !r.full.direct[n] {
 				ok = false
 				break
 			}

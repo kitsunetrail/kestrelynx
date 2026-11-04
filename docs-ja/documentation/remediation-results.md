@@ -17,7 +17,7 @@ Pull Request: 作成 1件 · オープン中 1件
 修正するファイル: example/application の pnpm-lock.yaml
 Pull Request: #12 (今回作成)
 更新: package-a 1.2.3 → 1.2.4
-要判断: package-b は脆弱性が直る 2.3.0 に上げられず、pnpm-lock.yaml では 2.1.1 のまま（上げられない原因は KestreLynx では調べていないため、package-b に依存しているパッケージの版の指定を確認してください）
+要判断: package-b 2.1.1 を修正版の 2.3.0 に上げられない（原因は確かめられなかった）
 
 イメージ: example/service:latest
 修正するファイル: example/application の docker/Dockerfile

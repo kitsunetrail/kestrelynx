@@ -952,8 +952,8 @@ func TestPlanMessage_ItemReasonNamesItsPackages(t *testing.T) {
 	}
 	r := planReport()
 	for lang, want := range map[Language]string{
-		LanguageJA: "要判断: multer は脆弱性が直る 2.3.0 に上げられず、package-lock.json では 2.1.1 のまま（上げられない原因は KestreLynx では調べていないため、multer に依存しているパッケージの版の指定を確認してください）",
-		LanguageEN: "Needs a decision: multer could not be raised to 2.3.0, which fixes the vulnerability, and stays at 2.1.1 in package-lock.json (KestreLynx did not look into why it cannot be raised, so check the version ranges of the packages that depend on multer)",
+		LanguageJA: "要判断: multer 2.1.1 を修正版の 2.3.0 に上げられない（原因は確かめられなかった）",
+		LanguageEN: "Needs a decision: multer 2.1.1 cannot be raised to the fixed 2.3.0 (the cause could not be determined)",
 	} {
 		got := slackPlanText(r, item("the update left pnpm-lock.yaml unchanged", 0), lang)
 		if !strings.Contains(got, want) {
@@ -1074,8 +1074,8 @@ func TestPlanMessage_LeftOutNotUpdatedSentence(t *testing.T) {
 	p := slackPlanFixture()
 	p.PullRequests[0].Language.Remaining = []remediation.PRLanguageRemaining{{Name: "multer", From: "2.1.1", Target: "2.3.0", Reason: remediation.ReasonTargetNotUpdated}}
 	for lang, want := range map[Language]string{
-		LanguageJA: "要判断: multer は脆弱性が直る 2.3.0 に上げられず、pnpm-lock.yaml では 2.1.1 のまま（上げられない原因は KestreLynx では調べていないため、multer に依存しているパッケージの版の指定を確認してください）",
-		LanguageEN: "Needs a decision: multer could not be raised to 2.3.0, which fixes the vulnerability, and stays at 2.1.1 in pnpm-lock.yaml (KestreLynx did not look into why it cannot be raised, so check the version ranges of the packages that depend on multer)",
+		LanguageJA: "要判断: multer 2.1.1 を修正版の 2.3.0 に上げられない（原因は確かめられなかった）",
+		LanguageEN: "Needs a decision: multer 2.1.1 cannot be raised to the fixed 2.3.0 (the cause could not be determined)",
 	} {
 		if got := slackPlanText(planReport(), &PlanInfo{Plan: &p}, lang); !strings.Contains(got, want) {
 			t.Errorf("%s: missing %q in\n%s", lang, want, got)

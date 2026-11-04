@@ -7,4 +7,4 @@ TEXT: KestreLynx 2026-06-24 09:00 修正計画 — 要判断 1件
 --- section ---
 *サービス: api、web*
 修正するファイル: ex/app の package-lock.json
-要判断: multer は脆弱性が直る 2.3.0 に上げられず、package-lock.json では 2.1.1 のまま（上げられない原因は KestreLynx では調べていないため、multer に依存しているパッケージの版の指定を確認してください）
+要判断: multer 2.1.1 を修正版の 2.3.0 に上げられない（原因は確かめられなかった）

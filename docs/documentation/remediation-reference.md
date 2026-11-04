@@ -181,11 +181,13 @@ See [Base image selection](remediation-logic.md#base-image-selection) for determ
 | Bundled dependencies and package-specific shrinkwrap | Unsupported for automatic updates of target packages |
 | Versions forced by `overrides` | Affected packages require manual handling |
 | Private registry settings in `.npmrc` | Unsupported |
-| Re-resolution through dependent packages | Limited to transitive dependencies that do not reach fixed versions through normal updates and whose dependent packages are confirmed to require older versions |
+| Re-resolution through dependent packages | Applies to packages that do not reach fixed versions through normal updates and whose dependent packages are confirmed to require older versions, including packages declared directly by the project if they meet the [eligibility conditions](remediation-logic.md#dependent-reresolution-eligibility) |
 
 #### Re-resolution support and limits {#dependent-reresolution-limits}
 
-This mechanism applies to transitive dependencies whose dependent packages' version requirements prevent updates to fixed versions.
+This mechanism applies to packages whose dependent packages' version requirements prevent updates to fixed versions, including packages that the project also declares directly in `package.json`, `pyproject.toml`, or the lockfile's root requirements.
+The project's own declarations follow the [same rules as normal updates](remediation-logic.md#direct-dependencies) and are rewritten if they exclude the fixed version and their forms are supported.
+
 The following examples assume a lowest fixed version of `1.2.8` for npm and pnpm, and `2.0.0` for uv.
 
 | Example requirement from a dependent package | Use of this mechanism | Notes |
@@ -200,7 +202,7 @@ The following examples assume a lowest fixed version of `1.2.8` for npm and pnpm
 
 The following cases are excluded.
 
-- The project itself declares the package to fix as a direct dependency.
+- The version of the target package used directly by the project is below the fixed version and differs from the version found in the running image
 - The target or a required dependent package uses an alias, local, Git, or URL reference, or has its version forced by `overrides`.
 - Conflicting declarations for the same dependency prevent a single version requirement from being determined.
 - The project uses pip or a pnpm version outside series 9, 10, 11, and 12.x from 12.10.0.
@@ -264,7 +266,7 @@ A package version already present in the original lockfile is exempt, and a vers
 | Lockfiles recording automatic runtime downloads | Unsupported |
 | `resolutions`, `configDependencies`, `executionEnv`, and similar settings | Unsupported settings that alter resolution or additional downloads |
 | pnpm 12 | Supported from 12.10.0; 12.x releases before 12.10.0 require manual handling |
-| Re-resolution through dependent packages | Limited to transitive dependencies that do not reach fixed versions through normal updates and whose dependent packages are confirmed to require older versions |
+| Re-resolution through dependent packages | Applies to packages that do not reach fixed versions through normal updates and whose dependent packages are confirmed to require older versions, including packages declared directly by the project if they meet the [eligibility conditions](remediation-logic.md#dependent-reresolution-eligibility) |
 
 A `pnpm-workspace.yaml` in the same directory can be read if it contains only the following settings.
 The file's presence alone does not establish a workspace.
@@ -314,7 +316,7 @@ See [pip verification environment](remediation-logic.md#pip-target-environment) 
 | `[tool.uv]` | `required-version`, `dev-dependencies`, `sources`, and `package` can be read |
 | Other `[tool.uv]` settings | Unsupported |
 | `uv.toml` | Unsupported if present anywhere from the dependency directory to the repository root |
-| Re-resolution through dependent packages | Limited to transitive dependencies whose dependent packages are confirmed to require older versions, including reassessment of an initial update result rejected by dependency diff checks |
+| Re-resolution through dependent packages | Applies to packages whose dependent packages are confirmed to require older versions, including packages declared directly by the project if they meet the [eligibility conditions](remediation-logic.md#dependent-reresolution-eligibility), and includes reassessment of an initial update result rejected by dependency diff checks |
 
 Readable `[tool.uv]` keys still require supported dependency sources and project structure.
 

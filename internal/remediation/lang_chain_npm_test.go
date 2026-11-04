@@ -240,26 +240,43 @@ func TestNpmChainWaitsForAVersionThatIsTooNew(t *testing.T) {
 	}
 }
 
-func TestNpmChainDoesNotStartFromADeclaredPackage(t *testing.T) {
+func TestNpmChainTakesAPackageTheProjectDeclares(t *testing.T) {
+	// The project declares minimist itself, and its own copy is fixed; the copy
+	// mkdirp holds is not. The chain update raises mkdirp all the same.
 	p := newMkdirpProject()
 	manifest := `{"name":"app","version":"1.0.0","dependencies":{"mkdirp":"^0.5.1","rc":"^1.2.0","minimist":"^1.2.0"}}`
 	root := map[string]string{"mkdirp": "^0.5.1", "rc": "^1.2.0", "minimist": "^1.2.0"}
-	lock := npmLock(root, map[string]npmEntry{
-		"node_modules/mkdirp":                       {ver: "0.5.1", deps: map[string]string{"minimist": "0.0.8"}},
-		"node_modules/mkdirp/node_modules/minimist": {ver: "0.0.8"},
-		"node_modules/minimist":                     {ver: "1.2.8"},
-		"node_modules/rc":                           {ver: "1.2.8", deps: map[string]string{"minimist": "^1.2.0"}},
-	})
-	h := newNpmHarness(t, manifest, lock, []*findingGroup{minimistGroupAt("0.0.8")}, p.dists, p.findings, nil)
-	it, _ := h.runNpm(nil)
-	wantCategory(t, it, CategoryManual, ReasonTargetNotUpdated)
-	if it.Update != nil && it.Update.Chain != nil {
-		t.Errorf("chain = %+v", it.Update.Chain)
-	}
-	for _, l := range h.npm.lookups {
-		if strings.HasPrefix(l, "mkdirp@") || strings.HasPrefix(l, "rc@") {
-			t.Errorf("looked up %s for a package that is excluded", l)
+	lock := func(mkdirp string) []byte {
+		pkgs := map[string]npmEntry{
+			"node_modules/minimist": {ver: "1.2.8"},
+			"node_modules/rc":       {ver: "1.2.8", deps: map[string]string{"minimist": "^1.2.0"}},
 		}
+		if mkdirp == "0.5.1" {
+			pkgs["node_modules/mkdirp"] = npmEntry{ver: "0.5.1", deps: map[string]string{"minimist": "0.0.8"}}
+			pkgs["node_modules/mkdirp/node_modules/minimist"] = npmEntry{ver: "0.0.8"}
+		} else {
+			pkgs["node_modules/mkdirp"] = npmEntry{ver: mkdirp, deps: map[string]string{"minimist": "^1.2.6"}}
+		}
+		return npmLock(root, pkgs)
+	}
+	h := newNpmHarness(t, manifest, lock("0.5.1"), []*findingGroup{minimistGroupAt("0.0.8")}, p.dists, p.findings, func(n int) []byte {
+		if n == 0 {
+			return nil
+		}
+		return lock("0.5.6")
+	})
+	it, _ := h.runNpm(nil)
+	wantCategory(t, it, CategoryPRCandidate, ReasonUpdateVerified)
+	c := it.Update.Chain
+	if c == nil || c.Outcome != ChainAdopted || len(c.Tops) != 1 || c.Tops[0] != (ChainMove{Name: "mkdirp", From: "0.5.1", To: "0.5.6", Kind: "top"}) ||
+		len(c.Blocked) != 1 || c.Blocked[0].Parent != "mkdirp" {
+		t.Fatalf("chain = %+v", c)
+	}
+	if min := packageOf(t, it, "minimist"); min.AdoptedVersion != "1.2.8" || strings.Join(min.Through, ",") != "mkdirp" {
+		t.Errorf("minimist = %+v", min)
+	}
+	if len(it.Update.ManifestEdits) != 0 {
+		t.Errorf("manifest edits = %+v", it.Update.ManifestEdits)
 	}
 }
 

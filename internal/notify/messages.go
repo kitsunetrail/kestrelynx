@@ -480,7 +480,7 @@ type messages struct {
 	PlanChainRejected            string // "%[1]s %[2]s → %[3]s needs %[4]s updated as well, and that update was not adopted because %[5]s" (..., why)
 	PlanChainHeld                string // "%[1]s %[2]s → %[3]s is held back by %[4]s, and updating %[4]s was not tried because %[5]s" (..., why)
 	PlanChainWaiting             string // "... a version it brings in is less than 72 hours old, so it is tried again after %[5]s" (..., the time)
-	PlanNotUpdated               string // "%[1]s could not be raised to %[2]s, which fixes the vulnerability, and stays at %[3]s in %[4]s (...)" (name, target, installed, lockfile)
+	PlanNotUpdated               string // "%[1]s %[2]s cannot be raised to the fixed %[3]s (...)" (name, installed, target)
 	PlanNotInFile                string // "packages that are not in %s (...)" (lockfile)
 	PlanWrongVersion             string // "packages whose version in the image differs from %s (...)" (lockfile)
 	PlanBulletVersions           string // "  • %[1]s: the image has %[2]s, %[3]s has %[4]s" (name, image version, lockfile, lockfile versions)
@@ -903,7 +903,7 @@ var enMessages = messages{
 	PlanChainRejected:            "%[1]s %[2]s → %[3]s needs %[4]s updated as well, and that update was not adopted because %[5]s",
 	PlanChainHeld:                "%[1]s %[2]s → %[3]s is held back by %[4]s, and updating %[4]s was not tried because %[5]s",
 	PlanChainWaiting:             "%[1]s %[2]s → %[3]s needs %[4]s updated as well; a version it brings in is less than 72 hours old, so it is tried again after %[5]s",
-	PlanNotUpdated:               "%[1]s could not be raised to %[2]s, which fixes the vulnerability, and stays at %[3]s in %[4]s (KestreLynx did not look into why it cannot be raised, so check the version ranges of the packages that depend on %[1]s)",
+	PlanNotUpdated:               "%[1]s %[2]s cannot be raised to the fixed %[3]s (the cause could not be determined)",
 	PlanNotInFile:                "packages that are not in %s (they probably came into the image by a route other than the lockfile, so updating the lockfile cannot fix them)",
 	PlanWrongVersion:             "packages whose version in the image differs from %s (the image may not have been built from the current %[1]s, so rebuild it and check again)",
 	PlanBulletVersions:           "  • %[1]s: the image has %[2]s, %[3]s has %[4]s",
@@ -1322,7 +1322,7 @@ var jaMessages = messages{
 	PlanChainRejected:            "%[1]s %[2]s → %[3]s には %[4]s の更新も必要だが、%[5]sため採用しない",
 	PlanChainHeld:                "%[1]s %[2]s → %[3]s は %[4]s に止められていて、%[5]sため %[4]s の更新を試していない",
 	PlanChainWaiting:             "%[1]s %[2]s → %[3]s には %[4]s の更新も必要だが、入る版の公開から72時間経っていないため %[5]s 以降に再試行する",
-	PlanNotUpdated:               "%[1]s は脆弱性が直る %[2]s に上げられず、%[4]s では %[3]s のまま（上げられない原因は KestreLynx では調べていないため、%[1]s に依存しているパッケージの版の指定を確認してください）",
+	PlanNotUpdated:               "%[1]s %[2]s を修正版の %[3]s に上げられない（原因は確かめられなかった）",
 	PlanNotInFile:                "%s に無いパッケージ（lockfile 以外の経路でイメージに入ったものとみられ、lockfile の更新では直せない）",
 	PlanWrongVersion:             "イメージに入っている版が %s と違うパッケージ（イメージが今の %[1]s から作られていない可能性があるため、作り直してから確認してください）",
 	PlanBulletVersions:           "  • %[1]s: イメージは %[2]s、%[3]s は %[4]s",

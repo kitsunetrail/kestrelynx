@@ -17,7 +17,7 @@ Image: example/app:latest
 File to change: pnpm-lock.yaml in example/application
 Pull request: #12 (opened now)
 Update: package-a 1.2.3 → 1.2.4
-Needs a decision: package-b could not be raised to 2.3.0, which fixes the vulnerability, and stays at 2.1.1 in pnpm-lock.yaml (KestreLynx did not look into why it cannot be raised, so check the version ranges of the packages that depend on package-b)
+Needs a decision: package-b 2.1.1 cannot be raised to the fixed 2.3.0 (the cause could not be determined)
 
 Image: example/service:latest
 File to change: docker/Dockerfile in example/application

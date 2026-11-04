@@ -11,8 +11,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/config"
+	"github.com/kitsunetrail/kestrelynx/internal/kubework"
 	"github.com/kitsunetrail/kestrelynx/internal/remediation"
 	"github.com/kitsunetrail/kestrelynx/internal/runner"
 	"github.com/kitsunetrail/kestrelynx/internal/worker"
@@ -164,5 +166,46 @@ func TestKubernetesCoversEveryDeclaredVolume(t *testing.T) {
 	}
 	if _, ok := kubernetesCover(worker.RuntimeSpec{Volumes: []string{"/home/gradle/.gradle", "/data"}}); ok {
 		t.Error("two volumes were accepted")
+	}
+}
+
+// The image of this process's container is read again while the Pod's status
+// does not report it, as right after the container started. Any other error
+// ends the reading at the read that gave it, and a status that never reports
+// the image gives an error once the time is up.
+func TestReadOwnImageWaitsForTheStatus(t *testing.T) {
+	const id = "ghcr.io/kitsunetrail/kestrelynx@sha256:" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	type answer struct {
+		id  string
+		err error
+	}
+	// reader gives the answers in turn, the last one repeating, and counts the
+	// reads.
+	reader := func(answers ...answer) (func(context.Context) (string, error), *int) {
+		reads := 0
+		return func(context.Context) (string, error) {
+			reads++
+			a := answers[min(reads, len(answers))-1]
+			return a.id, a.err
+		}, &reads
+	}
+	notYet := answer{"", kubework.ErrImageNotReported}
+
+	read, reads := reader(notYet, notYet, answer{id, nil})
+	if got, err := readOwnImage(context.Background(), read, time.Millisecond, nil); err != nil || got != id || *reads != 3 {
+		t.Fatalf("got %q, %v after %d reads", got, err, *reads)
+	}
+
+	forbidden := errors.New("forbidden")
+	read, reads = reader(notYet, answer{"", forbidden})
+	if _, err := readOwnImage(context.Background(), read, time.Millisecond, nil); !errors.Is(err, forbidden) || *reads != 2 {
+		t.Fatalf("err = %v after %d reads, want the error of the second read", err, *reads)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	read, _ = reader(notYet)
+	if got, err := readOwnImage(ctx, read, time.Millisecond, nil); !errors.Is(err, kubework.ErrImageNotReported) || got != "" {
+		t.Fatalf("got %q, %v for a status that never reports the image", got, err)
 	}
 }

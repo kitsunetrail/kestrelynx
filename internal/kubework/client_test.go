@@ -206,17 +206,56 @@ func TestClientListFollowsPages(t *testing.T) {
 	}
 }
 
+// The container is chosen from the Pod's spec: the one of the name, or the
+// only one; the status of another container is never taken for it, and a
+// status that does not report the container's image yet says so.
 func TestOwnImageID(t *testing.T) {
-	c, _, _, _ := apiServer(t, func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, `{"status":{"containerStatuses":[{"name":"kestrelynx","imageID":"docker.io/x/y@sha256:`+strings.Repeat("a", 64)+`"},{"name":"side","imageID":"z"}]}}`)
-	})
-	id, err := c.OwnImageID(context.Background(), "kestrelynx-abc-123", "kestrelynx")
-	if err != nil || !strings.HasSuffix(id, strings.Repeat("a", 64)) {
-		t.Fatalf("%q %v", id, err)
+	digest := func(c string) string { return "docker.io/x/y@sha256:" + strings.Repeat(c, 64) }
+	pod := func(containers []string, statuses map[string]string) string {
+		var spec, status []string
+		for _, n := range containers {
+			spec = append(spec, `{"name":"`+n+`"}`)
+		}
+		for n, id := range statuses {
+			status = append(status, `{"name":"`+n+`","imageID":"`+id+`"}`)
+		}
+		return `{"spec":{"containers":[` + strings.Join(spec, ",") + `]},"status":{"containerStatuses":[` + strings.Join(status, ",") + `]}}`
 	}
-	if _, err := c.OwnImageID(context.Background(), "kestrelynx-abc-123", ""); err == nil {
-		t.Error("an unnamed container among two was chosen")
+	cases := []struct {
+		name     string
+		body     string
+		want     string
+		notYet   bool
+		failsNow bool
+	}{
+		{"named among two", pod([]string{"kestrelynx", "side"}, map[string]string{"kestrelynx": digest("a"), "side": digest("b")}), digest("a"), false, false},
+		{"only container, named otherwise", pod([]string{"app"}, map[string]string{"app": digest("c")}), digest("c"), false, false},
+		{"no status yet", `{"spec":{"containers":[{"name":"kestrelynx"}]},"status":{"phase":"Pending"}}`, "", true, false},
+		{"empty image ID", pod([]string{"kestrelynx"}, map[string]string{"kestrelynx": ""}), "", true, false},
+		{"only the sidecar reported", pod([]string{"kestrelynx", "side"}, map[string]string{"side": digest("b")}), "", true, false},
+		{"another name among two", pod([]string{"app", "side"}, map[string]string{"app": digest("a"), "side": digest("b")}), "", false, true},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _, _, _ := apiServer(t, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, tc.body) })
+			id, err := c.OwnImageID(context.Background(), "kestrelynx-abc-123", "kestrelynx")
+			switch {
+			case tc.notYet:
+				if !errors.Is(err, ErrImageNotReported) || id != "" {
+					t.Errorf("%q, %v; want ErrImageNotReported", id, err)
+				}
+			case tc.failsNow:
+				if err == nil || errors.Is(err, ErrImageNotReported) {
+					t.Errorf("%q, %v; want an error that is not waited for", id, err)
+				}
+			default:
+				if err != nil || id != tc.want {
+					t.Errorf("%q, %v; want %q", id, err, tc.want)
+				}
+			}
+		})
+	}
+	c, _, _, _ := apiServer(t, func(w http.ResponseWriter, r *http.Request) {})
 	if _, err := c.OwnImageID(context.Background(), "../x", "kestrelynx"); err == nil {
 		t.Error("a bad Pod name was accepted")
 	}

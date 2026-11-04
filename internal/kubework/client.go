@@ -341,9 +341,16 @@ func (c *Client) ServerVersion(ctx context.Context) (major, minor int, err error
 	return major, minor, nil
 }
 
-// OwnImageID returns the image ID (a reference pinned by digest) of the
-// container of the named Pod that has the container name, as the kubelet
-// reports it. The client is one of the namespace KestreLynx runs in.
+// ErrImageNotReported is returned by OwnImageID while the Pod's status does
+// not report the image of the container yet, as right after the Pod started.
+var ErrImageNotReported = errors.New("the status of the Pod does not report the image of the container yet")
+
+// OwnImageID returns the image ID (a reference pinned by digest) of a
+// container of the named Pod, as the kubelet reports it: the container with
+// the given name, or the Pod's only container when it has no container of
+// that name. The container is chosen from the Pod's spec, so that the status
+// of another container is never taken for it. The client is one of the
+// namespace KestreLynx runs in.
 func (c *Client) OwnImageID(ctx context.Context, pod, container string) (string, error) {
 	r, err := c.opOwnPod(pod)
 	if err != nil {
@@ -354,6 +361,11 @@ func (c *Client) OwnImageID(ctx context.Context, pod, container string) (string,
 		return "", err
 	}
 	var p struct {
+		Spec struct {
+			Containers []struct {
+				Name string `json:"name"`
+			} `json:"containers"`
+		} `json:"spec"`
 		Status struct {
 			ContainerStatuses []struct {
 				Name    string `json:"name"`
@@ -364,13 +376,24 @@ func (c *Client) OwnImageID(ctx context.Context, pod, container string) (string,
 	if err := json.Unmarshal(data, &p); err != nil {
 		return "", fmt.Errorf("the Pod cannot be read: %w", err)
 	}
-	cs := p.Status.ContainerStatuses
-	for _, s := range cs {
-		if s.Name == container || (container == "" && len(cs) == 1) {
+	name := ""
+	for _, ct := range p.Spec.Containers {
+		if ct.Name == container {
+			name = ct.Name
+		}
+	}
+	if name == "" {
+		if len(p.Spec.Containers) != 1 {
+			return "", fmt.Errorf("the Pod has no container %q and %d containers", container, len(p.Spec.Containers))
+		}
+		name = p.Spec.Containers[0].Name
+	}
+	for _, s := range p.Status.ContainerStatuses {
+		if s.Name == name && s.ImageID != "" {
 			return s.ImageID, nil
 		}
 	}
-	return "", fmt.Errorf("the Pod has no container %q", container)
+	return "", ErrImageNotReported
 }
 
 // ListPods reads every Pod with the label selector, page by page.

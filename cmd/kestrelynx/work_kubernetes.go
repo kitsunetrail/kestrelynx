@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/config"
 	"github.com/kitsunetrail/kestrelynx/internal/docker"
@@ -222,6 +223,35 @@ func ownPod(kc config.KubernetesConfig) (namespace, pod string, err error) {
 	return strings.TrimSpace(string(ns)), pod, nil
 }
 
+// ownImagePoll is how often the Pod is read again while its status does not
+// report the image of this process's container yet.
+const ownImagePoll = 2 * time.Second
+
+// readOwnImage reads the image ID of this process's container until the
+// Pod's status reports it or ctx ends: the kubelet fills the status in after
+// the container has started, so a process that has just started may not find
+// it there. Any other error is returned at once.
+func readOwnImage(ctx context.Context, read func(ctx context.Context) (string, error), poll time.Duration, log *slog.Logger) (string, error) {
+	waited := false
+	for {
+		id, err := read(ctx)
+		if !errors.Is(err, kubework.ErrImageNotReported) {
+			return id, err
+		}
+		if !waited && log != nil {
+			log.Info("waiting for the status of this Pod to report the image of its container")
+			waited = true
+		}
+		t := time.NewTimer(poll)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return "", err
+		case <-t.C:
+		}
+	}
+}
+
 // ownImage finds the image, pinned by digest, that this process's own Pod
 // runs, for the receiving init container to use.
 func ownImage(kc config.KubernetesConfig, log *slog.Logger) (string, error) {
@@ -238,12 +268,9 @@ func ownImage(kc config.KubernetesConfig, log *slog.Logger) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), workCleanupTimeout)
 	defer cancel()
-	id, err := c.OwnImageID(ctx, pod, ownContainerName)
-	if err != nil {
-		if _, err2 := c.OwnImageID(ctx, pod, ""); err2 == nil {
-			id, err = c.OwnImageID(ctx, pod, "")
-		}
-	}
+	id, err := readOwnImage(ctx, func(ctx context.Context) (string, error) {
+		return c.OwnImageID(ctx, pod, ownContainerName)
+	}, ownImagePoll, log)
 	if err != nil {
 		return "", err
 	}

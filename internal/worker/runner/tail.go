@@ -78,3 +78,19 @@ func sanitize(s string) string {
 		return r
 	}, s)
 }
+
+// headBuffer keeps the first max bytes written to it and drops the rest.
+type headBuffer struct {
+	max int
+	buf []byte
+}
+
+func (h *headBuffer) Write(p []byte) (int, error) {
+	if room := h.max - len(h.buf); room > 0 {
+		if len(p) < room {
+			room = len(p)
+		}
+		h.buf = append(h.buf, p[:room]...)
+	}
+	return len(p), nil
+}

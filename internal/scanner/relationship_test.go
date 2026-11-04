@@ -35,3 +35,31 @@ func TestParseReport_GoBinaryRelationship(t *testing.T) {
 		t.Errorf("dependency = %+v", dep)
 	}
 }
+
+// The dependency graph of a pom result is kept; that of any other is not.
+func TestParseReport_PomDependsOn(t *testing.T) {
+	doc := `{"SchemaVersion":2,"ArtifactName":"x","ArtifactType":"filesystem","Results":[
+	{"Target":"pom.xml","Class":"lang-pkgs","Type":"pom","Packages":[
+		{"ID":"com.example:app:1.0","Name":"com.example:app","Version":"1.0","Relationship":"root","DependsOn":["org.yaml:snakeyaml:1.30"]},
+		{"ID":"org.yaml:snakeyaml:1.30","Name":"org.yaml:snakeyaml","Version":"1.30","Relationship":"direct"}]},
+	{"Target":"package-lock.json","Class":"lang-pkgs","Type":"npm","Packages":[
+		{"ID":"a@1.0.0","Name":"a","Version":"1.0.0","DependsOn":["b@1.0.0"]}]}]}`
+	rep, err := ParseReport([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rp := range rep.Packages {
+		for _, p := range rp.Packages {
+			switch {
+			case rp.Type == "pom" && p.Name == "com.example:app":
+				if p.ID != "com.example:app:1.0" || len(p.DependsOn) != 1 || p.DependsOn[0] != "org.yaml:snakeyaml:1.30" {
+					t.Errorf("pom root = %+v", p)
+				}
+			case rp.Type == "npm":
+				if p.ID != "" || p.DependsOn != nil {
+					t.Errorf("npm package kept its graph: %+v", p)
+				}
+			}
+		}
+	}
+}

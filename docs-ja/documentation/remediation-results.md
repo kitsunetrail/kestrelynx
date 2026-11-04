@@ -358,9 +358,22 @@ com.fasterxml.jackson.core:jackson-databind 2.13.0 を修正版の 2.13.4 に上
 BOMでは「（版は BOM の org.example:platform-bom 1.2.0 が決めている）」、GradleのSpring Bootでは「（版は Spring Boot 3.2.1 の BOM が決めている）」と表示します。
 Spring Bootの公開版の行は「• Spring Boot 3.2.12（同じマイナー版の最新）: 修正版を指定している」の形式です。
 
-- 確認する版は、版を決めるpomの現在の版以上の正式版のうち、同じメジャー・マイナー版の最新と全体の最新
+Maven・Gradleで、更新後も対象が目標版より古いまま残る`target_not_updated`では、その版を引き込む依存元の名前と版を確認できれば表示します。
+記録する条件は[Mavenの更新結果の検査](remediation-logic.md#maven-update-validation)と[Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation)を参照してください。
+
+```text
+com.fasterxml.jackson.core:jackson-databind 2.13.3 を修正版の 2.13.4 に上げられない（依存元の com.example:lib 1.2.0 が com.fasterxml.jackson.core:jackson-databind 2.13.3 を使っている）
+  • com.example:lib 1.2.5（同じマイナー版の最新）: 修正版を指定している
+  • com.example:lib 2.0.0（最新）: com.fasterxml.jackson.core:jackson-databind を指定していない
+```
+
+Gradleでは「（annotationProcessor では依存元の com.example:lib 1.2.0 が com.fasterxml.jackson.core:jackson-databind 2.13.3 を使っている）」のように構成名も表示します。
+依存元がなく構成が直接宣言している場合は「（annotationProcessor で com.fasterxml.jackson.core:jackson-databind 2.13.3 を直接指定している）」と表示します。
+
+- 確認する版は、依存元または版を決めるpomの現在の版以上の正式版のうち、同じメジャー・マイナー版の最新と全体の最新
 - 同じマイナー版の最新には現在の版も含め、全体の最新と同じ場合は「最新」の行を省略
 - 親pomでは`dependencies`の宣言の版を確認し、版の宣言がなければ管理の版を確認
+- 依存元のpomでは`dependencies`の宣言の版を確認し、宣言に版がなければ管理の版を使い、対象の宣言がなければ「指定していない」と表示
 - BOMでは管理の版を確認し、取り込むBOMも深さ3までたどる
 - 確認するpom・親・取り込むBOMのどれかに、有効になる条件（`activeByDefault`・`jdk`・`os`・`property`・`file`）を持ち、依存・管理・プロパティ・親のどれかを変えるプロファイルがある場合は、その公開版の案内を省略
 - 名前で指定したときだけ使われるプロファイルは判定を止めない
@@ -368,11 +381,16 @@ Spring Bootの公開版の行は「• Spring Boot 3.2.12（同じマイナー�
 「修正版を指定している」は、設定する版が目標版以上で、すべての対象脆弱性を直す場合です。
 版を設定してもこの条件を満たさなければ「修正版を指定していない」、版を設定しなければ「対象パッケージ名 を指定していない」と表示します。
 
-修正の判定には、設定する版と同じ系統（`-jre`・`-android`など）の修正版だけを使います。
-脆弱性ごとに、同じ系列（メジャー・マイナー版）の修正版があればそのすべて以上、なければ同じメジャー版の修正版のすべて以上、それもなければすべての修正版以上で判定し、同じ系統の修正版がなければ直るとは判定しません。
+修正の判定には、設定する版と同じ系統（`-jre`・`-android`など）の修正版と、系統の指定がない修正版を使います。
+系統の指定がない`33.7.2`などの修正版は、`33.7.2-jre`など、どの系統の版にも適用します。
+
+脆弱性ごとに、適用できる修正版のうち、同じ系列（メジャー・マイナー版）があればそのすべて以上、なければ同じメジャー版のすべて以上、それもなければすべて以上で判定します。
+適用できる修正版がなければ、直るとは判定しません。
 
 公開版の照会は項目の判定後に行い、更新の照会とは別に、1パッケージあたり版の一覧を含むMaven Centralの読み込み12件、1項目あたり合計30秒までです。
-失敗や上限超過で確認できない公開版の案内は省略し、版を決めるpomの情報は残します。
+読み込み12件は依存元すべての合計で、依存元の公開版の確認は1項目あたり対象パッケージと依存元の組み合わせ3件までです。
+
+失敗や上限超過で確認できない公開版の案内は省略し、依存元や版を決めるpomの情報は残します。
 
 表示したpomの版への更新による依存解決やアプリケーションの動作は確認せず、途中の版や必要な最小の版も調べません。
 「指定していない」は、対象パッケージがプロジェクトからなくなることを示しません。
@@ -385,7 +403,7 @@ org.example:lib 2.5.0 の修正版は別のメジャー版（3.0.1）にしか�
 ```
 
 対象はnpm・pnpm・uv・pip・Go・Maven・Gradleです。
-範囲や要求・設定する版の値はSlackには表示せず、Webhookではnpm・pnpm・uvの`language_items[].update.chain.hints`、pip・Go・Maven・Gradleの`language_items[].packages[].fix_hint`に確認した情報とともに載せます。
+公開版の確認で得た範囲や要求・設定する版の値はSlackには表示せず、Webhookではnpm・pnpm・uvの`language_items[].update.chain.hints`、pip・Go・Maven・Gradleの`language_items[].packages[].fix_hint`に確認した情報とともに載せます。
 
 ### 再取得の案内 {#repull-guidance}
 

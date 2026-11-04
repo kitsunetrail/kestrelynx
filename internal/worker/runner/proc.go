@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,6 +31,9 @@ type procResult struct {
 	quotaExceeded bool  // the space or entry count under /work went over its limit
 	releaseAge    bool  // stderr carried the package manager's release-age error
 	err           error // the program could not be started or waited for
+	// head is the start of the standard output, when it was asked to be
+	// kept, with invalid UTF-8 and control characters removed.
+	head []byte
 }
 
 // lookPath finds name in dir, the directory of the tools, and nowhere else:
@@ -56,23 +60,34 @@ func lookPath(dir, name string) (string, error) {
 // pipes this program reads (never to its own standard output), and no other
 // descriptor is passed on.
 func runProc(ctx context.Context, cfg *Config, m worker.Manager, argv []string, dir string) procResult {
+	return runProcKeeping(ctx, cfg, m, argv, dir, 0)
+}
+
+// runProcKeeping is runProc that also keeps the first keep bytes of the
+// child's standard output (none when keep is 0), in procResult.head.
+func runProcKeeping(ctx context.Context, cfg *Config, m worker.Manager, argv []string, dir string, keep int) procResult {
 	exe, err := lookPath(cfg.BinDir, argv[0])
 	if err != nil {
 		return procResult{exitCode: -1, err: err}
 	}
-	return runExe(ctx, cfg, m, exe, argv, dir)
+	return runExe(ctx, cfg, m, exe, argv, dir, keep)
 }
 
-// runExe is runProc for a program whose absolute path is already known.
-func runExe(ctx context.Context, cfg *Config, m worker.Manager, exe string, argv []string, dir string) procResult {
+// runExe is runProcKeeping for a program whose absolute path is already known.
+func runExe(ctx context.Context, cfg *Config, m worker.Manager, exe string, argv []string, dir string, keep int) procResult {
 	stdout := newTailBuffer(worker.MaxStreamTail)
 	stderr := newMarkedTailBuffer(worker.MaxStreamTail, releaseAgeMarker)
+	head := &headBuffer{max: keep}
+	var out io.Writer = stdout
+	if keep > 0 {
+		out = io.MultiWriter(stdout, head)
+	}
 	cmd := &exec.Cmd{
 		Path:        exe,
 		Args:        argv,
 		Dir:         dir,
 		Env:         cfg.childEnv(m),
-		Stdout:      stdout,
+		Stdout:      out,
 		Stderr:      stderr,
 		SysProcAttr: &syscall.SysProcAttr{Setpgid: true},
 		WaitDelay:   3 * time.Second,
@@ -103,6 +118,9 @@ func runExe(ctx context.Context, cfg *Config, m worker.Manager, exe string, argv
 		res.err = waitErr
 	}
 	res.stdout, res.stderr = stdout.String(), stderr.String()
+	if keep > 0 {
+		res.head = []byte(sanitize(string(head.buf)))
+	}
 	res.truncated = stdout.truncated || stderr.truncated
 	res.releaseAge = stderr.found
 	return res

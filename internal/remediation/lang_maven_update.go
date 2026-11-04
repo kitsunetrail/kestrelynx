@@ -1212,6 +1212,8 @@ func (r *updateRun) mavenSourceCheck(ctx context.Context, mf *mavenFiles, after 
 	for n, want := range releases {
 		for _, v := range va[n] {
 			if c, ok := compareVersions(schemeMaven, v, want); !ok || c < 0 {
+				holders, direct := mavenHolders(a.Report, n, v)
+				r.setHolders(n, holders, direct, "")
 				return pkgFailure(n, ReasonTargetNotUpdated, "the updated files resolve %s to %s, below %s", n, v, want)
 			}
 			if lo := r.adopted[n]; lo == "" {

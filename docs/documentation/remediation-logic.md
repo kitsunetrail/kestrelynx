@@ -399,7 +399,7 @@ See [Go dependency files](remediation-reference.md#go-inputs) for required files
 
 - For each CVE, select the lowest fixed version above the running version within the same major version, then use the highest of these versions as the target's lower bound
 - Do not select a prerelease unless the running version is a prerelease, and preserve variants such as `-jre` and `-android`
-- Require manual handling with `maven_fix_in_other_major` if fixes exist only in another major version, and use vulnerability information without a lookup to suggest the lowest stable version above the running version in another major version with the same variant that fixes all target vulnerabilities
+- Require manual handling with `maven_fix_in_other_major` if fixes exist only in another major version, and use vulnerability information without a lookup to suggest the lowest stable version above the running version in another major version with the same variant or no variant that fixes all target vulnerabilities
 - During the update, check Maven Central's `maven-metadata.xml` and select the lowest release at or above the lower bound within the same major version and variant
 - Require manual handling with `maven_release_not_found` if no published version meets the conditions, and suggest the lowest stable release in the retrieved version list at or above the lower bound in another major version with the same variant that fixes all target vulnerabilities, if one exists
 
@@ -877,6 +877,7 @@ gradle --no-daemon --no-build-cache -q -Porg.gradle.java.installations.auto-down
 - On Docker, mount tmpfs over `/home/gradle/.gradle`, which the image declares as a `VOLUME`, and verify that no anonymous volume was created
 - On Kubernetes, prevent the container runtime from creating a volume on the node's disk by mounting an empty memory volume with a 1 MiB size limit read-only over `/home/gradle/.gradle` in the work Pod, enforce the volume type, mount path, and read-only setting through the admission policy, and verify at job startup that the mount is a read-only memory volume with a size limit
 - Pass input files using paths relative to the dependency directory, and return `gradle.lockfile` and the supplied build script, settings, properties, catalog, wrapper configuration, and auxiliary lockfiles in the results
+- The work container or Pod removes control characters from up to the first 8 MiB of standard output from `dependencies --update-locks` and adds it to the results as `gradle-dependencies.txt`, containing the dependency tree for each configuration
 - Exclude `.gradle/` and `build/` created by Gradle from the results
 
 See [Supported runtimes](remediation-reference.md#supported-runtimes) for supported versions and [Dependency downloads](outbound-communication.md#dependency-downloads) for network destinations.
@@ -1014,6 +1015,8 @@ KestreLynx checks the retrieved parent, BOM, and dependency POMs and the project
 
 - Check target versions and findings using both the root's aggregated results and each module's results
 - Check that targets reach at least the selected published versions and that target findings confirmed before the update remain in no occurrence after the update
+- When a target remains below its target version, use `target_not_updated` and record up to five packages depending on that version in `packages[].fix_hint.held_by`, using dependency edges (`DependsOn`) from Trivy's parsing of the updated pom files
+- Exclude the project's own modules from dependents and use the information for [fixing release hints](remediation-results.md#fix-hints)
 - For each resolved target version after the update, read the required versions of non-optional compile and runtime dependencies from its POM, parents, and BOMs, and check that resolved dependencies do not remain below their required versions
 - Compare new findings by each module's `pom.xml` path; reject an update if it introduces a finding to a module, even if that finding already exists in another module
 - List dependencies outside the targets whose resolved versions changed, and dependencies that were added or removed, in the PR body
@@ -1033,7 +1036,7 @@ KestreLynx passes the files it has rewritten to the work container or Pod, then 
 
 | Check target | Acceptance conditions |
 | --- | --- |
-| Returned files | All input files are present, and the work container or Pod changed only `gradle.lockfile` |
+| Returned files | All input files and `gradle-dependencies.txt` are present, and among the input files, the work container or Pod changed only `gradle.lockfile` |
 | Build definitions and auxiliary lockfiles | The rewritten files, `settings-gradle.lockfile`, and `buildscript-gradle.lockfile` retain the content passed to the work container or Pod |
 | Lockfile configurations | The set of configurations and the set of configurations listed in `empty=` are unchanged before and after the update |
 | Removed entries | No package has been removed from any configuration that contained it before the update |
@@ -1042,6 +1045,10 @@ KestreLynx passes the files it has rewritten to the work container or Pod, then 
 | SNAPSHOT | Added or changed versions do not contain `SNAPSHOT`, ignoring case |
 | Comments and duplicates | New comments use the form generated by Gradle, and no configuration contains multiple versions of the same package |
 
+- For `target_not_updated` in a configuration where the target remains below its target version, record up to five parents of that version in the configuration's dependency tree in `packages[].fix_hint.held_by`, and record the configuration name in `fix_hint.configuration`
+- Set `fix_hint.direct` to `true` when no dependent is found and the configuration declares the target directly
+- Read dependency trees within limits of 8 MiB, 100,000 lines, and 1024 bytes per tree line, stopping at an unreadable line
+- Use dependency trees only for [fixing release hints](remediation-results.md#fix-hints), without using them for PRs or update decisions
 - Require manual handling with `gradle_lock_entry_removed` for removed entries, including dependencies no longer needed by the new version
 - Require manual handling with `gradle_lock_configurations_changed` for changes to the set of configurations or `empty=`, and with `gradle_lock_version_unsupported` for added or changed SNAPSHOT versions
 - Read lockfile comments, `group:artifact:version=configurations`, and at most one `empty=` line; reject standalone CR characters and lines longer than 8192 bytes

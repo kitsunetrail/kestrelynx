@@ -259,7 +259,16 @@ type Package struct {
 	// in, verbatim: "root" for the main module of a Go binary, "direct",
 	// "indirect" or "unknown"; empty when Trivy reported none.
 	Relationship string
+	// ID and DependsOn are, for a package of a pom.xml, Trivy's identifier of
+	// the package and those of the packages it depends on (at most
+	// maxDependsOn of them): the dependency graph Trivy resolved. Empty for
+	// any other result.
+	ID        string
+	DependsOn []string
 }
+
+// maxDependsOn bounds the dependencies kept of one package.
+const maxDependsOn = 256
 
 // ScanTarget names the image to scan. Subject carries the identity to pin
 // to: Subject.Ref is always the display name pinned to the result;
@@ -304,12 +313,14 @@ type trivyReport struct {
 		Type     string `json:"Type"`
 		Target   string `json:"Target"`
 		Packages []struct {
-			Name         string `json:"Name"`
-			Version      string `json:"Version"`
-			Release      string `json:"Release"`
-			Epoch        int    `json:"Epoch"`
-			FilePath     string `json:"FilePath"`
-			Relationship string `json:"Relationship"`
+			Name         string   `json:"Name"`
+			Version      string   `json:"Version"`
+			Release      string   `json:"Release"`
+			Epoch        int      `json:"Epoch"`
+			FilePath     string   `json:"FilePath"`
+			Relationship string   `json:"Relationship"`
+			ID           string   `json:"ID"`
+			DependsOn    []string `json:"DependsOn"`
 		} `json:"Packages"`
 		Vulnerabilities []struct {
 			VulnerabilityID  string `json:"VulnerabilityID"`
@@ -397,12 +408,20 @@ func ParseReport(data []byte) (ImageScan, error) {
 					scan.PackagesTruncated = true
 					break
 				}
-				rp.Packages = append(rp.Packages, Package{
+				pkg := Package{
 					Name:         p.Name,
 					Version:      formatPackageVersion(p.Epoch, p.Version, p.Release),
 					PkgPath:      trimLeadingSlash(p.FilePath),
 					Relationship: p.Relationship,
-				})
+				}
+				if res.Type == "pom" {
+					pkg.ID = p.ID
+					pkg.DependsOn = p.DependsOn
+					if len(pkg.DependsOn) > maxDependsOn {
+						pkg.DependsOn = pkg.DependsOn[:maxDependsOn]
+					}
+				}
+				rp.Packages = append(rp.Packages, pkg)
 				retained++
 			}
 			if len(rp.Packages) > 0 {

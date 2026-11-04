@@ -511,7 +511,7 @@ func (b *planBuilder) hintVerdict(pkg string, r *remediation.ChainHintRelease) s
 // heldLine is the line about a package the packages that depend on it hold
 // back, as an update found them without moving them, "" when it found none.
 func (b *planBuilder) heldLine(x pkgLine) string {
-	if x.hint == nil || x.target == "" {
+	if x.hint == nil || x.target == "" || x.reason != remediation.ReasonDependentsHoldBack {
 		return ""
 	}
 	type holder struct{ parent, version string }
@@ -574,14 +574,47 @@ func (b *planBuilder) decidedLine(x pkgLine) string {
 	return fmt.Sprintf(format, litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.target), litMrkdwn(d.Name), litMrkdwn(d.Version))
 }
 
-// deciderLines are the lines under a decidedLine: what the newest release of
-// the deciding pom in its minor version, and its newest release, set the
-// package to.
+// usedByLine is the line about a Maven or Gradle package an update left
+// below its target because packages it depends on bring it in (in a Gradle
+// configuration), or a Gradle configuration declares it itself; "" without
+// such a hint.
+func (b *planBuilder) usedByLine(x pkgLine) string {
+	h := x.hint
+	if h == nil || x.target == "" || x.reason != remediation.ReasonTargetNotUpdated || h.DecidedBy != nil || h.GoLine != nil || h.Fix != nil ||
+		(x.manager != remediation.ManagerMaven && x.manager != remediation.ManagerGradle) {
+		return ""
+	}
+	name, from, target := litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.target)
+	if len(h.HeldBy) == 0 {
+		if h.Direct && h.Configuration != "" {
+			return fmt.Sprintf(b.msg.PlanDeclaredIn, name, from, target, litMrkdwn(h.Configuration))
+		}
+		return ""
+	}
+	var parts []string
+	for _, k := range h.HeldBy {
+		parts = append(parts, litMrkdwn(k.Parent)+" "+litMrkdwn(k.ParentVersion))
+	}
+	brought := x.from
+	if r := h.HeldBy[0].Range; r != "" {
+		brought = r
+	}
+	if h.Configuration != "" {
+		return fmt.Sprintf(b.msg.PlanUsedByIn, name, from, target, b.cut(parts), litMrkdwn(brought), litMrkdwn(h.Configuration))
+	}
+	return fmt.Sprintf(b.msg.PlanUsedBy, name, from, target, b.cut(parts), litMrkdwn(brought))
+}
+
+// deciderLines are the lines under a decidedLine or a usedByLine: what the
+// newest release of the deciding pom (or of each dependent) in its minor
+// version, and its newest release, set the package to.
 func (b *planBuilder) deciderLines(x pkgLine) []string {
 	d := x.hint.DecidedBy
-	who := litMrkdwn(d.Name)
-	if d.Kind == remediation.DeciderSpringBoot {
-		who = "Spring Boot"
+	whoOf := func(h remediation.ChainHint) string {
+		if d != nil && d.Kind == remediation.DeciderSpringBoot {
+			return "Spring Boot"
+		}
+		return litMrkdwn(h.Parent)
 	}
 	verdict := func(r *remediation.ChainHintRelease) string {
 		switch {
@@ -594,6 +627,7 @@ func (b *planBuilder) deciderLines(x pkgLine) []string {
 	}
 	var out []string
 	for _, h := range x.hint.Releases {
+		who := whoOf(h)
 		for _, rel := range []struct {
 			r     *remediation.ChainHintRelease
 			which string
@@ -1290,6 +1324,9 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 			line = b.goLineLine(x)
 		case b.decidedLine(x) != "":
 			line = b.decidedLine(x)
+			hints = b.deciderLines(x)
+		case b.usedByLine(x) != "":
+			line = b.usedByLine(x)
 			hints = b.deciderLines(x)
 		case x.reason == remediation.ReasonTargetNotUpdated:
 			line = fmt.Sprintf(b.msg.PlanNotUpdated, name, from, target)

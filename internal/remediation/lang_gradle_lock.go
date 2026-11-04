@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/kitsunetrail/kestrelynx/internal/worker"
 )
 
 // gradleLockHeader are the comment lines Gradle writes at the top of
@@ -136,6 +138,10 @@ func (r *updateRun) checkGradleOutput(ctx context.Context, proj *gradleProject, 
 			}
 			got := newBy[conf][n]
 			if c, ok := compareVersions(schemeMaven, got, want); !ok || c < 0 {
+				if report, ok := out.stepFile(stepUpdate, worker.GradleReportName); ok {
+					holders, direct := gradleHolders(report, conf, n, got)
+					r.setHolders(n, holders, direct, conf)
+				}
 				return nil, pkgFailure(n, ReasonTargetNotUpdated, "the updated gradle.lockfile has %s at %s in %s, below %s", n, got, conf, want)
 			}
 		}

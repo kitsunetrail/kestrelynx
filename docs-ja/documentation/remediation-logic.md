@@ -399,7 +399,7 @@ majorが`0`の場合は、同じmajorのまとまりをminor単位で扱いま�
 
 - 稼働版より新しく、同じメジャー版の修正版から各CVEの最小の版を選び、その最大を目標版の下限にする
 - 稼働版がプレリリースでなければプレリリースを選ばず、`-jre`・`-android`などの系統を変えない
-- 修正版が別のメジャー版にしかない場合は`maven_fix_in_other_major`で手動対応にし、脆弱性情報から、稼働版より新しい別のメジャー版・同じ系統の正式版で、すべての対象脆弱性を直す最も低い版を照会なしで案内する
+- 修正版が別のメジャー版にしかない場合は`maven_fix_in_other_major`で手動対応にし、脆弱性情報にある稼働版より新しい別のメジャー版の正式版のうち、系統が稼働版と同じか指定されておらず、すべての対象脆弱性を直す最も低い版を照会なしで案内する
 - 更新時にMaven Centralの`maven-metadata.xml`を調べ、下限以上で同じメジャー版・系統の最も低い版を選ぶ
 - 条件を満たす公開版がない場合は`maven_release_not_found`で手動対応にし、取得した版の一覧から、下限以上で別のメジャー版・同じ系統の正式版のうち、すべての対象脆弱性を直す最も低い版があれば案内する
 
@@ -877,6 +877,7 @@ gradle --no-daemon --no-build-cache -q -Porg.gradle.java.installations.auto-down
 - Dockerではイメージが宣言する`VOLUME`の`/home/gradle/.gradle`をtmpfsで覆い、匿名ボリュームが作られていないことを確認する
 - Kubernetesではノードのディスク上にボリュームが作られないよう、作業用Podの`/home/gradle/.gradle`を容量上限1MiBの空のメモリボリュームで読み取り専用に覆い、admission policyでボリュームの種類・マウント先・読み取り専用を制限し、ジョブの起動時に容量上限付きの読み取り専用メモリボリュームであることを確認する
 - 入力ファイルを依存ディレクトリからの相対パスで渡し、結果には`gradle.lockfile`と渡したビルドスクリプト・settings・properties・catalog・wrapperの設定・補助lockfileを返す
+- 作業用コンテナ・Podは、`dependencies --update-locks`の標準出力の先頭8MiBまでから制御文字を除き、構成ごとの依存の木を含む`gradle-dependencies.txt`として結果に加える
 - Gradleが作る`.gradle/`・`build/`は結果に含めない
 
 対応する版は[対応する実行環境](remediation-reference.md#supported-runtimes)、通信先は[依存パッケージの取得](outbound-communication.md#dependency-downloads)を参照してください。
@@ -1014,6 +1015,8 @@ Mavenは実行せず、更新前後のすべての`pom.xml`をリポジトリと
 
 - 対象の版と所見は、ルートの集約と各モジュールの結果を合わせて確認する
 - 対象が選んだ公開版以上に上がり、更新前に確認できた対象の所見が更新後のどの出現箇所にも残らないことを確かめる
+- 対象が目標版より低い版に残る場合は`target_not_updated`とし、Trivyのpomの解析結果の依存の経路（`DependsOn`）から、その版の対象に依存するパッケージを5件まで`packages[].fix_hint.held_by`に記録する
+- 依存元にはプロジェクト自身のモジュールを含めず、確認できた情報を[直る版の案内](remediation-results.md#fix-hints)に使う
 - 更新後に解決された対象の各版について、POM・親・BOMからoptionalでないcompile・runtimeの依存の要求版を読み、解決された依存が要求より低い版に残っていないか確かめる
 - 新しい所見はモジュールごとの`pom.xml`のパスで比べ、別のモジュールに既存の所見でも、そのモジュールに新しく入れば採用しない
 - 対象以外に解決後の版が変わった依存や、追加・削除された依存をPR本文に載せる
@@ -1033,7 +1036,7 @@ KestreLynxが書き換えたファイルを作業用コンテナ・Podへ渡し�
 
 | 検査対象 | 採用条件 |
 | --- | --- |
-| 返すファイル | 入力したファイルがすべてあり、作業用コンテナ・Podが変更したのは`gradle.lockfile`だけであること |
+| 返すファイル | 入力したファイルと`gradle-dependencies.txt`があり、入力ファイルのうち作業用コンテナ・Podが変更したのは`gradle.lockfile`だけであること |
 | ビルド定義と補助lockfile | 書き換えて渡したファイル、`settings-gradle.lockfile`・`buildscript-gradle.lockfile`が渡した内容のままであること |
 | lockfileの構成 | 構成の集合と`empty=`に列挙した構成の集合が更新前後で同じであること |
 | エントリの削除 | 更新前の各構成にあるパッケージが削除されていないこと |
@@ -1042,6 +1045,10 @@ KestreLynxが書き換えたファイルを作業用コンテナ・Podへ渡し�
 | SNAPSHOT | 追加・変更した版に、大文字・小文字を区別せず`SNAPSHOT`を含まないこと |
 | コメントと重複 | 新しいコメントがGradleの生成する形式であり、同じ構成で同じパッケージに複数の版がないこと |
 
+- 対象が目標版より低い構成で`target_not_updated`となった場合は、その構成の依存の木からその版の対象の親を5件まで`packages[].fix_hint.held_by`に記録し、構成名を`fix_hint.configuration`に記録する
+- 依存元がなく構成が対象を直接宣言している場合は`fix_hint.direct`を`true`にする
+- 依存の木は8MiB・10万行・1行1024バイトまで読み、読めない行でその木の読み込みを終える
+- 依存の木は[直る版の案内](remediation-results.md#fix-hints)にだけ使い、PRや更新の判定には使わない
 - 新しい版で不要になった依存も含め、エントリの削除は`gradle_lock_entry_removed`で手動対応にする
 - 構成の集合や`empty=`の変更は`gradle_lock_configurations_changed`、追加・変更したSNAPSHOT版は`gradle_lock_version_unsupported`で手動対応にする
 - lockfileはコメント・`group:artifact:version=configurations`・最大1行の`empty=`を読み取り、単独のCRや8192バイトを超える行を受け付けない

@@ -10,7 +10,7 @@ package worker
 // ProtocolVersion is the version of the job and result formats. The program
 // that runs in the container is shipped with the main process that starts it,
 // built from the same source, and checks the version of every job and result.
-const ProtocolVersion = 3
+const ProtocolVersion = 4
 
 // Paths inside the work container. The program only reads /work.
 const (
@@ -92,6 +92,25 @@ const (
 // PipReportName is the file pip.dry_run writes its install report to, in the
 // working tree.
 const PipReportName = "pip-report.json"
+
+// GradleReportName is the output of a gradle.update_locks step that holds what
+// the gradle run printed: the dependencies task's report of every
+// configuration, the dependency tree of each. It is not a file of the working
+// tree; the program keeps the standard output, from its start and up to
+// MaxGradleReportBytes, and returns it as one of the step's outputs.
+const GradleReportName = "gradle-dependencies.txt"
+
+// MaxGradleReportBytes bounds the report a gradle.update_locks step returns.
+const MaxGradleReportBytes = 8 << 20
+
+// StepReports are the outputs a step of op returns that the program makes
+// from what the step printed, not files of the working tree.
+func StepReports(op Op) []string {
+	if op == OpGradleUpdateLocks {
+		return []string{GradleReportName}
+	}
+	return nil
+}
 
 // Limits on the size of the job and of what it carries.
 const (

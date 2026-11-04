@@ -478,6 +478,9 @@ type messages struct {
 	PlanDecidedByBOM             string // PlanDecidedByParent for a BOM
 	PlanDecidedBySpringBoot      string // PlanDecidedByParent for the BOM of Spring Boot %[5]s (%[4]s is not shown)
 	PlanHintSameMinor            string // "newest in the same minor version"
+	PlanUsedBy                   string // "%[1]s %[2]s cannot be raised to the fixed %[3]s (the dependent %[4]s uses %[1]s %[5]s)" (name, installed, target, the dependents with their versions, the version they bring)
+	PlanUsedByIn                 string // PlanUsedBy in the Gradle configuration %[6]s
+	PlanDeclaredIn               string // "%[1]s %[2]s cannot be raised to the fixed %[3]s (%[4]s declares %[1]s %[2]s directly)" (name, installed, target, the configuration)
 	PlanHintSetsFix              string // "specifies a fixed version"
 	PlanHintSetsNoFix            string // "does not specify a fixed version"
 	PlanHintNotSet               string // "does not specify %s" (package)
@@ -914,6 +917,9 @@ var enMessages = messages{
 	PlanDecidedByBOM:             "%[1]s %[2]s cannot be raised to the fixed %[3]s (the version is decided by the BOM %[4]s %[5]s)",
 	PlanDecidedBySpringBoot:      "%[1]s %[2]s cannot be raised to the fixed %[3]s (the version is decided by the BOM of Spring Boot %[5]s)",
 	PlanHintSameMinor:            "newest in the same minor version",
+	PlanUsedBy:                   "%[1]s %[2]s cannot be raised to the fixed %[3]s (the dependent %[4]s uses %[1]s %[5]s)",
+	PlanUsedByIn:                 "%[1]s %[2]s cannot be raised to the fixed %[3]s (in %[6]s, the dependent %[4]s uses %[1]s %[5]s)",
+	PlanDeclaredIn:               "%[1]s %[2]s cannot be raised to the fixed %[3]s (%[4]s declares %[1]s %[2]s directly)",
 	PlanHintSetsFix:              "specifies a fixed version",
 	PlanHintSetsNoFix:            "does not specify a fixed version",
 	PlanHintNotSet:               "does not specify %s",
@@ -1346,6 +1352,9 @@ var jaMessages = messages{
 	PlanDecidedByBOM:             "%[1]s %[2]s を修正版の %[3]s に上げられない（版は BOM の %[4]s %[5]s が決めている）",
 	PlanDecidedBySpringBoot:      "%[1]s %[2]s を修正版の %[3]s に上げられない（版は Spring Boot %[5]s の BOM が決めている）",
 	PlanHintSameMinor:            "同じマイナー版の最新",
+	PlanUsedBy:                   "%[1]s %[2]s を修正版の %[3]s に上げられない（依存元の %[4]s が %[1]s %[5]s を使っている）",
+	PlanUsedByIn:                 "%[1]s %[2]s を修正版の %[3]s に上げられない（%[6]s では依存元の %[4]s が %[1]s %[5]s を使っている）",
+	PlanDeclaredIn:               "%[1]s %[2]s を修正版の %[3]s に上げられない（%[4]s で %[1]s %[2]s を直接指定している）",
 	PlanHintSetsFix:              "修正版を指定している",
 	PlanHintSetsNoFix:            "修正版を指定していない",
 	PlanHintNotSet:               "%s を指定していない",

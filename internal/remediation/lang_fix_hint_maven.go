@@ -13,6 +13,12 @@ const (
 	DeciderSpringBoot = "spring_boot"
 )
 
+// dependentPOM is how the pom of a package that depends on another is read
+// for the version it brings of that one: its dependency declaration, with the
+// version its management gives when the declaration writes none, and nothing
+// when it does not declare it.
+const dependentPOM = "dependent"
+
 // FixDecider is the pom outside the project whose release decides a
 // package's version: a parent pom that declares it, a BOM the project
 // imports, or the BOM of the Spring Boot plugin. Name is its
@@ -44,8 +50,9 @@ func (r *updateRun) setDecider(name string, d *FixDecider) {
 // mavenHints finds the hints of a Maven or Gradle item's packages that need
 // no update run: the lowest fix of another major version of a package whose
 // fixes are all of one, and, for a package whose version a pom outside the
-// project decides, what the newest release of that pom in its minor version
-// (InSpec) and its newest release (Latest) set the package to.
+// project decides or that packages it depends on bring in below its target,
+// what the newest release of that pom (or of each of those packages) in its
+// minor version (InSpec) and its newest release (Latest) set the package to.
 func (u *LangUpdater) mavenHints(ctx context.Context, it *LanguageItem) {
 	for i := range it.Packages {
 		p := &it.Packages[i]
@@ -62,67 +69,95 @@ func (u *LangUpdater) mavenHints(ctx context.Context, it *LanguageItem) {
 	defer cancel()
 	poms := map[string]*mavenPOM{}
 	versions := map[string][]string{}
+	pairs := 0
 	for i := range it.Packages {
 		p := &it.Packages[i]
 		h := p.Hint()
-		if h == nil || h.DecidedBy == nil || h.Releases != nil || ctx.Err() != nil {
+		if h == nil || h.Releases != nil || ctx.Err() != nil {
 			continue
 		}
-		reads := 0
-		spend := func() bool {
-			if reads >= maxDeciderReads || ctx.Err() != nil {
-				return false
+		type pom struct{ kind, name, version string }
+		var whose []pom
+		switch {
+		case h.DecidedBy != nil:
+			whose = []pom{{h.DecidedBy.Kind, h.DecidedBy.Name, h.DecidedBy.Version}}
+		case len(h.HeldBy) > 0:
+			for _, x := range h.HeldBy {
+				if pairs >= maxHintPairs {
+					break
+				}
+				pairs++
+				whose = append(whose, pom{dependentPOM, x.Parent, x.ParentVersion})
 			}
-			reads++
-			return true
 		}
-		fetch := func(g, a, v string) *mavenPOM {
-			key := g + ":" + a + ":" + v
-			if pom, ok := poms[key]; ok {
-				return pom
+		reads := 0 // what the hint of the package reads, over all its poms
+		for _, w := range whose {
+			if ch := u.pomReleases(ctx, w.kind, w.name, w.version, p, poms, versions, &reads); ch != nil {
+				h.Releases = append(h.Releases, *ch)
 			}
-			if !spend() {
-				return nil
-			}
-			data, err := u.cfg.Maven.POM(ctx, g, a, v)
-			if err != nil {
-				return nil
-			}
-			pom, err := parseMavenPOM(data)
-			if err != nil || pom.EffectiveGroupID() != g || pom.ArtifactID != a || pom.EffectiveVersion() != v {
-				return nil
-			}
-			poms[key] = pom
-			return pom
-		}
-		d := h.DecidedBy
-		g, a, ok := strings.Cut(d.Name, ":")
-		if !ok {
-			continue
-		}
-		vs, ok := versions[d.Name]
-		if !ok {
-			if !spend() {
-				continue
-			}
-			var err error
-			if vs, err = u.cfg.Maven.Versions(ctx, g, a); err != nil {
-				continue
-			}
-			versions[d.Name] = vs
-		}
-		sameMinor, latest := deciderReleases(vs, d.Version)
-		ch := ChainHint{Package: p.Name, Parent: d.Name, ParentVersion: d.Version, Direct: true}
-		if sameMinor != "" {
-			ch.InSpec = deciderRelease(d.Kind, g, a, sameMinor, p.Name, p.SelectionLowerBound, p.CVEs, fetch)
-		}
-		if latest != "" && latest != sameMinor {
-			ch.Latest = deciderRelease(d.Kind, g, a, latest, p.Name, p.SelectionLowerBound, p.CVEs, fetch)
-		}
-		if ch.InSpec != nil || ch.Latest != nil {
-			h.Releases = []ChainHint{ch}
 		}
 	}
+}
+
+// pomReleases judges what the newest release of the pom name in the minor
+// version of cur (InSpec) and its newest release (Latest) set package p to,
+// counting in reads the poms and lists it reads apart from what the item's
+// hints read already, up to maxDeciderReads for the package; nil when
+// neither can be told.
+func (u *LangUpdater) pomReleases(ctx context.Context, kind, name, cur string, p *LanguagePackage, poms map[string]*mavenPOM, versions map[string][]string, reads *int) *ChainHint {
+	spend := func() bool {
+		if *reads >= maxDeciderReads || ctx.Err() != nil {
+			return false
+		}
+		*reads++
+		return true
+	}
+	fetch := func(g, a, v string) *mavenPOM {
+		key := g + ":" + a + ":" + v
+		if pom, ok := poms[key]; ok {
+			return pom
+		}
+		if !spend() {
+			return nil
+		}
+		data, err := u.cfg.Maven.POM(ctx, g, a, v)
+		if err != nil {
+			return nil
+		}
+		pom, err := parseMavenPOM(data)
+		if err != nil || pom.EffectiveGroupID() != g || pom.ArtifactID != a || pom.EffectiveVersion() != v {
+			return nil
+		}
+		poms[key] = pom
+		return pom
+	}
+	g, a, ok := strings.Cut(name, ":")
+	if !ok {
+		return nil
+	}
+	vs, ok := versions[name]
+	if !ok {
+		if !spend() {
+			return nil
+		}
+		var err error
+		if vs, err = u.cfg.Maven.Versions(ctx, g, a); err != nil {
+			return nil
+		}
+		versions[name] = vs
+	}
+	sameMinor, latest := deciderReleases(vs, cur)
+	ch := &ChainHint{Package: p.Name, Parent: name, ParentVersion: cur, Direct: true}
+	if sameMinor != "" {
+		ch.InSpec = deciderRelease(kind, g, a, sameMinor, p.Name, p.SelectionLowerBound, p.CVEs, fetch)
+	}
+	if latest != "" && latest != sameMinor {
+		ch.Latest = deciderRelease(kind, g, a, latest, p.Name, p.SelectionLowerBound, p.CVEs, fetch)
+	}
+	if ch.InSpec == nil && ch.Latest == nil {
+		return nil
+	}
+	return ch
 }
 
 // deciderReleases picks, of the releases of the deciding pom (pre-releases
@@ -167,12 +202,14 @@ func deciderRelease(kind, g, a, v, name, target string, cves []CVERef, fetch fun
 	}
 	set, found, ok := "", false, false
 	ci, i := -1, -1
-	if kind == DeciderParentPOM {
+	if kind == DeciderParentPOM || kind == dependentPOM {
 		ci, i = nearestDeclaration(chain, name)
 	}
 	switch {
 	case ci == mavenUnknown:
 		return nil
+	case ci < 0 && kind == dependentPOM:
+		return &ChainHintRelease{Version: v, Dropped: true}
 	case ci >= 0 && chain[ci].pom.Dependencies[i].Version != "":
 		set, ok = chainResolve(chain, chain[ci].pom.Dependencies[i].Version)
 		found = true
@@ -267,7 +304,8 @@ func bomVersion(chain []mavenChainPOM, name string, fetch func(g, a, v string) *
 }
 
 // mavenFixedAt reports whether version v fixes every vulnerability, the
-// fixes of another flavour than v's left out: at or above every fix a
+// fixes of another flavour than v's left out (a fix written with none counts
+// for every flavour, as the plan reads it): at or above every fix a
 // vulnerability reports in the series (major and minor version) of v, or,
 // without one there, every fix in the major version of v, or, without one
 // there either, every fix it reports. A vulnerability with no fix of the
@@ -285,7 +323,7 @@ func mavenFixedAt(v string, cves []CVERef) bool {
 				if _, ok := parseVersion(schemeMaven, one); !ok {
 					return false
 				}
-				if mavenFlavor(one) != flavor {
+				if f := mavenFlavor(one); f != "" && f != flavor {
 					continue
 				}
 				all = append(all, one)
@@ -318,7 +356,8 @@ func mavenFixedAt(v string, cves []CVERef) bool {
 
 // mavenOtherMajorFix is the lowest version the advisories of a package report
 // as a fix, of another major version than installed, not a pre-release and of
-// the same flavour, that fixes every one of them; "" when none does.
+// the same flavour (or written with none), that fixes every one of them; ""
+// when none does.
 func mavenOtherMajorFix(installed string, cves []CVERef) string {
 	major, ok := mavenMajor(installed)
 	if !ok {
@@ -328,7 +367,10 @@ func mavenOtherMajorFix(installed string, cves []CVERef) string {
 	for _, c := range cves {
 		for _, alt := range c.FixedVers {
 			for _, one := range splitFixed(alt) {
-				if m, ok := mavenMajor(one); !ok || m == major || mavenIsPrerelease(one) || mavenFlavor(one) != mavenFlavor(installed) {
+				if f := mavenFlavor(one); f != "" && f != mavenFlavor(installed) {
+					continue
+				}
+				if m, ok := mavenMajor(one); !ok || m == major || mavenIsPrerelease(one) {
 					continue
 				}
 				cands = append(cands, one)

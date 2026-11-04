@@ -1,6 +1,7 @@
 package pycore
 
 import (
+	"reflect"
 	"sync"
 	"testing"
 
@@ -84,7 +85,7 @@ func TestAugmentFindings(t *testing.T) {
 	}
 	p := aug.Packages[0]
 	if p.Target != "usr/local/bin/python3.12" || p.Class != scanner.ClassLang || p.Type != "python-runtime" ||
-		len(p.Packages) != 1 || p.Packages[0] != (scanner.Package{Name: "Python runtime", Version: "3.12.14", PkgPath: "usr/local/bin/python3.12"}) {
+		len(p.Packages) != 1 || !reflect.DeepEqual(p.Packages[0], scanner.Package{Name: "Python runtime", Version: "3.12.14", PkgPath: "usr/local/bin/python3.12"}) {
 		t.Errorf("Packages[0] = %+v", p)
 	}
 }

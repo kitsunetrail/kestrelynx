@@ -895,7 +895,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `manifest_changed` | The update made an unpermitted manifest change | [Checking related changes](remediation-logic.md#change-validation) |
 | `output_files_invalid` | The output files are invalid or cannot be read | [Result collection](remediation-logic.md#worker-results) |
 | `lockfile_format_changed` | The update changed the lockfile format | [Checking related changes](remediation-logic.md#change-validation) |
-| `target_not_updated` | The package did not reach the target version after the update | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
+| `target_not_updated` | The package did not reach the target version after the update | [Partial PR conditions](remediation-logic.md#partial-pr-selection), [Fixing release hints](remediation-results.md#fix-hints) |
 | `target_removed` | The target package is missing after the update or is no longer reachable through dependencies | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
 | `fix_condition_not_met` | The updated version does not meet the vulnerability's fixed-version condition | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
 | `unexplained_dependency_diff` | The update changed dependencies it cannot explain, or raised the Go `go` line to a version that does not exactly match the highest version required by the upgraded or added modules | [Checking related changes](remediation-logic.md#change-validation), [Go update validation](remediation-logic.md#go-update-validation) |

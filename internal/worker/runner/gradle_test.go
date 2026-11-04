@@ -306,3 +306,36 @@ func TestEnvironmentGradleVersionAndJDKAreChecked(t *testing.T) {
 		}
 	}
 }
+
+// What the gradle run printed is returned as the report of the step, from its
+// start and up to the bound, with control characters taken out.
+func TestGradleStepReturnsWhatItPrinted(t *testing.T) {
+	e, job, _ := gradleFixture(t, `printf 'runtimeClasspath - Runtime classpath.\n+--- a:b:1.0\n|    \\--- c:d:2.0\n\033[0m'`)
+	res, err := e.run(job)
+	if err != nil || res == nil || res.Status != worker.StatusCompleted {
+		t.Fatalf("err %v result %+v", err, res)
+	}
+	want := "runtimeClasspath - Runtime classpath.\n+--- a:b:1.0\n|    \\--- c:d:2.0\n[0m"
+	if got := e.read("steps/locks", worker.GradleReportName); got != want {
+		t.Errorf("report = %q", got)
+	}
+	found := false
+	for _, o := range res.Steps[0].Outputs {
+		found = found || o.Path == worker.GradleReportName && o.Size == int64(len(want))
+	}
+	if !found {
+		t.Errorf("outputs = %+v", res.Steps[0].Outputs)
+	}
+	if _, ok := e.files["final/"+worker.GradleReportName]; ok {
+		t.Error("the report is in the final tree")
+	}
+}
+
+func TestHeadBufferKeepsTheStart(t *testing.T) {
+	h := &headBuffer{max: 5}
+	h.Write([]byte("abc"))
+	h.Write([]byte("defg"))
+	if n, _ := h.Write([]byte("h")); n != 1 || string(h.buf) != "abcde" {
+		t.Errorf("buf = %q", h.buf)
+	}
+}

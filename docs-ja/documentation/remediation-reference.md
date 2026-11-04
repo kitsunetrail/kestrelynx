@@ -895,7 +895,7 @@ PR記録の`state`には、次の値があります。
 | `manifest_changed` | 更新でmanifestに許可していない変更が入った | [付随変更の検査](remediation-logic.md#change-validation) |
 | `output_files_invalid` | 出力ファイルが不正、または読み取れない | [結果の回収](remediation-logic.md#worker-results) |
 | `lockfile_format_changed` | 更新でlockfileの形式が変わった | [付随変更の検査](remediation-logic.md#change-validation) |
-| `target_not_updated` | 更新しても目標の版に上がらなかった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
+| `target_not_updated` | 更新しても目標の版に上がらなかった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection)・[直る版の案内](remediation-results.md#fix-hints) |
 | `target_removed` | 更新後に対象パッケージがなくなった、または依存関係から到達できなくなった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
 | `fix_condition_not_met` | 更新後の版が脆弱性の修正条件を満たさない | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
 | `unexplained_dependency_diff` | 更新との関係を説明できない依存の変更や、版が上がった・追加されたモジュールが要求する版の最大と一致しないGoの`go`の行の引き上げがある | [付随変更の検査](remediation-logic.md#change-validation)・[Goの更新結果の検査](remediation-logic.md#go-update-validation) |

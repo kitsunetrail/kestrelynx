@@ -508,3 +508,59 @@ func TestPlanSlack_MavenHints(t *testing.T) {
 		})
 	}
 }
+
+// A Maven or Gradle package an update left below its target is shown with the
+// packages that bring it in (in the Gradle configuration) and what their
+// releases set it to, or with the configuration that declares it.
+func TestPlanSlack_UsedByHints(t *testing.T) {
+	r, _, _ := planCycleFixture()
+	const name = "com.fasterxml.jackson.core:jackson-databind"
+	releases := []remediation.ChainHint{{Package: name, Parent: "com.example:lib", ParentVersion: "1.2.0", Direct: true,
+		InSpec: &remediation.ChainHintRelease{Version: "1.2.5", Range: "2.13.4", Fixes: true}, Latest: &remediation.ChainHintRelease{Version: "2.0.0", Dropped: true}}}
+	held := []remediation.FixHolder{{Parent: "com.example:lib", ParentVersion: "1.2.0", Range: "2.13.3"}}
+	cases := []struct {
+		name    string
+		manager remediation.DependencyManager
+		hint    *remediation.FixHint
+		ja, en  string
+	}{
+		{"Maven", remediation.ManagerMaven, &remediation.FixHint{HeldBy: held, Releases: releases},
+			name + " 2.13.3 を修正版の 2.13.4 に上げられない（依存元の com.example:lib 1.2.0 が " + name + " 2.13.3 を使っている）\n  • com.example:lib 1.2.5（同じマイナー版の最新）: 修正版を指定している\n  • com.example:lib 2.0.0（最新）: " + name + " を指定していない",
+			name + " 2.13.3 cannot be raised to the fixed 2.13.4 (the dependent com.example:lib 1.2.0 uses " + name + " 2.13.3)\n  • com.example:lib 1.2.5 (newest in the same minor version): specifies a fixed version"},
+		{"Gradle", remediation.ManagerGradle, &remediation.FixHint{HeldBy: held, Releases: releases, Configuration: "annotationProcessor"},
+			"（annotationProcessor では依存元の com.example:lib 1.2.0 が " + name + " 2.13.3 を使っている）",
+			"(in annotationProcessor, the dependent com.example:lib 1.2.0 uses " + name + " 2.13.3)"},
+		{"Gradle, declared", remediation.ManagerGradle, &remediation.FixHint{Direct: true, Configuration: "annotationProcessor"},
+			name + " 2.13.3 を修正版の 2.13.4 に上げられない（annotationProcessor で " + name + " 2.13.3 を直接指定している）",
+			name + " 2.13.3 cannot be raised to the fixed 2.13.4 (annotationProcessor declares " + name + " 2.13.3 directly)"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := languageFixture()
+			li := &p.LanguageItems[0]
+			li.Manager = c.manager
+			li.Packages = li.Packages[:1]
+			pk := &li.Packages[0]
+			pk.Name, pk.Ecosystem, pk.Installed, pk.SelectionLowerBound = name, "jar", "2.13.3", "2.13.4"
+			li.Category, li.Reason = remediation.CategoryManual, remediation.ReasonTargetNotUpdated
+			pk.Action, pk.Reason, pk.FixHint = remediation.ActionManual, remediation.ReasonTargetNotUpdated, c.hint
+			info := &PlanInfo{Plan: &p, Changed: true}
+			if ja := slackPlanText(r, info, LanguageJA); !strings.Contains(ja, c.ja) {
+				t.Errorf("ja lacks %q:\n%s", c.ja, ja)
+			}
+			if en := slackPlanText(r, info, LanguageEN); !strings.Contains(en, c.en) {
+				t.Errorf("en lacks %q:\n%s", c.en, en)
+			}
+		})
+	}
+	// Another manager's target_not_updated keeps its own line.
+	p := languageFixture()
+	li := &p.LanguageItems[0]
+	li.Packages = li.Packages[:1]
+	li.Category, li.Reason = remediation.CategoryManual, remediation.ReasonTargetNotUpdated
+	li.Packages[0].Action, li.Packages[0].Reason = remediation.ActionManual, remediation.ReasonTargetNotUpdated
+	li.Packages[0].FixHint = &remediation.FixHint{HeldBy: held}
+	if got := slackPlanText(r, &PlanInfo{Plan: &p, Changed: true}, LanguageJA); strings.Contains(got, "com.example:lib") {
+		t.Errorf("an npm item shows Maven holders:\n%s", got)
+	}
+}

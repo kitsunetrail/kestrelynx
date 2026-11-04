@@ -155,7 +155,7 @@ func (c *Config) checkRuntime(spec worker.RuntimeSpec, job *worker.Job, interp s
 	run := func(args ...string) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
-		pr := runExe(ctx, c, job.Manager, interp, append([]string{filepath.Base(interp)}, args...), c.TmpDir)
+		pr := runExe(ctx, c, job.Manager, interp, append([]string{filepath.Base(interp)}, args...), c.TmpDir, 0)
 		if pr.err != nil || pr.timedOut || pr.exitCode != 0 {
 			return "", fmt.Errorf("%s %s did not report its version (exit %d)", filepath.Base(interp), strings.Join(args, " "), pr.exitCode)
 		}
@@ -224,7 +224,7 @@ func (c *Config) checkGradle(spec worker.RuntimeSpec, job *worker.Job, interp st
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	pr := runExe(ctx, c, job.Manager, interp, []string{"gradle", "--version"}, c.TmpDir)
+	pr := runExe(ctx, c, job.Manager, interp, []string{"gradle", "--version"}, c.TmpDir, 0)
 	if pr.err != nil || pr.timedOut || pr.exitCode != 0 {
 		return fmt.Errorf("gradle --version did not report its version (exit %d)", pr.exitCode)
 	}

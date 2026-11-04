@@ -93,6 +93,14 @@ func TestMavenFixedAt(t *testing.T) {
 	if got := mavenOtherMajorFix("1.0-android", flavoured); got != "2.1-android" {
 		t.Errorf("other major fix = %q", got)
 	}
+	// A fix written with no flavour counts for every flavour.
+	plain := []CVERef{{VulnID: "C", FixedVers: []string{"33.7.2"}}}
+	if got := mavenOtherMajorFix("31.0.1-jre", plain); got != "33.7.2" {
+		t.Errorf("other major fix of a flavoured version = %q", got)
+	}
+	if !mavenFixedAt("33.7.2-jre", plain) || mavenFixedAt("33.7.1-jre", plain) {
+		t.Error("a fix with no flavour was not read for a flavoured version")
+	}
 }
 
 // A package the plan left alone because every fix is of another major

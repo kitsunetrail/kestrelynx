@@ -11,6 +11,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/hpke"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -282,7 +284,11 @@ func execute(cfg Config, job *worker.Job, base string, files map[string][]byte, 
 			stepCtx, stepCancel = context.WithTimeout(ctx, time.Duration(job.StepTimeoutSeconds)*time.Second)
 		}
 		t0 := time.Now()
-		pr := runProc(stepCtx, &cfg, job.Manager, argv, tree)
+		keep := 0
+		if len(worker.StepReports(step.Op)) > 0 {
+			keep = worker.MaxGradleReportBytes
+		}
+		pr := runProcKeeping(stepCtx, &cfg, job.Manager, argv, tree, keep)
 		stepCancel()
 
 		sr := worker.StepResult{
@@ -326,12 +332,22 @@ func execute(cfg Config, job *worker.Job, base string, files map[string][]byte, 
 			last.UnexpectedPaths, last.UnexpectedCount = paths, count
 			return fail(worker.StatusStepFailed, "step %q left %d unexpected entries in the working tree", step.ID, count)
 		}
-		files, err := collect(tree, worker.StepsDir+"/"+step.ID, job.Outputs, &outBudget, files)
+		list, err := collect(tree, worker.StepsDir+"/"+step.ID, job.Outputs, &outBudget, files)
 		if err != nil {
 			last.Error = sanitize(err.Error())
 			return fail(worker.StatusStepFailed, "step %q: collect outputs: %v", step.ID, err)
 		}
-		last.Outputs = files
+		for _, name := range worker.StepReports(step.Op) {
+			data := pr.head
+			if int64(len(data)) > outBudget {
+				data = data[:outBudget]
+			}
+			outBudget -= int64(len(data))
+			sum := sha256.Sum256(data)
+			files[worker.StepsDir+"/"+step.ID+"/"+name] = data
+			list = append(list, worker.OutputFile{Path: name, Size: int64(len(data)), SHA256: hex.EncodeToString(sum[:])})
+		}
+		last.Outputs = list
 		if step.Scratch {
 			os.RemoveAll(tree)
 		}

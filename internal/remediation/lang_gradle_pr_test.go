@@ -136,11 +136,16 @@ func TestGradleIsNotAChainUpdateAndHasAScanType(t *testing.T) {
 	}
 }
 
+// The outputs of a Gradle step are its inputs and the report of what the
+// gradle run printed; the final tree has the inputs only.
 func TestExpectedOutputsOfAGradleJobAreItsInputs(t *testing.T) {
 	job := worker.Job{Manager: worker.ManagerGradle, Inputs: []worker.Input{{Path: "gradle.lockfile"}, {Path: "gradle/libs.versions.toml"}, {Path: "build.gradle"}}}
 	got := expectedOutputs(job, worker.OpGradleUpdateLocks)
-	if strings.Join(got, ",") != "build.gradle,gradle.lockfile,gradle/libs.versions.toml" {
+	if strings.Join(got, ",") != "build.gradle,gradle-dependencies.txt,gradle.lockfile,gradle/libs.versions.toml" {
 		t.Errorf("outputs = %v", got)
+	}
+	if got := expectedOutputs(job, ""); strings.Join(got, ",") != "build.gradle,gradle.lockfile,gradle/libs.versions.toml" {
+		t.Errorf("final outputs = %v", got)
 	}
 	if got := expectedOutputs(worker.Job{Manager: worker.ManagerGo}, worker.OpGoGet); strings.Join(got, ",") != "go.mod,go.sum" {
 		t.Errorf("go outputs = %v", got)

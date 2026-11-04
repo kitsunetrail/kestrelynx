@@ -358,9 +358,22 @@ com.fasterxml.jackson.core:jackson-databind 2.13.0 cannot be raised to the fixed
 A BOM is shown as “(the version is decided by the BOM org.example:platform-bom 1.2.0)”, and Spring Boot in Gradle as “(the version is decided by the BOM of Spring Boot 3.2.1)”.
 Spring Boot release lines use the format “• Spring Boot 3.2.12 (newest in the same minor version): specifies a fixed version”.
 
-- Check the deciding pom's newest stable release within its current major and minor version and its newest stable release overall, considering releases at or above its current version
+For Maven and Gradle packages marked `target_not_updated` because they remain below the target version after the update, show the names and versions of dependents bringing in that version when identified.
+See [Maven update validation](remediation-logic.md#maven-update-validation) and [Gradle update validation](remediation-logic.md#gradle-update-validation) for the conditions under which they are recorded.
+
+```text
+com.fasterxml.jackson.core:jackson-databind 2.13.3 cannot be raised to the fixed 2.13.4 (the dependent com.example:lib 1.2.0 uses com.fasterxml.jackson.core:jackson-databind 2.13.3)
+  • com.example:lib 1.2.5 (newest in the same minor version): specifies a fixed version
+  • com.example:lib 2.0.0 (newest): does not specify com.fasterxml.jackson.core:jackson-databind
+```
+
+Gradle also shows the configuration, as in “(in annotationProcessor, the dependent com.example:lib 1.2.0 uses com.fasterxml.jackson.core:jackson-databind 2.13.3)”.
+When no dependent is found and the configuration declares the target directly, it shows “(annotationProcessor declares com.fasterxml.jackson.core:jackson-databind 2.13.3 directly)”.
+
+- Check the dependent's or deciding pom's newest stable release within its current major and minor version and its newest stable release overall, considering releases at or above its current version
 - Include the current version when selecting the newest in the same minor version, and omit the “newest” line if both selections are the same
 - For a parent pom, check the version declared in `dependencies`, falling back to management if no version is declared
+- For a dependent's pom, check the version declared in `dependencies`, use management when the declaration has no version, and show “does not specify” when the target is not declared
 - For a BOM, check its managed version, following imported BOMs to a depth of three
 - Omit a release hint if the pom being checked, any parent, or any imported BOM contains a profile with an activation condition (`activeByDefault`, `jdk`, `os`, `property`, or `file`) that changes dependencies, dependency management, properties, or the parent
 - Profiles used only when explicitly selected by name do not stop the check
@@ -368,11 +381,16 @@ Spring Boot release lines use the format “• Spring Boot 3.2.12 (newest in th
 “specifies a fixed version” means the version it sets is at or above the target and fixes all target vulnerabilities.
 Show “does not specify a fixed version” if it sets a version that does not meet these conditions, or “does not specify package-name” if it sets no version.
 
-Fix checks use only reported fixes with the same variant as the version being checked, such as `-jre` or `-android`.
-For each vulnerability, that version must be at or above every fix in its series (major and minor version), or every fix in its major version if none is reported in the series, or every reported fix if neither exists; a vulnerability with no fix of the same variant is not considered fixed.
+Fix checks use reported fixes with the same variant as the version being checked, such as `-jre` or `-android`, and fixes with no variant.
+A fix with no variant, such as `33.7.2`, applies to every variant, including `33.7.2-jre`.
+
+For each vulnerability, the checked version must be at or above every applicable fix in its series (major and minor version), or every applicable fix in its major version if none is reported in the series, or every applicable fix if neither exists.
+A vulnerability with no applicable fix is not considered fixed.
 
 Release lookups run after the item is settled, separately from update lookup limits, with at most 12 Maven Central reads per package including the version list, and 30 seconds in total per item.
-Omit release hints that cannot be checked because of failures or limits, while retaining the deciding pom's information.
+The 12 reads are shared across all dependents, and dependent release checks are limited to three target-package and dependent-package pairs per item.
+
+Omit release hints that cannot be checked because of failures or limits, while retaining the dependent or deciding pom information.
 
 The checks do not establish whether updating to the displayed pom version resolves dependencies or whether the application works, and do not check intermediate releases or find the minimum required version.
 “does not specify” does not establish that the target package leaves the project.
@@ -385,7 +403,7 @@ org.example:lib 2.5.0 has its fixes only in another major version (3.0.1)
 ```
 
 Hints apply to npm, pnpm, uv, pip, Go, Maven, and Gradle.
-Ranges and required or set version values are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints` for npm, pnpm, and uv, or `language_items[].packages[].fix_hint` for pip, Go, Maven, and Gradle.
+Ranges and required or set version values from release checks are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints` for npm, pnpm, and uv, or `language_items[].packages[].fix_hint` for pip, Go, Maven, and Gradle.
 
 ### Re-pull guidance {#repull-guidance}
 

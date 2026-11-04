@@ -214,9 +214,9 @@ func checkResultFiles(job worker.Job, files map[string][]byte) (*jobOutput, erro
 	}
 
 	declared := map[string]worker.OutputFile{} // path in the result tar
-	addOutputs := func(prefix string, list []worker.OutputFile) error {
+	addOutputs := func(prefix string, list []worker.OutputFile, reports []string) error {
 		for _, f := range list {
-			if !contains(job.Outputs, f.Path) {
+			if !contains(job.Outputs, f.Path) && !contains(reports, f.Path) {
 				return fmt.Errorf("result.json declares the undeclared output %q", f.Path)
 			}
 			p := prefix + "/" + f.Path
@@ -238,7 +238,7 @@ func checkResultFiles(job worker.Job, files map[string][]byte) (*jobOutput, erro
 		}
 		// A step that did not succeed has no outputs in the result.
 		if stepSucceeded(s) {
-			if err := addOutputs(worker.StepsDir+"/"+s.ID, s.Outputs); err != nil {
+			if err := addOutputs(worker.StepsDir+"/"+s.ID, s.Outputs, worker.StepReports(s.Op)); err != nil {
 				return nil, err
 			}
 		} else if len(s.Outputs) != 0 {
@@ -246,7 +246,7 @@ func checkResultFiles(job worker.Job, files map[string][]byte) (*jobOutput, erro
 		}
 	}
 	if res.Status == worker.StatusCompleted {
-		if err := addOutputs(worker.FinalDir, res.Final); err != nil {
+		if err := addOutputs(worker.FinalDir, res.Final, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -293,6 +293,7 @@ func expectedOutputs(job worker.Job, op worker.Op) []string {
 	if op == worker.OpPipDryRun {
 		out = append(out, worker.PipReportName)
 	}
+	out = append(out, worker.StepReports(op)...)
 	sort.Strings(out)
 	return out
 }

@@ -89,6 +89,9 @@ type fakeOutcome struct {
 	mangle func(files map[string][]byte)
 	// mangleResult changes result.json before it is packed.
 	mangleResult func(r *worker.Result)
+	// reports are what a step printed that the program returns (see
+	// worker.StepReports), by step id; empty when not set.
+	reports map[string][]byte
 }
 
 func (f *fakeWork) RunJob(_ context.Context, spec docker.JobSpec) (docker.JobResult, error) {
@@ -195,6 +198,12 @@ func buildResult(job worker.Job, src, repl map[string][]byte, o fakeOutcome) []b
 			stepTree[name] = c
 		}
 		last.Outputs = outputs(worker.StepsDir+"/"+s.ID, stepTree)
+		// What the program makes of what the step printed.
+		for _, name := range worker.StepReports(s.Op) {
+			c := o.reports[s.ID]
+			files[worker.StepsDir+"/"+s.ID+"/"+name] = c
+			last.Outputs = append(last.Outputs, worker.OutputFile{Path: name, Size: int64(len(c)), SHA256: sha256Hex(c)})
+		}
 	}
 	if res.Status == worker.StatusCompleted {
 		res.Final = outputs(worker.FinalDir, tree)

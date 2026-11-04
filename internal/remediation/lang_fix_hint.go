@@ -61,6 +61,11 @@ type FixHint struct {
 	// its releases set the package to (InSpec the newest in its minor
 	// version, Latest the newest).
 	DecidedBy *FixDecider `json:"decided_by,omitempty"`
+	// Configuration is, for a Gradle package an update left below its
+	// target, the configuration it stayed there in; HeldBy are then the
+	// modules that bring it in there, Direct that the configuration declares
+	// it itself.
+	Configuration string `json:"configuration,omitempty"`
 }
 
 // FixRelease is a release of a package that fixes it.
@@ -92,7 +97,7 @@ type FixHolder struct {
 var fixHintReasons = map[Reason]bool{
 	ReasonDependentsHoldBack: true, ReasonGoLineRaised: true, ReasonGoRuntimeUnavailable: true, ReasonFixInOtherMajor: true,
 	ReasonMavenVersionSourceUnsupported: true, ReasonGradleVersionSourceUnsupported: true, ReasonMavenReleaseNotFound: true,
-	ReasonMavenFixInOtherMajor: true,
+	ReasonMavenFixInOtherMajor: true, ReasonTargetNotUpdated: true,
 }
 
 // The hints are looked up after the item is settled, within limits of their

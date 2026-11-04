@@ -312,3 +312,30 @@ func TestGoClientCancelledRequest(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// The version list is read one version a line, from the escaped path; a line
+// that is not a version refuses the list.
+func TestGoClientVersions(t *testing.T) {
+	body := "v1.0.0\nv1.1.0\n\nv1.2.0-rc.1\n"
+	c, seen := goProxyServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/@v/list") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(body))
+	})
+	vs, err := c.Versions(bg, "github.com/Azure/go-autorest")
+	if err != nil || strings.Join(vs, " ") != "v1.0.0 v1.1.0 v1.2.0-rc.1" {
+		t.Fatalf("versions = %v, %v", vs, err)
+	}
+	if got := (*seen)[0]; !strings.Contains(got, "/github.com/!azure/go-autorest/@v/list") {
+		t.Errorf("path = %q", got)
+	}
+	body = "v1.0.0\nnot a version\n"
+	if _, err := c.Versions(bg, "example.com/m"); err == nil {
+		t.Error("a list with a line that is not a version was read")
+	}
+	if _, err := c.Versions(bg, "example.com/../m"); err == nil {
+		t.Error("Versions accepted a path with ..")
+	}
+}

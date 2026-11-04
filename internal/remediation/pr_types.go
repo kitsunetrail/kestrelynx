@@ -63,7 +63,11 @@ const (
 	ReasonImageUpdaterFile    Reason = "image_updater_file"
 	ReasonComposeFileNotFound Reason = "compose_file_not_found"
 	ReasonComposeFileUnusable Reason = "compose_file_unusable"
+	// ReasonPRLimit: the cycle has opened as many pull requests as it may;
+	// ReasonOpenPRLimit: as many of this tool's pull requests as may be open
+	// at once are open.
 	ReasonPRLimit             Reason = "pr_limit"
+	ReasonOpenPRLimit         Reason = "open_pr_limit"
 	ReasonCandidateChanged    Reason = "candidate_changed"
 	ReasonBaseMoved           Reason = "base_moved"
 	ReasonGitHubRateLimited   Reason = "github_rate_limited"

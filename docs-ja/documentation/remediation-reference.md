@@ -934,7 +934,8 @@ Webhookでは、`packages[].reason`と`update.chain.reason`を併せて確認し
 
 | コード | 意味 | 詳しい説明 |
 | --- | --- | --- |
-| `pr_limit` | 1回の実行で作成するPR数、またはオープン中のPR数の上限に達した（どちらかは`detail`で確認する） | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
+| `pr_limit` | 1回の実行で作成するPR数の上限（`new_prs_per_cycle`）に達した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
+| `open_pr_limit` | 設定したリポジトリ全体で開いているKestreLynxのPR数の上限（`open_prs`）に達した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `candidate_changed` | PRの準備中に候補が変わった、または新しい系列の確認でDockerfileの候補タグが稼働イメージごとに異なる内容を指した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr)、[新しい系列の確認](remediation-logic.md#newer-series-check) |
 | `base_moved` | PRの準備中にベースブランチが進んだ | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `github_rate_limited` | GitHubのレート制限に掛かった | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |

@@ -814,7 +814,7 @@ func (r *prRun) processUnit(plan Plan, u *composeUnit) PRUnit {
 		return v
 	}
 	if n := r.openCount(); n >= r.s.cfg.Limits.OpenPRs {
-		c.set(PRStatusDeferred, ReasonPRLimit, fmt.Sprintf("%d pull requests are open (limit %d)", n, r.s.cfg.Limits.OpenPRs))
+		c.set(PRStatusDeferred, ReasonOpenPRLimit, fmt.Sprintf("%d pull requests are open (limit %d)", n, r.s.cfg.Limits.OpenPRs))
 		return v
 	}
 	if u.lang != nil {

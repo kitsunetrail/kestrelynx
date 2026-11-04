@@ -312,6 +312,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 
 	// The pull request stage.
 	"pr_limit":                       {"the limit on pull requests of a run was reached", "1回の実行で作れる Pull Request の数の上限に達した"},
+	"open_pr_limit":                  {"the limit on open pull requests of KestreLynx was reached", "開いている KestreLynx の Pull Request の数が上限に達した"},
 	"candidate_changed":              {"the candidate changed while the pull request was prepared", "Pull Request の準備中に候補が変わった"},
 	"base_moved":                     {"the base branch moved while the pull request was prepared", "Pull Request の準備中にベースブランチが進んだ"},
 	"github_rate_limited":            {"GitHub limited the request rate", "GitHub のレート制限に掛かった"},

@@ -934,7 +934,8 @@ In webhooks, check both `packages[].reason` and `update.chain.reason`.
 
 | Code | Meaning | Details |
 | --- | --- | --- |
-| `pr_limit` | The limit on PRs created in a run, or on open PRs, was reached (`detail` says which) | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
+| `pr_limit` | The limit on PRs created in a run (`new_prs_per_cycle`) was reached | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
+| `open_pr_limit` | The limit on open KestreLynx PRs across all configured repositories (`open_prs`) was reached | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `candidate_changed` | The candidate changed while the PR was being prepared, or a Dockerfile candidate tag pointed to different content across running images during the newer series check | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr), [Newer series check](remediation-logic.md#newer-series-check) |
 | `base_moved` | The base branch advanced while the PR was being prepared | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `github_rate_limited` | GitHub limited the request rate | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |

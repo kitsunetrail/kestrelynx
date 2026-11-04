@@ -436,7 +436,7 @@ func TestPRStageLanguageSharesTheLimits(t *testing.T) {
 	c := langFixtures()["uv"]
 	h.addFiles(c.files)
 	res = h.run(prLangPlan(ia, ib, h.langItem(c)))
-	wantStatus(t, res.Units[2], PRStatusDeferred, ReasonPRLimit)
+	wantStatus(t, res.Units[2], PRStatusDeferred, ReasonOpenPRLimit)
 }
 
 func TestPRStageLanguageReplacesAnOlderPullRequestItCovers(t *testing.T) {

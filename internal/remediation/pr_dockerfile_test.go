@@ -360,7 +360,7 @@ func TestPRStageDockerfileSharedLimits(t *testing.T) {
 	h.limits = PRLimits{NewPRsPerCycle: 5, OpenPRs: 1}
 	res = h.run(plan)
 	wantStatus(t, res.Units[0], PRStatusOpen, "")
-	wantStatus(t, res.Units[1], PRStatusDeferred, ReasonPRLimit)
+	wantStatus(t, res.Units[1], PRStatusDeferred, ReasonOpenPRLimit)
 	h.limits = PRLimits{NewPRsPerCycle: 5, OpenPRs: 2}
 	res = h.run(plan)
 	wantStatus(t, res.Units[1], PRStatusCreated, "")

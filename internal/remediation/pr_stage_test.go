@@ -290,7 +290,7 @@ func TestPRStageLimits(t *testing.T) {
 	h.limits = PRLimits{NewPRsPerCycle: 5, OpenPRs: 1}
 	res = h.run(plan)
 	wantStatus(t, res.Units[0], PRStatusOpen, "")
-	wantStatus(t, res.Units[1], PRStatusDeferred, ReasonPRLimit)
+	wantStatus(t, res.Units[1], PRStatusDeferred, ReasonOpenPRLimit)
 	if n := len(h.gh.pulls(testRepo)); n != 1 {
 		t.Errorf("pulls = %d", n)
 	}
@@ -978,7 +978,7 @@ func TestPRStageMarkerOnlyPullsAreSuppressionOnly(t *testing.T) {
 	}
 	// It counts toward the open limit.
 	h.limits = PRLimits{NewPRsPerCycle: 3, OpenPRs: 1}
-	wantStatus(t, onlyUnit(t, h.run(plan2)), PRStatusDeferred, ReasonPRLimit)
+	wantStatus(t, onlyUnit(t, h.run(plan2)), PRStatusDeferred, ReasonOpenPRLimit)
 	// It is never replaced.
 	h.limits = PRLimits{NewPRsPerCycle: 3, OpenPRs: 10}
 	u := onlyUnit(t, h.run(plan2))

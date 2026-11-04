@@ -99,6 +99,11 @@ func (r *updateRun) runPip(ctx context.Context) *updateFailure {
 	checkStep := worker.Step{ID: stepCheck, Op: worker.OpPipDryRun, Scratch: true, RequireHashes: requireHashes, Target: target}
 	out, fail := r.exec(ctx, worker.ManagerPip, map[string][]byte{"requirements.txt": newLock}, []worker.Step{checkStep}, "check")
 	if fail != nil {
+		if fail.reason == ReasonPostUpdateCheckFailed {
+			if held := r.pipHeldBack(ctx, reportBefore, orig, target); held != nil {
+				return held
+			}
+		}
 		return fail
 	}
 	it.PostUpdateCheckExecuted = true
@@ -224,4 +229,79 @@ func (r *updateRun) wheelHashesOf(ctx context.Context, name, ver string) ([]stri
 			detail: fmt.Sprintf("%s %s has %d wheels, more than the %d hashes one requirement is given", name, ver, len(hs), maxWheelsPerEdit)}
 	}
 	return hs, nil
+}
+
+// pipHeldBack explains a check of the rewritten file that pip could not
+// resolve, when the original file shows why: a package it pins asks, in the
+// environment pip resolves for, for a package of the set at versions that
+// leave out the version the set pins it to (a package of the set is not
+// judged by what its current version asks for). Such a package is held back by
+// the packages that depend on it, which this update does not move; it is left
+// to a person with them recorded (see FixHint), and when other packages of the
+// set are not held back the update is made again without it. nil when the
+// original file shows no such requirement or cannot be read.
+func (r *updateRun) pipHeldBack(ctx context.Context, reportBefore, orig []byte, target *worker.Target) *updateFailure {
+	chk, fail := r.checkPipReport(ctx, reportBefore, orig, target)
+	if fail != nil {
+		return nil
+	}
+	// The requirements a package has in force for one package hold together,
+	// so they are judged as one range.
+	type edge struct{ parent, version, dep string }
+	var order []edge
+	ranges := map[edge][]string{}
+	for _, e := range chk.edges {
+		// What a package of the set asks for is that of the version it is
+		// pinned to, which the original file does not show.
+		if _, ok := r.set.target[e.dep]; !ok || r.set.targets[e.parent] {
+			continue
+		}
+		k := edge{e.parent, e.version, e.dep}
+		if _, seen := ranges[k]; !seen {
+			order = append(order, k)
+			ranges[k] = nil
+		}
+		if e.constraint != "" {
+			ranges[k] = append(ranges[k], e.constraint)
+		}
+	}
+	held := map[string][]FixHolder{}
+	for _, k := range order {
+		v, ok := parsePEP440(r.set.target[k.dep])
+		if !ok {
+			continue
+		}
+		rng := strings.Join(ranges[k], ",")
+		if allowed, evaluable := pySatisfies(v, rng); allowed || !evaluable {
+			continue
+		}
+		held[k.dep] = append(held[k.dep], FixHolder{Parent: k.parent, ParentVersion: k.version, Range: rng})
+	}
+	if len(held) == 0 {
+		return nil
+	}
+	pkgs := map[string]updateFailureDetail{}
+	var details []string
+	for _, n := range r.set.names {
+		hs, ok := held[n]
+		if !ok {
+			continue
+		}
+		detail := fmt.Sprintf("%s %s asks for %s %q, which leaves out %s", hs[0].Parent, hs[0].ParentVersion, n, hs[0].Range, r.set.target[n])
+		if len(hs) > 1 {
+			detail += fmt.Sprintf(", and %d more package(s) do so too", len(hs)-1)
+		}
+		pkgs[n] = updateFailureDetail{ReasonDependentsHoldBack, detail}
+		details = append(details, detail)
+		for _, k := range r.set.byName[n] {
+			r.it.Packages[k].FixHint = &FixHint{HeldBy: append([]FixHolder(nil), hs...)}
+		}
+	}
+	f := manualFailure(ReasonDependentsHoldBack, "pip cannot install the pinned versions next to the packages that depend on them: %s", strings.Join(details, "; "))
+	if len(pkgs) < len(r.set.names) && r.attempt == 0 {
+		f.retryWithout = pkgs
+	} else {
+		f.pkgs = pkgs
+	}
+	return f
 }

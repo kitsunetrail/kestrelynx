@@ -917,6 +917,7 @@ PR記録の`state`には、次の値があります。
 | `dependents_update_rejected` | 依存元の更新が検査を通らなかった | [再解決の検査条件](#dependent-reresolution-rules) |
 | `dependents_update_unsupported` | 依存元をこのツールでは更新できない | [再解決の対応範囲と上限](#dependent-reresolution-limits) |
 | `dependents_update_limit` | 依存元の更新が上限を超える | [再解決の対応範囲と上限](#dependent-reresolution-limits) |
+| `dependents_hold_back` | 依存元がこのパッケージの版を制限している | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods)・[直る版の案内](remediation-results.md#fix-hints) |
 | `release_too_new` | 更新で入る版の公開から72時間経っていない | [公開後の待機と再試行](#dependent-reresolution-waits) |
 | `chain_downgrade` | 更新でパッケージが古い版に下がる、または版の対応を確定できない | [再解決の検査条件](#dependent-reresolution-rules) |
 | `chain_move_limit` | 更新で動くパッケージ数が上限を超える | [再解決の対応範囲と上限](#dependent-reresolution-limits) |

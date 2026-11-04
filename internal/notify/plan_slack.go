@@ -450,14 +450,24 @@ func (b *planBuilder) hintLines(x pkgLine) []string {
 	if x.chain == nil {
 		return nil
 	}
+	return b.releaseLines(x, x.chain.Hints, x.chain.Outcome == remediation.ChainNotFixed)
+}
+
+// releaseLines are the lines of hints about the dependents of a package;
+// notFixed says an update re-resolved within the project's ranges and did not
+// reach the fix.
+func (b *planBuilder) releaseLines(x pkgLine, hints []remediation.ChainHint, notFixed bool) []string {
 	manifest := "package.json"
-	if x.manager == remediation.ManagerUv {
+	switch x.manager {
+	case remediation.ManagerUv:
 		manifest = "pyproject.toml"
+	case remediation.ManagerPip:
+		manifest = "requirements.txt"
 	}
 	pkg := litMrkdwn(x.name)
 	var out []string
 	add := func(line string) { out = append(out, fmt.Sprintf(b.msg.PlanHintBullet, line)) }
-	for _, h := range x.chain.Hints {
+	for _, h := range hints {
 		if !remediation.SameDependencyName(x.manager, h.Package, x.name) {
 			continue
 		}
@@ -467,7 +477,7 @@ func (b *planBuilder) hintLines(x pkgLine) []string {
 			// The update re-resolved within the project's ranges and still did
 			// not reach the fix: a release there allowing it does not mean it
 			// can be had, which the line says.
-			if r.Fixes && !r.Dropped && x.chain.Outcome == remediation.ChainNotFixed {
+			if r.Fixes && !r.Dropped && notFixed {
 				verdict = fmt.Sprintf(b.msg.PlanHintFixesNotRaised, pkg)
 			}
 			add(fmt.Sprintf(b.msg.PlanHintRelease, parent, litMrkdwn(r.Version), fmt.Sprintf(b.msg.PlanHintInSpec, manifest), verdict))
@@ -496,6 +506,29 @@ func (b *planBuilder) hintVerdict(pkg string, r *remediation.ChainHintRelease) s
 		return fmt.Sprintf(b.msg.PlanHintFixes, pkg)
 	}
 	return fmt.Sprintf(b.msg.PlanHintNoFix, pkg)
+}
+
+// heldLine is the line about a package the packages that depend on it hold
+// back, as an update found them without moving them, "" when it found none.
+func (b *planBuilder) heldLine(x pkgLine) string {
+	if x.hint == nil || x.target == "" {
+		return ""
+	}
+	type holder struct{ parent, version string }
+	seen := map[holder]bool{}
+	var parts []string
+	for _, h := range x.hint.HeldBy {
+		k := holder{h.Parent, h.ParentVersion}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		parts = append(parts, litMrkdwn(h.Parent)+" "+litMrkdwn(h.ParentVersion))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(b.msg.PlanChainHeldBack, litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.target), b.cut(parts))
 }
 
 // chainLine is the line about a package a chain update was meant for and did
@@ -960,9 +993,9 @@ func (b *planBuilder) languageUnit(u remediation.PRUnit) planEntry {
 	// to a pull request made in an earlier cycle holds no marks of its own.
 	var left []leftOut
 	if l := u.Language; l != nil {
-		manager := b.langItems[u.ItemKey].Manager
+		li := b.langItems[u.ItemKey]
 		for _, x := range l.Remaining {
-			left = append(left, leftOut{x.Name, x.From, x.Target, x.Reason, nil, x.MavenBOM, manager})
+			left = append(left, leftOut{x.Name, x.From, x.Target, x.Reason, nil, x.MavenBOM, li.Manager, remainingHint(li, x)})
 		}
 	}
 	if len(left) == 0 {
@@ -1015,6 +1048,19 @@ type leftOut struct {
 	chain              *remediation.ChainUpdate
 	bom                *remediation.MavenBOMRaise
 	manager            remediation.DependencyManager
+	hint               *remediation.FixHint
+}
+
+// remainingHint is the hint of a package a pull request leaves out, from the
+// item's package of that name left out for the same reason: the record of the
+// pull request does not hold hints.
+func remainingHint(li remediation.LanguageItem, x remediation.PRLanguageRemaining) *remediation.FixHint {
+	for _, p := range li.Packages {
+		if p.LeftOut && p.Name == x.Name && p.Ecosystem == x.Ecosystem && p.Reason == x.Reason && p.Installed == x.From {
+			return p.Hint()
+		}
+	}
+	return nil
 }
 
 func leftOutOf(li remediation.LanguageItem) []leftOut {
@@ -1025,7 +1071,7 @@ func leftOutOf(li remediation.LanguageItem) []leftOut {
 	}
 	for _, p := range li.Packages {
 		if p.LeftOut {
-			out = append(out, leftOut{p.Name, p.Installed, p.SelectionLowerBound, p.Reason, chain, p.MavenBOM, li.Manager})
+			out = append(out, leftOut{p.Name, p.Installed, p.SelectionLowerBound, p.Reason, chain, p.MavenBOM, li.Manager, p.Hint()})
 		}
 	}
 	return out
@@ -1050,12 +1096,14 @@ type pkgLine struct {
 	// partOf are the packages of a global node_modules a package in one is
 	// part of, the package itself left out.
 	partOf []string
+	// hint is what holds the package back, as the update found it.
+	hint *remediation.FixHint
 }
 
 func (b *planBuilder) leftOutLines(e *planEntry, left []leftOut, file string) {
 	items := make([]pkgLine, len(left))
 	for i, x := range left {
-		items[i] = pkgLine{name: x.name, from: x.from, target: x.target, reason: x.reason, leftOut: true, chain: x.chain, bom: x.bom, manager: x.manager}
+		items[i] = pkgLine{name: x.name, from: x.from, target: x.target, reason: x.reason, leftOut: true, chain: x.chain, bom: x.bom, manager: x.manager, hint: x.hint}
 	}
 	b.packageLines(e, tagDecide, b.msg.PlanLblDecide, file, items)
 }
@@ -1128,6 +1176,9 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 		case b.chainLine(x) != "":
 			line = b.chainLine(x)
 			hints = b.hintLines(x)
+		case b.heldLine(x) != "":
+			line = b.heldLine(x)
+			hints = b.releaseLines(x, x.hint.Releases, false)
 		case x.reason == remediation.ReasonTargetNotUpdated:
 			line = fmt.Sprintf(b.msg.PlanNotUpdated, name, from, target)
 		case x.leftOut:
@@ -1349,7 +1400,7 @@ func (b *planBuilder) packageReasonLines(e *planEntry, tag planTag, label string
 	for i, p := range pkgs {
 		items[i] = pkgLine{name: p.Name, from: p.Installed, target: p.SelectionLowerBound, reason: p.Reason, chain: chain,
 			unchanged:    lockfileLeftAlone.MatchString(p.Detail) || lockfileLeftAlone.MatchString(li.Detail),
-			lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0, bom: p.MavenBOM, manager: li.Manager, partOf: globalOwners(p)}
+			lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0, bom: p.MavenBOM, manager: li.Manager, partOf: globalOwners(p), hint: p.Hint()}
 	}
 	b.packageLines(e, tag, label, path.Base(languageFile(li)), items)
 }

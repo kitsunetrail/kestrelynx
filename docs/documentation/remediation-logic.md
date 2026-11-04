@@ -587,7 +587,7 @@ A declaration that allows the fixed version is preserved; otherwise, it is rewri
 | `package.json` specifies `minimist ^1.2.0` and `mkdirp ^0.5.1`, with the direct `minimist` at the fixed `1.2.8` and the copy under `mkdirp 0.5.1` pinned to exactly `0.0.8` | Yes | Updating `mkdirp` to `0.5.6` within its range leaves `package.json` unchanged and can produce a PR if the checks pass |
 | `pyproject.toml` specifies `cryptography>=41`, and `pyopenssl` requires `cryptography<42` | Yes | A solution within the declared ranges produces a PR if the checks pass; if no solution is found, KestreLynx identifies the dependent package blocking the update and reports whether each of two releases can use the fixed version: its latest release within the project's declared range and its latest published release |
 | The target version used directly by the project is below the fixed version and differs from the version found in the running image | No | There is no basis for rewriting the project's declaration |
-| A pip project | No | This mechanism supports npm, pnpm, and uv |
+| A pip project | No | Dependent packages are not re-resolved; targets with an identified blocking dependent require manual handling and receive [fixing release hints](remediation-results.md#fix-hints) |
 
 KestreLynx checks the information for `mkdirp 0.5.1` in the public npm registry to confirm its requirement for `minimist`.
 
@@ -906,6 +906,15 @@ When pnpm updates only transitive dependencies, direct dependency entries may al
 If a pip version range allows the update target, KestreLynx reports an expected fix through rebuilding without rewriting the range to a pinned version.
 See [Supported input formats](remediation-reference.md#supported-inputs) for supported inputs and forms that cannot be updated.
 
+If pip's dry run cannot resolve dependencies after rewriting `==` pins in requirements.txt to fixed versions, KestreLynx uses the pre-update pip report and PyPI's `requires_dist` to find dependent packages whose requirements exclude the proposed pinned versions.
+This check evaluates markers for the running image's environment.
+
+- Active requirements from the same dependent package for the same target are combined and evaluated as one range
+- Requirements from packages included in the update targets are excluded because only their pre-update requirements are known
+
+A target with an identified blocking dependent requires manual handling with `dependents_hold_back`; if none is found, the reason remains `post_update_check_failed`.
+Dependent packages are not re-resolved, and [fixing release hints](remediation-results.md#fix-hints) are shown for published dependent releases that can be checked.
+
 ### Checking related changes {#change-validation}
 
 Changes outside the update targets are also checked against their relationship to the update and public registry information.
@@ -1043,7 +1052,10 @@ See [Gradle PRs and CI checks](remediation-results.md#gradle-pull-requests) for 
 ### Partial PR conditions {#partial-pr-selection}
 
 For npm, pnpm, and uv, the remaining updates may be accepted even when some packages do not reach the update target's lower bound.
-Pinned-version pip updates and Go updates are not split this way.
+Go updates are not split this way.
+
+For pinned-version pip updates, if other targets remain in the same requirements.txt after excluding packages marked `dependents_hold_back`, KestreLynx reruns the remaining updates from the original inputs.
+If the checks pass, it creates a PR for the remaining updates and records the excluded packages as `left_out` with their reasons.
 
 For npm, pnpm, and uv, when the conditions for [Re-resolution through dependent packages](#dependent-reresolution) are met, KestreLynx checks that result before deciding whether to adopt a partial PR from the normal update.
 

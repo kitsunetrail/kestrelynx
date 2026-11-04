@@ -305,6 +305,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"dependents_update_rejected":    {"updating the packages that depend on it did not pass the checks", "依存元の更新が検査を通らなかった"},
 	"dependents_update_unsupported": {"the packages that depend on it cannot be updated by this tool", "依存元をこのツールでは更新できない"},
 	"dependents_update_limit":       {"updating the packages that depend on it exceeds a limit", "依存元の更新が上限を超える"},
+	"dependents_hold_back":          {"a package that depends on it limits its version", "依存元がこのパッケージの版を制限している"},
 	"release_too_new":               {"a version the update brings in was published less than 72 hours ago", "更新で入る版の公開から72時間経っていない"},
 	"chain_downgrade":               {"the update would move a package to an older version, or its versions cannot be matched", "更新でパッケージが古い版に下がる、または版の対応を確定できない"},
 	"chain_move_limit":              {"the update changes more packages than the limit allows", "更新で動くパッケージ数が上限を超える"},

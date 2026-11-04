@@ -231,6 +231,18 @@
 | `packages[].maven_bom.from` | string | 取り込んでいるBOMの版 |
 | `packages[].maven_bom.to` | string | 同じメジャー版の後のマイナー版の正式版のうち、対象を目標版以上で管理する最も低いBOMの版 |
 | `packages[].maven_bom.manages` | string | `to`のBOMが管理する対象の版 |
+| `packages[].fix_hint` | object | 更新を妨げる依存元と[直る版の案内](remediation-results.md#fix-hints)で、`reason`が`dependents_hold_back`で情報がある場合だけ付与 |
+| `packages[].fix_hint.held_by` | objectの配列 | 対象の固定先の版を許さない要件を持つ依存元 |
+| `packages[].fix_hint.held_by[].parent` | string | 更新を妨げる依存元の名前 |
+| `packages[].fix_hint.held_by[].parent_version` | string | その依存元の現在の版 |
+| `packages[].fix_hint.held_by[].range` | string | その版が対象に付ける有効な要件をまとめた範囲 |
+| `packages[].fix_hint.releases` | objectの配列 | 依存元の公開版について確認した情報で、`update.chain.hints`と同じ形式、確認できなければ省略 |
+| `packages[].fix_hint.releases[].package` / `packages[].fix_hint.releases[].parent` / `packages[].fix_hint.releases[].parent_version` | string | 対象パッケージの名前・依存元の名前・依存元の現在の版 |
+| `packages[].fix_hint.releases[].latest` | object | 公開されている正式版の最新の情報で、pipでは`in_spec`を付けず、`latest`を確認できなければその案内を省略 |
+| `packages[].fix_hint.releases[].latest.version` | string | 確認した依存元の最新の正式版 |
+| `packages[].fix_hint.releases[].latest.range` | string | その版が対象に付ける範囲で、空なら省略 |
+| `packages[].fix_hint.releases[].latest.fixes` | boolean | その範囲が対象のすべての対象脆弱性を直す公開済みの正式版を含む場合は`true`で、`false`でも付与 |
+| `packages[].fix_hint.releases[].latest.dropped` | boolean | その版が対象を直接の依存として宣言していない場合は`true`で、それ以外は省略 |
 | `packages[].occurrence_count` / `packages[].cve_count` / `packages[].origin_count` | integer | 依存ファイル内の出現箇所・脆弱性・元の所見の件数 |
 | `packages[].kev_count` | integer | KEVに掲載された脆弱性の件数で、`0`なら省略 |
 | `packages[].occurrences` / `packages[].cves` / `packages[].origins` | objectの配列 | 出現箇所・脆弱性・元の所見の一覧で、空なら省略 |

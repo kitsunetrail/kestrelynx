@@ -294,6 +294,7 @@ func (r *updateRun) checkPipReport(ctx context.Context, report, reqs []byte, tar
 	}
 
 	requires := map[string][]string{}
+	var edges []pipEdge
 	for _, it := range rep.Install {
 		name := normalizePyName(it.Name)
 		ver := it.Version
@@ -311,12 +312,13 @@ func (r *updateRun) checkPipReport(ctx context.Context, report, reqs []byte, tar
 				return nil, manualFailure(ReasonUnexplainedDiff, "%s %s requires %s in this environment and the pip report does not install it", name, ver, dep)
 			}
 			requires[name] = append(requires[name], dep)
+			edges = append(edges, pipEdge{parent: name, version: ver, dep: dep, constraint: constraint})
 			if f := rangeProblem(dep, name+" "+ver, constraint, depVer, true); f != nil {
 				return nil, f
 			}
 		}
 	}
-	return &pipChecked{requires: requires, roots: roots}, nil
+	return &pipChecked{requires: requires, roots: roots, edges: edges}, nil
 }
 
 // Bounds on the spreading of extras and on the marker evaluations of one report.
@@ -331,6 +333,14 @@ var (
 type pipChecked struct {
 	requires map[string][]string
 	roots    []string
+	// edges are the requirements in force, in the order of the report.
+	edges []pipEdge
+}
+
+// pipEdge is a requirement in force: parent at version asks for dep within
+// constraint ("" for any version).
+type pipEdge struct {
+	parent, version, dep, constraint string
 }
 
 // checkFileRequirements evaluates every requirement line of the requirements

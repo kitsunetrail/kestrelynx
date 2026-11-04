@@ -533,6 +533,12 @@ func (u *LangUpdater) jobID(n int, role string) string {
 // run that has left packages out is not left out again, so an item takes at
 // most two runs, and both count as the one job the item is.
 func (u *LangUpdater) updateItem(ctx context.Context, it *LanguageItem, n int) {
+	u.runItem(ctx, it, n)
+	u.packageHints(ctx, it)
+}
+
+// runItem runs the update of an item and records its outcome.
+func (u *LangUpdater) runItem(ctx context.Context, it *LanguageItem, n int) {
 	set, fail := newUpdateSet(it)
 	if fail != nil {
 		fail.apply(it, set.idx)

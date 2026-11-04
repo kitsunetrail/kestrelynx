@@ -316,3 +316,71 @@ func TestPlanSlack_ChainHintsUvNames(t *testing.T) {
 		}
 	})
 }
+
+// A pip package that the packages depending on it hold back is shown with
+// them and with what their newest releases declare, whether the item is
+// manual for it or a pull request leaves it out.
+func TestPlanSlack_PipHeldBack(t *testing.T) {
+	r, _, _ := planCycleFixture()
+	hint := &remediation.FixHint{
+		HeldBy: []remediation.FixHolder{{Parent: "botocore", ParentVersion: "1.34.0", Range: "<2.1,>=1.25.4"}},
+		Releases: []remediation.ChainHint{{Package: "urllib3", Parent: "botocore", ParentVersion: "1.34.0",
+			Latest: &remediation.ChainHintRelease{Version: "1.35.10", Range: "<3,>=1.25.4", Fixes: true}}},
+	}
+	ja := []string{
+		"urllib3 1.26.18 を修正版の 2.2.2 に上げられない（依存元の botocore 1.34.0 が urllib3 の版を制限）",
+		"  • botocore 1.35.10（最新）: 修正版の urllib3 を使える",
+	}
+	en := []string{
+		"urllib3 1.26.18 cannot be raised to the fixed 2.2.2 (the dependent botocore 1.34.0 limits the version of urllib3)",
+		"  • botocore 1.35.10 (newest): can use a fixed urllib3",
+	}
+	check := func(t *testing.T, p *remediation.Plan) {
+		t.Helper()
+		info := &PlanInfo{Plan: p, Changed: true}
+		got := slackPlanText(r, info, LanguageJA)
+		for _, w := range ja {
+			if !strings.Contains(got, w) {
+				t.Errorf("ja lacks %q:\n%s", w, got)
+			}
+		}
+		got = slackPlanText(r, info, LanguageEN)
+		for _, w := range en {
+			if !strings.Contains(got, w) {
+				t.Errorf("en lacks %q:\n%s", w, got)
+			}
+		}
+	}
+	t.Run("manual", func(t *testing.T) {
+		p := languageFixture()
+		li := &p.LanguageItems[0]
+		li.Manager = remediation.ManagerPip
+		li.Packages = li.Packages[:1]
+		pk := &li.Packages[0]
+		pk.Name, pk.Installed, pk.SelectionLowerBound = "urllib3", "1.26.18", "2.2.2"
+		li.Category, li.Reason = remediation.CategoryManual, remediation.ReasonDependentsHoldBack
+		pk.Action, pk.Reason, pk.FixHint = remediation.ActionManual, remediation.ReasonDependentsHoldBack, hint
+		check(t, &p)
+	})
+	t.Run("left out", func(t *testing.T) {
+		p := leftOutFixture()
+		li := &p.LanguageItems[0]
+		li.Manager = remediation.ManagerPip
+		pk := &li.Packages[1]
+		pk.Name, pk.Installed, pk.SelectionLowerBound, pk.Reason, pk.FixHint = "urllib3", "1.26.18", "2.2.2", remediation.ReasonDependentsHoldBack, hint
+		check(t, &p)
+	})
+	t.Run("a hint without its reason is not shown", func(t *testing.T) {
+		p := languageFixture()
+		li := &p.LanguageItems[0]
+		li.Manager = remediation.ManagerPip
+		li.Packages = li.Packages[:1]
+		pk := &li.Packages[0]
+		pk.Name, pk.Installed, pk.SelectionLowerBound = "urllib3", "1.26.18", "2.2.2"
+		li.Category, li.Reason = remediation.CategoryManual, remediation.ReasonPostUpdateCheckFailed
+		pk.Action, pk.Reason, pk.FixHint = remediation.ActionManual, remediation.ReasonPostUpdateCheckFailed, hint
+		if got := slackPlanText(r, &PlanInfo{Plan: &p, Changed: true}, LanguageJA); strings.Contains(got, "botocore") {
+			t.Errorf("hint shown:\n%s", got)
+		}
+	})
+}

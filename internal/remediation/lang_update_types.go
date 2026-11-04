@@ -99,6 +99,11 @@ const (
 	ReasonDependentsRejected    Reason = "dependents_update_rejected"
 	ReasonDependentsUnsupported Reason = "dependents_update_unsupported"
 	ReasonDependentsLimit       Reason = "dependents_update_limit"
+	// ReasonDependentsHoldBack: a package the project has pinned asks for the
+	// package at versions that leave out its fixed version, and the update,
+	// which does not move the packages that depend on it, cannot go past that
+	// (see LanguagePackage.FixHint).
+	ReasonDependentsHoldBack Reason = "dependents_hold_back"
 	// ReasonReleaseTooNew: a version the update brings in was published less
 	// than the minimum age ago; the item is tried again later.
 	ReasonReleaseTooNew Reason = "release_too_new"

@@ -280,3 +280,32 @@ func TestPlanMessage_MavenBOMRaise(t *testing.T) {
 		t.Errorf("maven_bom = %v", bom)
 	}
 }
+
+// The webhook carries a package's fix hint with its reason only.
+func TestWebhook_FixHint(t *testing.T) {
+	r, changed, _ := planCycleFixture()
+	hint := &remediation.FixHint{HeldBy: []remediation.FixHolder{{Parent: "botocore", ParentVersion: "1.34.0", Range: "<2.1,>=1.25.4"}}}
+	info := func(reason remediation.Reason) *PlanInfo {
+		p := languageFixture()
+		p.Items = p.Items[:1]
+		it := p.LanguageItems[0]
+		x := langPkg("urllib3", "1.26.20", "2.8.0", false)
+		x.Action, x.Reason, x.FixHint = remediation.ActionManual, reason, hint
+		it.Manager, it.Category, it.Reason = remediation.ManagerPip, remediation.CategoryManual, reason
+		it.Packages = []remediation.LanguagePackage{x}
+		p.LanguageItems = []remediation.LanguageItem{it}
+		return &PlanInfo{Plan: &p, Changed: true}
+	}
+	pkgOf := func(info *PlanInfo) map[string]any {
+		j := webhookJSON(t, BuildWebhookPayloadWithPlan(r, &changed, info))
+		return j["remediation"].(map[string]any)["language_items"].([]any)[0].(map[string]any)["packages"].([]any)[0].(map[string]any)
+	}
+	got, _ := pkgOf(info(remediation.ReasonDependentsHoldBack))["fix_hint"].(map[string]any)
+	held, _ := got["held_by"].([]any)
+	if len(held) != 1 || held[0].(map[string]any)["parent"] != "botocore" {
+		t.Errorf("fix_hint = %v", got)
+	}
+	if h, ok := pkgOf(info(remediation.ReasonPostUpdateCheckFailed))["fix_hint"]; ok {
+		t.Errorf("fix_hint for another reason = %v", h)
+	}
+}

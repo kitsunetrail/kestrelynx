@@ -917,6 +917,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `dependents_update_rejected` | The dependent-package update fails the checks | [Re-resolution check conditions](#dependent-reresolution-rules) |
 | `dependents_update_unsupported` | KestreLynx cannot update the dependent packages | [Re-resolution support and limits](#dependent-reresolution-limits) |
 | `dependents_update_limit` | The dependent-package update exceeds a limit | [Re-resolution support and limits](#dependent-reresolution-limits) |
+| `dependents_hold_back` | A package that depends on it limits its version | [Update methods by package manager](remediation-logic.md#manager-update-methods), [Fixing release hints](remediation-results.md#fix-hints) |
 | `release_too_new` | A version introduced by the update is less than 72 hours old | [Release waiting periods and retries](#dependent-reresolution-waits) |
 | `chain_downgrade` | The update downgrades a package, or the correspondence between versions cannot be determined | [Re-resolution check conditions](#dependent-reresolution-rules) |
 | `chain_move_limit` | The update changes more packages than the limit allows | [Re-resolution support and limits](#dependent-reresolution-limits) |

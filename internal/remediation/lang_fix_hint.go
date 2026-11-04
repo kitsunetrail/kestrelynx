@@ -38,6 +38,26 @@ type ChainHintRelease struct {
 	Dropped bool   `json:"dropped,omitempty"`
 }
 
+// FixHint is, for a package an update could not take to its fixed version,
+// what holds it back: the packages whose requirements leave the fixed version
+// out, and for each of them what its newest release declares for the package
+// (Releases, empty when that could not be told).
+type FixHint struct {
+	HeldBy   []FixHolder `json:"held_by"`
+	Releases []ChainHint `json:"releases,omitempty"`
+}
+
+// FixHolder is a package of the project, at the version the project has, that
+// asks for the package at Range, which leaves out its fixed version.
+type FixHolder struct {
+	Parent        string `json:"parent"`
+	ParentVersion string `json:"parent_version"`
+	Range         string `json:"range"`
+}
+
+// fixHintReasons are the package reasons a FixHint is read with.
+var fixHintReasons = map[Reason]bool{ReasonDependentsHoldBack: true}
+
 // The hints are looked up after the item is settled, within limits of their
 // own, so that they never take what the update needs: at most this many
 // (package, dependent) pairs per item, and this long in all.
@@ -105,6 +125,64 @@ func (u *LangUpdater) fixHints(ctx context.Context, it *LanguageItem, set update
 	chain.Hints = hints
 }
 
+// packageHints settles the hints of an item's packages once the item is
+// settled: a hint is dropped from a package whose reason it is not read with,
+// and for each package left with one, what the newest release of each package
+// holding it back declares for it is looked up, within the limits of the
+// hints. A lookup that fails or cannot be judged leaves that release out.
+func (u *LangUpdater) packageHints(ctx context.Context, it *LanguageItem) {
+	var todo []int
+	cves := map[string][]CVERef{}
+	for i := range it.Packages {
+		p := &it.Packages[i]
+		if p.FixHint == nil {
+			continue
+		}
+		if p.Hint() == nil {
+			p.FixHint = nil
+			continue
+		}
+		p.FixHint.Releases = nil
+		if len(p.FixHint.HeldBy) > 0 {
+			todo = append(todo, i)
+			cves[p.matchName()] = append(cves[p.matchName()], p.CVEs...)
+		}
+	}
+	if len(todo) == 0 {
+		return
+	}
+	src := u.hintSourceFor(it.Manager, nil)
+	if src == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, hintTimeout)
+	defer cancel()
+	l := &hintLookup{ctx: ctx, sc: it.Manager.scheme(), src: src, rels: map[string][]string{}, judgeHeld: true}
+	type pair struct{ pkg, parent, version string }
+	looked := map[pair]*ChainHint{}
+	for _, i := range todo {
+		p := &it.Packages[i]
+		for _, h := range p.FixHint.HeldBy {
+			k := pair{p.matchName(), h.Parent, h.ParentVersion}
+			c, seen := looked[k]
+			if !seen {
+				if len(looked) >= maxHintPairs || ctx.Err() != nil {
+					continue
+				}
+				c = &ChainHint{Package: p.Name, Parent: h.Parent, ParentVersion: h.ParentVersion}
+				l.hint(c, h.Range, cves[p.matchName()])
+				if c.InSpec == nil && c.Latest == nil {
+					c = nil
+				}
+				looked[k] = c
+			}
+			if c != nil {
+				p.FixHint.Releases = append(p.FixHint.Releases, *c)
+			}
+		}
+	}
+}
+
 // hintSource reads, for the hints of one manager, what the index publishes.
 type hintSource interface {
 	// versions returns the versions of name the index offers; ok is false
@@ -130,7 +208,7 @@ func (u *LangUpdater) hintSourceFor(m DependencyManager, sh *itemShared) hintSou
 		if t, ok := u.cfg.Npm.(NpmPublishTimes); ok {
 			return &npmHints{m: m, npm: u.cfg.Npm, times: t, sh: sh}
 		}
-	case ManagerUv:
+	case ManagerUv, ManagerPip:
 		if u.cfg.PyPI == nil {
 			return nil
 		}
@@ -147,6 +225,10 @@ type hintLookup struct {
 	sc   scheme
 	src  hintSource
 	rels map[string][]string
+	// judgeHeld says the range the dependent's current release declares is
+	// judged against the released versions too: it is known to leave out the
+	// version the update asked for, not every fixed version.
+	judgeHeld bool
 }
 
 // releases returns the released versions of a package (pre-releases left
@@ -199,6 +281,8 @@ func (l *hintLookup) hint(h *ChainHint, held string, cves []CVERef) {
 	at := func(s string) *ChainHintRelease {
 		v, _ := parseVersion(l.sc, s)
 		switch c := v.compare(cur); {
+		case c == 0 && l.judgeHeld:
+			return l.judged(s, held, children, cves)
 		case c == 0:
 			return &ChainHintRelease{Version: s, Range: held}
 		case c > 0:
@@ -237,6 +321,13 @@ func (l *hintLookup) release(parent, version, pkg string, children []string, cve
 	case dropped:
 		return &ChainHintRelease{Version: version, Dropped: true}
 	}
+	return l.judged(version, rng, children, cves)
+}
+
+// judged is a release of the dependent that declares rng for the package:
+// whether rng allows a released version that fixes it, or nil when that
+// cannot be told.
+func (l *hintLookup) judged(version, rng string, children []string, cves []CVERef) *ChainHintRelease {
 	fixes := false
 	for _, s := range children {
 		allowed, evaluable := l.src.allows(rng, s)
@@ -333,8 +424,9 @@ func (p *pyHints) versions(ctx context.Context, name string) ([]string, bool) {
 
 // requirement reads the release's requires_dist as the chain update does: a
 // requirement counts whatever its marker says, as a uv.lock holds every
-// environment at once, and a package required with different specifiers, or a
-// requirement that cannot be read, cannot be told as one requirement.
+// environment at once (for pip, which resolves for one environment, that is
+// the stricter reading), and a package required with different specifiers, or
+// a requirement that cannot be read, cannot be told as one requirement.
 func (p *pyHints) requirement(ctx context.Context, parent, version, pkg string) (string, bool, bool) {
 	key := normalizePyName(parent) + "==" + version
 	rel, ok := PyPIRelease{}, false

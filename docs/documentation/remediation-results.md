@@ -255,6 +255,8 @@ Other fields are described in [Re-resolution results](webhook-remediation-refere
 #### Fixing release hints {#fix-hints}
 
 For npm, pnpm, and uv, hints appear below a package's line when a dependent package's requirement blocks a fixed version and the outcome is `not_fixed`, `rejected`, or `not_tried`.
+For pip, the same format is used for packages marked `dependents_hold_back` when resolution fails after updating pinned versions and a dependent package blocking the update is found.
+
 Each line shows the dependent package's name and version, which release it is, and whether it can use a fixed version of the target package.
 
 ```text
@@ -263,14 +265,22 @@ starlette 0.32.0.post1 cannot be raised to the fixed 1.3.1 (the dependent fastap
   • fastapi 0.162.0 (newest): can use a fixed starlette
 ```
 
-The checks cover these two releases of the dependent package.
+```text
+urllib3 1.26.20 cannot be raised to the fixed 2.8.0 (the dependent botocore 1.34.0 limits the version of urllib3)
+  • botocore 1.43.123 (newest): can use a fixed urllib3
+```
 
-- The newest stable release within the package.json range for npm and pnpm, or the pyproject.toml range for uv, when the dependent package is a direct dependency of the project.
-- The newest published stable release, with its display omitted when it is the same as the newest release within the range.
+For npm, pnpm, and uv, the checks cover these two releases of the dependent package.
 
-Prereleases are excluded from the version list, and for uv, releases whose files are all yanked are also excluded from the list retrieved from PyPI.
+- The newest stable release within the package.json range for npm and pnpm, or the pyproject.toml range for uv, when the dependent package is a direct dependency of the project
+- The newest published stable release, with its display omitted when it is the same as the newest release within the range
 
-For uv, dependent requirements are read from PyPI metadata (`requires_dist`), and all requirements are considered regardless of environment markers.
+For pip, versions in requirements.txt are pinned with `==`, so only the newest published stable release is checked, with no “newest within the range” line.
+Even when the newest release is the current version, the combined range of active requirements blocking the update is checked against the target package's published stable releases.
+
+Prereleases are excluded from the version list, and for uv and pip, releases whose files are all yanked are also excluded from the list retrieved from PyPI.
+
+For uv and pip, dependent requirements for published releases are read from PyPI metadata (`requires_dist`), and all requirements are considered regardless of environment markers.
 
 The following table describes the display types.
 
@@ -294,14 +304,14 @@ For a dependent package that is not a direct dependency, the note appears below 
 Lines are omitted for information that cannot be evaluated or retrieved.
 
 - For npm and pnpm, evaluation is unavailable because of peer dependencies, aliases, conflicting ranges, unsupported ranges, a bundled shrinkwrap, or similar conditions.
-- For uv, evaluation is unavailable when there are differing requirements for the same package, unreadable requirements, or unsupported version specifications.
+- For uv and pip, evaluation is unavailable when a published release has differing requirements for the same package, unreadable requirements, or unsupported version specifications
 - Registry queries fail or the lookup time limit is reached.
 
-Queries run after the update decision, with limits of three target-package and dependent-package pairs and 30 seconds in total per item.
-The presence or content of hints does not affect the plan or PR.
+Queries for published dependent releases run after the update decision, with limits of three target-package and dependent-package pairs and 30 seconds in total per item.
+The presence or content of published release hints does not affect the plan or PR.
 
-Hints apply to npm, pnpm, and uv.
-Range values are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints`.
+Hints apply to npm, pnpm, uv, and pip.
+Range values are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints` for npm, pnpm, and uv, or `language_items[].packages[].fix_hint` for pip.
 
 ### Re-pull guidance {#repull-guidance}
 

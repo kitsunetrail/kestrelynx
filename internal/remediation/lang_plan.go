@@ -297,6 +297,19 @@ type LanguagePackage struct {
 	// version that does: what a person can raise the BOM to. It is read with
 	// the reason ReasonMavenBOMSeriesUnreached only.
 	MavenBOM *MavenBOMRaise `json:"maven_bom,omitempty"`
+	// FixHint says, for a package an update could not take to its fixed
+	// version, what holds it back and what newer releases of that declare for
+	// it. It is read with the reasons in fixHintReasons only.
+	FixHint *FixHint `json:"fix_hint,omitempty"`
+}
+
+// Hint is the package's FixHint when its reason is one the field is read
+// with, else nil.
+func (p LanguagePackage) Hint() *FixHint {
+	if !fixHintReasons[p.Reason] {
+		return nil
+	}
+	return p.FixHint
 }
 
 // BOMRaise is the package's MavenBOM when its reason is the one the field is

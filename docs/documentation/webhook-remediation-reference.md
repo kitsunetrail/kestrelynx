@@ -231,17 +231,25 @@ See [Verification scope by target](remediation-logic.md#verification-scope) for 
 | `packages[].maven_bom.from` | string | The imported BOM version. |
 | `packages[].maven_bom.to` | string | The lowest regular BOM release in a later minor version within the same major version that manages the target at or above its target version. |
 | `packages[].maven_bom.manages` | string | The target's version managed by the BOM at `to`. |
-| `packages[].fix_hint` | object | Dependent packages blocking the update and [fixing release hints](remediation-results.md#fix-hints); included only when `reason` is `dependents_hold_back` and information is available. |
-| `packages[].fix_hint.held_by` | array of objects | Dependent packages whose requirements exclude the target's proposed pinned version. |
-| `packages[].fix_hint.held_by[].parent` | string | Name of the dependent package blocking the update. |
+| `packages[].fix_hint` | object | [Fixing release hints](remediation-results.md#fix-hints); included only when `reason` is `dependents_hold_back`, `go_line_raised_too_far`, `go_runtime_unavailable`, or `fix_in_other_major_version` and information is available. |
+| `packages[].fix_hint.go_line` | object | The required Go version blocking a Go update and the module declaring that `go` line; omitted when unavailable. |
+| `packages[].fix_hint.go_line.module` / `packages[].fix_hint.go_line.version` | string | Path and version of the module whose `go.mod` declares the required `go` line. |
+| `packages[].fix_hint.go_line.go` | string | The `go` version declared by that `go.mod`. |
+| `packages[].fix_hint.go_line.built_with` | string | The Go version used to build the running binaries, compared for `go_line_raised_too_far`; omitted when unknown or for `go_runtime_unavailable`. |
+| `packages[].fix_hint.go_line.to` | string | The target package version requested by the update; omitted when not recorded. |
+| `packages[].fix_hint.fix` | object | Fixed-release information when a Go package has fixes only in another major version; omitted when unavailable. |
+| `packages[].fix_hint.fix.version` | string | The lowest version named as a fix in the vulnerability information that fixes all target vulnerabilities. |
+| `packages[].fix_hint.direct` | boolean | `true` for Go hints about another major version when the project's `go.mod` requires the target without `// indirect`; omitted otherwise. |
+| `packages[].fix_hint.held_by` | array of objects | Dependent packages whose requirements exclude the proposed pinned version, or dependents requiring the target in Go hints about another major version; omitted when empty. |
+| `packages[].fix_hint.held_by[].parent` | string | Name of the dependent package. |
 | `packages[].fix_hint.held_by[].parent_version` | string | Current version of that dependent package. |
-| `packages[].fix_hint.held_by[].range` | string | Combined range of that version's active requirements for the target. |
+| `packages[].fix_hint.held_by[].range` | string | Combined range of that version's active requirements for the target, or the target version required by its `go.mod` for Go. |
 | `packages[].fix_hint.releases` | array of objects | Checked information about published dependent releases, using the same structure as `update.chain.hints`; omitted when unavailable. |
 | `packages[].fix_hint.releases[].package` / `packages[].fix_hint.releases[].parent` / `packages[].fix_hint.releases[].parent_version` | string | Target package name, dependent package name, and current dependent version, respectively. |
-| `packages[].fix_hint.releases[].latest` | object | Information about the newest published stable release; pip does not include `in_spec`, and a hint is omitted if `latest` cannot be checked. |
-| `packages[].fix_hint.releases[].latest.version` | string | Dependent version checked as the newest stable release. |
-| `packages[].fix_hint.releases[].latest.range` | string | The range that release declares for the target; omitted when empty. |
-| `packages[].fix_hint.releases[].latest.fixes` | boolean | `true` when the range includes a published stable version that fixes all target vulnerabilities in the package; included even when `false`. |
+| `packages[].fix_hint.releases[].latest` | object | Information about the newest published stable release for pip, or `@latest` for Go; neither includes `in_spec`, and a hint is omitted if it cannot be checked. |
+| `packages[].fix_hint.releases[].latest.version` | string | Dependent version checked as the latest release. |
+| `packages[].fix_hint.releases[].latest.range` | string | The range that release declares for the target, or the required target version for Go; omitted when empty. |
+| `packages[].fix_hint.releases[].latest.fixes` | boolean | `true` when the range includes a published stable version that fixes all target vulnerabilities in the package; always `false` for Go hints about another major version, and included even when `false`. |
 | `packages[].fix_hint.releases[].latest.dropped` | boolean | `true` when that release does not declare the target as a direct dependency; omitted otherwise. |
 | `packages[].occurrence_count` / `packages[].cve_count` / `packages[].origin_count` | integer | Counts of occurrences in dependency files, vulnerabilities, and original findings. |
 | `packages[].kev_count` | integer | Number of vulnerabilities listed in KEV; omitted when `0`. |

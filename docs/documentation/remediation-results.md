@@ -310,8 +310,44 @@ Lines are omitted for information that cannot be evaluated or retrieved.
 Queries for published dependent releases run after the update decision, with limits of three target-package and dependent-package pairs and 30 seconds in total per item.
 The presence or content of published release hints does not affect the plan or PR.
 
-Hints apply to npm, pnpm, uv, and pip.
-Range values are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints` for npm, pnpm, and uv, or `language_items[].packages[].fix_hint` for pip.
+For Go, packages marked `go_line_raised_too_far` or `go_runtime_unavailable` show the module and version declaring the required Go when that information is available.
+See [Go update validation](remediation-logic.md#go-update-validation) and [Go selection](remediation-logic.md#go-runtime-selection) for the conditions under which it is recorded.
+
+```text
+golang.org/x/net v0.20.0 cannot be raised to the fixed v0.60.0 without raising the go line of go.mod to 1.26.0 (the go.mod of golang.org/x/net v0.60.0 declares go 1.26.0; the running binaries were built with Go 1.22.12)
+```
+
+When the build Go is unknown, the line ends with “; the Go the running binaries were built with is not known)”.
+
+```text
+example.com/old v1.4.0 needs Go 1.99 to be raised to the fixed v1.4.5 (the go.mod of example.com/old v1.4.5 declares it, and no supported Go is that new)
+```
+
+For `fix_in_other_major_version`, hints are checked during the update stage, including for items marked for manual handling during planning.
+This check does not update dependencies.
+
+- The fixed version is the lowest version named as a fix in the vulnerability information that fixes all target vulnerabilities
+- Read `go.mod` and `go.sum` from GitHub and treat a target required without `// indirect` in `go.mod` as directly required, skipping dependent lookups
+- Otherwise, read each requirement's `go.mod` from the proxy and record modules requiring the target, their versions, and the target versions they require
+- Check each dependent's latest version through `@latest` and show “does not use it directly” if its `go.mod` no longer requires the target, or “cannot use a fixed version” if it still does
+- Omit the corresponding hint if the latest version's `go.mod` was synthesized by the proxy or a lookup fails
+
+```text
+example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (the dependent example.com/mid v1.0.0 uses it)
+  • example.com/mid v1.3.0 (newest): does not use example.com/old directly
+```
+
+A directly required package is shown as follows.
+
+```text
+example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (go.mod requires it directly, so the imports need rewriting)
+```
+
+Go hints for fixes in another major version have a total lookup limit of 30 seconds per item, with latest-version checks for up to three target-package and dependent-package pairs.
+Reads of `go.mod` files from the proxy are limited to 200 per item, including latest versions.
+
+Hints apply to npm, pnpm, uv, pip, and Go.
+Ranges and required-version values are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints` for npm, pnpm, and uv, or `language_items[].packages[].fix_hint` for pip and Go.
 
 ### Re-pull guidance {#repull-guidance}
 

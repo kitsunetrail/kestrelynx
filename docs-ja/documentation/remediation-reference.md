@@ -334,7 +334,7 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 | `toolchain`の行 | 公開されたGoの版を表す`go1.N.M`形式に対応し、`default`・独自の接尾辞・RCなどは手動対応 |
 | `go.work` | 依存ディレクトリまたはリポジトリのルートまでの上位ディレクトリにある場合は手動対応 |
 | `vendor` | 依存ディレクトリにある場合は手動対応 |
-| 別のメジャー版 | 修正版が別のモジュールパスにしかない場合は`fix_in_other_major_version`で手動対応 |
+| 別のメジャー版 | 修正版が別のモジュールパスにしかない場合は`fix_in_other_major_version`で手動対応とし、確認できた最小の修正版と、直接指定か依存元による要求かを[直る版の案内](remediation-results.md#fix-hints)に表示 |
 | 標準ライブラリの`stdlib` | PRを作らず、ビルドに使うGoの版を上げる案内を修正計画に表示 |
 
 候補の決め方と標準ライブラリの案内は[Goの候補選定](remediation-logic.md#go-package-selection)、採用条件は[Goの更新結果の検査](remediation-logic.md#go-update-validation)を参照してください。
@@ -810,7 +810,7 @@ PR記録の`state`には、次の値があります。
 | `work_environment_rejected` | 作業用コンテナがプログラムの実行要件を満たしていない | [実行時の制限](remediation-logic.md#worker-restrictions) |
 | `go_version_too_old` | `go.mod`に`go`の版の指定がない、または1.21より古い | [Goの依存ファイル](#go-inputs) |
 | `go_toolchain_unsupported` | `go.mod`の`toolchain`の行が、公開されたGoの版ではない | [Goの依存ファイル](#go-inputs) |
-| `go_runtime_unavailable` | 更新に必要な版以上の、サポート中のGoを選べない | [Goの選定](remediation-logic.md#go-runtime-selection) |
+| `go_runtime_unavailable` | 更新に必要な版以上の、サポート中のGoを選べない | [Goの選定](remediation-logic.md#go-runtime-selection)・[直る版の案内](remediation-results.md#fix-hints) |
 | `gradle_version_unsupported` | 対応していない Gradle の版を使っている | [Gradleの依存ファイル](#gradle-inputs) |
 | `gradle_toolchain_unsupported` | 対応していない Java の toolchain を指定している | [Gradleの実行設定](remediation-logic.md#gradle-worker-settings) |
 | `runtime_eol` | 更新対象の実行環境がサポート終了している | [実行環境の選定](remediation-logic.md#runtime-and-tool-versions) |
@@ -852,9 +852,9 @@ PR記録の`state`には、次の値があります。
 | `update_candidate_in_source` | ソース内のパッケージに対応する修正版の更新候補がある | [修正版の下限](remediation-logic.md#fix-lower-bound) |
 | `range_allows_fix` | 依存範囲が修正版を許し、再ビルドで入る見込みがある | [直接依存の版指定](remediation-logic.md#direct-dependencies) |
 | `go_stdlib_needs_newer_go` | Goの標準ライブラリの脆弱性で、`go.mod`の更新ではなく、新しいGoでビルドし直すと直る | [Goの候補選定](remediation-logic.md#go-package-selection) |
-| `fix_in_other_major_version` | 修正版が別のメジャー版にあり、Goでは別のモジュールパスになる | [Goの候補選定](remediation-logic.md#go-package-selection) |
-| `go_release_retracted` | 対象の版が、モジュールの作者によって撤回されている | [Goの候補選定](remediation-logic.md#go-package-selection) |
-| `go_line_raised_too_far` | 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える、またはビルドした版が不明なまま行の版が変わる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
+| `fix_in_other_major_version` | 修正版が別のメジャー版にあり、Goでは別のモジュールパスになる | [Goの候補選定](remediation-logic.md#go-package-selection)・[直る版の案内](remediation-results.md#fix-hints) |
+| `go_release_retracted` | 目標版が撤回されていて代わりの修正版を選べない、または依存の要求で目標を超えた対象の版が撤回されている | [Goの候補選定](remediation-logic.md#go-package-selection)・[Goの更新結果の検査](remediation-logic.md#go-update-validation) |
+| `go_line_raised_too_far` | 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える、またはビルドした版が不明なまま行の版が変わる | [Goの更新結果の検査](remediation-logic.md#go-update-validation)・[直る版の案内](remediation-results.md#fix-hints) |
 | `go_dependencies_uncheckable` | 更新後の依存の要求を確かめるためにたどるモジュールの版が多すぎる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
 | `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection)・[Gradleの目標版](remediation-logic.md#gradle-target-versions) |
 | `maven_version_source_unsupported` | 版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている | [版の出所と書き換え](remediation-logic.md#maven-version-sources) |

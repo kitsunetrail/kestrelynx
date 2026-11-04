@@ -310,8 +310,44 @@ uv・pipでは、依存元の公開版の指定をPyPIのメタデータ（`requ
 依存元の公開版への問い合わせは更新の判定が終わった後に行い、1項目あたり対象パッケージと依存元の組み合わせ3件まで、合計30秒までです。
 公開版の案内の有無や内容は、計画やPRに影響しません。
 
-対象はnpm・pnpm・uv・pipです。
-範囲の値はSlackには表示せず、Webhookではnpm・pnpm・uvの`language_items[].update.chain.hints`、pipの`language_items[].packages[].fix_hint`に確認した情報とともに載せます。
+Goでは、`go_line_raised_too_far`・`go_runtime_unavailable`で必要なGoを宣言するモジュールと版を確認できた場合に、その情報を表示します。
+記録する条件は[Goの更新結果の検査](remediation-logic.md#go-update-validation)と[Goの選定](remediation-logic.md#go-runtime-selection)を参照してください。
+
+```text
+golang.org/x/net v0.20.0 を修正版の v0.60.0 に上げると、go.mod の go の行が 1.26.0 に上がる（golang.org/x/net v0.60.0 の go.mod が go 1.26.0 を指定・稼働中のバイナリは Go 1.22.12 でビルド）
+```
+
+ビルドしたGoが不明な場合は、末尾に「・稼働中のバイナリをビルドした Go は不明）」と表示します。
+
+```text
+example.com/old v1.4.0 を修正版の v1.4.5 に上げるには Go 1.99 が必要（example.com/old v1.4.5 の go.mod が指定・サポート中の Go にない）
+```
+
+`fix_in_other_major_version`では、計画段階で手動対応になった項目も更新段階で案内を確認します。
+この確認では依存を更新しません。
+
+- 修正版は、脆弱性情報にある修正版のうち、すべての対象脆弱性を直す最も低い版
+- GitHubから`go.mod`・`go.sum`を読み、対象が`go.mod`に`// indirect`なしで要求されていれば直接指定として依存元の照会を省略
+- 直接指定でなければ、`go.mod`の各要求の`go.mod`をプロキシから読み、対象を要求するモジュールと版、要求している対象の版を記録
+- 依存元の最新版を`@latest`で調べ、その`go.mod`が対象を要求しなければ「直接は使っていない」、要求していれば「修正版を使えない」と表示
+- 最新版の`go.mod`がプロキシによる合成の場合や照会に失敗した場合は、その案内を省略
+
+```text
+example.com/old v1.4.0 の修正版は別のメジャー版（v2.1.0）にしかない（依存元の example.com/mid v1.0.0 が使っている）
+  • example.com/mid v1.3.0（最新）: example.com/old を直接は使っていない
+```
+
+直接指定の場合は、次のように表示します。
+
+```text
+example.com/old v1.4.0 の修正版は別のメジャー版（v2.1.0）にしかない（go.mod で直接指定・import の書き換えが必要）
+```
+
+Goの別メジャー版の案内の照会は1項目あたり合計30秒までで、最新版の確認は対象パッケージと依存元の組み合わせ3件までです。
+プロキシからの`go.mod`の読み込みは、最新版を含めて1項目あたり200件までです。
+
+対象はnpm・pnpm・uv・pip・Goです。
+範囲や要求している版の値はSlackには表示せず、Webhookではnpm・pnpm・uvの`language_items[].update.chain.hints`、pip・Goの`language_items[].packages[].fix_hint`に確認した情報とともに載せます。
 
 ### 再取得の案内 {#repull-guidance}
 

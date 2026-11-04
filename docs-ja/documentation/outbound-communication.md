@@ -123,7 +123,7 @@ PRには、イメージ参照とdigest、Workload名、リポジトリ名、ソ�
 | KestreLynx | `pypi.org`・`files.pythonhosted.org` | Pythonパッケージの情報・配布物を取得 | Pythonの更新結果を照合する場合 |
 | KestreLynx | `registry.npmjs.org` | パッケージ名・版を指定し、依存先の版指定と公開日時を取得 | npm・pnpmの再解決で、更新を妨げる指定や公開後72時間の経過を確認する場合 |
 | KestreLynx | `pypi.org` | パッケージ名・版を指定し、依存先の版指定と配布物のアップロード日時を取得 | uvの再解決で、更新を妨げる指定や公開後72時間の経過を確認する場合 |
-| KestreLynx | `proxy.golang.org` | モジュールパスと版を指定し、版情報の`.info`・`go.mod`の`.mod`・最新版の`@latest`を取得 | Goの目標版、撤回、必要なGoの版、依存の要求を確認する場合 |
+| KestreLynx | `proxy.golang.org` | モジュールパスと版を指定し、版情報の`.info`・`go.mod`の`.mod`・最新版の`@latest`・版の一覧の`@v/list`を取得 | Goの目標版、撤回、必要なGoの版、依存の要求を確認する場合や、撤回された版の代わりを探す場合 |
 | KestreLynx | `sum.golang.org` | モジュールパスと版を指定し、`lookup`でモジュールのzipと`go.mod`のハッシュを取得 | Goの更新結果の照合と`go.sum`の補完を行う場合 |
 | KestreLynx | `repo.maven.apache.org` | groupId・artifactId・版を指定し、`maven-metadata.xml`と親・BOM・依存の`.pom`を取得 | Mavenの公開版・版の出所・依存の要求と更新前後の解決結果を確認する場合 |
 | KestreLynx | `repo.maven.apache.org` | groupId・artifactId・版を指定し、`maven-metadata.xml`とSpring BootのBOM・親・取り込むBOM・依存の`.pom`を取得 | Gradleで更新する依存の公開版・BOMのプロパティ・追加や変更した座標を確認する場合 |

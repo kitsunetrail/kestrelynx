@@ -43,8 +43,36 @@ type ChainHintRelease struct {
 // out, and for each of them what its newest release declares for the package
 // (Releases, empty when that could not be told).
 type FixHint struct {
-	HeldBy   []FixHolder `json:"held_by"`
+	HeldBy   []FixHolder `json:"held_by,omitempty"`
 	Releases []ChainHint `json:"releases,omitempty"`
+	// GoLine is, for a Go update held back by the Go it needs, the module
+	// version whose go.mod asks for that Go.
+	GoLine *GoLineHint `json:"go_line,omitempty"`
+	// Fix is, for a package whose fixes are all of another major version, the
+	// lowest of them that fixes every target vulnerability; Direct says the
+	// project requires the package itself (go.mod lists it without
+	// "// indirect"), so its own imports name the major version. HeldBy are
+	// then the modules the project requires whose go.mod requires the
+	// package, Range the version each asks for.
+	Fix    *FixRelease `json:"fix,omitempty"`
+	Direct bool        `json:"direct,omitempty"`
+}
+
+// FixRelease is a release of a package that fixes it.
+type FixRelease struct {
+	Version string `json:"version"`
+}
+
+// GoLineHint is a module version whose go.mod declares the go line Go, which
+// an update of the package to To (the version it was asked for, "" when it
+// was not reached) needs; BuiltWith is the Go the running binaries were built
+// with, when the update was held back by it.
+type GoLineHint struct {
+	Module    string `json:"module"`
+	Version   string `json:"version"`
+	Go        string `json:"go"`
+	BuiltWith string `json:"built_with,omitempty"`
+	To        string `json:"to,omitempty"`
 }
 
 // FixHolder is a package of the project, at the version the project has, that
@@ -56,7 +84,7 @@ type FixHolder struct {
 }
 
 // fixHintReasons are the package reasons a FixHint is read with.
-var fixHintReasons = map[Reason]bool{ReasonDependentsHoldBack: true}
+var fixHintReasons = map[Reason]bool{ReasonDependentsHoldBack: true, ReasonGoLineRaised: true, ReasonGoRuntimeUnavailable: true, ReasonFixInOtherMajor: true}
 
 // The hints are looked up after the item is settled, within limits of their
 // own, so that they never take what the update needs: at most this many
@@ -131,6 +159,9 @@ func (u *LangUpdater) fixHints(ctx context.Context, it *LanguageItem, set update
 // holding it back declares for it is looked up, within the limits of the
 // hints. A lookup that fails or cannot be judged leaves that release out.
 func (u *LangUpdater) packageHints(ctx context.Context, it *LanguageItem) {
+	if it.Manager == ManagerGo {
+		u.goMajorHints(ctx, it)
+	}
 	var todo []int
 	cves := map[string][]CVERef{}
 	for i := range it.Packages {
@@ -140,6 +171,9 @@ func (u *LangUpdater) packageHints(ctx context.Context, it *LanguageItem) {
 		}
 		if p.Hint() == nil {
 			p.FixHint = nil
+			continue
+		}
+		if it.Manager == ManagerGo {
 			continue
 		}
 		p.FixHint.Releases = nil

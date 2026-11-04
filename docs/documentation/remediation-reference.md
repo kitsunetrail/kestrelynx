@@ -334,7 +334,7 @@ Readable `[tool.uv]` keys still require supported dependency sources and project
 | `toolchain` line | Supports released Go versions in `go1.N.M` form; `default`, custom suffixes, release candidates, and similar forms require manual handling |
 | `go.work` | Requires manual handling if present in the dependency directory or any ancestor up to the repository root |
 | `vendor` | Requires manual handling if present in the dependency directory |
-| Another major version | Fixes available only under another module path require manual handling with `fix_in_other_major_version` |
+| Another major version | Fixes available only under another module path require manual handling with `fix_in_other_major_version`, with [fixing release hints](remediation-results.md#fix-hints) showing the lowest fixed version and whether the project or a dependent requires the package, when known |
 | Standard library `stdlib` | No PR is created; the remediation plan recommends building with a newer Go version |
 
 See [Go candidate selection](remediation-logic.md#go-package-selection) for candidate selection and standard library guidance, and [Go update validation](remediation-logic.md#go-update-validation) for acceptance conditions.
@@ -810,7 +810,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `work_environment_rejected` | The work container did not meet its program's execution requirements | [Execution restrictions](remediation-logic.md#worker-restrictions) |
 | `go_version_too_old` | `go.mod` declares no `go` version, or one below 1.21 | [Go dependency files](#go-inputs) |
 | `go_toolchain_unsupported` | The `toolchain` line of `go.mod` is not a released Go version | [Go dependency files](#go-inputs) |
-| `go_runtime_unavailable` | No supported Go is as new as the update needs | [Go selection](remediation-logic.md#go-runtime-selection) |
+| `go_runtime_unavailable` | No supported Go is as new as the update needs | [Go selection](remediation-logic.md#go-runtime-selection), [Fixing release hints](remediation-results.md#fix-hints) |
 | `gradle_version_unsupported` | the build uses a Gradle version that is not supported | [Gradle dependency files](#gradle-inputs) |
 | `gradle_toolchain_unsupported` | the build asks for a Java toolchain that is not supported | [Gradle execution settings](remediation-logic.md#gradle-worker-settings) |
 | `runtime_eol` | The runtime targeted by the update is past the end of its support | [Runtime selection](remediation-logic.md#runtime-and-tool-versions) |
@@ -852,9 +852,9 @@ The following tables give each code's meaning and related decision rules or chec
 | `update_candidate_in_source` | A fixed-version update candidate exists for the package in the source | [Fixed-version lower bound](remediation-logic.md#fix-lower-bound) |
 | `range_allows_fix` | The version range allows the fixed version, so a rebuild is expected to install it | [Direct dependency version specifications](remediation-logic.md#direct-dependencies) |
 | `go_stdlib_needs_newer_go` | The Go standard library vulnerability is fixed by building with a newer Go, rather than by updating `go.mod` | [Go candidate selection](remediation-logic.md#go-package-selection) |
-| `fix_in_other_major_version` | The fix is in another major version, which Go names as another module path | [Go candidate selection](remediation-logic.md#go-package-selection) |
-| `go_release_retracted` | The module's author retracted the target version | [Go candidate selection](remediation-logic.md#go-package-selection) |
-| `go_line_raised_too_far` | A changed `go` or `toolchain` line exceeds the lowest Go version the running binaries were built with, or a line's version changes while the build version is unknown | [Go update validation](remediation-logic.md#go-update-validation) |
+| `fix_in_other_major_version` | The fix is in another major version, which Go names as another module path | [Go candidate selection](remediation-logic.md#go-package-selection), [Fixing release hints](remediation-results.md#fix-hints) |
+| `go_release_retracted` | The target version is retracted and no alternative fixed release can be selected, or dependency requirements raise a target above its target version to a retracted release | [Go candidate selection](remediation-logic.md#go-package-selection), [Go update validation](remediation-logic.md#go-update-validation) |
+| `go_line_raised_too_far` | A changed `go` or `toolchain` line exceeds the lowest Go version the running binaries were built with, or a line's version changes while the build version is unknown | [Go update validation](remediation-logic.md#go-update-validation), [Fixing release hints](remediation-results.md#fix-hints) |
 | `go_dependencies_uncheckable` | The module versions followed to check the updated dependency requirements cannot all be checked because there are too many | [Go update validation](remediation-logic.md#go-update-validation) |
 | `maven_fix_in_other_major` | the fix is only in another major version | [Maven candidate selection](remediation-logic.md#maven-package-selection), [Gradle target versions](remediation-logic.md#gradle-target-versions) |
 | `maven_version_source_unsupported` | the version is decided in a way no edit of the project's pom files changes | [Version sources and edits](remediation-logic.md#maven-version-sources) |

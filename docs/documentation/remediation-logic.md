@@ -373,9 +373,12 @@ Reaching the lower bound alone is insufficient; the checks in [Adopting update r
 #### Module target versions {#go-target-versions}
 
 - Select the lowest fixed version above the running version; for multiple CVEs, use the highest of their respective minimum fixed versions as the target
-- Require manual handling with `fix_in_other_major_version` if fixes exist only under a different module path for another major version
+- Require manual handling with `fix_in_other_major_version` if fixes exist only under a different module path for another major version, and check [fixing release hints](remediation-results.md#fix-hints) during the update stage
 - Before updating, check `.info` from `proxy.golang.org` to verify that the target version exists and confirm its canonical form, including `+incompatible`
-- Check `retract` directives in the latest version's `go.mod`, using `@latest` to find that version; a retracted target version requires manual handling with `go_release_retracted`
+- Check `retract` directives in the latest version's `go.mod`, using `@latest` to find that version, and look for an alternative fixed release in `@v/list` if the target is retracted
+- Select the lowest later release in the retracted version's major version that matches the module path, is not a prerelease, fixes all target vulnerabilities, and is not retracted
+- Verify the selected release's canonical version through `.info`, use it for the update, and record the replacement in the update notes
+- Require manual handling with `go_release_retracted` if no release meets these conditions or the version list cannot be retrieved
 
 #### Go standard library rebuild guidance {#go-stdlib-rebuild}
 
@@ -704,13 +707,15 @@ See [Supported runtimes](remediation-reference.md#supported-runtimes) for work-c
 
 | Declarations | Selection rule |
 | --- | --- |
-| Required Go version | Uses the highest version from the input `go.mod`'s `go` and `toolchain` lines and the target versions' `go.mod` `go` lines. |
+| Required Go version | Uses the highest version from the input `go.mod`'s `go` and `toolchain` lines and the `go.mod` `go` lines of target versions or versions raised above them by dependency requirements. |
 | Work runtime series | Selects the oldest supported series in the bundled table whose execution version is at least the required version. |
 | Execution version | Uses Go from the official `golang` image pinned by digest, containing the bundled table's version for the selected series. |
 | No suitable execution version | Requires manual handling with `go_runtime_unavailable`. |
 
 - The Go version used to build the running binaries does not place an upper bound on the Go version used for the update
 - The updated `go` and `toolchain` lines are subject to separate [conditions for raising versions](#go-update-validation)
+- When `go_runtime_unavailable` is caused by the `go.mod` `go` line of a target version or a version raised above it, record that module, its version, and the required `go` version in `packages[].fix_hint.go_line`
+- Omit `fix_hint.go_line` when the project's own `go` or `toolchain` line is the cause
 
 ### Tool version selection {#tool-version-selection}
 
@@ -950,6 +955,8 @@ For Go, update results are adopted only when all of the following conditions are
 - When the `go` line's version is numerically increased, it must exactly match the highest `go` version declared in the new `go.mod` files of upgraded or added modules; a lower or higher version is rejected with `unexplained_dependency_diff`
 - Results that lower the higher of the `go` and `toolchain` versions are rejected, including when the `toolchain` line is removed
 - If a changed `go` or `toolchain` line exceeds the lowest Go version used to build the running binaries, or a line's version changes while the build version is unknown, manual handling is required with `go_line_raised_too_far`
+- When the raised `go` line matches the highest `go` version declared by the updated module versions' `go.mod` files and exceeds the build Go or the build Go is unknown, record the first module in path order declaring that version, its version, the `go` version, the build Go when known, and the requested target version in `packages[].fix_hint.go_line`
+- Omit `fix_hint.go_line` when only the `toolchain` line is the cause
 - PRs that raise the `go` line state that language features or `GODEBUG` defaults may change
 
 #### go.sum verification and completion {#go-sum-validation}

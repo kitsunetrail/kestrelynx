@@ -161,6 +161,7 @@ func (u *LangUpdater) Run(ctx context.Context, plan *Plan) LangUpdateUsage {
 	for i := range plan.LanguageItems {
 		it := &plan.LanguageItems[i]
 		if it.Category != CategoryDependencyUpdateCandidate {
+			u.packageHints(ctx, it)
 			continue
 		}
 		switch {

@@ -233,26 +233,29 @@ func goRaisedTargets(g *goModGraph, targets map[string]string) (map[string]strin
 }
 
 // goLineNeeded is the highest go line of the go.mod files of the versions an
-// update moved to: what go get raises the module's go line to.
-func goLineNeeded(g *goModGraph, moved map[string]string) (goRelease, error) {
+// update moved to, what go get raises the module's go line to, and the first
+// module version, in path order, whose go.mod declares it ("" when none
+// declares a go line).
+func goLineNeeded(g *goModGraph, moved map[string]string) (goRelease, string, error) {
 	var need goRelease
+	by := ""
 	for _, p := range goSortedKeys(moved) {
 		e, err := g.entry(p, moved[p])
 		if err != nil {
-			return goRelease{}, err
+			return goRelease{}, "", err
 		}
 		if e.goLine == "" {
 			continue
 		}
 		gl, ok := parseGoRelease(e.goLine)
 		if !ok {
-			return goRelease{}, fmt.Errorf("the go.mod of %s@%s declares go %q, which is not a Go release", p, moved[p], e.goLine)
+			return goRelease{}, "", fmt.Errorf("the go.mod of %s@%s declares go %q, which is not a Go release", p, moved[p], e.goLine)
 		}
 		if gl.compare(need) > 0 {
-			need = gl
+			need, by = gl, p+"@"+moved[p]
 		}
 	}
-	return need, nil
+	return need, by, nil
 }
 
 // goSortedKeys lists the keys of a map in order.

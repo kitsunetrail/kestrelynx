@@ -384,3 +384,65 @@ func TestPlanSlack_PipHeldBack(t *testing.T) {
 		}
 	})
 }
+
+// Go packages are shown with what decides them: the lowest fix of another
+// major version and what brings the old one in, or the module whose go.mod
+// asks for the Go an update needs.
+func TestPlanSlack_GoHints(t *testing.T) {
+	r, _, _ := planCycleFixture()
+	cases := []struct {
+		name           string
+		reason         remediation.Reason
+		target         string
+		hint           *remediation.FixHint
+		ja, en, absent string
+	}{
+		{"another major, through a dependent", remediation.ReasonFixInOtherMajor, "", &remediation.FixHint{
+			Fix:      &remediation.FixRelease{Version: "v2.1.0"},
+			HeldBy:   []remediation.FixHolder{{Parent: "example.com/mid", ParentVersion: "v1.0.0", Range: "v1.4.0"}},
+			Releases: []remediation.ChainHint{{Package: "example.com/old", Parent: "example.com/mid", ParentVersion: "v1.0.0", Latest: &remediation.ChainHintRelease{Version: "v1.3.0", Dropped: true}}},
+		},
+			"example.com/old v1.4.0 の修正版は別のメジャー版（v2.1.0）にしかない（依存元の example.com/mid v1.0.0 が使っている）\n  • example.com/mid v1.3.0（最新）: example.com/old を直接は使っていない",
+			"example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (the dependent example.com/mid v1.0.0 uses it)\n  • example.com/mid v1.3.0 (newest): does not use example.com/old directly", ""},
+		{"another major, required directly", remediation.ReasonFixInOtherMajor, "", &remediation.FixHint{Fix: &remediation.FixRelease{Version: "v2.1.0"}, Direct: true},
+			"example.com/old v1.4.0 の修正版は別のメジャー版（v2.1.0）にしかない（go.mod で直接指定・import の書き換えが必要）",
+			"example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (go.mod requires it directly, so the imports need rewriting)", ""},
+		{"go line", remediation.ReasonGoLineRaised, "v1.4.5", &remediation.FixHint{GoLine: &remediation.GoLineHint{Module: "example.com/old", Version: "v1.4.5", Go: "1.24", BuiltWith: "1.23.4"}},
+			"example.com/old v1.4.0 を修正版の v1.4.5 に上げると、go.mod の go の行が 1.24 に上がる（example.com/old v1.4.5 の go.mod が go 1.24 を指定・稼働中のバイナリは Go 1.23.4 でビルド）",
+			"example.com/old v1.4.0 cannot be raised to the fixed v1.4.5 without raising the go line of go.mod to 1.24 (the go.mod of example.com/old v1.4.5 declares go 1.24; the running binaries were built with Go 1.23.4)", ""},
+		{"go line, build Go not known", remediation.ReasonGoLineRaised, "v1.4.5", &remediation.FixHint{GoLine: &remediation.GoLineHint{Module: "example.com/old", Version: "v1.4.5", Go: "1.24"}},
+			"稼働中のバイナリをビルドした Go は不明）", "the Go the running binaries were built with is not known)", ""},
+		{"go line, the version the update took", remediation.ReasonGoLineRaised, "v1.4.5", &remediation.FixHint{GoLine: &remediation.GoLineHint{Module: "example.com/old", Version: "v1.4.6", Go: "1.24", BuiltWith: "1.23.4", To: "v1.4.6"}},
+			"example.com/old v1.4.0 を修正版の v1.4.6 に上げると", "cannot be raised to the fixed v1.4.6 without", ""},
+		{"no supported Go", remediation.ReasonGoRuntimeUnavailable, "v1.4.5", &remediation.FixHint{GoLine: &remediation.GoLineHint{Module: "example.com/old", Version: "v1.4.5", Go: "1.99"}},
+			"example.com/old v1.4.0 を修正版の v1.4.5 に上げるには Go 1.99 が必要（example.com/old v1.4.5 の go.mod が指定・サポート中の Go にない）",
+			"example.com/old v1.4.0 needs Go 1.99 to be raised to the fixed v1.4.5 (the go.mod of example.com/old v1.4.5 declares it, and no supported Go is that new)", ""},
+		{"a hint without its reason", remediation.ReasonGoReplace, "", &remediation.FixHint{Fix: &remediation.FixRelease{Version: "v2.1.0"}}, "", "", "v2.1.0"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := languageFixture()
+			li := &p.LanguageItems[0]
+			li.Manager = remediation.ManagerGo
+			li.Packages = li.Packages[:1]
+			pk := &li.Packages[0]
+			pk.Name, pk.Installed, pk.SelectionLowerBound = "example.com/old", "v1.4.0", c.target
+			li.Category, li.Reason = remediation.CategoryManual, c.reason
+			pk.Action, pk.Reason, pk.FixHint = remediation.ActionManual, c.reason, c.hint
+			info := &PlanInfo{Plan: &p, Changed: true}
+			ja, en := slackPlanText(r, info, LanguageJA), slackPlanText(r, info, LanguageEN)
+			if c.absent != "" {
+				if strings.Contains(ja, c.absent) {
+					t.Errorf("shown:\n%s", ja)
+				}
+				return
+			}
+			if !strings.Contains(ja, c.ja) {
+				t.Errorf("ja lacks %q:\n%s", c.ja, ja)
+			}
+			if !strings.Contains(en, c.en) {
+				t.Errorf("en lacks %q:\n%s", c.en, en)
+			}
+		})
+	}
+}

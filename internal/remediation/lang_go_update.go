@@ -133,6 +133,9 @@ func (r *updateRun) runGo(ctx context.Context) *updateFailure {
 			need = tc
 		}
 	}
+	// needBy is the module version whose go.mod asks for need, and needLine
+	// its go line, when one does and not the project's own lines.
+	needBy, needLine := "", ""
 	for _, n := range r.set.names {
 		lp := origLock.lookup(n)
 		if lp == nil {
@@ -157,7 +160,7 @@ func (r *updateRun) runGo(ctx context.Context) *updateFailure {
 				return pkgFailure(n, ReasonGoRuntimeUnavailable, "the go.mod of %s@%s declares go %q, which is not a Go release", n, canonical, e.goLine)
 			}
 			if gl.compare(need) > 0 {
-				need = gl
+				need, needBy, needLine = gl, n+"@"+canonical, e.goLine
 			}
 		}
 		pkgs = append(pkgs, worker.Package{Name: n, Version: canonical})
@@ -183,7 +186,7 @@ func (r *updateRun) runGo(ctx context.Context) *updateFailure {
 				return goFailure(ctx, err, ReasonDistributionMismatch)
 			}
 			if gl, ok := parseGoRelease(e.goLine); ok && gl.compare(need) > 0 {
-				need = gl
+				need, needBy, needLine = gl, p.Name+"@"+v, e.goLine
 			}
 			r.upd.Notes = append(r.upd.Notes, fmt.Sprintf("%s was not named in go get: %s requires it at %s, above the target %s", p.Name, raisedBy(graph, r.goTargets, p.Name, v), v, p.Version))
 		}
@@ -191,6 +194,9 @@ func (r *updateRun) runGo(ctx context.Context) *updateFailure {
 	}
 	spec, ok := goRuntimeFor(need, r.u.now())
 	if !ok {
+		if needBy != "" {
+			r.setGoLineHint(needBy, needLine, "")
+		}
 		return manualFailure(ReasonGoRuntimeUnavailable, "the update needs Go %s or later, and no supported Go of the runtime table is", need)
 	}
 	r.toolSpec = ToolSpec{Manager: ManagerGo, Runtime: spec.ID, RuntimeBasis: RuntimeBasisGoLines}
@@ -269,9 +275,102 @@ func (r *updateRun) goTargetVersion(ctx context.Context, reg GoModuleRegistry, p
 		}
 	}
 	if d := goRetraction(r.goRetracts[path], info.Version); d != "" {
-		return "", pkgFailure(path, ReasonGoRetracted, "%s@%s is retracted by the go.mod of %s (%s)", path, info.Version, latest.Version, d)
+		next, fail := r.goUnretracted(ctx, reg, path, installed, info.Version)
+		if fail != nil {
+			return "", fail
+		}
+		if next == "" {
+			return "", pkgFailure(path, ReasonGoRetracted, "%s@%s is retracted by the go.mod of %s (%s)", path, info.Version, latest.Version, d)
+		}
+		r.upd.Notes = append(r.upd.Notes, fmt.Sprintf("%s@%s is retracted by the go.mod of %s (%s), so the update takes %s, the lowest later release that fixes it and is not retracted", path, info.Version, latest.Version, d, next))
+		return next, nil
 	}
 	return info.Version, nil
+}
+
+// goUnretracted is the lowest release of path the proxy lists above the
+// retracted version, of its major version (and one the path takes), that fixes every
+// target vulnerability of the package and is not retracted, at the canonical
+// version the proxy gives for it; "" when there is none or the proxy cannot
+// list the versions.
+func (r *updateRun) goUnretracted(ctx context.Context, reg GoModuleRegistry, path, installed, retracted string) (string, *updateFailure) {
+	lister, ok := reg.(GoVersionLister)
+	if !ok {
+		return "", nil
+	}
+	if err := r.spendGoLookup(); err != nil {
+		return "", lookupFailure(ctx, err, "the versions of "+path+" on the Go module proxy")
+	}
+	vs, err := lister.Versions(ctx, path)
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", lookupFailure(ctx, err, "the versions of "+path+" on the Go module proxy")
+		}
+		return "", nil
+	}
+	var cves []CVERef
+	for _, i := range r.set.byName[path] {
+		cves = append(cves, r.it.Packages[i].CVEs...)
+	}
+	floor, ok := parseVersion(schemeGo, retracted)
+	if !ok {
+		return "", nil
+	}
+	major := floor.(semver).major
+	best, bestV := "", version(nil)
+	for _, s := range vs {
+		v, ok := parseVersion(schemeGo, s)
+		if !ok || isPre(v) || v.(semver).major != major || v.compare(floor) <= 0 || (bestV != nil && v.compare(bestV) >= 0) {
+			continue
+		}
+		if goMajorProblem(path, installed, s) != "" || goRetraction(r.goRetracts[path], s) != "" || !fixedAt(schemeGo, s, cves) {
+			continue
+		}
+		best, bestV = s, v
+	}
+	if best == "" {
+		return "", nil
+	}
+	if err := r.spendGoLookup(); err != nil {
+		return "", lookupFailure(ctx, err, path+"@"+best+" on the Go module proxy")
+	}
+	info, err := reg.Info(ctx, path, best)
+	if err != nil {
+		return "", lookupFailure(ctx, err, path+"@"+best+" on the Go module proxy")
+	}
+	if c, ok := compareVersions(schemeGo, info.Version, best); !ok || c != 0 {
+		return "", pkgFailure(path, ReasonDistributionMismatch, "the Go module proxy answers %s for %s@%s", info.Version, path, best)
+	}
+	return info.Version, nil
+}
+
+// goLineHeldBack reports whether the go line itself kept an update that
+// raised its lines: it went up to need, the line the versions moved to
+// declare, and past the Go the running binaries were built with (or that Go is
+// not known). A toolchain line that did so is not one a module asks for.
+func (r *updateRun) goLineHeldBack(ch *goModChange, need goRelease) bool {
+	if ch.goAfter == ch.goBefore {
+		return false
+	}
+	a, ok := parseGoRelease(ch.goAfter)
+	if !ok || a.compare(need) != 0 {
+		return false
+	}
+	ceiling, known := parseGoRelease(r.it.GoBuiltWith)
+	return !known || a.compare(ceiling) > 0
+}
+
+// setGoLineHint records on the packages of the set the module version (at,
+// "path@version") whose go.mod asks for the go line goLine, the Go the
+// running binaries were built with when known, and the version the update
+// asked for each package.
+func (r *updateRun) setGoLineHint(at, goLine, builtWith string) {
+	i := strings.LastIndex(at, "@")
+	for _, k := range r.set.idx {
+		p := &r.it.Packages[k]
+		h := &GoLineHint{Module: at[:i], Version: at[i+1:], Go: goLine, BuiltWith: builtWith, To: r.goTargets[p.matchName()]}
+		p.FixHint = &FixHint{GoLine: h}
+	}
 }
 
 // goRetraction returns the retract directive that covers version, or "".
@@ -394,11 +493,14 @@ func (r *updateRun) checkGoResult(ctx context.Context, reg GoModuleRegistry, bef
 			}
 		}
 	}
-	need, err := goLineNeeded(graph, moved)
+	need, by, err := goLineNeeded(graph, moved)
 	if err != nil {
 		return goFailure(ctx, err, ReasonOutputFilesInvalid)
 	}
 	if fail := r.checkGoLines(ch, need); fail != nil {
+		if fail.reason == ReasonGoLineRaised && by != "" && r.goLineHeldBack(ch, need) {
+			r.setGoLineHint(by, ch.goAfter, r.it.GoBuiltWith)
+		}
 		return fail
 	}
 

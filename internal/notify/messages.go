@@ -468,6 +468,12 @@ type messages struct {
 	PlanChangeWith               string // "%[1]s %[2]s → %[3]s (with %[4]s)" (name, old, new, the direct dependencies updated with it)
 	PlanChainHeldBack            string // "%[1]s %[2]s cannot be raised to the fixed %[3]s (the dependent %[4]s limits the version of %[1]s)" (name, installed, target, the dependents with their versions)
 	PlanChainNotFixedTops        string // "%[1]s %[2]s → %[3]s: re-resolving %[4]s ... did not reach the fixed version this time" (name, installed, target, the direct dependencies), when no holder is recorded
+	PlanOtherMajor               string // "%[1]s %[2]s has its fixes only in another major version (%[3]s)" (name, installed, the lowest fix)
+	PlanOtherMajorDirect         string // PlanOtherMajor when go.mod requires the package itself
+	PlanOtherMajorHeld           string // PlanOtherMajor with "(the dependent %[4]s uses it)" (..., the modules with their versions)
+	PlanGoLineRaised             string // "%[1]s %[2]s cannot be raised to the fixed %[3]s without raising the go line of go.mod to %[4]s (the go.mod of %[5]s %[6]s declares go %[4]s; ... Go %[7]s)" (name, installed, target, go line, module, version, build Go)
+	PlanGoLineRaisedUnknown      string // PlanGoLineRaised when the build Go is not known (no %[7]s)
+	PlanGoRuntimeMissing         string // "%[1]s %[2]s needs Go %[4]s to be raised to the fixed %[3]s (the go.mod of %[5]s %[6]s declares it ...)" (name, installed, target, go line, module, version)
 	PlanHintRelease              string // "%[1]s %[2]s (%[3]s): %[4]s" (dependent, version, which release it is, what it allows)
 	PlanHintInSpec               string // "newest within the range %s specifies" (manifest file)
 	PlanHintLatest               string // "newest"
@@ -891,6 +897,12 @@ var enMessages = messages{
 	PlanChangeWith:               "%[1]s %[2]s → %[3]s (with %[4]s)",
 	PlanChainHeldBack:            "%[1]s %[2]s cannot be raised to the fixed %[3]s (the dependent %[4]s limits the version of %[1]s)",
 	PlanChainNotFixedTops:        "%[1]s %[2]s → %[3]s: re-resolving %[4]s within the project's ranges did not reach the fixed version this time",
+	PlanOtherMajor:               "%[1]s %[2]s has its fixes only in another major version (%[3]s)",
+	PlanOtherMajorDirect:         "%[1]s %[2]s has its fixes only in another major version (%[3]s) (go.mod requires it directly, so the imports need rewriting)",
+	PlanOtherMajorHeld:           "%[1]s %[2]s has its fixes only in another major version (%[3]s) (the dependent %[4]s uses it)",
+	PlanGoLineRaised:             "%[1]s %[2]s cannot be raised to the fixed %[3]s without raising the go line of go.mod to %[4]s (the go.mod of %[5]s %[6]s declares go %[4]s; the running binaries were built with Go %[7]s)",
+	PlanGoLineRaisedUnknown:      "%[1]s %[2]s cannot be raised to the fixed %[3]s without raising the go line of go.mod to %[4]s (the go.mod of %[5]s %[6]s declares go %[4]s; the Go the running binaries were built with is not known)",
+	PlanGoRuntimeMissing:         "%[1]s %[2]s needs Go %[4]s to be raised to the fixed %[3]s (the go.mod of %[5]s %[6]s declares it, and no supported Go is that new)",
 	PlanHintRelease:              "%[1]s %[2]s (%[3]s): %[4]s",
 	PlanHintInSpec:               "newest within the range %s specifies",
 	PlanHintLatest:               "newest",
@@ -1310,6 +1322,12 @@ var jaMessages = messages{
 	PlanChangeWith:               "%[1]s %[2]s → %[3]s（%[4]s も更新）",
 	PlanChainHeldBack:            "%[1]s %[2]s を修正版の %[3]s に上げられない（依存元の %[4]s が %[1]s の版を制限）",
 	PlanChainNotFixedTops:        "%[1]s %[2]s → %[3]s: %[4]s をプロジェクトの範囲内で解決し直したが、今回の再解決では修正版に届かなかった",
+	PlanOtherMajor:               "%[1]s %[2]s の修正版は別のメジャー版（%[3]s）にしかない",
+	PlanOtherMajorDirect:         "%[1]s %[2]s の修正版は別のメジャー版（%[3]s）にしかない（go.mod で直接指定・import の書き換えが必要）",
+	PlanOtherMajorHeld:           "%[1]s %[2]s の修正版は別のメジャー版（%[3]s）にしかない（依存元の %[4]s が使っている）",
+	PlanGoLineRaised:             "%[1]s %[2]s を修正版の %[3]s に上げると、go.mod の go の行が %[4]s に上がる（%[5]s %[6]s の go.mod が go %[4]s を指定・稼働中のバイナリは Go %[7]s でビルド）",
+	PlanGoLineRaisedUnknown:      "%[1]s %[2]s を修正版の %[3]s に上げると、go.mod の go の行が %[4]s に上がる（%[5]s %[6]s の go.mod が go %[4]s を指定・稼働中のバイナリをビルドした Go は不明）",
+	PlanGoRuntimeMissing:         "%[1]s %[2]s を修正版の %[3]s に上げるには Go %[4]s が必要（%[5]s %[6]s の go.mod が指定・サポート中の Go にない）",
 	PlanHintRelease:              "%[1]s %[2]s（%[3]s）: %[4]s",
 	PlanHintInSpec:               "%s で指定している範囲の最新",
 	PlanHintLatest:               "最新",

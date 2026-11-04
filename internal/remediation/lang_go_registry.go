@@ -30,6 +30,19 @@ type GoModuleRegistry interface {
 	Sums(ctx context.Context, path, version string) (GoSums, error)
 }
 
+// GoVersionLister is a GoModuleRegistry that also lists the versions of a
+// module the proxy knows; a target that is retracted is moved to a later
+// fixed version that is not only with one.
+type GoVersionLister interface {
+	// Versions returns the versions the proxy lists for path.
+	Versions(ctx context.Context, path string) ([]string, error)
+}
+
+var _ GoVersionLister = (*GoClient)(nil)
+
+// maxGoListBytes bounds the version list of one module.
+const maxGoListBytes = 1 << 20
+
 // GoInfo is the proxy's information on one version.
 type GoInfo struct {
 	Version string
@@ -168,6 +181,30 @@ func (c *GoClient) Latest(ctx context.Context, path string) (GoInfo, error) {
 		return GoInfo{}, err
 	}
 	return parseGoInfo(body)
+}
+
+// Versions implements GoVersionLister with GET <proxy>/<path>/@v/list: one
+// version a line. A line that is not a version is refused.
+func (c *GoClient) Versions(ctx context.Context, path string) ([]string, error) {
+	if !goLookupArgsOK(path, "") {
+		return nil, fmt.Errorf("%q is not a module path this client looks up", path)
+	}
+	body, err := c.get(ctx, c.proxyBase()+"/"+goEscape(path)+"/@v/list", maxGoListBytes)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, l := range strings.Split(string(body), "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" {
+			continue
+		}
+		if !goLookupArgsOK(path, l) {
+			return nil, fmt.Errorf("the version list of %s has the line %q, which is not a version", path, clip(l, 100))
+		}
+		out = append(out, l)
+	}
+	return out, nil
 }
 
 // GoMod implements GoModuleRegistry with GET <proxy>/<path>/@v/<version>.mod.

@@ -531,6 +531,52 @@ func (b *planBuilder) heldLine(x pkgLine) string {
 	return fmt.Sprintf(b.msg.PlanChainHeldBack, litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.target), b.cut(parts))
 }
 
+// otherMajorLine is the line about a Go package whose fixes are all of another
+// major version, with what brings the old one in, "" without a hint naming
+// the fix.
+func (b *planBuilder) otherMajorLine(x pkgLine) string {
+	if x.reason != remediation.ReasonFixInOtherMajor || x.hint == nil || x.hint.Fix == nil {
+		return ""
+	}
+	name, from, fix := litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.hint.Fix.Version)
+	if x.hint.Direct {
+		return fmt.Sprintf(b.msg.PlanOtherMajorDirect, name, from, fix)
+	}
+	var parts []string
+	for _, h := range x.hint.HeldBy {
+		parts = append(parts, litMrkdwn(h.Parent)+" "+litMrkdwn(h.ParentVersion))
+	}
+	if len(parts) > 0 {
+		return fmt.Sprintf(b.msg.PlanOtherMajorHeld, name, from, fix, b.cut(parts))
+	}
+	return fmt.Sprintf(b.msg.PlanOtherMajor, name, from, fix)
+}
+
+// goLineLine is the line about a Go package an update did not take to its
+// fixed version for the Go it needs, with the module version whose go.mod
+// asks for it, "" without such a hint.
+func (b *planBuilder) goLineLine(x pkgLine) string {
+	if x.hint == nil || x.hint.GoLine == nil || x.target == "" {
+		return ""
+	}
+	g := x.hint.GoLine
+	to := x.target
+	if g.To != "" {
+		to = g.To
+	}
+	name, from, target := litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(to)
+	line, mod, ver := litMrkdwn(g.Go), litMrkdwn(g.Module), litMrkdwn(g.Version)
+	switch {
+	case x.reason == remediation.ReasonGoRuntimeUnavailable:
+		return fmt.Sprintf(b.msg.PlanGoRuntimeMissing, name, from, target, line, mod, ver)
+	case x.reason != remediation.ReasonGoLineRaised:
+		return ""
+	case g.BuiltWith == "":
+		return fmt.Sprintf(b.msg.PlanGoLineRaisedUnknown, name, from, target, line, mod, ver)
+	}
+	return fmt.Sprintf(b.msg.PlanGoLineRaised, name, from, target, line, mod, ver, litMrkdwn(g.BuiltWith))
+}
+
 // chainLine is the line about a package a chain update was meant for and did
 // not take to its version, "" when the update's record does not say enough.
 func (b *planBuilder) chainLine(x pkgLine) string {
@@ -1131,6 +1177,13 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 	var groups []*bareGroup
 	byKey := map[string]*bareGroup{}
 	for _, x := range shown {
+		if line := b.otherMajorLine(x); line != "" {
+			e.line(tag, kv(label, line))
+			for _, h := range b.releaseLines(x, x.hint.Releases, false) {
+				e.line(tag, h)
+			}
+			continue
+		}
 		if x.target == "" {
 			key, header := string(x.reason), b.reason(x.reason)
 			bullet := fmt.Sprintf(b.msg.PlanBullet, litMrkdwn(x.name), litMrkdwn(x.from))
@@ -1179,6 +1232,8 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 		case b.heldLine(x) != "":
 			line = b.heldLine(x)
 			hints = b.releaseLines(x, x.hint.Releases, false)
+		case b.goLineLine(x) != "":
+			line = b.goLineLine(x)
 		case x.reason == remediation.ReasonTargetNotUpdated:
 			line = fmt.Sprintf(b.msg.PlanNotUpdated, name, from, target)
 		case x.leftOut:

@@ -522,7 +522,9 @@ func (r *updateRun) gradleBOMProperty(ctx context.Context, chain []mavenChainPOM
 		text := chain[ci].pom.DependencyManagement[i].Version
 		p, ok := mavenPropertyRef(text)
 		if !ok || propertyOwner(chain, p) < 0 {
-			return bp, false, manualFailure(ReasonGradleVersionSourceUnsupported, "%s is managed by the Spring Boot BOM at %q, which is not one property the project can set", name, text)
+			f := manualFailure(ReasonGradleVersionSourceUnsupported, "%s is managed by the Spring Boot BOM at %q, which is not one property the project can set", name, text)
+			f.decider = deciderOf(DeciderSpringBoot, chain[0].coord)
+			return bp, false, f
 		}
 		from, _ := chainResolve(chain, text)
 		return bomProperty{prop: p, from: from}, true, nil
@@ -548,7 +550,9 @@ func (r *updateRun) gradleBOMProperty(ctx context.Context, chain []mavenChainPOM
 			}
 			p, isRef := mavenPropertyRef(d.Version)
 			if !direct || !isRef || propertyOwner(chain, p) < 0 {
-				return bp, false, manualFailure(ReasonGradleVersionSourceUnsupported, "%s is managed by the BOM %s:%s, whose version is not a property the project can set to move the set, and a package of a BOM is not pinned apart from its set", name, g, a)
+				f := manualFailure(ReasonGradleVersionSourceUnsupported, "%s is managed by the BOM %s:%s, whose version is not a property the project can set to move the set, and a package of a BOM is not pinned apart from its set", name, g, a)
+				f.decider = deciderOf(DeciderSpringBoot, chain[0].coord)
+				return bp, false, f
 			}
 			cand := bomProperty{prop: p, from: v, bom: g + ":" + a}
 			dup := false
@@ -566,7 +570,9 @@ func (r *updateRun) gradleBOMProperty(ctx context.Context, chain []mavenChainPOM
 	case 1:
 		return found[0], true, nil
 	}
-	return bp, false, manualFailure(ReasonGradleVersionSourceUnsupported, "%s is managed by more than one BOM the Spring Boot BOM imports", name)
+	f := manualFailure(ReasonGradleVersionSourceUnsupported, "%s is managed by more than one BOM the Spring Boot BOM imports", name)
+	f.decider = deciderOf(DeciderSpringBoot, chain[0].coord)
+	return bp, false, f
 }
 
 // planGradleTarget finds where a target's version is decided and the release
@@ -574,6 +580,7 @@ func (r *updateRun) gradleBOMProperty(ctx context.Context, chain []mavenChainPOM
 func (r *updateRun) planGradleTarget(ctx context.Context, proj *gradleProject, bom []mavenChainPOM, n string) (gradlePlanned, *updateFailure) {
 	p := r.it.Packages[r.set.byName[n][0]]
 	installed := p.Installed
+	r.clearHints(n)
 	g, a := strings.SplitN(n, ":", 2)[0], strings.SplitN(n, ":", 2)[1]
 	vs, fail := r.versions(ctx, g, a)
 	if fail != nil {
@@ -581,6 +588,7 @@ func (r *updateRun) planGradleTarget(ctx context.Context, proj *gradleProject, b
 	}
 	rel, ok := chooseRelease(vs, installed, r.set.target[n])
 	if !ok {
+		r.otherMajorRelease(n, installed, vs)
 		return gradlePlanned{}, manualFailure(ReasonMavenReleaseNotFound, "Maven Central lists no release of %s at %s or above that can replace %s", n, r.set.target[n], installed)
 	}
 	pl := gradlePlanned{name: n, installed: installed, release: rel}
@@ -641,6 +649,7 @@ func (r *updateRun) planGradleTarget(ctx context.Context, proj *gradleProject, b
 	if proj.depMgmt && bom != nil {
 		bp, managed, fail := r.gradleBOMProperty(ctx, bom, n)
 		if fail != nil {
+			r.setDecider(n, fail.decider)
 			return pl, fail
 		}
 		if managed {

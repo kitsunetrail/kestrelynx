@@ -231,26 +231,31 @@
 | `packages[].maven_bom.from` | string | 取り込んでいるBOMの版 |
 | `packages[].maven_bom.to` | string | 同じメジャー版の後のマイナー版の正式版のうち、対象を目標版以上で管理する最も低いBOMの版 |
 | `packages[].maven_bom.manages` | string | `to`のBOMが管理する対象の版 |
-| `packages[].fix_hint` | object | [直る版の案内](remediation-results.md#fix-hints)で、`reason`が`dependents_hold_back`・`go_line_raised_too_far`・`go_runtime_unavailable`・`fix_in_other_major_version`のいずれかで情報がある場合だけ付与 |
+| `packages[].fix_hint` | object | [直る版の案内](remediation-results.md#fix-hints)で、`reason`が`dependents_hold_back`・`go_line_raised_too_far`・`go_runtime_unavailable`・`fix_in_other_major_version`・`maven_version_source_unsupported`・`gradle_version_source_unsupported`・`maven_release_not_found`・`maven_fix_in_other_major`のいずれかで情報がある場合だけ付与 |
+| `packages[].fix_hint.decided_by` | object | Maven・Gradleで対象の版を決めるプロジェクト外のpomの情報で、確認できなければ省略 |
+| `packages[].fix_hint.decided_by.kind` | string | 親pomは`parent_pom`、取り込むBOMは`bom`、GradleのSpring BootのBOMは`spring_boot` |
+| `packages[].fix_hint.decided_by.name` | string | 版を決めるpomの`groupId:artifactId`で、`spring_boot`では`org.springframework.boot:spring-boot-dependencies` |
+| `packages[].fix_hint.decided_by.version` | string | 現在使っているpomの版で、`spring_boot`ではSpring Bootプラグインの版 |
 | `packages[].fix_hint.go_line` | object | Goの更新を妨げる必要なGoの版と、その`go`の行を宣言するモジュールの情報で、確認できなければ省略 |
 | `packages[].fix_hint.go_line.module` / `packages[].fix_hint.go_line.version` | string | 必要な`go`の行を`go.mod`で宣言するモジュールのパスと版 |
 | `packages[].fix_hint.go_line.go` | string | その`go.mod`が宣言する`go`の版 |
 | `packages[].fix_hint.go_line.built_with` | string | `go_line_raised_too_far`で比較した、稼働バイナリをビルドしたGoの版で、不明な場合や`go_runtime_unavailable`では省略 |
 | `packages[].fix_hint.go_line.to` | string | 更新が求めた対象パッケージの版で、記録がなければ省略 |
-| `packages[].fix_hint.fix` | object | Goの修正版が別のメジャー版にしかない場合の修正版の情報で、確認できなければ省略 |
-| `packages[].fix_hint.fix.version` | string | 脆弱性情報にある修正版のうち、すべての対象脆弱性を直す最も低い版 |
+| `packages[].fix_hint.fix` | object | Go・Maven・Gradleの別のメジャー版の修正版の情報で、確認できなければ省略 |
+| `packages[].fix_hint.fix.version` | string | すべての対象脆弱性を直す最も低い版で、Goと`maven_fix_in_other_major`では脆弱性情報から選び、`maven_release_not_found`ではMaven Centralの版の一覧から目標版以上を選び、Maven・Gradleでは別のメジャー版・同じ系統の正式版に限定 |
 | `packages[].fix_hint.direct` | boolean | Goの別メジャー版の案内で、プロジェクトの`go.mod`が対象を`// indirect`なしで要求する場合は`true`で、それ以外は省略 |
 | `packages[].fix_hint.held_by` | objectの配列 | 対象の固定先の版を許さない要件を持つ依存元、またはGoの別メジャー版の案内で対象を要求する依存元で、空なら省略 |
 | `packages[].fix_hint.held_by[].parent` | string | 依存元の名前 |
 | `packages[].fix_hint.held_by[].parent_version` | string | その依存元の現在の版 |
 | `packages[].fix_hint.held_by[].range` | string | その版が対象に付ける有効な要件をまとめた範囲、またはGoではその`go.mod`が要求する対象の版 |
-| `packages[].fix_hint.releases` | objectの配列 | 依存元の公開版について確認した情報で、`update.chain.hints`と同じ形式、確認できなければ省略 |
-| `packages[].fix_hint.releases[].package` / `packages[].fix_hint.releases[].parent` / `packages[].fix_hint.releases[].parent_version` | string | 対象パッケージの名前・依存元の名前・依存元の現在の版 |
-| `packages[].fix_hint.releases[].latest` | object | pipでは公開されている正式版の最新、Goでは`@latest`の情報で、いずれも`in_spec`を付けず、確認できなければその案内を省略 |
-| `packages[].fix_hint.releases[].latest.version` | string | 確認した依存元の最新版 |
-| `packages[].fix_hint.releases[].latest.range` | string | その版が対象に付ける範囲、またはGoでは要求する対象の版で、空なら省略 |
-| `packages[].fix_hint.releases[].latest.fixes` | boolean | その範囲が対象のすべての対象脆弱性を直す公開済みの正式版を含む場合は`true`で、Goの別メジャー版の案内では`false`となり、`false`でも付与 |
-| `packages[].fix_hint.releases[].latest.dropped` | boolean | その版が対象を直接の依存として宣言していない場合は`true`で、それ以外は省略 |
+| `packages[].fix_hint.releases` | objectの配列 | 依存元または版を決めるpomの公開版について確認した情報で、`update.chain.hints`と同じ形式、確認できなければ省略 |
+| `packages[].fix_hint.releases[].package` / `packages[].fix_hint.releases[].parent` / `packages[].fix_hint.releases[].parent_version` | string | 対象パッケージの名前・依存元の名前・依存元の現在の版で、Maven・Gradleの`parent`と`parent_version`は版を決めるpomの名前と現在の版 |
+| `packages[].fix_hint.releases[].in_spec` | object | Maven・Gradleでは、版を決めるpomの現在の版を含む同じメジャー・マイナー版の最新の正式版の情報で、子フィールドは`latest`と同じ、確認できなければ省略し、pip・Goでは付与しない |
+| `packages[].fix_hint.releases[].latest` | object | pipでは公開されている正式版の最新、Goでは`@latest`、Maven・Gradleでは版を決めるpomの最新の正式版の情報で、確認できなければ省略し、Maven・Gradleでは`in_spec`と同じ版なら省略 |
+| `packages[].fix_hint.releases[].latest.version` | string | 確認した依存元または版を決めるpomの公開版 |
+| `packages[].fix_hint.releases[].latest.range` | string | その版が対象に付ける範囲、Goでは要求する対象の版、Maven・Gradleでは設定する対象の版で、空なら省略 |
+| `packages[].fix_hint.releases[].latest.fixes` | boolean | pipでは指定範囲がすべての対象脆弱性を直す公開済みの正式版を含む場合、Maven・Gradleでは設定する版が目標版以上ですべての対象脆弱性を直す場合は`true`で、Goの別メジャー版の案内では`false`となり、`false`でも付与 |
+| `packages[].fix_hint.releases[].latest.dropped` | boolean | その版が対象を直接の依存として宣言していない場合、Maven・Gradleでは対象の版を設定しない場合は`true`で、それ以外は省略 |
 | `packages[].occurrence_count` / `packages[].cve_count` / `packages[].origin_count` | integer | 依存ファイル内の出現箇所・脆弱性・元の所見の件数 |
 | `packages[].kev_count` | integer | KEVに掲載された脆弱性の件数で、`0`なら省略 |
 | `packages[].occurrences` / `packages[].cves` / `packages[].origins` | objectの配列 | 出現箇所・脆弱性・元の所見の一覧で、空なら省略 |

@@ -346,8 +346,46 @@ example.com/old v1.4.0 の修正版は別のメジャー版（v2.1.0）にしか
 Goの別メジャー版の案内の照会は1項目あたり合計30秒までで、最新版の確認は対象パッケージと依存元の組み合わせ3件までです。
 プロキシからの`go.mod`の読み込みは、最新版を含めて1項目あたり200件までです。
 
-対象はnpm・pnpm・uv・pip・Goです。
-範囲や要求している版の値はSlackには表示せず、Webhookではnpm・pnpm・uvの`language_items[].update.chain.hints`、pip・Goの`language_items[].packages[].fix_hint`に確認した情報とともに載せます。
+Maven・Gradleでは、`maven_version_source_unsupported`・`gradle_version_source_unsupported`で、版を決めるプロジェクト外の親pom・BOM・Spring BootのBOMを確認できた場合に、その名前と版を表示します。
+記録する条件は[Mavenの版の出所と書き換え](remediation-logic.md#maven-version-sources)と[Gradleの版の宣言と書き換え](remediation-logic.md#gradle-version-sources)を参照してください。
+
+```text
+com.fasterxml.jackson.core:jackson-databind 2.13.0 を修正版の 2.13.4 に上げられない（版は親 pom の com.example:parent 1.0.0 が決めている）
+  • com.example:parent 1.0.3（同じマイナー版の最新）: 修正版を指定している
+  • com.example:parent 2.0.0（最新）: com.fasterxml.jackson.core:jackson-databind を指定していない
+```
+
+BOMでは「（版は BOM の org.example:platform-bom 1.2.0 が決めている）」、GradleのSpring Bootでは「（版は Spring Boot 3.2.1 の BOM が決めている）」と表示します。
+Spring Bootの公開版の行は「• Spring Boot 3.2.12（同じマイナー版の最新）: 修正版を指定している」の形式です。
+
+- 確認する版は、版を決めるpomの現在の版以上の正式版のうち、同じメジャー・マイナー版の最新と全体の最新
+- 同じマイナー版の最新には現在の版も含め、全体の最新と同じ場合は「最新」の行を省略
+- 親pomでは`dependencies`の宣言の版を確認し、版の宣言がなければ管理の版を確認
+- BOMでは管理の版を確認し、取り込むBOMも深さ3までたどる
+- 確認するpom・親・取り込むBOMのどれかに、有効になる条件（`activeByDefault`・`jdk`・`os`・`property`・`file`）を持ち、依存・管理・プロパティ・親のどれかを変えるプロファイルがある場合は、その公開版の案内を省略
+- 名前で指定したときだけ使われるプロファイルは判定を止めない
+
+「修正版を指定している」は、設定する版が目標版以上で、すべての対象脆弱性を直す場合です。
+版を設定してもこの条件を満たさなければ「修正版を指定していない」、版を設定しなければ「対象パッケージ名 を指定していない」と表示します。
+
+修正の判定には、設定する版と同じ系統（`-jre`・`-android`など）の修正版だけを使います。
+脆弱性ごとに、同じ系列（メジャー・マイナー版）の修正版があればそのすべて以上、なければ同じメジャー版の修正版のすべて以上、それもなければすべての修正版以上で判定し、同じ系統の修正版がなければ直るとは判定しません。
+
+公開版の照会は項目の判定後に行い、更新の照会とは別に、1パッケージあたり版の一覧を含むMaven Centralの読み込み12件、1項目あたり合計30秒までです。
+失敗や上限超過で確認できない公開版の案内は省略し、版を決めるpomの情報は残します。
+
+表示したpomの版への更新による依存解決やアプリケーションの動作は確認せず、途中の版や必要な最小の版も調べません。
+「指定していない」は、対象パッケージがプロジェクトからなくなることを示しません。
+
+`maven_fix_in_other_major`・`maven_release_not_found`では、[Mavenと共通の選定規則](remediation-logic.md#maven-target-versions)で別のメジャー版の修正版を確認できた場合に、その版を表示します。
+すべての対象脆弱性を直すかは、上記と同じ系統・系列の規則で判定します。
+
+```text
+org.example:lib 2.5.0 の修正版は別のメジャー版（3.0.1）にしかない
+```
+
+対象はnpm・pnpm・uv・pip・Go・Maven・Gradleです。
+範囲や要求・設定する版の値はSlackには表示せず、Webhookではnpm・pnpm・uvの`language_items[].update.chain.hints`、pip・Go・Maven・Gradleの`language_items[].packages[].fix_hint`に確認した情報とともに載せます。
 
 ### 再取得の案内 {#repull-guidance}
 

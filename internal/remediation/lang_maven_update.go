@@ -446,7 +446,9 @@ func (r *updateRun) bomPlace(ctx context.Context, chain []mavenChainPOM, root *m
 			}
 			p, isRef := mavenPropertyRef(d.Version)
 			if !direct || !isRef || propertyOwner(chain, p) < 0 {
-				return mavenPlace{}, manualFailure(ReasonMavenVersionSourceUnsupported, "%s is managed by the BOM %s:%s, whose version is not a property the project can set to move the set, and a package of a BOM is not pinned apart from the rest", name, g, a)
+				f := manualFailure(ReasonMavenVersionSourceUnsupported, "%s is managed by the BOM %s:%s, whose version is not a property the project can set to move the set, and a package of a BOM is not pinned apart from the rest", name, g, a)
+				f.decider = &FixDecider{Kind: DeciderBOM, Name: g + ":" + a, Version: v}
+				return mavenPlace{}, f
 			}
 			managers = append(managers, mavenPlace{kind: MavenEditPropertyOverride, file: root.path, prop: p, from: v, bom: g + ":" + a, chain: chain,
 				edit: mavenEdit{Kind: mavenSetProperty, Name: p}})
@@ -578,7 +580,9 @@ func placeOfText(chain []mavenChainPOM, ci int, text string, index int, managed 
 	case !strings.Contains(text, "${") && managed:
 		return mavenPlace{kind: MavenEditManagedPin, file: root.path, from: text, chain: chain, edit: mavenEdit{Kind: mavenAddManaged, GroupID: g, ArtifactID: a}}, nil
 	case !strings.Contains(text, "${"):
-		return mavenPlace{}, manualFailure(ReasonMavenVersionSourceUnsupported, "%s is declared at %s in %s, a parent outside the project, which management does not override", name, text, at.coord)
+		f := manualFailure(ReasonMavenVersionSourceUnsupported, "%s is declared at %s in %s, a parent outside the project, which management does not override", name, text, at.coord)
+		f.decider = deciderOf(DeciderParentPOM, at.coord)
+		return mavenPlace{}, f
 	case !isRef:
 		return mavenPlace{}, manualFailure(ReasonMavenVersionSourceUnsupported, "the version of %s is the expression %s", name, text)
 	}
@@ -1016,8 +1020,10 @@ type mavenPlanned struct {
 // moves to. A manual failure belongs to the target alone.
 func (r *updateRun) planTarget(ctx context.Context, mf *mavenFiles, chains map[*mavenModule][]mavenChainPOM, n string) (mavenPlanned, *updateFailure) {
 	p := r.it.Packages[r.set.byName[n][0]]
+	r.clearHints(n)
 	places, fail := r.placesOf(ctx, mf, chains, n)
 	if fail != nil {
+		r.setDecider(n, fail.decider)
 		return mavenPlanned{}, fail
 	}
 	g, a := strings.SplitN(n, ":", 2)[0], strings.SplitN(n, ":", 2)[1]
@@ -1027,6 +1033,7 @@ func (r *updateRun) planTarget(ctx context.Context, mf *mavenFiles, chains map[*
 	}
 	rel, ok := chooseRelease(vs, p.Installed, r.set.target[n])
 	if !ok {
+		r.otherMajorRelease(n, p.Installed, vs)
 		return mavenPlanned{}, manualFailure(ReasonMavenReleaseNotFound, "Maven Central lists no release of %s at %s or above that can replace %s", n, r.set.target[n], p.Installed)
 	}
 	pl := mavenPlanned{name: n, installed: p.Installed, release: rel, places: places, bomValues: map[int]string{}}

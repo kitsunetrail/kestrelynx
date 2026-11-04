@@ -346,8 +346,46 @@ example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (go.
 Go hints for fixes in another major version have a total lookup limit of 30 seconds per item, with latest-version checks for up to three target-package and dependent-package pairs.
 Reads of `go.mod` files from the proxy are limited to 200 per item, including latest versions.
 
-Hints apply to npm, pnpm, uv, pip, and Go.
-Ranges and required-version values are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints` for npm, pnpm, and uv, or `language_items[].packages[].fix_hint` for pip and Go.
+For Maven and Gradle, packages marked `maven_version_source_unsupported` or `gradle_version_source_unsupported` show the name and version of the external parent pom, BOM, or Spring Boot BOM deciding their version when identified.
+See [Maven version sources and edits](remediation-logic.md#maven-version-sources) and [Gradle version declarations and edits](remediation-logic.md#gradle-version-sources) for the conditions under which it is recorded.
+
+```text
+com.fasterxml.jackson.core:jackson-databind 2.13.0 cannot be raised to the fixed 2.13.4 (the version is decided by the parent pom com.example:parent 1.0.0)
+  • com.example:parent 1.0.3 (newest in the same minor version): specifies a fixed version
+  • com.example:parent 2.0.0 (newest): does not specify com.fasterxml.jackson.core:jackson-databind
+```
+
+A BOM is shown as “(the version is decided by the BOM org.example:platform-bom 1.2.0)”, and Spring Boot in Gradle as “(the version is decided by the BOM of Spring Boot 3.2.1)”.
+Spring Boot release lines use the format “• Spring Boot 3.2.12 (newest in the same minor version): specifies a fixed version”.
+
+- Check the deciding pom's newest stable release within its current major and minor version and its newest stable release overall, considering releases at or above its current version
+- Include the current version when selecting the newest in the same minor version, and omit the “newest” line if both selections are the same
+- For a parent pom, check the version declared in `dependencies`, falling back to management if no version is declared
+- For a BOM, check its managed version, following imported BOMs to a depth of three
+- Omit a release hint if the pom being checked, any parent, or any imported BOM contains a profile with an activation condition (`activeByDefault`, `jdk`, `os`, `property`, or `file`) that changes dependencies, dependency management, properties, or the parent
+- Profiles used only when explicitly selected by name do not stop the check
+
+“specifies a fixed version” means the version it sets is at or above the target and fixes all target vulnerabilities.
+Show “does not specify a fixed version” if it sets a version that does not meet these conditions, or “does not specify package-name” if it sets no version.
+
+Fix checks use only reported fixes with the same variant as the version being checked, such as `-jre` or `-android`.
+For each vulnerability, that version must be at or above every fix in its series (major and minor version), or every fix in its major version if none is reported in the series, or every reported fix if neither exists; a vulnerability with no fix of the same variant is not considered fixed.
+
+Release lookups run after the item is settled, separately from update lookup limits, with at most 12 Maven Central reads per package including the version list, and 30 seconds in total per item.
+Omit release hints that cannot be checked because of failures or limits, while retaining the deciding pom's information.
+
+The checks do not establish whether updating to the displayed pom version resolves dependencies or whether the application works, and do not check intermediate releases or find the minimum required version.
+“does not specify” does not establish that the target package leaves the project.
+
+For `maven_fix_in_other_major` and `maven_release_not_found`, show a fixed version in another major version when one is found using the [selection rules shared with Maven](remediation-logic.md#maven-target-versions).
+Whether it fixes all target vulnerabilities is checked using the same variant and series rules above.
+
+```text
+org.example:lib 2.5.0 has its fixes only in another major version (3.0.1)
+```
+
+Hints apply to npm, pnpm, uv, pip, Go, Maven, and Gradle.
+Ranges and required or set version values are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints` for npm, pnpm, and uv, or `language_items[].packages[].fix_hint` for pip, Go, Maven, and Gradle.
 
 ### Re-pull guidance {#repull-guidance}
 

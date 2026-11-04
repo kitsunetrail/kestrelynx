@@ -208,6 +208,9 @@ type updateFailure struct {
 	// wait, when set, says the item is to be tried again later and why (see
 	// RecordLanguageWaits).
 	wait *langWaitIntent
+	// decider is the pom outside the project that decides the version of the
+	// package a Maven or Gradle failure is about, when that is why.
+	decider *FixDecider
 }
 
 type updateFailureDetail struct {

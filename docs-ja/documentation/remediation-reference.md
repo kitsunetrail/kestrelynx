@@ -856,12 +856,12 @@ PR記録の`state`には、次の値があります。
 | `go_release_retracted` | 目標版が撤回されていて代わりの修正版を選べない、または依存の要求で目標を超えた対象の版が撤回されている | [Goの候補選定](remediation-logic.md#go-package-selection)・[Goの更新結果の検査](remediation-logic.md#go-update-validation) |
 | `go_line_raised_too_far` | 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える、またはビルドした版が不明なまま行の版が変わる | [Goの更新結果の検査](remediation-logic.md#go-update-validation)・[直る版の案内](remediation-results.md#fix-hints) |
 | `go_dependencies_uncheckable` | 更新後の依存の要求を確かめるためにたどるモジュールの版が多すぎる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
-| `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection)・[Gradleの目標版](remediation-logic.md#gradle-target-versions) |
-| `maven_version_source_unsupported` | 版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている | [版の出所と書き換え](remediation-logic.md#maven-version-sources) |
-| `maven_release_not_found` | 更新で使える版が Maven Central にない | [目標版とMaven Centralの版](remediation-logic.md#maven-target-versions)・[Gradleの目標版](remediation-logic.md#gradle-target-versions) |
+| `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection)・[Gradleの目標版](remediation-logic.md#gradle-target-versions)・[直る版の案内](remediation-results.md#fix-hints) |
+| `maven_version_source_unsupported` | 版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている | [版の出所と書き換え](remediation-logic.md#maven-version-sources)・[直る版の案内](remediation-results.md#fix-hints) |
+| `maven_release_not_found` | 更新で使える版が Maven Central にない | [目標版とMaven Centralの版](remediation-logic.md#maven-target-versions)・[Gradleの目標版](remediation-logic.md#gradle-target-versions)・[直る版の案内](remediation-results.md#fix-hints) |
 | `maven_bom_series_unreached` | 取り込んでいる BOM と同じマイナー版では修正版に届かない | [版の出所と書き換え](remediation-logic.md#maven-version-sources)・[Gradleの版の宣言と書き換え](remediation-logic.md#gradle-version-sources) |
 | `maven_dependency_held_back` | 更新後も、新しい版が要求する依存が要求より低い版のまま残る | [Mavenの更新結果の検査](remediation-logic.md#maven-update-validation) |
-| `gradle_version_source_unsupported` | 版が、プロジェクトのファイルの変更では変えられない形で決まっている | [版の宣言と書き換え](remediation-logic.md#gradle-version-sources) |
+| `gradle_version_source_unsupported` | 版が、プロジェクトのファイルの変更では変えられない形で決まっている | [版の宣言と書き換え](remediation-logic.md#gradle-version-sources)・[直る版の案内](remediation-results.md#fix-hints) |
 | `gradle_lock_entry_removed` | 更新で gradle.lockfile のエントリが削除された | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
 | `gradle_lock_configurations_changed` | 更新で gradle.lockfile が lock する構成が変わった | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
 | `gradle_lock_version_unsupported` | 更新後の gradle.lockfile にスナップショット版が含まれる | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |

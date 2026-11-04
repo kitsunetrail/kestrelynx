@@ -56,6 +56,11 @@ type FixHint struct {
 	// package, Range the version each asks for.
 	Fix    *FixRelease `json:"fix,omitempty"`
 	Direct bool        `json:"direct,omitempty"`
+	// DecidedBy is, for a Maven or Gradle package whose version a pom
+	// outside the project decides, that pom; Releases then say what two of
+	// its releases set the package to (InSpec the newest in its minor
+	// version, Latest the newest).
+	DecidedBy *FixDecider `json:"decided_by,omitempty"`
 }
 
 // FixRelease is a release of a package that fixes it.
@@ -84,7 +89,11 @@ type FixHolder struct {
 }
 
 // fixHintReasons are the package reasons a FixHint is read with.
-var fixHintReasons = map[Reason]bool{ReasonDependentsHoldBack: true, ReasonGoLineRaised: true, ReasonGoRuntimeUnavailable: true, ReasonFixInOtherMajor: true}
+var fixHintReasons = map[Reason]bool{
+	ReasonDependentsHoldBack: true, ReasonGoLineRaised: true, ReasonGoRuntimeUnavailable: true, ReasonFixInOtherMajor: true,
+	ReasonMavenVersionSourceUnsupported: true, ReasonGradleVersionSourceUnsupported: true, ReasonMavenReleaseNotFound: true,
+	ReasonMavenFixInOtherMajor: true,
+}
 
 // The hints are looked up after the item is settled, within limits of their
 // own, so that they never take what the update needs: at most this many
@@ -155,25 +164,36 @@ func (u *LangUpdater) fixHints(ctx context.Context, it *LanguageItem, set update
 
 // packageHints settles the hints of an item's packages once the item is
 // settled: a hint is dropped from a package whose reason it is not read with,
-// and for each package left with one, what the newest release of each package
-// holding it back declares for it is looked up, within the limits of the
-// hints. A lookup that fails or cannot be judged leaves that release out.
+// and what each manager looks up for the hints left is looked up, within the
+// limits of the hints: for pip, what the newest release of each package
+// holding a package back declares for it; for Go, what brings in a package
+// whose fixes are all of another major version; for Maven and Gradle, what
+// the releases of the pom that decides a package's version set it to. A lookup
+// that fails or cannot be judged leaves its part out.
 func (u *LangUpdater) packageHints(ctx context.Context, it *LanguageItem) {
-	if it.Manager == ManagerGo {
-		u.goMajorHints(ctx, it)
+	for i := range it.Packages {
+		if p := &it.Packages[i]; p.FixHint != nil && p.Hint() == nil {
+			p.FixHint = nil
+		}
 	}
+	switch it.Manager {
+	case ManagerGo:
+		u.goMajorHints(ctx, it)
+	case ManagerMaven, ManagerGradle:
+		u.mavenHints(ctx, it)
+	case ManagerPip:
+		u.holderHints(ctx, it)
+	}
+}
+
+// holderHints looks up, for each package held back by the packages that
+// depend on it, what the newest release of each of them declares for it.
+func (u *LangUpdater) holderHints(ctx context.Context, it *LanguageItem) {
 	var todo []int
 	cves := map[string][]CVERef{}
 	for i := range it.Packages {
 		p := &it.Packages[i]
 		if p.FixHint == nil {
-			continue
-		}
-		if p.Hint() == nil {
-			p.FixHint = nil
-			continue
-		}
-		if it.Manager == ManagerGo {
 			continue
 		}
 		p.FixHint.Releases = nil

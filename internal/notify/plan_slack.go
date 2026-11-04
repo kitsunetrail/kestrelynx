@@ -531,11 +531,16 @@ func (b *planBuilder) heldLine(x pkgLine) string {
 	return fmt.Sprintf(b.msg.PlanChainHeldBack, litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.target), b.cut(parts))
 }
 
-// otherMajorLine is the line about a Go package whose fixes are all of another
-// major version, with what brings the old one in, "" without a hint naming
-// the fix.
+// otherMajorLine is the line about a package whose fixes are all of another
+// major version, with what brings the old one in for Go, "" without a hint
+// naming the fix.
 func (b *planBuilder) otherMajorLine(x pkgLine) string {
-	if x.reason != remediation.ReasonFixInOtherMajor || x.hint == nil || x.hint.Fix == nil {
+	switch x.reason {
+	case remediation.ReasonFixInOtherMajor, remediation.ReasonMavenFixInOtherMajor, remediation.ReasonMavenReleaseNotFound:
+	default:
+		return ""
+	}
+	if x.hint == nil || x.hint.Fix == nil {
 		return ""
 	}
 	name, from, fix := litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.hint.Fix.Version)
@@ -550,6 +555,55 @@ func (b *planBuilder) otherMajorLine(x pkgLine) string {
 		return fmt.Sprintf(b.msg.PlanOtherMajorHeld, name, from, fix, b.cut(parts))
 	}
 	return fmt.Sprintf(b.msg.PlanOtherMajor, name, from, fix)
+}
+
+// decidedLine is the line about a Maven or Gradle package whose version a pom
+// outside the project decides, "" without such a hint.
+func (b *planBuilder) decidedLine(x pkgLine) string {
+	if x.hint == nil || x.hint.DecidedBy == nil || x.target == "" {
+		return ""
+	}
+	d := x.hint.DecidedBy
+	format := b.msg.PlanDecidedByParent
+	switch d.Kind {
+	case remediation.DeciderBOM:
+		format = b.msg.PlanDecidedByBOM
+	case remediation.DeciderSpringBoot:
+		format = b.msg.PlanDecidedBySpringBoot
+	}
+	return fmt.Sprintf(format, litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.target), litMrkdwn(d.Name), litMrkdwn(d.Version))
+}
+
+// deciderLines are the lines under a decidedLine: what the newest release of
+// the deciding pom in its minor version, and its newest release, set the
+// package to.
+func (b *planBuilder) deciderLines(x pkgLine) []string {
+	d := x.hint.DecidedBy
+	who := litMrkdwn(d.Name)
+	if d.Kind == remediation.DeciderSpringBoot {
+		who = "Spring Boot"
+	}
+	verdict := func(r *remediation.ChainHintRelease) string {
+		switch {
+		case r.Dropped:
+			return fmt.Sprintf(b.msg.PlanHintNotSet, litMrkdwn(x.name))
+		case r.Fixes:
+			return b.msg.PlanHintSetsFix
+		}
+		return b.msg.PlanHintSetsNoFix
+	}
+	var out []string
+	for _, h := range x.hint.Releases {
+		for _, rel := range []struct {
+			r     *remediation.ChainHintRelease
+			which string
+		}{{h.InSpec, b.msg.PlanHintSameMinor}, {h.Latest, b.msg.PlanHintLatest}} {
+			if rel.r != nil {
+				out = append(out, fmt.Sprintf(b.msg.PlanHintBullet, fmt.Sprintf(b.msg.PlanHintRelease, who, litMrkdwn(rel.r.Version), rel.which, verdict(rel.r))))
+			}
+		}
+	}
+	return out
 }
 
 // goLineLine is the line about a Go package an update did not take to its
@@ -1234,6 +1288,9 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 			hints = b.releaseLines(x, x.hint.Releases, false)
 		case b.goLineLine(x) != "":
 			line = b.goLineLine(x)
+		case b.decidedLine(x) != "":
+			line = b.decidedLine(x)
+			hints = b.deciderLines(x)
 		case x.reason == remediation.ReasonTargetNotUpdated:
 			line = fmt.Sprintf(b.msg.PlanNotUpdated, name, from, target)
 		case x.leftOut:

@@ -474,6 +474,13 @@ type messages struct {
 	PlanGoLineRaised             string // "%[1]s %[2]s cannot be raised to the fixed %[3]s without raising the go line of go.mod to %[4]s (the go.mod of %[5]s %[6]s declares go %[4]s; ... Go %[7]s)" (name, installed, target, go line, module, version, build Go)
 	PlanGoLineRaisedUnknown      string // PlanGoLineRaised when the build Go is not known (no %[7]s)
 	PlanGoRuntimeMissing         string // "%[1]s %[2]s needs Go %[4]s to be raised to the fixed %[3]s (the go.mod of %[5]s %[6]s declares it ...)" (name, installed, target, go line, module, version)
+	PlanDecidedByParent          string // "%[1]s %[2]s cannot be raised to the fixed %[3]s (the version is decided by the parent pom %[4]s %[5]s)" (name, installed, target, the pom, its version)
+	PlanDecidedByBOM             string // PlanDecidedByParent for a BOM
+	PlanDecidedBySpringBoot      string // PlanDecidedByParent for the BOM of Spring Boot %[5]s (%[4]s is not shown)
+	PlanHintSameMinor            string // "newest in the same minor version"
+	PlanHintSetsFix              string // "specifies a fixed version"
+	PlanHintSetsNoFix            string // "does not specify a fixed version"
+	PlanHintNotSet               string // "does not specify %s" (package)
 	PlanHintRelease              string // "%[1]s %[2]s (%[3]s): %[4]s" (dependent, version, which release it is, what it allows)
 	PlanHintInSpec               string // "newest within the range %s specifies" (manifest file)
 	PlanHintLatest               string // "newest"
@@ -903,6 +910,13 @@ var enMessages = messages{
 	PlanGoLineRaised:             "%[1]s %[2]s cannot be raised to the fixed %[3]s without raising the go line of go.mod to %[4]s (the go.mod of %[5]s %[6]s declares go %[4]s; the running binaries were built with Go %[7]s)",
 	PlanGoLineRaisedUnknown:      "%[1]s %[2]s cannot be raised to the fixed %[3]s without raising the go line of go.mod to %[4]s (the go.mod of %[5]s %[6]s declares go %[4]s; the Go the running binaries were built with is not known)",
 	PlanGoRuntimeMissing:         "%[1]s %[2]s needs Go %[4]s to be raised to the fixed %[3]s (the go.mod of %[5]s %[6]s declares it, and no supported Go is that new)",
+	PlanDecidedByParent:          "%[1]s %[2]s cannot be raised to the fixed %[3]s (the version is decided by the parent pom %[4]s %[5]s)",
+	PlanDecidedByBOM:             "%[1]s %[2]s cannot be raised to the fixed %[3]s (the version is decided by the BOM %[4]s %[5]s)",
+	PlanDecidedBySpringBoot:      "%[1]s %[2]s cannot be raised to the fixed %[3]s (the version is decided by the BOM of Spring Boot %[5]s)",
+	PlanHintSameMinor:            "newest in the same minor version",
+	PlanHintSetsFix:              "specifies a fixed version",
+	PlanHintSetsNoFix:            "does not specify a fixed version",
+	PlanHintNotSet:               "does not specify %s",
 	PlanHintRelease:              "%[1]s %[2]s (%[3]s): %[4]s",
 	PlanHintInSpec:               "newest within the range %s specifies",
 	PlanHintLatest:               "newest",
@@ -1328,6 +1342,13 @@ var jaMessages = messages{
 	PlanGoLineRaised:             "%[1]s %[2]s を修正版の %[3]s に上げると、go.mod の go の行が %[4]s に上がる（%[5]s %[6]s の go.mod が go %[4]s を指定・稼働中のバイナリは Go %[7]s でビルド）",
 	PlanGoLineRaisedUnknown:      "%[1]s %[2]s を修正版の %[3]s に上げると、go.mod の go の行が %[4]s に上がる（%[5]s %[6]s の go.mod が go %[4]s を指定・稼働中のバイナリをビルドした Go は不明）",
 	PlanGoRuntimeMissing:         "%[1]s %[2]s を修正版の %[3]s に上げるには Go %[4]s が必要（%[5]s %[6]s の go.mod が指定・サポート中の Go にない）",
+	PlanDecidedByParent:          "%[1]s %[2]s を修正版の %[3]s に上げられない（版は親 pom の %[4]s %[5]s が決めている）",
+	PlanDecidedByBOM:             "%[1]s %[2]s を修正版の %[3]s に上げられない（版は BOM の %[4]s %[5]s が決めている）",
+	PlanDecidedBySpringBoot:      "%[1]s %[2]s を修正版の %[3]s に上げられない（版は Spring Boot %[5]s の BOM が決めている）",
+	PlanHintSameMinor:            "同じマイナー版の最新",
+	PlanHintSetsFix:              "修正版を指定している",
+	PlanHintSetsNoFix:            "修正版を指定していない",
+	PlanHintNotSet:               "%s を指定していない",
 	PlanHintRelease:              "%[1]s %[2]s（%[3]s）: %[4]s",
 	PlanHintInSpec:               "%s で指定している範囲の最新",
 	PlanHintLatest:               "最新",

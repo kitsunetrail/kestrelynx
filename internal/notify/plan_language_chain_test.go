@@ -446,3 +446,65 @@ func TestPlanSlack_GoHints(t *testing.T) {
 		})
 	}
 }
+
+// Maven and Gradle packages are shown with the pom outside the project that
+// decides their version and what two of its releases set them to, or with the
+// lowest fix of another major version.
+func TestPlanSlack_MavenHints(t *testing.T) {
+	r, _, _ := planCycleFixture()
+	const name = "com.fasterxml.jackson.core:jackson-databind"
+	rel := func(v, set string, fixes, dropped bool) *remediation.ChainHintRelease {
+		return &remediation.ChainHintRelease{Version: v, Range: set, Fixes: fixes, Dropped: dropped}
+	}
+	cases := []struct {
+		name    string
+		manager remediation.DependencyManager
+		reason  remediation.Reason
+		hint    *remediation.FixHint
+		ja, en  string
+	}{
+		{"parent pom", remediation.ManagerMaven, remediation.ReasonMavenVersionSourceUnsupported, &remediation.FixHint{
+			DecidedBy: &remediation.FixDecider{Kind: remediation.DeciderParentPOM, Name: "com.example:parent", Version: "1.0.0"},
+			Releases:  []remediation.ChainHint{{Package: name, Parent: "com.example:parent", ParentVersion: "1.0.0", Direct: true, InSpec: rel("1.0.3", "2.13.4", true, false), Latest: rel("2.0.0", "", false, true)}},
+		},
+			name + " 2.13.0 を修正版の 2.13.4 に上げられない（版は親 pom の com.example:parent 1.0.0 が決めている）\n  • com.example:parent 1.0.3（同じマイナー版の最新）: 修正版を指定している\n  • com.example:parent 2.0.0（最新）: " + name + " を指定していない",
+			name + " 2.13.0 cannot be raised to the fixed 2.13.4 (the version is decided by the parent pom com.example:parent 1.0.0)\n  • com.example:parent 1.0.3 (newest in the same minor version): specifies a fixed version\n  • com.example:parent 2.0.0 (newest): does not specify " + name},
+		{"BOM", remediation.ManagerMaven, remediation.ReasonMavenVersionSourceUnsupported, &remediation.FixHint{
+			DecidedBy: &remediation.FixDecider{Kind: remediation.DeciderBOM, Name: "org.example:platform-bom", Version: "1.2.0"},
+			Releases:  []remediation.ChainHint{{Package: name, Parent: "org.example:platform-bom", ParentVersion: "1.2.0", Direct: true, InSpec: rel("1.2.7", "2.13.3", false, false)}},
+		},
+			"（版は BOM の org.example:platform-bom 1.2.0 が決めている）\n  • org.example:platform-bom 1.2.7（同じマイナー版の最新）: 修正版を指定していない",
+			"(the version is decided by the BOM org.example:platform-bom 1.2.0)\n  • org.example:platform-bom 1.2.7 (newest in the same minor version): does not specify a fixed version"},
+		{"Spring Boot", remediation.ManagerGradle, remediation.ReasonGradleVersionSourceUnsupported, &remediation.FixHint{
+			DecidedBy: &remediation.FixDecider{Kind: remediation.DeciderSpringBoot, Name: "org.springframework.boot:spring-boot-dependencies", Version: "3.2.1"},
+			Releases:  []remediation.ChainHint{{Package: name, Parent: "org.springframework.boot:spring-boot-dependencies", ParentVersion: "3.2.1", Direct: true, InSpec: rel("3.2.12", "2.15.4", true, false), Latest: rel("3.5.7", "2.19.2", true, false)}},
+		},
+			"（版は Spring Boot 3.2.1 の BOM が決めている）\n  • Spring Boot 3.2.12（同じマイナー版の最新）: 修正版を指定している\n  • Spring Boot 3.5.7（最新）: 修正版を指定している",
+			"(the version is decided by the BOM of Spring Boot 3.2.1)\n  • Spring Boot 3.2.12 (newest in the same minor version): specifies a fixed version\n  • Spring Boot 3.5.7 (newest): specifies a fixed version"},
+		{"another major", remediation.ManagerMaven, remediation.ReasonMavenReleaseNotFound, &remediation.FixHint{Fix: &remediation.FixRelease{Version: "3.0.1"}},
+			name + " 2.13.0 の修正版は別のメジャー版（3.0.1）にしかない",
+			name + " 2.13.0 has its fixes only in another major version (3.0.1)"},
+		{"another major, planned so", remediation.ManagerGradle, remediation.ReasonMavenFixInOtherMajor, &remediation.FixHint{Fix: &remediation.FixRelease{Version: "3.0.1"}},
+			name + " 2.13.0 の修正版は別のメジャー版（3.0.1）にしかない",
+			name + " 2.13.0 has its fixes only in another major version (3.0.1)"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := languageFixture()
+			li := &p.LanguageItems[0]
+			li.Manager = c.manager
+			li.Packages = li.Packages[:1]
+			pk := &li.Packages[0]
+			pk.Name, pk.Ecosystem, pk.Installed, pk.SelectionLowerBound = name, "jar", "2.13.0", "2.13.4"
+			li.Category, li.Reason = remediation.CategoryManual, c.reason
+			pk.Action, pk.Reason, pk.FixHint = remediation.ActionManual, c.reason, c.hint
+			info := &PlanInfo{Plan: &p, Changed: true}
+			if ja := slackPlanText(r, info, LanguageJA); !strings.Contains(ja, c.ja) {
+				t.Errorf("ja lacks %q:\n%s", c.ja, ja)
+			}
+			if en := slackPlanText(r, info, LanguageEN); !strings.Contains(en, c.en) {
+				t.Errorf("en lacks %q:\n%s", c.en, en)
+			}
+		})
+	}
+}

@@ -399,9 +399,11 @@ See [Go dependency files](remediation-reference.md#go-inputs) for required files
 
 - For each CVE, select the lowest fixed version above the running version within the same major version, then use the highest of these versions as the target's lower bound
 - Do not select a prerelease unless the running version is a prerelease, and preserve variants such as `-jre` and `-android`
-- Require manual handling with `maven_fix_in_other_major` if fixes exist only in another major version
+- Require manual handling with `maven_fix_in_other_major` if fixes exist only in another major version, and use vulnerability information without a lookup to suggest the lowest stable version above the running version in another major version with the same variant that fixes all target vulnerabilities
 - During the update, check Maven Central's `maven-metadata.xml` and select the lowest release at or above the lower bound within the same major version and variant
-- Require manual handling with `maven_release_not_found` if no published version meets the conditions
+- Require manual handling with `maven_release_not_found` if no published version meets the conditions, and suggest the lowest stable release in the retrieved version list at or above the lower bound in another major version with the same variant that fixes all target vulnerabilities, if one exists
+
+See [Fixing release hints](remediation-results.md#fix-hints) for how suggested versions are checked for fixes and displayed.
 
 #### Version sources and edits {#maven-version-sources}
 
@@ -425,6 +427,7 @@ Starting from the project's `pom.xml`, follow the parent chain and look for vers
 - In this case, search regular releases in later minor versions within the same major version for the lowest BOM version that manages the target at or above its target version, and show it as guidance in Slack and the webhook if found
 - Read at most eight POMs when searching for guidance, and omit the guidance if no qualifying version is found or the POMs cannot be read
 - If the property that determines the BOM version cannot be changed, multiple BOMs manage the target, or management comes through another BOM's import, require manual handling without pinning the target individually
+- If an external parent writes the version directly in `dependencies`, an imported BOM's version is not a property the project can set, or management comes from a BOM imported by that BOM, record the parent or imported BOM deciding the version and check [fixing release hints](remediation-results.md#fix-hints)
 - Preserve formatting and comments when editing, then read the files again and verify that the diff contains only the specified version changes, property changes, and management additions
 
 #### Multiple modules {#maven-multi-module}
@@ -449,7 +452,7 @@ See [Maven dependency files](remediation-reference.md#maven-inputs) for required
 
 #### Target versions {#gradle-target-versions}
 
-The target version's lower bound and the published version selected from Maven Central follow the [same rules as Maven](#maven-target-versions).
+The target version's lower bound, the published version selected from Maven Central, and hints for fixes in another major version follow the [same rules as Maven](#maven-target-versions).
 
 #### Version declarations and edits {#gradle-version-sources}
 
@@ -473,6 +476,7 @@ Updates through Spring Boot BOM properties apply when both the Spring Boot and d
     - If the target's managed version is `${p}`, change `p`
     - If an imported BOM's version is `${p}` and that BOM directly manages the target, change `p` to update the set of dependencies
     - Require manual handling if the property to change cannot be determined, including directly written versions, expressions using a property as part of a version, or management through multiple BOMs or another BOM's import
+    - If a managed version or an imported BOM's version is not a property the project can set, or management comes through multiple BOMs or another BOM's import, record the Spring Boot BOM at the plugin's version as the version decider and check [fixing release hints](remediation-results.md#fix-hints)
 - Select the lowest regular BOM release within the current major and minor version that brings the target to at least its target version; require manual handling with `maven_bom_series_unreached` if none does
     - Search for guidance on a BOM in a later minor version that reaches the target using the [same rules as Maven](#maven-version-sources)
 - If multiple targets change the same property or catalog value, use the highest of the required versions

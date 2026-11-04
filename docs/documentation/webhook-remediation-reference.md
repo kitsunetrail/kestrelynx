@@ -231,26 +231,31 @@ See [Verification scope by target](remediation-logic.md#verification-scope) for 
 | `packages[].maven_bom.from` | string | The imported BOM version. |
 | `packages[].maven_bom.to` | string | The lowest regular BOM release in a later minor version within the same major version that manages the target at or above its target version. |
 | `packages[].maven_bom.manages` | string | The target's version managed by the BOM at `to`. |
-| `packages[].fix_hint` | object | [Fixing release hints](remediation-results.md#fix-hints); included only when `reason` is `dependents_hold_back`, `go_line_raised_too_far`, `go_runtime_unavailable`, or `fix_in_other_major_version` and information is available. |
+| `packages[].fix_hint` | object | [Fixing release hints](remediation-results.md#fix-hints); included only when `reason` is `dependents_hold_back`, `go_line_raised_too_far`, `go_runtime_unavailable`, `fix_in_other_major_version`, `maven_version_source_unsupported`, `gradle_version_source_unsupported`, `maven_release_not_found`, or `maven_fix_in_other_major` and information is available. |
+| `packages[].fix_hint.decided_by` | object | The external pom deciding the target's version for Maven or Gradle; omitted when unavailable. |
+| `packages[].fix_hint.decided_by.kind` | string | `parent_pom` for a parent pom, `bom` for an imported BOM, or `spring_boot` for the Spring Boot BOM in Gradle. |
+| `packages[].fix_hint.decided_by.name` | string | The deciding pom's `groupId:artifactId`; `org.springframework.boot:spring-boot-dependencies` for `spring_boot`. |
+| `packages[].fix_hint.decided_by.version` | string | The pom version currently used; the Spring Boot plugin's version for `spring_boot`. |
 | `packages[].fix_hint.go_line` | object | The required Go version blocking a Go update and the module declaring that `go` line; omitted when unavailable. |
 | `packages[].fix_hint.go_line.module` / `packages[].fix_hint.go_line.version` | string | Path and version of the module whose `go.mod` declares the required `go` line. |
 | `packages[].fix_hint.go_line.go` | string | The `go` version declared by that `go.mod`. |
 | `packages[].fix_hint.go_line.built_with` | string | The Go version used to build the running binaries, compared for `go_line_raised_too_far`; omitted when unknown or for `go_runtime_unavailable`. |
 | `packages[].fix_hint.go_line.to` | string | The target package version requested by the update; omitted when not recorded. |
-| `packages[].fix_hint.fix` | object | Fixed-release information when a Go package has fixes only in another major version; omitted when unavailable. |
-| `packages[].fix_hint.fix.version` | string | The lowest version named as a fix in the vulnerability information that fixes all target vulnerabilities. |
+| `packages[].fix_hint.fix` | object | Fixed-release information for another major version in Go, Maven, or Gradle; omitted when unavailable. |
+| `packages[].fix_hint.fix.version` | string | The lowest version that fixes all target vulnerabilities, selected from vulnerability information for Go and `maven_fix_in_other_major`, or from Maven Central's version list at or above the target for `maven_release_not_found`, with Maven and Gradle restricted to stable releases in another major version with the same variant. |
 | `packages[].fix_hint.direct` | boolean | `true` for Go hints about another major version when the project's `go.mod` requires the target without `// indirect`; omitted otherwise. |
 | `packages[].fix_hint.held_by` | array of objects | Dependent packages whose requirements exclude the proposed pinned version, or dependents requiring the target in Go hints about another major version; omitted when empty. |
 | `packages[].fix_hint.held_by[].parent` | string | Name of the dependent package. |
 | `packages[].fix_hint.held_by[].parent_version` | string | Current version of that dependent package. |
 | `packages[].fix_hint.held_by[].range` | string | Combined range of that version's active requirements for the target, or the target version required by its `go.mod` for Go. |
-| `packages[].fix_hint.releases` | array of objects | Checked information about published dependent releases, using the same structure as `update.chain.hints`; omitted when unavailable. |
-| `packages[].fix_hint.releases[].package` / `packages[].fix_hint.releases[].parent` / `packages[].fix_hint.releases[].parent_version` | string | Target package name, dependent package name, and current dependent version, respectively. |
-| `packages[].fix_hint.releases[].latest` | object | Information about the newest published stable release for pip, or `@latest` for Go; neither includes `in_spec`, and a hint is omitted if it cannot be checked. |
-| `packages[].fix_hint.releases[].latest.version` | string | Dependent version checked as the latest release. |
-| `packages[].fix_hint.releases[].latest.range` | string | The range that release declares for the target, or the required target version for Go; omitted when empty. |
-| `packages[].fix_hint.releases[].latest.fixes` | boolean | `true` when the range includes a published stable version that fixes all target vulnerabilities in the package; always `false` for Go hints about another major version, and included even when `false`. |
-| `packages[].fix_hint.releases[].latest.dropped` | boolean | `true` when that release does not declare the target as a direct dependency; omitted otherwise. |
+| `packages[].fix_hint.releases` | array of objects | Checked information about published releases of a dependent or deciding pom, using the same structure as `update.chain.hints`; omitted when unavailable. |
+| `packages[].fix_hint.releases[].package` / `packages[].fix_hint.releases[].parent` / `packages[].fix_hint.releases[].parent_version` | string | Target package name, dependent package name, and current dependent version, respectively; for Maven and Gradle, `parent` and `parent_version` identify the deciding pom and its current version. |
+| `packages[].fix_hint.releases[].in_spec` | object | For Maven and Gradle, the deciding pom's newest stable release within its current major and minor version, including the current version, with the same child fields as `latest`; omitted when unavailable and never included for pip or Go. |
+| `packages[].fix_hint.releases[].latest` | object | The newest published stable release for pip, `@latest` for Go, or the deciding pom's newest stable release for Maven and Gradle; omitted when unavailable, or when it is the same version as `in_spec` for Maven and Gradle. |
+| `packages[].fix_hint.releases[].latest.version` | string | The checked release of the dependent or deciding pom. |
+| `packages[].fix_hint.releases[].latest.range` | string | The range that release declares for the target, the required target version for Go, or the target version it sets for Maven and Gradle; omitted when empty. |
+| `packages[].fix_hint.releases[].latest.fixes` | boolean | `true` for pip when the range includes a published stable version that fixes all target vulnerabilities, or for Maven and Gradle when the version it sets is at or above the target and fixes all target vulnerabilities; always `false` for Go hints about another major version, and included even when `false`. |
+| `packages[].fix_hint.releases[].latest.dropped` | boolean | `true` when that release does not declare the target as a direct dependency, or for Maven and Gradle when it sets no target version; omitted otherwise. |
 | `packages[].occurrence_count` / `packages[].cve_count` / `packages[].origin_count` | integer | Counts of occurrences in dependency files, vulnerabilities, and original findings. |
 | `packages[].kev_count` | integer | Number of vulnerabilities listed in KEV; omitted when `0`. |
 | `packages[].occurrences` / `packages[].cves` / `packages[].origins` | array of objects | Lists of occurrences, vulnerabilities, and original findings; omitted when empty. |

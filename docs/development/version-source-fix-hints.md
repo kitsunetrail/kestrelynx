@@ -32,11 +32,11 @@ Cases caused by dependents in npm, pnpm, uv, pip, Maven, and Gradle are covered 
 
 ### Retracted Go fixed releases
 
-#### Decision
+<h4>Decision</h4>
 
 When a Go fixed release is retracted, look for the next unretracted fixed release in the same major version and, if one is found, create a PR for an update that passes the checks instead of requiring manual handling.
 
-#### Example
+<h4>Example</h4>
 
 The following examples show a retracted range in `bluemonday` and an individually retracted release in `gqlparser/v2`.
 
@@ -64,7 +64,7 @@ v2.5.12         v2.5.14         v2.5.15
 
 The PRs target `v1.0.26` and `v2.5.15`, respectively.
 
-#### Details
+<h4>Details</h4>
 
 - Read `retract` in the latest release's `go.mod`, handling both individual versions and ranges
 - Read the module proxy's `@v/list` for later stable releases in the same major version that match the module path
@@ -76,11 +76,11 @@ For selection rules, see [Go module target versions](../documentation/remediatio
 
 ### Modules declaring the Go go line
 
-#### Decision
+<h4>Decision</h4>
 
 When an update is blocked because the fix requires a Go version that is too new, record and show both the required Go version and the module and version declaring it.
 
-#### Example
+<h4>Example</h4>
 
 The following example shows a fixed `golang.org/x/net` release requiring a newer Go than the one used to build the running binaries.
 
@@ -92,7 +92,7 @@ flowchart LR
 
 The fixed `golang.org/x/net v0.60.0` declares the required `Go 1.26.0`.
 
-#### Details
+<h4>Details</h4>
 
 | Condition blocking the update | Information recorded |
 |---|---|
@@ -108,11 +108,11 @@ For the conditions, see [Go selection](../documentation/remediation-logic.md#go-
 
 ### Go fixes in another major version
 
-#### Decision
+<h4>Decision</h4>
 
 When Go fixes exist only in another major version, do not update automatically; show the fixed version and the project or dependents requiring the old module.
 
-#### Example
+<h4>Example</h4>
 
 The following example shows a fixed release of `github.com/aws/amazon-s3-encryption-client-go/v3` changing the module path.
 
@@ -126,7 +126,7 @@ github.com/aws/amazon-s3-encryption-client-go/v4  v4.0.0  # Fixed version
 This fix changes the module path from `/v3` to `/v4`.
 The module proxy contains `v4.0.0`, but updating requires rewriting imports.
 
-#### Details
+<h4>Details</h4>
 
 - For `fix_in_other_major_version`, record the lowest version in the vulnerability information that fixes all target vulnerabilities
 - Record a direct requirement when the project's `go.mod` directly requires the target
@@ -138,11 +138,11 @@ Checking information for the notification does not rewrite dependencies or impor
 
 ### Maven and Gradle version sources
 
-#### Decision
+<h4>Decision</h4>
 
 When edits to the project's files cannot change a Maven or Gradle package's version, name the pom deciding it and show whether newer published releases of that pom specify a fixed version.
 
-#### Example
+<h4>Example</h4>
 
 The following diagram shows separate paths through which a parent pom or an imported BOM can decide a version.
 `spring-boot-dependencies 2.7.0` is the actual imported BOM example.
@@ -164,7 +164,7 @@ flowchart TD
 
 In this diagram, the parent pom and `spring-boot-dependencies 2.7.0` are the version sources to consider changing.
 
-#### Details
+<h4>Details</h4>
 
 When an external pom decides the version and exposes no property the project can set, rewriting only the target's version cannot perform the update.
 
@@ -186,11 +186,11 @@ For the recording conditions, see [Maven version sources and edits](../documenta
 
 ### Maven and Gradle fix checks
 
-#### Decision
+<h4>Decision</h4>
 
 For Maven and Gradle, determine whether a vulnerability is fixed by comparing against fixes in the same series and flavor, rather than using a single ordering of version numbers.
 
-#### Example
+<h4>Example</h4>
 
 The following table is a fictional example in which one vulnerability has fixes at `2.12.7` and `2.13.4`.
 
@@ -209,7 +209,7 @@ The following table is also a fictional example, showing the difference between 
 | 33.7.2 | 33.7.2-android | Applies because the fix has no flavor |
 | 33.7.2 | 33.8.0-jre | Applies because the fix has no flavor |
 
-#### Details
+<h4>Details</h4>
 
 - Use reported fixes with the same flavor as the version being set, along with fixes that have no flavor
 - For each vulnerability, prefer fix information in the same major and minor version, then the same major version if none exists, and otherwise the remaining fix information
@@ -224,11 +224,11 @@ For selection rules, see [Maven target versions and Maven Central releases](../d
 
 ### Notification display and records
 
-#### Decision
+<h4>Decision</h4>
 
 Show the decisive reason an update cannot reach a fixed version in parentheses, followed by one line stating the conclusion for each checked published release.
 
-#### Example
+<h4>Example</h4>
 
 The following fictional example from the user documentation shows a notification where a parent pom decides the version.
 
@@ -244,7 +244,7 @@ com.fasterxml.jackson.core:jackson-databind 2.13.0 cannot be raised to the fixed
 | `com.example:parent 1.0.3` | The newest release in the same minor version specifies a fixed version of the target |
 | `com.example:parent 2.0.0` | The newest release overall sets no version for the target, but this does not establish that the target leaves the project |
 
-#### Details
+<h4>Details</h4>
 
 - Show “specifies a fixed version” when the published release sets a version at or above the target that fixes all target vulnerabilities
 - Show “does not specify a fixed version” when it sets a version that fails those conditions, or “does not specify package-name” when it sets no version for the target
@@ -260,7 +260,7 @@ For displays when dependents are updated together with the target, see [Results 
 
 ### Timing and limits for reading published release information
 
-#### Decision
+<h4>Decision</h4>
 
 Read published release information for notifications from Maven Central and the module proxy after deciding whether to create a PR, with limits on both reads and time.
 
@@ -269,14 +269,14 @@ Read published release information for notifications from Maven Central and the 
 3. Read release information for notifications from Maven Central or the module proxy
 4. Notify
 
-#### Example
+<h4>Example</h4>
 
 The following example shows checks of a published `spring-boot-dependencies` release reaching the read limit.
 
 Because `spring-boot-dependencies` imports many BOMs, the 12-read limit can be reached before determining the target version set by a published release.
 The identified version source, `spring-boot-dependencies 2.7.0`, remains recorded.
 
-#### Details
+<h4>Details</h4>
 
 A failed read does not change the update plan or PR decision.
 

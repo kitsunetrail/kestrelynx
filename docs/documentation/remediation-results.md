@@ -278,13 +278,13 @@ The hints therefore check the requirements of other `fastapi` releases as well.
 
 #### Reading the notification
 
-##### What is shown
+<h5>What is shown</h5>
 
 The first notification line explains why the update cannot reach a fixed version, and the following lines state the conclusion for each checked release.
 
 Each hint line shows the dependent package's name and version, which release was checked, and whether it can use a fixed version of the target package.
 
-##### Example
+<h5>Example</h5>
 
 The following notification example shows `fastapi` requirements blocking a fixed `starlette`.
 
@@ -300,7 +300,7 @@ starlette 0.32.0.post1 cannot be raised to the fixed 1.3.1 (the dependent fastap
 | The `fastapi 0.109.0` line | Even the newest `fastapi` allowed by the project's `pyproject.toml` cannot use a fixed `starlette`. |
 | The `fastapi 0.162.0` line | The newest published `fastapi` has a requirement that allows a fixed `starlette`. |
 
-##### Conditions
+<h5>Conditions</h5>
 
 Hints apply to npm, pnpm, uv, pip, Go, Maven, and Gradle.
 Ranges and required or set version values from release checks are omitted from Slack.
@@ -312,11 +312,11 @@ Ranges and required or set version values from release checks are omitted from S
 
 #### Dependent package blockers in npm, pnpm, uv, and pip
 
-##### What is shown
+<h5>What is shown</h5>
 
 For npm, pnpm, uv, and pip, when a dependent's requirement blocks an update to a fixed version, the notification shows whether newer releases of that dependent can use a fixed version.
 
-##### Example
+<h5>Example</h5>
 
 The following example shows whether each published `fastapi` release allows the fixed `starlette` within its range.
 
@@ -342,7 +342,7 @@ urllib3 1.26.20 cannot be raised to the fixed 2.8.0 (the dependent botocore 1.34
   • botocore 1.43.123 (newest): can use a fixed urllib3
 ```
 
-##### Conditions
+<h5>Conditions</h5>
 
 For npm, pnpm, and uv, hints appear below the target package's line when a dependent package's requirement blocks a fixed version and the outcome is `not_fixed`, `rejected`, or `not_tried`.
 
@@ -379,12 +379,12 @@ For a dependent package that is not a direct dependency, the note appears below 
 
 #### Notification details for checked releases only
 
-##### What is shown
+<h5>What is shown</h5>
 
 Intermediate dependent releases are not checked, and the minimum release that can use a fixed version is not sought.
 The notification shows only the results for checked releases.
 
-##### Example
+<h5>Example</h5>
 
 The following example lists the current `fastapi`, the newest within the project's range, and the newest overall.
 
@@ -396,7 +396,7 @@ The following example lists the current `fastapi`, the newest within the project
 The notification shows only two lines, for `0.109.0` and `0.162.0`.
 A release below `0.162.0` may allow a fixed version, but the notification does not establish this.
 
-##### Conditions
+<h5>Conditions</h5>
 
 A newer dependent release may restore an older requirement, so a release allowing a fixed version does not establish that every release at or above it fixes the vulnerability.
 
@@ -406,11 +406,11 @@ A newer dependent release may restore an older requirement, so a release allowin
 
 #### Go blockers
 
-##### What is shown
+<h5>What is shown</h5>
 
 For Go, the notification explains when the fix requires a Go version that is too new or when fixes exist only in another major version.
 
-##### Example
+<h5>Example</h5>
 
 The following example shows a fixed `golang.org/x/net` requiring a newer Go than the one used to build the running binaries.
 
@@ -457,7 +457,7 @@ The following fictional example shows a package required directly by the project
 example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (go.mod requires it directly, so the imports need rewriting)
 ```
 
-##### Conditions
+<h5>Conditions</h5>
 
 For `go_line_raised_too_far` and `go_runtime_unavailable`, the hint shows the module and version declaring the required Go when that information is available.
 See [Go update validation](remediation-logic.md#go-update-validation) and [Go selection](remediation-logic.md#go-runtime-selection) for the conditions under which it is recorded.
@@ -477,11 +477,11 @@ This check does not update dependencies.
 
 #### Version sources in Maven and Gradle
 
-##### What is shown
+<h5>What is shown</h5>
 
 For Maven and Gradle, when an external parent pom or BOM decides a package's version, the notification shows its name and version and whether its newer published releases specify a fixed version.
 
-##### Example
+<h5>Example</h5>
 
 The following fictional example shows an external parent pom or imported BOM deciding the target version.
 
@@ -511,7 +511,7 @@ com.fasterxml.jackson.core:jackson-databind 2.13.0 cannot be raised to the fixed
 | Spring Boot BOM in Gradle | `(the version is decided by the BOM of Spring Boot 3.2.1)` |
 | Published Spring Boot release | `• Spring Boot 3.2.12 (newest in the same minor version): specifies a fixed version` |
 
-##### Conditions
+<h5>Conditions</h5>
 
 For `maven_version_source_unsupported` and `gradle_version_source_unsupported`, the hint appears when the external parent pom, BOM, or Spring Boot BOM deciding the version can be identified.
 
@@ -519,13 +519,13 @@ See [Maven version sources and edits](remediation-logic.md#maven-version-sources
 
 #### Dependent package blockers in Maven and Gradle
 
-##### What is shown
+<h5>What is shown</h5>
 
 For Maven and Gradle, when an older version remains after the update, the notification shows the dependents bringing it in and whether their newer published releases specify a fixed version.
 
 For Gradle, the notification also shows the configuration where that version remains.
 
-##### Example
+<h5>Example</h5>
 
 The following fictional example shows a dependent bringing in an older `jackson-databind`, with that version remaining in `annotationProcessor` for Gradle.
 
@@ -551,7 +551,7 @@ com.fasterxml.jackson.core:jackson-databind 2.13.3 cannot be raised to the fixed
 | Version brought in by a dependent in `annotationProcessor` | `(in annotationProcessor, the dependent com.example:lib 1.2.0 uses com.fasterxml.jackson.core:jackson-databind 2.13.3)` |
 | Version declared directly by the configuration, with no dependent | `(annotationProcessor declares com.fasterxml.jackson.core:jackson-databind 2.13.3 directly)` |
 
-##### Conditions
+<h5>Conditions</h5>
 
 For `target_not_updated`, when the package remains below the target version after the update, the hint shows the names and versions of dependents bringing in that version when identified.
 
@@ -559,13 +559,13 @@ See [Maven update validation](remediation-logic.md#maven-update-validation) and 
 
 #### Fix checks in Maven and Gradle
 
-##### What is shown
+<h5>What is shown</h5>
 
 For Maven and Gradle, whether a release “specifies a fixed version” is determined by comparing against fixes in the same series and variant, rather than using a single ordering of version numbers.
 
 When a fixed release is identified in another major version, the notification also shows that version.
 
-##### Example
+<h5>Example</h5>
 
 The following fictional example lists the releases checked for the parent pom shown earlier.
 
@@ -595,7 +595,7 @@ The following fictional example shows a fix available only in another major vers
 org.example:lib 2.5.0 has its fixes only in another major version (3.0.1)
 ```
 
-##### Conditions
+<h5>Conditions</h5>
 
 The checks cover the newest release within the current major and minor version and the newest release overall.
 Only stable releases at or above the dependent's or deciding pom's current version are considered.
@@ -635,12 +635,12 @@ Whether it fixes all target vulnerabilities is checked using the same variant an
 
 #### Timing and limits for reading published release information
 
-##### What is shown
+<h5>What is shown</h5>
 
 The hints show published release information that could be checked.
 If that information cannot be read, identified dependent or deciding pom information is retained.
 
-##### Conditions
+<h5>Conditions</h5>
 
 Published release information for notifications is read after the plan and PR decisions, with limits on both reads and time.
 

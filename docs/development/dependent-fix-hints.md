@@ -39,11 +39,11 @@ The Go `go` line, Maven and Gradle parent poms, BOMs and Spring Boot, retracted 
 
 ### Dependent releases checked for whether they can use a fixed version
 
-#### Decision
+<h4>Decision</h4>
 
 Check a limited set of dependent releases, generally the newest within the project's declared range and the newest published release, and add whether each can use a fixed version to the notification.
 
-#### Example
+<h4>Example</h4>
 
 The diagram places `starlette` versions horizontally to show whether each dependent's requirement includes a fixed version.
 
@@ -65,7 +65,7 @@ The requirement in `fastapi 0.162.0` has no upper bound and includes `1.3.1`.
 | `fastapi 0.109.0` | fastapi 0.109.0 (newest within the range pyproject.toml specifies): cannot use a fixed starlette |
 | `fastapi 0.162.0` | fastapi 0.162.0 (newest): can use a fixed starlette |
 
-#### Details
+<h4>Details</h4>
 
 “Can use” means that a stable release fixing all target vulnerabilities is published and allowed by the dependent's requirement.
 A release fixing only some target vulnerabilities, or one that is not yet published, does not qualify.
@@ -85,12 +85,12 @@ When both candidates select the same release, omit the duplicate “newest” li
 
 ### Notification details for checked releases only
 
-#### Decision
+<h4>Decision</h4>
 
 Do not check intermediate dependent releases or search for the minimum release that can use a fixed version.
 Describe only the releases checked in the notification.
 
-#### Example
+<h4>Example</h4>
 
 The following example checks the newest `fastapi` within the project's range and the newest release overall.
 
@@ -102,7 +102,7 @@ The following example checks the newest `fastapi` within the project's range and
 The notification shows only two lines, for `0.109.0` and `0.162.0`.
 A release below `0.162.0` may allow a fixed version, but the notification does not establish this.
 
-#### Details
+<h4>Details</h4>
 
 A newer dependent release may restore an older requirement, so a release allowing a fixed version does not establish that every release at or above it fixes the vulnerability.
 
@@ -110,11 +110,11 @@ A newer dependent release may restore an older requirement, so a release allowin
 
 ### Re-resolution of declared packages
 
-#### Decision
+<h4>Decision</h4>
 
 Even when the project declares the target package itself, if another dependent holds it at an older version, npm, pnpm, and uv select the dependents again and create a PR for updates that pass the checks.
 
-#### Example
+<h4>Example</h4>
 
 These examples show a dependent blocking an update through a pin or an upper bound.
 
@@ -156,7 +156,7 @@ flowchart TB
 The “After” diagram shows the path through `mkdirp`.
 The fixed versions of `minimist` are `0.2.4` and `1.2.6`; the verified PR raises `0.0.8` to `1.2.8`.
 
-#### Details
+<h4>Details</h4>
 
 - Require confirmation that a pin or upper bound excludes a fixed version
 - When the project uses the target directly, require that version to be at or above the fixed version or match the version found in the running image
@@ -168,11 +168,11 @@ For eligibility, see [Re-resolution eligibility](../documentation/remediation-lo
 
 ### uv resolution failures
 
-#### Decision
+<h4>Decision</h4>
 
 Treat uv resolution failures as failure to reach a fixed version and include information about blocking dependents in the notification.
 
-#### Details
+<h4>Details</h4>
 
 uv resolves again with the fixed version specified, so resolution fails if the dependent's requirements and the fixed version cannot both be satisfied within the project's requirements.
 
@@ -186,12 +186,12 @@ Add verified information about newer dependents outside the project's range with
 
 ### Identifying pip dependents
 
-#### Decision
+<h4>Decision</h4>
 
 If pip cannot resolve dependencies after rewriting a pin to a fixed version, look for dependents whose requirements exclude the fix and require a person's decision when they are found.
 Do not update pip dependents automatically.
 
-#### Example
+<h4>Example</h4>
 
 The following example shows pip failing to resolve dependencies after rewriting the `urllib3` pin and checking the `botocore` requirement.
 
@@ -207,7 +207,7 @@ flowchart TD
 `urllib3 2.8.0` falls outside the `<2.1,>=1.25.4` requirement active for `botocore 1.34.0` on Python 3.10 and later.
 The “Found” path identifies `botocore` as the dependent a person needs to reconsider.
 
-#### Details
+<h4>Details</h4>
 
 - Evaluate markers in the running image's environment and use requirements active there
 - Evaluate active requirements from the same dependent to the same target together
@@ -220,11 +220,11 @@ For processing conditions, see [Update methods by package manager](../documentat
 
 ### Maven and Gradle dependency paths
 
-#### Decision
+<h4>Decision</h4>
 
 For Maven and Gradle packages that retain an older version after the update, identify the dependents bringing in that version and show them in the notification.
 
-#### Example
+<h4>Example</h4>
 
 The following diagram shows the dependency paths after the update verified with Gradle.
 
@@ -238,7 +238,7 @@ flowchart LR
 The runtime dependency updates, but `2.13.3` remains in `annotationProcessor`.
 The dependent's newest release in the same minor version, `2.13.5`, also does not specify a fixed version.
 
-#### Details
+<h4>Details</h4>
 
 For packages marked `target_not_updated` because they remain below the target after the update, trace the paths bringing in the older version.
 
@@ -253,11 +253,11 @@ For recording conditions, see [Maven update validation](../documentation/remedia
 
 ### Notifications and records
 
-#### Decision
+<h4>Decision</h4>
 
 Use one notification line to explain why this update cannot reach a fixed version, followed by one line stating the conclusion for each checked dependent release.
 
-#### Example
+<h4>Example</h4>
 
 The following Slack example shows `fastapi` requirements preventing `starlette` from reaching a fixed version.
 
@@ -273,7 +273,7 @@ starlette 0.32.0.post1 cannot be raised to the fixed 1.3.1 (the dependent fastap
 | `fastapi 0.109.0` | The newest release within the `pyproject.toml` range cannot use `starlette 1.3.1` |
 | `fastapi 0.162.0` | The newest published stable release has a requirement that includes `starlette 1.3.1` |
 
-#### Details
+<h4>Details</h4>
 
 - Show the dependent's name and version, whether it is the newest within the range or newest overall, and whether it can use a fixed version
 - For Maven and Gradle, show whether it specifies a fixed version
@@ -289,7 +289,7 @@ For reason codes, see [Update result reasons](../documentation/remediation-refer
 
 ### Timing and limits for reading published release information
 
-#### Decision
+<h4>Decision</h4>
 
 Read published release information for notifications after deciding whether to create a PR, with limits on both reads and time.
 
@@ -298,7 +298,7 @@ Read published release information for notifications after deciding whether to c
 3. Read dependent releases from npm, PyPI, or Maven Central
 4. Notify
 
-#### Details
+<h4>Details</h4>
 
 A failed read does not change the update plan or PR decision.
 

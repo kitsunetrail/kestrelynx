@@ -4,6 +4,8 @@
 
 開発ログは検討・実装の過程の記録です。現在利用できる機能の導入・運用方法は[ドキュメント](../documentation/index.md)を参照してください。
 
+- 2026年11月4日 — [Go・親 pom・BOM などで修正版に上げられないパッケージの通知と更新の開発](version-source-fix-hints.md) — 必要な Go の宣言元と親 pom・BOM・Spring Boot による版の決定元、撤回された修正版の選び直しと別メジャーの修正版の表示（実装済み、手元の Docker で Go の PR 作成と更新制限の記録、Maven の BOM の記録を確認）
+- 2026年11月3日 — [依存元の指定で修正版に上げられないパッケージの通知と更新の開発](dependent-fix-hints.md) — 依存元の公開版が修正版を使えるかの表示と、宣言されたパッケージの依存元ごとの再解決（実装済み、本番運用環境で通知、検証用のリポジトリで npm の PR と Gradle の依存経路の表示を確認）
 - 2026年11月2日 — [Gradle の修正 PR の開発](gradle-remediation.md) — 稼働イメージの jar の所見から版の宣言を書き換え、公式の Gradle で gradle.lockfile を更新し、Trivy で更新前後を比べる仕組み(実装済み、検証用のリポジトリで PR の作成を確認)
 - 2026年11月1日 — [Maven の修正 PR の開発](maven-remediation.md) — 稼働イメージの jar の所見から、Maven を実行せずに pom.xml を書き換え、Trivy で更新前後を比べる仕組み(実装済み、検証用のリポジトリで PR の作成を確認)
 - 2026年10月29日 — [Go modules の修正 PR の開発](go-modules-remediation.md) — 稼働イメージの Go バイナリの所見から、対応付けた go.mod・go.sum を更新する仕組み(実装済み、検証用のリポジトリで PR の作成を確認)

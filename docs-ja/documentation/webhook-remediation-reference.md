@@ -231,7 +231,7 @@
 | `packages[].maven_bom.from` | string | 取り込んでいるBOMの版 |
 | `packages[].maven_bom.to` | string | 同じメジャー版の後のマイナー版の正式版のうち、対象を目標版以上で管理する最も低いBOMの版 |
 | `packages[].maven_bom.manages` | string | `to`のBOMが管理する対象の版 |
-| `packages[].fix_hint` | object | [直る版の案内](remediation-results.md#fix-hints)で、`reason`が`dependents_hold_back`・`go_line_raised_too_far`・`go_runtime_unavailable`・`fix_in_other_major_version`・`maven_version_source_unsupported`・`gradle_version_source_unsupported`・`maven_release_not_found`・`maven_fix_in_other_major`、またはMaven・Gradleの`target_not_updated`で情報がある場合だけ付与 |
+| `packages[].fix_hint` | object | [修正版に上げられないときの案内](remediation-results.md#fix-hints)で、`reason`が`dependents_hold_back`・`go_line_raised_too_far`・`go_runtime_unavailable`・`fix_in_other_major_version`・`maven_version_source_unsupported`・`gradle_version_source_unsupported`・`maven_release_not_found`・`maven_fix_in_other_major`、またはMaven・Gradleの`target_not_updated`で情報がある場合だけ付与 |
 | `packages[].fix_hint.decided_by` | object | Maven・Gradleで対象の版を決めるプロジェクト外のpomの情報で、確認できなければ省略 |
 | `packages[].fix_hint.decided_by.kind` | string | 親pomは`parent_pom`、取り込むBOMは`bom`、GradleのSpring BootのBOMは`spring_boot` |
 | `packages[].fix_hint.decided_by.name` | string | 版を決めるpomの`groupId:artifactId`で、`spring_boot`では`org.springframework.boot:spring-boot-dependencies` |
@@ -367,7 +367,7 @@
 | `blocked[].range` | string | 依存元による版指定（例: `0.0.8`） |
 | `blocked[].proof` | string | `exact`は古い版への固定、`upper_bound`は指定範囲の上限が修正版に届かない場合 |
 | `blocked[].via` | stringの配列 | その依存元につながる直接依存の名前で、空なら省略 |
-| `hints` | objectの配列 | npm・pnpm・uvで結果が`not_fixed`・`rejected`・`not_tried`の場合に確認する[直る版の案内](remediation-results.md#fix-hints)で、空なら省略 |
+| `hints` | objectの配列 | npm・pnpm・uvで結果が`not_fixed`・`rejected`・`not_tried`の場合に確認する[修正版に上げられないときの案内](remediation-results.md#fix-hints)で、空なら省略 |
 | `hints[].package` | string | 更新を妨げられている対象パッケージの名前 |
 | `hints[].parent` | string | 更新を妨げる版指定を持つ依存元の名前 |
 | `hints[].parent_version` | string | 更新を妨げる版指定を持つ依存元の現在の版 |
@@ -394,7 +394,7 @@
 | `moves[].kind` | string | `ancestor`は依存元の変更、`followed`はその他の変更、`added`は追加、`removed`は削除 |
 | `truncated` | boolean | 変更一覧の一部を省略する場合は`true`で、それ以外は省略 |
 | `usage` | object | 通常更新・再実行を含む処理量の詳細 |
-| `usage.containers` / `usage.lookups` / `usage.bytes` / `usage.elapsed_ms` | integer | 順に、作業用コンテナ数・レジストリ照会数・受信バイト数・処理開始からの経過ミリ秒 |
+| `usage.containers` / `usage.lookups` / `usage.bytes` / `usage.elapsed_ms` | integer | 順に、作業用コンテナ数・npm・PyPIなどのレジストリに問い合わせた回数・受信バイト数・処理開始からの経過ミリ秒 |
 
 `update.chain`には見送りも含むため、このフィールドがあるだけでは実行済み・採用済みとは判断できません。
 公開後の待機が終わる日時は、`language_items[].retry_after`で確認します。

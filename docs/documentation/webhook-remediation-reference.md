@@ -231,7 +231,7 @@ See [Verification scope by target](remediation-logic.md#verification-scope) for 
 | `packages[].maven_bom.from` | string | The imported BOM version. |
 | `packages[].maven_bom.to` | string | The lowest regular BOM release in a later minor version within the same major version that manages the target at or above its target version. |
 | `packages[].maven_bom.manages` | string | The target's version managed by the BOM at `to`. |
-| `packages[].fix_hint` | object | [Fixing release hints](remediation-results.md#fix-hints); included only when information is available and `reason` is `dependents_hold_back`, `go_line_raised_too_far`, `go_runtime_unavailable`, `fix_in_other_major_version`, `maven_version_source_unsupported`, `gradle_version_source_unsupported`, `maven_release_not_found`, `maven_fix_in_other_major`, or `target_not_updated` for Maven and Gradle. |
+| `packages[].fix_hint` | object | [Hints when a package cannot reach its fix](remediation-results.md#fix-hints); included only when information is available and `reason` is `dependents_hold_back`, `go_line_raised_too_far`, `go_runtime_unavailable`, `fix_in_other_major_version`, `maven_version_source_unsupported`, `gradle_version_source_unsupported`, `maven_release_not_found`, `maven_fix_in_other_major`, or `target_not_updated` for Maven and Gradle. |
 | `packages[].fix_hint.decided_by` | object | The external pom deciding the target's version for Maven or Gradle; omitted when unavailable. |
 | `packages[].fix_hint.decided_by.kind` | string | `parent_pom` for a parent pom, `bom` for an imported BOM, or `spring_boot` for the Spring Boot BOM in Gradle. |
 | `packages[].fix_hint.decided_by.name` | string | The deciding pom's `groupId:artifactId`; `org.springframework.boot:spring-boot-dependencies` for `spring_boot`. |
@@ -367,7 +367,7 @@ Check `language_items[].update.chain.outcome` for the re-resolution result.
 | `blocked[].range` | string | Version requirement declared by the dependent package, such as `0.0.8`. |
 | `blocked[].proof` | string | `exact` for a pin to an older version, or `upper_bound` when the required range's upper bound excludes fixed versions. |
 | `blocked[].via` | array of strings | Names of direct dependencies that lead to that dependent package; omitted when empty. |
-| `hints` | array of objects | [Fixing release hints](remediation-results.md#fix-hints) checked for npm, pnpm, and uv when the outcome is `not_fixed`, `rejected`, or `not_tried`; omitted when empty. |
+| `hints` | array of objects | [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) checked for npm, pnpm, and uv when the outcome is `not_fixed`, `rejected`, or `not_tried`; omitted when empty. |
 | `hints[].package` | string | Name of the target package whose update is blocked. |
 | `hints[].parent` | string | Name of the dependent package whose requirement blocks the update. |
 | `hints[].parent_version` | string | Current version of the dependent package whose requirement blocks the update. |

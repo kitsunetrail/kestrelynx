@@ -373,7 +373,7 @@ Reaching the lower bound alone is insufficient; the checks in [Adopting update r
 #### Module target versions {#go-target-versions}
 
 - Select the lowest fixed version above the running version; for multiple CVEs, use the highest of their respective minimum fixed versions as the target
-- Require manual handling with `fix_in_other_major_version` if fixes exist only under a different module path for another major version, and check [fixing release hints](remediation-results.md#fix-hints) during the update stage
+- Require manual handling with `fix_in_other_major_version` if fixes exist only under a different module path for another major version, and check [hints when a package cannot reach its fix](remediation-results.md#fix-hints) during the update stage
 - Before updating, check `.info` from `proxy.golang.org` to verify that the target version exists and confirm its canonical form, including `+incompatible`
 - Check `retract` directives in the latest version's `go.mod`, using `@latest` to find that version, and look for an alternative fixed release in `@v/list` if the target is retracted
 - Select the lowest later release in the retracted version's major version that matches the module path, is not a prerelease, fixes all target vulnerabilities, and is not retracted
@@ -403,7 +403,7 @@ See [Go dependency files](remediation-reference.md#go-inputs) for required files
 - During the update, check Maven Central's `maven-metadata.xml` and select the lowest release at or above the lower bound within the same major version and variant
 - Require manual handling with `maven_release_not_found` if no published version meets the conditions, and suggest the lowest stable release in the retrieved version list at or above the lower bound in another major version with the same variant that fixes all target vulnerabilities, if one exists
 
-See [Fixing release hints](remediation-results.md#fix-hints) for how suggested versions are checked for fixes and displayed.
+See [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) for how suggested versions are checked for fixes and displayed.
 
 #### Version sources and edits {#maven-version-sources}
 
@@ -427,7 +427,7 @@ Starting from the project's `pom.xml`, follow the parent chain and look for vers
 - In this case, search regular releases in later minor versions within the same major version for the lowest BOM version that manages the target at or above its target version, and show it as guidance in Slack and the webhook if found
 - Read at most eight POMs when searching for guidance, and omit the guidance if no qualifying version is found or the POMs cannot be read
 - If the property that determines the BOM version cannot be changed, multiple BOMs manage the target, or management comes through another BOM's import, require manual handling without pinning the target individually
-- If an external parent writes the version directly in `dependencies`, an imported BOM's version is not a property the project can set, or management comes from a BOM imported by that BOM, record the parent or imported BOM deciding the version and check [fixing release hints](remediation-results.md#fix-hints)
+- If an external parent writes the version directly in `dependencies`, an imported BOM's version is not a property the project can set, or management comes from a BOM imported by that BOM, record the parent or imported BOM deciding the version and check [hints when a package cannot reach its fix](remediation-results.md#fix-hints)
 - Preserve formatting and comments when editing, then read the files again and verify that the diff contains only the specified version changes, property changes, and management additions
 
 #### Multiple modules {#maven-multi-module}
@@ -476,7 +476,7 @@ Updates through Spring Boot BOM properties apply when both the Spring Boot and d
     - If the target's managed version is `${p}`, change `p`
     - If an imported BOM's version is `${p}` and that BOM directly manages the target, change `p` to update the set of dependencies
     - Require manual handling if the property to change cannot be determined, including directly written versions, expressions using a property as part of a version, or management through multiple BOMs or another BOM's import
-    - If a managed version or an imported BOM's version is not a property the project can set, or management comes through multiple BOMs or another BOM's import, record the Spring Boot BOM at the plugin's version as the version decider and check [fixing release hints](remediation-results.md#fix-hints)
+    - If a managed version or an imported BOM's version is not a property the project can set, or management comes through multiple BOMs or another BOM's import, record the Spring Boot BOM at the plugin's version as the version decider and check [hints when a package cannot reach its fix](remediation-results.md#fix-hints)
 - Select the lowest regular BOM release within the current major and minor version that brings the target to at least its target version; require manual handling with `maven_bom_series_unreached` if none does
     - Search for guidance on a BOM in a later minor version that reaches the target using the [same rules as Maven](#maven-version-sources)
 - If multiple targets change the same property or catalog value, use the highest of the required versions
@@ -594,7 +594,7 @@ A declaration that allows the fixed version is preserved; otherwise, it is rewri
 | `package.json` specifies `minimist ^1.2.0` and `mkdirp ^0.5.1`, with the direct `minimist` at the fixed `1.2.8` and the copy under `mkdirp 0.5.1` pinned to exactly `0.0.8` | Yes | Updating `mkdirp` to `0.5.6` within its range leaves `package.json` unchanged and can produce a PR if the checks pass |
 | `pyproject.toml` specifies `cryptography>=41`, and `pyopenssl` requires `cryptography<42` | Yes | A solution within the declared ranges produces a PR if the checks pass; if no solution is found, KestreLynx identifies the dependent package blocking the update and reports whether each of two releases can use the fixed version: its latest release within the project's declared range and its latest published release |
 | The target version used directly by the project is below the fixed version and differs from the version found in the running image | No | There is no basis for rewriting the project's declaration |
-| A pip project | No | Dependent packages are not re-resolved; targets with an identified blocking dependent require manual handling and receive [fixing release hints](remediation-results.md#fix-hints) |
+| A pip project | No | Dependent packages are not re-resolved; targets with an identified blocking dependent require manual handling and receive [hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
 
 KestreLynx checks the information for `mkdirp 0.5.1` in the public npm registry to confirm its requirement for `minimist`.
 
@@ -923,7 +923,7 @@ This check evaluates markers for the running image's environment.
 - Requirements from packages included in the update targets are excluded because only their pre-update requirements are known
 
 A target with an identified blocking dependent requires manual handling with `dependents_hold_back`; if none is found, the reason remains `post_update_check_failed`.
-Dependent packages are not re-resolved, and [fixing release hints](remediation-results.md#fix-hints) are shown for published dependent releases that can be checked.
+Dependent packages are not re-resolved, and [hints when a package cannot reach its fix](remediation-results.md#fix-hints) are shown for published dependent releases that can be checked.
 
 ### Checking related changes {#change-validation}
 
@@ -1016,7 +1016,7 @@ KestreLynx checks the retrieved parent, BOM, and dependency POMs and the project
 - Check target versions and findings using both the root's aggregated results and each module's results
 - Check that targets reach at least the selected published versions and that target findings confirmed before the update remain in no occurrence after the update
 - When a target remains below its target version, use `target_not_updated` and record up to five packages depending on that version in `packages[].fix_hint.held_by`, using dependency edges (`DependsOn`) from Trivy's parsing of the updated pom files
-- Exclude the project's own modules from dependents and use the information for [fixing release hints](remediation-results.md#fix-hints)
+- Exclude the project's own modules from dependents and use the information for [hints when a package cannot reach its fix](remediation-results.md#fix-hints)
 - For each resolved target version after the update, read the required versions of non-optional compile and runtime dependencies from its POM, parents, and BOMs, and check that resolved dependencies do not remain below their required versions
 - Compare new findings by each module's `pom.xml` path; reject an update if it introduces a finding to a module, even if that finding already exists in another module
 - List dependencies outside the targets whose resolved versions changed, and dependencies that were added or removed, in the PR body
@@ -1048,7 +1048,7 @@ KestreLynx passes the files it has rewritten to the work container or Pod, then 
 - For `target_not_updated` in a configuration where the target remains below its target version, record up to five parents of that version in the configuration's dependency tree in `packages[].fix_hint.held_by`, and record the configuration name in `fix_hint.configuration`
 - Set `fix_hint.direct` to `true` when no dependent is found and the configuration declares the target directly
 - Read dependency trees within limits of 8 MiB, 100,000 lines, and 1024 bytes per tree line, stopping at an unreadable line
-- Use dependency trees only for [fixing release hints](remediation-results.md#fix-hints), without using them for PRs or update decisions
+- Use dependency trees only for [hints when a package cannot reach its fix](remediation-results.md#fix-hints), without using them for PRs or update decisions
 - Require manual handling with `gradle_lock_entry_removed` for removed entries, including dependencies no longer needed by the new version
 - Require manual handling with `gradle_lock_configurations_changed` for changes to the set of configurations or `empty=`, and with `gradle_lock_version_unsupported` for added or changed SNAPSHOT versions
 - Read lockfile comments, `group:artifact:version=configurations`, and at most one `empty=` line; reject standalone CR characters and lines longer than 8192 bytes

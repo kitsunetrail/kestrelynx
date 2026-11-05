@@ -69,6 +69,8 @@ nav:
       - Runtime usage (experimental): documentation/runtime-usage.md
   - Development:
       - Overview: development/index.md
+      - "Development of notifications and updates for packages blocked from reaching a fix by Go, parent poms, BOMs, and other constraints": development/version-source-fix-hints.md
+      - "Development of notifications and updates for packages blocked from reaching a fix by dependent requirements": development/dependent-fix-hints.md
       - Gradle remediation pull request development: development/gradle-remediation.md
       - Maven remediation pull request development: development/maven-remediation.md
       - Go modules remediation pull request development: development/go-modules-remediation.md

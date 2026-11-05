@@ -334,7 +334,7 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 | `toolchain`の行 | 公開されたGoの版を表す`go1.N.M`形式に対応し、`default`・独自の接尾辞・RCなどは手動対応 |
 | `go.work` | 依存ディレクトリまたはリポジトリのルートまでの上位ディレクトリにある場合は手動対応 |
 | `vendor` | 依存ディレクトリにある場合は手動対応 |
-| 別のメジャー版 | 修正版が別のモジュールパスにしかない場合は`fix_in_other_major_version`で手動対応とし、確認できた最小の修正版と、直接指定か依存元による要求かを[直る版の案内](remediation-results.md#fix-hints)に表示 |
+| 別のメジャー版 | 修正版が別のモジュールパスにしかない場合は`fix_in_other_major_version`で手動対応とし、確認できた最小の修正版と、直接指定か依存元による要求かを[修正版に上げられないときの案内](remediation-results.md#fix-hints)に表示 |
 | 標準ライブラリの`stdlib` | PRを作らず、ビルドに使うGoの版を上げる案内を修正計画に表示 |
 
 候補の決め方と標準ライブラリの案内は[Goの候補選定](remediation-logic.md#go-package-selection)、採用条件は[Goの更新結果の検査](remediation-logic.md#go-update-validation)を参照してください。
@@ -810,7 +810,7 @@ PR記録の`state`には、次の値があります。
 | `work_environment_rejected` | 作業用コンテナがプログラムの実行要件を満たしていない | [実行時の制限](remediation-logic.md#worker-restrictions) |
 | `go_version_too_old` | `go.mod`に`go`の版の指定がない、または1.21より古い | [Goの依存ファイル](#go-inputs) |
 | `go_toolchain_unsupported` | `go.mod`の`toolchain`の行が、公開されたGoの版ではない | [Goの依存ファイル](#go-inputs) |
-| `go_runtime_unavailable` | 更新に必要な版以上の、サポート中のGoを選べない | [Goの選定](remediation-logic.md#go-runtime-selection)・[直る版の案内](remediation-results.md#fix-hints) |
+| `go_runtime_unavailable` | 更新に必要な版以上の、サポート中のGoを選べない | [Goの選定](remediation-logic.md#go-runtime-selection)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
 | `gradle_version_unsupported` | 対応していない Gradle の版を使っている | [Gradleの依存ファイル](#gradle-inputs) |
 | `gradle_toolchain_unsupported` | 対応していない Java の toolchain を指定している | [Gradleの実行設定](remediation-logic.md#gradle-worker-settings) |
 | `runtime_eol` | 更新対象の実行環境がサポート終了している | [実行環境の選定](remediation-logic.md#runtime-and-tool-versions) |
@@ -852,16 +852,16 @@ PR記録の`state`には、次の値があります。
 | `update_candidate_in_source` | ソース内のパッケージに対応する修正版の更新候補がある | [修正版の下限](remediation-logic.md#fix-lower-bound) |
 | `range_allows_fix` | 依存範囲が修正版を許し、再ビルドで入る見込みがある | [直接依存の版指定](remediation-logic.md#direct-dependencies) |
 | `go_stdlib_needs_newer_go` | Goの標準ライブラリの脆弱性で、`go.mod`の更新ではなく、新しいGoでビルドし直すと直る | [Goの候補選定](remediation-logic.md#go-package-selection) |
-| `fix_in_other_major_version` | 修正版が別のメジャー版にあり、Goでは別のモジュールパスになる | [Goの候補選定](remediation-logic.md#go-package-selection)・[直る版の案内](remediation-results.md#fix-hints) |
+| `fix_in_other_major_version` | 修正版が別のメジャー版にあり、Goでは別のモジュールパスになる | [Goの候補選定](remediation-logic.md#go-package-selection)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
 | `go_release_retracted` | 目標版が撤回されていて代わりの修正版を選べない、または依存の要求で目標を超えた対象の版が撤回されている | [Goの候補選定](remediation-logic.md#go-package-selection)・[Goの更新結果の検査](remediation-logic.md#go-update-validation) |
-| `go_line_raised_too_far` | 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える、またはビルドした版が不明なまま行の版が変わる | [Goの更新結果の検査](remediation-logic.md#go-update-validation)・[直る版の案内](remediation-results.md#fix-hints) |
+| `go_line_raised_too_far` | 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える、またはビルドした版が不明なまま行の版が変わる | [Goの更新結果の検査](remediation-logic.md#go-update-validation)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
 | `go_dependencies_uncheckable` | 更新後の依存の要求を確かめるためにたどるモジュールの版が多すぎる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
-| `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection)・[Gradleの目標版](remediation-logic.md#gradle-target-versions)・[直る版の案内](remediation-results.md#fix-hints) |
-| `maven_version_source_unsupported` | 版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている | [版の出所と書き換え](remediation-logic.md#maven-version-sources)・[直る版の案内](remediation-results.md#fix-hints) |
-| `maven_release_not_found` | 更新で使える版が Maven Central にない | [目標版とMaven Centralの版](remediation-logic.md#maven-target-versions)・[Gradleの目標版](remediation-logic.md#gradle-target-versions)・[直る版の案内](remediation-results.md#fix-hints) |
+| `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection)・[Gradleの目標版](remediation-logic.md#gradle-target-versions)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
+| `maven_version_source_unsupported` | 版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている | [版の出所と書き換え](remediation-logic.md#maven-version-sources)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
+| `maven_release_not_found` | 更新で使える版が Maven Central にない | [目標版とMaven Centralの版](remediation-logic.md#maven-target-versions)・[Gradleの目標版](remediation-logic.md#gradle-target-versions)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
 | `maven_bom_series_unreached` | 取り込んでいる BOM と同じマイナー版では修正版に届かない | [版の出所と書き換え](remediation-logic.md#maven-version-sources)・[Gradleの版の宣言と書き換え](remediation-logic.md#gradle-version-sources) |
 | `maven_dependency_held_back` | 更新後も、新しい版が要求する依存が要求より低い版のまま残る | [Mavenの更新結果の検査](remediation-logic.md#maven-update-validation) |
-| `gradle_version_source_unsupported` | 版が、プロジェクトのファイルの変更では変えられない形で決まっている | [版の宣言と書き換え](remediation-logic.md#gradle-version-sources)・[直る版の案内](remediation-results.md#fix-hints) |
+| `gradle_version_source_unsupported` | 版が、プロジェクトのファイルの変更では変えられない形で決まっている | [版の宣言と書き換え](remediation-logic.md#gradle-version-sources)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
 | `gradle_lock_entry_removed` | 更新で gradle.lockfile のエントリが削除された | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
 | `gradle_lock_configurations_changed` | 更新で gradle.lockfile が lock する構成が変わった | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
 | `gradle_lock_version_unsupported` | 更新後の gradle.lockfile にスナップショット版が含まれる | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
@@ -874,7 +874,7 @@ PR記録の`state`には、次の値があります。
 | `update_job_failed` | 更新の実行に失敗した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
 | `update_result_invalid` | 更新ジョブの結果が不正である | [結果の回収](remediation-logic.md#worker-results) |
 | `update_job_timed_out` | 更新の実行がタイムアウトした | [実行時の制限](remediation-logic.md#worker-restrictions) |
-| `distribution_lookup_failed` | レジストリでのパッケージ照会に失敗した | [付随変更の検査](remediation-logic.md#change-validation) |
+| `distribution_lookup_failed` | npm・PyPIなどのレジストリからパッケージの情報を読む処理に失敗した | [付随変更の検査](remediation-logic.md#change-validation) |
 | `source_scan_failed` | 依存ファイルのスキャンに失敗した | [比較条件](remediation-logic.md#comparison-conditions) |
 | `update_input_invalid` | 更新の入力が不正である | [コンテナへの入力](remediation-logic.md#worker-inputs) |
 | `update_job_input_rejected` | 更新ジョブが入力を受け付けなかった | [コンテナへの入力](remediation-logic.md#worker-inputs) |
@@ -895,12 +895,12 @@ PR記録の`state`には、次の値があります。
 | `manifest_changed` | 更新でmanifestに許可していない変更が入った | [付随変更の検査](remediation-logic.md#change-validation) |
 | `output_files_invalid` | 出力ファイルが不正、または読み取れない | [結果の回収](remediation-logic.md#worker-results) |
 | `lockfile_format_changed` | 更新でlockfileの形式が変わった | [付随変更の検査](remediation-logic.md#change-validation) |
-| `target_not_updated` | 更新しても目標の版に上がらなかった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection)・[直る版の案内](remediation-results.md#fix-hints) |
+| `target_not_updated` | 更新しても目標の版に上がらなかった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
 | `target_removed` | 更新後に対象パッケージがなくなった、または依存関係から到達できなくなった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
 | `fix_condition_not_met` | 更新後の版が脆弱性の修正条件を満たさない | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
 | `unexplained_dependency_diff` | 更新との関係を説明できない依存の変更や、版が上がった・追加されたモジュールが要求する版の最大と一致しないGoの`go`の行の引き上げがある | [付随変更の検査](remediation-logic.md#change-validation)・[Goの更新結果の検査](remediation-logic.md#go-update-validation) |
 | `distribution_mismatch` | パッケージがレジストリの公開内容やpipの解決結果と一致しない | [付随変更の検査](remediation-logic.md#change-validation) |
-| `registry_check_limit` | 更新時のレジストリ照会数の上限に達した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
+| `registry_check_limit` | 更新時にnpm・PyPIなどのレジストリに問い合わせた回数が上限に達した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
 | `update_package_limit` | 更新するパッケージ数が上限を超えている | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
 | `resolved_source_changed` | パッケージの取得元が変わった | [付随変更の検査](remediation-logic.md#change-validation) |
 | `post_update_lockfile_unstable` | lockfileを再生成すると、さらに内容が変わる | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
@@ -917,7 +917,7 @@ PR記録の`state`には、次の値があります。
 | `dependents_update_rejected` | 依存元の更新が検査を通らなかった | [再解決の検査条件](#dependent-reresolution-rules) |
 | `dependents_update_unsupported` | 依存元をこのツールでは更新できない | [再解決の対応範囲と上限](#dependent-reresolution-limits) |
 | `dependents_update_limit` | 依存元の更新が上限を超える | [再解決の対応範囲と上限](#dependent-reresolution-limits) |
-| `dependents_hold_back` | 依存元がこのパッケージの版を制限している | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods)・[直る版の案内](remediation-results.md#fix-hints) |
+| `dependents_hold_back` | 依存元がこのパッケージの版を制限している | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
 | `release_too_new` | 更新で入る版の公開から72時間経っていない | [公開後の待機と再試行](#dependent-reresolution-waits) |
 | `chain_downgrade` | 更新でパッケージが古い版に下がる、または版の対応を確定できない | [再解決の検査条件](#dependent-reresolution-rules) |
 | `chain_move_limit` | 更新で動くパッケージ数が上限を超える | [再解決の対応範囲と上限](#dependent-reresolution-limits) |

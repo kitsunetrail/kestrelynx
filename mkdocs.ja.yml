@@ -41,6 +41,8 @@ nav:
       - 稼働時の使用状況（実験的）: documentation/runtime-usage.md
   - 開発ログ:
       - 概要: development/index.md
+      - Go・親 pom・BOM などで修正版に上げられないパッケージの通知と更新の開発: development/version-source-fix-hints.md
+      - 依存元の指定で修正版に上げられないパッケージの通知と更新の開発: development/dependent-fix-hints.md
       - Gradle の修正 PR の開発: development/gradle-remediation.md
       - Maven の修正 PR の開発: development/maven-remediation.md
       - Go modules の修正 PR の開発: development/go-modules-remediation.md

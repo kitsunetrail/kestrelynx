@@ -254,12 +254,39 @@ A PR may include normal updates that pass the checks even when re-resolution is 
 See [Re-resolution through dependent packages](remediation-logic.md#dependent-reresolution) for the processing flow in npm, pnpm, and uv.
 Other fields are described in [Re-resolution results](webhook-remediation-reference.md#language-chain-fields) and [Scan comparisons](webhook-remediation-reference.md#language-chain-scan-fields).
 
-#### Fixing release hints {#fix-hints}
+### Hints when a package cannot reach its fix {#fix-hints}
 
-For npm, pnpm, and uv, hints appear below a package's line when a dependent package's requirement blocks a fixed version and the outcome is `not_fixed`, `rejected`, or `not_tried`.
-For pip, the same format is used for packages marked `dependents_hold_back` when resolution fails after updating pinned versions and a dependent package blocking the update is found.
+These hints identify the dependent package, required Go version, or pom that prevents a package from reaching a fixed version.
+When published releases can be checked, the hints also show whether those releases allow or specify a fixed version.
 
-Each line shows the dependent package's name and version, which release it is, and whether it can use a fixed version of the target package.
+```mermaid
+flowchart LR
+    P["Project"] --> D["Dependent package<br/>fastapi 0.108.0"]
+    D --> R["starlette at least 0.29.0<br/>and below 0.33.0"]
+    R --> V["starlette 0.32.0.post1<br/>Vulnerable"]
+    R -.->|"Excluded by the requirement"| F["Fixed version<br/>starlette 1.3.1"]
+```
+
+| Term | Meaning in this example |
+| --- | --- |
+| Dependent package | The package that uses `starlette`: `fastapi 0.108.0` in this example. |
+| Requirement (range) | The `starlette` versions that `fastapi 0.108.0` declares it can use: `>=0.29.0,<0.33.0` means “at least `0.29.0` and below `0.33.0`.” |
+| Fixed version | A version that fixes the target vulnerabilities: `starlette 1.3.1` in this example. |
+
+`starlette 1.3.1` is outside the range required by `fastapi 0.108.0`.
+The hints therefore check the requirements of other `fastapi` releases as well.
+
+#### Reading the notification
+
+##### What is shown
+
+The first notification line explains why the update cannot reach a fixed version, and the following lines state the conclusion for each checked release.
+
+Each hint line shows the dependent package's name and version, which release was checked, and whether it can use a fixed version of the target package.
+
+##### Example
+
+The following notification example shows `fastapi` requirements blocking a fixed `starlette`.
 
 ```text
 starlette 0.32.0.post1 cannot be raised to the fixed 1.3.1 (the dependent fastapi 0.108.0 limits the version of starlette)
@@ -267,24 +294,73 @@ starlette 0.32.0.post1 cannot be raised to the fixed 1.3.1 (the dependent fastap
   • fastapi 0.162.0 (newest): can use a fixed starlette
 ```
 
+| Line | Meaning in this example |
+| --- | --- |
+| The line starting with `starlette 0.32.0.post1` | The current `fastapi 0.108.0` requirement blocks the update to `starlette 1.3.1`. |
+| The `fastapi 0.109.0` line | Even the newest `fastapi` allowed by the project's `pyproject.toml` cannot use a fixed `starlette`. |
+| The `fastapi 0.162.0` line | The newest published `fastapi` has a requirement that allows a fixed `starlette`. |
+
+##### Conditions
+
+Hints apply to npm, pnpm, uv, pip, Go, Maven, and Gradle.
+Ranges and required or set version values from release checks are omitted from Slack.
+
+| Managers | Webhook field containing the checked information and ranges or required or set versions |
+| --- | --- |
+| npm, pnpm, and uv | `language_items[].update.chain.hints` |
+| pip, Go, Maven, and Gradle | `language_items[].packages[].fix_hint` |
+
+#### Dependent package blockers in npm, pnpm, uv, and pip
+
+##### What is shown
+
+For npm, pnpm, uv, and pip, when a dependent's requirement blocks an update to a fixed version, the notification shows whether newer releases of that dependent can use a fixed version.
+
+##### Example
+
+The following example shows whether each published `fastapi` release allows the fixed `starlette` within its range.
+
+```text
+starlette        0.35.0  0.36.0  0.46.0          1.3.1  # fix
+                 |       |       |               |
+fastapi 0.109.0  [=======)                       x      # excludes the fix
+fastapi 0.162.0                  [===============*===>  # includes the fix
+```
+
+The horizontal axis shows `starlette` versions in order; spacing is not to scale.
+`[` includes the lower bound, `)` excludes the upper bound, and `>` indicates no upper bound.
+
+| Notification line | `starlette` versions allowed by that `fastapi` release | Meaning of the diagram |
+| --- | --- | --- |
+| `fastapi 0.109.0` | `>=0.35.0,<0.36.0` | The fixed `1.3.1` is outside the range and cannot be used. |
+| `fastapi 0.162.0` | `>=0.46.0` | The fixed `1.3.1` is inside the range and can be used. |
+
+The following pip notification example shows `botocore` requirements blocking an update to `urllib3`.
+
 ```text
 urllib3 1.26.20 cannot be raised to the fixed 2.8.0 (the dependent botocore 1.34.0 limits the version of urllib3)
   • botocore 1.43.123 (newest): can use a fixed urllib3
 ```
 
-For npm, pnpm, and uv, the checks cover these two releases of the dependent package.
+##### Conditions
 
-- The newest stable release within the package.json range for npm and pnpm, or the pyproject.toml range for uv, when the dependent package is a direct dependency of the project
-- The newest published stable release, with its display omitted when it is the same as the newest release within the range
+For npm, pnpm, and uv, hints appear below the target package's line when a dependent package's requirement blocks a fixed version and the outcome is `not_fixed`, `rejected`, or `not_tried`.
 
-For pip, versions in requirements.txt are pinned with `==`, so only the newest published stable release is checked, with no “newest within the range” line.
-Even when the newest release is the current version, the combined range of active requirements blocking the update is checked against the target package's published stable releases.
+For pip, hints appear when resolution fails after updating pinned versions and a dependent package blocking the update is found, leaving the target marked `dependents_hold_back`.
 
-Prereleases are excluded from the version list, and for uv and pip, releases whose files are all yanked are also excluded from the list retrieved from PyPI.
+| Managers | Dependent releases checked |
+| --- | --- |
+| npm and pnpm | If the dependent is a direct dependency of the project, the newest stable release within the `package.json` range and the newest published stable release. |
+| uv | If the dependent is a direct dependency of the project, the newest stable release within the `pyproject.toml` range and the newest published stable release. |
+| npm, pnpm, and uv when the dependent is not a direct dependency | The newest published stable release. |
+| pip | Only the newest published stable release. |
 
-For uv and pip, dependent requirements for published releases are read from PyPI metadata (`requires_dist`), and all requirements are considered regardless of environment markers.
-
-The following table describes the display types.
+- For npm, pnpm, and uv, omit the newest published release line when it is the same as the newest release within the project's range.
+- For pip, versions in `requirements.txt` are pinned with `==`, so there is no “newest within the range” line.
+- For pip, even when the newest release is the current version, check the combined range of active requirements blocking the update against the target package's published stable releases.
+- Exclude prereleases from the version list.
+- For uv and pip, also exclude releases whose files are all yanked from the list retrieved from PyPI.
+- For uv and pip, read dependent requirements from PyPI metadata (`requires_dist`) and consider all requirements regardless of environment markers.
 
 | Slack display excerpt | Meaning |
 | --- | --- |
@@ -293,63 +369,135 @@ The following table describes the display types.
 | `can use a fixed starlette` | That dependent release's requirement includes a published stable version that fixes all target vulnerabilities in the package. |
 | `cannot use a fixed starlette` | That dependent release's requirement does not include a published stable version that fixes all target vulnerabilities in the package. |
 | `can use a fixed starlette, but this update did not raise it` | Shown for the newest release within the package.json or pyproject.toml range when the dependent release's requirement allows a fixed version, but constraints such as other packages or the Python version prevent re-resolution within the range from reaching it, leaving the chain update outcome as `not_fixed`. |
-| `does not use starlette directly` | That dependent release does not declare the target package as a direct dependency, but another path may still bring it in. |
+| `does not use starlette directly` | That dependent release does not declare the target package as a direct dependency. |
 | `which release of express brings in this mkdirp is not checked` | A note for a dependent package that is not a direct dependency, indicating that the direct dependency release bringing in the displayed dependent release is not checked. |
 
-For a dependent package that is not a direct dependency, the note appears below the newest release line when that release can use a fixed version or drops the direct requirement, and the direct dependency path is known.
+For a dependent package that is not a direct dependency, the note appears below the newest release line when both conditions hold.
 
-- Intermediate releases are not checked, so the hints do not identify the minimum release needed for a fix.
-- The checks do not establish whether updating to the displayed release resolves dependencies successfully or whether the application works.
-- “can use a fixed starlette” describes the dependent package's declared range and does not guarantee that updating to that release fixes the vulnerability.
-- “does not use starlette directly” does not establish that the target package leaves the project or that the vulnerability is fixed.
+- The newest release can use a fixed version or no longer requires the target package directly.
+- The direct dependency path is known.
 
-Lines are omitted for information that cannot be evaluated or retrieved.
+#### Notification details for checked releases only
 
-- For npm and pnpm, evaluation is unavailable because of peer dependencies, aliases, conflicting ranges, unsupported ranges, a bundled shrinkwrap, or similar conditions.
-- For uv and pip, evaluation is unavailable when a published release has differing requirements for the same package, unreadable requirements, or unsupported version specifications
-- Registry queries fail or the lookup time limit is reached.
+##### What is shown
 
-Queries for published dependent releases run after the update decision, with limits of three target-package and dependent-package pairs and 30 seconds in total per item.
-The presence or content of published release hints does not affect the plan or PR.
+Intermediate dependent releases are not checked, and the minimum release that can use a fixed version is not sought.
+The notification shows only the results for checked releases.
 
-For Go, packages marked `go_line_raised_too_far` or `go_runtime_unavailable` show the module and version declaring the required Go when that information is available.
-See [Go update validation](remediation-logic.md#go-update-validation) and [Go selection](remediation-logic.md#go-runtime-selection) for the conditions under which it is recorded.
+##### Example
+
+The following example lists the current `fastapi`, the newest within the project's range, and the newest overall.
+
+| fastapi version | 0.108.0 | 0.109.0 | Intermediate releases | 0.162.0 |
+| --- | --- | --- | --- | --- |
+| Role | Current release | Newest within the range pyproject.toml specifies | Not checked | Newest |
+| Can use a fixed starlette | No | No | Unknown | Yes |
+
+The notification shows only two lines, for `0.109.0` and `0.162.0`.
+A release below `0.162.0` may allow a fixed version, but the notification does not establish this.
+
+##### Conditions
+
+A newer dependent release may restore an older requirement, so a release allowing a fixed version does not establish that every release at or above it fixes the vulnerability.
+
+- The checks do not establish successful dependency resolution or application behavior after updating to the displayed dependent or pom release, and “can use a fixed starlette” does not guarantee that updating to that release fixes the vulnerability.
+- Even when a release “does not use starlette directly”, another path may bring it in, so this does not establish that the target leaves the project or that the vulnerability is fixed.
+- For Maven and Gradle, “does not specify” likewise does not establish that the target package leaves the project.
+
+#### Go blockers
+
+##### What is shown
+
+For Go, the notification explains when the fix requires a Go version that is too new or when fixes exist only in another major version.
+
+##### Example
+
+The following example shows a fixed `golang.org/x/net` requiring a newer Go than the one used to build the running binaries.
+
+```mermaid
+flowchart LR
+    B["Running binaries<br/>Built with Go 1.22.12"] --> C["1.26.0 is newer than 1.22.12"]
+    F["Fixed golang.org/x/net v0.60.0<br/>Its go.mod declares go 1.26.0"] --> C
+    C --> R["This update cannot reach<br/>the fixed version"]
+```
+
+Meeting the fixed module's Go requirement would raise the `go` line in `go.mod` above the Go version used to build the running binaries.
+The update cannot be adopted with that change in this example.
 
 ```text
 golang.org/x/net v0.20.0 cannot be raised to the fixed v0.60.0 without raising the go line of go.mod to 1.26.0 (the go.mod of golang.org/x/net v0.60.0 declares go 1.26.0; the running binaries were built with Go 1.22.12)
 ```
 
-When the build Go is unknown, the line ends with “; the Go the running binaries were built with is not known)”.
+The following fictional example shows a requirement that no supported Go version meets.
 
 ```text
 example.com/old v1.4.0 needs Go 1.99 to be raised to the fixed v1.4.5 (the go.mod of example.com/old v1.4.5 declares it, and no supported Go is that new)
 ```
 
-For `fix_in_other_major_version`, hints are checked during the update stage, including for items marked for manual handling during planning.
-This check does not update dependencies.
+The following fictional example shows a fix available only in another major version, with a different module path.
 
-- The fixed version is the lowest version named as a fix in the vulnerability information that fixes all target vulnerabilities
-- Read `go.mod` and `go.sum` from GitHub and treat a target required without `// indirect` in `go.mod` as directly required, skipping dependent lookups
-- Otherwise, read each requirement's `go.mod` from the proxy and record modules requiring the target, their versions, and the target versions they require
-- Check each dependent's latest version through `@latest` and show “does not use it directly” if its `go.mod` no longer requires the target, or “cannot use a fixed version” if it still does
-- Omit the corresponding hint if the latest version's `go.mod` was synthesized by the proxy or a lookup fails
+```text
+example.com/old     v1.4.0  # Current module path and version
+        |
+        v
+example.com/old/v2  v2.1.0  # Fixed module path and version
+```
+
+In this example, raising the version under the same module path cannot reach the fix.
+The following fictional example shows the notification when a dependent uses the module.
 
 ```text
 example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (the dependent example.com/mid v1.0.0 uses it)
   • example.com/mid v1.3.0 (newest): does not use example.com/old directly
 ```
 
-A directly required package is shown as follows.
+The following fictional example shows a package required directly by the project.
 
 ```text
 example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (go.mod requires it directly, so the imports need rewriting)
 ```
 
-Go hints for fixes in another major version have a total lookup limit of 30 seconds per item, with latest-version checks for up to three target-package and dependent-package pairs.
-Reads of `go.mod` files from the proxy are limited to 200 per item, including latest versions.
+##### Conditions
 
-For Maven and Gradle, packages marked `maven_version_source_unsupported` or `gradle_version_source_unsupported` show the name and version of the external parent pom, BOM, or Spring Boot BOM deciding their version when identified.
-See [Maven version sources and edits](remediation-logic.md#maven-version-sources) and [Gradle version declarations and edits](remediation-logic.md#gradle-version-sources) for the conditions under which it is recorded.
+For `go_line_raised_too_far` and `go_runtime_unavailable`, the hint shows the module and version declaring the required Go when that information is available.
+See [Go update validation](remediation-logic.md#go-update-validation) and [Go selection](remediation-logic.md#go-runtime-selection) for the conditions under which it is recorded.
+
+When the build Go is unknown, the line ends with “; the Go the running binaries were built with is not known)”.
+
+For `fix_in_other_major_version`, hints are checked during update processing, including for items marked for manual handling during planning.
+This check does not update dependencies.
+
+| Information checked | Conditions and handling |
+| --- | --- |
+| Fixed version to display | The lowest version named as a fix in the vulnerability information that fixes all target vulnerabilities. |
+| Direct requirement in the project | Read `go.mod` and `go.sum` from GitHub; if `go.mod` requires the target without `// indirect`, treat it as directly required and skip proxy reads to find dependents. |
+| Dependents of a target that is not directly required | Read each requirement's `go.mod` from the proxy and record modules requiring the target, their versions, and the target versions they require. |
+| Each dependent's latest release | Read the version through the proxy's `@latest`; show “does not use it directly” if its `go.mod` no longer requires the target, or “cannot use a fixed version” if it still does. |
+| Omitted hints | Omit the corresponding hint if the latest version's `go.mod` was synthesized by the proxy or the required information cannot be read from the proxy. |
+
+#### Version sources in Maven and Gradle
+
+##### What is shown
+
+For Maven and Gradle, when an external parent pom or BOM decides a package's version, the notification shows its name and version and whether its newer published releases specify a fixed version.
+
+##### Example
+
+The following fictional example shows an external parent pom or imported BOM deciding the target version.
+
+```mermaid
+flowchart TD
+    P["Project pom"] -->|"References its parent"| A["Parent pom<br/>com.example:parent 1.0.0"]
+    P -->|"Or imports a BOM"| B["BOM<br/>org.example:platform-bom 1.2.0"]
+    subgraph E["Outside the project: declarations this file update cannot change"]
+        A --> V["Sets the target package version<br/>jackson-databind 2.13.0"]
+        B --> V
+    end
+```
+
+In this example, declarations outside the project decide the target version.
+
+The following fictional example shows the notification for a parent pom.
 
 ```text
 com.fasterxml.jackson.core:jackson-databind 2.13.0 cannot be raised to the fixed 2.13.4 (the version is decided by the parent pom com.example:parent 1.0.0)
@@ -357,11 +505,40 @@ com.fasterxml.jackson.core:jackson-databind 2.13.0 cannot be raised to the fixed
   • com.example:parent 2.0.0 (newest): does not specify com.fasterxml.jackson.core:jackson-databind
 ```
 
-A BOM is shown as “(the version is decided by the BOM org.example:platform-bom 1.2.0)”, and Spring Boot in Gradle as “(the version is decided by the BOM of Spring Boot 3.2.1)”.
-Spring Boot release lines use the format “• Spring Boot 3.2.12 (newest in the same minor version): specifies a fixed version”.
+| Version source | Slack display format |
+| --- | --- |
+| BOM | `(the version is decided by the BOM org.example:platform-bom 1.2.0)` |
+| Spring Boot BOM in Gradle | `(the version is decided by the BOM of Spring Boot 3.2.1)` |
+| Published Spring Boot release | `• Spring Boot 3.2.12 (newest in the same minor version): specifies a fixed version` |
 
-For Maven and Gradle packages marked `target_not_updated` because they remain below the target version after the update, show the names and versions of dependents bringing in that version when identified.
-See [Maven update validation](remediation-logic.md#maven-update-validation) and [Gradle update validation](remediation-logic.md#gradle-update-validation) for the conditions under which they are recorded.
+##### Conditions
+
+For `maven_version_source_unsupported` and `gradle_version_source_unsupported`, the hint appears when the external parent pom, BOM, or Spring Boot BOM deciding the version can be identified.
+
+See [Maven version sources and edits](remediation-logic.md#maven-version-sources) and [Gradle version declarations and edits](remediation-logic.md#gradle-version-sources) for the conditions under which it is recorded.
+
+#### Dependent package blockers in Maven and Gradle
+
+##### What is shown
+
+For Maven and Gradle, when an older version remains after the update, the notification shows the dependents bringing it in and whether their newer published releases specify a fixed version.
+
+For Gradle, the notification also shows the configuration where that version remains.
+
+##### Example
+
+The following fictional example shows a dependent bringing in an older `jackson-databind`, with that version remaining in `annotationProcessor` for Gradle.
+
+```mermaid
+flowchart LR
+    P["Project"] --> D["Dependent package<br/>com.example:lib 1.2.0"]
+    D --> T["jackson-databind 2.13.3<br/>Remains after the update"]
+    P --> G["Gradle configuration<br/>annotationProcessor"]
+    G --> D
+    G -.->|"When declared directly with no dependent"| T
+```
+
+The following fictional example shows the notification when a dependent is found.
 
 ```text
 com.fasterxml.jackson.core:jackson-databind 2.13.3 cannot be raised to the fixed 2.13.4 (the dependent com.example:lib 1.2.0 uses com.fasterxml.jackson.core:jackson-databind 2.13.3)
@@ -369,43 +546,125 @@ com.fasterxml.jackson.core:jackson-databind 2.13.3 cannot be raised to the fixed
   • com.example:lib 2.0.0 (newest): does not specify com.fasterxml.jackson.core:jackson-databind
 ```
 
-Gradle also shows the configuration, as in “(in annotationProcessor, the dependent com.example:lib 1.2.0 uses com.fasterxml.jackson.core:jackson-databind 2.13.3)”.
-When no dependent is found and the configuration declares the target directly, it shows “(annotationProcessor declares com.fasterxml.jackson.core:jackson-databind 2.13.3 directly)”.
+| Declaration identified in Gradle | Slack display format |
+| --- | --- |
+| Version brought in by a dependent in `annotationProcessor` | `(in annotationProcessor, the dependent com.example:lib 1.2.0 uses com.fasterxml.jackson.core:jackson-databind 2.13.3)` |
+| Version declared directly by the configuration, with no dependent | `(annotationProcessor declares com.fasterxml.jackson.core:jackson-databind 2.13.3 directly)` |
 
-- Check the dependent's or deciding pom's newest stable release within its current major and minor version and its newest stable release overall, considering releases at or above its current version
-- Include the current version when selecting the newest in the same minor version, and omit the “newest” line if both selections are the same
-- For a parent pom, check the version declared in `dependencies`, falling back to management if no version is declared
-- For a dependent's pom, check the version declared in `dependencies`, use management when the declaration has no version, and show “does not specify” when the target is not declared
-- For a BOM, check its managed version, following imported BOMs to a depth of three
-- Omit a release hint if the pom being checked, any parent, or any imported BOM contains a profile with an activation condition (`activeByDefault`, `jdk`, `os`, `property`, or `file`) that changes dependencies, dependency management, properties, or the parent
-- Profiles used only when explicitly selected by name do not stop the check
+##### Conditions
 
-“specifies a fixed version” means the version it sets is at or above the target and fixes all target vulnerabilities.
-Show “does not specify a fixed version” if it sets a version that does not meet these conditions, or “does not specify package-name” if it sets no version.
+For `target_not_updated`, when the package remains below the target version after the update, the hint shows the names and versions of dependents bringing in that version when identified.
 
-Fix checks use reported fixes with the same variant as the version being checked, such as `-jre` or `-android`, and fixes with no variant.
-A fix with no variant, such as `33.7.2`, applies to every variant, including `33.7.2-jre`.
+See [Maven update validation](remediation-logic.md#maven-update-validation) and [Gradle update validation](remediation-logic.md#gradle-update-validation) for the conditions under which they are recorded.
 
-For each vulnerability, the checked version must be at or above every applicable fix in its series (major and minor version), or every applicable fix in its major version if none is reported in the series, or every applicable fix if neither exists.
-A vulnerability with no applicable fix is not considered fixed.
+#### Fix checks in Maven and Gradle
 
-Release lookups run after the item is settled, separately from update lookup limits, with at most 12 Maven Central reads per package including the version list, and 30 seconds in total per item.
-The 12 reads are shared across all dependents, and dependent release checks are limited to three target-package and dependent-package pairs per item.
+##### What is shown
 
-Omit release hints that cannot be checked because of failures or limits, while retaining the dependent or deciding pom information.
+For Maven and Gradle, whether a release “specifies a fixed version” is determined by comparing against fixes in the same series and variant, rather than using a single ordering of version numbers.
 
-The checks do not establish whether updating to the displayed pom version resolves dependencies or whether the application works, and do not check intermediate releases or find the minimum required version.
-“does not specify” does not establish that the target package leaves the project.
+When a fixed release is identified in another major version, the notification also shows that version.
 
-For `maven_fix_in_other_major` and `maven_release_not_found`, show a fixed version in another major version when one is found using the [selection rules shared with Maven](remediation-logic.md#maven-target-versions).
-Whether it fixes all target vulnerabilities is checked using the same variant and series rules above.
+##### Example
+
+The following fictional example lists the releases checked for the parent pom shown earlier.
+
+| Current release | Newest in the same minor version | Newest overall |
+| --- | --- | --- |
+| `com.example:parent 1.0.0` | `com.example:parent 1.0.3` | `com.example:parent 2.0.0` |
+
+The following fictional example compares series for a vulnerability with reported fixes in `2.12.7` and `2.13.4`.
+
+| Version set | Fix in the same series | Result for this vulnerability |
+| --- | --- | --- |
+| `2.13.2` | `2.13.4` | Not fixed: it is below the fix in the same `2.13` series. |
+| `2.12.8` | `2.12.7` | Fixed: it is at or above the fix in the same `2.12` series. |
+
+Even though `2.13.2` is newer than `2.12.7` in another series, it does not fix this vulnerability because it is below `2.13.4` in its own series.
+
+The following fictional example shows how the `-android` and `-jre` variants affect which fixes are used in the comparison.
+
+| Reported fix | Version set | Whether this fix is used in the comparison |
+| --- | --- | --- |
+| `33.7.2-android` | `33.8.0-jre` | No: the variants differ. |
+| `33.7.2` | `33.7.2-jre` | Yes: the fix has no variant. |
+
+The following fictional example shows a fix available only in another major version.
 
 ```text
 org.example:lib 2.5.0 has its fixes only in another major version (3.0.1)
 ```
 
-Hints apply to npm, pnpm, uv, pip, Go, Maven, and Gradle.
-Ranges and required or set version values from release checks are omitted from Slack and included with the checked information in the webhook's `language_items[].update.chain.hints` for npm, pnpm, and uv, or `language_items[].packages[].fix_hint` for pip, Go, Maven, and Gradle.
+##### Conditions
+
+The checks cover the newest release within the current major and minor version and the newest release overall.
+Only stable releases at or above the dependent's or deciding pom's current version are considered.
+
+- Include the current version when selecting the newest in the same minor version.
+- Omit the “newest” line when both selections are the same.
+
+| Pom checked | How the target package's version is read |
+| --- | --- |
+| Parent pom | Check the version declared in `dependencies`, falling back to management if no version is declared. |
+| Dependent's pom | Check the version declared in `dependencies`, use management when the declaration has no version, and show “does not specify” when the target is not declared. |
+| BOM | Check its managed version, following imported BOMs to a depth of three. |
+
+| Result of the check | Slack display |
+| --- | --- |
+| Sets a version at or above the target that fixes all target vulnerabilities | `specifies a fixed version` |
+| Sets a version that does not meet these conditions | `does not specify a fixed version` |
+| Sets no version | `does not specify package-name` |
+
+A series is a major and minor version pair, and series and variant comparisons are made for each vulnerability.
+Use fixes with the same variant as the version being checked, along with fixes that have no variant.
+
+For each vulnerability, applicable fixes are compared in the following order.
+
+| Applicable fixes | Requirement for the version being set |
+| --- | --- |
+| Fixes exist in the same major and minor version | At or above every fix in that series. |
+| None exist in the same series, but fixes exist in the same major version | At or above every fix in that major version. |
+| None exist in the same major version | At or above every applicable fix. |
+| No applicable fix exists | The vulnerability is not considered fixed. |
+
+- Omit a release hint if the pom being checked, any parent, or any imported BOM contains a profile with an activation condition (`activeByDefault`, `jdk`, `os`, `property`, or `file`) that changes dependencies, dependency management, properties, or the parent.
+- Profiles used only when explicitly selected by name do not stop the check.
+
+For `maven_fix_in_other_major` and `maven_release_not_found`, check for a fixed version in another major version using the [selection rules shared with Maven](remediation-logic.md#maven-target-versions).
+Whether it fixes all target vulnerabilities is checked using the same variant and series rules above.
+
+#### Timing and limits for reading published release information
+
+##### What is shown
+
+The hints show published release information that could be checked.
+If that information cannot be read, identified dependent or deciding pom information is retained.
+
+##### Conditions
+
+Published release information for notifications is read after the plan and PR decisions, with limits on both reads and time.
+
+1. Attempt the update
+2. Decide whether to make a PR
+3. Read published dependent releases from npm, PyPI, Maven Central, or another registry
+4. Notify
+
+The presence or content of these hints therefore does not affect the plan or PR.
+
+| Managers | Sources read | Read limits | Time limit |
+| --- | --- | --- | --- |
+| npm and pnpm | Published releases and dependency requirements from the npm registry | Up to three target-package and dependent-package pairs per item. | 30 seconds in total per item. |
+| uv and pip | Published releases and metadata (`requires_dist`) from PyPI | Up to three target-package and dependent-package pairs per item. | 30 seconds in total per item. |
+| Go hints for fixes in another major version | `go.mod` and `go.sum` from GitHub; `@latest` and `go.mod` from the Go module proxy | Latest-version checks for up to three target-package and dependent-package pairs per item; up to 200 proxy reads of `go.mod` per item, including latest versions. | 30 seconds in total per item. |
+| Maven and Gradle | Version lists, poms, parents, and imported BOMs from Maven Central | Up to 12 reads per package, including the version list and shared across all dependents; dependent release checks for up to three target-package and dependent-package pairs per item. | 30 seconds in total per item. |
+
+Maven Central reads for Maven and Gradle hints are counted separately from reads needed for the update.
+
+| Scope | Conditions for omitting a line |
+| --- | --- |
+| npm and pnpm | Peer dependencies, aliases, conflicting ranges, unsupported ranges, a bundled shrinkwrap, or similar conditions prevent evaluation. |
+| uv and pip | A published release has differing requirements for the same package, unreadable requirements, or unsupported version specifications. |
+| Reading published release information | Information cannot be read from the registry or other source, or a read or time limit is reached. |
 
 ### Re-pull guidance {#repull-guidance}
 

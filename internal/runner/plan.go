@@ -413,6 +413,21 @@ func (r Runner) buildPlan(ctx context.Context, cyc planCycle, report analyze.Rep
 			"registry_requests", ns.RegistryRequests)
 	}
 
+	// The moved bases are compared after every comparison that decides a
+	// proposal, with what the scan limits leave, and under the same reserve.
+	rb := planner.CheckRebuildBases(ctx, &plan, remediation.RebuildCheckOptions{
+		ReserveTime: pc.CycleTimeout / 3, ReserveRequests: pc.MaxRegistryRequests / 4,
+	})
+	if rb.Items > 0 {
+		log.Info("moved base images compared",
+			"items", rb.Items,
+			"checked", rb.Checked,
+			"partial", rb.Partial,
+			"not_checked", rb.NotChecked,
+			"baseline_rescans", rb.BaselineRescans,
+			"registry_requests", rb.RegistryRequests)
+	}
+
 	info := &notify.PlanInfo{Plan: &plan}
 	if pc.Plans != nil {
 		if err := pc.Plans.Save(plan); err != nil {

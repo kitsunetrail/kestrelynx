@@ -769,10 +769,10 @@ func (r *run) compareBase(ref ImageRef, tag string, platform inventory.Platform,
 		return fail(CategoryFailed, ReasonRegistryError, "the registry resolution has no usable manifest digest")
 	}
 	repoKey, _ := inventory.RepositoryKey(ref.Repository)
-	baseScanKey := string(RoleBaseline) + "|" + repoKey + "|" + entityString(inventory.EntityKey{Digest: curDigest, Platform: platform})
-	candScanKey := string(RoleCandidate) + "|" + repoKey + "|" + entityString(inventory.EntityKey{Digest: candDigest, Platform: platform})
-	baseScan, baseCached := r.dfScans[baseScanKey]
-	candScan, candCached := r.dfScans[candScanKey]
+	curKey := baseScanKey(RoleBaseline, repoKey, curDigest, platform)
+	candKey := baseScanKey(RoleCandidate, repoKey, candDigest, platform)
+	baseScan, baseCached := r.dfScans[curKey]
+	candScan, candCached := r.dfScans[candKey]
 	// Both limits are checked before either is spent.
 	if !baseCached && r.plan.Usage.BaselineRescans >= r.p.cfg.Limits.MaxBaselineRescans {
 		return fail(CategoryDeferred, ReasonBaselineRescanLimit, fmt.Sprintf("baseline rescan limit of %d reached", r.p.cfg.Limits.MaxBaselineRescans))
@@ -780,27 +780,15 @@ func (r *run) compareBase(ref ImageRef, tag string, platform inventory.Platform,
 	if !candCached && r.plan.Usage.CandidateScans >= r.p.cfg.Limits.MaxCandidateScans {
 		return fail(CategoryDeferred, ReasonCandidateScanLimit, fmt.Sprintf("candidate scan limit of %d reached", r.p.cfg.Limits.MaxCandidateScans))
 	}
-	scan := func(role ScanRole, repo, tag string, d inventory.Digest) scanned {
-		target := scanner.ScanTarget{
-			Subject: inventory.ImageSubject{
-				Ref:      repo + ":" + tag,
-				Key:      inventory.EntityKey{Digest: d, Platform: platform},
-				Resolved: true,
-			},
-			Registry: inventory.RegistryRef{Repository: repo, Digest: d},
-			Source:   scanner.SourceRemote,
-		}
-		return r.scanUnder(role, target)
-	}
 	if !baseCached {
 		r.plan.Usage.BaselineRescans++
-		baseScan = scan(RoleBaseline, ref.Repository, ref.Tag, curDigest)
-		r.dfScans[baseScanKey] = baseScan
+		baseScan = r.scanBaseTag(RoleBaseline, ref.Repository, ref.Tag, curDigest, platform)
+		r.dfScans[curKey] = baseScan
 	}
 	if !candCached {
 		r.plan.Usage.CandidateScans++
-		candScan = scan(RoleCandidate, ref.Repository, tag, candDigest)
-		r.dfScans[candScanKey] = candScan
+		candScan = r.scanBaseTag(RoleCandidate, ref.Repository, tag, candDigest, platform)
+		r.dfScans[candKey] = candScan
 	}
 	c.baseScan, c.candScan = baseScan.id, candScan.id
 	if err := r.ctx.Err(); err != nil {
@@ -810,6 +798,25 @@ func (r *run) compareBase(ref ImageRef, tag string, platform inventory.Platform,
 	dec := Decide(targets, vr, r.intel())
 	c.vr, c.dec = &vr, &dec
 	return c
+}
+
+// baseScanKey is the key of a base image's scan in the pass's cache.
+func baseScanKey(role ScanRole, repoKey string, d inventory.Digest, platform inventory.Platform) string {
+	return string(role) + "|" + repoKey + "|" + entityString(inventory.EntityKey{Digest: d, Platform: platform})
+}
+
+// scanBaseTag scans a tag of a base image, resolved to d, from the registry
+// under the prepared conditions.
+func (r *run) scanBaseTag(role ScanRole, repo, tag string, d inventory.Digest, platform inventory.Platform) scanned {
+	return r.scanUnder(role, scanner.ScanTarget{
+		Subject: inventory.ImageSubject{
+			Ref:      repo + ":" + tag,
+			Key:      inventory.EntityKey{Digest: d, Platform: platform},
+			Resolved: true,
+		},
+		Registry: inventory.RegistryRef{Repository: repo, Digest: d},
+		Source:   scanner.SourceRemote,
+	})
 }
 
 // attachLayers records on each target the layers its findings were reported

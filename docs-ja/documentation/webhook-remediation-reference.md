@@ -146,6 +146,7 @@
 | `dockerfile_items[].candidate` | object | 候補の[イメージ情報](#remediation-image-fields)で、候補がなければ省略 |
 | `dockerfile_items[].counts` | object | 整数値の`targets`・`resolved`・`remaining`・`introduced`による集計 |
 | `dockerfile_items[].rebuild_runtimes` | objectの配列 | 全稼働イメージが`floating_base_unconfirmed`の場合にまとめたランタイムの再ビルドの見込みで、空なら省略 |
+| `dockerfile_items[].rebuild_check` | object | 現在のベースとの突き合わせをまとめた結果で、全稼働イメージが`floating_base_unconfirmed`の場合だけ付け、結果がなければ省略 |
 | `dockerfile_items[].entities` | objectの配列 | 稼働イメージごとの照合・比較結果で、空なら省略 |
 | `dockerfile_items[].newer_series` | object | 稼働イメージ全体の新しい系列の確認結果で、結果がなければ省略 |
 | `dockerfile_items[].newer_series.status` | string | [新しい系列の状態値](remediation-reference.md#newer-series-status-values) |
@@ -177,6 +178,7 @@
 | `kev_targets` | integer | KEVに掲載された比較対象の所見数で、`0`なら省略 |
 | `comparison` | object | [比較結果](#remediation-image-fields)で、結果がなければ省略 |
 | `rebuild_runtimes` | objectの配列 | この稼働イメージが`floating_base_unconfirmed`の場合のランタイムの再ビルドの見込みで、空なら省略 |
+| `rebuild_check` | object | この稼働イメージが`floating_base_unconfirmed`の場合の、現在のベースとの突き合わせの結果で、結果がなければ省略 |
 | `scans` | objectの配列 | [スキャンの記録](#remediation-image-fields)で、空なら省略 |
 
 両方の`rebuild_runtimes[]`は、現在のベースのランタイムの版から求めた見込みで、完成イメージの比較ではありません。
@@ -193,6 +195,53 @@
   - 新しい版で増えるCVEは含めない
   - 項目全体では`package`・`installed`・`base_version`が同じ記録をまとめ、CVEのIDの重複を除いて並べ、どれかの稼働イメージで残るIDは`disappearing`に含めない
   - 稼働イメージごとの判定が混在する場合は項目全体の見込みを省略し、`entities[]`には個別の記録を残す
+
+両方の`rebuild_check`は、稼働イメージと現在のベースをパッケージの場所・CVEで突き合わせた見込みで、再ビルドした完成イメージの比較ではなく、`final_image_verified`は`false`のままです。
+
+| `rebuild_check`のフィールド名 | 型 | 意味・省略条件 |
+| --- | --- | --- |
+| `status` | string | 下表に示す確認の状態 |
+| `reason` / `detail` | string | 比較していない場合の理由と補足で、空なら省略 |
+| `gone` | objectの配列 | 稼働イメージの所見のうち、ベースの同じ場所にパッケージがあり、別の版でCVEがないもので、空なら省略 |
+| `remaining` | objectの配列 | 稼働イメージの所見のうち、ベースの同じ場所にも同じCVEがあるもので、空なら省略 |
+| `not_in_base` | objectの配列 | ベースの同じ場所にないOSパッケージとグローバルな`node_modules`のパッケージで、空なら省略 |
+| `other_not_in_base` | integer | アプリの依存など、上記以外でベースの同じ場所にないパッケージの数で、`0`なら省略 |
+| `only_in_base` | objectの配列 | ベースの深刻度の範囲内でstatusが`fixed`かつ修正版があり、稼働イメージの同じ場所に対応する所見がないもので、空なら省略 |
+| `undetermined` | integer | 判定できなかった所見の数で、`0`なら省略 |
+| `running_scan` | object | [スキャンの記録](#remediation-image-fields)と同じ形式の稼働イメージのスキャン記録で、情報なしは省略 |
+| `base_scan` | object | [スキャンの記録](#remediation-image-fields)と同じ形式の現在のベースのスキャン記録で、情報なしは省略 |
+
+`gone`・`remaining`・`not_in_base`・`only_in_base`の配列には、次のパッケージのフィールドを使います。
+
+| パッケージのフィールド名 | 型 | 意味・省略条件 |
+| --- | --- | --- |
+| `name` | string | パッケージ名 |
+| `version` | string | 稼働イメージのパッケージの版で、`only_in_base`では現在のベースの版 |
+| `class` | string | パッケージの分類 |
+| `path` | string | パッケージのパス、または`PkgPath`がない場合の`Target`で、OSパッケージや空の場合は省略 |
+| `owner` | string | グローバルな`node_modules`の所有パッケージ名で、該当しなければ省略 |
+| `base_version` | string | `gone`の記録に対応する、現在のベースの同じ場所にある版で、空なら省略 |
+| `vuln_ids` | stringの配列 | このパッケージのこの結果に該当するCVEのID |
+
+| `status`の値 | 意味 |
+| --- | --- |
+| `checked` | 対象の所見をすべて判定した |
+| `partial` | 未判定の所見がある |
+| `not_checked` | 比較しておらず、`reason`と`detail`に説明を記録する |
+
+- 所見と場所
+  - 稼働イメージの対象は、深刻度の範囲内でstatusが`fixed`かつ修正版がある所見
+  - ベース側は、深刻度の範囲内のすべての所見でCVEが残っているかを確かめる
+  - 言語ランタイム本体の所見は`rebuild_runtimes`で扱う
+  - 場所の照合と`undetermined`になる条件は[ベースレイヤーの照合](remediation-logic.md#base-layer-matching)を参照
+- 項目全体の集計
+  - `not_checked`が1つでもあれば項目も`not_checked`とし、それ以外で`partial`が1つでもあれば項目も`partial`とする
+  - `gone`には、その所見を持つすべての稼働イメージで消えるものだけを含める
+  - プラットフォームによってベースの版が違う場合は、版ごとに別の記録にする
+- 結果の読み方
+  - `not_in_base`は、ベースから消えたものとDockerfileで足したものを区別できない
+  - `only_in_base`には、Dockerfileの手順で消す所見も含む
+  - Dockerfileの手順の効果など、見込みの制約は[再ビルドの案内](remediation-results.md#rebuild-guidance)を参照
 
 検査の範囲は、[対象別の検証範囲](remediation-logic.md#verification-scope)を参照してください。
 

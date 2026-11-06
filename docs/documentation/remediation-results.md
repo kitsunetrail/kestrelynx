@@ -676,15 +676,74 @@ It does not mean that running containers have been replaced with that content.
 
 ### Rebuild guidance {#rebuild-guidance}
 
+Rebuild guidance shows expected changes from rebuilding and the steps to take when a rebuild is recommended.
+
 | Displayed content | Interpretation |
 | --- | --- |
 | `a rebuild is expected to pick up … or later` | The pip dependency range permits a fixed version, so a rebuild is expected to resolve the finding. |
 | Guidance to rebuild the Go standard library with a newer Go | `stdlib` findings do not produce a PR; a separate remediation plan item recommends rebuilding with at least the Go version that fixes all CVEs. |
 | `Rebuild: PR #… (base image … … → …) is merged, but the running image is still built from …` | The base-update PR is merged and the running images are unchanged since the PR was created, so deploying an image built from the merged Dockerfile puts the update in place. |
-| `which base the running image was built from cannot be confirmed` | The base behind a floating tag could not be confirmed, so the guidance is to pull the current base and rebuild. |
-| Guidance to run `docker compose build --pull` | Instructions to pull the base again and rebuild when the Dockerfile was discovered through Compose `build`. |
-| pull the base again, rebuild the image (for example with `docker build --pull`) and deploy it again | Guidance when the Dockerfile was found only through a configured mapping, including images built in CI. |
+| `the first layers of the running image do not match the current …` | The current base referenced by the floating tag does not match the start of the running image's layers. The check below determines whether rebuild steps are shown. |
+| Guidance to run `docker compose build --pull` | When rebuild steps are shown for a Dockerfile discovered through Compose `build`, they instruct you to pull the current base and rebuild. |
+| pull the base again, rebuild the image (for example with `docker build --pull`) and deploy it again | When rebuild steps are shown for a Dockerfile found only through a configured mapping, they instruct you to pull the current base, rebuild, and deploy again; this also applies to images built in CI. |
 | `Node.js in the current … is …; if the rebuild takes over this version, … of the … findings of the detected Node.js … are expected to disappear (the rebuilt image is not checked)` | The number of currently detected CVEs expected to disappear if the rebuild inherits the current base's runtime version, excluding CVEs introduced by the new version; Python is displayed as `Python runtime`. |
+
+For a floating-tag `FROM` whose current base layers do not match the start of the running image, KestreLynx scans the current base from the registry and matches findings with the running image by package location and CVE.
+It does not build an image.
+
+Slack and email use the following branches.
+
+```text
+Check against the current base
+├─ checked
+│  ├─ Findings are expected to disappear
+│  │  └─ Rebuild: show steps and count in the rebuild summary
+│  ├─ None are expected to disappear, but there is something to display
+│  │  └─ Base check: show details without steps or a rebuild summary count
+│  └─ None are expected to disappear and there is nothing to display
+│     └─ Omit the line, including when only other_not_in_base is present
+├─ partial
+│  └─ Rebuild: show steps and count in the rebuild summary
+│     Append " (some findings could not be confirmed)"
+└─ not_checked
+   └─ Rebuild: show steps and count in the rebuild summary
+      Append " (which findings disappear could not be confirmed)"
+```
+
+- Findings expected to disappear
+  - `gone` contains findings, or `rebuild_runtimes` contains findings expected to disappear
+- Details eligible for display
+  - Package lists in `gone`, `remaining`, `not_in_base`, and `only_in_base`
+  - Runtime estimates, including those with only remaining findings
+- Summary counts
+  - `Base check` is not counted as `rebuild`
+  - A hidden line is not counted as `rebuild`
+
+The following examples use illustrative package names and versions.
+
+```text
+Rebuild: the first layers of the running image do not match the current node:24-alpine; pull the base again, rebuild the image (for example with `docker build --pull`) and deploy it again
+  • gone if the current base's version carries over: package-a 1.0.0 → 1.0.1
+  • also in the current base: package-b 2.0.0
+  • new in the current base: package-c 3.0.0
+```
+
+```text
+Base check: no finding is confirmed to disappear with the current node:24-alpine
+  • also in the current base: package-b 2.0.0
+  • not in the current base: package-d 4.0.0 (3 packages with what it bundles)
+```
+
+- Package lists in Slack
+  - Show package names and versions without CVE IDs
+  - Group `not_in_base` packages in a global `node_modules` by their owning package
+  - Show at most 10 entries per line and represent additional entries by a count
+- Limits of the estimate
+  - Dockerfile `RUN` effects are not evaluated, so an instruction such as `apk upgrade` may remove findings listed as remaining
+  - Reinstalling an older version at the same location in the Dockerfile may leave findings that were expected to disappear
+  - “Not in the current base” cannot distinguish packages removed from the base from packages added by the Dockerfile
+  - `only_in_base` also includes findings that Dockerfile instructions remove from the completed image
+  - `final_image_verified` remains `false`
 
 None of these cases confirms the version actually installed by a rebuild or resolution in the running image after deployment.
 For details, see [Direct dependency version constraints](remediation-logic.md#direct-dependencies), [Base layer matching](remediation-logic.md#base-layer-matching), and [Go standard library rebuild guidance](remediation-logic.md#go-stdlib-rebuild).

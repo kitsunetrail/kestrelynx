@@ -33,7 +33,7 @@ func rebuildPlanText(t *testing.T, it remediation.DockerfileItem, lang Language)
 // line names the version a rebuild would take over.
 func TestPlanMessage_DockerfileRebuildRuntime(t *testing.T) {
 	compose := map[Language]string{
-		LanguageJA: "稼働中のイメージの作成元のベースを確認できない。`docker compose build --pull` で再ビルドすると現在のベースが入る",
+		LanguageJA: "`docker compose build --pull` で再ビルドすると現在のベースが入る",
 		LanguageEN: "rebuilding with `docker compose build --pull` picks up the current base",
 	}
 	mapping := map[Language]string{

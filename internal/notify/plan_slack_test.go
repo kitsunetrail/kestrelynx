@@ -302,7 +302,7 @@ func TestPlanMessage_ProposalsWithoutPullRequests(t *testing.T) {
 			"修正するファイル: ex/app の requirements.txt\n再ビルド: urllib3 1.26.5: 再ビルドで 1.26.18 以上が入る見込み",
 			"更新候補: express 4.18.2 → 4.19.2、lodash 4.17.20 → 4.17.21、qs 6.11.0 → 6.11.3 (KEV 1件)\n要判断: package-lock.json に無いパッケージ（lockfile 以外の経路でイメージに入ったものとみられ、lockfile の更新では直せない）\n  • ghost 1.0.0",
 			"要判断: 候補でKEV掲載の脆弱性が新たに入る",
-			"再ビルド: 稼働中のイメージの作成元のベースを確認できない。ベースを取り直して再ビルドし(`docker build --pull` など)、デプロイし直す",
+			"再ビルド: 稼働中のイメージの先頭のレイヤーが現在の python:3.12-slim と一致しない。ベースを取り直して再ビルドし(`docker build --pull` など)、デプロイし直す(消える所見は確認できなかった)",
 		},
 		LanguageEN: {
 			"3 update candidate(s) · 1 re-pull · 2 rebuild · 4 need a decision",

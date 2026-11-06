@@ -8,7 +8,7 @@ TEXT: KestreLynx 2026-06-24 09:00 修正計画 — 更新候補 3件 · 再pull 
 *イメージ: web:latest*
 再pull: 所見4件中3件が解消 (KEV 2件)
 修正するファイル: ex/app の docker/Dockerfile
-再ビルド: 稼働中のイメージの作成元のベースを確認できない。ベースを取り直して再ビルドし(`docker build --pull` など)、デプロイし直す
+再ビルド: 稼働中のイメージの先頭のレイヤーが現在の python:3.12-slim と一致しない。ベースを取り直して再ビルドし(`docker build --pull` など)、デプロイし直す(消える所見は確認できなかった)
 --- divider ---
 --- section ---
 *イメージ: api:2.0.1*

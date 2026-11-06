@@ -146,6 +146,7 @@ See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for
 | `dockerfile_items[].candidate` | object | Candidate [image information](#remediation-image-fields); omitted when there is no candidate. |
 | `dockerfile_items[].counts` | object | Integer counts named `targets`, `resolved`, `remaining`, and `introduced`. |
 | `dockerfile_items[].rebuild_runtimes` | array of objects | Aggregated runtime rebuild estimates when all running images have the `floating_base_unconfirmed` outcome; omitted when empty. |
+| `dockerfile_items[].rebuild_check` | object | Aggregate check against the current base, available only when all running images have the `floating_base_unconfirmed` outcome; omitted when no result is available. |
 | `dockerfile_items[].entities` | array of objects | Matching and comparison results for each running image; omitted when empty. |
 | `dockerfile_items[].newer_series` | object | Newer series check result across all running images; omitted when no result is available. |
 | `dockerfile_items[].newer_series.status` | string | A [Newer series status value](remediation-reference.md#newer-series-status-values). |
@@ -177,6 +178,7 @@ See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for
 | `kev_targets` | integer | Number of comparison targets listed in KEV; omitted when `0`. |
 | `comparison` | object | [Comparison result](#remediation-image-fields); omitted when no result is available. |
 | `rebuild_runtimes` | array of objects | Runtime rebuild estimates for this running image when its outcome is `floating_base_unconfirmed`; omitted when empty. |
+| `rebuild_check` | object | Check of this running image against the current base when its outcome is `floating_base_unconfirmed`; omitted when no result is available. |
 | `scans` | array of objects | [Scan records](#remediation-image-fields); omitted when empty. |
 
 Both `rebuild_runtimes[]` arrays contain estimates based on the current base's runtime version, not comparisons of the final image.
@@ -193,6 +195,53 @@ Both `rebuild_runtimes[]` arrays contain estimates based on the current base's r
   - CVEs introduced by the new version are excluded
   - Item-level records are grouped by `package`, `installed`, and `base_version`, with CVE IDs deduplicated and sorted, and IDs remaining in any running image excluded from `disappearing`
   - Mixed outcomes across running images omit the item-level estimate while preserving individual records in `entities[]`
+
+Both `rebuild_check` objects describe estimates from matching the running image with the current base by package location and CVE, not comparisons of a completed rebuilt image; `final_image_verified` remains `false`.
+
+| `rebuild_check` field | Type | Meaning and omission conditions |
+| --- | --- | --- |
+| `status` | string | Check status, as defined below. |
+| `reason` / `detail` | string | Reason and additional details when no comparison was made; omitted when empty. |
+| `gone` | array of objects | Running-image findings for which the base has the package at the same location with a different version and without the CVE; omitted when empty. |
+| `remaining` | array of objects | Running-image findings whose CVE is also present at the same location in the base; omitted when empty. |
+| `not_in_base` | array of objects | OS packages and packages in a global `node_modules` absent from the same location in the base; omitted when empty. |
+| `other_not_in_base` | integer | Count of other packages absent from the same location in the base, such as application dependencies; omitted when `0`. |
+| `only_in_base` | array of objects | Base findings within the severity range whose status is `fixed` and that have a fixed version, with no corresponding finding at the same location in the running image; omitted when empty. |
+| `undetermined` | integer | Count of findings that could not be determined; omitted when `0`. |
+| `running_scan` | object | Running-image scan record in the [scan record format](#remediation-image-fields); omitted when unavailable. |
+| `base_scan` | object | Current-base scan record in the [scan record format](#remediation-image-fields); omitted when unavailable. |
+
+The `gone`, `remaining`, `not_in_base`, and `only_in_base` arrays use the following package fields.
+
+| Package field | Type | Meaning and omission conditions |
+| --- | --- | --- |
+| `name` | string | Package name. |
+| `version` | string | Package version in the running image, or in the current base for `only_in_base`. |
+| `class` | string | Package class. |
+| `path` | string | Package path, or `Target` when `PkgPath` is unavailable; omitted for OS packages or when empty. |
+| `owner` | string | Owning package in a global `node_modules`; omitted when not applicable. |
+| `base_version` | string | Version at the same location in the current base for a `gone` entry; omitted when empty. |
+| `vuln_ids` | array of strings | CVE IDs belonging to this result for the package. |
+
+| `status` value | Meaning |
+| --- | --- |
+| `checked` | All targeted findings were determined. |
+| `partial` | Some findings could not be determined. |
+| `not_checked` | No comparison was made; `reason` and `detail` explain why. |
+
+- Findings and locations
+  - Running-image targets are findings within the severity range whose status is `fixed` and that have a fixed version
+  - All base findings within the severity range are used to determine whether a CVE remains
+  - Language-runtime findings are handled by `rebuild_runtimes`
+  - Location matching and conditions for `undetermined` are described in [Base layer matching](remediation-logic.md#base-layer-matching)
+- Item-level aggregation
+  - Any `not_checked` result makes the item `not_checked`; otherwise, any `partial` result makes it `partial`
+  - `gone` includes a finding only if it disappears for every running image that has it
+  - Different base versions across platforms remain separate entries
+- Interpretation
+  - `not_in_base` cannot distinguish packages removed from the base from packages added by the Dockerfile
+  - `only_in_base` includes findings that Dockerfile instructions may remove
+  - The effects of Dockerfile instructions and other limits are described in [Rebuild guidance](remediation-results.md#rebuild-guidance)
 
 See [Verification scope by target](remediation-logic.md#verification-scope) for the scope of checks.
 

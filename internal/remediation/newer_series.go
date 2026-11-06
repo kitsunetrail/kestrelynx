@@ -148,17 +148,7 @@ func (p *Planner) CheckNewerSeries(ctx context.Context, plan *Plan, opts NewerSe
 	p.cfg.Budget.Reserve(opts.ReserveRequests)
 	defer p.cfg.Budget.Reserve(0)
 
-	inputs := map[string]ImageInput{}
-	for _, in := range r.inputs {
-		ref := in.Scan.Subject.Ref
-		if ref == "" {
-			ref = in.Scan.Image
-		}
-		k := ref + "|" + entityString(in.Scan.Subject.Key)
-		if _, ok := inputs[k]; !ok {
-			inputs[k] = in
-		}
-	}
+	inputs := r.inputsByEntity()
 	type unit struct {
 		prio Priority
 		item int // index into Items, or -1
@@ -211,6 +201,23 @@ func (p *Planner) CheckNewerSeries(ctx context.Context, plan *Plan, opts NewerSe
 	sum.RegistryRequests = used
 	*plan = r.plan
 	return sum
+}
+
+// inputsByEntity indexes the pass's images by their reference and entity, the
+// key a plan's items and running images are found under.
+func (r *run) inputsByEntity() map[string]ImageInput {
+	inputs := map[string]ImageInput{}
+	for _, in := range r.inputs {
+		ref := in.Scan.Subject.Ref
+		if ref == "" {
+			ref = in.Scan.Image
+		}
+		k := ref + "|" + entityString(in.Scan.Subject.Key)
+		if _, ok := inputs[k]; !ok {
+			inputs[k] = in
+		}
+	}
+	return inputs
 }
 
 // newerSeriesReasons are the outcomes of a pinned item's own series that

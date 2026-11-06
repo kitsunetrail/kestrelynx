@@ -153,6 +153,9 @@ type DockerfileEntity struct {
 	// image's base: what the current base's runtime versions would do to the
 	// running image's runtime findings.
 	RebuildRuntimes []RuntimeRebuild `json:"rebuild_runtimes,omitempty"`
+	// RebuildCheck is set when every running image of the item has a base the
+	// tag no longer points at: how this one compares with the current base.
+	RebuildCheck *RebuildCheck `json:"rebuild_check,omitempty"`
 
 	// NewerSeries is this running image's part of the item's check of newer
 	// series of the base.
@@ -192,6 +195,9 @@ type DockerfileItem struct {
 	// RebuildRuntimes is the entities' records grouped by runtime and
 	// versions; set only when every entity is floating_base_unconfirmed.
 	RebuildRuntimes []RuntimeRebuild `json:"rebuild_runtimes,omitempty"`
+	// RebuildCheck is the entities' checks taken together; set only when every
+	// entity is floating_base_unconfirmed.
+	RebuildCheck *RebuildCheck `json:"rebuild_check,omitempty"`
 
 	// FinalImageVerified is always false: the image rebuilt from the candidate
 	// base is not built or scanned, and the instructions after the FROM can

@@ -992,6 +992,133 @@ func (b *planBuilder) ownerText(o remediation.ChainOwner) string {
 
 // --- Dockerfile base images ---
 
+// rebuildLines says what comparing the running images with the current base
+// shows. A rebuild is proposed when something is expected to disappear or when
+// that could not be established; otherwise the line only says what was found,
+// and with nothing to say there is no line.
+func (b *planBuilder) rebuildLines(e *planEntry, it remediation.DockerfileItem, file string) {
+	c := it.RebuildCheck
+	base := litMrkdwn(it.BaseRef)
+	gone := c.HasGone()
+	var details []string
+	if c != nil {
+		details = b.rebuildDetails(c)
+	}
+	var runtimes []string
+	for _, rr := range it.RebuildRuntimes {
+		if total := len(rr.Disappearing) + len(rr.Remaining); total > 0 {
+			gone = gone || len(rr.Disappearing) > 0
+			runtimes = append(runtimes, fmt.Sprintf(b.msg.PlanRebuildRuntime, base, litMrkdwn(rr.Package), litMrkdwn(rr.BaseVersion),
+				litMrkdwn(rr.Installed), len(rr.Disappearing), total))
+		}
+	}
+	checked := c != nil && c.Status == remediation.RebuildChecked
+	switch {
+	case !checked || gone:
+		guide := b.msg.PlanDockerfileRebuild
+		switch {
+		case it.Source.Origin == remediation.DockerfileFromMapping:
+			guide = b.msg.PlanDockerfileRebuildMapping
+		case it.Source.Origin == remediation.DockerfileFromBoth && slices.ContainsFunc(it.Workloads, isContainerKey):
+			guide = b.msg.PlanDockerfileRebuildMixed
+		}
+		text := fmt.Sprintf(guide, base)
+		switch {
+		case c == nil || c.Status == remediation.RebuildNotChecked:
+			text += b.msg.PlanRebuildUnchecked
+		case c.Status == remediation.RebuildPartial:
+			text += b.msg.PlanRebuildPartial
+		}
+		e.plain(file)
+		e.line(tagRebuild, kv(b.msg.PlanLblRebuild, text))
+	case len(details) > 0 || len(runtimes) > 0:
+		e.plain(file)
+		e.plain(kv(b.msg.PlanLblBaseCheck, fmt.Sprintf(b.msg.PlanBaseCheckNone, base)))
+	default:
+		return
+	}
+	for _, d := range details {
+		e.plain(d)
+	}
+	for _, r := range runtimes {
+		e.plain(r)
+	}
+}
+
+// rebuildDetails lists the packages of each outcome of a check.
+func (b *planBuilder) rebuildDetails(c *remediation.RebuildCheck) []string {
+	var out []string
+	add := func(format string, items []string) {
+		if len(items) > 0 {
+			out = append(out, fmt.Sprintf(format, b.joined(items)))
+		}
+	}
+	var gone []string
+	for _, p := range c.Gone {
+		gone = append(gone, b.change(p.Name, p.Version, p.BaseVersion))
+	}
+	add(b.msg.PlanRebuildGone, gone)
+	add(b.msg.PlanRebuildRemaining, b.rebuildPackages(c.Remaining))
+	add(b.msg.PlanRebuildNotInBase, b.rebuildNotInBase(c.NotInBase))
+	add(b.msg.PlanRebuildOnlyInBase, b.rebuildPackages(c.OnlyInBase))
+	return out
+}
+
+func (b *planBuilder) rebuildPackages(ps []remediation.RebuildPackage) []string {
+	var out []string
+	for _, p := range ps {
+		out = appendOnce(out, litMrkdwn(p.Name)+" "+litMrkdwn(p.Version))
+	}
+	return out
+}
+
+// rebuildNotInBase shows a package of a global node_modules together with what
+// is found under it, one entry per package installed there. Versions of the
+// package itself are not counted as what it bundles, and several of them are
+// each shown, since it cannot be told which one bundles what.
+func (b *planBuilder) rebuildNotInBase(ps []remediation.RebuildPackage) []string {
+	type group struct {
+		versions []string
+		bundled  map[string]bool
+	}
+	groups := map[string]*group{}
+	var owners []string
+	var out []string
+	for _, p := range ps {
+		if p.Owner == "" {
+			out = appendOnce(out, litMrkdwn(p.Name)+" "+litMrkdwn(p.Version))
+			continue
+		}
+		g := groups[p.Owner]
+		if g == nil {
+			g = &group{bundled: map[string]bool{}}
+			groups[p.Owner] = g
+			owners = append(owners, p.Owner)
+		}
+		if p.Name == p.Owner {
+			g.versions = appendOnce(g.versions, p.Version)
+		} else {
+			g.bundled[p.Name+"\x00"+p.Version] = true
+		}
+	}
+	sort.Strings(owners)
+	for _, owner := range owners {
+		g := groups[owner]
+		switch {
+		case len(g.versions) == 1 && len(g.bundled) > 0:
+			out = append(out, fmt.Sprintf(b.msg.PlanRebuildOwner, litMrkdwn(owner), litMrkdwn(g.versions[0]), len(g.bundled)+1))
+		default:
+			for _, v := range g.versions {
+				out = append(out, litMrkdwn(owner)+" "+litMrkdwn(v))
+			}
+			if len(g.bundled) > 0 {
+				out = append(out, fmt.Sprintf(b.msg.PlanRebuildOwnerPart, litMrkdwn(owner), len(g.bundled)))
+			}
+		}
+	}
+	return out
+}
+
 func (b *planBuilder) dockerfileUnit(u remediation.PRUnit) planEntry {
 	e := planEntry{}
 	b.imagesOf(&e, u.Workloads)
@@ -1046,21 +1173,7 @@ func (b *planBuilder) dockerfileItem(it remediation.DockerfileItem) planEntry {
 		e.plain(file)
 		e.line(tagNotComparable, kv(b.msg.PlanLblNotComparable, fmt.Sprintf(b.msg.PlanBaseLayersMismatch, litMrkdwn(it.BaseRef))))
 	case it.Category == remediation.CategoryNotComparable && it.Reason == remediation.ReasonFloatingBaseUnconfirmed:
-		e.plain(file)
-		guide := b.msg.PlanDockerfileRebuild
-		switch {
-		case it.Source.Origin == remediation.DockerfileFromMapping:
-			guide = b.msg.PlanDockerfileRebuildMapping
-		case it.Source.Origin == remediation.DockerfileFromBoth && slices.ContainsFunc(it.Workloads, isContainerKey):
-			guide = b.msg.PlanDockerfileRebuildMixed
-		}
-		e.line(tagRebuild, kv(b.msg.PlanLblRebuild, guide))
-		for _, rr := range it.RebuildRuntimes {
-			if total := len(rr.Disappearing) + len(rr.Remaining); total > 0 {
-				e.plain(fmt.Sprintf(b.msg.PlanRebuildRuntime, litMrkdwn(it.BaseRef), litMrkdwn(rr.Package), litMrkdwn(rr.BaseVersion),
-					litMrkdwn(rr.Installed), len(rr.Disappearing), total))
-			}
-		}
+		b.rebuildLines(&e, it, file)
 	default:
 		if label, tag, ok := b.outcome(it.Category); ok {
 			e.plain(file)

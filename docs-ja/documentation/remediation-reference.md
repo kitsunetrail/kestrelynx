@@ -659,7 +659,7 @@ PR記録の`state`には、次の値があります。
 | `base_onbuild` | ベースイメージに`ONBUILD`トリガーがある | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
 | `no_base_derived_findings` | 修正可能な所見が、ベースイメージのレイヤーにない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
 | `base_unchanged` | タグが指す現在のベースのレイヤーが稼働イメージの先頭と一致し、ベースの更新を確認できない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
-| `floating_base_unconfirmed` | 稼働イメージの作成元のベースを確認できない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
+| `floating_base_unconfirmed` | 浮動タグの`FROM`が現在指すベースのレイヤーが、稼働イメージの先頭のレイヤーと一致しない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
 | `dockerfile_set_not_adopted` | 同じDockerfileを使うWorkloadのすべてで、同じ候補を採用できなかった（個々のWorkloadの理由も確認する） | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
 | `compose_set_not_adopted` | 同じイメージを使うサービスのすべてで、同じ候補を採用できなかった（個々のサービスの理由も確認する） | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `instances_missing` | 対応付けたコンテナの稼働インスタンスがない、稼働中の参照を取得できない、または更新対象に計画の項目がないインスタンスがある | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |

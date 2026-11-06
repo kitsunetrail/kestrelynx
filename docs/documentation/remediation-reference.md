@@ -659,7 +659,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `base_onbuild` | The base image has `ONBUILD` triggers | [Base image selection](remediation-logic.md#base-image-selection) |
 | `no_base_derived_findings` | No fixable finding lies in the base image's layers | [Base layer matching](remediation-logic.md#base-layer-matching) |
 | `base_unchanged` | The layers of the base the tag points to now match the start of the running image, so no base update is visible | [Base layer matching](remediation-logic.md#base-layer-matching) |
-| `floating_base_unconfirmed` | The base image the running image was built from cannot be confirmed | [Base layer matching](remediation-logic.md#base-layer-matching) |
+| `floating_base_unconfirmed` | The layers of the current base referenced by a floating-tag `FROM` do not match the start of the running image's layers | [Base layer matching](remediation-logic.md#base-layer-matching) |
 | `dockerfile_set_not_adopted` | The same candidate could not be adopted for every workload sharing the Dockerfile (check each workload's own reason too) | [Base image selection](remediation-logic.md#base-image-selection) |
 | `compose_set_not_adopted` | The same candidate could not be adopted for every service sharing the image (check each service's own reason too) | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `instances_missing` | A mapped container has no running instance, a running reference is unavailable, or an instance in the update target has no plan item | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |

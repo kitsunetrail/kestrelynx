@@ -93,8 +93,11 @@ type dockerfileItemPayload struct {
 	// running image's language runtime findings, as read from the base's
 	// version; set only when the tag no longer points at the running base.
 	RebuildRuntimes []remediation.RuntimeRebuild `json:"rebuild_runtimes,omitempty"`
-	Entities        []dockerfileEntityPayload    `json:"entities,omitempty"`
-	PullRequest     *dockerfilePRPayload         `json:"pull_request,omitempty"`
+	// RebuildCheck is how the running images compare with the base the tag
+	// points at now; set only when the tag no longer points at the running base.
+	RebuildCheck *rebuildCheckPayload      `json:"rebuild_check,omitempty"`
+	Entities     []dockerfileEntityPayload `json:"entities,omitempty"`
+	PullRequest  *dockerfilePRPayload      `json:"pull_request,omitempty"`
 	// NewerSeries is the check of newer series of a pinned base over all the
 	// running images; each entity holds its own comparisons.
 	NewerSeries *newerSeriesPayload `json:"newer_series,omitempty"`
@@ -123,8 +126,43 @@ type dockerfileEntityPayload struct {
 	KEVTargets      int                          `json:"kev_targets,omitempty"`
 	Comparison      *comparisonPayload           `json:"comparison,omitempty"`
 	RebuildRuntimes []remediation.RuntimeRebuild `json:"rebuild_runtimes,omitempty"`
+	RebuildCheck    *rebuildCheckPayload         `json:"rebuild_check,omitempty"`
 	Scans           []remediationScanEntry       `json:"scans,omitempty"`
 	NewerSeries     *newerSeriesPayload          `json:"newer_series,omitempty"`
+}
+
+// rebuildCheckPayload is a check against the current base. Its two scans have
+// the same role, so each has its own field instead of a place in a list.
+type rebuildCheckPayload struct {
+	Status         string                       `json:"status"`
+	Reason         string                       `json:"reason,omitempty"`
+	Detail         string                       `json:"detail,omitempty"`
+	Gone           []remediation.RebuildPackage `json:"gone,omitempty"`
+	Remaining      []remediation.RebuildPackage `json:"remaining,omitempty"`
+	NotInBase      []remediation.RebuildPackage `json:"not_in_base,omitempty"`
+	OtherNotInBase int                          `json:"other_not_in_base,omitempty"`
+	OnlyInBase     []remediation.RebuildPackage `json:"only_in_base,omitempty"`
+	Undetermined   int                          `json:"undetermined,omitempty"`
+	RunningScan    *remediationScanEntry        `json:"running_scan,omitempty"`
+	BaseScan       *remediationScanEntry        `json:"base_scan,omitempty"`
+}
+
+func rebuildCheckPayloadOf(c *remediation.RebuildCheck, scans map[string]remediation.ScanExecution) *rebuildCheckPayload {
+	if c == nil {
+		return nil
+	}
+	out := &rebuildCheckPayload{
+		Status: string(c.Status), Reason: string(c.Reason), Detail: c.Detail,
+		Gone: c.Gone, Remaining: c.Remaining, NotInBase: c.NotInBase, OtherNotInBase: c.OtherNotInBase,
+		OnlyInBase: c.OnlyInBase, Undetermined: c.Undetermined,
+	}
+	if e := scanEntries(scans, c.RunningScan); len(e) == 1 {
+		out.RunningScan = &e[0]
+	}
+	if e := scanEntries(scans, c.BaseScan); len(e) == 1 {
+		out.BaseScan = &e[0]
+	}
+	return out
 }
 
 // dockerfilePRPayload is the state of the pull request unit for an item.
@@ -142,7 +180,7 @@ func dockerfileItemPayloadOf(it remediation.DockerfileItem, scans map[string]rem
 		FinalImageVerified: it.FinalImageVerified,
 		Category:           string(it.Category), Reason: string(it.Reason), Detail: it.Detail, Priority: string(it.Priority),
 		Workloads: it.Workloads, Source: it.Source, BaseRef: it.BaseRef, BaseKind: string(it.BaseKind), Counts: it.Counts,
-		RebuildRuntimes: it.RebuildRuntimes, AwaitingDeploy: it.AwaitingDeploy,
+		RebuildRuntimes: it.RebuildRuntimes, RebuildCheck: rebuildCheckPayloadOf(it.RebuildCheck, scans), AwaitingDeploy: it.AwaitingDeploy,
 	}
 	if out.Workloads == nil {
 		out.Workloads = []string{}
@@ -156,7 +194,7 @@ func dockerfileItemPayloadOf(it remediation.DockerfileItem, scans map[string]rem
 			Services: e.Services, Running: imageStatePayloadOf(e.Running, true),
 			LayerConfirmation: e.Layers, FindingsByLayer: e.Findings,
 			Category: string(e.Category), Reason: string(e.Reason), Detail: e.Detail, Targets: len(e.Targets),
-			RebuildRuntimes: e.RebuildRuntimes,
+			RebuildRuntimes: e.RebuildRuntimes, RebuildCheck: rebuildCheckPayloadOf(e.RebuildCheck, scans),
 		}
 		if e.CurrentBase != nil {
 			b := imageStatePayloadOf(*e.CurrentBase, false)

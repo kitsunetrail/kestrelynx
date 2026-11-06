@@ -308,6 +308,60 @@ Base remediation targets include findings that Trivy reports as belonging to the
   - Item-level guidance includes the estimate only when every running image in the item has the `floating_base_unconfirmed` outcome
   - The category remains `not_comparable` because this is not a comparison of the final image
 
+For a floating-tag `FROM` whose current base layers do not match the start of the running image, KestreLynx also checks the current base against the running image by package location and CVE.
+It records the result in `rebuild_check` without building an image.
+
+- Scan preparation
+  - Scan the content currently referenced by the base tag from the registry under the [scan comparison conditions](#comparison-conditions)
+  - Rescan the running image when its scan conditions differ from those used for the comparison
+  - Use the remaining `baseline_rescans_per_cycle` allowance and scan the same base content only once per cycle
+- Execution order and limits
+  - Run after planning, language-package updates, and newer-series checks, before saving the plan
+  - Reserve time and registry requests for PR processing as in newer-series checks, recording `newer_series_reserved` when that reservation stops the check
+- Findings included
+  - On the running-image side, consider findings within the severity range whose status is `fixed` and that have a fixed version
+  - On the base side, use all findings within the severity range to determine whether a CVE remains, including findings without a fixed version
+  - Leave language-runtime findings to `rebuild_runtimes`
+
+Package matching uses the package type, class, and name together with the location below.
+
+| Package kind | Location used for matching |
+| --- | --- |
+| OS package | Package name, without a path |
+| `node-pkg` | `PkgPath` unchanged |
+| `python-pkg` | `PkgPath` with the package's own version removed from `.dist-info` or `.egg-info` path elements |
+| `jar` | `PkgPath` with the package's own version removed from the filename suffix `-<version>.jar` |
+| Other kinds | `PkgPath`, or a path-shaped `Target` containing `/` when `PkgPath` is empty |
+
+- Findings that cannot be determined
+  - A `node-pkg`, `python-pkg`, or `jar` has no `PkgPath`, or another language package has neither `PkgPath` nor a path-shaped `Target`
+  - The base's OS cannot be identified for an OS package
+  - The base has multiple versions at the same location
+  - The base has the same version at the same location but does not report the CVE
+  - For a kind whose path structure has not been verified, the base has the same package name at another location
+  - A language-runtime finding is not covered by `rebuild_runtimes` for the detected version
+
+| Result | Matching outcome |
+| --- | --- |
+| `gone` | The base has the package at the same location with a different version and without the CVE |
+| `remaining` | The base has the same CVE at the same location |
+| `not_in_base` | An OS package or a package in a global `node_modules` is absent from the same location in the base |
+| `other_not_in_base` | Count of other packages absent from the same location in the base, such as application dependencies |
+| `only_in_base` | Base findings within the severity range whose status is `fixed` and that have a fixed version, with no corresponding finding at the same location in the running image |
+| `undetermined` | Count of findings that could not be determined |
+
+- Status
+  - `checked` means all targeted findings were determined
+  - `partial` means some findings could not be determined
+  - `not_checked` means no comparison was made, with `reason` and `detail` explaining why
+- Multiple running images
+  - The item has `rebuild_check` only when every running image has the `floating_base_unconfirmed` outcome
+  - Any `not_checked` result makes the item `not_checked`; otherwise, any `partial` result makes it `partial`
+  - `gone` includes a finding only if it disappears for every running image that has it
+  - Different base versions across platforms remain separate entries
+
+Notification branches and the limits of these estimates are described in [Rebuild guidance](remediation-results.md#rebuild-guidance).
+
 !!! note "Layer matching and build provenance"
 
     A match establishes correspondence between filesystem layers. Trivy may still attribute a package to a base layer even if a later instruction reinstalls the same name and version.

@@ -28,7 +28,9 @@ const deliveredVersion = 1
 // repository and target; operation events are delivered by sequence number instead and
 // are not part of it. The Dockerfile items add their edit location, the base
 // image and candidate, each running image's layer check, category and
-// counts. The check of newer series adds, for each item, Dockerfile item and
+// counts, and for a floating base the status of the check against the current
+// base and the packages it names in each outcome, without their findings. The
+// check of newer series adds, for each item, Dockerfile item and
 // running image of one, its status, shown tag and reason, and each candidate's
 // tag, status, reason, content, counts and per-target outcomes. A plan with
 // nothing in it has the empty fingerprint, the same as nothing delivered.
@@ -82,17 +84,18 @@ func Fingerprint(p Plan) string {
 		Packages  []langPackage     `json:"packages,omitempty"`
 	}
 	type dfEntity struct {
-		Running    image    `json:"running"`
-		Base       *image   `json:"base,omitempty"`
-		Candidate  *image   `json:"candidate,omitempty"`
-		Layers     string   `json:"layers"`
-		Category   Category `json:"category"`
-		Reason     Reason   `json:"reason,omitempty"`
-		Targets    int      `json:"targets,omitempty"`
-		Resolved   int      `json:"resolved,omitempty"`
-		Remaining  int      `json:"remaining,omitempty"`
-		Introduced int      `json:"introduced,omitempty"`
-		Newer      *newerFP `json:"newer_series,omitempty"`
+		Running    image      `json:"running"`
+		Base       *image     `json:"base,omitempty"`
+		Candidate  *image     `json:"candidate,omitempty"`
+		Layers     string     `json:"layers"`
+		Category   Category   `json:"category"`
+		Reason     Reason     `json:"reason,omitempty"`
+		Targets    int        `json:"targets,omitempty"`
+		Resolved   int        `json:"resolved,omitempty"`
+		Remaining  int        `json:"remaining,omitempty"`
+		Introduced int        `json:"introduced,omitempty"`
+		Newer      *newerFP   `json:"newer_series,omitempty"`
+		Rebuild    *rebuildFP `json:"rebuild_check,omitempty"`
 	}
 	type dfItem struct {
 		Key       string            `json:"key"`
@@ -105,6 +108,7 @@ func Fingerprint(p Plan) string {
 		Entities  []dfEntity        `json:"entities,omitempty"`
 		Counts    DockerfileCounts  `json:"counts"`
 		Newer     *newerFP          `json:"newer_series,omitempty"`
+		Rebuild   *rebuildFP        `json:"rebuild_check,omitempty"`
 		Deploy    *BaseUpdateMerged `json:"awaiting_deploy,omitempty"`
 	}
 	type prUnit struct {
@@ -154,7 +158,7 @@ func Fingerprint(p Plan) string {
 	})
 	for _, di := range p.DockerfileItems {
 		fd := dfItem{Key: di.Key, Category: di.Category, Reason: di.Reason, Workloads: append([]string(nil), di.Workloads...),
-			Path: di.Source.Path, Base: di.BaseRef, Counts: di.Counts, Newer: newerFingerprint(di.NewerSeries, nil), Deploy: di.AwaitingDeploy}
+			Path: di.Source.Path, Base: di.BaseRef, Counts: di.Counts, Newer: newerFingerprint(di.NewerSeries, nil), Rebuild: rebuildFingerprint(di.RebuildCheck), Deploy: di.AwaitingDeploy}
 		sort.Strings(fd.Workloads)
 		if c := di.Candidate; c != nil {
 			fd.Candidate = &image{Ref: c.Ref, Config: c.ConfigDigest, Manifest: c.ManifestDigest, Top: c.TopDigest}
@@ -172,6 +176,7 @@ func Fingerprint(p Plan) string {
 				fe.Resolved, fe.Remaining, fe.Introduced = e.Comparison.Counts()
 			}
 			fe.Newer = newerFingerprint(e.NewerSeries, e.Targets)
+			fe.Rebuild = rebuildFingerprint(e.RebuildCheck)
 			fd.Entities = append(fd.Entities, fe)
 		}
 		sort.Slice(fd.Entities, func(i, j int) bool {
@@ -284,6 +289,16 @@ type newerFP struct {
 	Candidates []newerCandFP     `json:"candidates,omitempty"`
 }
 
+// rebuildFP is what a check against the current base shows: the packages of
+// each outcome, in the check's order, without their findings.
+type rebuildFP struct {
+	Status     RebuildCheckStatus `json:"status"`
+	Gone       []string           `json:"gone,omitempty"`
+	Remaining  []string           `json:"remaining,omitempty"`
+	NotInBase  []string           `json:"not_in_base,omitempty"`
+	OnlyInBase []string           `json:"only_in_base,omitempty"`
+}
+
 type newerCandFP struct {
 	Tag      string             `json:"tag"`
 	Status   NewerSeriesStatus  `json:"status"`
@@ -294,6 +309,20 @@ type newerCandFP struct {
 	// Outcomes are the outcomes of the targets, sorted by vulnerability and
 	// package.
 	Outcomes []string `json:"outcomes,omitempty"`
+}
+
+func rebuildFingerprint(c *RebuildCheck) *rebuildFP {
+	if c == nil {
+		return nil
+	}
+	names := func(ps []RebuildPackage) []string {
+		var out []string
+		for _, p := range ps {
+			out = append(out, p.Name+"\x00"+p.Version+"\x00"+p.Path+"\x00"+p.BaseVersion)
+		}
+		return out
+	}
+	return &rebuildFP{Status: c.Status, Gone: names(c.Gone), Remaining: names(c.Remaining), NotInBase: names(c.NotInBase), OnlyInBase: names(c.OnlyInBase)}
 }
 
 func newerFingerprint(ns *NewerSeries, targets []Target) *newerFP {

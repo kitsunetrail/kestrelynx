@@ -197,6 +197,7 @@ Both `rebuild_runtimes[]` arrays contain estimates based on the current base's r
   - Mixed outcomes across running images omit the item-level estimate while preserving individual records in `entities[]`
 
 Both `rebuild_check` objects describe estimates from matching the running image with the current base by package location and CVE, not comparisons of a completed rebuilt image; `final_image_verified` remains `false`.
+When the status is `checked` and no findings are expected to disappear, the results are still included in `rebuild_check` even though nothing is displayed in Slack or email.
 
 | `rebuild_check` field | Type | Meaning and omission conditions |
 | --- | --- | --- |
@@ -246,6 +247,8 @@ The `gone`, `remaining`, `not_in_base`, and `only_in_base` arrays use the follow
 See [Verification scope by target](remediation-logic.md#verification-scope) for the scope of checks.
 
 ## Language package fields {#remediation-language-fields}
+
+Packages with reason `global_node_modules` are still included in `language_items[].packages[]` even when they are not displayed under “Needs a decision” in Slack or email.
 
 | `remediation` field | Type | Meaning and omission conditions |
 | --- | --- | --- |

@@ -992,18 +992,14 @@ func (b *planBuilder) ownerText(o remediation.ChainOwner) string {
 
 // --- Dockerfile base images ---
 
-// rebuildLines says what comparing the running images with the current base
-// shows. A rebuild is proposed when something is expected to disappear or when
-// that could not be established; otherwise the line only says what was found,
-// and with nothing to say there is no line.
+// rebuildLines proposes a rebuild when comparing the running images with the
+// current base shows that something is expected to disappear, or when that
+// could not be established. A comparison that shows nothing going away has
+// nothing to propose, so the plan does not mention it.
 func (b *planBuilder) rebuildLines(e *planEntry, it remediation.DockerfileItem, file string) {
 	c := it.RebuildCheck
 	base := litMrkdwn(it.BaseRef)
 	gone := c.HasGone()
-	var details []string
-	if c != nil {
-		details = b.rebuildDetails(c)
-	}
 	var runtimes []string
 	for _, rr := range it.RebuildRuntimes {
 		if total := len(rr.Disappearing) + len(rr.Remaining); total > 0 {
@@ -1012,33 +1008,29 @@ func (b *planBuilder) rebuildLines(e *planEntry, it remediation.DockerfileItem, 
 				litMrkdwn(rr.Installed), len(rr.Disappearing), total))
 		}
 	}
-	checked := c != nil && c.Status == remediation.RebuildChecked
-	switch {
-	case !checked || gone:
-		guide := b.msg.PlanDockerfileRebuild
-		switch {
-		case it.Source.Origin == remediation.DockerfileFromMapping:
-			guide = b.msg.PlanDockerfileRebuildMapping
-		case it.Source.Origin == remediation.DockerfileFromBoth && slices.ContainsFunc(it.Workloads, isContainerKey):
-			guide = b.msg.PlanDockerfileRebuildMixed
-		}
-		text := fmt.Sprintf(guide, base)
-		switch {
-		case c == nil || c.Status == remediation.RebuildNotChecked:
-			text += b.msg.PlanRebuildUnchecked
-		case c.Status == remediation.RebuildPartial:
-			text += b.msg.PlanRebuildPartial
-		}
-		e.plain(file)
-		e.line(tagRebuild, kv(b.msg.PlanLblRebuild, text))
-	case len(details) > 0 || len(runtimes) > 0:
-		e.plain(file)
-		e.plain(kv(b.msg.PlanLblBaseCheck, fmt.Sprintf(b.msg.PlanBaseCheckNone, base)))
-	default:
+	if c != nil && c.Status == remediation.RebuildChecked && !gone {
 		return
 	}
-	for _, d := range details {
-		e.plain(d)
+	guide := b.msg.PlanDockerfileRebuild
+	switch {
+	case it.Source.Origin == remediation.DockerfileFromMapping:
+		guide = b.msg.PlanDockerfileRebuildMapping
+	case it.Source.Origin == remediation.DockerfileFromBoth && slices.ContainsFunc(it.Workloads, isContainerKey):
+		guide = b.msg.PlanDockerfileRebuildMixed
+	}
+	text := fmt.Sprintf(guide, base)
+	switch {
+	case c == nil || c.Status == remediation.RebuildNotChecked:
+		text += b.msg.PlanRebuildUnchecked
+	case c.Status == remediation.RebuildPartial:
+		text += b.msg.PlanRebuildPartial
+	}
+	e.plain(file)
+	e.line(tagRebuild, kv(b.msg.PlanLblRebuild, text))
+	if c != nil {
+		for _, d := range b.rebuildDetails(c) {
+			e.plain(d)
+		}
 	}
 	for _, r := range runtimes {
 		e.plain(r)
@@ -1342,9 +1334,6 @@ type pkgLine struct {
 	bom *remediation.MavenBOMRaise
 	// manager is the item's, which names the manifest the hints speak of.
 	manager remediation.DependencyManager
-	// partOf are the packages of a global node_modules a package in one is
-	// part of, the package itself left out.
-	partOf []string
 	// hint is what holds the package back, as the update found it.
 	hint *remediation.FixHint
 }
@@ -1364,12 +1353,13 @@ func (b *planBuilder) leftOutLines(e *planEntry, left []leftOut, planned []pkgLi
 // before any update ran, as lines: they are named whatever else the item
 // proposes, so that a pull request of the other packages does not hide them.
 // The packages an update left out are not among them, nor those that only
-// share an update set another package of which could not be updated, nor,
-// with ownReason, the packages the item's own reason covers.
+// share an update set another package of which could not be updated, nor the
+// packages of a global node_modules, nor, with ownReason, the packages the
+// item's own reason covers.
 func (b *planBuilder) plannedManual(li remediation.LanguageItem, ownReason bool) []pkgLine {
 	var out []pkgLine
 	for _, p := range li.Packages {
-		if p.Action != remediation.ActionManual || p.LeftOut || p.Reason == remediation.ReasonUpdateSetNotApplied || (ownReason && ofItemReason(li, p)) {
+		if p.Action != remediation.ActionManual || p.LeftOut || p.Reason == remediation.ReasonUpdateSetNotApplied || p.Reason == remediation.ReasonGlobalNodeModules || (ownReason && ofItemReason(li, p)) {
 			continue
 		}
 		out = append(out, b.pkgLineOf(li, p))
@@ -1383,11 +1373,7 @@ func (b *planBuilder) plannedManual(li remediation.LanguageItem, ownReason bool)
 // fingerprint, the cut part too.
 func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string, items []pkgLine) {
 	for _, x := range items {
-		d := strings.Join([]string{"package", x.name, x.from, x.target, string(x.reason), fmt.Sprint(x.unchanged), fmt.Sprint(x.leftOut), fmt.Sprint(x.inFile), strings.Join(x.lockVersions, ","), b.bomRaise(x)}, "\x00")
-		if len(x.partOf) > 0 {
-			d += "\x00" + strings.Join(x.partOf, ",")
-		}
-		b.detail = append(b.detail, d)
+		b.detail = append(b.detail, strings.Join([]string{"package", x.name, x.from, x.target, string(x.reason), fmt.Sprint(x.unchanged), fmt.Sprint(x.leftOut), fmt.Sprint(x.inFile), strings.Join(x.lockVersions, ","), b.bomRaise(x)}, "\x00"))
 	}
 	shown := items
 	if len(shown) > planLeftOuts {
@@ -1410,16 +1396,6 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 		if x.target == "" {
 			key, header := string(x.reason), b.reason(x.reason)
 			bullet := fmt.Sprintf(b.msg.PlanBullet, litMrkdwn(x.name), litMrkdwn(x.from))
-			if x.reason == remediation.ReasonGlobalNodeModules {
-				header = fmt.Sprintf(b.msg.PlanGlobalModules, litMrkdwn(file))
-				if len(x.partOf) > 0 {
-					owners := make([]string, len(x.partOf))
-					for i, o := range x.partOf {
-						owners[i] = litMrkdwn(o)
-					}
-					bullet = fmt.Sprintf(b.msg.PlanBulletPartOf, litMrkdwn(x.name), litMrkdwn(x.from), strings.Join(owners, b.msg.PlanListSep))
-				}
-			}
 			if x.reason == remediation.ReasonNotFoundInSource {
 				if !x.inFile {
 					header = fmt.Sprintf(b.msg.PlanNotInFile, litMrkdwn(file))
@@ -1492,6 +1468,9 @@ func (b *planBuilder) packageLines(e *planEntry, tag planTag, label, file string
 
 func (b *planBuilder) languageItem(li remediation.LanguageItem) planEntry {
 	e := planEntry{}
+	if onlyGlobalNodeModules(li) {
+		return e
+	}
 	b.imagesOf(&e, li.Workloads)
 	file := kv(b.msg.PlanLblFile, b.fileValue(li.Source.Repository, languageFile(li)))
 	switch li.Category {
@@ -1569,12 +1548,12 @@ func (b *planBuilder) languageItem(li remediation.LanguageItem) planEntry {
 				why = fmt.Sprintf(b.msg.PlanRuntimeEOL, litMrkdwn(x.Name), litMrkdwn(x.EOL))
 			}
 		}
-		e.plain(file)
 		// The packages the item's reason does not cover need a decision
 		// whatever the item's state is: they are named after its own lines,
 		// in the same list when those need a decision too.
 		pkgs := packagesOfReason(li)
 		planned := b.plannedManual(li, true)
+		e.plain(file)
 		switch {
 		case b.chainWaiting(&e, tag, label, li):
 		case len(pkgs) > 0 && li.RuntimeEOL == nil:
@@ -1584,6 +1563,7 @@ func (b *planBuilder) languageItem(li remediation.LanguageItem) planEntry {
 			} else {
 				b.packageReasonLines(&e, tag, label, li, pkgs, nil)
 			}
+		case li.Reason == remediation.ReasonGlobalNodeModules:
 		default:
 			e.line(tag, kv(label, why))
 		}
@@ -1592,6 +1572,22 @@ func (b *planBuilder) languageItem(li remediation.LanguageItem) planEntry {
 		}
 	}
 	return e
+}
+
+// onlyGlobalNodeModules reports whether every package of an item is in a global
+// node_modules. Whatever became of the item's files, updating them cannot fix
+// those packages, so the item has nothing to propose. An end-of-life runtime is
+// the item's own news and keeps it.
+func onlyGlobalNodeModules(li remediation.LanguageItem) bool {
+	if len(li.Packages) == 0 || li.RuntimeEOL != nil {
+		return false
+	}
+	for _, p := range li.Packages {
+		if p.Reason != remediation.ReasonGlobalNodeModules {
+			return false
+		}
+	}
+	return true
 }
 
 // plannedLines names, under the label of what needs a decision, the packages
@@ -1647,11 +1643,12 @@ func chainPackageReason(r remediation.Reason) bool {
 // packagesOfReason are the packages of an item whose own reason is the item's
 // reason: the item is manual because of them. The packages the update of the
 // packages that hold them back was meant for are among them, whatever the
-// item's reason is.
+// item's reason is. The packages of a global node_modules are not: updating the
+// item's files cannot fix them, so there is nothing to propose for them.
 func packagesOfReason(li remediation.LanguageItem) []remediation.LanguagePackage {
 	var out []remediation.LanguagePackage
 	for _, p := range li.Packages {
-		if ofItemReason(li, p) {
+		if ofItemReason(li, p) && p.Reason != remediation.ReasonGlobalNodeModules {
 			out = append(out, p)
 		}
 	}
@@ -1673,22 +1670,6 @@ func lockVersions(p remediation.LanguagePackage) []string {
 			out = appendOnce(out, o.Version)
 		}
 	}
-	return out
-}
-
-// globalOwners are the packages of a global node_modules a package in one is
-// part of (npm for npm's own dependencies), the package itself left out.
-func globalOwners(p remediation.LanguagePackage) []string {
-	if p.Reason != remediation.ReasonGlobalNodeModules {
-		return nil
-	}
-	var out []string
-	for _, o := range p.Origins {
-		if owner, ok := remediation.GlobalNodeModule(o.PkgPath); ok && owner != p.Name {
-			out = appendOnce(out, owner)
-		}
-	}
-	sort.Strings(out)
 	return out
 }
 
@@ -1716,7 +1697,7 @@ func (b *planBuilder) pkgLineOf(li remediation.LanguageItem, p remediation.Langu
 	}
 	return pkgLine{name: p.Name, from: p.Installed, target: p.SelectionLowerBound, reason: p.Reason, chain: chain,
 		unchanged:    lockfileLeftAlone.MatchString(p.Detail) || lockfileLeftAlone.MatchString(li.Detail),
-		lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0, bom: p.MavenBOM, manager: li.Manager, partOf: globalOwners(p), hint: p.Hint()}
+		lockVersions: lockVersions(p), inFile: len(p.Occurrences) > 0, bom: p.MavenBOM, manager: li.Manager, hint: p.Hint()}
 }
 
 // --- the message ---

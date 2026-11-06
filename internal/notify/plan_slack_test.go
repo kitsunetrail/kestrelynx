@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1030,42 +1031,82 @@ func TestPlanMessage_PackagesNotInTheLockfile(t *testing.T) {
 	}
 }
 
-// The frontend of production once npm's own packages are told apart: one
-// heading for the packages of a global node_modules, each bullet naming the
-// package it is part of unless it is that package.
-func TestPlanMessage_PackagesInAGlobalNodeModules(t *testing.T) {
+// Updating the files cannot fix a package of a global node_modules, so the
+// message has nothing to propose for it: an item of only such packages is not
+// shown or counted, and the other packages of an item are shown without them.
+// The webhook keeps them.
+func TestPlanMessage_PackagesInAGlobalNodeModulesAreNotShown(t *testing.T) {
+	const npm = "usr/local/lib/node_modules/npm/"
+	global := func(name, version, pkgPath string) remediation.LanguagePackage {
+		return remediation.LanguagePackage{Name: name, Installed: version, Action: remediation.ActionManual,
+			Reason: remediation.ReasonGlobalNodeModules, Origins: []remediation.FindingOrigin{{PkgPath: pkgPath}}}
+	}
 	li := languageUpdated("deps:YYAC-project/regfis-frontend@main:.#pnpm")
 	li.Manager = remediation.ManagerPnpm
 	li.Category, li.Reason = remediation.CategoryManual, remediation.ReasonGlobalNodeModules
-	li.Packages = nil
-	const npm = "usr/local/lib/node_modules/npm/"
-	for _, p := range [][3]string{
-		{"brace-expansion", "2.0.2", npm + "node_modules/brace-expansion/package.json"},
-		{"pacote", "20.0.1", npm + "node_modules/@npmcli/metavuln-calculator/node_modules/pacote/package.json"},
-		{"npm", "10.9.2", npm + "package.json"},
-	} {
-		li.Packages = append(li.Packages, remediation.LanguagePackage{Name: p[0], Installed: p[1], Action: remediation.ActionManual,
-			Reason: remediation.ReasonGlobalNodeModules, Origins: []remediation.FindingOrigin{{PkgPath: p[2]}}})
+	li.Packages = []remediation.LanguagePackage{
+		global("brace-expansion", "2.0.2", npm+"node_modules/brace-expansion/package.json"),
+		global("npm", "10.9.2", npm+"package.json"),
+	}
+	info := languagePlanOf(li)
+	if got := info.SlackFingerprint(); got != "" {
+		t.Errorf("an item of only such packages has a fingerprint: %q", got)
 	}
 	r := planReport()
-	for lang, want := range map[Language]string{
-		LanguageJA: "要判断: グローバルな node_modules にあるパッケージ（pnpm-lock.yaml で入れたものではないため、pnpm-lock.yaml の更新では直せない）\n  • brace-expansion 2.0.2（npm に含まれる）\n  • pacote 20.0.1（npm に含まれる）\n  • npm 10.9.2",
-		LanguageEN: "Needs a decision: packages in a global node_modules (pnpm-lock.yaml did not install them, so updating pnpm-lock.yaml cannot fix them)\n  • brace-expansion 2.0.2 (part of npm)\n  • pacote 20.0.1 (part of npm)\n  • npm 10.9.2",
+	if got := slackPlanText(r, info, LanguageJA); strings.Contains(got, "brace-expansion") || strings.Contains(got, "pnpm-lock.yaml") || strings.Contains(got, "要判断") {
+		t.Errorf("an item of only such packages is shown:\n%s", got)
+	}
+	raw, err := json.Marshal(languageItemPayloadOf(li, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"reason":"global_node_modules"`) || !strings.Contains(string(raw), `"brace-expansion"`) {
+		t.Errorf("the webhook lost them: %s", raw)
+	}
+
+	// Nor does what became of the item's files bring such an item back.
+	for _, o := range []struct {
+		category remediation.Category
+		reason   remediation.Reason
+	}{
+		{remediation.CategoryManual, remediation.ReasonDependencyFilesNotFound},
+		{remediation.CategoryDeferred, remediation.ReasonGitHubBudget},
+		{remediation.CategoryFailed, remediation.ReasonSourceError},
 	} {
-		got := slackPlanText(r, languagePlanOf(li), lang)
-		if !strings.Contains(got, want) || strings.Contains(got, "→") {
-			t.Errorf("%s: missing %q (or an arrow) in\n%s", lang, want, got)
-		}
-		if strings.Count(got, "要判断:")+strings.Count(got, "Needs a decision:") != 1 {
-			t.Errorf("%s: more than one heading:\n%s", lang, got)
+		other := li
+		other.Category, other.Reason = o.category, o.reason
+		if got := languagePlanOf(other).SlackFingerprint(); got != "" {
+			t.Errorf("%s/%s: an item of only such packages has a fingerprint: %q", o.category, o.reason, got)
 		}
 	}
-	// What a package is part of is in the fingerprint.
-	other := li
-	other.Packages = append([]remediation.LanguagePackage(nil), li.Packages...)
-	other.Packages[0].Origins = []remediation.FindingOrigin{{PkgPath: "usr/local/lib/node_modules/corepack/node_modules/brace-expansion/package.json"}}
-	if languagePlanOf(li).SlackFingerprint() == languagePlanOf(other).SlackFingerprint() {
-		t.Error("the package a package is part of is not in the fingerprint")
+	// An end-of-life runtime is news of its own.
+	eol := li
+	eol.Reason, eol.RuntimeEOL = remediation.ReasonRuntimeEndOfLife, &remediation.RuntimeEOLInfo{ID: "node24", Name: "node24", EOL: "2028-04-30"}
+	if got := slackPlanText(r, languagePlanOf(eol), LanguageJA); !strings.Contains(got, "node24") || strings.Contains(got, "brace-expansion") {
+		t.Errorf("end-of-life runtime:\n%s", got)
+	}
+
+	// Another package of the item still needs a decision.
+	mixed := li
+	mixed.Packages = append(append([]remediation.LanguagePackage(nil), li.Packages...), remediation.LanguagePackage{
+		Name: "multer", Installed: "2.1.1", SelectionLowerBound: "2.3.0", Action: remediation.ActionManual, Reason: remediation.ReasonTargetNotUpdated})
+	got := slackPlanText(r, languagePlanOf(mixed), LanguageJA)
+	if !strings.Contains(got, "pnpm-lock.yaml") || !strings.Contains(got, "要判断 1件") || !strings.Contains(got, "要判断: multer 2.1.1 を修正版の 2.3.0 に上げられない") {
+		t.Errorf("the other package is not shown:\n%s", got)
+	}
+	if strings.Contains(got, "brace-expansion") || strings.Contains(got, "node_modules") {
+		t.Errorf("the package of a global node_modules is shown:\n%s", got)
+	}
+
+	// An item that proposes an update does not name them either.
+	update := languageUpdated("deps:ex/app@main:.#npm")
+	update.Packages = append(append([]remediation.LanguagePackage(nil), update.Packages...), global("qs", "6.0.0", npm+"node_modules/qs/package.json"))
+	withCopy, without := languagePlanOf(update), languagePlanOf(languageUpdated("deps:ex/app@main:.#npm"))
+	if got := slackPlanText(r, withCopy, LanguageJA); strings.Contains(got, "qs") || strings.Contains(got, "要判断") {
+		t.Errorf("an update names the copy:\n%s", got)
+	}
+	if withCopy.SlackFingerprint() != without.SlackFingerprint() {
+		t.Error("a package that is not shown changes the fingerprint")
 	}
 }
 

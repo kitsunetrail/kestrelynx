@@ -776,7 +776,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `unsupported_source_settings` | The project sets an unsupported package source | |
 | `scan_not_pinned` | The scan result is not tied to one image | [Source verification](remediation-logic.md#source-verification) |
 | `not_found_in_source` | The dependency files do not list the package at the running version | [Source verification](remediation-logic.md#source-verification) |
-| `global_node_modules` | The package is in global `node_modules` and cannot be fixed by updating dependency files | [Source verification](remediation-logic.md#source-verification) |
+| `global_node_modules` | The package is in global `node_modules` and cannot be fixed by updating dependency files. It is included only in the webhook, not under “Needs a decision” in Slack or email (the entire item is omitted when no other packages remain to display, except that items with reason `runtime_eol` indicating the end of support for a language runtime remain visible) | [Source verification](remediation-logic.md#source-verification) |
 | `non_registry_source` | The package does not come from a supported public registry | |
 | `sdist_only` | The package has only a source distribution | |
 | `forced_by_override` | The package version is forced by an override | |

@@ -698,10 +698,8 @@ Check against the current base
 ├─ checked
 │  ├─ Findings are expected to disappear
 │  │  └─ Rebuild: show steps and count in the rebuild summary
-│  ├─ None are expected to disappear, but there is something to display
-│  │  └─ Base check: show details without steps or a rebuild summary count
-│  └─ None are expected to disappear and there is nothing to display
-│     └─ Omit the line, including when only other_not_in_base is present
+│  └─ No findings are expected to disappear
+│     └─ Show nothing
 ├─ partial
 │  └─ Rebuild: show steps and count in the rebuild summary
 │     Append " (some findings could not be confirmed)"
@@ -712,26 +710,21 @@ Check against the current base
 
 - Findings expected to disappear
   - `gone` contains findings, or `rebuild_runtimes` contains findings expected to disappear
-- Details eligible for display
+- Details displayed below the `Rebuild` line
   - Package lists in `gone`, `remaining`, `not_in_base`, and `only_in_base`
   - Runtime estimates, including those with only remaining findings
 - Summary counts
-  - `Base check` is not counted as `rebuild`
   - A hidden line is not counted as `rebuild`
 
-The following examples use illustrative package names and versions.
+Even when nothing is displayed in Slack or email, the results are available in the webhook's [`rebuild_check`](webhook-remediation-reference.md#remediation-dockerfile-fields).
+
+The following example uses illustrative package names and versions.
 
 ```text
 Rebuild: the first layers of the running image do not match the current node:24-alpine; pull the base again, rebuild the image (for example with `docker build --pull`) and deploy it again
   • gone if the current base's version carries over: package-a 1.0.0 → 1.0.1
   • also in the current base: package-b 2.0.0
   • new in the current base: package-c 3.0.0
-```
-
-```text
-Base check: no finding is confirmed to disappear with the current node:24-alpine
-  • also in the current base: package-b 2.0.0
-  • not in the current base: package-d 4.0.0 (3 packages with what it bundles)
 ```
 
 - Package lists in Slack

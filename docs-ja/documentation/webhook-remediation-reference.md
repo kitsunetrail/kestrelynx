@@ -197,6 +197,7 @@
   - 稼働イメージごとの判定が混在する場合は項目全体の見込みを省略し、`entities[]`には個別の記録を残す
 
 両方の`rebuild_check`は、稼働イメージと現在のベースをパッケージの場所・CVEで突き合わせた見込みで、再ビルドした完成イメージの比較ではなく、`final_image_verified`は`false`のままです。
+`checked`で消える見込みの所見がなく、Slackとメールに何も出ない場合も、結果は`rebuild_check`に載ります。
 
 | `rebuild_check`のフィールド名 | 型 | 意味・省略条件 |
 | --- | --- | --- |
@@ -246,6 +247,8 @@
 検査の範囲は、[対象別の検証範囲](remediation-logic.md#verification-scope)を参照してください。
 
 ## 言語パッケージのフィールド {#remediation-language-fields}
+
+理由が`global_node_modules`のパッケージは、Slackとメールの「要判断」に出ない場合も`language_items[].packages[]`に載ります。
 
 | `remediation`のフィールド名 | 型 | 意味・省略条件 |
 | --- | --- | --- |

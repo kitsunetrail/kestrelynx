@@ -222,8 +222,8 @@ func TestPlanSlack_PlannedManualOfDeferredItem(t *testing.T) {
 	}
 }
 
-// A package of the item's reason and a copy of the same name and version in a
-// global node_modules are told apart: each is named once, with its own reason.
+// A package of the item's reason keeps its line when a copy of the same name
+// and version in a global node_modules, which is not shown, is on the item.
 func TestPlanSlack_PlannedManualSameNameApart(t *testing.T) {
 	r := planReport()
 	li := languageUpdated("deps:ex/app@main:.#npm")
@@ -233,12 +233,10 @@ func TestPlanSlack_PlannedManualSameNameApart(t *testing.T) {
 		{Name: "multer", Ecosystem: "node-pkg", Installed: "2.1.1", Action: remediation.ActionManual, Reason: remediation.ReasonGlobalNodeModules},
 	}
 	got := slackPlanText(r, languagePlanOf(li), LanguageJA)
-	for _, w := range []string{
-		"要判断: multer 2.1.1 を修正版の 2.3.0 に上げられない（原因は確かめられなかった）",
-		"要判断: グローバルな node_modules にあるパッケージ（package-lock.json で入れたものではないため、package-lock.json の更新では直せない）\n  • multer 2.1.1",
-	} {
-		if strings.Count(got, w) != 1 {
-			t.Errorf("%q is not named once in\n%s", w, got)
-		}
+	if w := "要判断: multer 2.1.1 を修正版の 2.3.0 に上げられない（原因は確かめられなかった）"; strings.Count(got, w) != 1 {
+		t.Errorf("%q is not named once in\n%s", w, got)
+	}
+	if strings.Contains(got, "node_modules") || strings.Count(got, "multer") != 1 {
+		t.Errorf("the copy in a global node_modules is shown:\n%s", got)
 	}
 }

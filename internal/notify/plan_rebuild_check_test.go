@@ -53,28 +53,17 @@ func TestPlanMessage_RebuildCheckStates(t *testing.T) {
 			}
 		}
 	})
-	t.Run("nothing is confirmed to disappear", func(t *testing.T) {
-		got := rebuildPlanText(t, rebuildCheckItem(rebuildNothingGone()), LanguageJA)
-		for _, want := range []string{
-			"ベースの確認: 現在の node:24-alpine で消えると確認できた所見はない\n",
-			"  • 現在のベースにも残る: brace-expansion 5.0.9、undici 6.28.0\n",
-			"  • 現在のベースにない: pnpm 10.34.4(同梱を含め4パッケージ)",
+	t.Run("nothing is expected to disappear", func(t *testing.T) {
+		for name, c := range map[string]*remediation.RebuildCheck{
+			"packages remain or are not in the base": rebuildNothingGone(),
+			"only packages of the application":       {Status: remediation.RebuildChecked, OtherNotInBase: 3},
+			"packages only the base has":             {Status: remediation.RebuildChecked, OnlyInBase: []remediation.RebuildPackage{rbPkg("glob", "13.0.6", "npm")}},
 		} {
-			if !strings.Contains(got, want) {
-				t.Errorf("missing %q in\n%s", want, got)
-			}
-		}
-		for _, not := range []string{"再ビルド", "docker build"} {
-			if strings.Contains(got, not) {
-				t.Errorf("has %q:\n%s", not, got)
-			}
-		}
-	})
-	t.Run("nothing to say", func(t *testing.T) {
-		got := rebuildPlanText(t, rebuildCheckItem(&remediation.RebuildCheck{Status: remediation.RebuildChecked, OtherNotInBase: 3}), LanguageJA)
-		for _, not := range []string{"再ビルド", "ベースの確認", "node:24-alpine", "Dockerfile"} {
-			if strings.Contains(got, not) {
-				t.Errorf("has %q:\n%s", not, got)
+			got := rebuildPlanText(t, rebuildCheckItem(c), LanguageJA)
+			for _, not := range []string{"再ビルド", "docker build", "node:24-alpine", "Dockerfile", "brace-expansion", "glob"} {
+				if strings.Contains(got, not) {
+					t.Errorf("%s: has %q:\n%s", name, not, got)
+				}
 			}
 		}
 	})
@@ -105,7 +94,7 @@ func TestPlanMessage_RebuildCheckStates(t *testing.T) {
 }
 
 // The runtime estimate decides like the packages: findings that only remain do
-// not make a rebuild worth proposing, but they are still shown.
+// not make a rebuild worth proposing.
 func TestPlanMessage_RebuildCheckRuntime(t *testing.T) {
 	rr := func(disappearing, remaining []string) []remediation.RuntimeRebuild {
 		return []remediation.RuntimeRebuild{{Package: "Node.js", Installed: "24.1.0", BaseVersion: "24.22.2", Disappearing: disappearing, Remaining: remaining}}
@@ -113,20 +102,22 @@ func TestPlanMessage_RebuildCheckRuntime(t *testing.T) {
 	it := rebuildCheckItem(&remediation.RebuildCheck{Status: remediation.RebuildChecked})
 	it.RebuildRuntimes = rr(nil, []string{"CVE-1"})
 	got := rebuildPlanText(t, it, LanguageJA)
-	if !strings.Contains(got, "ベースの確認: ") || strings.Contains(got, "再ビルド 1件") || !strings.Contains(got, "1 件のうち 0 件") {
+	if strings.Contains(got, "再ビルド") || strings.Contains(got, "件のうち") {
 		t.Errorf("only remaining:\n%s", got)
 	}
 	it.RebuildRuntimes = rr([]string{"CVE-1"}, nil)
 	got = rebuildPlanText(t, it, LanguageJA)
-	if !strings.Contains(got, "再ビルド 1件") || strings.Contains(got, "ベースの確認") || !strings.Contains(got, "1 件のうち 1 件") {
+	if !strings.Contains(got, "再ビルド 1件") || !strings.Contains(got, "1 件のうち 1 件") {
 		t.Errorf("disappearing:\n%s", got)
 	}
 }
 
 func TestPlanMessage_RebuildCheckEnglish(t *testing.T) {
-	got := rebuildPlanText(t, rebuildCheckItem(rebuildNothingGone()), LanguageEN)
+	c := rebuildNothingGone()
+	c.Gone = []remediation.RebuildPackage{{Name: "openssl", Version: "3.5.1", BaseVersion: "3.5.4", VulnIDs: []string{"CVE-2"}}}
+	got := rebuildPlanText(t, rebuildCheckItem(c), LanguageEN)
 	for _, want := range []string{
-		"Base check: no finding is confirmed to disappear with the current node:24-alpine\n",
+		"  • gone if the current base's version carries over: openssl 3.5.1 → 3.5.4\n",
 		"  • also in the current base: brace-expansion 5.0.9, undici 6.28.0\n",
 		"  • not in the current base: pnpm 10.34.4 (4 packages with what it bundles)",
 	} {
@@ -143,7 +134,7 @@ func TestPlanMessage_RebuildCheckEnglish(t *testing.T) {
 
 func TestPlanMessage_RebuildCheckNotInBase(t *testing.T) {
 	got := rebuildPlanText(t, rebuildCheckItem(&remediation.RebuildCheck{
-		Status: remediation.RebuildChecked,
+		Status: remediation.RebuildPartial,
 		NotInBase: []remediation.RebuildPackage{
 			rbPkg("curl", "8.0", ""),
 			rbPkg("undici", "6.28.0", "npm"), rbPkg("tar", "7.0", "npm"),
@@ -155,7 +146,7 @@ func TestPlanMessage_RebuildCheckNotInBase(t *testing.T) {
 	}
 
 	got = rebuildPlanText(t, rebuildCheckItem(&remediation.RebuildCheck{
-		Status: remediation.RebuildChecked,
+		Status: remediation.RebuildPartial,
 		NotInBase: []remediation.RebuildPackage{
 			rbPkg("pnpm", "10.34.4", "pnpm"), rbPkg("pnpm", "10.34.5", "pnpm"), rbPkg("tar", "7.0", "pnpm"),
 		},
@@ -168,7 +159,7 @@ func TestPlanMessage_RebuildCheckNotInBase(t *testing.T) {
 	for i := range 12 {
 		many = append(many, rbPkg(fmt.Sprintf("p%02d", i), "1", "npm"))
 	}
-	got = rebuildPlanText(t, rebuildCheckItem(&remediation.RebuildCheck{Status: remediation.RebuildChecked, Remaining: many}), LanguageJA)
+	got = rebuildPlanText(t, rebuildCheckItem(&remediation.RebuildCheck{Status: remediation.RebuildPartial, Remaining: many}), LanguageJA)
 	if !strings.Contains(got, "p09 1") || strings.Contains(got, "p10 1") || !strings.Contains(got, "2") {
 		t.Errorf("a long list:\n%s", got)
 	}
@@ -182,12 +173,15 @@ func TestSlackFingerprint_RebuildCheck(t *testing.T) {
 		p.DockerfileItems = []remediation.DockerfileItem{rebuildCheckItem(c)}
 		return (&PlanInfo{Plan: &p}).SlackFingerprint()
 	}
-	base := fp(&remediation.RebuildCheck{Status: remediation.RebuildChecked, Remaining: []remediation.RebuildPackage{{Name: "undici", Version: "6.28.0", VulnIDs: []string{"CVE-1"}}}})
-	if got := fp(&remediation.RebuildCheck{Status: remediation.RebuildChecked, Remaining: []remediation.RebuildPackage{{Name: "undici", Version: "6.28.0", VulnIDs: []string{"CVE-1", "CVE-2"}}}}); got != base {
+	base := fp(&remediation.RebuildCheck{Status: remediation.RebuildPartial, Remaining: []remediation.RebuildPackage{{Name: "undici", Version: "6.28.0", VulnIDs: []string{"CVE-1"}}}})
+	if got := fp(&remediation.RebuildCheck{Status: remediation.RebuildPartial, Remaining: []remediation.RebuildPackage{{Name: "undici", Version: "6.28.0", VulnIDs: []string{"CVE-1", "CVE-2"}}}}); got != base {
 		t.Errorf("a new finding of the same package changes the fingerprint")
 	}
-	if got := fp(&remediation.RebuildCheck{Status: remediation.RebuildChecked, Remaining: []remediation.RebuildPackage{{Name: "undici", Version: "6.29.1", VulnIDs: []string{"CVE-1"}}}}); got == base {
+	if got := fp(&remediation.RebuildCheck{Status: remediation.RebuildPartial, Remaining: []remediation.RebuildPackage{{Name: "undici", Version: "6.29.1", VulnIDs: []string{"CVE-1"}}}}); got == base {
 		t.Errorf("a new version does not change the fingerprint")
+	}
+	if got := fp(rebuildNothingGone()); got != "" {
+		t.Errorf("a comparison with nothing going away has a fingerprint: %q", got)
 	}
 }
 

@@ -156,19 +156,8 @@ func writeImageVerification(t *prText, b *strings.Builder, evidence *Verificatio
 	if ev := evidence; ev != nil {
 		for _, it := range ev.Items {
 			b.WriteString("\n")
-			fmt.Fprintf(b, t.CVerRunning, mdCode(it.Current.Ref))
-			if it.Current.ConfigDigest != "" {
-				fmt.Fprintf(b, t.ConfigDigest, mdCode(it.Current.ConfigDigest))
-			}
-			if it.Current.Platform != "" {
-				fmt.Fprintf(b, t.PlatformPart, mdCode(it.Current.Platform))
-			}
-			b.WriteString("\n")
-			if it.Current.DigestKindUnverified {
-				b.WriteString(t.DigestNote)
-			}
-			fmt.Fprintf(b, t.CCandidate,
-				mdCode(it.Candidate.Ref), mdCode(it.Candidate.TopDigest), mdCode(it.Candidate.ManifestDigest), mdCode(it.Candidate.ConfigDigest), mdCode(it.Candidate.Platform))
+			writeRunningImage(t, b, t.CVerRunning, it.Current)
+			writeResolvedImage(t, b, t.CCandidate, it.Candidate)
 			fmt.Fprintf(b, t.Locations, codeListIn(t, it.Locations, maxListedNames))
 			fmt.Fprintf(b, t.VerRecord,
 				ev.PlanGeneratedAt.UTC().Format(time.RFC3339), mdCode(it.BaselineScan), mdCode(it.CandidateScan))
@@ -182,18 +171,48 @@ func writeImageVerification(t *prText, b *strings.Builder, evidence *Verificatio
 			writeVulnListIn(t, b, t.TitleOtherRemainingImage, it.OtherRemaining)
 			writeVulnListIn(t, b, t.TitleIntroduced, it.Introduced)
 		}
-		b.WriteString("\n")
-		fmt.Fprintf(b, t.CScanned, mdCode(ev.TrivyVersion))
-		if ev.VulnDBUpdatedAt != nil {
-			fmt.Fprintf(b, t.DBBuilt, ev.VulnDBUpdatedAt.UTC().Format(time.RFC3339))
-		}
-		fmt.Fprintf(b, t.SeverityEnd, codeListIn(t, ev.Severities, 10))
-		if ev.Scope != "" {
-			fmt.Fprintf(b, t.ScopeEnd, mdCode(ev.Scope))
-		}
-		b.WriteString("\n")
+		writeScanConditions(t, b, t.CScanned, ev)
 	}
 
+}
+
+// writeRunningImage writes the line of a running image with its config digest
+// and platform, when known, each on a line of its own under it.
+func writeRunningImage(t *prText, b *strings.Builder, head string, img ImageState) {
+	fmt.Fprintf(b, head, mdCode(img.Ref))
+	if img.ConfigDigest != "" {
+		fmt.Fprintf(b, t.ConfigDigest, mdCode(img.ConfigDigest))
+	}
+	if img.Platform != "" {
+		fmt.Fprintf(b, t.PlatformLine, mdCode(img.Platform))
+	}
+	if img.DigestKindUnverified {
+		b.WriteString(t.DigestNote)
+	}
+}
+
+// writeResolvedImage writes the line of an image resolved from a registry with
+// its digests and platform, each on a line of its own under it.
+func writeResolvedImage(t *prText, b *strings.Builder, head string, img ImageState) {
+	fmt.Fprintf(b, head, mdCode(img.Ref))
+	fmt.Fprintf(b, t.TagDigest, mdCode(img.TopDigest))
+	fmt.Fprintf(b, t.PlatformManifest, mdCode(img.ManifestDigest))
+	fmt.Fprintf(b, t.ConfigDigest, mdCode(img.ConfigDigest))
+	fmt.Fprintf(b, t.PlatformLine, mdCode(img.Platform))
+}
+
+// writeScanConditions writes the conditions both images were scanned under, one
+// on each line, after the sentence head.
+func writeScanConditions(t *prText, b *strings.Builder, head string, ev *VerificationSummary) {
+	b.WriteString("\n" + head + "\n\n")
+	fmt.Fprintf(b, t.ScanTrivy, mdCode(ev.TrivyVersion))
+	if ev.VulnDBUpdatedAt != nil {
+		fmt.Fprintf(b, t.DBBuilt, ev.VulnDBUpdatedAt.UTC().Format(time.RFC3339))
+	}
+	fmt.Fprintf(b, t.SeverityLine, codeListIn(t, ev.Severities, 10))
+	if ev.Scope != "" {
+		fmt.Fprintf(b, t.ScopeLine, mdCode(ev.Scope))
+	}
 }
 
 // assembleBody appends the marker to text, cutting text first if needed.

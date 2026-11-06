@@ -41,15 +41,26 @@ KestreLynx は、`example/app` の `svc/package-lock.json` にある 2 件のパ
 
 ## 確認したこと
 
-- 実行環境: `node24` `24.21.0` (公式イメージ `node@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`)
-- パッケージマネージャー: `pnpm` `11.28.2` (プロジェクトが指定する範囲を満たす、このビルドの既定の版)、アーカイブの sha256 `dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd`
+- 実行環境: `node24` `24.21.0`
+  - 公式イメージ: `node@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`
+- パッケージマネージャー: `pnpm` `11.28.2`
+  - 選んだ版: プロジェクトが指定する範囲を満たす、このビルドの既定の版
+  - アーカイブの sha256: `dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd`
 
 **実行した操作**
 
-- `pnpm update lodash`、終了コード 0
-- `pnpm install --lockfile-only`、終了コード 0 (作業用コピーで実行し、結果は比較だけに使いました)
+- `pnpm update lodash`
+  - 終了コード: 0
+- `pnpm install --lockfile-only`
+  - 終了コード: 0
+  - 作業用コピーで実行し、結果は比較だけに使いました
 
-**lockfile のエントリ**: 追加 1 件、変更 1 件、削除 0 件 (一覧は途中で切ってあります)
+**lockfile のエントリ**
+
+- 追加: 1 件
+- 変更: 1 件
+- 削除: 0 件
+- 一覧は途中で切ってあります
 
 変更:
 
@@ -68,7 +79,8 @@ KestreLynx は、`example/app` の `svc/package-lock.json` にある 2 件のパ
 
 **更新に伴って依存先が新しい版に寄ったエントリ (1)**
 
-- `browserslist@4.28.2`: `caniuse-lite` を `1.0.30001792` から `1.0.30001806` へ
+- `browserslist@4.28.2`
+  - `caniuse-lite` を `1.0.30001792` から `1.0.30001806` へ
 
 - 実行時のメモ: `the declared packageManager differs from the one installed`
 
@@ -76,8 +88,13 @@ KestreLynx は、`example/app` の `svc/package-lock.json` にある 2 件のパ
 
 - 更新前: `svc/pnpm-lock.yaml sha256:aaaaaaaaaaaa`
 - 更新後: `svc/pnpm-lock.yaml sha256:bbbbbbbbbbbb`
-- 解消 2 件、残存 1 件、新規 0 件 (更新したパッケージだけでなく、ファイルの全パッケージが対象)
-- 2 つのスキャンの所見は、パッケージ・版・脆弱性 ID で比べたほか、脆弱性のある版を指す lockfile のエントリ数と依存の数も比べました
+- ファイルの全パッケージの検出結果 (更新したパッケージに限らない)
+  - 解消: 2 件
+  - 残存: 1 件
+  - 新規: 0 件
+- 2 つのスキャンの所見を次のとおり比べました
+  - パッケージ・版・脆弱性 ID
+  - 脆弱性のある版を指す lockfile のエントリ数と依存の数
 - 以下の一覧は途中で切ってあります
 
 **解消 (2)**
@@ -93,8 +110,16 @@ KestreLynx は、`example/app` の `svc/package-lock.json` にある 2 件のパ
 
 - なし
 
-両方のスキャンで Trivy `0.71.2` を使用しました。脆弱性データベースは、どちらも 2026-10-09T01:02:03Z に作成されたものを使用しました。重大度の範囲 (`CRITICAL`、`HIGH`) と設定は、両方のスキャンで同じです。リポジトリ自身の Trivy 設定、ignore ファイル、VEX ドキュメントは読んでいません。
+両方のスキャンを次の条件で実行しました。
 
-- マージ前に CI で lockfile からのインストール (例: `npm ci`) を実行してください
+- Trivy: `0.71.2`
+- 脆弱性データベースの作成時刻: 2026-10-09T01:02:03Z
+- 重大度の範囲: `CRITICAL`、`HIGH`
+- 設定: 両方のスキャンで同じ
+
+リポジトリ自身の Trivy 設定、ignore ファイル、VEX ドキュメントは読んでいません。
+
+- マージ前に CI で lockfile からのインストールを実行してください
+  - 例: `npm ci`
 
 <!-- kestrelynx:{"v":1,"repo_id":7,"base_branch":"main","path":"compose.yml","locations":["services.web.image"],"current_ref":"nginx:1.25.3","candidate_tag":"1.25.4","candidate_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","base_sha":"1111111111111111111111111111111111111111","head_sha":"2222222222222222222222222222222222222222","input_blob_sha":"3333333333333333333333333333333333333333","changes":[{"path":"compose.yml","mode":"100644","blob_sha":"4444444444444444444444444444444444444444"}],"target_key":"d596a66a37dc307e942721c34ab9e199f77f040025dd35c89eca19f67f63a6ca","update_key":"e513bca69279da9566db0a06ac85a0a173b88d9bf1a0a76acc455a31016fe979","attempt_key":"e17763c925cde9702bea370d076aec40d211b1d0658f6a78f56fbf450df9d39d","fix_targets":[{"location":"services.web.image","vuln_id":"CVE-1","package":{"ecosystem":"debian","class":"os","name":"libc"}}]} -->

@@ -214,14 +214,13 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 			if s.Scratch {
 				b.WriteString(t.LScratch)
 			}
-			b.WriteString("\n")
 		}
 		if d := up.Diff; d != nil {
 			fmt.Fprintf(&b, t.LEntries, len(d.Added), len(d.Changed), len(d.Removed))
 			if d.Truncated {
 				b.WriteString(t.LTruncated)
 			}
-			b.WriteString("\n\n")
+			b.WriteString("\n")
 			writeEntryList(t, &b, t.LTitleChanged, d.Changed)
 			writeEntryList(t, &b, t.LTitleAdded, d.Added)
 			writeEntryList(t, &b, t.LTitleRemoved, d.Removed)
@@ -253,11 +252,10 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 					fmt.Fprintf(&b, t.LineMore, len(f)-maxListedEntries)
 					break
 				}
-				var moves []string
+				fmt.Fprintf(&b, t.LFollowedLine, mdCode(e.Entry))
 				for _, m := range e.Moves {
-					moves = append(moves, fmt.Sprintf(t.LFollowedMove, mdCode(m.Name), mdCode(m.From), mdCode(m.To)))
+					fmt.Fprintf(&b, t.LFollowedMove, mdCode(m.Name), mdCode(m.From), mdCode(m.To))
 				}
-				fmt.Fprintf(&b, t.LFollowedLine, mdCode(e.Entry), strings.Join(moves, "; "))
 			}
 		}
 		if g := up.Go; g != nil {
@@ -423,10 +421,9 @@ func writeEnvironment(t *prText, b *strings.Builder, rec *LangRecord) {
 		return
 	}
 	if r := rec.Runtime; r != nil {
-		if why := runtimeWhy(t, r); why != "" {
-			fmt.Fprintf(b, t.LEnvRuntimeWhy, mdCode(r.ID), mdCode(r.Version), mdCode(r.Image), why)
-		} else {
-			fmt.Fprintf(b, t.LEnvRuntime, mdCode(r.ID), mdCode(r.Version), mdCode(r.Image))
+		fmt.Fprintf(b, t.LEnvRuntime, mdCode(r.ID), mdCode(r.Version), mdCode(r.Image))
+		for _, why := range runtimeWhy(t, r) {
+			fmt.Fprintf(b, "  - %s\n", why)
 		}
 		if r.Pip != "" {
 			fmt.Fprintf(b, t.LEnvPip, mdCode(r.Pip))
@@ -452,9 +449,9 @@ func writeEnvironment(t *prText, b *strings.Builder, rec *LangRecord) {
 	b.WriteString("\n")
 }
 
-// runtimeWhy words how the runtime was chosen from its record, or returns ""
-// for a record that says nothing of it.
-func runtimeWhy(t *prText, r *RuntimeRecord) string {
+// runtimeWhy words how the runtime was chosen from its record, one line of the
+// body for each reason, or returns nothing for a record that says nothing of it.
+func runtimeWhy(t *prText, r *RuntimeRecord) []string {
 	var decls []string
 	for _, d := range r.Declared {
 		decls = append(decls, mdCode(d.Source)+" "+mdCode(d.Value))
@@ -477,7 +474,7 @@ func runtimeWhy(t *prText, r *RuntimeRecord) string {
 	case RuntimeBasisGoLines:
 		parts = append(parts, t.LEnvGoBasis)
 	default:
-		return ""
+		return nil
 	}
 	for _, x := range r.Excluded {
 		series := strings.TrimPrefix(strings.TrimPrefix(x.ID, "node"), "python")
@@ -490,7 +487,7 @@ func runtimeWhy(t *prText, r *RuntimeRecord) string {
 			parts = append(parts, fmt.Sprintf(pick(t.LEnvExcludedDecl, t.LEnvPyExcludedDecl), mdCode(series)))
 		}
 	}
-	return strings.Join(parts, t.LEnvWhySep)
+	return parts
 }
 
 // manifestFileName is the file a manager's direct dependencies are declared in.

@@ -51,23 +51,11 @@ func buildDockerfilePRBody(in dockerfileBodyInput) (string, error) {
 	if ev := in.Evidence; ev != nil {
 		for _, it := range ev.Items {
 			b.WriteString("\n")
-			fmt.Fprintf(&b, t.DRunning, mdCode(it.Current.Ref))
-			if it.Current.ConfigDigest != "" {
-				fmt.Fprintf(&b, t.ConfigDigest, mdCode(it.Current.ConfigDigest))
-			}
-			if it.Current.Platform != "" {
-				fmt.Fprintf(&b, t.PlatformPart, mdCode(it.Current.Platform))
-			}
-			b.WriteString("\n")
-			if it.Current.DigestKindUnverified {
-				b.WriteString(t.DigestNote)
-			}
+			writeRunningImage(t, &b, t.DRunning, it.Current)
 			if cb := it.CurrentBase; cb != nil {
-				fmt.Fprintf(&b, t.DCurrentBase,
-					mdCode(cb.Ref), mdCode(cb.TopDigest), mdCode(cb.ManifestDigest), mdCode(cb.ConfigDigest), mdCode(cb.Platform))
+				writeResolvedImage(t, &b, t.DCurrentBase, *cb)
 			}
-			fmt.Fprintf(&b, t.DCandidateBase,
-				mdCode(it.Candidate.Ref), mdCode(it.Candidate.TopDigest), mdCode(it.Candidate.ManifestDigest), mdCode(it.Candidate.ConfigDigest), mdCode(it.Candidate.Platform))
+			writeResolvedImage(t, &b, t.DCandidateBase, it.Candidate)
 			if l := it.Layers; l != nil {
 				fmt.Fprintf(&b, t.DLayer, mdCode(l.Status), l.BaseLayers, l.ImageLayers)
 			}
@@ -80,16 +68,7 @@ func buildDockerfilePRBody(in dockerfileBodyInput) (string, error) {
 			writeVulnListIn(t, &b, t.TitleOtherRemaining, it.OtherRemaining)
 			writeVulnListIn(t, &b, t.TitleIntroduced, it.Introduced)
 		}
-		b.WriteString("\n")
-		fmt.Fprintf(&b, t.DScanned, mdCode(ev.TrivyVersion))
-		if ev.VulnDBUpdatedAt != nil {
-			fmt.Fprintf(&b, t.DBBuilt, ev.VulnDBUpdatedAt.UTC().Format(time.RFC3339))
-		}
-		fmt.Fprintf(&b, t.SeverityEnd, codeListIn(t, ev.Severities, 10))
-		if ev.Scope != "" {
-			fmt.Fprintf(&b, t.ScopeEnd, mdCode(ev.Scope))
-		}
-		b.WriteString("\n")
+		writeScanConditions(t, &b, t.DScanned, ev)
 	}
 	if anyKubernetes(in.Workloads) {
 		writeKubernetesDeploy(t, &b, in.Workloads, in.Management)

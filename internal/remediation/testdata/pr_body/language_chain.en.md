@@ -41,15 +41,26 @@ The version specifier of these direct dependencies did not allow a fixed version
 
 ## Verification
 
-- Runtime: `node24` `24.21.0`, from the official image `node@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`
-- Package manager: `pnpm` `11.28.2` (this build's default version, which the version ranges the project declares allow), archive sha256 `dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd`
+- Runtime: `node24` `24.21.0`
+  - Official image: `node@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`
+- Package manager: `pnpm` `11.28.2`
+  - Version chosen: this build's default version, which the version ranges the project declares allow
+  - Archive sha256: `dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd`
 
 **Operations run**
 
-- `pnpm update lodash`, exit code 0
-- `pnpm install --lockfile-only`, exit code 0 (run on a scratch copy; its result was only compared)
+- `pnpm update lodash`
+  - Exit code: 0
+- `pnpm install --lockfile-only`
+  - Exit code: 0
+  - Run on a scratch copy; its result was only compared
 
-**Lockfile entries**: 1 added, 1 changed, 0 removed (the lists are cut)
+**Lockfile entries**
+
+- Added: 1
+- Changed: 1
+- Removed: 0
+- The lists are cut
 
 Changed:
 
@@ -68,7 +79,8 @@ Every version the update added or changed was looked up in the npm registry and 
 
 **Entries whose dependencies moved to newer versions along with the update (1)**
 
-- `browserslist@4.28.2`: `caniuse-lite` `1.0.30001792` to `1.0.30001806`
+- `browserslist@4.28.2`
+  - `caniuse-lite` `1.0.30001792` to `1.0.30001806`
 
 - Note from the run: `the declared packageManager differs from the one installed`
 
@@ -76,8 +88,13 @@ Every version the update added or changed was looked up in the npm registry and 
 
 - Before: `svc/pnpm-lock.yaml sha256:aaaaaaaaaaaa`
 - After: `svc/pnpm-lock.yaml sha256:bbbbbbbbbbbb`
-- Resolved 2, remaining 1, introduced 0 (over every package of the files, not only the updated ones)
-- The findings of the two scans were compared by package, version and vulnerability ID, and the number of lockfile entries and of requirements that point to a version with a vulnerability was compared too
+- Findings over every package of the files, not only the updated ones
+  - Resolved: 2
+  - Remaining: 1
+  - Introduced: 0
+- The findings of the two scans were compared by
+  - Package, version and vulnerability ID
+  - The number of lockfile entries and of requirements that point to a version with a vulnerability
 - The lists below are cut
 
 **Resolved (2)**
@@ -93,8 +110,16 @@ Every version the update added or changed was looked up in the npm registry and 
 
 - none
 
-Both scans used Trivy `0.71.2`, the vulnerability database built at 2026-10-09T01:02:03Z, the same severity range (`CRITICAL`, `HIGH`) and the same settings; the repository's own Trivy configuration, ignore files and VEX documents were not read.
+Both scans ran under these conditions:
 
-- Before merging, run a CI job that installs from the lockfile (for example `npm ci`)
+- Trivy: `0.71.2`
+- Vulnerability database built at: 2026-10-09T01:02:03Z
+- Severity range: `CRITICAL`, `HIGH`
+- Settings: the same in both scans
+
+The repository's own Trivy configuration, ignore files and VEX documents were not read.
+
+- Before merging, run a CI job that installs from the lockfile
+  - For example: `npm ci`
 
 <!-- kestrelynx:{"v":1,"repo_id":7,"base_branch":"main","path":"compose.yml","locations":["services.web.image"],"current_ref":"nginx:1.25.3","candidate_tag":"1.25.4","candidate_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","base_sha":"1111111111111111111111111111111111111111","head_sha":"2222222222222222222222222222222222222222","input_blob_sha":"3333333333333333333333333333333333333333","changes":[{"path":"compose.yml","mode":"100644","blob_sha":"4444444444444444444444444444444444444444"}],"target_key":"d596a66a37dc307e942721c34ab9e199f77f040025dd35c89eca19f67f63a6ca","update_key":"e513bca69279da9566db0a06ac85a0a173b88d9bf1a0a76acc455a31016fe979","attempt_key":"e17763c925cde9702bea370d076aec40d211b1d0658f6a78f56fbf450df9d39d","fix_targets":[{"location":"services.web.image","vuln_id":"CVE-1","package":{"ecosystem":"debian","class":"os","name":"libc"}}]} -->

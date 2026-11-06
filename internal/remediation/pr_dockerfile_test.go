@@ -142,7 +142,7 @@ func TestPRStageDockerfileCreate(t *testing.T) {
 	for _, want := range []string{
 		"Running image: `myapp:1`", "Current base image: `python:3.12.3-slim`", "Candidate base image: `python:3.12.5-slim`",
 		"Layer check: `confirmed`",
-		"resolved 2, remaining 1", "introduced by the candidate base image: 0",
+		"  - Resolved: 2\n  - Remaining: 1\n", "  - Introduced by the candidate base image: 0\n",
 		"FROM on line 1: `python:3.12.3-slim` to `python:3.12.5-slim`", "`compose/app/svc`",
 	} {
 		if !strings.Contains(pr.Body, want) {
@@ -697,7 +697,7 @@ func TestPRStageDockerfileShowsWhatStays(t *testing.T) {
 	wantStatus(t, onlyUnit(t, h.run(dfPlan(it))), PRStatusCreated, "")
 	body := h.gh.pulls(testRepo)[0].Body
 	for _, want := range []string{
-		"remaining 0", "Other findings of the compared base images that remain in the candidate base image: 1",
+		"  - Remaining: 0\n", "- Other findings of the compared base images\n  - Remaining in the candidate base image: 1\n",
 		"**Remaining among the targeted findings (0)**", "**Other findings that remain in the candidate base image (1)**", "`CVE-OLD` in `pkg-old`",
 	} {
 		if !strings.Contains(body, want) {

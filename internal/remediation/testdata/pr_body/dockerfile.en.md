@@ -12,14 +12,34 @@ KestreLynx proposes a newer tag for the base image of `build/Dockerfile` in `exa
 
 ## Verification
 
-- Running image: `nginx:1.25.3`, config digest `sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, platform `linux/amd64`
+- Running image: `nginx:1.25.3`
+  - Config digest: `sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
+  - Platform: `linux/amd64`
   - The running digest comes from the container runtime; whether it is the image config digest or an index or manifest digest is not confirmed.
-- Current base image: `debian:12.5`, tag digest `sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`, platform manifest `sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`, config digest `sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd`, platform `linux/amd64`
-- Candidate base image: `nginx:1.25.4`, tag digest `sha256:1111111111111111111111111111111111111111111111111111111111111111`, platform manifest `sha256:2222222222222222222222222222222222222222222222222222222222222222`, config digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`, platform `linux/amd64`
-- Layer check: `confirmed`; the current base image has 3 layer(s) and the running image 7. A match shows that the filesystem layers agree; it does not show how the image was built.
-- Verification record: plan generated at 2026-10-09T04:00:00Z, scan of the current base `scan-base-1`, scan of the candidate base `scan-cand-1`
-- Findings this update targets (fixed findings of the running image in the base image's layers): resolved 2, remaining 1
-- Other findings of the compared base images that remain in the candidate base image: 1; introduced by the candidate base image: 0
+- Current base image: `debian:12.5`
+  - Tag digest: `sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`
+  - Platform manifest: `sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`
+  - Config digest: `sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd`
+  - Platform: `linux/amd64`
+- Candidate base image: `nginx:1.25.4`
+  - Tag digest: `sha256:1111111111111111111111111111111111111111111111111111111111111111`
+  - Platform manifest: `sha256:2222222222222222222222222222222222222222222222222222222222222222`
+  - Config digest: `sha256:3333333333333333333333333333333333333333333333333333333333333333`
+  - Platform: `linux/amd64`
+- Layer check: `confirmed`
+  - Layers of the current base image: 3
+  - Layers of the running image: 7
+  - A match shows that the filesystem layers agree; it does not show how the image was built.
+- Verification record
+  - Plan generated at: 2026-10-09T04:00:00Z
+  - Scan of the current base: `scan-base-1`
+  - Scan of the candidate base: `scan-cand-1`
+- Findings this update targets (fixed findings of the running image in the base image's layers)
+  - Resolved: 2
+  - Remaining: 1
+- Other findings of the compared base images
+  - Remaining in the candidate base image: 1
+  - Introduced by the candidate base image: 0
 
 **Resolved (2)**
 
@@ -38,6 +58,11 @@ KestreLynx proposes a newer tag for the base image of `build/Dockerfile` in `exa
 
 - none
 
-Both base images were scanned by Trivy `0.71.2` with the vulnerability database built at 2026-10-09T01:02:03Z. Severity range: `CRITICAL`, `HIGH`. Scope: `os packages`.
+Both base images were scanned under these conditions:
+
+- Trivy: `0.71.2`
+- Vulnerability database built at: 2026-10-09T01:02:03Z
+- Severity range: `CRITICAL`, `HIGH`
+- Scope: `os packages`
 
 <!-- kestrelynx:{"v":1,"repo_id":7,"base_branch":"main","path":"compose.yml","locations":["services.web.image"],"current_ref":"nginx:1.25.3","candidate_tag":"1.25.4","candidate_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","base_sha":"1111111111111111111111111111111111111111","head_sha":"2222222222222222222222222222222222222222","input_blob_sha":"3333333333333333333333333333333333333333","changes":[{"path":"compose.yml","mode":"100644","blob_sha":"4444444444444444444444444444444444444444"}],"target_key":"d596a66a37dc307e942721c34ab9e199f77f040025dd35c89eca19f67f63a6ca","update_key":"e513bca69279da9566db0a06ac85a0a173b88d9bf1a0a76acc455a31016fe979","attempt_key":"e17763c925cde9702bea370d076aec40d211b1d0658f6a78f56fbf450df9d39d","fix_targets":[{"location":"services.web.image","vuln_id":"CVE-1","package":{"ecosystem":"debian","class":"os","name":"libc"}}]} -->

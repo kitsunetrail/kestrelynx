@@ -575,9 +575,9 @@ func TestLanguageBodyStatesWhatWasChecked(t *testing.T) {
 	h.run(prLangPlan(h.langItem(fx)))
 	body := h.gh.pulls(testRepo)[0].Body
 	for _, want := range []string{
-		"Before merging, run a CI job that installs from the lockfile (for example `pnpm install --frozen-lockfile`)",
+		"- Before merging, run a CI job that installs from the lockfile\n  - For example: `pnpm install --frozen-lockfile`\n",
 		"Scan of the dependency files before and after",
-		"Resolved 1, remaining 0, introduced 0",
+		"  - Resolved: 1\n  - Remaining: 0\n  - Introduced: 0\n",
 		"in the CISA KEV catalog",
 		"priority `act_now`",
 		"`svc/pnpm-lock.yaml`",

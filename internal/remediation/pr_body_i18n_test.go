@@ -133,6 +133,86 @@ func bodyFixtures(t *testing.T, lang BodyLanguage) map[string]string {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	reasons := languageBodyFixture(lang, marker, true)
+	reasons.Record.Runtime = &RuntimeRecord{
+		ID: "node22", Version: "22.23.3", Image: "node@sha256:" + hex64('c'), Basis: RuntimeBasisLowestInRange,
+		Declared:     []ToolDeclaration{{Source: "engines.node", Value: ">=20"}},
+		Excluded:     []RuntimeExclusion{{ID: "node20", Why: ExcludedEndOfLife, EOL: "2026-04-30"}},
+		EnginesFloor: "20.0.0",
+	}
+	out["language_runtime_reasons"], err = buildLanguagePRBody(reasons)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	goMod := languageBodyFixture(lang, marker, true)
+	goMod.Item.Manager = ManagerGo
+	goMod.Item.GoBuiltWith = "1.26.10"
+	goMod.LockPath = "svc/go.mod"
+	goMod.Files = []FileChange{{Path: "svc/go.mod"}, {Path: "svc/go.sum"}}
+	goMod.Record.Manager = "go"
+	goMod.Record.Chain, goMod.Record.ManifestEdits, goMod.Record.Tool = nil, nil, nil
+	goMod.Record.Runtime = &RuntimeRecord{ID: "golang1.26", Version: "1.26.10", Image: "golang@sha256:" + hex64('c'), Basis: RuntimeBasisGoLines}
+	goMod.Item.Update.Diff, goMod.Item.Update.Notes = nil, nil
+	goMod.Item.Update.Steps = []UpdateStep{{Op: "go get golang.org/x/net@v0.53.0"}}
+	goMod.Record.DeprecatedNotes, goMod.Record.DeprecatedChanged, goMod.Record.Followed = nil, 0, nil
+	goMod.Item.SourceCheck.Before = []HashedFile{{Path: "svc/go.mod", SHA256: hex64('a')}}
+	goMod.Item.SourceCheck.After = []HashedFile{{Path: "svc/go.mod", SHA256: hex64('b')}}
+	goMod.Item.Update.Go = &GoUpdate{
+		GoBefore: "1.22", GoAfter: "1.25.0", ToolchainAfter: "go1.25.3",
+		Collateral: []GoModuleMove{{Path: "golang.org/x/text", From: "v0.14.0", To: "v0.36.0"}, {Path: "golang.org/x/sys", To: "v0.40.0"}},
+		SumAdded:   []string{"golang.org/x/text v0.36.0/go.mod h1:" + strings.Repeat("A", 43) + "="},
+	}
+	out["language_go"], err = buildLanguagePRBody(goMod)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	maven := languageBodyFixture(lang, marker, true)
+	maven.Item.Manager = ManagerMaven
+	maven.LockPath = "svc/pom.xml"
+	maven.Files = []FileChange{{Path: "svc/pom.xml"}}
+	maven.Record.Manager = "maven"
+	maven.Record.Chain, maven.Record.ManifestEdits, maven.Record.Tool, maven.Record.Runtime = nil, nil, nil, nil
+	maven.Item.Update.Diff, maven.Item.Update.Notes, maven.Item.Update.Steps = nil, nil, nil
+	maven.Record.DeprecatedNotes, maven.Record.DeprecatedChanged, maven.Record.Followed = nil, 0, nil
+	maven.Item.SourceCheck.Before = []HashedFile{{Path: "svc/pom.xml", SHA256: hex64('a')}}
+	maven.Item.SourceCheck.After = []HashedFile{{Path: "svc/pom.xml", SHA256: hex64('b')}}
+	maven.Item.Update.Maven = &MavenUpdate{
+		Edits: []MavenEditRecord{{File: "svc/pom.xml", Kind: MavenEditPropertyOverride, Package: "org.yaml:snakeyaml", Property: "snakeyaml.version", From: "2.6", To: "2.7"}},
+		Moves: []MavenMove{{Name: "org.example:up", From: []string{"1"}, To: []string{"2"}}},
+	}
+	out["language_maven"], err = buildLanguagePRBody(maven)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gradle := languageBodyFixture(lang, marker, true)
+	gradle.Item.Manager = ManagerGradle
+	gradle.LockPath = "svc/gradle.lockfile"
+	gradle.Files = []FileChange{{Path: "svc/gradle.lockfile"}}
+	gradle.Record.Manager = "gradle"
+	gradle.Record.Chain, gradle.Record.ManifestEdits, gradle.Record.Tool = nil, nil, nil
+	gradle.Record.Runtime = &RuntimeRecord{ID: "gradle9.8.2-jdk17", Version: "9.8.2", Image: "gradle@sha256:" + hex64('c')}
+	gradle.Item.Update.Runtime = gradle.Record.Runtime
+	gradle.Item.Update.Diff, gradle.Item.Update.Notes = nil, nil
+	gradle.Item.Update.Steps = []UpdateStep{{ID: "update", Op: "gradle.update_locks"}}
+	gradle.Record.DeprecatedNotes, gradle.Record.DeprecatedChanged, gradle.Record.Followed = nil, 0, nil
+	gradle.Item.SourceCheck.Before = []HashedFile{{Path: "svc/gradle.lockfile", SHA256: hex64('a')}}
+	gradle.Item.SourceCheck.After = []HashedFile{{Path: "svc/gradle.lockfile", SHA256: hex64('b')}}
+	gradle.Item.Update.Gradle = &GradleUpdate{
+		BOM: "org.springframework.boot:spring-boot-dependencies:4.1.2",
+		Edits: []GradleEditRecord{
+			{File: "svc/gradle.properties", Kind: GradleEditPropertyOverride, Package: "org.yaml:snakeyaml", Property: "snakeyaml.version", From: "2.6", To: "2.7"},
+			{File: "svc/build.gradle.kts", Kind: GradleEditConstraint, Package: "org.apache.commons:commons-lang3", To: "3.18.0"},
+		},
+		Moves: []GradleMove{{Name: "org.example:up", From: []string{"1"}, To: []string{"2"}}},
+	}
+	out["language_gradle"], err = buildLanguagePRBody(gradle)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return out
 }
 
@@ -534,9 +614,9 @@ func TestPRBodyJapaneseScanSentencesWithAndWithoutDatabaseTime(t *testing.T) {
 	got := bodyFixtures(t, BodyJA)
 	with, without := got["language"], got["language_nodb"]
 	for _, want := range []string{
-		"両方のスキャンで Trivy `0.71.2` を使用しました。",
-		"脆弱性データベースは、どちらも 2026-10-09T01:02:03Z に作成されたものを使用しました。",
-		"重大度の範囲 (`CRITICAL`、`HIGH`) と設定は、両方のスキャンで同じです。",
+		"両方のスキャンを次の条件で実行しました。\n\n- Trivy: `0.71.2`\n",
+		"- 脆弱性データベースの作成時刻: 2026-10-09T01:02:03Z\n",
+		"- 重大度の範囲: `CRITICAL`、`HIGH`\n- 設定: 両方のスキャンで同じ\n",
 	} {
 		if !strings.Contains(with, want) {
 			t.Errorf("with the database time, the body lacks %q", want)
@@ -545,11 +625,8 @@ func TestPRBodyJapaneseScanSentencesWithAndWithoutDatabaseTime(t *testing.T) {
 			t.Error("the database sentence is present without a database time")
 		}
 	}
-	if strings.Contains(without, "脆弱性データベースは、どちらも") || !strings.Contains(without, "両方のスキャンで Trivy `0.71.2` を使用しました。") {
-		t.Error("without the database time, the sentences are not independent")
-	}
-	if !strings.Contains(without, "重大度の範囲 (`CRITICAL`、`HIGH`) と設定は、両方のスキャンで同じです。") {
-		t.Error("the severity sentence is missing without the database time")
+	if strings.Contains(without, "脆弱性データベースの作成時刻") || !strings.Contains(without, "- Trivy: `0.71.2`\n- 重大度の範囲: `CRITICAL`、`HIGH`\n") {
+		t.Error("without the database time, the lines are not independent")
 	}
 }
 

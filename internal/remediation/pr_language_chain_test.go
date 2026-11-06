@@ -121,7 +121,7 @@ func TestPRStageOfAChainUpdate(t *testing.T) {
 		t.Fatalf("view = %+v", u.Language)
 	}
 	pr := h.gh.pulls(testRepo)[0]
-	for _, want := range []string{"### Packages updated along with the fix", "- `mkdirp`: `0.5.1` to `0.5.6` (it required `minimist` `0.0.8`)", "in `package.json`.", "compared by package, version and vulnerability ID"} {
+	for _, want := range []string{"### Packages updated along with the fix", "- `mkdirp`: `0.5.1` to `0.5.6` (it required `minimist` `0.0.8`)", "in `package.json`.", "compared by\n  - Package, version and vulnerability ID\n"} {
 		if !strings.Contains(pr.Body, want) {
 			t.Errorf("body lacks %q:\n%s", want, pr.Body)
 		}

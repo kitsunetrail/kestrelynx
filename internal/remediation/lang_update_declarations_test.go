@@ -376,10 +376,9 @@ func TestLongContinuedRequirementIsScannedOnce(t *testing.T) {
 		if err != nil || !strings.HasPrefix(string(out), "urllib3==1.26.17 \\\n") {
 			t.Fatalf("%v", err)
 		}
-		// This takes well under a second, and a few under the race detector.
 		// Scanning the rest of the line again from each of its lines would
 		// take minutes.
-		if d := time.Since(start); d > 30*time.Second {
+		if d := time.Since(start); d > 3*time.Second*raceSlowdown {
 			t.Errorf("took %s", d)
 		}
 	})

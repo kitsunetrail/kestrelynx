@@ -368,7 +368,7 @@ func TestCheckReferencesStaysSmallWithLongKeysAndManyUnmetRequirements(t *testin
 	if fail != nil {
 		t.Fatalf("the same unmet requirements before and after: %+v", fail)
 	}
-	if d := time.Since(start); d > 20*time.Second {
+	if d := time.Since(start); d > 20*time.Second*raceSlowdown {
 		t.Errorf("took %s", d)
 	}
 	if alloc := m1.TotalAlloc - m0.TotalAlloc; alloc > 600<<20 {

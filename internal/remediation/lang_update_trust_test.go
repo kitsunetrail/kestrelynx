@@ -590,7 +590,7 @@ func TestRewriteIsBounded(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if d := time.Since(start); d > 2*time.Second {
+		if d := time.Since(start); d > 2*time.Second*raceSlowdown {
 			t.Errorf("took %s", d)
 		}
 		if len(out) != b.Len() {

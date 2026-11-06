@@ -437,7 +437,7 @@ func TestPnpmUnknownMembersAreListedOncePerPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 	total := 0
@@ -483,7 +483,7 @@ func TestWheelTagsAreJudgedAsSetsAndBounded(t *testing.T) {
 	for i := 0; i < 2000; i++ {
 		wheelFitsTarget("a-1-"+many("cp2", 64)+"-"+many("abi", 64)+"-manylinux_2_17_x86_64.whl", tg)
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("judging tags took %v", d)
 	}
 	for name, want := range map[string]bool{
@@ -509,7 +509,7 @@ func TestPipReportWheelTagsAreReadOnlyForAFilePyPIPublishes(t *testing.T) {
 	})
 	start := time.Now()
 	it, _ := h.run()
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 	wantCategory(t, it, CategoryManual, ReasonDistributionMismatch)
@@ -551,7 +551,7 @@ func TestDuplicateDirectRequirementsAreComparedOnce(t *testing.T) {
 	t.Run("the same requirement written thousands of times", func(t *testing.T) {
 		start := time.Now()
 		it, _ := build(t, dup).run()
-		if d := time.Since(start); d > 10*time.Second {
+		if d := time.Since(start); d > 10*time.Second*raceSlowdown {
 			t.Errorf("took %v", d)
 		}
 		wantCategory(t, it, CategoryPRCandidate, ReasonUpdateVerified)
@@ -598,7 +598,7 @@ func TestOverridesAreWalkedOnceUnderBounds(t *testing.T) {
 	if _, err := overrideNames(json.RawMessage(level)); err != nil {
 		t.Error(err)
 	}
-	if d := time.Since(start); d > time.Second {
+	if d := time.Since(start); d > time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 	// The plan reads the manifest through the same path.
@@ -728,7 +728,7 @@ func TestSpecifiersAreBounded(t *testing.T) {
 			t.Fatalf("lower bound = %q, %v", got, ok)
 		}
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 }
@@ -950,7 +950,7 @@ func TestUvReachJudgesEachMarkerAndEntryOnce(t *testing.T) {
 	if len(reached) != parents {
 		t.Errorf("reached %d", len(reached))
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 }
@@ -1190,7 +1190,7 @@ func TestBundleListsAreJudgedByTheirTextOnce(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		entryBundlesAnything(big)
 	}
-	if d := time.Since(start); d > 2*time.Second {
+	if d := time.Since(start); d > 2*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 	if recordBundlesAnything("") || recordBundlesAnything("[]") || !recordBundlesAnything(`["a"]`) {
@@ -1288,7 +1288,7 @@ func TestEditsAreMadeWithOneSortAndOneScan(t *testing.T) {
 	if err != nil || len(out) != len(b)+100000 || !strings.HasPrefix(string(out), "XYbcdefghijXYbc") {
 		t.Fatalf("%v, %d", err, len(out))
 	}
-	if d := time.Since(start); d > 2*time.Second {
+	if d := time.Since(start); d > 2*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 	if _, err := applyReplacements([]byte("abcdef"), []replacement{{1, 4, "x"}, {3, 5, "y"}}); err == nil {
@@ -1314,7 +1314,7 @@ func TestEditsAreMadeWithOneSortAndOneScan(t *testing.T) {
 	if err != nil || strings.Count(string(got), "1.26.17") != maxManifestEdits || strings.Contains(string(got), "1.26.4") {
 		t.Fatalf("%v", err)
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 	// One more is over the limit, whatever the document.
@@ -1341,7 +1341,7 @@ func TestEditsAreMadeWithOneSortAndOneScan(t *testing.T) {
 	if err != nil || strings.Count(string(pgot), `"1.2.6"`) != 3 {
 		t.Fatalf("%v", err)
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 	if _, err := editPackageJSON(bg, []byte(pj.String()), append(pedits, pedits...)); err == nil {
@@ -1373,7 +1373,7 @@ func TestMaskingEditedSpecifiersWalksTheRequirementsOnce(t *testing.T) {
 	if err := g.maskEditedSpecs(bg, ManagerUv, edits); err != nil {
 		t.Fatal(err)
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 	if n := strings.Count(g.meta, editedMask[1:]); n != maxManifestEdits {
@@ -1486,7 +1486,7 @@ func TestUvPlanningReadsEachRequirementOnce(t *testing.T) {
 	if len(r.upd.ManifestEdits) != worker.MaxPackages {
 		t.Errorf("edits = %d", len(r.upd.ManifestEdits))
 	}
-	if d > 10*time.Second {
+	if d > 10*time.Second*raceSlowdown {
 		t.Errorf("planning took %v", d)
 	}
 	// Over the bound on requirements the item is deferred, before any job.
@@ -1516,7 +1516,7 @@ func TestUpdateSetIsIndexedOnce(t *testing.T) {
 		}
 		r.packageArgs(nil, func(string) bool { return true })
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %v", d)
 	}
 	if got := r.nameOf("unknown"); got != "unknown" {

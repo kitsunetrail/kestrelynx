@@ -428,7 +428,7 @@ func TestComparingGraphsWithLongKeysIsNotProportionalToTheirProduct(t *testing.T
 	before, after := build("1.0.0"), build("1.0.1")
 	start := time.Now()
 	un := newUnresolvedCtx(bg, before, after)
-	if d := time.Since(start); d > 3*time.Second {
+	if d := time.Since(start); d > 3*time.Second*raceSlowdown {
 		t.Errorf("unresolved took %v", d)
 	}
 	if len(un) != 0 {
@@ -438,7 +438,7 @@ func TestComparingGraphsWithLongKeysIsNotProportionalToTheirProduct(t *testing.T
 	if why := newNonRegistryEdge(bg, before, after); why != "" {
 		t.Errorf("non-registry: %s", why)
 	}
-	if d := time.Since(start); d > 3*time.Second {
+	if d := time.Since(start); d > 3*time.Second*raceSlowdown {
 		t.Errorf("non-registry took %v", d)
 	}
 	start = time.Now()
@@ -449,7 +449,7 @@ func TestComparingGraphsWithLongKeysIsNotProportionalToTheirProduct(t *testing.T
 	for _, n := range after.nodes {
 		edgeSig(after, n.deps, map[string]bool{})
 	}
-	if d := time.Since(start); d > 3*time.Second {
+	if d := time.Since(start); d > 3*time.Second*raceSlowdown {
 		t.Errorf("reach and signatures took %v", d)
 	}
 	// A time that is over stops the walks.
@@ -614,7 +614,7 @@ func TestSnapshotsOfOnePackageShareOneDigestOfItsDistribution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := time.Since(start); d > 10*time.Second {
+	if d := time.Since(start); d > 10*time.Second*raceSlowdown {
 		t.Errorf("building the graph took %v", d)
 	}
 	var first *depNode

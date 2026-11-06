@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"syscall"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -130,6 +131,11 @@ func TestProbesFromExitCode(t *testing.T) {
 // before it reports back, and RunUnsafeProbesInSubprocess returns promptly
 // with a real, unambiguous result instead of blocking forever.
 func TestRunUnsafeProbesInSubprocess_Integration(t *testing.T) {
+	// The child starts with SetNoNewPrivsAll, which cgo rules out, and the
+	// race detector needs cgo. The sensor is built without it.
+	if _, _, errno := syscall.AllThreadsSyscall(unix.SYS_GETPID, 0, 0, 0); errno == unix.ENOTSUP {
+		t.Skip("all-threads system calls are not available with cgo")
+	}
 	probes, err := RunUnsafeProbesInSubprocess()
 	if err != nil {
 		t.Fatalf("RunUnsafeProbesInSubprocess: %v", err)

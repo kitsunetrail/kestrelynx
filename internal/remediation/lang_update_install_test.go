@@ -557,7 +557,7 @@ func TestPnpmYAMLIsBoundedAndReadInLinearTime(t *testing.T) {
 	if got := len(gmap(doc.top["packages"])); got != 60000 {
 		t.Errorf("%d packages", got)
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("reading %d keys took %s", 60000, d)
 	}
 	for name, text := range map[string]string{
@@ -591,7 +591,7 @@ func TestSnapshotsShareTheMetadataOfTheirPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %s", d)
 	}
 	for k, n := range g.nodes {
@@ -655,7 +655,7 @@ func TestTOMLLongNamesAreNotCopiedForEveryKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime.ReadMemStats(&m1)
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > 5*time.Second*raceSlowdown {
 		t.Errorf("took %s", d)
 	}
 	if grew := m1.TotalAlloc - m0.TotalAlloc; grew > 400<<20 {
@@ -707,7 +707,7 @@ func TestManyOccurrencesOfAnUpdatedPackageAreCheckedInLinearTime(t *testing.T) {
 	if fail := r.checkVersions(lf); fail != nil {
 		t.Fatalf("%s %s", fail.reason, fail.detail)
 	}
-	if d := time.Since(start); d > 2*time.Second {
+	if d := time.Since(start); d > 2*time.Second*raceSlowdown {
 		t.Errorf("took %s", d)
 	}
 	if got := r.afterVersions["t"]; len(got) != 1 || got[0] != "1.0.5" {
@@ -753,7 +753,7 @@ func TestInstalledRequirementsAreFoundThroughBigRequirementLists(t *testing.T) {
 	if len(roots) != 20000 {
 		t.Errorf("%d roots", len(roots))
 	}
-	if d := time.Since(start); d > 2*time.Second {
+	if d := time.Since(start); d > 2*time.Second*raceSlowdown {
 		t.Errorf("took %s", d)
 	}
 }

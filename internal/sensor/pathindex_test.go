@@ -137,7 +137,7 @@ func TestPathIndexFairness_BurstIntoFullTableIsFast(t *testing.T) {
 	recordN(&idx, 1000, 0, 5000) // table now full
 	start := time.Now()
 	recordN(&idx, 1001, 100_000, 160_000)
-	if d := time.Since(start); d > 2*time.Second {
+	if d := time.Since(start); d > 2*time.Second*raceSlowdown {
 		t.Errorf("60,000-insert burst took %v", d)
 	}
 	if len(idx.byKey) != maxPathIndexEntries {

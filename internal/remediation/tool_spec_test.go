@@ -503,7 +503,7 @@ func TestToolSpec_HugeRangesAreRefusedQuickly(t *testing.T) {
 	if uerr == nil || uerr.Reason != ReasonNodeSpecInvalid {
 		t.Fatalf("error = %v", uerr)
 	}
-	if elapsed > 2*time.Second || after.TotalAlloc-before.TotalAlloc > 64<<20 {
+	if elapsed > 2*time.Second*raceSlowdown || after.TotalAlloc-before.TotalAlloc > 64<<20 {
 		t.Errorf("took %s and %d bytes", elapsed, after.TotalAlloc-before.TotalAlloc)
 	}
 	// The same through the planner.
@@ -521,7 +521,7 @@ func TestToolSpec_HugeRangesAreRefusedQuickly(t *testing.T) {
 			t.Fatal(uerr)
 		}
 	}
-	if time.Since(start) > 2*time.Second {
+	if time.Since(start) > 2*time.Second*raceSlowdown {
 		t.Errorf("merging took %s", time.Since(start))
 	}
 }

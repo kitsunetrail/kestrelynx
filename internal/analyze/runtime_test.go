@@ -610,8 +610,8 @@ func TestAttachRuntime_LanguageLastSeenIgnoresLoadOnlyKindTimestamp(t *testing.T
 	}
 	r := Build(scans, []inventory.Container{container}, Triage{}, runtimeNow)
 
-	exeLastSeen := runtimeNow.Add(-4 * time.Hour)       // 08:00 in the review's example
-	mappedLibLastSeen := runtimeNow.Add(-2 * time.Hour) // 10:00 in the review's example: later, but must be ignored
+	exeLastSeen := runtimeNow.Add(-4 * time.Hour)       // 08:00
+	mappedLibLastSeen := runtimeNow.Add(-2 * time.Hour) // 10:00: later, but must be ignored
 	gen := baseGeneration()
 	gen.Executables = []evidence.ExecutableEvidence{{
 		Path: "/app/api",

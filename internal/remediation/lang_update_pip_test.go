@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -460,10 +461,14 @@ func (h *harness) checkReport(edit func(string) string) {
 }
 
 func TestNpmClient(t *testing.T) {
+	// The requests of the client reach the handler on different connections.
+	var mu sync.Mutex
 	var gotPath, gotRaw string
 	slow := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		gotPath, gotRaw = r.URL.Path, r.URL.EscapedPath()
+		mu.Unlock()
 		doc := func(name, ver, dist string) { fmt.Fprintf(w, `{"name":%q,"version":%q,"dist":%s}`, name, ver, dist) }
 		good := `{"tarball":"https://registry.npmjs.org/x/-/x-1.0.0.tgz","integrity":"sha512-abc"}`
 		switch r.URL.EscapedPath() {
@@ -496,8 +501,12 @@ func TestNpmClient(t *testing.T) {
 	if err != nil || d.Integrity != "sha512-abc" || d.Tarball != "https://registry.npmjs.org/x/-/x-1.0.0.tgz" {
 		t.Fatalf("%+v %v", d, err)
 	}
-	if _, err := c.VersionDist(ctx, "@s/pkg", "1.0.0"); err != nil || gotRaw != "/@s%2Fpkg/1.0.0" {
-		t.Errorf("scoped name: %v, path %q (%q)", err, gotRaw, gotPath)
+	_, err = c.VersionDist(ctx, "@s/pkg", "1.0.0")
+	mu.Lock()
+	path, raw := gotPath, gotRaw
+	mu.Unlock()
+	if err != nil || raw != "/@s%2Fpkg/1.0.0" {
+		t.Errorf("scoped name: %v, path %q (%q)", err, raw, path)
 	}
 	if _, err := c.VersionDist(ctx, "minimist", "9.9.9"); !errors.Is(err, ErrReleaseNotFound) {
 		t.Errorf("not found = %v", err)

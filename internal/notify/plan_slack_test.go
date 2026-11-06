@@ -689,7 +689,7 @@ func TestSlackAPINotifier_PlanNotDuePostsNothingExtra(t *testing.T) {
 	}
 }
 
-// --- the review's cases ---
+// --- what the message shows ---
 
 // A change that the message cuts short still changes the fingerprint.
 func TestPlanSlackFingerprint_SeesWhatTheLinesCutShort(t *testing.T) {

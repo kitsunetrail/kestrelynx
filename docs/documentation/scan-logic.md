@@ -168,7 +168,7 @@ This classification continues when triage is disabled.
 
 ### Language runtime findings {#language-runtime}
 
-KestreLynx checks the runtimes of languages whose package updates it supports: Node.js and Python.
+These checks cover the Node.js and Python runtimes themselves.
 
 - Handling in remediation plans
   - Findings attributable to the base are included in base-update comparisons, and an unconfirmed floating-tag base can produce a rebuild estimate from the current base's runtime version

@@ -21,7 +21,7 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
-// Default dataset URLs. Each is overridable in config for mirrors.
+// Default dataset URLs.
 const (
 	DefaultAdvisoryDBURL    = "https://codeload.github.com/psf/advisory-database/tar.gz/refs/heads/main"
 	DefaultCVERecordBaseURL = "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/"

@@ -13,34 +13,29 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
-func TestBuildNodeRuntime_CacheDirNextToStateAndOverrides(t *testing.T) {
+func TestBuildNodeRuntime_CacheDirNextToStateAndOfficialSources(t *testing.T) {
 	cfg := config.Config{}
 	cfg.State.Path = "/var/lib/kestrelynx/state.json"
 	cfg.Triage.Enabled = false
-	cfg.Scan.NodeRuntime = config.NodeRuntimeConfig{Enabled: true, ReleasesURL: "https://mirror.test/dist.json"}
+	cfg.Scan.NodeRuntime = config.NodeRuntimeConfig{Enabled: true}
 
 	advisor, refresher := buildNodeRuntime(cfg, slog.Default())
 	if advisor == nil || refresher.Advisor != advisor {
 		t.Fatal("the refresher must load into the advisor the scanners share")
 	}
-	if want := filepath.Join("/var/lib/kestrelynx", "nodejs"); refresher.Source.CacheDir != want {
-		t.Errorf("CacheDir = %q, want %q", refresher.Source.CacheDir, want)
+	src := refresher.Source
+	if want := filepath.Join("/var/lib/kestrelynx", "nodejs"); src.CacheDir != want {
+		t.Errorf("CacheDir = %q, want %q", src.CacheDir, want)
 	}
-	if refresher.Source.ReleasesURL != "https://mirror.test/dist.json" || refresher.Source.SecurityWGURL != "" {
-		t.Errorf("URL overrides not passed through: %+v", refresher.Source)
+	if src.SecurityWGURL != "" || src.BlogFeedURL != "" || src.BlogPostBaseURL != "" || src.ReleasesURL != "" || src.ScheduleURL != "" {
+		t.Errorf("the sources must stay the official ones: %+v", src)
 	}
 }
 
-func TestBuildPythonRuntime_CacheDirNextToStateAndOverrides(t *testing.T) {
+func TestBuildPythonRuntime_CacheDirNextToStateAndOfficialSources(t *testing.T) {
 	cfg := config.Config{}
 	cfg.State.Path = "/var/lib/kestrelynx/state.json"
-	cfg.Scan.PythonRuntime = config.PythonRuntimeConfig{
-		Enabled:          true,
-		AdvisoryDBURL:    "https://mirror.test/db.tar.gz",
-		CVERecordBaseURL: "https://mirror.test/cves/",
-		ReleasesURL:      "https://mirror.test/releases.json",
-		ReleaseCycleURL:  "https://mirror.test/cycle.json",
-	}
+	cfg.Scan.PythonRuntime = config.PythonRuntimeConfig{Enabled: true}
 
 	advisor, refresher := buildPythonRuntime(cfg, slog.Default())
 	if advisor == nil || refresher.Advisor != advisor {
@@ -50,9 +45,8 @@ func TestBuildPythonRuntime_CacheDirNextToStateAndOverrides(t *testing.T) {
 	if want := filepath.Join("/var/lib/kestrelynx", "python"); src.CacheDir != want {
 		t.Errorf("CacheDir = %q, want %q", src.CacheDir, want)
 	}
-	if src.AdvisoryDBURL != "https://mirror.test/db.tar.gz" || src.CVERecordBaseURL != "https://mirror.test/cves/" ||
-		src.ReleasesURL != "https://mirror.test/releases.json" || src.ReleaseCycleURL != "https://mirror.test/cycle.json" {
-		t.Errorf("URL overrides not passed through: %+v", src)
+	if src.AdvisoryDBURL != "" || src.CVERecordBaseURL != "" || src.ReleasesURL != "" || src.ReleaseCycleURL != "" {
+		t.Errorf("the sources must stay the official ones: %+v", src)
 	}
 }
 

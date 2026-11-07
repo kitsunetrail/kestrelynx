@@ -20,7 +20,7 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
-// Default dataset URLs. Each is overridable in config for mirrors.
+// Default dataset URLs.
 const (
 	DefaultSecurityWGURL   = "https://raw.githubusercontent.com/nodejs/security-wg/main/vuln/core/index.json"
 	DefaultBlogFeedURL     = "https://nodejs.org/en/feed/vulnerability.xml"

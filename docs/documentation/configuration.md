@@ -33,7 +33,7 @@ Allowed severity values are `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`.
 
 ### Language runtime checks {#language-runtime}
 
-KestreLynx checks the runtimes of languages whose package updates it supports: Node.js and Python.
+These checks cover the Node.js and Python runtimes themselves.
 
 #### Node.js runtime checks {#node-runtime}
 
@@ -43,11 +43,6 @@ Matching rules and limitations are described in [Node.js runtime findings](scan-
 | Option | Default | Description |
 | --- | --- | --- |
 | `scan.node_runtime.enabled` | `true` | Enable advisory downloads and Node.js runtime checks; `false` disables both. |
-| `scan.node_runtime.security_wg_url` | empty | Mirror URL for the security-wg core index; empty uses `https://raw.githubusercontent.com/nodejs/security-wg/main/vuln/core/index.json`. |
-| `scan.node_runtime.blog_feed_url` | empty | Mirror URL for the security blog RSS feed; empty uses `https://nodejs.org/en/feed/vulnerability.xml`. |
-| `scan.node_runtime.blog_post_base_url` | empty | Mirror base URL for blog post Markdown; empty uses `https://raw.githubusercontent.com/nodejs/nodejs.org/main/apps/site/pages/en/blog/vulnerability/`. |
-| `scan.node_runtime.releases_url` | empty | Mirror URL for release dates; empty uses `https://nodejs.org/dist/index.json`. |
-| `scan.node_runtime.schedule_url` | empty | Mirror URL for release-line EOL dates; empty uses `https://raw.githubusercontent.com/nodejs/Release/main/schedule.json`. |
 
 The cache is stored under `nodejs/` in the same directory as `state.path`.
 Download destinations are listed in [Node.js advisory downloads](outbound-communication.md#node-runtime-download).
@@ -60,10 +55,6 @@ Matching rules and limitations are described in [Python runtime findings](scan-l
 | Option | Default | Description |
 | --- | --- | --- |
 | `scan.python_runtime.enabled` | `true` | Enable advisory downloads and Python runtime checks; `false` disables both. |
-| `scan.python_runtime.advisory_db_url` | empty | Mirror URL for the PSF advisory database archive; empty uses `https://codeload.github.com/psf/advisory-database/tar.gz/refs/heads/main`. |
-| `scan.python_runtime.cve_record_base_url` | empty | Mirror base URL for official CVE records; empty uses `https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/`. |
-| `scan.python_runtime.releases_url` | empty | Mirror URL for the release list; empty uses `https://www.python.org/api/v2/downloads/release/?is_published=true`. |
-| `scan.python_runtime.release_cycle_url` | empty | Mirror URL for release-cycle data; empty uses `https://peps.python.org/api/release-cycle.json`. |
 
 The cache is stored under `python/` in the same directory as `state.path`.
 Download destinations are listed in [Python advisory downloads](outbound-communication.md#python-runtime-download).

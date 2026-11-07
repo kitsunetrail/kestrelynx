@@ -29,29 +29,29 @@ See [Configuration](configuration.md) for the source, and [Threat intelligence u
 
 | Sender | Destination | Information retrieved or sent | When |
 | --- | --- | --- | --- |
-| KestreLynx | `raw.githubusercontent.com` by default | Bulk download of the `nodejs/security-wg` core index containing CVEs, severities, affected ranges, and fixed ranges | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
-| KestreLynx | `nodejs.org` and `raw.githubusercontent.com` by default | Retrieve the security blog listing through RSS and post bodies as Markdown from `nodejs/nodejs.org` to supplement CVEs missing from security-wg | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
-| KestreLynx | `nodejs.org` by default | Bulk download of `dist/index.json` containing release dates | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
-| KestreLynx | `raw.githubusercontent.com` by default | Bulk download of `nodejs/Release`'s `schedule.json` containing release-line EOL dates | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
+| KestreLynx | `raw.githubusercontent.com` | Bulk download of the `nodejs/security-wg` core index containing CVEs, severities, affected ranges, and fixed ranges | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
+| KestreLynx | The listing is retrieved from `nodejs.org`. Post bodies are retrieved from `raw.githubusercontent.com`. | Retrieve the security blog listing through RSS and post bodies as Markdown from `nodejs/nodejs.org` to supplement CVEs missing from security-wg | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
+| KestreLynx | `nodejs.org` | Bulk download of `dist/index.json` containing release dates | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
+| KestreLynx | `raw.githubusercontent.com` | Bulk download of `nodejs/Release`'s `schedule.json` containing release-line EOL dates | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
 
 The security blog supplements security-wg because index updates can lag releases by several weeks or longer.
 These public datasets are matched locally; image information and detected CVEs are not sent to the download sources.
 
-Sources and mirror settings are described in [Node.js runtime checks](configuration.md#node-runtime), with refresh rules in [Threat intelligence updates](scan-logic.md#intel-cache) and failure handling in [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable).
+Settings for enabling or disabling Node.js runtime checks are described in [Node.js runtime checks](configuration.md#node-runtime), with refresh rules in [Threat intelligence updates](scan-logic.md#intel-cache) and failure handling in [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable).
 
 ### Python advisory downloads {#python-runtime-download}
 
 | Sender | Destination | Information retrieved or sent | When |
 | --- | --- | --- | --- |
-| KestreLynx | `codeload.github.com` by default | Bulk download of the PSF `advisory-database` as a `tar.gz` archive containing the advisory list | Python runtime checks are enabled and the data needs to be downloaded or refreshed. |
-| KestreLynx | `raw.githubusercontent.com` by default | Retrieve official records from `CVEProject/cvelistV5` for all CVEs in the PSF list, containing PSF-authored CPython version ranges and target OS information, severity, and `REJECTED` status | Python runtime checks are enabled and the records need to be downloaded or revalidated. |
-| KestreLynx | `www.python.org` by default | Bulk download of the release list through the API, providing final releases in each release line | Python runtime checks are enabled and the data needs to be downloaded or refreshed. |
-| KestreLynx | `peps.python.org` by default | Bulk download of release-cycle data providing each release line's EOL status | Python runtime checks are enabled and the data needs to be downloaded or refreshed. |
+| KestreLynx | `codeload.github.com` | Bulk download of the PSF `advisory-database` as a `tar.gz` archive containing the advisory list | Python runtime checks are enabled and the data needs to be downloaded or refreshed. |
+| KestreLynx | `raw.githubusercontent.com` | Retrieve official records from `CVEProject/cvelistV5` for all CVEs in the PSF list, containing PSF-authored CPython version ranges and target OS information, severity, and `REJECTED` status | Python runtime checks are enabled and the records need to be downloaded or revalidated. |
+| KestreLynx | `www.python.org` | Bulk download of the release list through the API, providing final releases in each release line | Python runtime checks are enabled and the data needs to be downloaded or refreshed. |
+| KestreLynx | `peps.python.org` | Bulk download of release-cycle data providing each release line's EOL status | Python runtime checks are enabled and the data needs to be downloaded or refreshed. |
 
 These public datasets are retrieved in full and matched locally; image information and detected CVEs are not sent to the download sources.
 CVE record requests cover the PSF list rather than being selected from image findings.
 
-Sources and mirror settings are described in [Python runtime checks](configuration.md#python-runtime), with refresh rules in [Threat intelligence updates](scan-logic.md#intel-cache) and failure handling in [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable).
+Settings for enabling or disabling Python runtime checks are described in [Python runtime checks](configuration.md#python-runtime), with refresh rules in [Threat intelligence updates](scan-logic.md#intel-cache) and failure handling in [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable).
 
 ### Hacker News searches {#hacker-news-search}
 

@@ -1164,34 +1164,6 @@ func TestParse_NodeRuntimeDefaults(t *testing.T) {
 	}
 }
 
-func TestParse_NodeRuntimeOverrides(t *testing.T) {
-	c, err := Parse([]byte(`
-notify:
-  slack_webhook_url: "https://x.test"
-scan:
-  node_runtime:
-    security_wg_url: "https://mirror.test/index.json"
-    blog_feed_url: "https://mirror.test/feed.xml"
-    blog_post_base_url: "https://mirror.test/posts/"
-    releases_url: "https://mirror.test/dist.json"
-    schedule_url: "https://mirror.test/schedule.json"
-`))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-	want := NodeRuntimeConfig{
-		Enabled:         true,
-		SecurityWGURL:   "https://mirror.test/index.json",
-		BlogFeedURL:     "https://mirror.test/feed.xml",
-		BlogPostBaseURL: "https://mirror.test/posts/",
-		ReleasesURL:     "https://mirror.test/dist.json",
-		ScheduleURL:     "https://mirror.test/schedule.json",
-	}
-	if c.Scan.NodeRuntime != want {
-		t.Errorf("NodeRuntime = %+v, want %+v", c.Scan.NodeRuntime, want)
-	}
-}
-
 func TestParse_NodeRuntimeDisabled(t *testing.T) {
 	c, err := Parse([]byte(`
 notify:
@@ -1218,29 +1190,26 @@ func TestParse_PythonRuntimeDefaults(t *testing.T) {
 	}
 }
 
-func TestParse_PythonRuntimeOverrides(t *testing.T) {
-	c, err := Parse([]byte(`
-notify:
-  slack_webhook_url: "https://x.test"
-scan:
-  python_runtime:
-    advisory_db_url: "https://mirror.test/db.tar.gz"
-    cve_record_base_url: "https://mirror.test/cves/"
-    releases_url: "https://mirror.test/releases.json"
-    release_cycle_url: "https://mirror.test/cycle.json"
-`))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-	want := PythonRuntimeConfig{
-		Enabled:          true,
-		AdvisoryDBURL:    "https://mirror.test/db.tar.gz",
-		CVERecordBaseURL: "https://mirror.test/cves/",
-		ReleasesURL:      "https://mirror.test/releases.json",
-		ReleaseCycleURL:  "https://mirror.test/cycle.json",
-	}
-	if c.Scan.PythonRuntime != want {
-		t.Errorf("PythonRuntime = %+v, want %+v", c.Scan.PythonRuntime, want)
+// These sources have no other site serving the same files, so they cannot be
+// set: the program would not start with a key that does nothing.
+func TestParse_RuntimeSourceURLsAreRejected(t *testing.T) {
+	for _, key := range []string{
+		"node_runtime:\n    security_wg_url",
+		"node_runtime:\n    blog_feed_url",
+		"node_runtime:\n    blog_post_base_url",
+		"node_runtime:\n    releases_url",
+		"node_runtime:\n    schedule_url",
+		"python_runtime:\n    advisory_db_url",
+		"python_runtime:\n    cve_record_base_url",
+		"python_runtime:\n    releases_url",
+		"python_runtime:\n    release_cycle_url",
+	} {
+		t.Run(key, func(t *testing.T) {
+			data := "notify:\n  slack_webhook_url: \"https://x.test\"\nscan:\n  " + key + ": \"https://mirror.test/x\"\n"
+			if _, err := Parse([]byte(data)); err == nil {
+				t.Fatal("Parse accepted a removed key")
+			}
+		})
 	}
 }
 

@@ -17,12 +17,6 @@ scan:
   # about your images; set enabled: false to opt out.
   node_runtime:
     enabled: true
-    # Mirror URLs for air-gapped environments. Empty = the official sources.
-    security_wg_url: ""
-    blog_feed_url: ""
-    blog_post_base_url: ""
-    releases_url: ""
-    schedule_url: ""
   # Also checks the CPython of official python images against the Python
   # Software Foundation's advisories (Trivy does not report it). Downloads
   # public data from codeload.github.com, raw.githubusercontent.com,
@@ -31,11 +25,6 @@ scan:
   # version ranges. Set enabled: false to opt out.
   python_runtime:
     enabled: true
-    # Mirror URLs for air-gapped environments. Empty = the official sources.
-    advisory_db_url: ""
-    cve_record_base_url: ""
-    releases_url: ""
-    release_cycle_url: ""
 
 notify:
   # Slack Incoming Webhook (sends a preformatted message).

@@ -33,7 +33,7 @@ Kubernetesモードで`schedule.run_on_start`が有効な場合、最初のス�
 
 ### 言語ランタイム本体の脆弱性照合 {#language-runtime}
 
-対象は、KestreLynxが言語パッケージの更新に対応しているNode.jsとPythonのランタイム本体です。
+対象は、Node.jsとPythonのランタイム本体です。
 
 #### Node.js本体の脆弱性照合 {#node-runtime}
 
@@ -43,11 +43,6 @@ KestreLynxは、`NODE_VERSION`に記録されたNode.jsの版をNode.jsのセキ
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
 | `scan.node_runtime.enabled` | `true` | セキュリティ情報の取得とNode.js本体の照合を有効にします。`false`では両方を停止します。 |
-| `scan.node_runtime.security_wg_url` | 空 | security-wgのcore索引のミラーURLです。空の場合は`https://raw.githubusercontent.com/nodejs/security-wg/main/vuln/core/index.json`を使います。 |
-| `scan.node_runtime.blog_feed_url` | 空 | セキュリティブログのRSSフィードのミラーURLです。空の場合は`https://nodejs.org/en/feed/vulnerability.xml`を使います。 |
-| `scan.node_runtime.blog_post_base_url` | 空 | ブログ本文のMarkdownのミラーベースURLです。空の場合は`https://raw.githubusercontent.com/nodejs/nodejs.org/main/apps/site/pages/en/blog/vulnerability/`を使います。 |
-| `scan.node_runtime.releases_url` | 空 | リリース日の一覧のミラーURLです。空の場合は`https://nodejs.org/dist/index.json`を使います。 |
-| `scan.node_runtime.schedule_url` | 空 | 系列ごとのEOL日の一覧のミラーURLです。空の場合は`https://raw.githubusercontent.com/nodejs/Release/main/schedule.json`を使います。 |
 
 キャッシュは、`state.path`と同じディレクトリの`nodejs/`配下に保存します。
 取得先は、[Node.jsのセキュリティ情報の取得](outbound-communication.md#node-runtime-download)に記載しています。
@@ -60,10 +55,6 @@ KestreLynxは、`PYTHON_VERSION`に記録されたCPythonの版をPythonのセ�
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
 | `scan.python_runtime.enabled` | `true` | セキュリティ情報の取得とPython本体の照合を有効にします。`false`では両方を停止します。 |
-| `scan.python_runtime.advisory_db_url` | 空 | PSFのアドバイザリーデータベースのアーカイブのミラーURLです。空の場合は`https://codeload.github.com/psf/advisory-database/tar.gz/refs/heads/main`を使います。 |
-| `scan.python_runtime.cve_record_base_url` | 空 | CVEの公式レコードのミラーベースURLです。空の場合は`https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/`を使います。 |
-| `scan.python_runtime.releases_url` | 空 | リリース一覧のミラーURLです。空の場合は`https://www.python.org/api/v2/downloads/release/?is_published=true`を使います。 |
-| `scan.python_runtime.release_cycle_url` | 空 | リリースサイクルのミラーURLです。空の場合は`https://peps.python.org/api/release-cycle.json`を使います。 |
 
 キャッシュは、`state.path`と同じディレクトリの`python/`配下に保存します。
 取得先は、[Pythonのセキュリティ情報の取得](outbound-communication.md#python-runtime-download)に記載しています。

@@ -78,27 +78,16 @@ type ScanConfig struct {
 
 // NodeRuntimeConfig controls the check of the Node.js binary of official node
 // images against Node.js's own security advisories, which Trivy does not
-// report. The URLs override the public data sources (mirrors, air-gapped
-// environments); an empty URL means the default source.
+// report.
 type NodeRuntimeConfig struct {
-	Enabled         bool
-	SecurityWGURL   string
-	BlogFeedURL     string
-	BlogPostBaseURL string
-	ReleasesURL     string
-	ScheduleURL     string
+	Enabled bool
 }
 
 // PythonRuntimeConfig controls the check of the CPython of official python
 // images against the Python Software Foundation's security advisories, which
-// Trivy does not report. The URLs override the public data sources (mirrors,
-// air-gapped environments); an empty URL means the default source.
+// Trivy does not report.
 type PythonRuntimeConfig struct {
-	Enabled          bool
-	AdvisoryDBURL    string
-	CVERecordBaseURL string
-	ReleasesURL      string
-	ReleaseCycleURL  string
+	Enabled bool
 }
 
 // Email TLS modes. Unencrypted SMTP is not accepted.
@@ -499,19 +488,10 @@ type rawConfig struct {
 	Scan struct {
 		Severity    []string `yaml:"severity"`
 		NodeRuntime struct {
-			Enabled         *bool  `yaml:"enabled"`
-			SecurityWGURL   string `yaml:"security_wg_url"`
-			BlogFeedURL     string `yaml:"blog_feed_url"`
-			BlogPostBaseURL string `yaml:"blog_post_base_url"`
-			ReleasesURL     string `yaml:"releases_url"`
-			ScheduleURL     string `yaml:"schedule_url"`
+			Enabled *bool `yaml:"enabled"`
 		} `yaml:"node_runtime"`
 		PythonRuntime struct {
-			Enabled          *bool  `yaml:"enabled"`
-			AdvisoryDBURL    string `yaml:"advisory_db_url"`
-			CVERecordBaseURL string `yaml:"cve_record_base_url"`
-			ReleasesURL      string `yaml:"releases_url"`
-			ReleaseCycleURL  string `yaml:"release_cycle_url"`
+			Enabled *bool `yaml:"enabled"`
 		} `yaml:"python_runtime"`
 	} `yaml:"scan"`
 	Notify struct {
@@ -803,19 +783,10 @@ func Parse(data []byte) (Config, error) {
 		Scan: ScanConfig{
 			Severity: raw.Scan.Severity,
 			NodeRuntime: NodeRuntimeConfig{
-				Enabled:         boolOr(raw.Scan.NodeRuntime.Enabled, true),
-				SecurityWGURL:   raw.Scan.NodeRuntime.SecurityWGURL,
-				BlogFeedURL:     raw.Scan.NodeRuntime.BlogFeedURL,
-				BlogPostBaseURL: raw.Scan.NodeRuntime.BlogPostBaseURL,
-				ReleasesURL:     raw.Scan.NodeRuntime.ReleasesURL,
-				ScheduleURL:     raw.Scan.NodeRuntime.ScheduleURL,
+				Enabled: boolOr(raw.Scan.NodeRuntime.Enabled, true),
 			},
 			PythonRuntime: PythonRuntimeConfig{
-				Enabled:          boolOr(raw.Scan.PythonRuntime.Enabled, true),
-				AdvisoryDBURL:    raw.Scan.PythonRuntime.AdvisoryDBURL,
-				CVERecordBaseURL: raw.Scan.PythonRuntime.CVERecordBaseURL,
-				ReleasesURL:      raw.Scan.PythonRuntime.ReleasesURL,
-				ReleaseCycleURL:  raw.Scan.PythonRuntime.ReleaseCycleURL,
+				Enabled: boolOr(raw.Scan.PythonRuntime.Enabled, true),
 			},
 		},
 		Notify: NotifyConfig{

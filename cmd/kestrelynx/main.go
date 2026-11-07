@@ -443,17 +443,11 @@ func withRuntimes(tr scanner.Trivy, advisors []scanner.RuntimeAdvisor) scanner.T
 // diff state, like the intel cache, whether or not triage is enabled, so one
 // volume mount covers all of it.
 func buildNodeRuntime(cfg config.Config, log *slog.Logger) (*nodecore.Advisor, nodecore.Refresher) {
-	nr := cfg.Scan.NodeRuntime
 	advisor := &nodecore.Advisor{}
 	return advisor, nodecore.Refresher{
 		Source: &nodecore.Source{
-			CacheDir:        filepath.Join(filepath.Dir(cfg.State.Path), "nodejs"),
-			SecurityWGURL:   nr.SecurityWGURL,
-			BlogFeedURL:     nr.BlogFeedURL,
-			BlogPostBaseURL: nr.BlogPostBaseURL,
-			ReleasesURL:     nr.ReleasesURL,
-			ScheduleURL:     nr.ScheduleURL,
-			Log:             log,
+			CacheDir: filepath.Join(filepath.Dir(cfg.State.Path), "nodejs"),
+			Log:      log,
 		},
 		Advisor: advisor,
 	}
@@ -463,16 +457,11 @@ func buildNodeRuntime(cfg config.Config, log *slog.Logger) (*nodecore.Advisor, n
 // the image scanners share. The data is cached in a python directory next to
 // the diff state, like the Node.js data.
 func buildPythonRuntime(cfg config.Config, log *slog.Logger) (*pycore.Advisor, pycore.Refresher) {
-	pr := cfg.Scan.PythonRuntime
 	advisor := &pycore.Advisor{}
 	return advisor, pycore.Refresher{
 		Source: &pycore.Source{
-			CacheDir:         filepath.Join(filepath.Dir(cfg.State.Path), "python"),
-			AdvisoryDBURL:    pr.AdvisoryDBURL,
-			CVERecordBaseURL: pr.CVERecordBaseURL,
-			ReleasesURL:      pr.ReleasesURL,
-			ReleaseCycleURL:  pr.ReleaseCycleURL,
-			Log:              log,
+			CacheDir: filepath.Join(filepath.Dir(cfg.State.Path), "python"),
+			Log:      log,
 		},
 		Advisor: advisor,
 	}

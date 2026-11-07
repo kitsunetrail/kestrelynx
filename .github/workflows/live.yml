@@ -1,0 +1,65 @@
+name: Live tests
+
+# The tests the CI workflow leaves out because they need the real Trivy, Docker,
+# a registry that asks for a login, or the network. They are what notices when a
+# Trivy update changes how it reads logins, which the unit tests cannot see. They
+# take a quarter of an hour or more, so they run weekly and when something they
+# cover changes, not on every change.
+on:
+  schedule:
+    - cron: "41 3 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/live.yml
+      - Dockerfile
+      - cmd/**
+      - go.mod
+      - go.sum
+      - internal/**
+      - scripts/integration_test.sh
+      - scripts/live_auth_test.sh
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/live.yml
+      - Dockerfile
+      - cmd/**
+      - go.mod
+      - go.sum
+      - internal/**
+      - scripts/integration_test.sh
+      - scripts/live_auth_test.sh
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The Trivy the image ships, so a change of its pin is what gets tested.
+      - name: Install Trivy
+        run: |
+          set -eu
+          version="$(sed -n 's|^FROM aquasec/trivy:\([0-9.]*\).*|\1|p' Dockerfile)"
+          test -n "$version"
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${version}/trivy_${version}_Linux-64bit.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin" trivy
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/trivy" image --download-db-only --quiet
+          "$HOME/.local/bin/trivy" image --download-java-db-only --quiet
+
+      - name: Registry login tests
+        run: scripts/live_auth_test.sh
+
+      - name: Integration tests
+        run: scripts/integration_test.sh

@@ -1,0 +1,68 @@
+name: Kubernetes install test
+
+# Installs KestreLynx on a throwaway cluster by the steps of the getting started
+# page and checks that it scans an image from a registry that asks for a login.
+# It is what notices when the page, the supplied manifests and the program stop
+# agreeing, which the other tests cannot see because they do not go through them.
+on:
+  schedule:
+    - cron: "11 4 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .dockerignore
+      - .github/workflows/kubernetes.yml
+      - Dockerfile
+      - README.ja.md
+      - README.md
+      - cmd/**
+      - deploy/kubernetes/**
+      - docs/documentation/getting-started.md
+      - docs-ja/documentation/getting-started.md
+      - go.mod
+      - go.sum
+      - internal/**
+      - scripts/kubernetes_test.sh
+  push:
+    branches: [main]
+    paths:
+      - .dockerignore
+      - .github/workflows/kubernetes.yml
+      - Dockerfile
+      - README.ja.md
+      - README.md
+      - cmd/**
+      - deploy/kubernetes/**
+      - docs/documentation/getting-started.md
+      - docs-ja/documentation/getting-started.md
+      - go.mod
+      - go.sum
+      - internal/**
+      - scripts/kubernetes_test.sh
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install k3d and kubectl
+        run: |
+          set -eu
+          mkdir -p "$HOME/.local/bin"
+          cd "$HOME/.local/bin"
+          curl -fsSLo k3d https://github.com/k3d-io/k3d/releases/download/v5.8.3/k3d-linux-amd64
+          curl -fsSLo kubectl https://dl.k8s.io/release/v1.36.5/bin/linux/amd64/kubectl
+          sha256sum -c - <<'EOF'
+          dbaa79a76ace7f4ca230a1ff41dc7d8a5036a8ad0309e9c54f9bf3836dbe853e  k3d
+          33bc88a24c3b09cf55bfd59e6ca977881b61fc3f25ab65bc80c65b430248648e  kubectl
+          EOF
+          chmod +x k3d kubectl
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install on a cluster and scan
+        run: scripts/kubernetes_test.sh

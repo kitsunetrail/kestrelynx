@@ -16,7 +16,8 @@ jobs:
       - run: go vet ./...
       - run: go build ./...
       # Unit tests only: integration tests (real trivy + network) are gated
-      # behind -short and excluded here to keep CI fast and hermetic.
+      # behind -short and excluded here to keep CI fast and hermetic. The Live
+      # tests workflow runs them.
       - run: go test ./... -short
 
   # The main image carries the program that runs in the update containers,

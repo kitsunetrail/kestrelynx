@@ -14,7 +14,6 @@ import (
 func TestBuildPlanConfig_Kubernetes(t *testing.T) {
 	cfg := config.Config{
 		Kubernetes: config.KubernetesConfig{Enabled: true},
-		Docker:     config.DockerConfig{Socket: "/var/run/docker.sock"},
 		State:      config.StateConfig{Path: "/var/lib/kestrelynx/state.json"},
 		Remediation: config.RemediationConfig{
 			Enabled: true, StorageDir: "/data/remediation",

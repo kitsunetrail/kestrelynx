@@ -63,16 +63,10 @@ notify:
   # and PR bodies: "en" (default) or "ja". The generic webhook stays in English.
   language: "en"
 
-docker:
-  # Path to docker.sock for container/image reads and, with remediation pull
-  # requests enabled, management of language-update work containers.
-  socket: "/var/run/docker.sock"
-
-# Kubernetes adapter (alternative to docker: above, not both). See
-# deploy/kubernetes/ for the manifests this is meant to run under.
+# Kubernetes adapter. See deploy/kubernetes/ for the manifests this is meant to
+# run under.
 # kubernetes:
 #   # Set true to scan a Kubernetes cluster instead of a single Docker host.
-#   # Mutually exclusive with docker.socket (leave that section out entirely).
 #   enabled: false
 #   # kube-apiserver base URL, e.g. "https://10.0.0.1:443". Leave empty inside
 #   # a cluster: it's built from the KUBERNETES_SERVICE_HOST/PORT environment

@@ -248,7 +248,6 @@ kubectl logs -n kestrelynx deployment/kestrelynx -f
 ```
 
 - **有効化**：`kubernetes.enabled: true`
-- **設定例からの切り替え**：`config.example.yml`の`docker`セクションを削除（`docker.socket`との同時設定は起動エラー）
 - **不要な構成要素**：Dockerソケット・ノードごとのエージェント
 - **接続要件**：スキャナPodから対象レジストリへのアクセス（Trivyによるイメージ取得）
 - **非公開レジストリの認証**：`registries`に設定し、`config.yml`をSecretに保存（[設定手順](docs-ja/documentation/getting-started.md#kubernetes-private-registry)、単一ノードK3sと`ghcr.io`の非公開イメージでスキャン確認済み）

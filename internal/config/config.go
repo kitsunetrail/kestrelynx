@@ -31,7 +31,6 @@ type Config struct {
 	Schedule    ScheduleConfig
 	Scan        ScanConfig
 	Notify      NotifyConfig
-	Docker      DockerConfig
 	Kubernetes  KubernetesConfig
 	State       StateConfig
 	Triage      TriageConfig
@@ -141,13 +140,8 @@ func (n NotifyConfig) FullReportWeekday() (time.Weekday, bool) {
 	return day, ok
 }
 
-type DockerConfig struct {
-	Socket string
-}
-
-// KubernetesConfig selects and configures the Kubernetes Runtime Adapter,
-// mutually exclusive with Docker (validate rejects enabling this alongside an
-// explicitly set docker.socket). The field shapes mirror kubernetes.Options
+// KubernetesConfig selects and configures the Kubernetes Runtime Adapter, used
+// instead of the Docker socket. The field shapes mirror kubernetes.Options
 // (internal/kubernetes/kubernetes.go): every field left empty falls back to
 // that package's in-cluster default.
 type KubernetesConfig struct {
@@ -513,14 +507,6 @@ type rawConfig struct {
 		FullReportDay string `yaml:"full_report_day"`
 		Language      string `yaml:"language"`
 	} `yaml:"notify"`
-	Docker struct {
-		// Socket is a pointer so validate can tell "explicitly set" (including
-		// an explicit empty string) apart from "omitted" — the mutual
-		// exclusion check with kubernetes.enabled needs that distinction,
-		// since Config.Docker.Socket itself always ends up non-empty (the
-		// default fills in either way).
-		Socket *string `yaml:"socket"`
-	} `yaml:"docker"`
 	Kubernetes struct {
 		Enabled       *bool    `yaml:"enabled"`
 		APIServer     string   `yaml:"api_server"`
@@ -636,7 +622,6 @@ type rawConfig struct {
 }
 
 const (
-	defaultSocket        = "/var/run/docker.sock"
 	defaultStatePath     = "/var/lib/kestrelynx/state.json"
 	defaultFullReportDay = "monday"
 	// defaultNotifyLanguage is the wording every deployment saw before
@@ -800,7 +785,6 @@ func Parse(data []byte) (Config, error) {
 			FullReportDay:     raw.Notify.FullReportDay,
 			Language:          raw.Notify.Language,
 		},
-		Docker: DockerConfig{Socket: stringOr(raw.Docker.Socket, "")},
 		Kubernetes: KubernetesConfig{
 			Enabled:       boolOr(raw.Kubernetes.Enabled, false),
 			APIServer:     raw.Kubernetes.APIServer,
@@ -870,7 +854,7 @@ func Parse(data []byte) (Config, error) {
 	}
 
 	applyDefaults(&c)
-	if err := validate(&c, raw.Docker.Socket != nil); err != nil {
+	if err := validate(&c); err != nil {
 		return Config{}, err
 	}
 	return c, nil
@@ -881,9 +865,6 @@ func applyDefaults(c *Config) {
 	// (run every 24h from start), per docs/ARCHITECTURE.md §5.
 	if len(c.Scan.Severity) == 0 {
 		c.Scan.Severity = []string{"HIGH", "CRITICAL"}
-	}
-	if c.Docker.Socket == "" {
-		c.Docker.Socket = defaultSocket
 	}
 	if c.Notify.Mode == "" {
 		c.Notify.Mode = "diff"
@@ -1006,10 +987,7 @@ func validateSMTPHost(host string) error {
 	return nil
 }
 
-func validate(c *Config, dockerSocketExplicit bool) error {
-	if c.Kubernetes.Enabled && dockerSocketExplicit {
-		return fmt.Errorf("config: configure either docker.socket or kubernetes.enabled, not both")
-	}
+func validate(c *Config) error {
 	for _, ns := range c.Kubernetes.Namespaces {
 		if !namespacePattern.MatchString(ns) {
 			return fmt.Errorf("config: invalid kubernetes.namespaces entry %q: must be 1-63 bytes of lowercase alphanumerics and hyphens, starting and ending with an alphanumeric", ns)

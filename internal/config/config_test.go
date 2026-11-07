@@ -22,9 +22,6 @@ func TestParse_Defaults(t *testing.T) {
 	if got := c.Scan.Severity; len(got) != 2 || got[0] != "HIGH" || got[1] != "CRITICAL" {
 		t.Errorf("default Severity = %v, want [HIGH CRITICAL]", got)
 	}
-	if c.Docker.Socket != "/var/run/docker.sock" {
-		t.Errorf("default Socket = %q", c.Docker.Socket)
-	}
 	if !c.Schedule.RunOnStart {
 		t.Errorf("default RunOnStart = false, want true")
 	}
@@ -164,8 +161,6 @@ notify:
   slack_webhook_url: "https://hooks.slack.test/x"
   generic_webhook_url: "https://example.test/hook"
   notify_on_clean: true
-docker:
-  socket: "/run/docker.sock"
 `
 	c, err := Parse([]byte(yaml))
 	if err != nil {
@@ -179,9 +174,6 @@ docker:
 	}
 	if !c.Notify.NotifyOnClean || c.Notify.GenericWebhookURL == "" {
 		t.Errorf("notify = %+v", c.Notify)
-	}
-	if c.Docker.Socket != "/run/docker.sock" {
-		t.Errorf("socket = %q", c.Docker.Socket)
 	}
 }
 
@@ -561,11 +553,6 @@ func TestParse_KubernetesDefaults(t *testing.T) {
 	if len(c.Kubernetes.Namespaces) != 0 {
 		t.Errorf("default Kubernetes.Namespaces = %v, want empty", c.Kubernetes.Namespaces)
 	}
-	// docker.socket keeps applying its usual default, unaffected by the
-	// rawConfig.Docker.Socket pointer change.
-	if c.Docker.Socket != "/var/run/docker.sock" {
-		t.Errorf("default Socket = %q", c.Docker.Socket)
-	}
 }
 
 func TestParse_KubernetesAllKeys(t *testing.T) {
@@ -599,38 +586,13 @@ kubernetes:
 	}
 }
 
-func TestParse_KubernetesEnabledWithoutExplicitDockerSocket(t *testing.T) {
-	// docker.socket left out entirely (not even the docker: section) must not
-	// trip the mutual-exclusion check: Config.Docker.Socket still ends up
-	// non-empty (the default fills in), but that's not "explicitly set".
-	c, err := Parse([]byte(minimal + "\nkubernetes:\n  enabled: true\n"))
-	if err != nil {
-		t.Fatalf("Parse: %v, want kubernetes.enabled alone to succeed", err)
-	}
-	if !c.Kubernetes.Enabled {
-		t.Error("Kubernetes.Enabled = false, want true")
-	}
-	if c.Docker.Socket != "/var/run/docker.sock" {
-		t.Errorf("Docker.Socket = %q, want default to still apply", c.Docker.Socket)
-	}
-}
-
-func TestParse_KubernetesEnabledWithExplicitDockerSocketRejected(t *testing.T) {
+func TestParse_DockerSectionIsRejected(t *testing.T) {
 	for _, body := range []string{
-		`docker:
-  socket: "/var/run/docker.sock"`, // explicit, even matching the default value
-		`docker:
-  socket: "/custom/docker.sock"`,
-		`docker:
-  socket: ""`, // explicit empty string still counts as "set"
+		"docker:\n  socket: \"/var/run/docker.sock\"\n",
+		"docker:\n",
 	} {
-		_, err := Parse([]byte(minimal + "\nkubernetes:\n  enabled: true\n" + body + "\n"))
-		if err == nil {
-			t.Errorf("body %q: expected mutual-exclusion error", body)
-			continue
-		}
-		if !strings.Contains(err.Error(), "docker.socket") || !strings.Contains(err.Error(), "kubernetes.enabled") {
-			t.Errorf("body %q: err = %v, want it to name both docker.socket and kubernetes.enabled", body, err)
+		if _, err := Parse([]byte(minimal + "\n" + body)); err == nil {
+			t.Errorf("Parse accepted %q", body)
 		}
 	}
 }

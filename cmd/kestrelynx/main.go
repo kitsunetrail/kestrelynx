@@ -534,14 +534,19 @@ func buildPlanConfig(cfg config.Config) *runner.PlanConfig {
 	return pc
 }
 
+// dockerSocket is the path of the Docker socket inside the KestreLynx container.
+// A socket elsewhere on the host is mounted at this path. Tests point it away
+// from the real daemon.
+var dockerSocket = "/var/run/docker.sock"
+
 // trivyDockerHost is the Docker socket image scans read local images from:
 // the one the container list comes from, or none on Kubernetes, where no
-// Docker socket is configured.
+// Docker socket is used.
 func trivyDockerHost(cfg config.Config) string {
 	if cfg.Kubernetes.Enabled {
 		return ""
 	}
-	return cfg.Docker.Socket
+	return dockerSocket
 }
 
 // ownPodWait bounds how long the first cycle waits for this process's own
@@ -577,8 +582,7 @@ func waitOwnPodRunning(ctx context.Context, c *kubernetes.Client, kc config.Kube
 // scanner.ScanSource that adapter's images must be scanned as (a registry
 // digest reached over the network for Kubernetes, the runtime's own image
 // store for Docker). Docker is the default path and behaves exactly as it
-// did before this adapter existed; config validation already guarantees the
-// two are mutually exclusive.
+// did before this adapter existed.
 func buildLister(cfg config.Config, log *slog.Logger) (runner.ContainerLister, inventory.EnvironmentKind, scanner.ScanSource, error) {
 	if cfg.Kubernetes.Enabled {
 		client, err := kubernetes.New(kubernetes.Options{
@@ -595,7 +599,7 @@ func buildLister(cfg config.Config, log *slog.Logger) (runner.ContainerLister, i
 		return client, inventory.KindKubernetes, scanner.SourceRemote, nil
 	}
 
-	dockerClient := docker.New(cfg.Docker.Socket)
+	dockerClient := docker.New(dockerSocket)
 	dockerClient.Log = log
 	return dockerClient, inventory.KindDocker, scanner.SourceLocal, nil
 }

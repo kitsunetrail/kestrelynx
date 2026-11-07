@@ -22,8 +22,10 @@ import (
 
 func workTestConfig(t *testing.T) config.Config {
 	t.Helper()
+	saved := dockerSocket
+	dockerSocket = filepath.Join(t.TempDir(), "no-docker.sock")
+	t.Cleanup(func() { dockerSocket = saved })
 	return config.Config{
-		Docker: config.DockerConfig{Socket: filepath.Join(t.TempDir(), "no-docker.sock")},
 		Remediation: config.RemediationConfig{
 			Enabled: true, PullRequests: config.RemediationPullRequestsConfig{Enabled: true},
 			StorageDir: filepath.Join(t.TempDir(), "remediation"),

@@ -268,7 +268,7 @@ func newDockerWorkClient(cfg config.Config, spec worker.RuntimeSpec, platform, i
 	if spec.Kind == worker.KindGradle {
 		expect["JAVA_HOME"] = worker.GradleJavaHome
 	}
-	return docker.NewWork(cfg.Docker.Socket, docker.WorkConfig{
+	return docker.NewWork(dockerSocket, docker.WorkConfig{
 		Image: workImageRef(spec, cfg.Remediation.Worker.Registry), Platform: platform,
 		ExpectEnv: expect, CoverPaths: dockerCoverPaths(spec),
 		Entrypoint: workEntrypoint, Env: workEnv, AllowedEnvKeys: workEnvKeys,

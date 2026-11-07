@@ -44,7 +44,6 @@ KestreLynxは、`NODE_VERSION`に記録されたNode.jsの版をNode.jsのセキ
 | --- | --- | --- |
 | `scan.node_runtime.enabled` | `true` | セキュリティ情報の取得とNode.js本体の照合を有効にします。`false`では両方を停止します。 |
 
-キャッシュは、`state.path`と同じディレクトリの`nodejs/`配下に保存します。
 取得先は、[Node.jsのセキュリティ情報の取得](outbound-communication.md#node-runtime-download)に記載しています。
 
 #### Python本体の脆弱性照合 {#python-runtime}
@@ -56,7 +55,6 @@ KestreLynxは、`PYTHON_VERSION`に記録されたCPythonの版をPythonのセ�
 | --- | --- | --- |
 | `scan.python_runtime.enabled` | `true` | セキュリティ情報の取得とPython本体の照合を有効にします。`false`では両方を停止します。 |
 
-キャッシュは、`state.path`と同じディレクトリの`python/`配下に保存します。
 取得先は、[Pythonのセキュリティ情報の取得](outbound-communication.md#python-runtime-download)に記載しています。
 
 ## 通知先
@@ -85,13 +83,6 @@ KestreLynxは、`PYTHON_VERSION`に記録されたCPythonの版をPythonのセ�
 
 スレッドの位置とフッターの読み方は、[スレッドのレポート](slack-display.md#thread-display)を参照してください。
 
-日本語のSlack通知は、次のように設定します。
-
-```yaml
-notify:
-  language: ja
-```
-
 翻訳する定型文と英語のまま残る内容は、[通知の言語](slack-display.md#notification-language)を参照してください。
 
 ## 通知モード
@@ -103,15 +94,11 @@ notify:
 
 差分として扱う変化は[パッケージの変化](diff-logic.md#package-changes)、送信する条件は[スキャン通知の送信条件](notification-conditions.md#notification-conditions)を参照してください。
 
-## 状態管理とDocker
+## 状態管理
 
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
-| `docker.socket` | `/var/run/docker.sock` | Dockerソケットのパスです。 |
 | `state.path` | `/var/lib/kestrelynx/state.json` | スキャン履歴と差分計算に使用するファイルです。 |
-
-脅威情報フィードのキャッシュは、`state.path`と同じディレクトリ内の`intel`ディレクトリに保存します。
-既定のパスは`/var/lib/kestrelynx/intel`です。
 
 `state.path`を含むディレクトリの永続化は[セットアップ手順](getting-started.md)、履歴の扱いは[履歴の継続](diff-logic.md#state-lifecycle)を参照してください。
 
@@ -382,10 +369,6 @@ Sensorの導入手順、観測の判定方法、通知オフの条件と通知�
 | `kubernetes.ca_file` | 空 | PEM形式のクラスタCAバンドルです。空の場合は`/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`を使用します。 |
 | `kubernetes.tls_server_name` | 空 | APIサーバのTLS証明書の検証に使用するサーバ名を上書きします。空の場合は上書きしません。 |
 | `kubernetes.namespaces` | `[]` | スキャン対象のnamespaceです。空または省略した場合は、すべてのnamespaceを対象にします。 |
-
-`docker.socket`に値（空文字列`""`を含みます）を設定した状態で`kubernetes.enabled: true`を設定すると、
-起動に失敗します。キーを省略するか値を`null`にした場合は、この排他条件に該当しません。
-空の`docker:`セクションは受け付けます。Kubernetesを有効にする場合は、`docker:`セクション全体を削除してください。
 
 クラスタ内では、`api_server`、`token_file`、`ca_file`を空のままにすると、
 Podに注入されたAPIサーバのアドレスと、マウントされたServiceAccountのトークンおよび

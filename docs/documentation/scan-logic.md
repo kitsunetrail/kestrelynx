@@ -24,8 +24,6 @@ On Docker, scans cover images used by running containers, including containers m
 - Stopped containers and images not used by running containers are excluded
 - Work containers that KestreLynx uses for dependency updates in remediation plans are excluded
 
-See [Configuration](configuration.md) for Docker connection settings.
-
 ### Kubernetes targets {#kubernetes-targets}
 
 On Kubernetes, targets are selected by each container's running state.
@@ -288,7 +286,7 @@ During each scan, KestreLynx checks the age of the KEV and EPSS caches and attem
 If a refresh fails, a validated cache remains usable for up to 7 days after retrieval.
 
 Caches older than this limit are treated as unavailable for priority decisions.
-See [Configuration](configuration.md) for cache storage and persistence.
+See [Setup instructions](getting-started.md) for cache persistence.
 
 Node.js advisory data also uses a 20-hour refresh interval.
 

@@ -44,7 +44,6 @@ Matching rules and limitations are described in [Node.js runtime findings](scan-
 | --- | --- | --- |
 | `scan.node_runtime.enabled` | `true` | Enable advisory downloads and Node.js runtime checks; `false` disables both. |
 
-The cache is stored under `nodejs/` in the same directory as `state.path`.
 Download destinations are listed in [Node.js advisory downloads](outbound-communication.md#node-runtime-download).
 
 #### Python runtime checks {#python-runtime}
@@ -56,7 +55,6 @@ Matching rules and limitations are described in [Python runtime findings](scan-l
 | --- | --- | --- |
 | `scan.python_runtime.enabled` | `true` | Enable advisory downloads and Python runtime checks; `false` disables both. |
 
-The cache is stored under `python/` in the same directory as `state.path`.
 Download destinations are listed in [Python advisory downloads](outbound-communication.md#python-runtime-download).
 
 ## Notification destinations
@@ -87,13 +85,6 @@ Email alone is enough to satisfy the destination requirement. When any
 
 See [Thread reports](slack-display.md#thread-display) for thread placement and how to read the footers.
 
-To use Japanese Slack notifications:
-
-```yaml
-notify:
-  language: ja
-```
-
 See [Notification language](slack-display.md#notification-language) for the fixed text that is translated and the content that remains in English.
 
 ## Notification mode
@@ -105,15 +96,11 @@ See [Notification language](slack-display.md#notification-language) for the fixe
 
 See [Package changes](diff-logic.md#package-changes) for changes treated as differences, and [Scan notification conditions](notification-conditions.md#notification-conditions) for when notifications are sent.
 
-## State and Docker
+## State
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `docker.socket` | `/var/run/docker.sock` | Path to the Docker socket. |
 | `state.path` | `/var/lib/kestrelynx/state.json` | File used for scan history and diff calculations. |
-
-The intel feed cache lives in an `intel` directory beside `state.path`.
-The default path is `/var/lib/kestrelynx/intel`.
 
 See [Setup instructions](getting-started.md) for persisting the directory containing `state.path`, and [History continuity](diff-logic.md#state-lifecycle) for how history is handled.
 
@@ -387,10 +374,6 @@ muting conditions, notification resumption, and permissions.
 | `kubernetes.ca_file` | empty | Cluster CA bundle in PEM format. When empty, use `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`. |
 | `kubernetes.tls_server_name` | empty | Override the server name used to validate the API server's TLS certificate. Empty means no override. |
 | `kubernetes.namespaces` | `[]` | Namespaces to scan. Empty or omitted means every namespace. |
-
-Setting `docker.socket` to a value, including `""`, together with `kubernetes.enabled: true`
-fails at startup. Omitting the key or setting it to `null` does not cause this conflict.
-An empty `docker:` section is accepted. Remove the entire `docker:` section when enabling Kubernetes.
 
 Inside a cluster, `api_server`, `token_file`, and `ca_file` can remain empty to
 use the Pod's injected API server address and mounted ServiceAccount token and

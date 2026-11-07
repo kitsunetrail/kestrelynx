@@ -235,12 +235,12 @@ func TestBuildPlanConfigChallengesShareTheCycleBudget(t *testing.T) {
 }
 
 func TestTrivyDockerHost(t *testing.T) {
-	cfg := config.Config{Docker: config.DockerConfig{Socket: "/run/user/1000/docker.sock"}}
-	if got := trivyDockerHost(cfg); got != "/run/user/1000/docker.sock" {
-		t.Errorf("docker host = %q, want the configured socket", got)
+	cfg := config.Config{}
+	if got := trivyDockerHost(cfg); got != "/var/run/docker.sock" {
+		t.Errorf("docker host = %q, want the mounted socket", got)
 	}
-	if tr, ok := buildPlanConfig(cfg).Scanner.(scanner.Trivy); !ok || tr.DockerHost != "/run/user/1000/docker.sock" {
-		t.Errorf("plan scanner = %#v, want the configured socket", buildPlanConfig(cfg).Scanner)
+	if tr, ok := buildPlanConfig(cfg).Scanner.(scanner.Trivy); !ok || tr.DockerHost != "/var/run/docker.sock" {
+		t.Errorf("plan scanner = %#v, want the mounted socket", buildPlanConfig(cfg).Scanner)
 	}
 	cfg.Kubernetes.Enabled = true
 	if got := trivyDockerHost(cfg); got != "" {

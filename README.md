@@ -248,7 +248,6 @@ kubectl logs -n kestrelynx deployment/kestrelynx -f
 ```
 
 - **Activation**: `kubernetes.enabled: true`
-- **Switching from the example**: removal of the `docker` section in `config.example.yml` (startup error with explicit `docker.socket`)
 - **Unnecessary components**: Docker socket and per-node agents
 - **Connectivity requirement**: scanner Pod access to the target registry for Trivy image retrieval
 - **Private registry credentials**: configure `registries` and store `config.yml` in a Secret ([setup instructions](docs/documentation/getting-started.md#kubernetes-private-registry); scanning verified with single-node K3s and private images on `ghcr.io`)

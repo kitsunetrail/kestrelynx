@@ -179,6 +179,17 @@ func forbiddenAddr(ip net.IP) bool {
 		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast()
 }
 
+// internalAddr reports whether ip is an address a registry inside the user's
+// own network can have. The user naming the host in a registry login is what
+// makes the client contact it. Link-local addresses stay refused: cloud
+// metadata services live there, and no registry does.
+func internalAddr(ip net.IP) bool {
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1]&0xc0 == 64 {
+		return true
+	}
+	return ip.IsLoopback() || ip.IsPrivate()
+}
+
 // ForbiddenAddr reports whether ip is outside the public address space that
 // outbound read-only clients are willing to contact: loopback, private,
 // link-local, unspecified, multicast, carrier-grade NAT and the like.
@@ -205,8 +216,9 @@ func (c *Client) dialContext(ctx context.Context, network, addr string) (net.Con
 	if len(ips) == 0 {
 		return nil, fmt.Errorf("registry: %s resolved to no address", host)
 	}
+	named := c.opts.Auth.Names(host, port)
 	for _, ip := range ips {
-		if forbiddenAddr(ip) && (c.opts.AllowAddr == nil || !c.opts.AllowAddr(ip, port)) {
+		if forbiddenAddr(ip) && !(named && internalAddr(ip)) && (c.opts.AllowAddr == nil || !c.opts.AllowAddr(ip, port)) {
 			return nil, fmt.Errorf("%w: %s is or resolves to %s", ErrForbiddenAddress, host, ip)
 		}
 	}

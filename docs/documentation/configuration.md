@@ -126,6 +126,49 @@ The default path is `/var/lib/kestrelynx/intel`.
 
 See [Setup instructions](getting-started.md) for persisting the directory containing `state.path`, and [History continuity](diff-logic.md#state-lifecycle) for how history is handled.
 
+## Image registry authentication {#registries}
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `registries` | `[]` | Per-host image registry credentials. |
+
+Configure private registry credentials in the top-level `registries` setting.
+KestreLynx uses these credentials for candidate selection and all scans that fetch images from registries, subject to the conditions below.
+
+It applies even when `remediation.enabled` is `false`, regardless of whether remediation plans exist or their preparation succeeds.
+
+| Field | Default or requirement | Format and validation |
+| --- | --- | --- |
+| `host` | required | Hostname or IPv4 address as used in image references, with an optional port from `1` to `65535`; no scheme, path, or user information. |
+| `username` | required | Nonempty string without whitespace, control characters, or `:`. |
+| `password` | required | Nonempty password or access token without whitespace or control characters. |
+| `token_hosts` | `[]` | Additional token service hosts allowed to receive credentials; each value uses the same format as `host`. |
+
+- Hostnames are case-insensitive, and `docker.io`, `index.docker.io`, and `registry-1.docker.io` are treated as the same host
+- Credential entries must not have duplicate `host` values after normalization
+- For Docker Hub authentication, set `host: docker.io` and `token_hosts: [auth.docker.io]`
+
+### Conditions for passing credentials
+
+- Credentials are passed only to scans that fetch images from registries with a resolved digest
+- Credentials are not passed when the digest is unresolved and the scan uses an image reference
+- Before scanning, KestreLynx makes anonymous requests to `/v2/` and the repository's tag list, and passes credentials only if both require authentication
+- Supported authentication is Basic, or Bearer with a token service on the same host or a host listed in `token_hosts`
+- Credentials are not passed when anonymous access is available
+- The requests that check whether authentication is required are separate from Trivy's fetch requests, so changes in registry responses between them cannot be detected
+- Connections use HTTPS only, and certificates must be trusted by the KestreLynx Pod
+- Destinations for KestreLynx's own requests, such as fetching tag lists and checking whether authentication is required
+    - Hosts listed in `host` or `token_hosts` can use private, loopback, and CGNAT (100.64.0.0/10) addresses
+    - Link-local addresses are not accessed
+    - Hosts not listed in either `host` or `token_hosts` can use only public addresses
+- These address restrictions do not apply to image fetches by Trivy
+- KestreLynx does not read credentials from `DOCKER_CONFIG` and overrides it with a dedicated configuration for each scan
+- KestreLynx logs a warning at startup if the `DOCKER_CONFIG` environment variable is set
+
+See [Credential destinations](outbound-communication.md#credential-destinations) for environment variables used by Trivy and their exemption from `token_hosts` restrictions.
+
+See [Credential destinations](outbound-communication.md#credential-destinations) for destination and redirect restrictions, and [Private image authentication](remediation-setup.md#configure-registry-auth) for setup instructions.
+
 ## Remediation plans and pull requests {#remediation}
 
 See the [remediation overview](remediation.md#contents) for an entry point and [Enabling remediation](remediation-setup.md) for setup instructions.
@@ -176,24 +219,6 @@ See [Credential destinations](outbound-communication.md#credential-destinations)
 Changing `state.path` does not change this location.
 See [Stored files](remediation-reference.md#stored-records) for its contents.
 
-### Image registry authentication {#remediation-registries}
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `remediation.registries` | `[]` | Per-host credentials for private-image candidate selection and comparison scans. |
-
-| Field | Default or requirement | Format and validation |
-| --- | --- | --- |
-| `host` | required | Hostname or IPv4 address as used in image references, with an optional port from `1` to `65535`; no scheme, path, or user information. |
-| `username` | required | Nonempty string without whitespace, control characters, or `:`. |
-| `password` | required | Nonempty password or access token without whitespace or control characters. |
-| `token_hosts` | `[]` | Additional token service hosts allowed to receive credentials; each value uses the same format as `host`. |
-
-- Hostnames are case-insensitive, and `docker.io`, `index.docker.io`, and `registry-1.docker.io` are treated as the same host
-- Credential entries must not have duplicate `host` values after normalization
-- For Docker Hub authentication, set `host: docker.io` and `token_hosts: [auth.docker.io]`
-
-See [Credential destinations](outbound-communication.md#credential-destinations) for destination and redirect restrictions, and [Private image authentication](remediation-setup.md#configure-registry-auth) for setup instructions.
 
 ### Source mappings {#remediation-mappings}
 
@@ -259,7 +284,7 @@ The following options are under `remediation.limits`.
 | --- | --- | --- |
 | `candidate_scans_per_cycle` | `10` | Candidate-image scans per cycle; positive integer. |
 | `baseline_rescans_per_cycle` | `10` | Baseline rescans per cycle to match comparison conditions; positive integer. |
-| `registry_requests_per_cycle` | `200` | Image-registry HTTP requests per cycle, including token exchanges; positive integer. |
+| `registry_requests_per_cycle` | `200` | Image-registry HTTP requests per cycle, including token exchanges; positive integer. Requests that check whether authentication is required before scanning running images do not count toward this limit, but the same requests before scanning candidate images do count. |
 | `tag_pages_per_repository` | `20` | Tag-list requests per image repository, including requests to find the target version series; positive integer. |
 | `cycle_timeout` | `30m` | Deadline for planning, dependency updates, and PR processing; positive duration, excluding ordinary running-image scans. |
 | `new_prs_per_cycle` | `3` | New PRs per cycle when PRs are enabled; positive integer. |

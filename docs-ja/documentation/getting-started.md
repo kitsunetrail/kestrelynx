@@ -15,52 +15,168 @@ Webhookへ送信します。
     - Webhook URL
     - TLS必須のSMTPメール
 
-## Docker Composeで実行
+## 設定ファイルの準備 {#prepare-config}
 
-リポジトリをダウンロードまたはcloneし、ローカル設定ファイルを作成します。
+DockerとDocker Composeで使う`config.yml`を作ります。
+
+1. リポジトリをダウンロードまたはcloneし、`config.yml`を作成する
+
+    ```bash
+    git clone https://github.com/kitsunetrail/kestrelynx.git
+    cd kestrelynx
+    cp config.example.yml config.yml
+    ```
+
+2. 手順1で作った`config.yml`の`notify`に通知先を1つ以上設定する
+
+    ```yaml
+    notify:
+      slack_webhook_url: "https://hooks.slack.com/services/..."
+    ```
+
+## Dockerで実行
+
+[設定ファイルの準備](#prepare-config)で作った`config.yml`があるディレクトリで、次のコマンドを実行してKestreLynxを起動し、ログを確認します。
 
 ```bash
-git clone https://github.com/kitsunetrail/kestrelynx.git
-cd kestrelynx
-cp config.example.yml config.yml
+docker run -d --name kestrelynx \
+  --restart unless-stopped \
+  -e TZ=UTC \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v "$PWD/config.yml:/etc/kestrelynx/config.yml:ro" \
+  -v kestrelynx-state:/var/lib/kestrelynx \
+  ghcr.io/kitsunetrail/kestrelynx:latest
+docker logs -f kestrelynx
 ```
 
-以下のように少なくとも1つの通知先を設定してください。
+- `kestrelynx-state`ボリュームがスキャン履歴と脅威情報フィードのキャッシュを保持するため、このボリュームを削除しない
 
-```yaml
-notify:
-  slack_webhook_url: "https://hooks.slack.com/services/..."
-```
+## Docker Composeで実行
 
-KestreLynxを起動します。
+[設定ファイルの準備](#prepare-config)で作った`config.yml`があるディレクトリでKestreLynxを起動します。
 
 ```bash
 docker compose up -d
 docker compose logs -f
 ```
 
-同梱のComposeファイルは、`kestrelynx-state`ボリュームを`/var/lib/kestrelynx`にマウントします。
-スキャン履歴と脅威情報フィードのキャッシュを保持するため、このボリュームを永続化してください。
+- `kestrelynx-state`ボリュームがスキャン履歴と脅威情報フィードのキャッシュを保持するため、このボリュームを削除しない
 
-保存先の設定は[設定](configuration.md)、履歴が差分判定に与える影響は[履歴の継続](diff-logic.md#state-lifecycle)を参照してください。
+## Kubernetesで実行
 
-## Dockerで実行
+`deploy/kubernetes/`のマニフェストを編集して適用します。
+
+- 1つのインスタンスが1つのクラスタを対象とする
+- Trivyがレジストリからイメージを取得するため、スキャナPodからレジストリへアクセスできる必要がある
+
+### 起動手順 {#kubernetes-steps}
+
+1. リポジトリをダウンロードするか、次のコマンドでcloneする
+
+    ```bash
+    git clone https://github.com/kitsunetrail/kestrelynx.git
+    cd kestrelynx
+    ```
+
+2. `deploy/kubernetes/configmap.yaml`を編集する
+
+    - 通知先を1つ以上設定する
+
+        ```yaml
+        data:
+          config.yml: |
+            notify:
+              slack_webhook_url: "https://hooks.slack.com/services/..."
+        ```
+
+    - 特定の名前空間だけをスキャンする場合は`kubernetes.namespaces`に列挙する（既定はすべての名前空間）
+    - 複数のインスタンスから1つのSlackチャンネルへ投稿する場合は、`environment.name`にインスタンスを区別する名前を設定する
+    - 他の設定は[設定項目](configuration.md)を参照する
+
+3. `deploy/kubernetes/pvc.yaml`のストレージ設定をクラスタに合わせて編集する
+
+    - 既定はアクセスモード`ReadWriteOnce`で1 GiB
+    - このPVCがスキャン履歴、初回検出日、脅威情報フィードのキャッシュを保持するため、Podを再作成してもこれらのデータは失われない
+
+4. 次のコマンドで名前空間を作成する
+
+    ```bash
+    kubectl create namespace kestrelynx
+    ```
+
+5. 非公開レジストリのイメージをスキャンする場合だけ、[非公開レジストリの認証](#kubernetes-private-registry)を行う
+
+6. 次のコマンドでマニフェストを適用し、起動を待ってからログを確認する
+
+    ```bash
+    kubectl apply -f deploy/kubernetes/
+    kubectl rollout status -n kestrelynx deployment/kestrelynx
+    kubectl logs -n kestrelynx deployment/kestrelynx -f
+    ```
+
+    - ServiceAccount、読み取り専用のClusterRoleとClusterRoleBinding、ConfigMap、PVC、Deploymentが作成される
+    - `work/`はこのコマンドでは適用されないため、言語パッケージの更新を使う場合だけ、[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)に従って別途適用する
+
+!!! warning "同時に動かさない"
+
+    `deployment.yaml`のレプリカ数1と`Recreate`戦略は変更せず、2つのインスタンスで1つの状態データ用ボリュームを共有しないでください。
+    2つのPodが同時に状態データへ書き込むと、スキャン履歴が壊れるためです。
+
+### 非公開レジストリの認証 {#kubernetes-private-registry}
+
+KestreLynxはPodの中を読まず、Podが使っているイメージをレジストリから取得してスキャンするため、非公開レジストリのイメージにはログイン情報が必要です。
+Podの`imagePullSecrets`は再利用しません。
+
+1. 次のコマンドで、`deploy/kubernetes/configmap.yaml`の設定から`config.yml`を作成する
+
+    ```bash
+    sed '1,/config.yml: |/d; s/^    //' deploy/kubernetes/configmap.yaml > config.yml
+    ```
+
+    - このファイルはパスワードを含むので、リポジトリにコミットしない
+
+2. 手順1で作った`config.yml`に`registries`を追加する
+
+    ```yaml
+    registries:
+      - host: registry.example.com
+        username: example-puller
+        password: "example-read-token"
+    ```
+
+    - `token_hosts`など各キーの説明は[イメージレジストリの認証](configuration.md#registries)を参照する
+    - Docker Hubの場合は`host: docker.io`と`token_hosts: [auth.docker.io]`を指定する
+
+3. 手順1で作った`config.yml`からSecretを作成する
+
+    ```bash
+    kubectl create secret generic kestrelynx-config \
+      --namespace kestrelynx \
+      --from-file=config.yml=config.yml \
+      --save-config
+    ```
+
+4. `deploy/kubernetes/deployment.yaml`の`config`ボリュームをSecretに変更する
+
+    ```yaml
+    - name: config
+      secret:
+        secretName: kestrelynx-config
+    ```
+
+ログイン情報が無いか違う場合、そのイメージはスキャン失敗として通知に出ます。
+
+設定をSecretに移した後は、他のページに「ConfigMapを適用する」とある手順でも、次のコマンドで設定の変更を反映します。
 
 ```bash
-docker run -d --name kestrelynx \
-  -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v "$PWD/config.yml:/etc/kestrelynx/config.yml:ro" \
-  -v kestrelynx-state:/var/lib/kestrelynx \
-  ghcr.io/kitsunetrail/kestrelynx:latest
+kubectl create secret generic kestrelynx-config \
+  --namespace kestrelynx \
+  --from-file=config.yml=config.yml \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart -n kestrelynx deployment/kestrelynx
 ```
 
-修正PRを有効にする場合のDockerソケットの権限は、[修正PRの有効化](remediation-setup.md#enable-pull-requests)を参照してください。
-
-Dockerでは、任意のSensor（実験的）を追加すると使用中のパッケージの所見に印が付き、
-優先度を変えずに同じ区分内で先に並びます。導入手順と観測の限界は
-[稼働時の使用状況](runtime-usage.md)に記載しています。
-
-### 修正計画と修正PR {#remediation}
+## 修正計画と修正PR {#remediation}
 
 Docker・Kubernetes向けの機能の概要は[修正計画の案内](remediation.md#overview)を参照してください。
 
@@ -69,71 +185,15 @@ Docker・Kubernetes向けの機能の概要は[修正計画の案内](remediatio
 | 更新候補の計画を有効にする | [修正計画の有効化](remediation-setup.md#enable-fix-plans) |
 | GitHubへのPR作成を有効にする | [修正PRの有効化](remediation-setup.md#enable-pull-requests) |
 
-## Kubernetesで実行
-
-リポジトリをダウンロードまたはcloneしてください。`deploy/kubernetes/`ディレクトリには、
-次のマニフェストが含まれています。
-
-| ファイル | リソース |
-| --- | --- |
-| `serviceaccount.yaml` | `kestrelynx`名前空間のServiceAccount `kestrelynx`です。 |
-| `clusterrole.yaml` | Pod、Node、ReplicaSet、Deployment、StatefulSet、DaemonSet、Job、CronJobへの読み取り専用の`get`と`list`アクセスを許可するClusterRoleです。 |
-| `clusterrolebinding.yaml` | そのロールをServiceAccountに割り当てるClusterRoleBindingです。 |
-| `configmap.yaml` | `config.yml`を含むConfigMap `kestrelynx-config`です。 |
-| `pvc.yaml` | アクセスモード`ReadWriteOnce`で1 GiBを要求するPersistentVolumeClaim `kestrelynx-state`です。 |
-| `deployment.yaml` | `Recreate`戦略を使用するレプリカ数1のDeploymentです。設定を`/etc/kestrelynx`に、状態データを`/var/lib/kestrelynx`にマウントします。 |
-| `work/` | 言語パッケージ更新用の任意の追加マニフェストで、[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)に従って別途適用します。 |
-
-修正計画を有効にすると、通常の取得対象に加えて`deployments`・`statefulsets`・`daemonsets`・`cronjobs`をLISTします。
-配布の読み取り専用ClusterRoleは、そのまま使用できます。
-`deploy/kubernetes/configmap.yaml`に少なくとも1つの通知先を設定してください。
-その中の`config.yml`には`kubernetes.enabled: true`を設定し、`docker.socket`には
-空文字列`""`を含む値を設定しないでください。キーの省略または値の`null`指定は受け付けます。
-空の`docker:`セクションは受け付けます。`config.example.yml`を基に設定する場合は、
-`docker:`セクション全体を削除してください。
-
-1つのインスタンスが1つのクラスタを対象とします。既定ではすべての名前空間を
-スキャンします。`kubernetes.namespaces`を設定すると、スキャン対象を指定した
-名前空間に制限できます。複数のインスタンスから1つのSlackチャンネルへ投稿する場合は、
-インスタンスを区別するために`environment.name`を設定してください。
-設定項目については[設定項目](configuration.md)を参照してください。
-
-Trivyはレジストリからイメージを取得するため、スキャナPodからレジストリへ
-アクセスできる必要があります。非公開レジストリのイメージを使用する場合は、
-`kestrelynx`名前空間に、型が`kubernetes.io/dockerconfigjson`の
-`kestrelynx-registry-auth`という名前のSecretを作成してください。
-`deploy/kubernetes/deployment.yaml`内の`DOCKER_CONFIG`環境変数、
-`registry-auth`ボリュームマウント、Secretボリュームのコメントを解除してください。
-これにより、Secretの`.dockerconfigjson`キーを、`DOCKER_CONFIG`で指定した
-ディレクトリ`/etc/kestrelynx/docker`の下に`config.json`としてマウントします。
-スキャン対象のWorkloadの`imagePullSecrets`は再利用しません。
-
-クラスタに合わせてPVCのストレージ設定を調整し、名前空間を作成して、
-準備したマニフェストを適用してください。
-
-```bash
-kubectl create namespace kestrelynx
-kubectl apply -f deploy/kubernetes/
-kubectl logs -n kestrelynx deployment/kestrelynx -f
-```
-
-PVCは、Podを再作成した後もスキャン履歴、初回検出日、脅威情報フィードのキャッシュを
-保持します。更新中にPodが重複して稼働しないよう、レプリカ数1と`Recreate`戦略を
-維持してください。2つのインスタンスで1つの状態データ用ボリュームを共有しないでください。
-
 ## タイムゾーンを設定
 
-`schedule.daily_at`は、`TZ`で指定したタイムゾーンとして解釈されます。  
-Composeの例ではUTCが既定値です。必要に応じて、運用するホストのタイムゾーンへ
-変更してください。
+`schedule.daily_at`は`TZ`で指定したタイムゾーンとして解釈され、既定はUTCです。
 
-```yaml
-environment:
-  - TZ=Asia/Tokyo
-```
+- Dockerで実行する場合は、`docker run`の`-e TZ=UTC`を変更する
+- Docker Composeで実行する場合は、`docker-compose.yml`の`TZ=UTC`を変更する
+- Kubernetesで実行する場合は、`deploy/kubernetes/deployment.yaml`の`TZ`環境変数を変更する
 
-同じ設定は、`deploy/kubernetes/deployment.yaml`内の`TZ`環境変数にも適用されます。
-こちらも既定値はUTCです。
+例えば、日本時間を使う場合は`TZ=Asia/Tokyo`を指定します。
 
 ## 参考ページ
 

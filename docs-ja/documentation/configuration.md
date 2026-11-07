@@ -124,6 +124,49 @@ notify:
 
 `state.path`を含むディレクトリの永続化は[セットアップ手順](getting-started.md)、履歴の扱いは[履歴の継続](diff-logic.md#state-lifecycle)を参照してください。
 
+## イメージレジストリの認証 {#registries}
+
+| 設定項目 | 既定値 | 説明 |
+| --- | --- | --- |
+| `registries` | `[]` | ホストごとのイメージレジストリの認証設定です。 |
+
+非公開レジストリの認証情報は、トップレベルの`registries`に設定します。
+候補選定に加え、下記の条件でレジストリから取得するすべてのスキャンに使います。
+
+`remediation.enabled`が`false`でも有効で、修正計画の有無や修正計画の準備の成否に関係なくスキャンに使います。
+
+| フィールド | 既定値・必須条件 | 形式・検証条件 |
+| --- | --- | --- |
+| `host` | 必須 | イメージ参照に書くホスト名またはIPv4アドレスと任意のポートで、scheme・パス・ユーザー情報は含めません。ポートは`1`〜`65535`です。 |
+| `username` | 必須 | 空白・制御文字・`:`を含まない、空でない文字列です。 |
+| `password` | 必須 | 空白・制御文字を含まない、空でないパスワードまたはアクセストークンです。 |
+| `token_hosts` | `[]` | 認証情報を送ってよい追加のtoken serviceのホスト一覧で、各値の形式は`host`と同じです。 |
+
+- ホスト名は大文字・小文字を区別せず、`docker.io`・`index.docker.io`・`registry-1.docker.io`は同じホストとして扱う
+- 正規化後に同じ`host`となる認証設定は重複して指定できない
+- Docker Hubの認証には`host: docker.io`と`token_hosts: [auth.docker.io]`を指定する
+
+### ログインを渡す条件
+
+- digestが確定してレジストリから取得するスキャンにだけログイン情報を渡す
+- digestが確定せず参照でスキャンする場合にはログイン情報を渡さない
+- スキャン前に`/v2/`とそのリポジトリのタグ一覧へ匿名で要求し、両方がログインを求める場合にだけログイン情報を渡す
+- Basic認証、またはtoken serviceが同じホストか`token_hosts`にあるBearer認証を対象とする
+- 匿名で読める場合はログイン情報を渡さない
+- ログインの要否を確かめる要求とTrivyによる取得は別の要求なので、その間にレジストリの応答が変わると検知できない
+- 接続はHTTPSだけで、証明書はKestreLynxのPodが信頼できるものが必要
+- KestreLynx自身の要求の接続先（タグ一覧の取得、ログインの要否の確認など）
+    - `host`または`token_hosts`に書いたホストには、プライベートアドレス、ループバック、CGNAT（100.64.0.0/10）でも接続する
+    - リンクローカルには接続しない
+    - `host`にも`token_hosts`にも書いていないホストには公開アドレスだけで接続する
+- Trivyによるイメージの取得には、このアドレス制限はかからない
+- `DOCKER_CONFIG`からログイン情報を読まず、スキャンごとに専用の設定で上書きする
+- `DOCKER_CONFIG`環境変数が設定されていると起動時に警告を出す
+
+Trivyが使う環境変数と`token_hosts`の制限の例外は、[認証情報の送付範囲](outbound-communication.md#credential-destinations)に記載しています。
+
+送付先とリダイレクトの制限は[認証情報の送付範囲](outbound-communication.md#credential-destinations)、設定手順は[非公開イメージの認証](remediation-setup.md#configure-registry-auth)を参照してください。
+
 ## 修正計画と修正PR {#remediation}
 
 機能の入口は[修正計画の案内](remediation.md#contents)、有効化は[有効化の手順](remediation-setup.md)を参照してください。
@@ -174,24 +217,6 @@ tokenの送付先は[認証情報の送付範囲](outbound-communication.md#cred
 `state.path`を変えても、この保存先は変わりません。
 内容は[保存ファイル](remediation-reference.md#stored-records)を参照してください。
 
-### イメージレジストリの認証 {#remediation-registries}
-
-| 設定項目 | 既定値 | 説明 |
-| --- | --- | --- |
-| `remediation.registries` | `[]` | 非公開イメージの候補選定と比較スキャンに使う、ホストごとの認証設定です。 |
-
-| フィールド | 既定値・必須条件 | 形式・検証条件 |
-| --- | --- | --- |
-| `host` | 必須 | イメージ参照に書くホスト名またはIPv4アドレスと任意のポートで、scheme・パス・ユーザー情報は含めません。ポートは`1`〜`65535`です。 |
-| `username` | 必須 | 空白・制御文字・`:`を含まない、空でない文字列です。 |
-| `password` | 必須 | 空白・制御文字を含まない、空でないパスワードまたはアクセストークンです。 |
-| `token_hosts` | `[]` | 認証情報を送ってよい追加のtoken serviceのホスト一覧で、各値の形式は`host`と同じです。 |
-
-- ホスト名は大文字・小文字を区別せず、`docker.io`・`index.docker.io`・`registry-1.docker.io`は同じホストとして扱う
-- 正規化後に同じ`host`となる認証設定は重複して指定できない
-- Docker Hubの認証には`host: docker.io`と`token_hosts: [auth.docker.io]`を指定する
-
-送付先とリダイレクトの制限は[認証情報の送付範囲](outbound-communication.md#credential-destinations)、設定手順は[非公開イメージの認証](remediation-setup.md#configure-registry-auth)を参照してください。
 
 ### ソースの対応付け {#remediation-mappings}
 
@@ -257,7 +282,7 @@ KustomizeとHelmのvaluesの設定例と作用先の指定方法は[Kustomizeの
 | --- | --- | --- |
 | `candidate_scans_per_cycle` | `10` | 1サイクルの候補イメージのスキャン数で、正の整数です。 |
 | `baseline_rescans_per_cycle` | `10` | 比較条件をそろえるための1サイクルの比較元の再スキャン数で、正の整数です。 |
-| `registry_requests_per_cycle` | `200` | token交換を含む1サイクルのイメージレジストリへのHTTP要求数で、正の整数です。 |
+| `registry_requests_per_cycle` | `200` | token交換を含む1サイクルのイメージレジストリへのHTTP要求数で、正の整数です。稼働イメージのスキャン前にログインの要否を確かめる要求は集計対象外ですが、候補イメージのスキャン前の同様の要求は集計対象です。 |
 | `tag_pages_per_repository` | `20` | イメージリポジトリごとのタグ一覧取得の要求数で、対象系列を探索する要求も含む正の整数です。 |
 | `cycle_timeout` | `30m` | 計画、依存更新、PR処理の期限で、正の期間です。通常の稼働イメージのスキャンは含みません。 |
 | `new_prs_per_cycle` | `3` | PR有効時の1サイクルの新規PR数で、正の整数です。 |

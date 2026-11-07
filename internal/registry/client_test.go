@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
+	"github.com/kitsunetrail/kestrelynx/internal/regauth"
 )
 
 const testToken = "tok-secret-123"
@@ -1075,6 +1076,68 @@ func TestResolve_DuplicateDigestVariantInAnyOrder(t *testing.T) {
 		var ve *VariantError
 		if !errors.Is(err, ErrVariantUnsupported) || !errors.As(err, &ve) || ve.Observed != "v8" {
 			t.Errorf("order %q: err = %v", order, err)
+		}
+	}
+}
+
+// A registry on the user's own network is reachable once the user names it in
+// a login, and only that host: naming one does not open the others.
+func TestAddressPolicy_HostNamedByALoginMayBeInternal(t *testing.T) {
+	f := newFakeRegistry(t)
+	store := func(host string, tokenHosts ...string) *regauth.Store {
+		s, err := regauth.NewStore([]regauth.Credential{regauth.New(host, "u", "p", tokenHosts)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	if _, err := strictClient(f, Options{Auth: store(f.host())}).Challenges(context.Background(), f.repo("team/app")); errors.Is(err, ErrForbiddenAddress) {
+		t.Fatalf("named host: err = %v", err)
+	}
+	if len(f.hits()) == 0 {
+		t.Fatal("the named host was not contacted")
+	}
+
+	for name, s := range map[string]*regauth.Store{
+		"another host":  store("registry.example.com"),
+		"another port":  store("127.0.0.1:1"),
+		"its host only": store("127.0.0.1"),
+	} {
+		if _, err := strictClient(f, Options{Auth: s}).Challenges(context.Background(), f.repo("team/app")); !errors.Is(err, ErrForbiddenAddress) {
+			t.Errorf("%s: err = %v, want ErrForbiddenAddress", name, err)
+		}
+	}
+}
+
+func TestAddressPolicy_NamingALinkLocalHostDoesNotOpenIt(t *testing.T) {
+	f := newFakeRegistry(t)
+	const metadata = "169.254.169.254"
+	s, err := regauth.NewStore([]regauth.Credential{regauth.New(metadata, "u", "p", nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := strictClient(f, Options{Auth: s}).Challenges(context.Background(), metadata+"/team/app"); !errors.Is(err, ErrForbiddenAddress) {
+		t.Errorf("err = %v, want ErrForbiddenAddress", err)
+	}
+}
+
+func TestInternalAddr(t *testing.T) {
+	for ip, want := range map[string]bool{
+		"10.1.2.3":        true,
+		"172.16.0.1":      true,
+		"192.168.1.1":     true,
+		"100.64.0.1":      true,
+		"127.0.0.1":       true,
+		"::1":             true,
+		"fd00::1":         true,
+		"169.254.169.254": false,
+		"fe80::1":         false,
+		"0.0.0.0":         false,
+		"224.0.0.1":       false,
+		"8.8.8.8":         false,
+	} {
+		if got := internalAddr(net.ParseIP(ip)); got != want {
+			t.Errorf("internalAddr(%s) = %v, want %v", ip, got, want)
 		}
 	}
 }

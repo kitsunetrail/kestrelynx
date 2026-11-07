@@ -93,7 +93,7 @@ PRには、イメージ参照とdigest、Workload名、リポジトリ名、ソ�
 | --- | --- | --- | --- |
 | KestreLynx | 公開または認証設定済みのイメージレジストリ | タグ一覧、manifest、configなど、イメージの実体確認に使う情報を取得 | 配布イメージやベースイメージの候補を調べる場合 |
 
-認証の設定は[イメージレジストリの認証](configuration.md#remediation-registries)、候補の探索は[イメージ候補の選定](remediation-logic.md#image-selection)を参照してください。
+認証の設定は[イメージレジストリの認証](configuration.md#registries)、候補の探索は[イメージ候補の選定](remediation-logic.md#image-selection)を参照してください。
 
 ### 作業用イメージの取得 {#worker-image-downloads}
 
@@ -169,14 +169,19 @@ Webhookには、版指定・変更一覧・処理量・再試行可能な日時�
 | 認証情報・通信 | 送付先・制限 |
 | --- | --- |
 | GitHub token | 各要求には対象リポジトリの所有者に対応する`remediation.github.tokens`のtoken（対応する項目がなければ既定の`remediation.github.token`、どちらもなければtokenなし）だけを付け、HTTPSの`api.github.com`だけに送付し、別ホストへのリダイレクトは拒否。別の所有者への転送時も転送先の所有者に応じてtokenを選び直して付け直す。所有者ごとのtokenが1つでもあれば、所有者を含まないURLへの転送は拒否し、既定のtokenだけなら従来どおり転送に従う |
-| イメージレジストリの認証情報 | 設定したレジストリ自身と、同じホストまたは`token_hosts`で許可したtoken serviceにHTTPSで送付 |
+| イメージレジストリの認証情報（`registries`） | 設定したレジストリ自身と、同じホストまたは`token_hosts`で許可したtoken serviceにHTTPSで送付 |
+| スキャン前のログイン要否の確認 | Trivyによる取得とは別の要求で、その間のレジストリの応答の変化は検知できない |
 | KestreLynxによるイメージレジストリへの要求 | リダイレクト先へ認証情報を引き継がない |
 | Trivyによるイメージレジストリへの要求 | 同じホスト内のリダイレクトには認証情報が付く場合があるが、別ホストへは引き継がない |
+| Trivyによるイメージの取得 | KestreLynxのアドレス制限はかからない |
+| コンテナの`TRIVY_USERNAME`・`TRIVY_PASSWORD`・`GITHUB_TOKEN` | Trivyが使う場合があり、`token_hosts`の制限外 |
+| 修正計画のデータベースを準備した回のスキャン | 環境変数から`TRIVY_*`を除くが、`GITHUB_TOKEN`は残る |
 | 作業用コンテナへの入力 | GitHub tokenとイメージレジストリの認証情報を渡さない |
 
-認証を設定していないレジストリには匿名でアクセスします。
+`registries`に認証を設定していないレジストリには匿名でアクセスしますが、Trivyが上記の環境変数を使う場合は例外です。
+これらの環境変数はKestreLynxの認証設定としては使いません。
 
-設定形式は、[GitHubアクセス](configuration.md#remediation-github)と[イメージレジストリの認証](configuration.md#remediation-registries)を参照してください。
+設定形式は、[GitHubアクセス](configuration.md#remediation-github)と[イメージレジストリの認証](configuration.md#registries)を参照してください。
 
 ## 作業用コンテナのネットワーク {#worker-network}
 

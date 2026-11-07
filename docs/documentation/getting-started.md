@@ -14,52 +14,168 @@ containers, then sends the results to Slack, email, or a webhook.
     - Webhook URL
     - Email over TLS-only SMTP
 
-## Run with Docker Compose
+## Prepare the configuration {#prepare-config}
 
-Download or clone the repository, then create a local configuration file.
+Create a `config.yml` file for use with Docker and Docker Compose.
+
+1. Download or clone the repository, then create `config.yml`.
+
+    ```bash
+    git clone https://github.com/kitsunetrail/kestrelynx.git
+    cd kestrelynx
+    cp config.example.yml config.yml
+    ```
+
+2. Configure at least one notification destination under `notify` in the `config.yml` file created in step 1.
+
+    ```yaml
+    notify:
+      slack_webhook_url: "https://hooks.slack.com/services/..."
+    ```
+
+## Run with Docker
+
+Run the following commands in the directory containing the `config.yml` file created in [Prepare the configuration](#prepare-config) to start KestreLynx and check the logs.
 
 ```bash
-git clone https://github.com/kitsunetrail/kestrelynx.git
-cd kestrelynx
-cp config.example.yml config.yml
+docker run -d --name kestrelynx \
+  --restart unless-stopped \
+  -e TZ=UTC \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v "$PWD/config.yml:/etc/kestrelynx/config.yml:ro" \
+  -v kestrelynx-state:/var/lib/kestrelynx \
+  ghcr.io/kitsunetrail/kestrelynx:latest
+docker logs -f kestrelynx
 ```
 
-Configure at least one notification destination as shown below.
+- The `kestrelynx-state` volume preserves scan history and the intel feed cache, so do not delete this volume.
 
-```yaml
-notify:
-  slack_webhook_url: "https://hooks.slack.com/services/..."
-```
+## Run with Docker Compose
 
-Start KestreLynx.
+Start KestreLynx in the directory containing the `config.yml` file created in [Prepare the configuration](#prepare-config).
 
 ```bash
 docker compose up -d
 docker compose logs -f
 ```
 
-The included Compose file mounts the `kestrelynx-state` volume at `/var/lib/kestrelynx`.
-Persist this volume to retain scan history and the intel feed cache.
+- The `kestrelynx-state` volume preserves scan history and the intel feed cache, so do not delete this volume.
 
-See [Configuration](configuration.md) for storage settings, and [History continuity](diff-logic.md#state-lifecycle) for how history affects change detection.
+## Run on Kubernetes
 
-## Run with Docker
+Edit and apply the manifests in `deploy/kubernetes/`.
+
+- One instance covers one cluster.
+- Trivy fetches images from the registry, so the scanner Pod needs registry access.
+
+### Start KestreLynx {#kubernetes-steps}
+
+1. Download the repository or clone it with the following commands.
+
+    ```bash
+    git clone https://github.com/kitsunetrail/kestrelynx.git
+    cd kestrelynx
+    ```
+
+2. Edit `deploy/kubernetes/configmap.yaml`.
+
+    - Configure at least one notification destination.
+
+        ```yaml
+        data:
+          config.yml: |
+            notify:
+              slack_webhook_url: "https://hooks.slack.com/services/..."
+        ```
+
+    - To scan only specific namespaces, list them in `kubernetes.namespaces` (the default is all namespaces).
+    - If multiple instances post to one Slack channel, set `environment.name` to a name that distinguishes the instance.
+    - See [Configuration](configuration.md) for other settings.
+
+3. Edit the storage settings in `deploy/kubernetes/pvc.yaml` to suit your cluster.
+
+    - The default is 1 GiB with `ReadWriteOnce` access.
+    - This PVC preserves scan history, first-seen dates, and the intel feed cache, so these persist after Pod recreation.
+
+4. Run the following command to create the namespace.
+
+    ```bash
+    kubectl create namespace kestrelynx
+    ```
+
+5. Follow [Authenticate to private registries](#kubernetes-private-registry) only if you scan images from private registries.
+
+6. Run the following commands to apply the manifests, wait for KestreLynx to start, and then check the logs.
+
+    ```bash
+    kubectl apply -f deploy/kubernetes/
+    kubectl rollout status -n kestrelynx deployment/kestrelynx
+    kubectl logs -n kestrelynx deployment/kestrelynx -f
+    ```
+
+    - This creates a ServiceAccount, a read-only ClusterRole and its ClusterRoleBinding, a ConfigMap, a PVC, and a Deployment.
+    - This command does not apply `work/`, so apply it separately following [Work Pod configuration](remediation-setup.md#kubernetes-language-updates) only if you use language-package updates.
+
+!!! warning "Do not run two copies"
+
+    Do not change the replica count of 1 or the `Recreate` strategy in `deployment.yaml`, and do not share one state volume between two instances.
+    Two Pods writing state data at the same time corrupt the scan history.
+
+### Authenticate to private registries {#kubernetes-private-registry}
+
+KestreLynx does not read inside Pods; it fetches the images used by Pods from registries to scan them, so images in private registries require credentials.
+It does not reuse Pod `imagePullSecrets`.
+
+1. Run the following command to create `config.yml` from the configuration in `deploy/kubernetes/configmap.yaml`.
+
+    ```bash
+    sed '1,/config.yml: |/d; s/^    //' deploy/kubernetes/configmap.yaml > config.yml
+    ```
+
+    - Do not commit this file to the repository because it contains passwords.
+
+2. Add `registries` to the `config.yml` you created in step 1.
+
+    ```yaml
+    registries:
+      - host: registry.example.com
+        username: example-puller
+        password: "example-read-token"
+    ```
+
+    - See [Image registry authentication](configuration.md#registries) for each key, including `token_hosts`.
+    - For Docker Hub, specify `host: docker.io` and `token_hosts: [auth.docker.io]`.
+
+3. Create a Secret from the `config.yml` you created in step 1.
+
+    ```bash
+    kubectl create secret generic kestrelynx-config \
+      --namespace kestrelynx \
+      --from-file=config.yml=config.yml \
+      --save-config
+    ```
+
+4. Change the `config` volume in `deploy/kubernetes/deployment.yaml` to use the Secret.
+
+    ```yaml
+    - name: config
+      secret:
+        secretName: kestrelynx-config
+    ```
+
+If credentials are missing or incorrect, the image appears in notifications as a scan failure.
+
+After moving the configuration to a Secret, use the following commands to apply configuration changes, including when other pages instruct you to apply a ConfigMap.
 
 ```bash
-docker run -d --name kestrelynx \
-  -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v "$PWD/config.yml:/etc/kestrelynx/config.yml:ro" \
-  -v kestrelynx-state:/var/lib/kestrelynx \
-  ghcr.io/kitsunetrail/kestrelynx:latest
+kubectl create secret generic kestrelynx-config \
+  --namespace kestrelynx \
+  --from-file=config.yml=config.yml \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart -n kestrelynx deployment/kestrelynx
 ```
 
-See [Enabling fix pull requests](remediation-setup.md#enable-pull-requests) for Docker socket permissions when enabling fix pull requests.
-
-On Docker, an optional Sensor (experimental) marks findings for packages in use and puts them
-first within the same priority, without changing priority. Setup and observation
-limits are described in [Runtime usage](runtime-usage.md).
-
-### Remediation plans and pull requests {#remediation}
+## Remediation plans and pull requests {#remediation}
 
 See the [remediation overview](remediation.md#overview) for an overview of the feature on Docker and Kubernetes.
 
@@ -68,71 +184,15 @@ See the [remediation overview](remediation.md#overview) for an overview of the f
 | Enable update candidate planning | [Enabling remediation plans](remediation-setup.md#enable-fix-plans) |
 | Enable GitHub PR creation | [Enabling fix pull requests](remediation-setup.md#enable-pull-requests) |
 
-## Run on Kubernetes
-
-Download or clone the repository. The `deploy/kubernetes/` directory contains
-the following manifests.
-
-| File | Resource |
-| --- | --- |
-| `serviceaccount.yaml` | ServiceAccount `kestrelynx` in the `kestrelynx` namespace. |
-| `clusterrole.yaml` | ClusterRole granting read-only `get` and `list` access to Pods, Nodes, ReplicaSets, Deployments, StatefulSets, DaemonSets, Jobs, and CronJobs. |
-| `clusterrolebinding.yaml` | ClusterRoleBinding assigning that role to the ServiceAccount. |
-| `configmap.yaml` | ConfigMap `kestrelynx-config` containing `config.yml`. |
-| `pvc.yaml` | PersistentVolumeClaim `kestrelynx-state`, requesting 1 GiB with `ReadWriteOnce` access. |
-| `deployment.yaml` | Single-replica Deployment with the `Recreate` strategy, configuration mounted at `/etc/kestrelynx`, and state at `/var/lib/kestrelynx`. |
-| `work/` | Optional additional manifests for language-package updates, applied separately following [Work Pod configuration](remediation-setup.md#kubernetes-language-updates). |
-
-Enabling remediation plans adds LIST calls for `deployments`, `statefulsets`, `daemonsets`, and `cronjobs` to the usual discovery calls.
-The supplied read-only ClusterRole can be used unchanged.
-Configure at least one notification destination in
-`deploy/kubernetes/configmap.yaml`. Its `config.yml` must set
-`kubernetes.enabled: true` and must not set `docker.socket` to a value, including `""`.
-Omitting the key or setting it to `null` is accepted, as is an empty `docker:` section.
-When adapting `config.example.yml`, remove the entire `docker:` section.
-
-One instance covers one cluster. By default, all namespaces are scanned;
-`kubernetes.namespaces` restricts scanning to the listed namespaces.
-Set `environment.name` to distinguish several instances posting to one Slack
-channel. See [Configuration](configuration.md) for configuration options.
-
-Trivy fetches images from the registry, so the scanner Pod needs registry
-access. For private-registry images, create a Secret named
-`kestrelynx-registry-auth` of type `kubernetes.io/dockerconfigjson` in the
-`kestrelynx` namespace. Uncomment the `DOCKER_CONFIG` environment variable,
-`registry-auth` volume mount, and Secret volume in
-`deploy/kubernetes/deployment.yaml`. This mounts the Secret's
-`.dockerconfigjson` key as `config.json` under `/etc/kestrelynx/docker`, the
-directory specified by `DOCKER_CONFIG`. The `imagePullSecrets` of scanned
-workloads are not reused.
-
-Adjust the PVC's storage settings for the cluster, then create the namespace
-and apply the prepared manifests.
-
-```bash
-kubectl create namespace kestrelynx
-kubectl apply -f deploy/kubernetes/
-kubectl logs -n kestrelynx deployment/kestrelynx -f
-```
-
-The PVC preserves scan history, first-seen dates, and the intel feed cache
-after Pod recreation. Keep one replica and the `Recreate` strategy to avoid
-overlapping Pods during updates. Two instances must not share one state
-volume.
-
 ## Set the timezone
 
-`schedule.daily_at` is interpreted in the timezone specified by `TZ`. The
-Compose example uses UTC by default. Change it to the timezone of the host as
-needed.
+`schedule.daily_at` is interpreted in the timezone specified by `TZ`, which defaults to UTC.
 
-```yaml
-environment:
-  - TZ=Asia/Tokyo
-```
+- When running with Docker, change `-e TZ=UTC` in the `docker run` command.
+- When running with Docker Compose, change `TZ=UTC` in `docker-compose.yml`.
+- When running on Kubernetes, change the `TZ` environment variable in `deploy/kubernetes/deployment.yaml`.
 
-The same setting applies to the `TZ` environment variable in
-`deploy/kubernetes/deployment.yaml`, which also defaults to UTC.
+For example, specify `TZ=Asia/Tokyo` to use Japan Standard Time.
 
 ## Reference pages
 

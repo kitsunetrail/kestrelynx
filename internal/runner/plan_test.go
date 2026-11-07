@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -735,5 +737,81 @@ func TestPlan_NewerSeriesKEVLookupStopsAtTheCheckDeadline(t *testing.T) {
 	ns := h.plans.saved[0].Items[0].NewerSeries
 	if ns == nil || ns.Status != remediation.NewerSeriesNotChecked || ns.Reason != remediation.ReasonNewerSeriesReserved {
 		t.Errorf("newer series = %+v", ns)
+	}
+}
+
+// The cycle's running images have a scanner of their own when one is set, so
+// that scanning them does not depend on what the plan's scanner has left.
+func TestPlan_RunningScannerScansTheRunningImages(t *testing.T) {
+	h := newPlanHarness(osFinding("CVE-1"))
+	running := &fakeScanner{byImage: h.normal.byImage}
+	h.r.Plan.RunningScanner = running
+	h.run(t)
+	if len(running.calls) != 1 || running.calls[0].Subject.Ref != "web:1.25.3" {
+		t.Errorf("running scanner calls = %+v", running.calls)
+	}
+	if len(h.normal.calls) != 0 {
+		t.Errorf("normal scanner calls = %d, want none with the databases prepared", len(h.normal.calls))
+	}
+	if h.scn.prepares != 1 {
+		t.Errorf("databases prepared %d times", h.scn.prepares)
+	}
+	for _, ev := range h.scn.events {
+		if ev == "scan:web:1.25.3" {
+			t.Error("the plan's scanner scanned the running image")
+		}
+	}
+}
+
+// When the databases cannot be confirmed after the scans, the plan rescans the
+// baselines it needs with its own scanner, not the running images' one.
+func TestPlan_RunningScannerLeavesBaselineRescansToThePlan(t *testing.T) {
+	h := newPlanHarness(osFinding("CVE-1"))
+	running := &fakeScanner{byImage: h.normal.byImage}
+	h.r.Plan.RunningScanner = running
+	h.scn.verifyOK = false
+	h.run(t)
+	if len(running.calls) != 1 {
+		t.Errorf("running scanner calls = %d, want the running image only", len(running.calls))
+	}
+	rescanned := false
+	for _, ev := range h.scn.events {
+		rescanned = rescanned || ev == "scan:web:1.25.3"
+	}
+	if !rescanned {
+		t.Errorf("plan scanner events = %v, want the baseline rescanned", h.scn.events)
+	}
+}
+
+func TestPlan_RunningScannerNotUsedWithoutPreparedDatabases(t *testing.T) {
+	h := newPlanHarness(osFinding("CVE-1"))
+	running := &fakeScanner{byImage: h.normal.byImage}
+	h.r.Plan.RunningScanner = running
+	h.scn.prepareErr = errors.New("download failed")
+	h.run(t)
+	if len(running.calls) != 0 || len(h.normal.calls) != 1 {
+		t.Errorf("running calls = %d, normal calls = %d, want the normal scanner", len(running.calls), len(h.normal.calls))
+	}
+}
+
+func TestScanImages_FailedScanIsNotLoggedAsScanned(t *testing.T) {
+	for name, scanErr := range map[string]error{"failed": errors.New("UNAUTHORIZED"), "succeeded": nil} {
+		t.Run(name, func(t *testing.T) {
+			h := newPlanHarness(osFinding("CVE-1"))
+			h.r.Plan = nil
+			scan := h.normal.byImage["web:1.25.3"]
+			scan.Err = scanErr
+			h.normal.byImage["web:1.25.3"] = scan
+			var buf bytes.Buffer
+			h.r.Log = slog.New(slog.NewTextHandler(&buf, nil))
+			h.run(t)
+			logged := buf.String()
+			if got, want := strings.Contains(logged, `msg="scanned image"`), scanErr == nil; got != want {
+				t.Errorf("logged scanned image = %v, want %v\n%s", got, want, logged)
+			}
+			if got, want := strings.Contains(logged, `msg="image scan failed"`), scanErr != nil; got != want {
+				t.Errorf("logged image scan failed = %v, want %v\n%s", got, want, logged)
+			}
+		})
 	}
 }

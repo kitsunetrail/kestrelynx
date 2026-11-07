@@ -207,6 +207,9 @@ func (r Runner) RunOnce(ctx context.Context) error {
 	if r.Plan != nil {
 		if cyc = r.preparePlan(ctx); cyc.ok {
 			sc = r.Plan.Scanner
+			if r.Plan.RunningScanner != nil {
+				sc = r.Plan.RunningScanner
+			}
 		}
 	}
 	scans, targets := r.scanImages(ctx, sc, images)
@@ -279,8 +282,9 @@ func (r Runner) scanImages(ctx context.Context, sc ImageScanner, images []invent
 			result := sc.Scan(ctx, target)
 			if result.Err != nil {
 				log.Warn("image scan failed", "image", img.Ref, "resolved", false, "err", result.Err)
+			} else {
+				log.Info("scanned image", "ref", img.Ref, "resolved", false)
 			}
-			log.Info("scanned image", "ref", img.Ref, "resolved", false)
 			scans = append(scans, result)
 			targets = append(targets, target)
 			continue
@@ -296,7 +300,9 @@ func (r Runner) scanImages(ctx context.Context, sc ImageScanner, images []invent
 				byKey[key] = result
 			}
 		}
-		log.Info("scanned image", "ref", img.Ref, "content_id", key.Digest.String(), "resolved", true)
+		if result.Err == nil {
+			log.Info("scanned image", "ref", img.Ref, "content_id", key.Digest.String(), "resolved", true)
+		}
 		scans = append(scans, retarget(result, img.Ref))
 		targets = append(targets, target)
 	}

@@ -67,6 +67,9 @@ func main() {
 		log.Error("load config", "err", err)
 		os.Exit(1)
 	}
+	if os.Getenv("DOCKER_CONFIG") != "" {
+		log.Warn("DOCKER_CONFIG is set, but image scans do not read registry logins from it; list them under registries")
+	}
 
 	notifier := buildNotifier(cfg.Notify)
 	if notifier == nil {
@@ -87,7 +90,7 @@ func main() {
 
 	r := runner.Runner{
 		Lister:                   lister,
-		Scanner:                  scanner.Trivy{Severity: cfg.Scan.Severity, DockerHost: trivyDockerHost(cfg)},
+		Scanner:                  buildScanner(cfg),
 		Notifier:                 notifier,
 		NotifyOnClean:            cfg.Notify.NotifyOnClean,
 		FullReportDay:            runner.NoFullReport,
@@ -145,6 +148,7 @@ func main() {
 		}
 		r.Plan = buildPlanConfig(cfg)
 		r.Plan.Scanner = withRuntimes(r.Plan.Scanner.(scanner.Trivy), runtimeAdvisors)
+		r.Plan.RunningScanner = withRuntimes(r.Plan.RunningScanner.(scanner.Trivy), runtimeAdvisors)
 		r.Plan.Runtimes = runtimeAdvisors
 		if cfg.Remediation.PullRequests.Enabled && len(r.Plan.Dependencies) > 0 {
 			if cfg.Kubernetes.Enabled {
@@ -162,7 +166,7 @@ func main() {
 			"cycle_timeout", l.CycleTimeout,
 			"storage_dir", cfg.Remediation.StorageDir,
 			"mappings", len(cfg.Remediation.Mappings),
-			"registry_logins", len(cfg.Remediation.Registries),
+			"registry_logins", len(cfg.Registries),
 			"github_token_set", cfg.Remediation.GitHub.Token != "",
 			"github_owner_tokens", len(cfg.Remediation.GitHub.Tokens),
 			"pull_requests", cfg.Remediation.PullRequests.Enabled,
@@ -181,7 +185,8 @@ func main() {
 		"severity", cfg.Scan.Severity,
 		"mode", cfg.Notify.Mode,
 		"full_report_day", cfg.Notify.FullReportDay,
-		"triage", cfg.Triage.Enabled)
+		"triage", cfg.Triage.Enabled,
+		"registry_logins", len(cfg.Registries))
 
 	if kc, ok := lister.(*kubernetes.Client); ok && cfg.Schedule.RunOnStart {
 		waitOwnPodRunning(ctx, kc, cfg.Kubernetes, log)
@@ -473,6 +478,22 @@ func buildPythonRuntime(cfg config.Config, log *slog.Logger) (*pycore.Advisor, p
 	}
 }
 
+// buildScanner assembles the scanner of a cycle without prepared databases: the
+// plan is off, or its databases could not be prepared. The registry logins
+// apply whether or not the plan is on, so a private image scans the same either
+// way. Its authentication checks have no request budget, which is the plan's.
+func buildScanner(cfg config.Config) scanner.Trivy {
+	// Config validation has rejected a host listed twice, the only way the
+	// store can fail to build.
+	auth, _ := cfg.RegistryCredentials()
+	return scanner.Trivy{
+		Severity:   cfg.Scan.Severity,
+		DockerHost: trivyDockerHost(cfg),
+		Auth:       auth,
+		Challenger: registry.New(registry.Options{Auth: auth}),
+	}
+}
+
 // buildPlanConfig assembles the fix plan and, with pull requests enabled, the
 // pull request stage. With Kubernetes, config validation allows manifest,
 // Dockerfile and dependency mappings.
@@ -482,13 +503,16 @@ func buildPlanConfig(cfg config.Config) *runner.PlanConfig {
 	// Config validation has rejected a host listed twice, the only way the
 	// store can fail to build; without logins the store is nil and every
 	// registry is reached anonymously.
-	auth, _ := rc.RegistryCredentials()
+	auth, _ := cfg.RegistryCredentials()
 	challenger := &cycleChallenger{}
 	pc := &runner.PlanConfig{
 		// Comparison mode: the databases PrepareDB fixes are the only ones
 		// any scan of the cycle uses. The registry logins reach Trivy only for
 		// a scan that fetches from the login's own host.
 		Scanner: scanner.Trivy{Severity: cfg.Scan.Severity, SkipDBUpdate: true, Auth: auth, Challenger: challenger, DockerHost: trivyDockerHost(cfg)},
+		// Scanning what runs must not depend on what the plan has left of its
+		// budget, nor take from it.
+		RunningScanner: scanner.Trivy{Severity: cfg.Scan.Severity, SkipDBUpdate: true, Auth: auth, Challenger: registry.New(registry.Options{Auth: auth}), DockerHost: trivyDockerHost(cfg)},
 		NewRegistry: func(b *registry.Budget) remediation.Registry {
 			c := registry.New(registry.Options{Budget: b, MaxTagPages: l.TagPagesPerRepository, Auth: auth})
 			challenger.use(c)

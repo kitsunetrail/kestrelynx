@@ -31,7 +31,11 @@ remediation:
 `workload`は通知のワークロードキーに合わせます。
 形式と名前空間の制約は[ソースの対応付け](configuration.md#remediation-mappings)を参照してください。
 
+修正計画を有効にすると、通常の取得対象に加えて`deployments`・`statefulsets`・`daemonsets`・`cronjobs`をLISTします。
+配布の読み取り専用ClusterRoleは、そのまま使用できます。
+
 設定したConfigMapを適用してKestreLynxのPodを再起動し、ログで設定の読み込みと計画の処理結果を確認します。
+設定をSecretで管理している場合は、[非公開レジストリの認証](getting-started.md#kubernetes-private-registry)の手順でSecretを更新します。
 配布構成では`kubectl logs -n kestrelynx deployment/kestrelynx -f`でログを確認できます。
 
 ### GitHubアクセスの準備 {#prepare-github-access}
@@ -148,21 +152,23 @@ remediation:
 
 ### 非公開イメージの認証 {#configure-registry-auth}
 
+トップレベルの`registries`に設定した認証情報は、修正計画と通常のスキャンで使います。
+Kubernetesでの設定手順は[非公開レジストリの認証](getting-started.md#kubernetes-private-registry)に記載しています。
+
 公開イメージだけを扱う場合、この設定は不要です。
 
 1. 対象イメージを読み取れる認証情報を用意する
-2. [イメージレジストリの認証](configuration.md#remediation-registries)に従い、対象ホストと認証情報を追加する
+2. [イメージレジストリの認証](configuration.md#registries)に従い、対象ホストと認証情報を追加する
 3. 別ホストのtoken serviceを使う場合は、認証情報の送付先を確認して`token_hosts`を設定する
 
 ```yaml
-remediation:
-  registries:
-    - host: registry.example.com
-      username: example-puller
-      password: "REPLACE_WITH_REGISTRY_READ_TOKEN"
+registries:
+  - host: registry.example.com
+    username: example-puller
+    password: "REPLACE_WITH_REGISTRY_READ_TOKEN"
 ```
 
-各キーの形式と設定条件は[イメージレジストリの認証](configuration.md#remediation-registries)を参照してください。
+各キーの形式と設定条件は[イメージレジストリの認証](configuration.md#registries)を参照してください。
 認証情報が送られる範囲は[認証情報の送付範囲](outbound-communication.md#credential-destinations)に記載しています。
 
 !!! note "記録の保存先"
@@ -365,6 +371,8 @@ ResourceQuotaの例はPod数を8に制限し、CPU・メモリ・一時ストレ
 #### 設定と起動確認
 
 既存のGitHub tokenと対応付けを保持し、`deploy/kubernetes/configmap.yaml`の`config.yml`に次を統合します。
+設定をSecretで管理している場合は、Secretの作成に使った`config.yml`に統合します。
+
 `namespace`は適用した作業用namespace名、`workload`とリポジトリは更新対象に合わせます。
 
 ```yaml
@@ -386,10 +394,12 @@ remediation:
 ```
 
 配布構成では次を実行し、ログと次回の通知で言語パッケージ更新の有効化と処理結果を確認します。
+設定をSecretで管理している場合は、[非公開レジストリの認証](getting-started.md#kubernetes-private-registry)の手順でSecretを更新します。
 
 ```sh
 kubectl apply -f deploy/kubernetes/configmap.yaml
 kubectl rollout restart -n kestrelynx deployment/kestrelynx
+kubectl rollout status -n kestrelynx deployment/kestrelynx
 kubectl logs -n kestrelynx deployment/kestrelynx -f
 ```
 

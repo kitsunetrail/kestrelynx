@@ -40,6 +40,14 @@ data:
     state:
       path: "/var/lib/kestrelynx/state.json"
 
+    # Logins for private image registries.
+    # The password is a secret: keep this file in a Secret rather than a
+    # ConfigMap, as the setup instructions show.
+    # registries:
+    #   - host: registry.example.com
+    #     username: example-puller
+    #     password: example-read-token
+
     triage:
       enabled: true
       act_now_epss: 0.10

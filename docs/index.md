@@ -216,7 +216,7 @@ See [Comparison with other tools](documentation/comparison.md) for a running ngi
 <dt>Kubernetes</dt>
 <dd markdown="span">An in-cluster Deployment discovers running containers across all or selected namespaces through read-only API operations, with additional permissions limited to a work namespace only when language-package updates are configured.</dd>
 <dt>Verified scope</dt>
-<dd markdown="span">Single-node K3s with containerd on linux/amd64. Multi-node clusters, arm64, managed Kubernetes, and authenticated private registries remain unverified. [Verification record](development/kubernetes-support.md)</dd>
+<dd markdown="span">Single-node K3s with containerd on linux/amd64. Multi-node clusters, arm64, managed Kubernetes remain unverified. [Verification record](development/kubernetes-support.md)</dd>
 <dt>Discovery</dt>
 <dd markdown="span">Containers must be running when discovered. Kubernetes native sidecars are included; ordinary init containers and ephemeral containers are excluded.</dd>
 <dt>Docker socket access</dt>

@@ -93,7 +93,7 @@ See [PR management](remediation-logic.md#pr-management) for management condition
 | --- | --- | --- | --- |
 | KestreLynx | Public image registries or registries with configured authentication | Retrieve tag lists, manifests, configs, and other information used to verify image identity | Looking for published-image or base-image candidates. |
 
-See [Image registry authentication](configuration.md#remediation-registries) for authentication settings and [Image candidate selection](remediation-logic.md#image-selection) for candidate discovery.
+See [Image registry authentication](configuration.md#registries) for authentication settings and [Image candidate selection](remediation-logic.md#image-selection) for candidate discovery.
 
 ### Work image downloads {#worker-image-downloads}
 
@@ -169,14 +169,19 @@ See [Notification conditions](notification-conditions.md#notification-conditions
 | Credentials or communication | Destinations and restrictions |
 | --- | --- |
 | GitHub token | Each request includes only the target repository owner's token from `remediation.github.tokens`, or the default `remediation.github.token` if no owner entry matches, or no token if neither is available. Sent only to `api.github.com` over HTTPS; redirects to other hosts are rejected. Redirects to another owner reselect and apply the token for the destination owner. If any owner-specific token is configured, redirects to URLs without an owner are rejected; configurations with only the default token continue to follow redirects as before. |
-| Image registry credentials | Sent over HTTPS only to the configured registry and token services on the same host or allowed by `token_hosts`. |
+| Image registry credentials (`registries`) | Sent over HTTPS only to the configured registry and token services on the same host or allowed by `token_hosts`. |
+| Checks for required authentication before scanning | Separate from Trivy's fetch requests; changes in registry responses between them cannot be detected. |
 | KestreLynx image-registry requests | Credentials are not forwarded to redirect destinations. |
 | Trivy image-registry requests | Credentials may be included in redirects within the same host, but are not forwarded to other hosts. |
+| Image fetches by Trivy | KestreLynx's address restrictions do not apply. |
+| Container environment variables `TRIVY_USERNAME`, `TRIVY_PASSWORD`, and `GITHUB_TOKEN` | Trivy may use them, without `token_hosts` restrictions. |
+| Scans in a cycle that prepares the remediation database | `TRIVY_*` variables are removed from the environment, but `GITHUB_TOKEN` remains. |
 | Work container inputs | GitHub tokens and image registry credentials are not passed to work containers. |
 
-Registries without configured authentication are accessed anonymously.
+Registries without authentication configured in `registries` are accessed anonymously, except when Trivy uses the environment variables listed above.
+KestreLynx does not use these environment variables as its authentication configuration.
 
-See [GitHub access](configuration.md#remediation-github) and [Image registry authentication](configuration.md#remediation-registries) for configuration formats.
+See [GitHub access](configuration.md#remediation-github) and [Image registry authentication](configuration.md#registries) for configuration formats.
 
 ## Work container network {#worker-network}
 

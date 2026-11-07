@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -182,9 +184,8 @@ func TestDockerfileMappings(t *testing.T) {
 func TestBuildPlanConfigPassesRegistryLoginsToScannerAndClient(t *testing.T) {
 	cfg := config.Config{Remediation: config.RemediationConfig{
 		Enabled: true, StorageDir: "/data/remediation",
-		Limits:     config.RemediationLimits{TagPagesPerRepository: 5},
-		Registries: []config.RemediationRegistry{{Host: "ghcr.io", Username: "me", Password: "pw-value", TokenHosts: []string{"auth.example.com"}}},
-	}}
+		Limits: config.RemediationLimits{TagPagesPerRepository: 5},
+	}, Registries: []config.RegistryLogin{{Host: "ghcr.io", Username: "me", Password: "pw-value", TokenHosts: []string{"auth.example.com"}}}}
 	pc := buildPlanConfig(cfg)
 	tr, ok := pc.Scanner.(scanner.Trivy)
 	if !ok {
@@ -201,7 +202,7 @@ func TestBuildPlanConfigPassesRegistryLoginsToScannerAndClient(t *testing.T) {
 		t.Errorf("registry client = %T", c)
 	}
 
-	cfg.Remediation.Registries = nil
+	cfg.Registries = nil
 	if tr := buildPlanConfig(cfg).Scanner.(scanner.Trivy); len(tr.Auth.Hosts()) != 0 {
 		t.Error("logins appeared without configuration")
 	}
@@ -212,9 +213,8 @@ func TestBuildPlanConfigPassesRegistryLoginsToScannerAndClient(t *testing.T) {
 func TestBuildPlanConfigChallengesShareTheCycleBudget(t *testing.T) {
 	cfg := config.Config{Remediation: config.RemediationConfig{
 		Enabled: true, StorageDir: "/data/remediation",
-		Limits:     config.RemediationLimits{TagPagesPerRepository: 5},
-		Registries: []config.RemediationRegistry{{Host: "ghcr.io", Username: "me", Password: "pw-value"}},
-	}}
+		Limits: config.RemediationLimits{TagPagesPerRepository: 5},
+	}, Registries: []config.RegistryLogin{{Host: "ghcr.io", Username: "me", Password: "pw-value"}}}
 	pc := buildPlanConfig(cfg)
 	ch := pc.Scanner.(scanner.Trivy).Challenger
 	if _, err := ch.Challenges(context.Background(), "ghcr.io/org/app"); err == nil {
@@ -281,5 +281,68 @@ func TestBuildPlanConfigSplitsAMappingWithSeveralSources(t *testing.T) {
 	}
 	if pc.PullRequests == nil || len(pc.PullRequests.Mappings) != 1 || len(pc.PullRequests.Repositories) != 1 {
 		t.Errorf("pull request config = %+v, want the compose mapping and its repository once", pc.PullRequests)
+	}
+}
+
+func withRegistryLogin(enabled bool) config.Config {
+	return config.Config{Remediation: config.RemediationConfig{
+		Enabled: enabled, StorageDir: "/data/remediation",
+		Limits: config.RemediationLimits{TagPagesPerRepository: 5},
+	}, Registries: []config.RegistryLogin{{Host: "ghcr.io", Username: "me", Password: "pw-value"}}}
+}
+
+// A private image on Kubernetes can only be fetched with a login, so the
+// scanner of a cycle without the plan must hold the logins too.
+func TestBuildScannerHoldsTheRegistryLoginsWithThePlanOff(t *testing.T) {
+	tr := buildScanner(withRegistryLogin(false))
+	cred, ok := tr.Auth.For("ghcr.io")
+	if !ok || cred.Username != "me" || cred.Password() != "pw-value" {
+		t.Errorf("credential = %v, %v", cred, ok)
+	}
+	if tr.Challenger == nil {
+		t.Error("a scanner without a challenger withholds every login")
+	}
+	if tr.SkipDBUpdate {
+		t.Error("the scanner of a cycle without prepared databases must update them itself")
+	}
+}
+
+func TestBuildScannerWithoutLogins(t *testing.T) {
+	if hosts := buildScanner(config.Config{}).Auth.Hosts(); len(hosts) != 0 {
+		t.Errorf("hosts = %v", hosts)
+	}
+}
+
+// The authentication checks of the running images' scans stay outside the
+// plan's budget, which the plan's scanner keeps spending.
+func TestBuildPlanConfigRunningScannerIsOutsideTheCycleBudget(t *testing.T) {
+	pc := buildPlanConfig(withRegistryLogin(true))
+	tr, ok := pc.RunningScanner.(scanner.Trivy)
+	if !ok {
+		t.Fatalf("running scanner is %T", pc.RunningScanner)
+	}
+	if _, ok := tr.Auth.For("ghcr.io"); !ok {
+		t.Error("the running images' scanner has no login")
+	}
+	if !tr.SkipDBUpdate {
+		t.Error("the running images' scanner must use the prepared databases")
+	}
+	pc.NewRegistry(registry.NewBudget(0))
+	// A loopback address the client refuses before sending anything shows
+	// which limit answered without any request leaving the test.
+	if _, err := tr.Challenger.Challenges(context.Background(), "127.0.0.1/org/app"); !errors.Is(err, registry.ErrForbiddenAddress) {
+		t.Errorf("err = %v, want the address policy rather than the spent budget", err)
+	}
+}
+
+// Image scans overwrite DOCKER_CONFIG, so a manifest that sets it would tell
+// the user that a login is in use when it is not.
+func TestSuppliedDeploymentDoesNotOfferDockerConfigLogins(t *testing.T) {
+	data, err := os.ReadFile("../../deploy/kubernetes/deployment.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "DOCKER_CONFIG") {
+		t.Error("deployment.yaml mentions DOCKER_CONFIG")
 	}
 }

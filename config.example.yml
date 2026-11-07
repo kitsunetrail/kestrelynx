@@ -166,6 +166,32 @@ runtime:
   # enabled above is also true.
   mute_unfixable_not_in_use: false
 
+# Logins for private image registries, used for every image KestreLynx fetches
+# from a registry: on Kubernetes the running images, and for the fix plan newer
+# images and candidates. They apply with remediation disabled too. A host
+# without an entry is reached anonymously.
+# host is the registry host as written in image references, with the port if
+# there is one, and without scheme or path. The password is a secret; keep the
+# file readable by its owner only. A login is sent to its own host over HTTPS,
+# and to the registry's token service only when that service is on the same host
+# or listed in token_hosts. KestreLynx's own requests do not pass it on at any
+# redirect. Trivy attaches its token again when the registry redirects to another
+# path of the same host, and does not when the redirect leads to another host.
+# GitHub Container Registry (ghcr.io) does not accept fine-grained personal
+# access tokens: use a personal access token (classic) with the read:packages
+# scope, and the GitHub user name it belongs to as username.
+# Docker Hub: host docker.io, an access token as password, and
+# token_hosts: [auth.docker.io].
+#
+# registries:
+#   - host: ghcr.io
+#     username: example-user
+#     password: example-token-from-github
+#   - host: registry.example.com:5000
+#     username: example-puller
+#     password: example-password
+#     token_hosts: []
+
 # Fix plan (experimental). Available in Docker and Kubernetes modes.
 # Kubernetes plans show published-image and Dockerfile base updates, floating-tag re-pull guidance,
 # and language-package candidates.
@@ -238,30 +264,6 @@ runtime:
 #         token: example-token-for-org
 #       - owner: example-user
 #         token: example-token-for-user
-#   # Logins for private image registries, used to look for newer images and
-#   # to scan candidates. A host without an entry is reached anonymously.
-#   # host is the registry host as written in image references, with the port
-#   # if there is one, and without scheme or path. The password is a secret;
-#   # keep the file readable by its owner only. A login is sent to its own
-#   # host over HTTPS, and to the registry's token service only when that
-#   # service is on the same host or listed in token_hosts. KestreLynx's own
-#   # requests do not pass it on at any redirect. Trivy, which scans the
-#   # candidate images, attaches its token again when the registry redirects
-#   # to another path of the same host, and does not when the redirect leads
-#   # to another host.
-#   # GitHub Container Registry (ghcr.io) does not accept fine-grained
-#   # personal access tokens: use a personal access token (classic) with the
-#   # read:packages scope, and the GitHub user name it belongs to as username.
-#   # Docker Hub: host docker.io, an access token as password, and
-#   # token_hosts: [auth.docker.io].
-#   # registries:
-#   #   - host: ghcr.io
-#   #     username: example-user
-#   #     password: example-token-from-github
-#   #   - host: registry.example.com:5000
-#   #     username: example-puller
-#   #     password: example-password
-#   #     token_hosts: []
 #   # Absolute directory for plans, delivery and PR records; persist it across
 #   # container recreation. It is independent of state.path and defaults to a
 #   # directory inside the supplied state volume.

@@ -31,7 +31,11 @@ remediation:
 Set `workload` to the workload key shown in notifications.
 See [Source mappings](configuration.md#remediation-mappings) for the format and namespace restrictions.
 
+Enabling remediation plans adds LIST calls for `deployments`, `statefulsets`, `daemonsets`, and `cronjobs` to the usual discovery calls.
+The supplied read-only ClusterRole can be used unchanged.
+
 Apply the updated ConfigMap, restart the KestreLynx Pod, and check the logs for configuration loading and planning results.
+If you manage the configuration in a Secret, update the Secret by following [Authenticate to private registries](getting-started.md#kubernetes-private-registry).
 With the supplied deployment, use `kubectl logs -n kestrelynx deployment/kestrelynx -f` to view the logs.
 
 ### Preparing GitHub access {#prepare-github-access}
@@ -148,21 +152,23 @@ See [Source mappings](configuration.md#remediation-mappings) for name and config
 
 ### Authenticating to private image registries {#configure-registry-auth}
 
+Credentials configured in the top-level `registries` setting are used for remediation plans and regular scans.
+For Kubernetes setup instructions, see [Authenticate to private registries](getting-started.md#kubernetes-private-registry).
+
 This configuration is unnecessary if you use only public images.
 
 1. Prepare credentials with read access to the target images
-2. Add the target host and credentials as described in [Image registry authentication](configuration.md#remediation-registries)
+2. Add the target host and credentials as described in [Image registry authentication](configuration.md#registries)
 3. If the registry uses a token service on another host, check where credentials will be sent and configure `token_hosts`
 
 ```yaml
-remediation:
-  registries:
-    - host: registry.example.com
-      username: example-puller
-      password: "REPLACE_WITH_REGISTRY_READ_TOKEN"
+registries:
+  - host: registry.example.com
+    username: example-puller
+    password: "REPLACE_WITH_REGISTRY_READ_TOKEN"
 ```
 
-For key formats and configuration requirements, see [Image registry authentication](configuration.md#remediation-registries).
+For key formats and configuration requirements, see [Image registry authentication](configuration.md#registries).
 For the destinations that receive credentials, see [Credential destinations](outbound-communication.md#credential-destinations).
 
 !!! note "Record storage"
@@ -365,6 +371,7 @@ The scanning ClusterRole remains read-only, and no permissions to operate on Sec
 #### Configuration and startup verification
 
 Keep the existing GitHub token and mappings, and merge the following into `config.yml` in `deploy/kubernetes/configmap.yaml`.
+If you manage the configuration in a Secret, merge the following into the `config.yml` you used to create the Secret.
 Set `namespace` to the applied work namespace and adjust `workload` and the repository for the update target.
 
 ```yaml
@@ -386,10 +393,12 @@ remediation:
 ```
 
 For the supplied deployment, run the following and check the logs and next notification for language-package update activation and processing results.
+If you manage the configuration in a Secret, update the Secret by following [Authenticate to private registries](getting-started.md#kubernetes-private-registry).
 
 ```sh
 kubectl apply -f deploy/kubernetes/configmap.yaml
 kubectl rollout restart -n kestrelynx deployment/kestrelynx
+kubectl rollout status -n kestrelynx deployment/kestrelynx
 kubectl logs -n kestrelynx deployment/kestrelynx -f
 ```
 

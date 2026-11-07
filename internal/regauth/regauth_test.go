@@ -214,3 +214,40 @@ func TestPermits(t *testing.T) {
 		}
 	}
 }
+
+func TestStoreNames(t *testing.T) {
+	s, err := NewStore([]Credential{
+		New("registry.internal", "u", "p", []string{"auth.internal:8443"}),
+		New("10.0.0.5:5000", "u", "p", nil),
+		New("explicit.internal:443", "u", "p", nil),
+		New("registry-1.docker.io:443", "u", "p", nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		host, port string
+		want       bool
+	}{
+		{"registry.internal", "443", true},
+		{"REGISTRY.internal", "443", true},
+		{"registry.internal", "5000", false},
+		{"auth.internal", "8443", true},
+		{"auth.internal", "443", false},
+		{"10.0.0.5", "5000", true},
+		{"10.0.0.5", "443", false},
+		{"explicit.internal", "443", true},
+		{"explicit.internal", "5000", false},
+		{"registry-1.docker.io", "443", true},
+		{"docker.io", "443", true},
+		{"other.internal", "443", false},
+	} {
+		if got := s.Names(tc.host, tc.port); got != tc.want {
+			t.Errorf("Names(%s, %s) = %v, want %v", tc.host, tc.port, got, tc.want)
+		}
+	}
+	var none *Store
+	if none.Names("registry.internal", "443") {
+		t.Error("a nil store names nothing")
+	}
+}

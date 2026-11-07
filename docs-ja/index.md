@@ -213,7 +213,7 @@ Trivyでスキャンし、既定では修正版のないものも含めてHIGH�
 <dt>Kubernetes</dt>
 <dd markdown="span">クラスタ内のDeploymentから、読み取り専用のAPI操作で全namespaceまたは指定namespaceの稼働中コンテナを発見し、言語パッケージ更新を設定した場合だけ作業用namespaceに限定した追加権限を使う</dd>
 <dt>Kubernetesの検証範囲</dt>
-<dd markdown="span">linux/amd64の単一ノードK3s＋containerdのみ検証済みで、複数ノード、arm64、マネージドKubernetes、認証付きプライベートレジストリは未検証 [検証の記録](development/kubernetes-support.md)</dd>
+<dd markdown="span">linux/amd64の単一ノードK3s＋containerdのみ検証済みで、複数ノード、arm64、マネージドKubernetesは未検証 [検証の記録](development/kubernetes-support.md)</dd>
 <dt>発見の範囲</dt>
 <dd markdown="span">発見時に稼働中のコンテナが対象で、Kubernetesのネイティブsidecarを含み、通常のinit containerとephemeral containerは対象外</dd>
 <dt>Docker socketの権限</dt>

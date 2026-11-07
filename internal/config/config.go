@@ -4,6 +4,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -37,6 +38,10 @@ type Config struct {
 	Environment EnvironmentConfig
 	Runtime     RuntimeConfig
 	Remediation RemediationConfig
+	// Registries are the logins for private image registries, by host. They
+	// apply to every image fetched from a registry, whether or not the fix plan
+	// is on. An image from a host that is not listed is reached anonymously.
+	Registries []RegistryLogin
 }
 
 // EnvironmentConfig names the environment this instance is watching
@@ -220,9 +225,6 @@ type RemediationConfig struct {
 	// mode.
 	PullRequests RemediationPullRequestsConfig
 	GitHub       RemediationGitHubConfig
-	// Registries are the logins for private image registries, by host. An
-	// image from a host that is not listed is reached anonymously.
-	Registries []RemediationRegistry
 	// StorageDir holds the plan and delivery records. Always absolute.
 	StorageDir string
 	// Mappings tell, per running workload, where its source lives. They have
@@ -323,8 +325,8 @@ func (g RemediationGitHubConfig) TokenFor(repo string) Secret {
 	return g.Token
 }
 
-// RemediationRegistry is the login for one private image registry.
-type RemediationRegistry struct {
+// RegistryLogin is the login for one private image registry.
+type RegistryLogin struct {
 	// Host is the registry host as it is written in image references, with
 	// the port if there is one: "ghcr.io", "registry.example.com:5000".
 	Host     string
@@ -580,13 +582,6 @@ type rawConfig struct {
 				Token yaml.Node `yaml:"token"`
 			} `yaml:"tokens"`
 		} `yaml:"github"`
-		Registries []struct {
-			Host     string `yaml:"host"`
-			Username string `yaml:"username"`
-			// A raw node, like the GitHub token's.
-			Password   yaml.Node `yaml:"password"`
-			TokenHosts []string  `yaml:"token_hosts"`
-		} `yaml:"registries"`
 		StorageDir string `yaml:"storage_dir"`
 		Worker     struct {
 			Registry     string `yaml:"registry"`
@@ -651,6 +646,13 @@ type rawConfig struct {
 			JobTimeout               *time.Duration `yaml:"job_timeout"`
 		} `yaml:"limits"`
 	} `yaml:"remediation"`
+	Registries []struct {
+		Host     string `yaml:"host"`
+		Username string `yaml:"username"`
+		// A raw node, like the GitHub token's.
+		Password   yaml.Node `yaml:"password"`
+		TokenHosts []string  `yaml:"token_hosts"`
+	} `yaml:"registries"`
 }
 
 const (
@@ -726,6 +728,13 @@ func Parse(data []byte) (Config, error) {
 	if err := dec.Decode(&raw); err != nil {
 		return Config{}, fmt.Errorf("parse config: %w", err)
 	}
+	// The decoder stops after one document. A file whose keys are indented, as
+	// in a ConfigMap, ends that document at the first key at the left margin, so
+	// anything after it would be dropped without a word.
+	var rest yaml.Node
+	if err := dec.Decode(&rest); !errors.Is(err, io.EOF) {
+		return Config{}, errors.New("parse config: the file has content after its first YAML document, which would not be read; give every top-level key the same indentation and use one document")
+	}
 
 	githubToken, err := secretFromNode(&raw.Remediation.GitHub.Token)
 	if err != nil {
@@ -765,14 +774,14 @@ func Parse(data []byte) (Config, error) {
 		wk.ToolVersions.CacheMaxSize = n
 	}
 
-	var registries []RemediationRegistry
-	for i := range raw.Remediation.Registries {
-		rr := &raw.Remediation.Registries[i]
+	var registries []RegistryLogin
+	for i := range raw.Registries {
+		rr := &raw.Registries[i]
 		pw, err := secretFromNode(&rr.Password)
 		if err != nil {
-			return Config{}, fmt.Errorf("config: remediation.registries[%d].password: %w", i, err)
+			return Config{}, fmt.Errorf("config: registries[%d].password: %w", i, err)
 		}
-		registries = append(registries, RemediationRegistry{Host: rr.Host, Username: rr.Username, Password: pw, TokenHosts: rr.TokenHosts})
+		registries = append(registries, RegistryLogin{Host: rr.Host, Username: rr.Username, Password: pw, TokenHosts: rr.TokenHosts})
 	}
 
 	emailPassword, err := secretFromNode(&raw.Notify.Email.Password)
@@ -786,6 +795,7 @@ func Parse(data []byte) (Config, error) {
 	}
 
 	c := Config{
+		Registries: registries,
 		Schedule: ScheduleConfig{
 			DailyAt:    raw.Schedule.DailyAt,
 			RunOnStart: boolOr(raw.Schedule.RunOnStart, true),
@@ -847,7 +857,6 @@ func Parse(data []byte) (Config, error) {
 			Enabled:      boolOr(raw.Remediation.Enabled, false),
 			PullRequests: RemediationPullRequestsConfig{Enabled: boolOr(raw.Remediation.PullRequests.Enabled, false)},
 			GitHub:       RemediationGitHubConfig{Token: githubToken, Tokens: githubTokens},
-			Registries:   registries,
 			StorageDir:   raw.Remediation.StorageDir,
 			Worker:       wk,
 			Limits: RemediationLimits{
@@ -1093,6 +1102,9 @@ func validate(c *Config, dockerSocketExplicit bool) error {
 			return fmt.Errorf("config: runtime.evidence_dir %q must be an absolute path", c.Runtime.EvidenceDir)
 		}
 	}
+	if err := validateRegistries(c.Registries); err != nil {
+		return err
+	}
 	return validateRemediation(c)
 }
 
@@ -1133,9 +1145,6 @@ func validateRemediation(c *Config) error {
 		return fmt.Errorf("config: remediation.limits.job_timeout must be between %s and %s, got %s", minJobTimeout, maxJobTimeout, r.Limits.JobTimeout)
 	}
 	if err := validateWorker(r.Worker, c.Kubernetes.Enabled); err != nil {
-		return err
-	}
-	if err := validateRegistries(r.Registries); err != nil {
 		return err
 	}
 	return validateMappings(r.Mappings, c.Kubernetes.Enabled)
@@ -1185,10 +1194,10 @@ func validateGitHubTokens(r *RemediationConfig) error {
 
 // validateRegistries checks the registry logins. No message contains a
 // password or a username.
-func validateRegistries(rs []RemediationRegistry) error {
+func validateRegistries(rs []RegistryLogin) error {
 	seen := map[string]bool{}
 	for i, rr := range rs {
-		at := fmt.Sprintf("config: remediation.registries[%d]", i)
+		at := fmt.Sprintf("config: registries[%d]", i)
 		if err := regauth.ValidateHost(rr.Host); err != nil {
 			return fmt.Errorf("%s.host: %v", at, err)
 		}
@@ -1214,9 +1223,9 @@ func validateRegistries(rs []RemediationRegistry) error {
 
 // RegistryCredentials returns the configured registry logins for the
 // registry client and the scanner.
-func (r RemediationConfig) RegistryCredentials() (*regauth.Store, error) {
-	creds := make([]regauth.Credential, 0, len(r.Registries))
-	for _, rr := range r.Registries {
+func (c Config) RegistryCredentials() (*regauth.Store, error) {
+	creds := make([]regauth.Credential, 0, len(c.Registries))
+	for _, rr := range c.Registries {
 		creds = append(creds, regauth.New(rr.Host, rr.Username, rr.Password.Value(), rr.TokenHosts))
 	}
 	return regauth.NewStore(creds)

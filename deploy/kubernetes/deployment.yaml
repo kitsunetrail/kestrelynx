@@ -29,19 +29,12 @@ spec:
           env:
             - name: TZ
               value: "UTC"
-            # Uncomment together with the registry-auth volume below to give
-            # Trivy credentials for private-registry images.
-            # - name: DOCKER_CONFIG
-            #   value: "/etc/kestrelynx/docker"
           volumeMounts:
             - name: config
               mountPath: /etc/kestrelynx
               readOnly: true
             - name: state
               mountPath: /var/lib/kestrelynx
-            # - name: registry-auth
-            #   mountPath: /etc/kestrelynx/docker
-            #   readOnly: true
       volumes:
         - name: config
           configMap:
@@ -49,13 +42,3 @@ spec:
         - name: state
           persistentVolumeClaim:
             claimName: kestrelynx-state
-        # registry-auth projects a kubernetes.io/dockerconfigjson Secret's
-        # .dockerconfigjson key as config.json under the DOCKER_CONFIG
-        # directory Trivy reads for registry auth. Secret updates propagate
-        # to the mounted file automatically, but not immediately.
-        # - name: registry-auth
-        #   secret:
-        #     secretName: kestrelynx-registry-auth
-        #     items:
-        #       - key: .dockerconfigjson
-        #         path: config.json

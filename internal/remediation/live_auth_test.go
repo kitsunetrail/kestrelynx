@@ -23,8 +23,8 @@ import (
 // These tests need a registry that asks for a login (the registry image with
 // htpasswd authentication, served over TLS on a loopback address with a
 // certificate of its own) holding kx/app:1.2.3 and kx/app:1.2.4, and a Trivy
-// with its databases already downloaded. They run only with the environment
-// below set:
+// with its databases already downloaded. scripts/live_auth_test.sh sets all of
+// this up and runs them; by hand they need the environment below:
 //
 //	KX_LIVE_AUTH_ADDR   host:port of the registry, e.g. 127.0.0.1:5443
 //	KX_LIVE_AUTH_USER   the login's user name

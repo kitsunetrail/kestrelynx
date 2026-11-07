@@ -104,7 +104,7 @@ After PR #1 was merged and the running `proxy` container was replaced with nginx
 - **Scan targets**: containers running at discovery time, including Kubernetes native sidecars
 - **Excluded targets**: ordinary init containers and ephemeral containers
 - **Verified Kubernetes setup**: Ubuntu on linux/amd64, single-node K3s 1.36 with containerd 2.3
-- **Unverified Kubernetes setups**: multiple nodes, mixed architectures, arm64, EKS / GKE / AKS, CRI-O, and authenticated private registries
+- **Unverified Kubernetes setups**: multiple nodes, mixed architectures, arm64, EKS / GKE / AKS, and CRI-O
 - **Details**: [verification record and constraints](docs/development/kubernetes-support.md)
 
 ## What a notification looks like
@@ -243,6 +243,7 @@ docker compose logs -f
 ```sh
 kubectl create namespace kestrelynx
 kubectl apply -f deploy/kubernetes/
+kubectl rollout status -n kestrelynx deployment/kestrelynx
 kubectl logs -n kestrelynx deployment/kestrelynx -f
 ```
 
@@ -250,7 +251,7 @@ kubectl logs -n kestrelynx deployment/kestrelynx -f
 - **Switching from the example**: removal of the `docker` section in `config.example.yml` (startup error with explicit `docker.socket`)
 - **Unnecessary components**: Docker socket and per-node agents
 - **Connectivity requirement**: scanner Pod access to the target registry for Trivy image retrieval
-- **Private registry credentials**: credential-mount example in the Deployment (unverified in a real cluster)
+- **Private registry credentials**: configure `registries` and store `config.yml` in a Secret ([setup instructions](docs/documentation/getting-started.md#kubernetes-private-registry); scanning verified with single-node K3s and private images on `ghcr.io`)
 - **Credential inheritance**: no automatic transfer of workload `imagePullSecrets`
 - **Unsupported scope**: node-only images, deleted registry digests, K3s `registries.yaml` mirrors/rewrites, and air-gapped clusters
 - **History storage**: PVC, with no concurrent writes to the same state file by multiple instances

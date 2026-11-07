@@ -104,7 +104,7 @@ PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ�
 - **スキャン対象**：取得時点で稼働中のコンテナ、Kubernetesのnative sidecar
 - **対象外**：通常のinit container・ephemeral container
 - **Kubernetesの検証済み構成**：Ubuntu／linux/amd64、単一ノードK3s 1.36＋containerd 2.3
-- **Kubernetesの未検証構成**：複数ノード・混在アーキテクチャ・arm64・EKS／GKE／AKS・CRI-O・認証付き非公開レジストリ
+- **Kubernetesの未検証構成**：複数ノード・混在アーキテクチャ・arm64・EKS／GKE／AKS・CRI-O
 - **詳細**：[検証記録と制約](docs-ja/development/kubernetes-support.md)
 
 ## 通知の例
@@ -243,6 +243,7 @@ docker compose logs -f
 ```sh
 kubectl create namespace kestrelynx
 kubectl apply -f deploy/kubernetes/
+kubectl rollout status -n kestrelynx deployment/kestrelynx
 kubectl logs -n kestrelynx deployment/kestrelynx -f
 ```
 
@@ -250,7 +251,7 @@ kubectl logs -n kestrelynx deployment/kestrelynx -f
 - **設定例からの切り替え**：`config.example.yml`の`docker`セクションを削除（`docker.socket`との同時設定は起動エラー）
 - **不要な構成要素**：Dockerソケット・ノードごとのエージェント
 - **接続要件**：スキャナPodから対象レジストリへのアクセス（Trivyによるイメージ取得）
-- **非公開レジストリの認証**：Deployment内の認証情報マウント例を参照（実環境では未検証）
+- **非公開レジストリの認証**：`registries`に設定し、`config.yml`をSecretに保存（[設定手順](docs-ja/documentation/getting-started.md#kubernetes-private-registry)、単一ノードK3sと`ghcr.io`の非公開イメージでスキャン確認済み）
 - **認証情報の引き継ぎ**：アプリ側の`imagePullSecrets`からの自動引き継ぎなし
 - **対応範囲外**：ノード上にしか存在しないイメージ・削除済みdigest・K3sの`registries.yaml`によるミラー／書き換え・エアギャップ環境
 - **履歴の保存先**：PVC（同じstateファイルへの複数インスタンスからの同時書き込み不可）

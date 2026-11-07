@@ -133,9 +133,11 @@ type PullRequestConfig struct {
 // Runner with a nil Plan never prepares databases, never switches the scans
 // to comparison mode and never touches the registry.
 type PlanConfig struct {
-	// Scanner scans the cycle's images (when the databases were prepared)
-	// and the candidates.
+	// Scanner prepares the databases and scans the candidates.
 	Scanner PlanScanner
+	// RunningScanner scans the cycle's running images when the databases were
+	// prepared, on the same databases as Scanner. Nil means Scanner.
+	RunningScanner ImageScanner
 	// NewRegistry returns the registry client for one cycle, built with the
 	// budget the runner creates.
 	NewRegistry func(*registry.Budget) remediation.Registry

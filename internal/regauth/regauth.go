@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/url"
 	"regexp"
 	"sort"
@@ -249,6 +250,34 @@ func (s *Store) For(host string) (Credential, bool) {
 	}
 	c, ok := s.byHost[NormalizeHost(host)]
 	return c, ok
+}
+
+// Names reports whether host at port is a registry host or a token service
+// that one of the credentials names. A name written without a port means the
+// HTTPS port.
+func (s *Store) Names(host, port string) bool {
+	if s == nil {
+		return false
+	}
+	host = NormalizeHost(host)
+	names := func(name string) bool {
+		h, p, err := net.SplitHostPort(name)
+		if err != nil {
+			h, p = name, "443"
+		}
+		return NormalizeHost(h) == host && p == port
+	}
+	for _, c := range s.byHost {
+		if names(c.Host) {
+			return true
+		}
+		for _, t := range c.TokenHosts {
+			if names(t) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Hosts lists the hosts the store holds credentials for, sorted.

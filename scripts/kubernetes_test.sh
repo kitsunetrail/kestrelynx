@@ -3,7 +3,10 @@
 # getting started page, and checks that it scans an image a Pod runs from a
 # registry that asks for a login. Unlike the other live tests this one goes
 # through the supplied manifests, the permissions they grant and the commands the
-# page tells the reader to run.
+# page tells the reader to run. It then runs KestreLynx outside the cluster, as
+# a container that reaches the API server with the address, token and CA set in
+# its configuration, and checks the same scan, and that a certificate which does
+# not carry the name used is refused unless tls_server_name gives one it does.
 #
 # Needs Docker, k3d, kubectl, openssl, curl and python3. The cluster, the
 # registry, the images and every file are removed at the end, and the user's
@@ -19,6 +22,8 @@ id="$$"
 cluster="kx-k8s-$id"
 net="kx-k8s-$id"
 registry_name="kx-k8s-registry-$id"
+outside_name="kx-k8s-outside-$id"
+outside_hook="kx-k8s-hook-$id"
 image="kx-k8s-test:$id"
 # A fixed subnet, because the certificate has to name the address before the
 # registry starts. It is private on purpose: that is what a registry on the
@@ -55,6 +60,39 @@ cmd_restart='kubectl rollout restart -n kestrelynx deployment/kestrelynx'
 secret_volume='- name: config
   secret:
     secretName: kestrelynx-config'
+# Running outside the cluster.
+cmd_out_account='kubectl apply -f deploy/kubernetes/serviceaccount.yaml \
+  -f deploy/kubernetes/clusterrole.yaml \
+  -f deploy/kubernetes/clusterrolebinding.yaml'
+cmd_out_token="kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kestrelynx-token
+  namespace: kestrelynx
+  annotations:
+    kubernetes.io/service-account.name: kestrelynx
+type: kubernetes.io/service-account-token
+EOF
+kubectl wait -n kestrelynx secret/kestrelynx-token --for=jsonpath='{.data.token}'"
+cmd_out_files="kubectl get secret -n kestrelynx kestrelynx-token -o jsonpath='{.data.token}' | base64 -d > token
+kubectl get secret -n kestrelynx kestrelynx-token -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
+chmod 600 token"
+cmd_out_server="kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'"
+out_config='kubernetes:
+  enabled: true
+  api_server: "https://kubernetes.example.com:6443"
+  token_file: /etc/kestrelynx/token
+  ca_file: /etc/kestrelynx/ca.crt'
+cmd_out_run='docker run -d --name kestrelynx \
+  --restart unless-stopped \
+  -e TZ=UTC \
+  -v "$PWD/config.yml:/etc/kestrelynx/config.yml:ro" \
+  -v "$PWD/token:/etc/kestrelynx/token:ro" \
+  -v "$PWD/ca.crt:/etc/kestrelynx/ca.crt:ro" \
+  -v kestrelynx-state:/var/lib/kestrelynx \
+  ghcr.io/kitsunetrail/kestrelynx:latest
+docker logs -f kestrelynx'
 
 diagnostics() {
   echo "--- pods" >&2
@@ -74,7 +112,8 @@ cleanup() {
     diagnostics
   fi
   k3d cluster delete "$cluster" >/dev/null 2>&1 || true
-  docker rm -fv "$registry_name" >/dev/null 2>&1 || true
+  docker rm -fv "$outside_name" "$outside_hook" "$registry_name" >/dev/null 2>&1 || true
+  docker volume rm "$outside_name" >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
   docker rmi -f "$image" "$image-base" >/dev/null 2>&1 || true
   if [ -n "${host_registry:-}" ]; then
@@ -90,12 +129,21 @@ fail() {
   exit 1
 }
 
-check_docs() { # each file must hold each block, whatever its indentation
+check_docs() { # each file must hold each block, however far the block is indented
   python3 - "$@" <<'EOF'
 import sys
 
 def lines(text):
-    return [line.strip() for line in text.splitlines() if line.strip()]
+    # A line of only spaces counts as empty; any other line is kept as it is,
+    # trailing spaces included, since a space after a line-continuing backslash
+    # or an empty line inside a command breaks the command.
+    return [line if line.strip() else "" for line in text.splitlines()]
+
+def dedent(block):
+    # Only the indentation the lines share goes, so YAML that loses its
+    # structure on the page no longer matches.
+    n = min((len(line) - len(line.lstrip(" ")) for line in block if line), default=0)
+    return [line[n:] for line in block]
 
 missing = False
 docs, blocks = sys.argv[1:3], sys.argv[3:]
@@ -103,8 +151,8 @@ for path in docs:
     with open(path, encoding="utf-8") as f:
         doc = lines(f.read())
     for block in blocks:
-        want = lines(block)
-        if not any(doc[i : i + len(want)] == want for i in range(len(doc))):
+        want = dedent(lines(block.strip("\n")))
+        if not any(dedent(doc[i : i + len(want)]) == want for i in range(len(doc) - len(want) + 1)):
             print(f"{path} no longer has:\n{block}", file=sys.stderr)
             missing = True
 sys.exit(1 if missing else 0)
@@ -123,6 +171,16 @@ if text.count(old) != 1:
 with open(path, "w", encoding="utf-8") as f:
     f.write(text.replace(old, new))
 EOF
+}
+
+replace() { # text, old, new; the old text must occur exactly once
+  python3 -c '
+import sys
+text, old, new = sys.argv[1:]
+if text.count(old) != 1:
+    sys.exit(f"expected one occurrence of {old!r}, found {text.count(old)}")
+sys.stdout.write(text.replace(old, new))
+' "$@"
 }
 
 run() { # a command from the page, in the copy of the repository
@@ -170,7 +228,12 @@ check_cycle() { # step name, ok or failed for the private image, plan or noplan
   count="$(wc -l <"$hooks")"
   [ "$count" -gt "$reports" ] || fail "$step: no report reached the webhook"
   reports="$count"
-  tail -n 1 "$hooks" | python3 -c '
+  tail -n 1 "$hooks" | check_report "$step" "$want" "$plan"
+  echo "ok: $step"
+}
+
+check_report() { # step name, ok or failed, plan or noplan; the report on stdin
+  python3 -c '
 import json, sys
 
 step, want, plan, ref = sys.argv[1:]
@@ -186,14 +249,15 @@ if plan == "plan":
         sys.exit(f"{step}: the report has no usable fix plan: {status}")
 elif "remediation" in report:
     sys.exit(f"{step}: the report has a fix plan although it is off")
-' "$step" "$want" "$plan" "$private_ref"
-  echo "ok: $step"
+' "$1" "$2" "$3" "$private_ref"
 }
 
 check_docs docs/documentation/getting-started.md docs-ja/documentation/getting-started.md \
   "$cmd_namespace" "$cmd_apply
 $cmd_rollout
-$cmd_logs" "$cmd_config" "$cmd_secret" "$cmd_secret_update" "$cmd_restart" "$secret_volume"
+$cmd_logs" "$cmd_config" "$cmd_secret" "$cmd_secret_update" "$cmd_restart" "$secret_volume" \
+  "$cmd_namespace
+$cmd_out_account" "$cmd_out_token" "$cmd_out_files" "$cmd_out_server" "$out_config" "$cmd_out_run"
 check_docs README.md README.ja.md "$cmd_apply
 $cmd_rollout
 $cmd_logs"
@@ -405,5 +469,137 @@ write_config "$password" 'remediation:
 run "$cmd_secret_update"
 run "$cmd_restart"
 check_cycle "the right login with the fix plan on: the private image is scanned" ok plan
+
+# The steps of "Run outside the cluster": KestreLynx runs as a plain container
+# that reaches the API server over the network, with the address, a token of the
+# supplied ServiceAccount and the cluster's CA given in the configuration. The
+# namespace already exists, so that one command is only checked on the page.
+echo "--- running outside the cluster"
+# What the steps inside the cluster created goes first, so the scans below have
+# only what these steps create, and a step missing from the page shows.
+(cd "$repo" && kubectl delete -f deploy/kubernetes/ --wait=true >/dev/null)
+for kind in serviceaccount/kestrelynx clusterrole/kestrelynx clusterrolebinding/kestrelynx; do
+  if kubectl get -n kestrelynx "$kind" >/dev/null 2>&1; then
+    fail "$kind is still there after removing the in-cluster install"
+  fi
+done
+run "$cmd_out_account"
+run "$cmd_out_token"
+run "$cmd_out_files"
+[ -s "$repo/token" ] || fail "the token was not saved"
+grep -q 'BEGIN CERTIFICATE' "$repo/ca.crt" || fail "the cluster CA was not saved"
+[ "$(stat -c %a "$repo/token")" = 600 ] || fail "the token can be read by others"
+server="$(run "$cmd_out_server" | tail -n 1)"
+case "$server" in
+  https://*) ;;
+  *) fail "the command for the API server's URL printed $server" ;;
+esac
+
+api_ip="$(docker inspect -f "{{(index .NetworkSettings.Networks \"$net\").IPAddress}}" "k3d-$cluster-server-0")"
+[ -n "$api_ip" ] || fail "could not find the address of the API server"
+# A name the API server's certificate does not carry, as a load balancer or a
+# DNS name in front of a cluster can be.
+api_name="kx-apiserver.test"
+
+docker run -d --name "$outside_hook" --network "$net" "$public_ref" python -c '
+import http.server
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        print("BODY", body.decode(), flush=True)
+        self.send_response(204)
+        self.end_headers()
+    def log_message(self, *args):
+        pass
+http.server.HTTPServer(("", 8080), Handler).serve_forever()
+' >/dev/null
+
+outside_reports=0
+check_outside() { # step name, API server URL, TLS server name, ok or refused
+  local step="$1" url="$2" server_name="$3" want="$4" log="$work/outside.log" hooks="$work/outside-hooks.log"
+  echo "--- checking: $step"
+  # The page's kubernetes block with this cluster's address, and what the test
+  # needs besides: a webhook it can read, one namespace, the login and the plan.
+  local kube="${out_config/https:\/\/kubernetes.example.com:6443/$url}"
+  [ "$kube" != "$out_config" ] || fail "the page's kubernetes block has no api_server to replace"
+  cat >"$repo/config.yml" <<EOF
+notify:
+  generic_webhook_url: "http://$outside_hook:8080/"
+  mode: "full"
+  notify_on_clean: true
+$kube
+  tls_server_name: "$server_name"
+  namespaces: [kx-app]
+registries:
+  - host: $registry
+    username: $user
+    password: "$password"
+remediation:
+  enabled: true
+EOF
+  chmod 600 "$repo/config.yml"
+
+  # The page's docker run, as another container on the cluster's network that
+  # resolves the extra name to the API server, with the image built here.
+  local cmd="$cmd_out_run"
+  cmd="$(replace "$cmd" '--name kestrelynx ' "--name $outside_name --network $net --add-host $api_name:$api_ip ")"
+  cmd="$(replace "$cmd" 'kestrelynx-state:' "$outside_name:")"
+  cmd="$(replace "$cmd" 'ghcr.io/kitsunetrail/kestrelynx:latest' "$image")"
+  cmd="$(replace "$cmd" $'\ndocker logs -f kestrelynx' '')"
+  docker rm -fv "$outside_name" >/dev/null 2>&1 || true
+  run "$cmd" >/dev/null
+
+  local waited=0
+  until docker logs "$outside_name" 2>&1 | grep -q 'msg="next scan scheduled"'; do
+    docker inspect -f '{{.State.Running}}' "$outside_name" | grep -q true || {
+      docker logs "$outside_name" >&2
+      fail "$step: KestreLynx stopped"
+    }
+    [ "$waited" -lt "$cycle_limit" ] || fail "$step: no scan cycle ended within ${cycle_limit}s"
+    sleep 5
+    waited=$((waited + 5))
+  done
+  docker logs "$outside_name" >"$log" 2>&1
+  docker logs "$outside_hook" 2>/dev/null | sed -n 's/^BODY //p' >"$hooks"
+
+  if grep -i 'forbidden' "$log"; then
+    fail "$step: the supplied permissions were not enough"
+  fi
+  # Outside a Pod there is no Pod of its own to wait for.
+  if grep 'did not show as running' "$log"; then
+    fail "$step: KestreLynx waited for a Pod of its own"
+  fi
+  case "$want" in
+    ok)
+      if grep 'scan cycle failed' "$log"; then
+        fail "$step: the scan cycle failed"
+      fi
+      grep -q "msg=\"scanned image\" ref=[^ ]*$public_ref " "$log" || fail "$step: the public image was not scanned"
+      grep -q "msg=\"scanned image\" ref=$private_ref content_id=$digest " "$log" || fail "$step: the private image was not scanned"
+      local count
+      count="$(wc -l <"$hooks")"
+      [ "$count" -gt "$outside_reports" ] || fail "$step: no report reached the webhook"
+      outside_reports="$count"
+      tail -n 1 "$hooks" | check_report "$step" ok plan
+      ;;
+    refused)
+      grep 'initial scan cycle failed' "$log" | grep -q 'x509' || {
+        cat "$log" >&2
+        fail "$step: the API server's certificate was not refused"
+      }
+      if grep -q 'msg="scanned image"' "$log"; then
+        fail "$step: images were scanned without a trusted connection"
+      fi
+      ;;
+  esac
+  echo "ok: $step"
+}
+
+check_outside "outside, by the API server's address: both images are scanned with the fix plan on" \
+  "https://$api_ip:6443" "" ok
+check_outside "outside, by a name its certificate does not carry: the connection is refused" \
+  "https://$api_name:6443" "" refused
+check_outside "outside, by that name with tls_server_name: both images are scanned" \
+  "https://$api_name:6443" "kubernetes" ok
 
 echo "passed"

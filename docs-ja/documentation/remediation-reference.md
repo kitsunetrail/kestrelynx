@@ -56,11 +56,11 @@ containerdで古いイメージが消えた場合は、コンテナを新しい�
 
 | 入力 | 対応範囲 |
 | --- | --- |
-| 編集箇所 | `services.<service>.image`に直接記述したイメージ参照 |
-| イメージ参照 | 稼働中のリポジトリとタグに一致し、変更箇所を特定できる文字列 |
+| 編集箇所 | `services.<service>.image`に直接記述したイメージ名 |
+| イメージ名 | 稼働中のリポジトリとタグに一致し、変更箇所を特定できる文字列 |
 | 固定タグ | 完全な版を指定するタグを、同じ系列の新しいパッチへ変更可能 |
-| 浮動タグ | 再pullの候補となり、同じタグの参照を書き換えるPRは作らない |
-| 変数・digest | 編集対象のイメージ参照では未対応 |
+| 浮動タグ | 再pullの候補となり、同じタグを使うイメージ名を書き換えるPRは作らない |
+| 変数・digest | 編集対象のイメージ名では未対応 |
 | YAMLのアンカー・エイリアス・マージキー | 編集箇所に関わる場合は未対応 |
 | ブロックスカラー・文字列以外の`image` | 未対応 |
 | `include`・対象サービスの`extends` | 自動編集では未対応 |
@@ -78,7 +78,7 @@ containerdで古いイメージが消えた場合は、コンテナを新しい�
 | 編集箇所 | 通常のコンテナと、`restartPolicy: Always`を持つネイティブsidecarの`image` |
 | 編集する文字列 | 宣言と稼働中のイメージに一致する明示的なタグの部分だけを書き換え、書式とコメントを保つ |
 | 重複キー | 編集の前後で全YAML文書を検査し、重複があれば拒否 |
-| digest・`$`変数・タグなし | 編集対象のイメージ参照では手動対応 |
+| digest・`$`変数・タグなし | 編集対象のイメージ名では手動対応 |
 | ブロックスカラー・単純な文字列以外の`image` | 手動対応 |
 | YAMLのアンカー・エイリアス・マージキー | 編集箇所への経路や、文書の識別に使う`metadata`などに関わる場合は手動対応 |
 | Fluxの`$imagepolicy` | 編集対象の`image`の行に印がある場合は手動対応 |
@@ -98,7 +98,7 @@ containerdで古いイメージが消えた場合は、コンテナを新しい�
 | ファイル | `kustomization.yaml`・`kustomization.yml`・`Kustomization`で、1つのYAML文書だけを含むファイル |
 | 対象の選択 | `kustomize.image`と`images[].name`が一致する項目を一意に選択 |
 | 編集する文字列 | 既存の文字列の`newTag`だけを書き換え、引用符・コメント・改行を保持 |
-| `newName` | 既存の値を維持し、得られるイメージ参照を宣言・稼働中の参照と照合するが、`newName`自体の変更は手動対応 |
+| `newName` | 既存の値を維持し、得られるイメージ名を宣言したイメージ名・稼働中のイメージ名と照合するが、`newName`自体の変更は手動対応 |
 | `newTag`の未設定・空文字列 | `kustomize_tag_not_set`で手動対応 |
 | 数値・文字列以外・明示的なYAMLタグ付きの値 | `kustomize_not_string`で手動対応し、数値として解釈されるタグは引用符で囲む |
 | ブロックスカラー・`$`を含む値 | `kustomize_block_scalar`・`kustomize_variable`で手動対応 |
@@ -109,13 +109,13 @@ containerdで古いイメージが消えた場合は、コンテナを新しい�
 | `imageTags`・`patches`・`replacements`・`components`・`helmCharts`・`helmGlobals` | 使用するファイルは`kustomize_unsupported_feature`で手動対応 |
 | `generators`・`transformers`・`vars`・`patchesStrategicMerge`・`patchesJson6902` | 使用するファイルは`kustomize_unsupported_feature`で手動対応 |
 | リモートの`resources`・`bases` | `kustomize_unsupported_feature`で手動対応 |
-| 別の`images`の項目による影響 | Kustomizeが`name`を正規表現として照合することを踏まえ、別の項目が対象の名前や変更前後の参照に作用する場合などは`kustomize_image_chained`で手動対応 |
+| 別の`images`の項目による影響 | Kustomizeが`name`を正規表現として照合することを踏まえ、別の項目が対象の名前や変更前後のイメージ名に作用する場合などは`kustomize_image_chained`で手動対応 |
 | 正規表現として不正な`name` | 対象以外も含む`images`の項目を検査し、`kustomize_invalid`で手動対応 |
 | Fluxの`$imagepolicy` | `newTag`の行に印がある場合は`kustomize_image_automation`で手動対応 |
 | `.argocd-source-*.yaml` | 同じディレクトリにArgo CD Image Updaterの書き戻しファイルがある場合は`image_updater_file`で手動対応 |
 
 ファイルが見つからない場合は`manifest_file_not_found`、編集できる種類のファイルでない場合は`manifest_file_unusable`を使います。
-ファイルから得る参照が宣言または稼働中の参照と異なる場合は`source_mismatch`になります。
+ファイルから得るイメージ名が宣言したイメージ名または稼働中のイメージ名と異なる場合は`source_mismatch`になります。
 
 集合全体の確認条件と通常のinit containerの扱いは[KustomizeのPR](remediation-logic.md#kustomize-prs)を参照してください。
 
@@ -128,7 +128,7 @@ registryを含むリポジトリとタグが、宣言したイメージと稼働
 | --- | --- |
 | ファイル | `.yaml`・`.yml`のvaluesファイルで、重複キーのない1つのYAML文書に対応 |
 | mapping形式 | `repository`と文字列の`tag`を持つmappingに対応し、`registry`は任意 |
-| 文字列形式 | `"repo:tag"`形式のイメージ参照に対応 |
+| 文字列形式 | `"repo:tag"`形式のイメージ名に対応 |
 | 対象の選択 | `helm_values.key`の経路で選び、値がない場合は`helm_key_missing`で手動対応 |
 | 編集内容 | タグ部分だけを書き換え、既存の引用符とコメントを保つ |
 | 新しいタグの引用符 | mapping形式の元のタグが引用符なしで、新しいタグが`1.10`・`on`などHelmで文字列にならない値の場合は、二重引用符で囲み、PR本文に記載 |
@@ -148,19 +148,19 @@ registryを含むリポジトリとタグが、宣言したイメージと稼働
 | `.argocd-source-*.yaml` | 同じディレクトリにArgo CD Image Updaterの書き戻しファイルがある場合は`image_updater_file`で手動対応 |
 
 ファイルが見つからない場合は`manifest_file_not_found`、編集できる種類のファイルでない場合は`manifest_file_unusable`を使います。
-ファイルから得る参照が宣言または稼働中の参照と異なる場合は`source_mismatch`になります。
+ファイルから得るイメージ名が宣言したイメージ名または稼働中のイメージ名と異なる場合は`source_mismatch`になります。
 
 集合全体の確認条件、通常のinit containerの扱い、最終的な値についての前提は[HelmのvaluesのPR](remediation-logic.md#helm-values-prs)を参照してください。
 ### Dockerfileの形式 {#dockerfile-formats}
 
 | 入力 | 対応範囲 |
 | --- | --- |
-| `FROM`の固定タグ | 変数やdigestを使わず、タグの位置を特定できる参照を編集可能 |
+| `FROM`の固定タグ | 変数やdigestを使わず、タグの位置を特定できるイメージ名を編集可能 |
 | `FROM`の浮動タグ | ベースの確認対象となるが、タグ更新PRの対象外 |
 | ビルド`target` | ステージ名を指定可能で、省略時は最後のステージが対象 |
 | 前のステージの継承 | 外部のベースイメージまでたどれる構成に対応 |
 | `--platform` | 外部ベースを指定する`FROM`の静的な指定に対応し、継承途中の`FROM`での指定は未対応 |
-| `FROM`内の変数・`scratch`・digest参照 | 自動編集では未対応 |
+| `FROM`内の変数・`scratch`・digestを含むイメージ名 | 自動編集では未対応 |
 | 標準以外の構文フロントエンド・`escape`ディレクティブ | 自動編集では未対応 |
 | 継承元ステージやベースイメージの`ONBUILD` | 自動更新では未対応 |
 | Composeのbuild context | リポジトリ内の静的なパスに対応 |
@@ -645,13 +645,13 @@ PR記録の`state`には、次の値があります。
 | `introduced_findings` | 候補で新たな所見が入る | [比較条件](remediation-logic.md#comparison-conditions) |
 | `introduced_kev` | 候補でKEV掲載の脆弱性が新たに入る | [比較条件](remediation-logic.md#comparison-conditions) |
 | `adopted` | 候補を採用した | [比較条件](remediation-logic.md#comparison-conditions) |
-| `declared_ref_mismatch` | 同じ稼働イメージ参照を使うコンテナのいずれかで、Podのspecのイメージ参照と稼働中の参照が一致しないため`not_comparable`になる | [Kubernetesのイメージ参照と再取得](remediation-logic.md#kubernetes-image-references) |
-| `declared_ref_unavailable` | 同じ稼働イメージ参照を使うコンテナのいずれかで、Podのspecのイメージ参照を読み取れないため`not_comparable`になる | [Kubernetesのイメージ参照と再取得](remediation-logic.md#kubernetes-image-references) |
+| `declared_ref_mismatch` | 稼働中のイメージ名が同じコンテナのいずれかで、Podのspecのイメージ名と稼働中のイメージ名が一致しないため`not_comparable`になる | [Kubernetesのイメージ名と再取得](remediation-logic.md#kubernetes-image-references) |
+| `declared_ref_unavailable` | 稼働中のイメージ名が同じコンテナのいずれかで、Podのspecのイメージ名を読み取れないため`not_comparable`になる | [Kubernetesのイメージ名と再取得](remediation-logic.md#kubernetes-image-references) |
 | `digest_only` | タグがなくdigestだけで指定されている | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
 | `tag_and_digest` | タグとdigestの両方で指定されている | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
 | `prerelease` | タグがプレリリース版の形式である | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `bare_digest` | digestだけの参照で、リポジトリが分からない | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `unparsable` | イメージ参照を解釈できない | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
+| `bare_digest` | digestだけで指定されたイメージ名で、リポジトリが分からない | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
+| `unparsable` | イメージ名を解釈できない | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
 | `unsupported_tag_format` | 対応していない形式のタグである | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
 | `base_layers_mismatch` | タグが指すベースのレイヤーが、稼働イメージの先頭部分と一致しない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
 | `base_update_not_deployed` | ベース更新のPRはマージ済みだが、稼働イメージはPR作成時のまま | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
@@ -662,8 +662,8 @@ PR記録の`state`には、次の値があります。
 | `floating_base_unconfirmed` | 浮動タグの`FROM`が現在指すベースのレイヤーが、稼働イメージの先頭のレイヤーと一致しない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
 | `dockerfile_set_not_adopted` | 同じDockerfileを使うWorkloadのすべてで、同じ候補を採用できなかった（個々のWorkloadの理由も確認する） | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
 | `compose_set_not_adopted` | 同じイメージを使うサービスのすべてで、同じ候補を採用できなかった（個々のサービスの理由も確認する） | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `instances_missing` | 対応付けたコンテナの稼働インスタンスがない、稼働中の参照を取得できない、または更新対象に計画の項目がないインスタンスがある | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
-| `mixed_references` | 稼働インスタンスの間で、宣言または稼働中の参照が一致しない | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
+| `instances_missing` | 対応付けたコンテナの稼働インスタンスがない、稼働中のイメージ名を取得できない、または更新対象に計画の項目がないインスタンスがある | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
+| `mixed_references` | 稼働インスタンスの間で、宣言したイメージ名または稼働中のイメージ名が一致しない | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
 | `kubernetes_set_not_adopted` | 同じファイルで同じイメージを更新するコンテナの間で、採用した候補が一致しない | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
 
 ### ソースの理由 {#source-reasons}
@@ -723,7 +723,7 @@ PR記録の`state`には、次の値があります。
 | `source_object_missing` | マニフェストにワークロードのオブジェクトの文書がない | [マニフェストの形式](#manifest-formats) |
 | `source_object_ambiguous` | マニフェストにワークロードのオブジェクトの文書が複数ある | [マニフェストの形式](#manifest-formats) |
 | `source_container_missing` | オブジェクトに、その名前の編集できるコンテナがない | [マニフェストの形式](#manifest-formats) |
-| `source_mismatch` | ファイルから得るイメージ参照が宣言または稼働中のイメージと異なる | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs)・[HelmのvaluesのPR](remediation-logic.md#helm-values-prs) |
+| `source_mismatch` | ファイルから得るイメージ名が宣言したイメージ名または稼働中のイメージ名と異なる | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs)・[HelmのvaluesのPR](remediation-logic.md#helm-values-prs) |
 | `mapping_conflict` | ファイルの2つ以上の対応付けが、同じ文書の同じコンテナを指している | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
 | `kustomize_invalid` | kustomizationが1つの正しいYAML文書でない、キーが重複している、または編集後の検査に通らない | [Kustomizeの形式](#kustomize-formats) |
 | `kustomize_image_missing` | kustomizationに対応付けた名前の`images`の項目がない | [Kustomizeの形式](#kustomize-formats) |
@@ -751,7 +751,7 @@ PR記録の`state`には、次の値があります。
 | `helm_anchor_or_alias` | キーまでの経路のノードにアンカーまたはエイリアスがある | [Helmのvaluesの形式](#helm-values-formats) |
 | `helm_merge_key` | キーまでの経路のマッピングにマージキーがある | [Helmのvaluesの形式](#helm-values-formats) |
 | `helm_image_automation` | イメージの行にFlux image automationの目印がある | [Helmのvaluesの形式](#helm-values-formats) |
-| `undeclared_affected_workload` | 列挙されていないコンテナがKustomizeの`images`の項目またはHelmのvaluesのキーと同じイメージ参照を宣言しており、編集の影響を受けうる | [KustomizeのPR](remediation-logic.md#kustomize-prs)・[HelmのvaluesのPR](remediation-logic.md#helm-values-prs) |
+| `undeclared_affected_workload` | 列挙されていないコンテナがKustomizeの`images`の項目またはHelmのvaluesのキーと同じイメージ名を宣言しており、編集の影響を受けうる | [KustomizeのPR](remediation-logic.md#kustomize-prs)・[HelmのvaluesのPR](remediation-logic.md#helm-values-prs) |
 | `init_container_unverified` | 列挙したinit containerが、稼働コンテナと同じイメージを動かしたことを確認できない | [KustomizeのPR](remediation-logic.md#kustomize-prs) |
 | `dependency_files_not_found` | 依存ファイルが見つからない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
 | `ambiguous_dependency_files` | 依存ファイルの組み合わせが複数あり、一意に決められない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |

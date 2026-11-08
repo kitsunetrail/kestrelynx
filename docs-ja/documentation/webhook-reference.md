@@ -26,7 +26,7 @@ Slackと併用できますが、DiscordやTeams専用のメッセージ形式に
 | `generated_at` | string | RFC 3339形式のスキャン時刻 |
 | `environment` | object | [環境](#environment) |
 | `summary` | object | [サマリー](#summary) |
-| `eosl_images` | stringの配列または`null` | EOLベースイメージの参照一覧で、該当なしは`null`になる場合がある |
+| `eosl_images` | stringの配列または`null` | EOLベースイメージ名一覧で、該当なしは`null`になる場合がある |
 | `actionable` | objectの配列 | `fixed`の[イメージ](#images)で、該当なしは`[]` |
 | `watch` | objectの配列 | `affected`へ正規化したイメージで、該当なしは`[]` |
 | `wont_fix` | objectの配列 | `will_not_fix`のイメージで、該当なしは`[]` |
@@ -52,7 +52,7 @@ Slackと併用できますが、DiscordやTeams専用のメッセージ形式に
 
 | `summary`のフィールド名 | 型 | 意味・省略条件 |
 | --- | --- | --- |
-| `images_total` | integer | スキャン失敗を含む、一意なイメージ参照と実体の組み合わせ数 |
+| `images_total` | integer | スキャン失敗を含む、一意なイメージ名とdigestの組み合わせ数 |
 | `images_affected` | integer | 対象脆弱性またはEOLベースOSがあるイメージ数 |
 | `priority_counts` | object | 優先度別のパッケージグループ件数で、トリアージ無効時は省略 |
 | `priority_counts.act_now` | integer | Act nowの件数 |
@@ -74,14 +74,14 @@ Node.jsまたはPython本体を照合できなかったイメージは、対応�
 
 | `runtime_unchecked[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `image` | string | セキュリティ情報を利用できず本体を照合しなかったイメージ参照 |
+| `image` | string | セキュリティ情報を利用できず本体を照合しなかったイメージ名 |
 | `package` | string | 未照合の本体のパッケージ名で、`Node.js`または`Python runtime` |
 
 ### スキャン失敗 {#scan-errors}
 
 | `scan_errors[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `image` | string | スキャンに失敗したイメージ参照 |
+| `image` | string | スキャンに失敗したイメージ名 |
 | `error` | string | エラー内容 |
 | `cause` | string | 原因 |
 | `registry` | string | 取得元のレジストリのホストで、分からなければ省略 |
@@ -103,25 +103,25 @@ Node.jsまたはPython本体を照合できなかったイメージは、対応�
 
 ## イメージのフィールド {#images}
 
-`actionable`、`watch`、`wont_fix`、`eol_packages`の各要素は、修正状態ごとのイメージ参照と実体を表します。
+`actionable`、`watch`、`wont_fix`、`eol_packages`の各要素は、修正状態ごとのイメージ名とdigestを表します。
 
 ### イメージの識別情報 {#image-identity}
 
 | フィールド名 | 型 | 意味・省略条件 |
 | --- | --- | --- |
-| `image` | string | 表示用のイメージ参照 |
+| `image` | string | 表示用のイメージ名 |
 | `severity_counts` | object | 深刻度別の整数件数で、`CRITICAL`・`HIGH`は常に出力し、`HIGH`はHIGHのみを数える |
 | `findings` | objectの配列 | このイメージと修正状態に属する[パッケージグループ](#package-fields) |
-| `containers` | objectの配列 | この実体に一致する[コンテナ](#containers)で、該当なしは`[]` |
-| `content_id` | string | 実体を確認できたDockerのconfig digest指定スキャンの`sha256:<hex>`で、それ以外は省略 |
-| `registry_digests` | stringの配列 | 成功して実体を確認できた結果のregistry digestを、同じ参照について集めた一覧で、情報なしは`[]` |
-| `identity_resolved` | boolean | この要素のスキャンで稼働中イメージの実体を確認できた場合は`true` |
+| `containers` | objectの配列 | このイメージとdigestが一致する[コンテナ](#containers)で、該当なしは`[]` |
+| `content_id` | string | digestを確認できたDockerのconfig digest指定スキャンの`sha256:<hex>`で、それ以外は省略 |
+| `registry_digests` | stringの配列 | 成功してdigestを確認できた結果のregistry digestを、同じイメージ名について集めた一覧で、情報なしは`[]` |
+| `identity_resolved` | boolean | この要素のスキャンで稼働中イメージのdigestを確認できた場合は`true` |
 | `scan_target_kind` | string | `content_id`、`registry_digest`、`reference`のいずれか |
 | `severity_counts.MEDIUM` | integer | MEDIUM件数で、`0`なら省略 |
 | `severity_counts.LOW` | integer | LOW件数で、`0`なら省略 |
 | `severity_counts.UNKNOWN` | integer | UNKNOWN件数（認識できない深刻度を含む）で、`0`なら省略 |
 
-`registry_digests`は同じ参照全体の情報ですが、`identity_resolved`と`scan_target_kind`は各要素の情報です。
+`registry_digests`は同じイメージ名について集めた情報ですが、`identity_resolved`と`scan_target_kind`は各要素の情報です。
 
 ### コンテナ {#containers}
 
@@ -130,7 +130,7 @@ Node.jsまたはPython本体を照合できなかったイメージは、対応�
 | `name` | string | Dockerでは先頭のスラッシュとリンク別名を除いた名前、Kubernetesでは`<namespace>/<pod>/<container>` |
 | `workload` | object | [Workloadの対応情報](#workloads)で、所属が不明でも出力 |
 
-同じ参照が複数の実体を指す場合も、各要素にはその実体に一致するコンテナだけを含めます。
+同じイメージ名に複数のdigestがある場合も、各要素にはその要素とdigestが一致するコンテナだけを含めます。
 
 ### Workload {#workloads}
 
@@ -324,10 +324,10 @@ Sensorの状態の意味と観測の限界は、[稼働時の使用状況](runti
 | --- | --- | --- |
 | `new` | objectの配列 | [通常のパッケージの変化](#new-fields)で、該当なしは`[]` |
 | `resolved` | objectの配列 | [パッケージの解消](#resolved-fields)で、該当なしは`[]` |
-| `replaced` | objectの配列 | [イメージの実体変更](#image-replacement-fields)で、該当なしは`[]` |
-| `reference_changes` | objectの配列 | [イメージ参照の更新](#reference-change-fields)で、該当なしは省略 |
+| `replaced` | objectの配列 | [digestの変更](#image-replacement-fields)で、該当なしは`[]` |
+| `reference_changes` | objectの配列 | [イメージ名の更新](#reference-change-fields)で、該当なしは省略 |
 | `new_eosl` | stringの配列 | [新規EOLベースイメージ](#eol-base-fields)で、該当なしは`[]` |
-| `resolved_eosl` | stringの配列 | [EOLとして記録されなくなった参照](#eol-base-fields)で、該当なしは`[]` |
+| `resolved_eosl` | stringの配列 | [EOLとして記録されなくなったイメージ名](#eol-base-fields)で、該当なしは`[]` |
 | `new_eol_packages` | objectの配列 | [EOLパッケージの変化](#eol-change-fields)で、該当なしは`[]` |
 | `resolved_eol_packages` | objectの配列 | [EOLパッケージの解除](#eol-resolved-fields)で、該当なしは`[]` |
 | `oldest_open_days` | integer | [未解決の最長期間](#oldest-open-days)で、`0`でも出力 |
@@ -336,7 +336,7 @@ Sensorの状態の意味と観測の限界は、[稼働時の使用状況](runti
 
 | `diff.new[]`のフィールド名 | 型 | 意味・省略条件 |
 | --- | --- | --- |
-| `image` | string | イメージ参照 |
+| `image` | string | イメージ名 |
 | `package` | string | パッケージ名 |
 | `kind` | string | `new`、`escalated`、`new_cves`、`now_fixable`、`unmuted`のいずれか |
 | `ecosystems` | stringの配列 | 変化にまとめたグループのエコシステムを重複なく並べ替えた一覧で、不明な種類は`""`として含む |
@@ -359,29 +359,29 @@ Sensorの状態の意味と観測の限界は、[稼働時の使用状況](runti
 
 | `diff.resolved[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `image` | string | イメージ参照 |
+| `image` | string | イメージ名 |
 | `package` | string | 通常側の検出結果からなくなったパッケージ名 |
 
 解消の意味は、[解消の判定](diff-logic.md#resolved-findings)を参照してください。
 
-### イメージの実体変更 {#image-replacement-fields}
+### digestの変更 {#image-replacement-fields}
 
 | `diff.replaced[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `ref` | string | イメージ参照 |
+| `ref` | string | イメージ名 |
 | `prev_content_ids` | stringの配列 | 並べ替え済みの前回の確認済みcontent-ID集合 |
 | `content_ids` | stringの配列 | 並べ替え済みの今回の確認済みcontent-ID集合 |
 
 配列は`null`にせず、空の場合は`[]`を出力します。
 
-### イメージ参照の更新 {#reference-change-fields}
+### イメージ名の更新 {#reference-change-fields}
 
 | `diff.reference_changes[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `repository` | string | 新参照からタグとdigestを除いたリポジトリで、レジストリのポートは保持 |
-| `previous_ref` | string | 省略していない旧イメージ参照 |
-| `ref` | string | 省略していない新イメージ参照 |
-| `workloads` | stringの配列 | 旧参照と新参照に共通するWorkloadキーの並べ替え済み一覧で、空なら`[]` |
+| `repository` | string | 更新後のイメージ名からタグとdigestを除いたリポジトリで、レジストリのポートは保持 |
+| `previous_ref` | string | 省略していない更新前のイメージ名 |
+| `ref` | string | 省略していない更新後のイメージ名 |
+| `workloads` | stringの配列 | 更新前のイメージ名と更新後のイメージ名に共通するWorkloadキーの並べ替え済み一覧で、空なら`[]` |
 
 | 対象 | Workloadキーの形式 |
 | --- | --- |
@@ -389,14 +389,14 @@ Sensorの状態の意味と観測の限界は、[稼働時の使用状況](runti
 | Kubernetes | `<kind>/<namespace>/<name>/<container>` |
 | 所属Workloadが不明な単独Dockerコンテナ | `container/<name>` |
 
-履歴を引き継ぐ条件は、[イメージ参照の更新](diff-logic.md#reference-changes)を参照してください。
+履歴を引き継ぐ条件は、[イメージ名の更新](diff-logic.md#reference-changes)を参照してください。
 
 ### ベースOSのEOL変化 {#eol-base-fields}
 
 | フィールド名 | 要素の型 | 意味 |
 | --- | --- | --- |
-| `diff.new_eosl[]` | string | 新たにEOLとして記録されたベースイメージの参照 |
-| `diff.resolved_eosl[]` | string | EOLとして記録されなくなったイメージ参照 |
+| `diff.new_eosl[]` | string | 新たにEOLとして記録されたベースイメージ名 |
+| `diff.resolved_eosl[]` | string | EOLとして記録されなくなったイメージ名 |
 
 ### EOLパッケージの変化 {#eol-change-fields}
 
@@ -404,7 +404,7 @@ Slackで畳み込むEOLパッケージの変化も含めます。
 
 | `diff.new_eol_packages[]`のフィールド名 | 型 | 意味・省略条件 |
 | --- | --- | --- |
-| `image` | string | イメージ参照 |
+| `image` | string | イメージ名 |
 | `package` | string | パッケージ名 |
 | `kind` | string | `eol_new`、`eol_new_cves`、`eol_escalated`のいずれか |
 | `ecosystems` | stringの配列 | 変化にまとめたグループのエコシステムを重複なく並べ替えた一覧で、不明な種類は`""`として含む |
@@ -425,9 +425,9 @@ Slackで畳み込むEOLパッケージの変化も含めます。
 
 | `diff.resolved_eol_packages[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
-| `image` | string | イメージ参照 |
+| `image` | string | イメージ名 |
 | `package` | string | EOL区分からなくなったパッケージ名 |
-| `still_open` | boolean | 同じ参照とパッケージに通常側の検出結果が残る場合は`true`で、`false`でも出力 |
+| `still_open` | boolean | 同じイメージ名とパッケージに通常側の検出結果が残る場合は`true`で、`false`でも出力 |
 
 ### 未解決の最長期間 {#oldest-open-days}
 
@@ -447,7 +447,7 @@ Slack側の定義は、[未解決の経過日数](slack-display.md#unresolved-ag
 
 ## 互換性 {#compatibility}
 
-エコシステム、稼働時の使用状況、EOL、参照更新の情報は、既存のフィールドと修正状態別の構造を維持して追加しています。
+エコシステム、稼働時の使用状況、EOL、イメージ名の更新に関する情報は、既存のフィールドと修正状態別の構造を維持して追加しています。
 
 受信側では、未知の追加フィールドを許容し、各表の省略条件に従って処理してください。
 省略、`null`、`[]`、`""`は、それぞれ別の値として扱います。

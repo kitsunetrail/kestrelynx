@@ -7,7 +7,7 @@
 
 ### 表示例 {#slack-example}
 
-次は表示例です。Slackではイメージ参照が太字になり、PR番号はリンクになります。
+次は表示例です。Slackではイメージ名が太字になり、PR番号はリンクになります。
 
 ```text
 🔧 修正計画
@@ -30,7 +30,7 @@ Pull Request: #13 (オープン中)
 | 表示 | 意味 |
 | --- | --- |
 | イメージ | 所見の元になった稼働イメージ |
-| サービス | イメージ参照で見出しを作れない場合などに示す対象サービス |
+| サービス | イメージ名で見出しを作れない場合などに示す対象サービス |
 | 修正するファイル | 対応付けたリポジトリと変更対象のファイル |
 | Pull Request | PRへのリンクと、今回作成・オープン中・マージ済み・未マージでクローズの状態 |
 | 更新 | PRが提案するイメージタグやパッケージの変更 |
@@ -709,12 +709,12 @@ Slackとメールの表示は、次のように分かれます。
 ```
 
 - 消える見込みの所見
-  - `gone`に所見があるか、`rebuild_runtimes`に消える見込みの所見がある
+    - `gone`に所見があるか、`rebuild_runtimes`に消える見込みの所見がある
 - 「再ビルド」の行の下に表示する詳細
-  - `gone`・`remaining`・`not_in_base`・`only_in_base`のパッケージ一覧
-  - 残る所見だけの場合も含む、ランタイムの見込み
+    - `gone`・`remaining`・`not_in_base`・`only_in_base`のパッケージ一覧
+    - 残る所見だけの場合も含む、ランタイムの見込み
 - 要約の件数
-  - 行を出さない場合も「再ビルド」に数えない
+    - 行を出さない場合も「再ビルド」に数えない
 
 Slackとメールに表示しない場合も、結果はwebhookの[`rebuild_check`](webhook-remediation-reference.md#remediation-dockerfile-fields)で確認できます。
 
@@ -728,15 +728,15 @@ Slackとメールに表示しない場合も、結果はwebhookの[`rebuild_chec
 ```
 
 - Slackのパッケージ一覧
-  - パッケージ名と版を表示し、CVEのIDは出さない
-  - グローバルな`node_modules`の`not_in_base`は所有パッケージごとにまとめる
-  - 1行に表示するのは10件までとし、超える分は件数にする
+    - パッケージ名と版を表示し、CVEのIDは出さない
+    - グローバルな`node_modules`の`not_in_base`は所有パッケージごとにまとめる
+    - 1行に表示するのは10件までとし、超える分は件数にする
 - 見込みの制約
-  - Dockerfileの`RUN`の効果は判定しないため、`apk upgrade`などで「残る」の所見が消えることがある
-  - Dockerfileが古い版を同じ場所に入れ直すと、「消える見込み」の所見も残ることがある
-  - 「現在のベースにない」は、ベースから消えたものとDockerfileで足したものを区別できない
-  - `only_in_base`には、Dockerfileの手順で完成イメージから消す所見も含む
-  - `final_image_verified`は`false`のままとする
+    - Dockerfileの`RUN`の効果は判定しないため、`apk upgrade`などで「残る」の所見が消えることがある
+    - Dockerfileが古い版を同じ場所に入れ直すと、「消える見込み」の所見も残ることがある
+    - 「現在のベースにない」は、ベースから消えたものとDockerfileで足したものを区別できない
+    - `only_in_base`には、Dockerfileの手順で完成イメージから消す所見も含む
+    - `final_image_verified`は`false`のままとする
 
 いずれも、再ビルド後に実際に入る版や、配置後の稼働イメージでの解消を確認した結果ではありません。
 判定の詳細は[直接依存の版指定](remediation-logic.md#direct-dependencies)、[ベースレイヤーの照合](remediation-logic.md#base-layer-matching)、[Goの標準ライブラリの再ビルド案内](remediation-logic.md#go-stdlib-rebuild)を参照してください。

@@ -19,13 +19,13 @@
 | `container/<名前>`の項目がない | `docker ps`の`NAMES`と対応付けが一致し、一覧取得時に稼働していたか確認し、改名・作り直し後は次のサイクルの結果を確認する | [docker runのコンテナ](remediation-reference.md#docker-run-containers) |
 | `container/<名前>`がComposeのコンテナを指している | 同じ状態が続く間は1回だけ出るログの警告を確認し、示された`compose/<project>/<service>`に変更する | [Workloadの確認](remediation-setup.md#identify-workload) |
 | 同じタグでビルドし直した後、古いコンテナの項目が出ない | containerdのイメージストアで古いイメージが消えていないか確認し、コンテナを新しいイメージで作り直す | [docker runのコンテナ](remediation-reference.md#docker-run-containers) |
-| 稼働イメージとスキャンしたイメージの実体が一致しない | 計画に項目が出ないことがあるため、ログのスキャン失敗と対象のイメージIDを確認する | [ソースの確認](remediation-logic.md#source-verification) |
+| 稼働イメージとスキャンしたイメージのdigestが一致しない | 計画に項目が出ないことがあるため、ログのスキャン失敗と対象のイメージIDを確認する | [ソースの確認](remediation-logic.md#source-verification) |
 | 計画の記録はあるが通知がない | 通知先、送信条件、配信失敗のログを確認する | [通知を送る条件](notification-conditions.md#notification-conditions)・[修正計画の再送](notification-conditions.md#remediation-redelivery) |
 | ソースを取得できない、対象ファイルが見つからない | Composeラベル、Composeを使わないコンテナの名前、またはKubernetesのワークロードキー、対応付け、ベースブランチ、パス、GitHubのアクセスを確認する | [ソースの対応付け](configuration.md#remediation-mappings)・[GitHubアクセス](configuration.md#remediation-github) |
 | 所有者ごとのtokenを設定していて、名前変更・移管したリポジトリの読み取りに失敗する | 所有者を含まないリポジトリIDのURLへの転送ではtokenを選べず転送を拒否するため、対応付けの`repository`を現在の`owner/name`に直す | [GitHubアクセス](configuration.md#remediation-github) |
 | 非公開イメージへアクセスできない | レジストリのホスト、認証情報、取得権限、token serviceの許可を確認する | [イメージレジストリの認証](configuration.md#registries) |
 | 新しいイメージ候補がない | 通知の理由から、新しいタグ・内容・改善の有無を確認する | [イメージ候補の理由](remediation-reference.md#image-reasons) |
-| Kubernetesの項目が`declared_ref_mismatch`または`declared_ref_unavailable`になる | 同じ稼働イメージ参照を使う各コンテナのPodのspecと稼働中の参照を確認する | [Kubernetesのイメージ参照と再取得](remediation-logic.md#kubernetes-image-references) |
+| Kubernetesの項目が`declared_ref_mismatch`または`declared_ref_unavailable`になる | 稼働中のイメージ名が同じ各コンテナのPodのspecと稼働中のイメージ名を確認する | [Kubernetesのイメージ名と再取得](remediation-logic.md#kubernetes-image-references) |
 | タグ一覧の取得が途中で止まる | 取得失敗のログと、タグ取得・レジストリ要求・処理時間の上限を確認する | [タグ一覧の探索](remediation-logic.md#tag-discovery)・[処理の上限](configuration.md#remediation-limits) |
 | ローカルビルドとして扱われる | Composeの`build`と、Dockerfile・依存ファイルの対応付けを確認する | [ローカルビルドの除外](remediation-logic.md#local-builds) |
 | ベースイメージを確認できない | Dockerfileの対象ステージ、使用したベース、稼働イメージとの照合結果を確認する | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching)・[イメージ候補の理由](remediation-reference.md#image-reasons) |
@@ -57,7 +57,7 @@
 | --- | --- | --- |
 | 候補はあるがPRがない | PR作成の有効化、ソースの対応付け、対象の編集可能な形式を確認する | [基本設定](configuration.md#remediation-basics)・[ソースの対応付け](configuration.md#remediation-mappings)・[対応する入力形式](remediation-reference.md#supported-inputs) |
 | KustomizeまたはHelmのvaluesの更新が`undeclared_affected_workload`になる | 詳細に示されたコンテナへの作用を確認し、作用先なら`affects`へ追加して同じ項目・キーを指すすべての対応付けの集合をそろえるか、その項目・キーの作用範囲を変更する | [KustomizeのPR](remediation-logic.md#kustomize-prs)・[HelmのvaluesのPR](remediation-logic.md#helm-values-prs) |
-| KustomizeまたはHelmのvaluesの更新が`init_container_unverified`になる | 列挙した通常のinit containerのPod statusと、同じPodの集合内の稼働コンテナについて、イメージの中身・参照・スキャン結果を確認する | [KustomizeのPR](remediation-logic.md#kustomize-prs)・[HelmのvaluesのPR](remediation-logic.md#helm-values-prs) |
+| KustomizeまたはHelmのvaluesの更新が`init_container_unverified`になる | 列挙した通常のinit containerのPod statusと、同じPodの集合内の稼働コンテナについて、イメージの中身・イメージ名・スキャン結果を確認する | [KustomizeのPR](remediation-logic.md#kustomize-prs)・[HelmのvaluesのPR](remediation-logic.md#helm-values-prs) |
 | Kustomizeの更新が`kustomize_*`の理由で手動対応になる | 対象の`images[].name`、文字列の`newTag`、未対応の構文や機能、ほかの`images`の項目による影響、自動更新の印を確認する | [Kustomizeの形式](remediation-reference.md#kustomize-formats) |
 | Helmのvaluesの更新が`helm_*`の理由で手動対応になる | 指定したキー、イメージの形式、明示した文字列のタグ、YAMLのキーと構文、自動更新の印を理由コードに沿って確認する | [Helmのvaluesの形式](remediation-reference.md#helm-values-formats) |
 | HelmのvaluesのPRで最終的な値の確認を求められる | Flux HelmReleaseの`spec.values`、Argo CDの`parameters`・`valuesObject`・`valuesFrom`、CIの`--set`、ほかのvaluesファイルによる上書きと、指定したキーの作用先を確認する | [HelmのvaluesのPR設定](remediation-setup.md#helm-values-pull-requests) |

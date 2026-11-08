@@ -5,8 +5,8 @@
 On each scan, KestreLynx checks running containers and updates findings and priorities.
 
 1. Discover target containers on the Docker host or Kubernetes cluster
-2. Combine scan targets by image reference and identity
-3. Scan each target with Trivy and verify that the result matches the requested identity
+2. Combine scan targets by image name and digest
+3. Scan each target with Trivy and verify that the result matches the requested digest
 4. Group findings by package and fix status
 5. If triage is enabled, assign priorities using exploitation intelligence and severity
 
@@ -21,7 +21,8 @@ One KestreLynx instance monitors one Docker host or one Kubernetes cluster.
 
 On Docker, scans cover images used by running containers, including containers managed by Compose.
 
-- Stopped containers and images not used by running containers are excluded
+- Stopped containers are excluded
+- Images present on the host are not scanned unless at least one running container uses them, including old versions left after updates, images that have only been pulled, and images used only by stopped containers
 - Work containers that KestreLynx uses for dependency updates in remediation plans are excluded
 
 ### Kubernetes targets {#kubernetes-targets}
@@ -37,67 +38,116 @@ On Kubernetes, targets are selected by each container's running state.
 
 See [Configuration](configuration.md) for selecting target namespaces.
 
-### Image identity {#image-identity}
+### Image names and digests {#image-identity}
 
-An image reference is a name such as `web:1.0`.
-An image identity identifies the actual image content running under that reference.
+An image name is a name specified when starting a container or in a manifest, such as `web:1.0` or `nginx@sha256:...`.
+It means the name as written, including its tag or digest.
 
-| Environment | Information used to identify image content |
+Because the content behind the same image name can change, a digest distinguishes the image content currently running.
+KestreLynx uses the following information for each environment.
+
+| Environment | Digest used to distinguish images |
 | --- | --- |
 | Docker | Config digest reported by Docker |
-| Kubernetes | Registry digest and the running node's OS and architecture |
+| Kubernetes | Combination of the registry digest and the running node's OS and architecture |
 
-Identical reference-and-identity pairs are combined into one entry.
-Different identities under the same reference remain separate, while images whose identities are unknown are grouped by reference.
+Images with the same contents (the same digest) are scanned only once, regardless of how many containers use them or which image names they use.
+
+In the following example, the images used by containers a–d require two scans in total.
+The digests are shortened example values.
+
+| Container | Image name | Digest | Scan |
+| --- | --- | --- | --- |
+| a | `web:1.0` | `sha256:aaa…` | Scan the image |
+| b | `web:1.0` | `sha256:aaa…` | Use a's result (same image name and contents) |
+| c | `web:latest` | `sha256:aaa…` | Use a's result (different image name, same contents) |
+| d | `web:1.0` | `sha256:bbb…` | Scan separately (started after the tag was updated, so the contents differ) |
+
+However, when the digest is unknown, KestreLynx cannot determine whether the contents are the same, so it scans once per image name.
+This occurs on Kubernetes when the node does not report a registry digest (for example, for images loaded directly onto the node), or when the running node's OS or architecture is unknown.
 
 ## Scan result verification {#scan-verification}
 
-Before processing results, KestreLynx checks that discovery returned a complete list and verifies the identity of the scanned image.
+Before processing results, KestreLynx checks that discovery returned a complete list and verifies the digest of the scanned image.
 
 ### Container discovery failures {#discovery-failures}
 
 If container discovery fails, the cycle ends without changing saved history.
-During continuous operation, discovery is retried on the next scheduled cycle.
+Discovery is not retried immediately; it is attempted again at the next scan scheduled according to `schedule.daily_at`, with a default of once a day.
 
 On Kubernetes, scanning does not proceed with partial results if only some of the required lists were retrieved.
 This prevents containers missing from the returned lists from being treated as stopped.
 
-### Image identity verification {#identity-verification}
+### Image digest verification {#identity-verification}
 
-When an image's identity is known, the scan targets that identity.
+When an image's digest can be retrieved, the scan targets that digest.
 
 | Environment | Scan target | Result verification |
 | --- | --- | --- |
 | Docker | Local image selected by config digest | Matches the requested config digest |
 | Kubernetes | Image selected by registry digest and platform | Matches the requested digest, OS, and architecture |
 
-A result that cannot be verified against the requested identity is treated as a scan failure.
-When the identity is unknown, the image is scanned by reference.
+A result that cannot be verified against the requested digest is treated as a scan failure.
+When the digest cannot be retrieved, the image is scanned by image name.
 
-A reference scan alone cannot confirm that the running image content was scanned.
-Slack does not indicate whether an image is scanned by reference; this information is available in `identity_resolved` and `scan_target_kind` under the webhook's [Image identity](webhook-reference.md#image-identity).
+A scan by image name alone cannot confirm a match with the running image's digest.
+Slack does not indicate whether an image is scanned by image name; this information is available in `identity_resolved` and `scan_target_kind` under the webhook's [Digest information](webhook-reference.md#image-identity).
 
 ### Handling scan failures {#scan-failures}
 
 Failure to scan one target does not stop the remaining scans.
-For references with saved history, previous findings are retained according to the following rules.
+For image names with saved history, previous findings are retained according to the following rules.
 
 | Current state | Handling of previous findings |
 | --- | --- |
-| All scans for the same reference fail | Retain previous findings |
-| Some scans for the same reference fail | Incorporate successful results and retain previous findings that may belong to failed identities |
-| A Kubernetes reference scan succeeds but the identity remains unconfirmed | Retain findings using the same rules as for partial failures |
+| All scans for the same image name fail | Retain previous findings |
+| Some scans for the same image name fail | Incorporate successful results and retain previous findings that may belong to images with digests whose scans failed |
+| A Kubernetes scan by image name succeeds but the digest remains unconfirmed | Retain findings using the same rules as for partial failures |
 
-For partial failures, previous and current CVE IDs are combined and the higher priority is retained, separately for ordinary and EOL findings.
-Previous fix availability is also retained for ordinary findings.
+For example, if the scan of `sha256:aaa…` succeeds but the scan of `sha256:bbb…` fails for the same image name, `web:1.0`, the current results do not include findings for `sha256:bbb…`.
+To prevent vulnerabilities previously found for `sha256:bbb…` from appearing resolved, each package's record retains at least the previous information, using the values below.
+
+| Recorded information | Value retained |
+| --- | --- |
+| CVE IDs | CVE IDs from both the previous and current results |
+| Priority | The higher of the previous and current priorities |
+| Fix availability | A fix is recorded as available if either the previous or current results indicate one is available |
+
+End-of-life (EOL) findings are recorded separately from ordinary findings, but the same rules apply to their CVE IDs and priority (fix availability does not apply).
 
 See [Retained history](diff-logic.md#retained-findings) for its effect on diffs.
 
 ## Package-level grouping {#package-grouping}
 
+Vulnerabilities found in an image with the same image name and digest are grouped by package and fix status.
+
+The following diagram shows an example scan of one digest of `web:1.0`.
+`CVE-A` through `CVE-D` are fictional CVE IDs used for illustration.
+
+```mermaid
+flowchart LR
+    subgraph findings["Trivy findings: web:1.0 (same digest)"]
+        A["openssl 3.0.2<br/>CVE-A (fix available)"]
+        B["openssl 3.0.2<br/>CVE-B (fix available)"]
+        C["openssl 3.0.2<br/>CVE-C (no fix available)"]
+        D["lodash 4.17.20 (location 1)<br/>CVE-D (fix available)"]
+        E["lodash 4.17.20 (location 2)<br/>CVE-D (fix available)"]
+    end
+    subgraph groups["3 resulting groups"]
+        F["openssl 3.0.2 · fix available<br/>CVE-A, CVE-B"]
+        G["openssl 3.0.2 · no fix available<br/>CVE-C"]
+        H["lodash 4.17.20 · fix available<br/>CVE-D (counted once after deduplication)"]
+    end
+    A --> F
+    B --> F
+    C --> G
+    D --> H
+    E --> H
+```
+
 Findings are combined into one group when the following attributes match.
 
-- Image reference and identity
+- Image name and digest
 - Package ecosystem, OS or language package class, name, and installed version
 - Normalized fix status
 
@@ -143,8 +193,8 @@ Statuses are normalized during grouping as follows.
 | Missing or empty | Treated as `unknown` | `affected` |
 | Any other value | Preserved as an undefined status | `affected` |
 
-For OS packages, `will_not_fix` describes the policy for the target OS release.
-It does not mean that a fix is unavailable from the software's developer or in another OS release.
+For OS packages, `will_not_fix` means the distributor has decided not to fix the vulnerability in the target OS release; a fix may still be available from the package's developer.
+Consider updating your base image to a newer OS release, which may include a fix.
 
 See [Webhook vulnerability fields](webhook-reference.md#vulnerability-fields) for the field that exposes the original status.
 
@@ -158,34 +208,46 @@ See [EOL display](slack-display.md#eol-display) for how this appears in Slack.
 
 ### Package EOL {#eol-package}
 
-For findings reported by Trivy, package EOL findings have a `Status` of `end_of_life`.
-The distributor treats these CVEs as outside the target release's support scope, with no fix planned for that release.
+Package EOL findings identify CVEs that the distributor treats as outside the target release's support scope, with no fix planned for the target release.
 
-EOL findings are handled separately from ordinary findings, and both can exist for the same package.
-This classification continues when triage is disabled.
+EOL findings and ordinary findings are handled separately based on each CVE's fix status (`Status`) reported by Trivy, as follows.
+
+- CVEs whose fix status is `end_of_life` are handled as “EOL findings,” separately from CVEs with any other fix status (such as a fix being available or unavailable), which are handled as “ordinary findings”
+- The same package appears in EOL findings and ordinary findings when its CVEs have different fix statuses, as in a hypothetical example where openssl 3.0.2 has CVE-X with status `end_of_life` and CVE-Y with a fix available
+- EOL status depends only on each CVE's fix status and is unrelated to KEV- or EPSS-based priority, so EOL findings and ordinary findings are handled separately even when triage is disabled and no priorities are assigned
 
 ### Language runtime findings {#language-runtime}
 
-These checks cover the Node.js and Python runtimes themselves.
+Trivy does not report vulnerabilities in the Node.js and Python runtimes themselves, so KestreLynx detects them by checking each runtime against its security advisories.
+The following sections, "Node.js runtime findings" and "Python runtime findings," explain how detection works.
 
-- Handling in remediation plans
-  - Findings attributable to the base are included in base-update comparisons, and an unconfirmed floating-tag base can produce a rebuild estimate from the current base's runtime version
-  - See [Base layer matching](remediation-logic.md#base-layer-matching) for attribution conditions and estimate limitations
-- End-of-life notifications
-  - Runtime findings with status `end_of_life` use the note "end-of-life: no fix will be released for this series, so the series has to be upgraded (manual)"
+These findings differ from Trivy findings in the following two ways.
+
+- Remediation plans treat runtime vulnerabilities as fixable by updating the base image when the running image uses an official `node` or `python` image as its base image and uses its runtime unchanged.
+    - For tags such as `node:22`, whose contents are updated under the same tag, the plan estimates how many vulnerabilities would be resolved by rebuilding with the base image that the tag currently points to.
+    - [Base layer matching](remediation-logic.md#base-layer-matching) describes the conditions for treating vulnerabilities as fixable by updating the base image and the limitations of the estimate.
+- Notifications indicate that a runtime series must be upgraded when the series (such as Node.js 18) has reached end of life (EOL) and no fix will be released for it.
+    - The notification's fix field displays "end-of-life: no fix will be released for this series, so the series has to be upgraded (manual)".
 
 #### Node.js runtime findings {#node-runtime}
 
 Official `node` images and their derivatives install the Node.js runtime under `/usr/local` from nodejs.org tarballs.
 Trivy does not report this runtime as a package, so KestreLynx checks it against Node.js security advisories.
 
+Slack displays Node.js runtime vulnerabilities as package findings, just like findings for openssl or lodash.
+The Webhook `ecosystem` field identifies the package type and contains values such as `debian` or `npm` for Trivy findings (see [Webhook vulnerability fields](webhook-reference.md#vulnerability-fields)).
+
+The following table describes how the Node.js runtime version, notification display, and severity are handled.
+
 | Item | Handling |
 | --- | --- |
 | Version | Read `NODE_VERSION` in `X.Y.Z` form from the image configuration environment variables in the scan result. |
-| Notification | Report findings with package name `Node.js` and type `node-runtime`. |
-| Executable path | Infer `<prefix>/bin/node` from npm at `<prefix>/lib/node_modules/npm` found by Trivy, falling back to `usr/local/bin/node` when that location is unavailable. |
-| Runtime usage | When [Runtime usage](runtime-usage.md) is enabled, use Sensor evidence of this executable running to assess whether the runtime is in use. |
+| Notification | Slack displays the package as `Node.js`, and the Webhook `ecosystem` is `node-runtime`. |
 | Severity | Exclude CVEs whose severity is not selected by `scan.severity`. |
+
+See [Runtime usage](runtime-usage.md#runtime-executables) for how KestreLynx assesses whether the Node.js runtime is in use when using the Sensor.
+
+The following conditions determine the fix status and displayed version.
 
 | Fix status | Condition and displayed version |
 | --- | --- |
@@ -195,14 +257,18 @@ Trivy does not report this runtime as a package, so KestreLynx checks it against
 
 The EOL rule follows Node.js security posts, which state that EOL versions are always affected.
 
-- Excluded advisory entries
-  - Entries about npm itself or modules bundled with npm are excluded because Trivy reports them separately as packages under `node_modules/npm`.
-  - Windows-only entries are excluded for Linux images.
-- Coverage and limitations
-  - Images without `NODE_VERSION`, including images containing only a copied `node` binary and distroless images without that variable, are not checked.
-  - Distro `nodejs` packages installed through apk or dpkg continue to be reported by Trivy.
-  - If `NODE_VERSION` differs from the actual `node` binary, matching uses the version in `NODE_VERSION`.
-  - Blog advisories do not give the first affected version within a release line, so older versions in that line can also be reported for vulnerabilities introduced later.
+Node.js runtime matching has the following limitations.
+
+- The following information in Node.js security advisories is not used for Node.js runtime matching.
+    - Information about npm itself or modules bundled with npm is excluded from Node.js runtime matching because Trivy reports them separately as packages under `node_modules/npm`.
+    - Information about vulnerabilities that affect only Windows is excluded when matching Linux images.
+- Node.js runtime matching does not cover the following images or installation methods.
+    - Images without the `NODE_VERSION` environment variable, including images containing only a copied `node` binary and distroless images without that variable, are not checked because the version needed for matching cannot be obtained.
+    - Linux distribution `nodejs` packages installed through apk or dpkg are outside the scope of this matching and are reported by Trivy.
+- Node.js runtime matching results may not reflect whether vulnerabilities are actually present in the following cases.
+    - If the `NODE_VERSION` environment variable differs from the version of the actual `node` binary, matching still uses the version in `NODE_VERSION`.
+    - The Node.js security blog identifies affected versions by release line, such as `22.x`, without specifying the first affected version within that line.
+        - As a result, a vulnerability hypothetically introduced in `22.10.0` can also be reported as affecting an older version such as `22.5.0` (these version numbers are illustrative examples).
 
 Settings are described in [Scanning](configuration.md#scan), and data sources in [Node.js advisory downloads](outbound-communication.md#node-runtime-download).
 
@@ -211,20 +277,24 @@ Settings are described in [Scanning](configuration.md#scan), and data sources in
 Official `python` images and their derivatives build CPython from source and install it under `/usr/local`.
 Trivy does not report this runtime as a package, so KestreLynx checks it against Python security advisory data.
 
+Slack displays Python runtime vulnerabilities as package findings, just like findings for openssl or lodash.
+The Webhook `ecosystem` field identifies the package type and contains values such as `debian` or `npm` for Trivy findings (see [Webhook vulnerability fields](webhook-reference.md#vulnerability-fields)).
+
+The following table describes how the Python runtime version, notification display, and vulnerability information are handled.
+
 | Item | Handling |
 | --- | --- |
 | Version | Read `PYTHON_VERSION` in `3.Y.Z` form from the image configuration environment variables; prereleases such as `3.15.0rc3` are not checked. |
-| Notification | Report findings with package name `Python runtime` and type `python-runtime`. |
-| Executable path | Use the official image location `usr/local/bin/python3.Y`. |
-| Runtime usage | When [Runtime usage](runtime-usage.md) is enabled, use Sensor evidence of this executable running to assess whether the runtime is in use. |
+| Notification | Slack displays the package as `Python runtime`, and the Webhook `ecosystem` is `python-runtime`. |
 | Severity | Use severity from the official CVE record and exclude CVEs whose severity is not selected by `scan.severity`. |
 | Target OS | Exclude CVEs limited to non-Linux systems such as Windows when checking Linux images; POSIX, Unix, and Linux apply to Linux. |
 | Withdrawals | Exclude `REJECTED` CVEs and withdrawn advisories. |
 
-In official images, `python3` is a symbolic link to `python3.Y`.
-The Sensor records the resolved executable path.
+See [Runtime usage](runtime-usage.md#runtime-executables) for how KestreLynx assesses whether the Python runtime is in use when using the Sensor.
 
 Matching covers only CVEs whose official records contain PSF-authored CPython version ranges, available from mid-2023 onward.
+
+The following conditions determine the fix status and displayed version.
 
 | Fix status | Condition and displayed version |
 | --- | --- |

@@ -30,7 +30,7 @@ For language package updates, it rechecks the file contents and version declarat
 - Packages whose image paths are under `<prefix>/lib/node_modules` (the parent of the first `node_modules` is `lib`), including those bundled with npm or corepack in official node images, are handled manually without matching them against dependency files
 - If the base branch has advanced when a PR is created, the files used for the update and the relevant settings files are checked again
 - If source changes no longer match the planning inputs, writes for that update are deferred
-- For `container/<name>`, KestreLynx verifies that the scanned image matches the running image's ID, then checks base layers for Dockerfiles or detected package names and versions for dependency files
+- For `container/<name>`, KestreLynx verifies that the scanned image's digest matches the running image's ID, then checks base layers for Dockerfiles or detected package names and versions for dependency files
 
 !!! note "Verification limits"
 
@@ -44,20 +44,20 @@ See [Source mappings](configuration.md#remediation-mappings) for the mapping con
 
 ## Image candidate selection {#image-selection}
 
-### Kubernetes image references and re-pull guidance {#kubernetes-image-references}
+### Kubernetes image names and re-pull guidance {#kubernetes-image-references}
 
-Before looking for published-image candidates, KestreLynx checks the image reference in the Pod spec against the running reference.
+Before looking for published-image candidates, KestreLynx checks the image name in the Pod spec against the running image name.
 It normalizes abbreviated repository names and compares tags and digests.
 
-The running reference normally comes from the Pod's `status.containerStatuses[].image`.
-With containerd, this value can be an image config ID (`sha256:…`) when the node holds the image without a tag, such as after pulling it by digest alone, in which case KestreLynx selects the reference based on the same container's `imageID`.
+The running image name normally comes from the Pod's `status.containerStatuses[].image`.
+With containerd, this value can be an image config ID (`sha256:…`) when the node holds the image without a tag, such as after pulling it by digest alone, in which case KestreLynx selects the image name based on the same container's `imageID`.
 
-- If `imageID` is a digest reference with a repository, such as `ghcr.io/example/app@sha256:…`, KestreLynx uses that repository and digest as the running reference
-  - This avoids showing only the config ID in the notification's image field and allows comparison with the spec's digest reference
+- If `imageID` is an image name containing a repository and digest, such as `ghcr.io/example/app@sha256:…`, KestreLynx uses that repository and digest as the running image name
+    - This avoids showing only the config ID in the notification's image field and allows comparison with the image name containing a digest in the spec
 - If `imageID` also lacks a repository, KestreLynx keeps the original `image` value
 
-If any container using the same running image reference has a mismatch, items for that reference become `not_comparable`.
-The reason is `declared_ref_mismatch`, or `declared_ref_unavailable` when the spec's image reference cannot be read.
+If any container using the same running image name has a mismatch, items for that image name become `not_comparable`.
+The reason is `declared_ref_mismatch`, or `declared_ref_unavailable` when the spec's image name cannot be read.
 
 When new content under a floating tag is confirmed to improve the findings, re-pull guidance depends on `imagePullPolicy`.
 
@@ -68,19 +68,19 @@ When new content under a floating tag is confirmed to improve the findings, re-p
 | `Never` | `import_to_node` | The image must be imported onto the node. |
 ### Distributed image tags {#published-image-tags}
 
-The running image reference determines which candidate to compare.
+The running image name determines which candidate to compare.
 
 | Tag type | Candidate selection | Treatment after adoption |
 | --- | --- | --- |
 | Pinned tag specifying a full version | Selects the newest patch above the current version in the same major, minor, prefix, and suffix series. If candidates in the same series do not resolve the findings, KestreLynx performs the [Newer series check](#newer-series-check). | Becomes a candidate for a PR that changes the tag in Compose, a Kubernetes manifest, Kustomize, or Helm values if source-editing requirements are also met. |
-| Floating tag | Selects the content the same tag currently points to in the registry. | Produces re-pull guidance if an improvement is confirmed, without a PR because the reference does not change. |
+| Floating tag | Selects the content the same tag currently points to in the registry. | Produces re-pull guidance if an improvement is confirmed, without a PR because the image name does not change. |
 
-- A candidate with the same image content as the running image is not an update candidate
-- If the candidate and running-image identities cannot be verified, the comparison is not used to establish improvement
+- A candidate with the same digest as the running image is not an update candidate
+- If the candidate and running-image digests cannot be verified, the comparison is not used to establish improvement
 - The candidate tag is checked again before PR creation, and processing is deferred if it points to different content than during the comparison
 
 Candidate adoption follows [Scan comparison conditions](#comparison-conditions) and [Verification scope by target](#verification-scope).
-See [Compose formats](remediation-reference.md#compose-formats), [Manifest formats](remediation-reference.md#manifest-formats), [Kustomize formats](remediation-reference.md#kustomize-formats), and [Helm values formats](remediation-reference.md#helm-values-formats) for editable references and unsupported forms.
+See [Compose formats](remediation-reference.md#compose-formats), [Manifest formats](remediation-reference.md#manifest-formats), [Kustomize formats](remediation-reference.md#kustomize-formats), and [Helm values formats](remediation-reference.md#helm-values-formats) for editable image names and unsupported forms.
 
 ### Kubernetes manifest PRs {#kubernetes-manifest-prs}
 
@@ -88,10 +88,10 @@ For example, if the Pod spec, running image, and mapped `apps/web.yaml` all refe
 
 PR creation checks every mapping to the same repository, base branch, and manifest.
 
-- Each mapped container has running Pods, and every running image reference is available
-- Each container's declared and running references match, without mixed references among running containers of the same workload
+- Each mapped container has running Pods, and every running image name is available
+- Each container's declared and running image names match, without mixed image names among running containers of the same workload
 - Every target updating the same image in the same file has a plan item and adopts a candidate with the same tag and digest
-- Each image reference being edited matches the Pod spec and the running reference
+- Each image name being edited matches the image name in the Pod spec and the running image name
 
 If any running-state or candidate requirement is unmet, all PRs for that manifest are withheld.
 A healthy workload using a different image with nothing to fix is excluded from the update and does not block other PRs.
@@ -107,19 +107,19 @@ See [Source mappings](configuration.md#remediation-mappings) for configuration a
 In the [configuration example](remediation-setup.md#kustomize-pull-requests), KestreLynx checks `web/app`, `worker/app`, and `web/prepare`, and updates `images[nginx].newTag` when all can adopt the same fixed version.
 The checked set combines the mapped `workload` and `affects`.
 
-- Each listed container can be verified in the observed Pods, and its declared image reference matches its running reference
-- The entire set shares one current image reference, and every target can adopt the fixed version with the same tag and digest
-- The reference formed from the file's `name` or existing `newName` and `newTag` matches the declared and running references
-- For an ordinary init container, the Pod status confirms that it used the same image content under the same reference as a running container in the set in the same Pod
+- Each listed container can be verified in the observed Pods, and its declared image name matches its running image name
+- The entire set shares one current image name, and every target can adopt the fixed version with the same tag and digest
+- The image name formed from the file's `name` or existing `newName` and `newTag` matches the declared and running image names
+- For an ordinary init container, the Pod status confirms that it used the same image content under the same image name as a running container in the set in the same Pod
 
 Verification of an ordinary init container uses the scan of the running container in the same Pod.
-If its status, image content, reference, or an available scan cannot be verified, no PR is created, with reasons such as `init_container_unverified`.
+If its status, image content, image name, or an available scan cannot be verified, no PR is created, with reasons such as `init_container_unverified`.
 
 KestreLynx does not render Kustomize and treats the listed set as the complete affected set confirmed by the user.
 As a safety check, it stops with `undeclared_affected_workload` in the following cases.
 
-- An unlisted running container declares the same image reference and shares a namespace, Helm release, or Flux Kustomization with a listed workload
-- A listed workload's Pod spec contains an unlisted container using the same image reference, including waiting containers, native sidecars, and ordinary init containers
+- An unlisted running container declares the same image name and shares a namespace, Helm release, or Flux Kustomization with a listed workload
+- A listed workload's Pod spec contains an unlisted container using the same image name, including waiting containers, native sidecars, and ordinary init containers
 
 If running-state checks fail for a mapping to the same file, or an update's set fails candidate or unlisted-container checks, all PRs for that file are withheld.
 See [Kustomize formats](remediation-reference.md#kustomize-formats) for editing restrictions.
@@ -127,15 +127,15 @@ See [Kustomize formats](remediation-reference.md#kustomize-formats) for editing 
 ### Helm values PRs {#helm-values-prs}
 
 In the [configuration example](remediation-setup.md#helm-values-pull-requests), KestreLynx checks the combined `workload` and `affects` set of `web/app`, `worker/app`, and `web/prepare`, and updates `image.tag` when all can adopt the same fixed version.
-It checks that the repository formed from `registry` and `repository` with `tag`, or the string-form image reference, matches both the declared and running references.
+It checks that the repository formed from `registry` and `repository` with `tag`, or the string-form image name, matches both the declared and running image names.
 
 Checks across the whole set and handling of ordinary init containers follow [Kustomize PRs](#kustomize-prs).
 
-- Check that declared and running references match for the listed containers and that the whole set uses one current reference
+- Check that declared and running image names match for the listed containers and that the whole set uses one current image name
 - Check that the whole set can adopt the same candidate tag and digest
-- Verify ordinary init containers through Pod status and the scan of a running container in the set in the same Pod, confirming the same image content under the same reference
-- Stop with `undeclared_affected_workload` if an unlisted running container declares the same reference and shares a namespace, Helm release, or Flux Kustomization
-- Also stop with `undeclared_affected_workload` if a listed workload's Pod spec has an unlisted container using the same reference, including waiting containers, native sidecars, and ordinary init containers
+- Verify ordinary init containers through Pod status and the scan of a running container in the set in the same Pod, confirming the same image content under the same image name
+- Stop with `undeclared_affected_workload` if an unlisted running container declares the same image name and shares a namespace, Helm release, or Flux Kustomization
+- Also stop with `undeclared_affected_workload` if a listed workload's Pod spec has an unlisted container using the same image name, including waiting containers, native sidecars, and ordinary init containers
 
 If a mapping in the same values file fails running-state checks, or an update's set fails candidate or undeclared-container checks, KestreLynx skips all PRs for that file.
 An ordinary init container that cannot be verified prevents PR creation with a reason such as `init_container_unverified`.
@@ -172,7 +172,7 @@ This check is always enabled and has no additional settings.
 | Target | Conditions for checking |
 | --- | --- |
 | Published image | Pinned tags of containers in Compose, Kubernetes, or docker run, without requiring a mapping. Checks items with category `no_candidate`, one of the reasons below, and at least one target finding. |
-| Dockerfile | Pinned-tag `FROM` references in mapped Dockerfiles, where every running image has one of the reasons below. Reasons may differ between images. |
+| Dockerfile | Image names with pinned tags in `FROM` instructions in mapped Dockerfiles, where every running image has one of the reasons below. Reasons may differ between images. |
 
 | Same-series result | Meaning |
 | --- | --- |
@@ -181,7 +181,7 @@ This check is always enabled and has no additional settings.
 | `candidate_does_not_resolve_targets` | The newer patch does not resolve the target findings. |
 
 - The plan item's category stays unchanged, and Dockerfile items with different reasons across running images are checked while still needing a decision
-- Floating tags such as `node:22-alpine`, digest-pinned references, and prereleases are excluded
+- Floating tags such as `node:22-alpine`, digest-pinned image names, and prereleases are excluded
 - Versions with a different prefix or suffix, such as a change from `-alpine` to `-bookworm`, are excluded
 - Remaining findings in an item that became a PR candidate after a same-series candidate resolved some findings are excluded
 
@@ -253,8 +253,8 @@ An accompanying `image:` does not change this decision.
 In addition to the Compose definition, the following information can identify a local build.
 
 - The image and container have matching Compose project and service values, and the image name matches the name Compose generates
-- The image reference has no registry host, and the scan did not obtain a registry digest
-- The image reference names a Docker Official Image repository (`docker.io/library/<name>`), and Docker Hub denies anonymous access during the initial repository lookup with no credentials configured
+- The image name has no registry host, and the scan did not obtain a registry digest
+- The image name specifies a Docker Official Image repository (`docker.io/library/<name>`), and Docker Hub denies anonymous access during the initial repository lookup with no credentials configured
 
 Identification based on Compose labels and generated names is not used when the mapped service is confirmed to have no `build:`.
 
@@ -267,10 +267,10 @@ Identification based on Compose labels and generated names is not used when the 
 
 For a Dockerfile, KestreLynx identifies the external image inherited by the selected build stage as the base to update.
 
-On Kubernetes, a `dockerfile` mapping selects the target, and the Pod spec must also match the running image reference.
+On Kubernetes, a `dockerfile` mapping selects the target, and the image name in the Pod spec must also match the running image name.
 
 - Uses the specified `target` stage, or the last stage if `target` is omitted
-- Follows inheritance through earlier stages until it reaches a `FROM` that references an external image
+- Follows inheritance through earlier stages until it reaches a `FROM` specifying an external image name
 - Uses the context, Dockerfile, and target from Compose `build:` when they identify the edit location
 - Checks consistency when both a Dockerfile mapping and an edit location derived from Compose are used
 
@@ -299,29 +299,29 @@ Base remediation targets include findings that Trivy reports as belonging to the
 - If floating-tag content does not match the start of the running image's layers, it is not adopted as a candidate with confirmed improvement
 
 - Runtime attribution and comparison for pinned tags
-  - Runtime findings that could not be attributed to a layer are attributed to the base when the layer sequences match and both the running image and current base image configurations contain the runtime's version variable (`NODE_VERSION` for Node.js or `PYTHON_VERSION` for Python) with the same value
-  - If the same environment variable appears more than once, the last value is used
-  - Comparisons of the current base and candidate also check runtimes, and if a targeted runtime cannot be checked on either side, the result is indeterminate and the candidate is not adopted
+    - Runtime findings that could not be attributed to a layer are attributed to the base when the layer sequences match and both the running image and current base image configurations contain the runtime's version variable (`NODE_VERSION` for Node.js or `PYTHON_VERSION` for Python) with the same value
+    - If the same environment variable appears more than once, the last value is used
+    - Comparisons of the current base and candidate also check runtimes, and if a targeted runtime cannot be checked on either side, the result is indeterminate and the candidate is not adopted
 - Rebuild estimates for an unconfirmed floating-tag base
-  - When the running image has runtime findings and that runtime's version can be checked from the current base image configuration, KestreLynx estimates how many findings would disappear if a rebuild inherits that version
-  - The count covers currently detected CVEs for the same runtime and excludes CVEs introduced by the new version
-  - Item-level guidance includes the estimate only when every running image in the item has the `floating_base_unconfirmed` outcome
-  - The category remains `not_comparable` because this is not a comparison of the final image
+    - When the running image has runtime findings and that runtime's version can be checked from the current base image configuration, KestreLynx estimates how many findings would disappear if a rebuild inherits that version
+    - The count covers currently detected CVEs for the same runtime and excludes CVEs introduced by the new version
+    - Item-level guidance includes the estimate only when every running image in the item has the `floating_base_unconfirmed` outcome
+    - The category remains `not_comparable` because this is not a comparison of the final image
 
 For a floating-tag `FROM` whose current base layers do not match the start of the running image, KestreLynx also checks the current base against the running image by package location and CVE.
 It records the result in `rebuild_check` without building an image.
 
 - Scan preparation
-  - Scan the content currently referenced by the base tag from the registry under the [scan comparison conditions](#comparison-conditions)
-  - Rescan the running image when its scan conditions differ from those used for the comparison
-  - Use the remaining `baseline_rescans_per_cycle` allowance and scan the same base content only once per cycle
+    - Scan the content currently referenced by the base tag from the registry under the [scan comparison conditions](#comparison-conditions)
+    - Rescan the running image when its scan conditions differ from those used for the comparison
+    - Use the remaining `baseline_rescans_per_cycle` allowance and scan the same base content only once per cycle
 - Execution order and limits
-  - Run after planning, language-package updates, and newer-series checks, before saving the plan
-  - Reserve time and registry requests for PR processing as in newer-series checks, recording `newer_series_reserved` when that reservation stops the check
+    - Run after planning, language-package updates, and newer-series checks, before saving the plan
+    - Reserve time and registry requests for PR processing as in newer-series checks, recording `newer_series_reserved` when that reservation stops the check
 - Findings included
-  - On the running-image side, consider findings within the severity range whose status is `fixed` and that have a fixed version
-  - On the base side, use all findings within the severity range to determine whether a CVE remains, including findings without a fixed version
-  - Leave language-runtime findings to `rebuild_runtimes`
+    - On the running-image side, consider findings within the severity range whose status is `fixed` and that have a fixed version
+    - On the base side, use all findings within the severity range to determine whether a CVE remains, including findings without a fixed version
+    - Leave language-runtime findings to `rebuild_runtimes`
 
 Package matching uses the package type, class, and name together with the location below.
 
@@ -334,12 +334,12 @@ Package matching uses the package type, class, and name together with the locati
 | Other kinds | `PkgPath`, or a path-shaped `Target` containing `/` when `PkgPath` is empty |
 
 - Findings that cannot be determined
-  - A `node-pkg`, `python-pkg`, or `jar` has no `PkgPath`, or another language package has neither `PkgPath` nor a path-shaped `Target`
-  - The base's OS cannot be identified for an OS package
-  - The base has multiple versions at the same location
-  - The base has the same version at the same location but does not report the CVE
-  - For a kind whose path structure has not been verified, the base has the same package name at another location
-  - A language-runtime finding is not covered by `rebuild_runtimes` for the detected version
+    - A `node-pkg`, `python-pkg`, or `jar` has no `PkgPath`, or another language package has neither `PkgPath` nor a path-shaped `Target`
+    - The base's OS cannot be identified for an OS package
+    - The base has multiple versions at the same location
+    - The base has the same version at the same location but does not report the CVE
+    - For a kind whose path structure has not been verified, the base has the same package name at another location
+    - A language-runtime finding is not covered by `rebuild_runtimes` for the detected version
 
 | Result | Matching outcome |
 | --- | --- |
@@ -351,14 +351,14 @@ Package matching uses the package type, class, and name together with the locati
 | `undetermined` | Count of findings that could not be determined |
 
 - Status
-  - `checked` means all targeted findings were determined
-  - `partial` means some findings could not be determined
-  - `not_checked` means no comparison was made, with `reason` and `detail` explaining why
+    - `checked` means all targeted findings were determined
+    - `partial` means some findings could not be determined
+    - `not_checked` means no comparison was made, with `reason` and `detail` explaining why
 - Multiple running images
-  - The item has `rebuild_check` only when every running image has the `floating_base_unconfirmed` outcome
-  - Any `not_checked` result makes the item `not_checked`; otherwise, any `partial` result makes it `partial`
-  - `gone` includes a finding only if it disappears for every running image that has it
-  - Different base versions across platforms remain separate entries
+    - The item has `rebuild_check` only when every running image has the `floating_base_unconfirmed` outcome
+    - Any `not_checked` result makes the item `not_checked`; otherwise, any `partial` result makes it `partial`
+    - `gone` includes a finding only if it disappears for every running image that has it
+    - Different base versions across platforms remain separate entries
 
 Notification branches and the limits of these estimates are described in [Rebuild guidance](remediation-results.md#rebuild-guidance).
 
@@ -1152,7 +1152,7 @@ A running-image scan whose database identity cannot be verified is not reused di
 
 - Rescans the baseline within the retrieval budget if its conditions cannot be verified
 - Checks the database again after comparison scans and rejects the comparison if conditions changed
-- Verifies both image identities and matching OS and CPU architecture for image comparisons
+- Verifies both image digests and matching OS and CPU architecture for image comparisons
 - Does not infer resolution from a comparison with missing or truncated package lists
 - Does not treat absent findings as resolved if the target package type was not analysed
 

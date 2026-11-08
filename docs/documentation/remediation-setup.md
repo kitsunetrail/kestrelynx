@@ -89,7 +89,7 @@ For format details, see [Source mappings](configuration.md#remediation-mappings)
 2. Replace the workload, repository, base branch, and target file locations with your actual values
 3. Enable remediation plans with PR creation initially disabled
 
-This minimal example maps a distributed image reference to a Compose file.
+This minimal example maps a distributed image name to a Compose file.
 
 ```yaml
 remediation:

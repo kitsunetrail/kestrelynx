@@ -49,9 +49,9 @@ The item's `reason` and supplementary `detail` are omitted when empty.
 | `items[].priority` | string | Target priority; omitted when unavailable. |
 | `items[].services` | array of objects | Associated service information; omitted when empty. |
 | `items[].services[].workload` | string | Kubernetes workload key; each Kubernetes `services[]` element contains only this field. |
-| `items[].declared` | array of objects | Image references and pull policies from Kubernetes Pod specs; omitted when empty. |
+| `items[].declared` | array of objects | Image names and pull policies from Kubernetes Pod specs; omitted when empty. |
 | `items[].declared[].workload` | string | Target workload key. |
-| `items[].declared[].ref` | string | Image reference from the spec; omitted when unreadable. |
+| `items[].declared[].ref` | string | Image name from the spec; omitted when unreadable. |
 | `items[].declared[].pull_policy` | string | The spec's `imagePullPolicy`; omitted when unset. |
 | `items[].pull` | array of objects | Guidance grouped by pull policy for Kubernetes `pull_again` items; omitted when empty. |
 | `items[].pull[].guidance` | string | `restart_pulls`, `change_tag_or_digest`, or `import_to_node`; see [Re-pull guidance](remediation-logic.md#kubernetes-image-references) for their meanings. |
@@ -100,9 +100,9 @@ Image information in base-image items uses the same format.
 
 | Image information field | Type | Meaning and omission conditions |
 | --- | --- | --- |
-| `ref` | string | Image reference. |
+| `ref` | string | Image name. |
 | `tag` | string | Tag; omitted when unknown. |
-| `content` | string | Running image's content identity; omitted when unavailable or for candidate images. |
+| `content` | string | Running image's digest; omitted when unavailable or for candidate images. |
 | `config_digest` / `manifest_digest` / `top_digest` | string | Respective digests; omitted when unknown. |
 | `platform` | string | Platform; omitted when unknown. |
 | `digest_kind_unverified` | boolean | `true` when the running image's digest kind has not been verified; omitted otherwise. |
@@ -119,7 +119,7 @@ Image information in base-image items uses the same format.
 
 | `scans[]` field | Type | Meaning and omission conditions |
 | --- | --- | --- |
-| `role` / `ref` | string | Scan role and image reference. |
+| `role` / `ref` | string | Scan role and image name. |
 | `requested` / `confirmed` | string | Requested and confirmed targets. |
 | `db` | string | Identity of the database used. |
 | `scanned_at` | string | Scan time in RFC 3339 format; omitted when no record is available. |
@@ -142,7 +142,7 @@ See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for
 | `dockerfile_items[].priority` | string | Target priority; omitted when unavailable. |
 | `dockerfile_items[].workloads` | array of strings | Target workloads, including `container/<name>`; `[]` when none apply. |
 | `dockerfile_items[].source` | object | Dockerfile repository, branch, and path, plus available commit, stage, and other information. |
-| `dockerfile_items[].base_ref` / `dockerfile_items[].base_kind` | string | Current base-image reference and tag classification; omitted when empty. |
+| `dockerfile_items[].base_ref` / `dockerfile_items[].base_kind` | string | Current base-image name and tag classification; omitted when empty. |
 | `dockerfile_items[].candidate` | object | Candidate [image information](#remediation-image-fields); omitted when there is no candidate. |
 | `dockerfile_items[].counts` | object | Integer counts named `targets`, `resolved`, `remaining`, and `introduced`. |
 | `dockerfile_items[].rebuild_runtimes` | array of objects | Aggregated runtime rebuild estimates when all running images have the `floating_base_unconfirmed` outcome; omitted when empty. |
@@ -161,7 +161,7 @@ See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for
 | `dockerfile_items[].awaiting_deploy` | object | Merged PR information for `base_update_not_deployed`; omitted when not applicable. |
 | `dockerfile_items[].awaiting_deploy.number` | integer | PR number. |
 | `dockerfile_items[].awaiting_deploy.url` | string | PR URL; omitted when empty. |
-| `dockerfile_items[].awaiting_deploy.from` | string | Base-image reference used by `FROM` before the PR, from which the running images were built. |
+| `dockerfile_items[].awaiting_deploy.from` | string | Base-image name used by `FROM` before the PR, from which the running images were built. |
 | `dockerfile_items[].awaiting_deploy.to` | string | Tag set by the PR. |
 | `dockerfile_items[].final_image_verified` | boolean | Whether the rebuilt application image has been verified; always `false`. |
 | `dockerfile_items[].pull_request` | object | Matching [PR processing](#remediation-pr-fields); omitted when there is no match. |
@@ -192,9 +192,9 @@ Both `rebuild_runtimes[]` arrays contain estimates based on the current base's r
 | `remaining` | array of strings | IDs of currently detected CVEs that remain in that version; omitted when empty. |
 
 - CVE aggregation
-  - CVEs introduced by the new version are excluded
-  - Item-level records are grouped by `package`, `installed`, and `base_version`, with CVE IDs deduplicated and sorted, and IDs remaining in any running image excluded from `disappearing`
-  - Mixed outcomes across running images omit the item-level estimate while preserving individual records in `entities[]`
+    - CVEs introduced by the new version are excluded
+    - Item-level records are grouped by `package`, `installed`, and `base_version`, with CVE IDs deduplicated and sorted, and IDs remaining in any running image excluded from `disappearing`
+    - Mixed outcomes across running images omit the item-level estimate while preserving individual records in `entities[]`
 
 Both `rebuild_check` objects describe estimates from matching the running image with the current base by package location and CVE, not comparisons of a completed rebuilt image; `final_image_verified` remains `false`.
 When the status is `checked` and no findings are expected to disappear, the results are still included in `rebuild_check` even though nothing is displayed in Slack or email.
@@ -231,18 +231,18 @@ The `gone`, `remaining`, `not_in_base`, and `only_in_base` arrays use the follow
 | `not_checked` | No comparison was made; `reason` and `detail` explain why. |
 
 - Findings and locations
-  - Running-image targets are findings within the severity range whose status is `fixed` and that have a fixed version
-  - All base findings within the severity range are used to determine whether a CVE remains
-  - Language-runtime findings are handled by `rebuild_runtimes`
-  - Location matching and conditions for `undetermined` are described in [Base layer matching](remediation-logic.md#base-layer-matching)
+    - Running-image targets are findings within the severity range whose status is `fixed` and that have a fixed version
+    - All base findings within the severity range are used to determine whether a CVE remains
+    - Language-runtime findings are handled by `rebuild_runtimes`
+    - Location matching and conditions for `undetermined` are described in [Base layer matching](remediation-logic.md#base-layer-matching)
 - Item-level aggregation
-  - Any `not_checked` result makes the item `not_checked`; otherwise, any `partial` result makes it `partial`
-  - `gone` includes a finding only if it disappears for every running image that has it
-  - Different base versions across platforms remain separate entries
+    - Any `not_checked` result makes the item `not_checked`; otherwise, any `partial` result makes it `partial`
+    - `gone` includes a finding only if it disappears for every running image that has it
+    - Different base versions across platforms remain separate entries
 - Interpretation
-  - `not_in_base` cannot distinguish packages removed from the base from packages added by the Dockerfile
-  - `only_in_base` includes findings that Dockerfile instructions may remove
-  - The effects of Dockerfile instructions and other limits are described in [Rebuild guidance](remediation-results.md#rebuild-guidance)
+    - `not_in_base` cannot distinguish packages removed from the base from packages added by the Dockerfile
+    - `only_in_base` includes findings that Dockerfile instructions may remove
+    - The effects of Dockerfile instructions and other limits are described in [Rebuild guidance](remediation-results.md#rebuild-guidance)
 
 See [Verification scope by target](remediation-logic.md#verification-scope) for the scope of checks.
 

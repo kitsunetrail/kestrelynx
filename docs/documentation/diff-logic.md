@@ -3,10 +3,10 @@
 ## Comparison baseline {#comparison-baseline}
 
 Changes are determined by comparing current findings with history saved through previous cycles.
-Packages are compared by the combination of image reference, including its tag or other reference components, and package name.
+Packages are compared by the combination of image name, including its tag or other components, and package name.
 
-Packages with the same reference and name are compared together even when they belong to separate [scan result groups](scan-logic.md#package-grouping).
-Differences in identity, ecosystem, installed version, or fix status alone do not create separate histories.
+Packages with the same image name and package name are compared together even when they belong to separate [scan result groups](scan-logic.md#package-grouping).
+Differences in digest, ecosystem, installed version, or fix status alone do not create separate histories.
 
 Ordinary and EOL findings are recorded separately, so both histories can exist for the same combination.
 Whether to send a notification is determined separately by the [Notification conditions](notification-conditions.md#notification-conditions).
@@ -69,13 +69,13 @@ Removing some CVEs does not resolve a package while findings remain for the same
 !!! note "Meaning of resolution"
 
     Resolution means that findings have left the current scan scope; it does not prove that a patch was installed.
-    This includes cases where a previous target is no longer observed because a container stopped or an image reference changed.
+    This includes cases where a previous target is no longer observed because a container stopped or an image name changed.
 
 See [Package changes](slack-display.md#package-change-labels) and [EOL display](slack-display.md#eol-display) for how these distinctions appear.
 
 ## Base OS EOL changes {#eol-base-changes}
 
-Base OS EOL is compared by image reference.
+Base OS EOL is compared by image name.
 These changes are independent of package changes.
 
 | Previous record | Current state | Decision |
@@ -84,40 +84,40 @@ These changes are independent of package changes.
 | EOL recorded | EOL detected | Ongoing |
 | EOL recorded | EOL not detected and history need not be retained | Removed from EOL records |
 
-Removal from EOL records includes cases where the image reference leaves the scan scope.
+Removal from EOL records includes cases where the image name leaves the scan scope.
 The absence of a base OS EOL record does not mean that individual vulnerabilities are resolved.
 
-## Image content changes {#image-content-changes}
+## Image digest changes {#image-content-changes}
 
-For each image reference, KestreLynx compares the previous and current sets of config digests obtained from Docker.
-An image content change, such as replacement of the content behind `:latest`, is detected when all the following conditions hold.
+For each image name, KestreLynx compares the previous and current sets of config digests obtained from Docker.
+An image digest change, such as replacement of the content behind `:latest`, is detected when all the following conditions hold.
 
-- The same image reference exists in both the previous and current observations
+- The same image name exists in both the previous and current observations
 - Both observations contain at least one confirmed config digest
 - The two sets differ
 
 The first observation and cases where either set is empty do not qualify.
-Kubernetes registry digests alone are not used to detect this image content change.
+Kubernetes registry digests alone are not used to detect this image digest change.
 
 This decision is independent of package findings and scan success.
-An image content change is detected whenever the conditions hold, even if there are no findings or the current scan fails.
+An image digest change is detected whenever the conditions hold, even if there are no findings or the current scan fails.
 
-## Image reference updates {#reference-changes}
+## Image name updates {#reference-changes}
 
-When KestreLynx can identify a reference update for the same workload, such as `repo:sha-A` to `repo:sha-B`, it carries history over to the new reference.
+When KestreLynx can identify an image name update for the same workload, such as `repo:sha-A` to `repo:sha-B`, it carries history over to the new image name.
 This transfer occurs before package and EOL diffs are calculated.
 
 ### Conditions for transferring history {#transfer-conditions}
 
 All the following conditions must hold.
 
-- The old reference exists in the previous image records and is absent from current observations
-- The new reference is currently observed and is absent from the previous image records
-- The old and new references are valid image references in the same repository
-- The old reference's records and the new reference's observations share a workload
-- The old and new references have a one-to-one match both per reference and per shared workload
-- All scans of the new reference succeed, and a single image identity is confirmed across all running containers
-- The new reference has no existing finding, EOL, or muting history
+- The old image name exists in the previous image records and is absent from current observations
+- The new image name is currently observed and is absent from the previous image records
+- The old and new image names are valid image names in the same repository
+- The old image name's records and the new image name's observations share a workload
+- The old and new image names have a one-to-one match both per image name and per shared workload
+- All scans of the new image name succeed, and a single digest is confirmed across all running containers
+- The new image name has no existing finding, EOL, or muting history
 
 Repository comparison ignores tags and digests but distinguishes registry ports.
 Docker Hub shorthand is expanded, so `app` and `docker.io/library/app` are treated as the same repository.
@@ -130,37 +130,37 @@ Workload matching uses the following information.
 | Kubernetes | Workload kind, namespace, name, and container name within the Pod |
 | Standalone Docker container with no identifiable workload | Container name |
 
-Candidates with failed scans or unconfirmed identities are included when checking for a one-to-one match.
+Candidates with failed scans or unconfirmed digests are included when checking for a one-to-one match.
 Failed candidates are not excluded to make a remaining candidate the sole transfer destination.
 
 ### Transferred history {#transferred-history}
 
-The following history is carried from the old reference to the new reference.
+The following history is carried from the old image name to the new image name.
 
 - First-seen dates, CVE IDs, priorities, and fix availability for ordinary findings
 - First-seen-as-EOL dates, CVE IDs, and priorities for EOL packages
 - The base OS's first-seen-as-EOL date
 - Muting history
 
-After the transfer, this history is compared with the new reference's current results.
-Added CVEs are handled as ordinary CVE additions, and packages that disappear are resolved under the new reference.
+After the transfer, this history is compared with the new image name's current results.
+Added CVEs are handled as ordinary CVE additions, and packages that disappear are resolved under the new image name.
 
-Muting conditions are reassessed using the new reference's current information.
+Muting conditions are reassessed using the new image name's current information.
 See [Muting findings without a fix](runtime-usage.md#muting-findings-without-a-fix) for conditions and reasons for unmuting.
 
 ### Cases without history transfer {#no-transfer}
 
-History is not carried over as a reference update in cases such as the following.
+History is not carried over as an image name update in cases such as the following.
 
-- The old and new references run simultaneously during a rolling update
-- A shared reference splits into multiple new references
-- Multiple old references merge into one new reference
-- The new reference has failed scans, partially failed scans, or unconfirmed identities
-- Multiple image identities are running under the new reference
+- Containers using the old and new image names run simultaneously during a rolling update
+- A shared image name splits into multiple new image names
+- Multiple old image names merge into one new image name
+- The new image name has failed scans, partially failed scans, or unconfirmed digests
+- Multiple images with different digests are running under the new image name
 - Previous records lack workload information, so the match cannot be confirmed
 
-Without a transfer, each reference is compared with its own history.
-Findings under a new reference with no history are new, while findings under the old reference are resolved once they leave the scan scope and no longer need to be retained.
+Without a transfer, each image name is compared with its own history.
+Findings under a new image name with no history are new, while findings under the old image name are resolved once they leave the scan scope and no longer need to be retained.
 
 ## History continuity {#state-lifecycle}
 
@@ -189,8 +189,8 @@ Missing information affects decisions as follows.
 | --- | --- |
 | Priority | No priority escalation is detected in that cycle because there is no comparison baseline |
 | EOL package records | Current EOL packages are treated as newly detected EOL |
-| Image identity information | Current identities are recorded as the comparison baseline |
-| Workload records | History is not transferred from that old reference |
+| Image digest information | Current digests are recorded as the comparison baseline |
+| Workload records | History is not transferred from that old image name |
 
 ### Retained history {#retained-findings}
 

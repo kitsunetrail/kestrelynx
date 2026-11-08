@@ -56,11 +56,11 @@ Image registry authentication is not used to retrieve dependency packages.
 
 | Input | Support |
 | --- | --- |
-| Edit location | Image reference written directly in `services.<service>.image` |
-| Image reference | A string matching the running repository and tag, with an identifiable edit location |
+| Edit location | Image name written directly in `services.<service>.image` |
+| Image name | A string matching the running repository and tag, with an identifiable edit location |
 | Pinned tag | A tag specifying a full version can be changed to a newer patch in the same series |
-| Floating tag | Can produce a re-pull candidate, without a PR rewriting the same tag reference |
-| Variables and digests | Unsupported in image references being edited |
+| Floating tag | Can produce a re-pull candidate, without a PR rewriting an image name that uses the same tag |
+| Variables and digests | Unsupported in image names being edited |
 | YAML anchors, aliases, and merge keys | Unsupported when they affect the edit location |
 | Block scalars and non-string `image` values | Unsupported |
 | `include` and `extends` on the target service | Unsupported for automatic editing |
@@ -78,7 +78,7 @@ See [Distributed image tags](remediation-logic.md#published-image-tags) for tag 
 | Edit location | `image` in regular containers and native sidecars with `restartPolicy: Always` |
 | Edited text | Changes only the explicit tag matching the declared and running image, preserving formatting and comments |
 | Duplicate keys | Checks all YAML documents before and after editing and rejects duplicates |
-| Digests, `$` variables, and missing tags | Require manual action in image references being edited |
+| Digests, `$` variables, and missing tags | Require manual action in image names being edited |
 | Block scalars and `image` values other than simple strings | Require manual action |
 | YAML anchors, aliases, and merge keys | Require manual action when involved in the edit path or document identity, including `metadata` |
 | Flux `$imagepolicy` | Requires manual action when the marker appears on the target `image` line |
@@ -98,7 +98,7 @@ Following the [example of `images` in `kustomization.yaml` and `affects`](remedi
 | File | `kustomization.yaml`, `kustomization.yml`, or `Kustomization`, containing exactly one YAML document |
 | Target selection | Selects exactly one entry whose `images[].name` matches `kustomize.image` |
 | Edited text | Changes only the existing string `newTag`, preserving quotes, comments, and line endings |
-| `newName` | Preserves the existing value and checks the resulting image reference against declared and running references; changing `newName` itself requires manual action |
+| `newName` | Preserves the existing value and checks the resulting image name against declared and running image names; changing `newName` itself requires manual action |
 | Missing or empty `newTag` | Requires manual action with `kustomize_tag_not_set` |
 | Numbers, non-string values, and values with explicit YAML tags | Require manual action with `kustomize_not_string`; quote tags that would otherwise be parsed as numbers |
 | Block scalars and values containing `$` | Require manual action with `kustomize_block_scalar` or `kustomize_variable` |
@@ -109,13 +109,13 @@ Following the [example of `images` in `kustomization.yaml` and `affects`](remedi
 | `imageTags`, `patches`, `replacements`, `components`, `helmCharts`, and `helmGlobals` | Files using these fields require manual action with `kustomize_unsupported_feature` |
 | `generators`, `transformers`, `vars`, `patchesStrategicMerge`, and `patchesJson6902` | Files using these fields require manual action with `kustomize_unsupported_feature` |
 | Remote `resources` and `bases` | Require manual action with `kustomize_unsupported_feature` |
-| Interference from another `images` entry | Accounts for Kustomize matching `name` as a regular expression; cases such as another entry affecting the target's name or references before or after the edit require manual action with `kustomize_image_chained` |
+| Interference from another `images` entry | Accounts for Kustomize matching `name` as a regular expression; cases such as another entry affecting the target's name or image names before or after the edit require manual action with `kustomize_image_chained` |
 | A `name` that is not a valid regular expression | Checks all `images` entries, including non-target entries, and requires manual action with `kustomize_invalid` |
 | Flux `$imagepolicy` | A marker on the `newTag` line requires manual action with `kustomize_image_automation` |
 | `.argocd-source-*.yaml` | An Argo CD Image Updater write-back file in the same directory requires manual action with `image_updater_file` |
 
 A missing file uses `manifest_file_not_found`, and a file of a type that cannot be edited uses `manifest_file_unusable`.
-If the reference derived from the file differs from the declared or running reference, the reason is `source_mismatch`.
+If the image name derived from the file differs from the declared or running image name, the reason is `source_mismatch`.
 
 See [Kustomize PRs](remediation-logic.md#kustomize-prs) for checks across the whole set and handling of ordinary init containers.
 
@@ -128,7 +128,7 @@ The repository, including its registry, and tag must match both the declared ima
 | --- | --- |
 | File | A `.yaml` or `.yml` values file containing one YAML document without duplicate keys |
 | Mapping form | A mapping containing `repository` and a string `tag`, with optional `registry` |
-| String form | An image reference in `"repo:tag"` form |
+| String form | An image name in `"repo:tag"` form |
 | Target selection | Selects the path in `helm_values.key`; a missing value requires manual action with `helm_key_missing` |
 | Edited text | Changes only the tag, preserving existing quotes and comments |
 | Quoting a new tag | If the mapping form's old tag is unquoted and the new tag would not be a string in Helm, such as `1.10` or `on`, writes it in double quotes and explains this in the PR body |
@@ -148,19 +148,19 @@ The repository, including its registry, and tag must match both the declared ima
 | `.argocd-source-*.yaml` | Requires manual action with `image_updater_file` when an Argo CD Image Updater write-back file exists in the same directory |
 
 A missing file uses `manifest_file_not_found`, and a file whose type cannot be edited uses `manifest_file_unusable`.
-A reference derived from the file that differs from the declared or running reference uses `source_mismatch`.
+An image name derived from the file that differs from the declared or running image name uses `source_mismatch`.
 
 See [Helm values PRs](remediation-logic.md#helm-values-prs) for checks across the whole set, handling of ordinary init containers, and the premise about the final value.
 ### Dockerfile formats {#dockerfile-formats}
 
 | Input | Support |
 | --- | --- |
-| Pinned `FROM` tag | Editable when the reference has no variables or digest and the tag location can be identified |
+| Pinned `FROM` tag | Editable when the image name has no variables or digest and the tag location can be identified |
 | Floating `FROM` tag | Used for base verification, but excluded from tag-update PRs |
 | Build `target` | A stage name can be specified; defaults to the last stage |
 | Inheritance from earlier stages | Supported when inheritance can be followed to an external base image |
 | `--platform` | Static values are supported on the `FROM` specifying the external base, but unsupported on intermediate `FROM` instructions |
-| Variables in `FROM`, `scratch`, and digest references | Unsupported for automatic editing |
+| Variables in `FROM`, `scratch`, and image names containing digests | Unsupported for automatic editing |
 | Nonstandard syntax frontends and the `escape` directive | Unsupported for automatic editing |
 | `ONBUILD` in inherited stages or base images | Unsupported for automatic updates |
 | Compose build context | Static paths within the repository are supported |
@@ -645,13 +645,13 @@ The following tables give each code's meaning and related decision rules or chec
 | `introduced_findings` | The candidate brings new findings | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 | `introduced_kev` | The candidate brings a new vulnerability on the KEV list | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 | `adopted` | The candidate was adopted | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `declared_ref_mismatch` | At least one container using the same running image reference has a different image reference in its Pod spec, resulting in `not_comparable` | [Kubernetes image references and re-pull guidance](remediation-logic.md#kubernetes-image-references) |
-| `declared_ref_unavailable` | The Pod spec's image reference cannot be read for at least one container using the same running image reference, resulting in `not_comparable` | [Kubernetes image references and re-pull guidance](remediation-logic.md#kubernetes-image-references) |
-| `digest_only` | The reference has a digest and no tag | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `tag_and_digest` | The reference has both a tag and a digest | [Distributed image tags](remediation-logic.md#published-image-tags) |
+| `declared_ref_mismatch` | At least one container using the same running image name has a different image name in its Pod spec, resulting in `not_comparable` | [Kubernetes image names and re-pull guidance](remediation-logic.md#kubernetes-image-references) |
+| `declared_ref_unavailable` | The Pod spec's image name cannot be read for at least one container using the same running image name, resulting in `not_comparable` | [Kubernetes image names and re-pull guidance](remediation-logic.md#kubernetes-image-references) |
+| `digest_only` | The image name has a digest and no tag | [Distributed image tags](remediation-logic.md#published-image-tags) |
+| `tag_and_digest` | The image name has both a tag and a digest | [Distributed image tags](remediation-logic.md#published-image-tags) |
 | `prerelease` | The tag has a prerelease version format | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `bare_digest` | The reference is a bare digest with no identifiable repository | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `unparsable` | The image reference cannot be parsed | [Distributed image tags](remediation-logic.md#published-image-tags) |
+| `bare_digest` | The image name is a bare digest with no identifiable repository | [Distributed image tags](remediation-logic.md#published-image-tags) |
+| `unparsable` | The image name cannot be parsed | [Distributed image tags](remediation-logic.md#published-image-tags) |
 | `unsupported_tag_format` | The format of the tag is not supported | [Distributed image tags](remediation-logic.md#published-image-tags) |
 | `base_layers_mismatch` | The base image behind the tag does not match the start of the running image's layers | [Base layer matching](remediation-logic.md#base-layer-matching) |
 | `base_update_not_deployed` | The base-update PR is merged, but the running images are unchanged since the PR was created | [Base layer matching](remediation-logic.md#base-layer-matching) |
@@ -662,8 +662,8 @@ The following tables give each code's meaning and related decision rules or chec
 | `floating_base_unconfirmed` | The layers of the current base referenced by a floating-tag `FROM` do not match the start of the running image's layers | [Base layer matching](remediation-logic.md#base-layer-matching) |
 | `dockerfile_set_not_adopted` | The same candidate could not be adopted for every workload sharing the Dockerfile (check each workload's own reason too) | [Base image selection](remediation-logic.md#base-image-selection) |
 | `compose_set_not_adopted` | The same candidate could not be adopted for every service sharing the image (check each service's own reason too) | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `instances_missing` | A mapped container has no running instance, a running reference is unavailable, or an instance in the update target has no plan item | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
-| `mixed_references` | Running instances do not all declare or run the same reference | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
+| `instances_missing` | A mapped container has no running instance, a running image name is unavailable, or an instance in the update target has no plan item | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
+| `mixed_references` | Running instances do not all declare or run the same image name | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
 | `kubernetes_set_not_adopted` | Containers updating the same image in the same file do not agree on one adopted candidate | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
 
 ### Source reasons {#source-reasons}
@@ -723,7 +723,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `source_object_missing` | No document in the manifest matches the workload's object | [Manifest formats](#manifest-formats) |
 | `source_object_ambiguous` | More than one document in the manifest matches the workload's object | [Manifest formats](#manifest-formats) |
 | `source_container_missing` | The object has no editable container with that name | [Manifest formats](#manifest-formats) |
-| `source_mismatch` | The image reference derived from the file differs from the declared or running image | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs), [Helm values PRs](remediation-logic.md#helm-values-prs) |
+| `source_mismatch` | The image name derived from the file differs from the declared or running image name | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs), [Helm values PRs](remediation-logic.md#helm-values-prs) |
 | `mapping_conflict` | Two or more mappings to the file resolve to the same container in the same document | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
 | `kustomize_invalid` | The kustomization is not one well-formed YAML document, repeats a key, or fails the check after the edit | [Kustomize formats](#kustomize-formats) |
 | `kustomize_image_missing` | The kustomization has no `images` entry of the mapped name | [Kustomize formats](#kustomize-formats) |
@@ -751,7 +751,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `helm_anchor_or_alias` | A node on the path to the key has an anchor or is an alias | [Helm values formats](#helm-values-formats) |
 | `helm_merge_key` | A mapping on the path to the key has a merge key | [Helm values formats](#helm-values-formats) |
 | `helm_image_automation` | A line of the image carries a Flux image automation marker | [Helm values formats](#helm-values-formats) |
-| `undeclared_affected_workload` | An unlisted container declares the same image reference as the Kustomize `images` entry or Helm values key and may be affected by the edit | [Kustomize PRs](remediation-logic.md#kustomize-prs), [Helm values PRs](remediation-logic.md#helm-values-prs) |
+| `undeclared_affected_workload` | An unlisted container declares the same image name as the Kustomize `images` entry or Helm values key and may be affected by the edit | [Kustomize PRs](remediation-logic.md#kustomize-prs), [Helm values PRs](remediation-logic.md#helm-values-prs) |
 | `init_container_unverified` | A listed init container could not be shown to have run the same image as the running containers | [Kustomize PRs](remediation-logic.md#kustomize-prs) |
 | `dependency_files_not_found` | No dependency files were found | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
 | `ambiguous_dependency_files` | More than one set of dependency files matches, so no unique set can be selected | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |

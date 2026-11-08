@@ -21,11 +21,15 @@ the Sensor and can be used with `runtime.enabled: false`.
 | `not_observed` | Use was not confirmed during the observation window. This does not mean unused. |
 | `unavailable` | Evidence is insufficient to assess usage. A reason is included. |
 
+The Node.js and Python runtimes in the table refer to the runtimes themselves that KestreLynx checks against security advisories (see [Node.js runtime findings](scan-logic.md#node-runtime) and [Python runtime findings](scan-logic.md#python-runtime)).
+The following table lists the rules for marking each package type as in use.
+
 | Package type | Rule for marking it in use |
 | --- | --- |
 | OS package | A running process executed a file from the package or loaded it as a library, as seen by sampling or by eBPF execution and library-load events from short-lived processes. |
 | Language package compiled into a binary, such as Go or Rust | The executable identified by Trivy's Target is running as a process. |
-| Language package loaded by a runtime, such as Python, Node.js, or Java | A corresponding runtime process, such as `python`, `node`, or `java`, is running in the container. All packages in that ecosystem are then considered in use. |
+| Language package loaded by a runtime, such as Python, Node.js, or Java | All packages in the ecosystem are considered in use when a corresponding runtime process, such as `python`, `node`, or `java`, is running in the container. |
+| Node.js and Python runtimes | The runtime executable is running as a process. |
 
 Treating all packages in an ecosystem as in use because its runtime process is running is KestreLynx's conservative classification rule, rather than confirmation that each dependency is actually used.
 
@@ -34,6 +38,19 @@ count as evidence of use.
 
 See [Runtime usage display](slack-display.md#runtime-display) for Slack text and observed evidence, and [Current report ordering](slack-display.md#current-order) for ordering.
 Webhook fields are described in [Runtime fields](webhook-reference.md#runtime).
+
+### Runtime executables {#runtime-executables}
+
+The executable paths described below are used only when runtime usage is enabled, to assess whether the Node.js and Python runtimes are in use based on Sensor evidence of the executables running.
+
+- The Node.js runtime executable is handled as follows.
+    - The executable is `bin/node` under the Node.js installation directory, which is `/usr/local` in official `node` images, giving the path `/usr/local/bin/node`.
+    - The installation directory is determined by removing the trailing `/lib/node_modules/npm` from the npm path reported by Trivy.
+    - If npm is not found, the executable path is assumed to be `/usr/local/bin/node`.
+- The Python runtime executable is handled as follows.
+    - The executable is the Python runtime with a version number in its filename, located in `/usr/local/bin` in official `python` images.
+    - If the `PYTHON_VERSION` environment variable specifies a version in the 3.12 release line, the executable path is `/usr/local/bin/python3.12`.
+    - In official images, `python3` is a symbolic link to this executable, and the Sensor records the path after following the link.
 
 ## Requirements
 
@@ -161,9 +178,9 @@ meet every condition below.
 - The Sensor has observed every container used in the assessment for at least 7 days, to cover weekly activity.
 - Priority is not Act now.
 
-Packages with any `fixed` or EOL groups are not muted. EOL is always
-notified. Image references with failed scans or unconfirmed identities are not
-muted for that cycle.
+Packages with any `fixed` or EOL groups are not muted. EOL is always notified.
+
+Image names with failed scans or unconfirmed digests are not muted for that cycle.
 
 Muting does not change priority.
 For the same image and package, muting ends when any of the following applies.

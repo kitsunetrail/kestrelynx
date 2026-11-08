@@ -79,7 +79,7 @@ See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for
 | KestreLynx | `api.github.com` | Match existing PRs and past operation results | PR processing is enabled. |
 | KestreLynx | `api.github.com` | Create commits, branches, PRs, and replacement comments, and close eligible older PRs | PR processing is enabled and write conditions are met. |
 
-PRs may contain image references and digests, workload names, repository names, source paths, and changes.
+PRs may contain image names and digests, workload names, repository names, source paths, and changes.
 They may also contain package names and versions, vulnerability IDs, comparison results, and processing reasons.
 
 For re-resolution PRs, KestreLynx sends dependent package names, versions before and after the update, and version requirements that block the update to GitHub to explain why packages such as `mkdirp` also need updates.
@@ -91,7 +91,7 @@ See [PR management](remediation-logic.md#pr-management) for management condition
 
 | Sender | Destination | Information retrieved or sent | When |
 | --- | --- | --- | --- |
-| KestreLynx | Public image registries or registries with configured authentication | Retrieve tag lists, manifests, configs, and other information used to verify image identity | Looking for published-image or base-image candidates. |
+| KestreLynx | Public image registries or registries with configured authentication | Retrieve tag lists, manifests, configs, and other information used to verify image digests | Looking for published-image or base-image candidates. |
 
 See [Image registry authentication](configuration.md#registries) for authentication settings and [Image candidate selection](remediation-logic.md#image-selection) for candidate discovery.
 
@@ -154,7 +154,7 @@ See [Re-resolution support and limits](remediation-reference.md#dependent-rereso
 Email uses SMTP with required TLS (`starttls` or implicit `tls`) to the configured host and port.
 One send is limited to 30 seconds from connect through `QUIT`.
 
-Notifications may contain image references and digests, workload names, repository names, and source paths.
+Notifications may contain image names and digests, workload names, repository names, and source paths.
 They may also contain package names and versions, vulnerability IDs, and comparison results, so configure destinations according to the information you can share.
 
 Re-resolution notifications include dependent packages updated along with the targets, outcomes such as adoption, skipped attempts, or waiting periods, and their reasons.

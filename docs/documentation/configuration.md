@@ -47,7 +47,7 @@ Connections use HTTPS only, and certificates must be trusted by KestreLynx.
 
 | Option | Required | Default | Description |
 | --- | --- | --- | --- |
-| `host` | yes | none | Hostname or IPv4 address as used in image references, with an optional port from `1` to `65535`; no scheme, path, or user information. Hostnames are case-insensitive, and `docker.io`, `index.docker.io`, and `registry-1.docker.io` are treated as the same host. Credential entries must not have duplicate `host` values after normalization. |
+| `host` | yes | none | Hostname or IPv4 address as used in image names, with an optional port from `1` to `65535`; no scheme, path, or user information. Hostnames are case-insensitive, and `docker.io`, `index.docker.io`, and `registry-1.docker.io` are treated as the same host. Credential entries must not have duplicate `host` values after normalization. |
 | `username` | yes | none | Nonempty string without whitespace, control characters, or `:`. |
 | `password` | yes | none | Nonempty password or access token without whitespace or control characters. |
 | `token_hosts` | no | `[]` | Additional token service hosts allowed to receive credentials; each value uses the same format as `host`. For Docker Hub authentication, set `host: docker.io` and `token_hosts: [auth.docker.io]`. |
@@ -331,14 +331,14 @@ See [Container inputs](remediation-logic.md#worker-inputs) for checks when passi
 
 These settings apply to language-package updates in Kubernetes mode. The user applies the work namespace and necessary resources following the [setup steps](remediation-setup.md#kubernetes-language-updates).
 
-These settings require `kubernetes.enabled: true`. Invalid names, image references, or numeric values cause a startup error.
+These settings require `kubernetes.enabled: true`. Invalid names, image names, or numeric values cause a startup error.
 
 | Option | Required | Default | Description |
 | --- | --- | --- | --- |
 | `remediation.worker.kubernetes.namespace` | When another `remediation.worker.kubernetes` field is set | empty | Namespace for work Pods. When unset, language-package updates other than Maven require manual action with `work_namespace_not_configured`. |
 | `remediation.worker.kubernetes.service_account` | no | `kestrelynx-work` | ServiceAccount for work Pods; specify one without permissions or a token. |
 | `remediation.worker.kubernetes.priority_class` | no | `kestrelynx-work` | PriorityClass for work Pods; specify one with `preemptionPolicy: Never`. |
-| `remediation.worker.kubernetes.receiver_image` | When updating language packages from outside the cluster | empty | KestreLynx image for the container receiving input files, in `repository@sha256:...` form. When empty, read the digest-pinned reference from the status of KestreLynx's own Pod. Outside the cluster, KestreLynx cannot obtain this reference from its own Pod, so leaving this empty prevents language-package updates with `work_image_unavailable`. |
+| `remediation.worker.kubernetes.receiver_image` | When updating language packages from outside the cluster | empty | KestreLynx image for the container receiving input files, in `repository@sha256:...` form. When empty, read the digest-pinned image name from the status of KestreLynx's own Pod. Outside the cluster, KestreLynx cannot obtain this image name from its own Pod, so leaving this empty prevents language-package updates with `work_image_unavailable`. |
 | `remediation.worker.kubernetes.max_concurrent_pods` | no | `1` | Maximum work Pods held by the same instance at once, from `1` to `16`, including finished Pods that have not been deleted and excluding Pods already being deleted; the work namespace's ResourceQuota limits the total including those. |
 | `remediation.worker.kubernetes.runtime_class` | no | empty | Unsupported and must remain empty; setting it requires manual action with `work_runtime_class_unsupported`. |
 

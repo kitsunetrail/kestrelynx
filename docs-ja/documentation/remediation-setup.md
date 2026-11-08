@@ -89,7 +89,7 @@ projectが`example`、serviceが`web`なら、Workloadキーは`compose/example/
 2. Workload、リポジトリ、ベースブランチ、対象ファイルの場所を実際の値に置き換える
 3. 修正計画を有効にし、最初はPR作成を無効にした状態で設定する
 
-配布イメージの参照をComposeファイルへ対応付ける最小限の例です。
+配布イメージ名をComposeファイルへ対応付ける最小限の例です。
 
 ```yaml
 remediation:

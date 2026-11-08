@@ -20,11 +20,11 @@ In the following table, “findings” includes ordinary packages, EOL packages,
 | No findings | If there are also no changes, sends only when notifications without findings are enabled |
 | Last finding resolved | Reports the resolution even when no current findings remain |
 | Scan failure | Sends even without findings or changes |
-| Findings retained | Sends even without changes if previous package findings are retained because Kubernetes identities are unconfirmed |
-| Image content changed or reference updated | Sends even without package changes |
+| Findings retained | Sends even without changes if previous package findings are retained because Kubernetes digests are unconfirmed |
+| Image digest changed or image name updated | Sends even without package changes |
 
 The delivery condition for retained findings includes ordinary and EOL package history.
-If the retained history contains only base-OS EOL records, retention due to unconfirmed identities alone does not trigger delivery.
+If the retained history contains only base-OS EOL records, retention due to unconfirmed digests alone does not trigger delivery.
 
 See [Change and history decisions](diff-logic.md#comparison-baseline) for what constitutes a change and [Failed scans](scan-logic.md#scan-failures) for when results are retained.
 

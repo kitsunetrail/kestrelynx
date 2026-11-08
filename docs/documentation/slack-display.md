@@ -65,7 +65,7 @@ Sections without applicable content are omitted.
 | --- | --- |
 | Beginning | Header, image counts, and Sensor warnings |
 | Before changes | Warnings about unavailable threat intelligence sources |
-| Image changes | Content changes and reference updates |
+| Image changes | Digest changes and image name updates |
 | EOL changes | New EOL base operating systems and EOL package changes |
 | Package changes | Ordinary new or changed findings, resolutions, and EOL clearances |
 | End | Weekly current-state report, or scan failures and current unresolved state |
@@ -128,11 +128,11 @@ The header's `N images scanned, M affected` uses the following counting units.
 
 | Japanese display | English | Counting unit |
 | --- | --- | --- |
-| スキャンした件数 | images scanned | Distinct image reference-and-identity pairs, including failures |
-| 影響ありの件数 | affected | Image references with a selected vulnerability or an EOL base OS |
+| スキャンした件数 | images scanned | Distinct pairs of image name and digest, including failures |
+| 影響ありの件数 | affected | Image names with a selected vulnerability or an EOL base OS |
 
-Separate references count separately in the scanned count, even when they share the same scan result.
-References with only scan failures are excluded from the affected count.
+Separate image names count separately in the scanned count, even when they share the same scan result.
+Image names with only scan failures are excluded from the affected count.
 
 ### Current unresolved counts {#open-now}
 
@@ -141,9 +141,9 @@ EOL and priority counts include history retained from the previous cycle.
 
 | Display | Counting unit |
 | --- | --- |
-| `⛔ N EOL base` | Image references recorded as EOL |
-| `⛔ N EOL package` | Image reference-and-package pairs not folded into a base OS |
-| `🚨 N act-now` | Image reference-and-package pairs with Act now priority on the ordinary or EOL side |
+| `⛔ N EOL base` | Image names recorded as EOL |
+| `⛔ N EOL package` | Pairs of image name and package not folded into a base OS |
+| `🚨 N act-now` | Pairs of image name and package with Act now priority on the ordinary or EOL side |
 | `👀 N watch` · `🔕 N low` | Pairs by ordinary package priority, excluding those counted as Act now |
 
 EOL Watch and Low findings are not added to the priority counts.
@@ -156,23 +156,23 @@ When the current report contains no findings, the following states appear instea
 
 | State | Display |
 | --- | --- |
-| Package history retained because Kubernetes identities are unconfirmed | `📌 Open now: unconfirmed — holding previous findings until re-confirmed` |
+| Package history retained because Kubernetes digests are unconfirmed | `📌 Open now: unconfirmed — holding previous findings until re-confirmed` |
 | Previous history retained for another reason | `📌 Open now: not re-scanned — holding previous findings until the next successful scan` |
 | No retained history either | `🎉 Open now: none — all clear` |
 
 ### Priority line counts {#priority-counts}
 
 `Priority:` in a current-state report counts package groups in the current report.
-Groups with different fix statuses or different identities under the same reference count separately.
+Groups with different fix statuses or different digests under the same image name count separately.
 
 | Count | Included items |
 | --- | --- |
-| EOL base | EOL image references |
+| EOL base | EOL image names |
 | EOL package | EOL groups not folded into a base OS |
 | Act now | Act now groups, including EOL groups |
 | Watch and Low | Ordinary package groups at each priority |
 
-This differs from [current unresolved counts](#open-now), which combine findings for the same reference and package.
+This differs from [current unresolved counts](#open-now), which combine findings for the same image name and package.
 See [Muted findings](#muted-display) for exclusions due to muting.
 
 ### Unresolved age {#unresolved-age}
@@ -327,14 +327,14 @@ See [Change and history decisions](diff-logic.md#comparison-baseline) for the ru
 
 | Display | Meaning |
 | --- | --- |
-| `🔄 Image content changed (N)` | Section for image identity changes under the same reference |
+| `🔄 Image content changed (N)` | Section for digest changes under the same image name |
 | `image updated (old → new)` | Short digests before and after the change |
-| `🔄 Image reference updated: repo sha-A → sha-B (history carried over)` | Reference update with detection history carried over |
+| `🔄 Image reference updated: repo sha-A → sha-B (history carried over)` | Image name update with detection history carried over |
 
-Reference update lines show the repository name and the tags before and after the change.
-Digest-pinned references use short digests, and references with neither a tag nor a digest use `latest`.
+Image name update lines show the repository name and the tags before and after the change.
+Digest-pinned image names use short digests, and image names with neither a tag nor a digest use `latest`.
 
-When a reference has multiple identities, current-state image headings distinguish them with short digests and platforms such as `linux/amd64`.
+When an image name has multiple digests, current-state image headings distinguish them with short digests and platforms such as `linux/amd64`.
 
 ### Package changes {#package-change-labels}
 
@@ -347,7 +347,7 @@ When a reference has multiple identities, current-state image headings distingui
 | `Change: fix now available` | A fixed version became available |
 | `✅ Resolved since last scan (N)` | Section combining package resolutions and EOL clearances |
 
-The count in the new-findings heading is the number of displayed image reference-and-package pairs.
+The count in the new-findings heading is the number of displayed pairs of image name and package.
 It may differ from the number of cards when a pair has multiple fix statuses.
 
 New packages may have no dedicated `Change:` line.
@@ -460,12 +460,12 @@ Scan, threat intelligence, and Sensor warnings cover different areas.
 | Display | Meaning |
 | --- | --- |
 | `⚠️ N image(s) could not be scanned (vulnerabilities not checked)` | Number of images with scan failures or digest or platform verification failures |
-| `⏳ unconfirmed this cycle, holding previous findings — reference list` | Kubernetes references containing targets whose identities could not be pinned despite successful scans |
+| `⏳ unconfirmed this cycle, holding previous findings — image name list` | Image names used in Kubernetes for targets that could not be pinned by digest despite successful scans |
 
-Slack does not indicate whether an image is scanned by reference; this information is available in `identity_resolved` and `scan_target_kind` under the webhook's [Image identity](webhook-reference.md#image-identity).
+Slack does not indicate whether an image is scanned by image name; this information is available in `identity_resolved` and `scan_target_kind` under the webhook's [Image digest](webhook-reference.md#image-identity).
 
-The holding annotation may also appear for references without previous history.
-References whose scans all failed this cycle are excluded from this holding list.
+The holding annotation may also appear for image names without previous history.
+Image names whose scans all failed this cycle are excluded from this holding list.
 
 See [Failed scans](scan-logic.md#scan-failures) for retention behavior.
 

@@ -42,9 +42,9 @@ The table describes each tool's own checks; separate scanners and automation can
 
 | Tool | Trigger | Changes | Vulnerability checks before creating an update pull request | Output | Vulnerability checks after updates |
 | --- | --- | --- | --- | --- | --- |
-| [KestreLynx](remediation.md) | Vulnerabilities detected in images used by running containers | Image references and language dependency files in repositories | Compares scans before and after the proposed update | Remediation plans, update pull requests, notifications | Checks through subsequent periodic scans |
-| [Dependabot](https://github.com/dependabot/dependabot-core) | New versions or GitHub vulnerability alerts | Image references and language dependency files in repositories | Does not compare image scans | Update pull requests | Does not check deployed images |
-| [Renovate](https://github.com/renovatebot/renovate) | New versions or package vulnerability information | Image references and language dependency files in repositories | Does not compare image scans | Update pull requests | Does not check deployed images |
+| [KestreLynx](remediation.md) | Vulnerabilities detected in images used by running containers | Image names and language dependency files in repositories | Compares scans before and after the proposed update | Remediation plans, update pull requests, notifications | Checks through subsequent periodic scans |
+| [Dependabot](https://github.com/dependabot/dependabot-core) | New versions or GitHub vulnerability alerts | Image names and language dependency files in repositories | Does not compare image scans | Update pull requests | Does not check deployed images |
+| [Renovate](https://github.com/renovatebot/renovate) | New versions or package vulnerability information | Image names and language dependency files in repositories | Does not compare image scans | Update pull requests | Does not check deployed images |
 | [Copacetic](https://github.com/project-copacetic/copacetic) | An image and scanner report, or available package updates | Packages inside an image | Not applicable (does not create update pull requests) | A patched image | Does not check deployed images |
 | [OSV-Scanner](https://google.github.io/osv-scanner/experimental/guided-remediation/) | Known vulnerabilities (OSV database) | npm `package-lock.json` / `package.json`, Maven `pom.xml` | Not applicable (does not create update pull requests) | Updated dependency files; a report of fixed vulnerabilities and the remaining count | Does not check deployed images |
 

@@ -26,7 +26,7 @@ With the default `[HIGH, CRITICAL]`, Slack display, webhook payloads, and logs r
 | `generated_at` | string | Scan time in RFC 3339 format. |
 | `environment` | object | [Environment](#environment). |
 | `summary` | object | [Summary](#summary). |
-| `eosl_images` | array of strings or `null` | EOL base-image references; may be `null` when none apply. |
+| `eosl_images` | array of strings or `null` | EOL base-image names; may be `null` when none apply. |
 | `actionable` | array of objects | [Images](#images) with `fixed` findings; `[]` when none apply. |
 | `watch` | array of objects | Images with findings normalized to `affected`; `[]` when none apply. |
 | `wont_fix` | array of objects | Images with `will_not_fix` findings; `[]` when none apply. |
@@ -52,7 +52,7 @@ With the default `[HIGH, CRITICAL]`, Slack display, webhook payloads, and logs r
 
 | `summary` field | Type | Meaning and omission conditions |
 | --- | --- | --- |
-| `images_total` | integer | Number of unique image-reference and content-identity combinations, including scan failures. |
+| `images_total` | integer | Number of unique image name and digest combinations, including scan failures. |
 | `images_affected` | integer | Number of images with eligible vulnerabilities or an EOL base OS. |
 | `priority_counts` | object | Package-group counts by priority; omitted when triage is disabled. |
 | `priority_counts.act_now` | integer | Act now count. |
@@ -74,14 +74,14 @@ Notification and history handling are described in [Unavailable language runtime
 
 | `runtime_unchecked[]` field | Type | Meaning |
 | --- | --- | --- |
-| `image` | string | Image reference whose runtime was not checked because advisory data was unavailable. |
+| `image` | string | Image name whose runtime was not checked because advisory data was unavailable. |
 | `package` | string | Unchecked runtime package name: `Node.js` or `Python runtime`. |
 
 ### Scan failures {#scan-errors}
 
 | `scan_errors[]` field | Type | Meaning |
 | --- | --- | --- |
-| `image` | string | Image reference whose scan failed. |
+| `image` | string | Image name whose scan failed. |
 | `error` | string | Error details. |
 | `cause` | string | Cause of the failure. |
 | `registry` | string | Registry host from which the image is fetched; omitted when unknown. |
@@ -103,25 +103,25 @@ See [Handling scan failures](scan-logic.md#scan-failures) for how results are ha
 
 ## Image fields {#images}
 
-Each element of `actionable`, `watch`, `wont_fix`, and `eol_packages` represents an image reference and content identity for a particular fix status.
+Each element of `actionable`, `watch`, `wont_fix`, and `eol_packages` represents an image name and digest for a particular fix status.
 
-### Image identity {#image-identity}
+### Image digest {#image-identity}
 
 | Field | Type | Meaning and omission conditions |
 | --- | --- | --- |
-| `image` | string | Image reference for display. |
+| `image` | string | Image name for display. |
 | `severity_counts` | object | Integer counts by severity; `CRITICAL` and `HIGH` are always included, and `HIGH` counts only HIGH vulnerabilities. |
 | `findings` | array of objects | [Package groups](#package-fields) belonging to this image and fix status. |
-| `containers` | array of objects | [Containers](#containers) matching this content identity; `[]` when none apply. |
-| `content_id` | string | `sha256:<hex>` for a Docker scan targeting a config digest whose content identity was verified; omitted otherwise. |
-| `registry_digests` | array of strings | Registry digests collected for the same reference from successful scans with verified content identities; `[]` when unavailable. |
-| `identity_resolved` | boolean | `true` when this element's scan verified the running image's content identity. |
+| `containers` | array of objects | [Containers](#containers) matching this digest; `[]` when none apply. |
+| `content_id` | string | `sha256:<hex>` for a Docker scan targeting a config digest that was verified; omitted otherwise. |
+| `registry_digests` | array of strings | Registry digests collected for the same image name from successful scans with verified digests; `[]` when unavailable. |
+| `identity_resolved` | boolean | `true` when this element's scan verified the running image's digest. |
 | `scan_target_kind` | string | `content_id`, `registry_digest`, or `reference`. |
 | `severity_counts.MEDIUM` | integer | MEDIUM count; omitted when `0`. |
 | `severity_counts.LOW` | integer | LOW count; omitted when `0`. |
 | `severity_counts.UNKNOWN` | integer | UNKNOWN count, including unrecognized severities; omitted when `0`. |
 
-`registry_digests` covers the entire reference, while `identity_resolved` and `scan_target_kind` describe each element.
+`registry_digests` contains information collected for the same image name, while `identity_resolved` and `scan_target_kind` describe each element.
 
 ### Containers {#containers}
 
@@ -130,7 +130,7 @@ Each element of `actionable`, `watch`, `wont_fix`, and `eol_packages` represents
 | `name` | string | Docker name without the leading slash or link aliases, or `<namespace>/<pod>/<container>` for Kubernetes. |
 | `workload` | object | [Workload association](#workloads), included even when the association is unknown. |
 
-Even when one reference points to multiple content identities, each element includes only the containers matching its content identity.
+Even when one image name has multiple digests, each element includes only the containers with a matching digest.
 
 ### Workloads {#workloads}
 
@@ -324,10 +324,10 @@ See [Change and history decisions](diff-logic.md#comparison-baseline) for the co
 | --- | --- | --- |
 | `new` | array of objects | [Ordinary package changes](#new-fields); `[]` when none apply. |
 | `resolved` | array of objects | [Package resolutions](#resolved-fields); `[]` when none apply. |
-| `replaced` | array of objects | [Image content changes](#image-replacement-fields); `[]` when none apply. |
-| `reference_changes` | array of objects | [Image reference updates](#reference-change-fields); omitted when none apply. |
+| `replaced` | array of objects | [Image digest changes](#image-replacement-fields); `[]` when none apply. |
+| `reference_changes` | array of objects | [Image name updates](#reference-change-fields); omitted when none apply. |
 | `new_eosl` | array of strings | [New EOL base images](#eol-base-fields); `[]` when none apply. |
-| `resolved_eosl` | array of strings | [References no longer recorded as EOL](#eol-base-fields); `[]` when none apply. |
+| `resolved_eosl` | array of strings | [Image names no longer recorded as EOL](#eol-base-fields); `[]` when none apply. |
 | `new_eol_packages` | array of objects | [EOL package changes](#eol-change-fields); `[]` when none apply. |
 | `resolved_eol_packages` | array of objects | [EOL package clearances](#eol-resolved-fields); `[]` when none apply. |
 | `oldest_open_days` | integer | [Oldest unresolved age](#oldest-open-days); included even when `0`. |
@@ -336,7 +336,7 @@ See [Change and history decisions](diff-logic.md#comparison-baseline) for the co
 
 | `diff.new[]` field | Type | Meaning and omission conditions |
 | --- | --- | --- |
-| `image` | string | Image reference. |
+| `image` | string | Image name. |
 | `package` | string | Package name. |
 | `kind` | string | `new`, `escalated`, `new_cves`, `now_fixable`, or `unmuted`. |
 | `ecosystems` | array of strings | Sorted, deduplicated ecosystems of the groups combined into this change, including `""` for unknown types. |
@@ -359,29 +359,29 @@ The explanatory text in `reason` is in English regardless of the notification la
 
 | `diff.resolved[]` field | Type | Meaning |
 | --- | --- | --- |
-| `image` | string | Image reference. |
+| `image` | string | Image name. |
 | `package` | string | Package name no longer present in ordinary findings. |
 
 See [Resolution decisions](diff-logic.md#resolved-findings) for what resolution means.
 
-### Image content changes {#image-replacement-fields}
+### Image digest changes {#image-replacement-fields}
 
 | `diff.replaced[]` field | Type | Meaning |
 | --- | --- | --- |
-| `ref` | string | Image reference. |
+| `ref` | string | Image name. |
 | `prev_content_ids` | array of strings | Sorted previous verified content-ID set. |
 | `content_ids` | array of strings | Sorted current verified content-ID set. |
 
 Empty arrays are returned as `[]`, not `null`.
 
-### Image reference updates {#reference-change-fields}
+### Image name updates {#reference-change-fields}
 
 | `diff.reference_changes[]` field | Type | Meaning |
 | --- | --- | --- |
-| `repository` | string | Repository from the new reference without its tag or digest, preserving the registry port. |
-| `previous_ref` | string | Full previous image reference. |
-| `ref` | string | Full new image reference. |
-| `workloads` | array of strings | Sorted workload keys shared by the old and new references; `[]` when empty. |
+| `repository` | string | Repository from the new image name without its tag or digest, preserving the registry port. |
+| `previous_ref` | string | Full previous image name. |
+| `ref` | string | Full new image name. |
+| `workloads` | array of strings | Sorted workload keys shared by the old and new image names; `[]` when empty. |
 
 | Target | Workload key format |
 | --- | --- |
@@ -389,14 +389,14 @@ Empty arrays are returned as `[]`, not `null`.
 | Kubernetes | `<kind>/<namespace>/<name>/<container>` |
 | Standalone Docker container with no known workload | `container/<name>` |
 
-See [Image reference updates](diff-logic.md#reference-changes) for conditions for carrying history over.
+See [Image name updates](diff-logic.md#reference-changes) for conditions for carrying history over.
 
 ### Base OS EOL changes {#eol-base-fields}
 
 | Field | Element type | Meaning |
 | --- | --- | --- |
-| `diff.new_eosl[]` | string | Base-image reference newly recorded as EOL. |
-| `diff.resolved_eosl[]` | string | Image reference no longer recorded as EOL. |
+| `diff.new_eosl[]` | string | Base-image name newly recorded as EOL. |
+| `diff.resolved_eosl[]` | string | Image name no longer recorded as EOL. |
 
 ### EOL package changes {#eol-change-fields}
 
@@ -404,7 +404,7 @@ Changes to EOL packages folded in Slack are also included.
 
 | `diff.new_eol_packages[]` field | Type | Meaning and omission conditions |
 | --- | --- | --- |
-| `image` | string | Image reference. |
+| `image` | string | Image name. |
 | `package` | string | Package name. |
 | `kind` | string | `eol_new`, `eol_new_cves`, or `eol_escalated`. |
 | `ecosystems` | array of strings | Sorted, deduplicated ecosystems of the groups combined into this change, including `""` for unknown types. |
@@ -425,9 +425,9 @@ There is no `new_cve_count` field, so use the length of `new_cve_ids` for the ad
 
 | `diff.resolved_eol_packages[]` field | Type | Meaning |
 | --- | --- | --- |
-| `image` | string | Image reference. |
+| `image` | string | Image name. |
 | `package` | string | Package name no longer present in the EOL section. |
-| `still_open` | boolean | `true` when ordinary findings remain for the same reference and package; included even when `false`. |
+| `still_open` | boolean | `true` when ordinary findings remain for the same image name and package; included even when `false`. |
 
 ### Oldest unresolved age {#oldest-open-days}
 
@@ -447,7 +447,7 @@ See [Unresolved age](slack-display.md#unresolved-age) for the Slack definition.
 
 ## Compatibility {#compatibility}
 
-Ecosystem, runtime usage, EOL, and reference-update information are additions that preserve existing fields and the structure organized by fix status.
+Ecosystem, runtime usage, EOL, and information about image name updates are additions that preserve existing fields and the structure organized by fix status.
 
 Receivers should accept unknown additional fields and handle omissions according to each table.
 Treat omission, `null`, `[]`, and `""` as distinct values.

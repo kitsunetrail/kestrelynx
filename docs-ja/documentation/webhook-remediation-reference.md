@@ -49,9 +49,9 @@
 | `items[].priority` | string | 対象の優先度で、情報なしは省略 |
 | `items[].services` | objectの配列 | 対応するサービスの情報で、空なら省略 |
 | `items[].services[].workload` | string | Kubernetesのワークロードキーで、Kubernetesの`services[]`の各要素はこのフィールドだけを含む |
-| `items[].declared` | objectの配列 | KubernetesのPodのspecにあるイメージ参照と取得方針で、空なら省略 |
+| `items[].declared` | objectの配列 | KubernetesのPodのspecにあるイメージ名と取得方針で、空なら省略 |
 | `items[].declared[].workload` | string | 対象のワークロードキー |
-| `items[].declared[].ref` | string | specのイメージ参照で、読み取れない場合は省略 |
+| `items[].declared[].ref` | string | specのイメージ名で、読み取れない場合は省略 |
 | `items[].declared[].pull_policy` | string | specの`imagePullPolicy`で、未指定なら省略 |
 | `items[].pull` | objectの配列 | Kubernetesの`pull_again`項目に付く取得方針ごとの案内で、空なら省略 |
 | `items[].pull[].guidance` | string | `restart_pulls`・`change_tag_or_digest`・`import_to_node`のいずれかで、意味は[再取得の案内](remediation-logic.md#kubernetes-image-references)を参照 |
@@ -100,9 +100,9 @@
 
 | イメージ情報のフィールド名 | 型 | 意味・省略条件 |
 | --- | --- | --- |
-| `ref` | string | イメージ参照 |
+| `ref` | string | イメージ名 |
 | `tag` | string | タグで、不明なら省略 |
-| `content` | string | 稼働イメージの実体識別情報で、情報なしや候補イメージでは省略 |
+| `content` | string | 稼働イメージのdigestで、情報なしや候補イメージでは省略 |
 | `config_digest` / `manifest_digest` / `top_digest` | string | 各digestで、不明なら省略 |
 | `platform` | string | プラットフォームで、不明なら省略 |
 | `digest_kind_unverified` | boolean | 稼働イメージのdigestの種類を確認できていない場合は`true`で、それ以外は省略 |
@@ -119,7 +119,7 @@
 
 | `scans[]`のフィールド名 | 型 | 意味・省略条件 |
 | --- | --- | --- |
-| `role` / `ref` | string | スキャンの役割とイメージ参照 |
+| `role` / `ref` | string | スキャンの役割とイメージ名 |
 | `requested` / `confirmed` | string | 要求した対象と確認できた対象 |
 | `db` | string | 使用したデータベースの識別情報 |
 | `scanned_at` | string | RFC 3339形式のスキャン時刻で、記録がなければ省略 |
@@ -142,7 +142,7 @@
 | `dockerfile_items[].priority` | string | 対象の優先度で、情報なしは省略 |
 | `dockerfile_items[].workloads` | stringの配列 | 対象のWorkloadで、`container/<名前>`も含み、該当なしは`[]` |
 | `dockerfile_items[].source` | object | Dockerfileのリポジトリ・ブランチ・パスと、取得できたコミット・ステージなどの情報 |
-| `dockerfile_items[].base_ref` / `dockerfile_items[].base_kind` | string | 現在のベースイメージ参照とタグの分類で、空なら省略 |
+| `dockerfile_items[].base_ref` / `dockerfile_items[].base_kind` | string | 現在のベースイメージ名とタグの分類で、空なら省略 |
 | `dockerfile_items[].candidate` | object | 候補の[イメージ情報](#remediation-image-fields)で、候補がなければ省略 |
 | `dockerfile_items[].counts` | object | 整数値の`targets`・`resolved`・`remaining`・`introduced`による集計 |
 | `dockerfile_items[].rebuild_runtimes` | objectの配列 | 全稼働イメージが`floating_base_unconfirmed`の場合にまとめたランタイムの再ビルドの見込みで、空なら省略 |
@@ -161,7 +161,7 @@
 | `dockerfile_items[].awaiting_deploy` | object | `base_update_not_deployed`に該当するマージ済みPRの情報で、該当しなければ省略 |
 | `dockerfile_items[].awaiting_deploy.number` | integer | PR番号 |
 | `dockerfile_items[].awaiting_deploy.url` | string | PRのURLで、空なら省略 |
-| `dockerfile_items[].awaiting_deploy.from` | string | PR前に`FROM`が指していたベースイメージ参照で、稼働イメージの作成元 |
+| `dockerfile_items[].awaiting_deploy.from` | string | PR前に`FROM`が指していたベースイメージ名で、稼働イメージの作成元 |
 | `dockerfile_items[].awaiting_deploy.to` | string | PRが設定したタグ |
 | `dockerfile_items[].final_image_verified` | boolean | 再ビルド後のアプリケーションイメージの検証有無で、常に`false` |
 | `dockerfile_items[].pull_request` | object | 対応する[PR処理](#remediation-pr-fields)で、対応がなければ省略 |
@@ -192,9 +192,9 @@
 | `remaining` | stringの配列 | 検出中のCVEのうち、その版でも残るIDで、空なら省略 |
 
 - CVEの集計
-  - 新しい版で増えるCVEは含めない
-  - 項目全体では`package`・`installed`・`base_version`が同じ記録をまとめ、CVEのIDの重複を除いて並べ、どれかの稼働イメージで残るIDは`disappearing`に含めない
-  - 稼働イメージごとの判定が混在する場合は項目全体の見込みを省略し、`entities[]`には個別の記録を残す
+    - 新しい版で増えるCVEは含めない
+    - 項目全体では`package`・`installed`・`base_version`が同じ記録をまとめ、CVEのIDの重複を除いて並べ、どれかの稼働イメージで残るIDは`disappearing`に含めない
+    - 稼働イメージごとの判定が混在する場合は項目全体の見込みを省略し、`entities[]`には個別の記録を残す
 
 両方の`rebuild_check`は、稼働イメージと現在のベースをパッケージの場所・CVEで突き合わせた見込みで、再ビルドした完成イメージの比較ではなく、`final_image_verified`は`false`のままです。
 `checked`で消える見込みの所見がなく、Slackとメールに何も出ない場合も、結果は`rebuild_check`に載ります。
@@ -231,18 +231,18 @@
 | `not_checked` | 比較しておらず、`reason`と`detail`に説明を記録する |
 
 - 所見と場所
-  - 稼働イメージの対象は、深刻度の範囲内でstatusが`fixed`かつ修正版がある所見
-  - ベース側は、深刻度の範囲内のすべての所見でCVEが残っているかを確かめる
-  - 言語ランタイム本体の所見は`rebuild_runtimes`で扱う
-  - 場所の照合と`undetermined`になる条件は[ベースレイヤーの照合](remediation-logic.md#base-layer-matching)を参照
+    - 稼働イメージの対象は、深刻度の範囲内でstatusが`fixed`かつ修正版がある所見
+    - ベース側は、深刻度の範囲内のすべての所見でCVEが残っているかを確かめる
+    - 言語ランタイム本体の所見は`rebuild_runtimes`で扱う
+    - 場所の照合と`undetermined`になる条件は[ベースレイヤーの照合](remediation-logic.md#base-layer-matching)を参照
 - 項目全体の集計
-  - `not_checked`が1つでもあれば項目も`not_checked`とし、それ以外で`partial`が1つでもあれば項目も`partial`とする
-  - `gone`には、その所見を持つすべての稼働イメージで消えるものだけを含める
-  - プラットフォームによってベースの版が違う場合は、版ごとに別の記録にする
+    - `not_checked`が1つでもあれば項目も`not_checked`とし、それ以外で`partial`が1つでもあれば項目も`partial`とする
+    - `gone`には、その所見を持つすべての稼働イメージで消えるものだけを含める
+    - プラットフォームによってベースの版が違う場合は、版ごとに別の記録にする
 - 結果の読み方
-  - `not_in_base`は、ベースから消えたものとDockerfileで足したものを区別できない
-  - `only_in_base`には、Dockerfileの手順で消す所見も含む
-  - Dockerfileの手順の効果など、見込みの制約は[再ビルドの案内](remediation-results.md#rebuild-guidance)を参照
+    - `not_in_base`は、ベースから消えたものとDockerfileで足したものを区別できない
+    - `only_in_base`には、Dockerfileの手順で消す所見も含む
+    - Dockerfileの手順の効果など、見込みの制約は[再ビルドの案内](remediation-results.md#rebuild-guidance)を参照
 
 検査の範囲は、[対象別の検証範囲](remediation-logic.md#verification-scope)を参照してください。
 
@@ -539,7 +539,6 @@
 | `pull_requests[].language.remaining` | objectの配列 | PRに含めなかったパッケージで、空なら省略 |
 | `pull_requests[].language.packages[].through` | stringの配列 | 修正版に上げるために、あわせて更新した依存元の名前で、空なら省略 |
 | `pull_requests[].language.chain` | objectの配列 | PRに含む、再解決で版が変わる直接依存の一覧で、空なら省略 |
-
 | `dockerfile_items[].pull_request` | object | 対応する処理の`status`と、任意の`reason`・`number`・`url`・`state`で、対応がなければ省略 |
 | `language_items[].pull_request` | object | 対応する処理の`status`と、任意の理由・補足・PR情報・照合用識別子で、対応がなければ省略 |
 

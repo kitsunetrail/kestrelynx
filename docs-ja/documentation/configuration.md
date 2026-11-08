@@ -47,7 +47,7 @@ Kubernetesモードで`schedule.run_on_start`が有効な場合、最初のス�
 
 | 設定項目 | 必須 | 既定値 | 説明 |
 | --- | --- | --- | --- |
-| `host` | はい | なし | イメージ参照に書くホスト名またはIPv4アドレスと任意のポートで、scheme・パス・ユーザー情報は含めません。ポートは`1`〜`65535`です。ホスト名は大文字・小文字を区別せず、`docker.io`・`index.docker.io`・`registry-1.docker.io`は同じホストとして扱います。正規化後に同じ`host`となる認証設定は重複して指定できません。 |
+| `host` | はい | なし | イメージ名に書くホスト名またはIPv4アドレスと任意のポートで、scheme・パス・ユーザー情報は含めません。ポートは`1`〜`65535`です。ホスト名は大文字・小文字を区別せず、`docker.io`・`index.docker.io`・`registry-1.docker.io`は同じホストとして扱います。正規化後に同じ`host`となる認証設定は重複して指定できません。 |
 | `username` | はい | なし | 空白・制御文字・`:`を含まない、空でない文字列です。 |
 | `password` | はい | なし | 空白・制御文字を含まない、空でないパスワードまたはアクセストークンです。 |
 | `token_hosts` | いいえ | `[]` | 認証情報を送ってよい追加のtoken serviceのホスト一覧で、各値の形式は`host`と同じです。Docker Hubの認証には`host: docker.io`と`token_hosts: [auth.docker.io]`を指定します。 |
@@ -331,14 +331,14 @@ remediation:
 
 Kubernetesモードの言語パッケージ更新に使います。[導入手順](remediation-setup.md#kubernetes-language-updates)に従い、利用者が作業用namespaceと必要なリソースを適用します。
 
-これらの設定には`kubernetes.enabled: true`が必要です。名前・イメージ参照・数値の形式が不正な場合は、起動時にエラーになります。
+これらの設定には`kubernetes.enabled: true`が必要です。名前・イメージ名・数値の形式が不正な場合は、起動時にエラーになります。
 
 | 設定項目 | 必須 | 既定値 | 説明 |
 | --- | --- | --- | --- |
 | `remediation.worker.kubernetes.namespace` | `remediation.worker.kubernetes`のほかの項目を設定する場合 | 空 | 作業用Podを作るnamespace名です。未設定の場合はMaven以外の言語パッケージ更新が`work_namespace_not_configured`で手動対応になります。 |
 | `remediation.worker.kubernetes.service_account` | いいえ | `kestrelynx-work` | 作業用PodのServiceAccount名で、権限とトークンを持たないものを指定します。 |
 | `remediation.worker.kubernetes.priority_class` | いいえ | `kestrelynx-work` | 作業用PodのPriorityClass名で、`preemptionPolicy: Never`のものを指定します。 |
-| `remediation.worker.kubernetes.receiver_image` | クラスタの外から言語パッケージを更新する場合 | 空 | 入力ファイルを受け取るコンテナのKestreLynxイメージを`repository@sha256:...`で指定します。空の場合はKestreLynx自身のPodの状態からdigest付き参照を取得します。クラスタの外では自身のPodから取得できないため、空のままだと言語パッケージ更新は`work_image_unavailable`で行われません。 |
+| `remediation.worker.kubernetes.receiver_image` | クラスタの外から言語パッケージを更新する場合 | 空 | 入力ファイルを受け取るコンテナのKestreLynxイメージを`repository@sha256:...`で指定します。空の場合はKestreLynx自身のPodの状態からdigestを含むイメージ名を取得します。クラスタの外では自身のPodから取得できないため、空のままだと言語パッケージ更新は`work_image_unavailable`で行われません。 |
 | `remediation.worker.kubernetes.max_concurrent_pods` | いいえ | `1` | 同じインスタンスが同時に保持する作業用Pod数の上限で、`1`〜`16`を指定し、未削除の終了済みPodは数え、削除中のPodは数えません。削除中のPodを含む総数は作業用namespaceのResourceQuotaで制限します。 |
 | `remediation.worker.kubernetes.runtime_class` | いいえ | 空 | 未対応のため空にし、指定した場合は`work_runtime_class_unsupported`で手動対応になります。 |
 

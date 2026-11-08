@@ -7,7 +7,7 @@ A proposed candidate or merged PR does not mean that vulnerabilities have been r
 
 ### Example {#slack-example}
 
-The following is an example. In Slack, image references are bold and PR numbers are links.
+The following is an example. In Slack, image names are bold and PR numbers are links.
 
 ```text
 🔧 Fix plan
@@ -30,7 +30,7 @@ Update: base image python 3.12.3-slim → 3.12.4-slim
 | Display | Meaning |
 | --- | --- |
 | Image | The running image that produced the findings. |
-| Service | The target service, shown when an image reference cannot be used as the heading or in similar cases. |
+| Service | The target service, shown when an image name cannot be used as the heading or in similar cases. |
 | File to change | The mapped repository and the file to change. |
 | Pull request | A PR link and its status: opened now, open, merged, or closed without merging. |
 | Update | Image tag or package changes proposed by the PR. |
@@ -709,12 +709,12 @@ Check against the current base
 ```
 
 - Findings expected to disappear
-  - `gone` contains findings, or `rebuild_runtimes` contains findings expected to disappear
+    - `gone` contains findings, or `rebuild_runtimes` contains findings expected to disappear
 - Details displayed below the `Rebuild` line
-  - Package lists in `gone`, `remaining`, `not_in_base`, and `only_in_base`
-  - Runtime estimates, including those with only remaining findings
+    - Package lists in `gone`, `remaining`, `not_in_base`, and `only_in_base`
+    - Runtime estimates, including those with only remaining findings
 - Summary counts
-  - A hidden line is not counted as `rebuild`
+    - A hidden line is not counted as `rebuild`
 
 Even when nothing is displayed in Slack or email, the results are available in the webhook's [`rebuild_check`](webhook-remediation-reference.md#remediation-dockerfile-fields).
 
@@ -728,15 +728,15 @@ Rebuild: the first layers of the running image do not match the current node:24-
 ```
 
 - Package lists in Slack
-  - Show package names and versions without CVE IDs
-  - Group `not_in_base` packages in a global `node_modules` by their owning package
-  - Show at most 10 entries per line and represent additional entries by a count
+    - Show package names and versions without CVE IDs
+    - Group `not_in_base` packages in a global `node_modules` by their owning package
+    - Show at most 10 entries per line and represent additional entries by a count
 - Limits of the estimate
-  - Dockerfile `RUN` effects are not evaluated, so an instruction such as `apk upgrade` may remove findings listed as remaining
-  - Reinstalling an older version at the same location in the Dockerfile may leave findings that were expected to disappear
-  - “Not in the current base” cannot distinguish packages removed from the base from packages added by the Dockerfile
-  - `only_in_base` also includes findings that Dockerfile instructions remove from the completed image
-  - `final_image_verified` remains `false`
+    - Dockerfile `RUN` effects are not evaluated, so an instruction such as `apk upgrade` may remove findings listed as remaining
+    - Reinstalling an older version at the same location in the Dockerfile may leave findings that were expected to disappear
+    - “Not in the current base” cannot distinguish packages removed from the base from packages added by the Dockerfile
+    - `only_in_base` also includes findings that Dockerfile instructions remove from the completed image
+    - `final_image_verified` remains `false`
 
 None of these cases confirms the version actually installed by a rebuild or resolution in the running image after deployment.
 For details, see [Direct dependency version constraints](remediation-logic.md#direct-dependencies), [Base layer matching](remediation-logic.md#base-layer-matching), and [Go standard library rebuild guidance](remediation-logic.md#go-stdlib-rebuild).

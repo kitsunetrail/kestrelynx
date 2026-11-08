@@ -18,7 +18,7 @@ KestreLynxが更新候補を選び、更新結果を検査し、修正PRを管�
 - 計画のみの場合も、計画と配信の記録をローカルに保存する
 - 修正PRを有効にしても、PRのマージ、アプリケーションイメージのビルド、変更の配置は行わない
 
-有効化の設定は[有効化設定](configuration.md#remediation-enablement)を参照してください。
+有効化の設定は[基本設定](configuration.md#remediation-basics)を参照してください。
 通知の送信判定は[通知を送る条件](notification-conditions.md#notification-conditions)で説明します。
 
 ### ソースの確認 {#source-verification}
@@ -820,7 +820,7 @@ npm・pnpm・pip・uv・Go・Gradleの更新には、公式Node.js・Python・Go
 - 取得に失敗しても、KestreLynxのコンテナ内で代わりにパッケージマネージャーを実行しない
 
 固定する内容や対応系列は、KestreLynxの更新に伴って変わります。
-取得先の指定は[作業用イメージの取得先](configuration.md#remediation-worker-registry)を参照してください。
+取得先の指定は[作業用コンテナ](configuration.md#remediation-worker)を参照してください。
 
 ### ツールの取得と照合 {#tool-verification}
 
@@ -845,7 +845,7 @@ npm・pnpm・uvは、公開時刻から設定された待機時間を経過し�
 - 待機中に別のツール版へ置き換えて実行しない
 
 この判定はツール自身に適用し、依存パッケージに対するマネージャーの公開後制限とは別に扱います。
-時間の設定は[ツールの公開後待機時間](configuration.md#remediation-tool-release-age)を参照してください。
+時間の設定は[作業用コンテナ](configuration.md#remediation-worker)を参照してください。
 
 ### ツールキャッシュの再利用 {#tool-cache}
 
@@ -856,7 +856,7 @@ npm・pnpm・uvは、公開時刻から設定された待機時間を経過し�
 - キャッシュの内容を検証できない場合は、その内容をそのまま実行に使わない
 - 使用中ではないキャッシュを整理しても必要な空きを確保できない場合は、保留する
 
-容量の設定は[ツールキャッシュの容量](configuration.md#remediation-tool-cache)、保存内容は[保存ファイル](remediation-reference.md#stored-records)を参照してください。
+容量の設定は[作業用コンテナ](configuration.md#remediation-worker)、保存内容は[保存ファイル](remediation-reference.md#stored-records)を参照してください。
 
 ### コンテナへの入力 {#worker-inputs}
 

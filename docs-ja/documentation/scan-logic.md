@@ -204,7 +204,7 @@ EOLの判定は、EOLの版は常に影響を受けるとするNode.jsのセキ�
   - `NODE_VERSION`と実際の`node`バイナリの版が異なる場合も、`NODE_VERSION`の版で照合する
   - ブログには系列内の影響開始の版がないため、系列の途中で入った脆弱性について、その系列の古い版も該当として出ることがある
 
-設定は[Node.js本体の脆弱性照合](configuration.md#node-runtime)、データの取得先は[Node.jsのセキュリティ情報の取得](outbound-communication.md#node-runtime-download)に記載しています。
+設定は[スキャン](configuration.md#scan)、データの取得先は[Node.jsのセキュリティ情報の取得](outbound-communication.md#node-runtime-download)に記載しています。
 
 #### Python本体の検出結果 {#python-runtime}
 
@@ -239,7 +239,7 @@ Python本体の照合には、次の制約があります。
 - `PYTHON_VERSION`と実際のバイナリの版が異なる場合も、`PYTHON_VERSION`の版で照合する
 - CVEレコードの版の範囲や対象OSに誤りがあれば、照合結果にも引き継ぐ
 
-設定は[Python本体の脆弱性照合](configuration.md#python-runtime)、データの取得先は[Pythonのセキュリティ情報の取得](outbound-communication.md#python-runtime-download)に記載しています。
+設定は[スキャン](configuration.md#scan)、データの取得先は[Pythonのセキュリティ情報の取得](outbound-communication.md#python-runtime-download)に記載しています。
 
 ## 悪用情報による優先度 {#triage}
 

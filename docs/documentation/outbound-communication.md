@@ -37,7 +37,7 @@ See [Configuration](configuration.md) for the source, and [Threat intelligence u
 The security blog supplements security-wg because index updates can lag releases by several weeks or longer.
 These public datasets are matched locally; image information and detected CVEs are not sent to the download sources.
 
-Settings for enabling or disabling Node.js runtime checks are described in [Node.js runtime checks](configuration.md#node-runtime), with refresh rules in [Threat intelligence updates](scan-logic.md#intel-cache) and failure handling in [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable).
+Settings for enabling or disabling Node.js runtime checks are described in [Scanning](configuration.md#scan), with refresh rules in [Threat intelligence updates](scan-logic.md#intel-cache) and failure handling in [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable).
 
 ### Python advisory downloads {#python-runtime-download}
 
@@ -51,7 +51,7 @@ Settings for enabling or disabling Node.js runtime checks are described in [Node
 These public datasets are retrieved in full and matched locally; image information and detected CVEs are not sent to the download sources.
 CVE record requests cover the PSF list rather than being selected from image findings.
 
-Settings for enabling or disabling Python runtime checks are described in [Python runtime checks](configuration.md#python-runtime), with refresh rules in [Threat intelligence updates](scan-logic.md#intel-cache) and failure handling in [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable).
+Settings for enabling or disabling Python runtime checks are described in [Scanning](configuration.md#scan), with refresh rules in [Threat intelligence updates](scan-logic.md#intel-cache) and failure handling in [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable).
 
 ### Hacker News searches {#hacker-news-search}
 
@@ -102,7 +102,7 @@ See [Image registry authentication](configuration.md#registries) for authenticat
 | Docker or the Kubernetes node's container runtime | Docker Hub or the configured mirror | Download official Node.js, Python, Go (`golang`), and Gradle (`gradle`) work images | An image required for a language-package update is not available locally. |
 | Kubernetes node's container runtime | KestreLynx image registry | Download the image for the container receiving input files | An image required for a work Pod is not available locally. |
 
-See [Work image source](configuration.md#remediation-worker-registry) for mirror settings and [Pinning official images](remediation-logic.md#worker-images) for pinning and handling unavailable images.
+See [Work containers](configuration.md#remediation-worker) for mirror settings and [Pinning official images](remediation-logic.md#worker-images) for pinning and handling unavailable images.
 
 ### Tool downloads {#tool-downloads}
 
@@ -170,6 +170,8 @@ See [Notification conditions](notification-conditions.md#notification-conditions
 | --- | --- |
 | GitHub token | Each request includes only the target repository owner's token from `remediation.github.tokens`, or the default `remediation.github.token` if no owner entry matches, or no token if neither is available. Sent only to `api.github.com` over HTTPS; redirects to other hosts are rejected. Redirects to another owner reselect and apply the token for the destination owner. If any owner-specific token is configured, redirects to URLs without an owner are rejected; configurations with only the default token continue to follow redirects as before. |
 | Image registry credentials (`registries`) | Sent over HTTPS only to the configured registry and token services on the same host or allowed by `token_hosts`. |
+| Images accessible anonymously | Credentials are not passed. |
+| KestreLynx image-registry connection destinations | Hosts listed in `host` or `token_hosts` can use private, loopback, and CGNAT (100.64.0.0/10) addresses; all other hosts can use only public addresses. Link-local addresses are not accessed. |
 | Checks for required authentication before scanning | Separate from Trivy's fetch requests; changes in registry responses between them cannot be detected. |
 | KestreLynx image-registry requests | Credentials are not forwarded to redirect destinations. |
 | Trivy image-registry requests | Credentials may be included in redirects within the same host, but are not forwarded to other hosts. |

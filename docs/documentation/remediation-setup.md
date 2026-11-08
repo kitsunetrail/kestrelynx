@@ -115,7 +115,7 @@ For dependency file and Dockerfile settings and restrictions on multiple mapping
     - If using a catalog, also commit `settings-gradle.lockfile`
     - See [Gradle dependency files](remediation-reference.md#gradle-inputs) for required files and supported forms
 
-For details on the enablement keys, see [Enablement settings](configuration.md#remediation-enablement).
+For details on the enablement keys, see [Basic settings](configuration.md#remediation-basics).
 
 ### Mapping docker run containers {#docker-run-mappings}
 
@@ -173,7 +173,7 @@ For the destinations that receive credentials, see [Credential destinations](out
 
 !!! note "Record storage"
 
-    The supplied Compose configuration stores records in the state volume. If you change `remediation.storage_dir`, choose a location that persists when the container is recreated. For details, see [Storage location](configuration.md#remediation-storage).
+    The supplied Compose configuration stores records in the state volume. If you change `remediation.storage_dir`, choose a location that persists when the container is recreated. For details, see [Basic settings](configuration.md#remediation-basics).
 
 ### Verifying remediation plan startup {#verify-fix-plans}
 
@@ -185,7 +185,7 @@ The following steps apply to Compose; for Kubernetes startup checks, see [Kubern
 4. Confirm that the workload, source, and update targets shown in the notification are as intended
 
 For the meaning of each field, see [Displayed fields](remediation-results.md#slack-fields).
-If startup fails, see [Startup validation](configuration.md#remediation-validation); if no plan appears, see [Checking for a missing plan](remediation-troubleshooting.md#check-missing-plan).
+If startup fails, check the error message in the logs and the settings under [Remediation plans and pull requests](configuration.md#remediation); if no plan appears, see [Checking for a missing plan](remediation-troubleshooting.md#check-missing-plan).
 
 ## Enabling fix pull requests {#enable-pull-requests}
 
@@ -416,7 +416,7 @@ remediation:
     enabled: true
 ```
 
-For key details, see [Enablement settings](configuration.md#remediation-enablement).
+For key details, see [Basic settings](configuration.md#remediation-basics).
 To adjust PR counts or dependency update processing limits, see [Processing limits](configuration.md#remediation-limits).
 
 !!! note "PR creation across multiple hosts"

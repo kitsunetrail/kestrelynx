@@ -204,7 +204,7 @@ The EOL rule follows Node.js security posts, which state that EOL versions are a
   - If `NODE_VERSION` differs from the actual `node` binary, matching uses the version in `NODE_VERSION`.
   - Blog advisories do not give the first affected version within a release line, so older versions in that line can also be reported for vulnerabilities introduced later.
 
-Settings are described in [Node.js runtime checks](configuration.md#node-runtime), and data sources in [Node.js advisory downloads](outbound-communication.md#node-runtime-download).
+Settings are described in [Scanning](configuration.md#scan), and data sources in [Node.js advisory downloads](outbound-communication.md#node-runtime-download).
 
 #### Python runtime findings {#python-runtime}
 
@@ -239,7 +239,7 @@ Python runtime checks have the following limitations.
 - If `PYTHON_VERSION` differs from the actual binary, matching uses the version in `PYTHON_VERSION`.
 - Errors in the version ranges or target OS information in CVE records carry through to matching results.
 
-Settings are described in [Python runtime checks](configuration.md#python-runtime), and data sources in [Python advisory downloads](outbound-communication.md#python-runtime-download).
+Settings are described in [Scanning](configuration.md#scan), and data sources in [Python advisory downloads](outbound-communication.md#python-runtime-download).
 
 ## Exploitation-based priority {#triage}
 

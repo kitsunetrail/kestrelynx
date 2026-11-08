@@ -18,7 +18,7 @@ Creating a remediation plan and creating fix pull requests involve different ope
 - Planning alone still saves plan and delivery records locally
 - Enabling fix pull requests does not merge PRs, build application images, or deploy changes
 
-See [Enablement settings](configuration.md#remediation-enablement) for configuration.
+See [Basic settings](configuration.md#remediation-basics) for configuration.
 [Notification conditions](notification-conditions.md#notification-conditions) explains when notifications are sent.
 
 ### Source verification {#source-verification}
@@ -820,7 +820,7 @@ Their content is pinned by digest in the bundled table and does not follow chang
 - Retrieval failures do not cause package managers to run inside the KestreLynx container as a fallback
 
 Pinned content and supported series change with KestreLynx updates.
-See [Work image registry](configuration.md#remediation-worker-registry) for configuring the retrieval source.
+See [Work containers](configuration.md#remediation-worker) for configuring the retrieval source.
 
 ### Tool retrieval and verification {#tool-verification}
 
@@ -845,7 +845,7 @@ npm, pnpm, and uv are used only after the configured waiting period has elapsed 
 - A different tool version is not substituted during the waiting period
 
 This check applies to the tools themselves and is separate from package manager release-age restrictions on dependencies.
-See [Tool release waiting period](configuration.md#remediation-tool-release-age) for the time setting.
+See [Work containers](configuration.md#remediation-worker) for the time setting.
 
 ### Tool cache reuse {#tool-cache}
 
@@ -856,7 +856,7 @@ Previously retrieved tools are checked again for content integrity and eligibili
 - Cached content that cannot be verified is not used as-is for execution
 - Processing is deferred if removing unused cache entries cannot free enough space
 
-See [Tool cache capacity](configuration.md#remediation-tool-cache) for capacity settings and [Stored files](remediation-reference.md#stored-records) for stored content.
+See [Work containers](configuration.md#remediation-worker) for capacity settings and [Stored files](remediation-reference.md#stored-records) for stored content.
 
 ### Container inputs {#worker-inputs}
 

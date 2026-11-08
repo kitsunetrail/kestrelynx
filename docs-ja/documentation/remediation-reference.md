@@ -983,4 +983,4 @@ Webhookでは、`packages[].reason`と`update.chain.reason`を併せて確認し
 `plan.json`は、PR処理後の結果を含めて再保存しません。
 PR処理の今回の結果は通知で、継続して管理する記録は`prs.json`で確認できます。
 
-保存とPR処理の関係は[記録の保存順序](remediation-logic.md#record-order)、保存先の設定は[保存先](configuration.md#remediation-storage)を参照してください。
+保存とPR処理の関係は[記録の保存順序](remediation-logic.md#record-order)、保存先の設定は[基本設定](configuration.md#remediation-basics)を参照してください。

@@ -983,4 +983,4 @@ These records are also updated after dependency-update processing.
 `plan.json` is not saved again with PR processing results.
 Notifications contain the current run's PR processing results, while `prs.json` holds the records used for ongoing management.
 
-See [Record save order](remediation-logic.md#record-order) for the relationship between storage and PR processing and [Storage location](configuration.md#remediation-storage) for configuration.
+See [Record save order](remediation-logic.md#record-order) for the relationship between storage and PR processing and [Basic settings](configuration.md#remediation-basics) for configuration.

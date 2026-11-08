@@ -115,7 +115,7 @@ remediation:
     - catalogを使う場合は`settings-gradle.lockfile`もコミットする
     - 必要なファイルと書き方は[Gradleの依存ファイル](remediation-reference.md#gradle-inputs)を参照する
 
-有効化キーの詳細は[有効化設定](configuration.md#remediation-enablement)に記載しています。
+有効化キーの詳細は[基本設定](configuration.md#remediation-basics)に記載しています。
 
 ### docker runのコンテナの対応付け {#docker-run-mappings}
 
@@ -173,7 +173,7 @@ registries:
 
 !!! note "記録の保存先"
 
-    配布のCompose構成では、記録は状態保存用のボリュームに保存されます。`remediation.storage_dir`を変える場合は、コンテナを作り直しても残る場所を指定してください。詳細は[保存先](configuration.md#remediation-storage)を参照してください。
+    配布のCompose構成では、記録は状態保存用のボリュームに保存されます。`remediation.storage_dir`を変える場合は、コンテナを作り直しても残る場所を指定してください。詳細は[基本設定](configuration.md#remediation-basics)を参照してください。
 
 ### 修正計画の起動確認 {#verify-fix-plans}
 
@@ -185,7 +185,7 @@ registries:
 4. 通知に表示されたWorkload、ソース、更新対象が意図したものか確認する
 
 表示の意味は[結果の表示項目](remediation-results.md#slack-fields)を参照してください。
-起動に失敗した場合は[起動時の検証](configuration.md#remediation-validation)、計画が見つからない場合は[計画が出ない場合の確認](remediation-troubleshooting.md#check-missing-plan)へ進んでください。
+起動に失敗した場合はログのエラーの文と[修正計画と修正PR](configuration.md#remediation)の各設定を確認し、計画が見つからない場合は[計画が出ない場合の確認](remediation-troubleshooting.md#check-missing-plan)へ進んでください。
 
 ## 修正PRの有効化 {#enable-pull-requests}
 
@@ -417,7 +417,7 @@ remediation:
     enabled: true
 ```
 
-キーの詳細は[有効化設定](configuration.md#remediation-enablement)を参照してください。
+キーの詳細は[基本設定](configuration.md#remediation-basics)を参照してください。
 PR数や依存更新の処理量を調整する場合は[処理の上限](configuration.md#remediation-limits)を確認してください。
 
 !!! note "複数ホストでのPR作成"

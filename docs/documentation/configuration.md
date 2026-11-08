@@ -1,427 +1,355 @@
 # Configuration
 
-This page describes the YAML configuration file. The container image uses
-`/etc/kestrelynx/config.yml` by default. Unknown YAML fields produce an error.
+This page describes the YAML configuration file. The container image uses `/etc/kestrelynx/config.yml` by default. Unknown YAML fields produce an error.
 
-The complete annotated example is available in
-[`config.example.yml`](https://github.com/kitsunetrail/kestrelynx/blob/main/config.example.yml).
+The complete annotated example is available in [`config.example.yml`](https://github.com/kitsunetrail/kestrelynx/blob/main/config.example.yml).
 
-## Schedule
+## Scan targets {#scan-target}
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `schedule.daily_at` | empty | Local time in `HH:MM`. When empty, run every 24 hours from startup. |
-| `schedule.run_on_start` | `true` | Run one scan immediately when KestreLynx starts. |
+No settings in this section are needed to scan a Docker host. Configure them to scan a Kubernetes cluster.
+
+When running in a Pod inside the cluster, use the two options below and leave `kubernetes.api_server`, `kubernetes.token_file`, `kubernetes.ca_file`, and `kubernetes.tls_server_name` empty.
 
 In Kubernetes mode, when `schedule.run_on_start` is enabled, KestreLynx waits up to 30 seconds before the first scan for all containers in its own Pod to be reported as `Running` by the API.
-This wait prevents its own image from being missed by the scan when its container is not yet reported as `Running` immediately after startup.
 
-- It identifies its own Pod using the ServiceAccount namespace and `HOSTNAME`
-- It skips the wait if it cannot read its own Pod, such as when running outside the cluster, using another cluster's API server, or when `HOSTNAME` is not the Pod name
-- If not all containers are `Running` within 30 seconds, it logs a warning and starts the scan
-
-Use the container's `TZ` environment variable to select the timezone used by
-`daily_at`.
-
-## Scanning
+- It identifies its own Pod using the ServiceAccount namespace and `HOSTNAME`.
+- It skips the wait if it cannot read its own Pod, such as when running outside the cluster, using another cluster's API server, or when `HOSTNAME` is not the Pod name.
+- If not all containers are `Running` within 30 seconds, it logs a warning and starts the scan.
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `scan.severity` | `[HIGH, CRITICAL]` | Severities retained for analysis and notification, including Node.js and Python runtime findings. |
+| `kubernetes.enabled` | `false` | Scan a Kubernetes cluster instead of a Docker host. |
+| `kubernetes.namespaces` | `[]` | Namespaces to scan. Empty or omitted means every namespace. Each value must be 1–63 bytes of lowercase alphanumerics and hyphens, starting and ending with an alphanumeric. |
 
-Allowed severity values are `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`.
+#### Connecting from outside the cluster {#scan-target-outside}
 
-### Language runtime checks {#language-runtime}
+When connecting to the API server from outside the cluster, such as from a Docker container on another host, configure the following options in addition to those above.
 
-These checks cover the Node.js and Python runtimes themselves.
+Language-package updates using work Pods have not been verified when connecting from outside the cluster.
 
-#### Node.js runtime checks {#node-runtime}
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `kubernetes.api_server` | yes | empty | API server URL starting with `https://` and reachable from KestreLynx. |
+| `kubernetes.token_file` | yes | empty | File containing a token for a ServiceAccount with the permissions in the supplied ClusterRole (`deploy/kubernetes/clusterrole.yaml`). The file is reread on every scan, so replacing it takes effect on the next scan without a restart. Tokens created with `kubectl create token` expire, and scans fail after expiration. A non-expiring token can be created using a Secret of type `kubernetes.io/service-account-token` with the `kubernetes.io/service-account.name` annotation set to the ServiceAccount name. |
+| `kubernetes.ca_file` | yes | empty | File containing the cluster CA certificates in PEM format. The file is reread on every scan. It must be readable and contain valid PEM certificates at runtime; there is no insecure fallback. |
+| `kubernetes.tls_server_name` | When the host name or address in `api_server` is absent from the API server's certificate | empty | Name present in the certificate, such as `kubernetes`, to use for TLS certificate validation. Used when connecting through a load balancer or DNS name, for example. Empty means no server-name override. |
 
-KestreLynx checks the Node.js version recorded in `NODE_VERSION` against Node.js security advisories.
-Matching rules and limitations are described in [Node.js runtime findings](scan-logic.md#node-runtime).
+## Image registry authentication {#registries}
+
+Configure private registry credentials in the top-level `registries` setting.
+These credentials are used when Trivy fetches images from the registry on that host for scanning. They are also used when remediation planning reads information from the same registry about tags and images being considered as update targets.
+
+Connections use HTTPS only, and certificates must be trusted by KestreLynx.
+
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `registries` | no | `[]` | Per-host image registry credentials. |
+
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `host` | yes | none | Hostname or IPv4 address as used in image references, with an optional port from `1` to `65535`; no scheme, path, or user information. Hostnames are case-insensitive, and `docker.io`, `index.docker.io`, and `registry-1.docker.io` are treated as the same host. Credential entries must not have duplicate `host` values after normalization. |
+| `username` | yes | none | Nonempty string without whitespace, control characters, or `:`. |
+| `password` | yes | none | Nonempty password or access token without whitespace or control characters. |
+| `token_hosts` | no | `[]` | Additional token service hosts allowed to receive credentials; each value uses the same format as `host`. For Docker Hub authentication, set `host: docker.io` and `token_hosts: [auth.docker.io]`. |
+
+See [Credential destinations](outbound-communication.md#credential-destinations) for environment variables used by Trivy, their exemption from `token_hosts` restrictions, and destination and redirect restrictions, and [Private image authentication](remediation-setup.md#configure-registry-auth) for setup instructions.
+
+## Schedule {#schedule}
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `scan.node_runtime.enabled` | `true` | Enable advisory downloads and Node.js runtime checks; `false` disables both. |
+| `schedule.daily_at` | empty | Local time in `HH:MM`. Use the container's `TZ` environment variable to select the timezone. When empty, run every 24 hours from startup. |
+| `schedule.run_on_start` | `true` | Run one scan immediately when KestreLynx starts. |
 
-Download destinations are listed in [Node.js advisory downloads](outbound-communication.md#node-runtime-download).
+## Scanning {#scan}
 
-#### Python runtime checks {#python-runtime}
+See the following pages for runtime matching rules, limitations, and advisory download destinations.
 
-KestreLynx checks the CPython version recorded in `PYTHON_VERSION` against Python security advisory data.
-Matching rules and limitations are described in [Python runtime findings](scan-logic.md#python-runtime).
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `scan.python_runtime.enabled` | `true` | Enable advisory downloads and Python runtime checks; `false` disables both. |
-
-Download destinations are listed in [Python advisory downloads](outbound-communication.md#python-runtime-download).
-
-## Notification destinations
-
-At least one destination is required.
+- Node.js: [Node.js runtime findings](scan-logic.md#node-runtime), [Node.js advisory downloads](outbound-communication.md#node-runtime-download)
+- Python: [Python runtime findings](scan-logic.md#python-runtime), [Python advisory downloads](outbound-communication.md#python-runtime-download)
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `notify.slack_webhook_url` | empty | Slack incoming webhook URL for channel notifications. |
-| `notify.slack_bot_token` | empty | Slack bot token with `chat:write`. Set together with `slack_channel` to enable thread posts and links to the previous report. |
-| `notify.slack_channel` | empty | Destination Slack channel ID for bot delivery. |
-| `notify.generic_webhook_url` | empty | Endpoint that receives structured JSON. |
-| `notify.email.host` | empty | SMTP host name or IP, without a scheme or port. |
-| `notify.email.port` | unset | SMTP port (`1`–`65535`). |
-| `notify.email.tls` | unset | `starttls` (upgrade after connect) or `tls` (implicit TLS). Unencrypted SMTP is refused. |
-| `notify.email.username` | empty | Optional SMTP username; set together with `password`. |
-| `notify.email.password` | empty | Optional SMTP password; set together with `username`. |
-| `notify.email.from` | empty | Sender address. |
-| `notify.email.to` | empty | One or more recipient addresses. |
-| `notify.language` | `en` | Language for Slack and email notifications and PR bodies: `en` or `ja`; other values are configuration errors. Generic webhook JSON remains in English. |
-| `notify.notify_on_clean` | `false` | Send a notification when no vulnerabilities are found. |
+| `scan.severity` | `[HIGH, CRITICAL]` | Severities retained for analysis and notification, including Node.js and Python runtime findings. Allowed values are `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`. |
+| `scan.node_runtime.enabled` | `true` | Download security advisories and check the Node.js version recorded in `NODE_VERSION` against them. `false` disables both downloads and checks. |
+| `scan.python_runtime.enabled` | `true` | Download security advisory data and check the CPython version recorded in `PYTHON_VERSION` against it. `false` disables both downloads and checks. |
 
-Configure either `slack_webhook_url` or the bot-token pair, not both. A generic
-webhook and email can be used alongside either Slack delivery method.
-Email alone is enough to satisfy the destination requirement. When any
-`notify.email` field is set, `host`, `port`, `tls`, `from`, and at least one
-`to` address are required together.
+## Prioritization {#triage}
 
-See [Thread reports](slack-display.md#thread-display) for thread placement and how to read the footers.
+See [Outbound communication](outbound-communication.md#outbound-communication) for where KestreLynx connects and what it sends.
 
-See [Notification language](slack-display.md#notification-language) for the fixed text that is translated and the content that remains in English.
+| Option | Default | Description |
+| --- | --- | --- |
+| `triage.enabled` | `true` | Enable CISA KEV- and EPSS-based prioritization. |
+| `triage.act_now_epss` | `0.10` | EPSS probability at or above which a CVE becomes act now. Must be at least `triage.watch_epss` and at most `1`. |
+| `triage.watch_epss` | `0.01` | EPSS probability at or above which a CVE is at least watch. Must be greater than `0` and at most `triage.act_now_epss`. |
+| `triage.kev_url` | empty | Override the CISA KEV feed URL, for example with a local mirror. |
+| `triage.epss_url` | empty | Override the EPSS feed URL, for example with a local mirror. |
+| `triage.discussion_links` | `true` | Look up Hacker News discussions for act-now CVEs. |
 
-## Notification mode
+## Notifications {#notifications}
+
+### Notification destinations {#notify-destinations}
+
+At least one destination is required. Email alone satisfies this requirement.
+
+Configure either a Slack incoming webhook or the bot-token pair, not both. A generic webhook and email can be used alongside either Slack delivery method.
+
+See [Thread reports](slack-display.md#thread-display) for thread placement and footers, and [Notification language](slack-display.md#notification-language) for the content that is translated.
+
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `notify.slack_webhook_url` | no | empty | Slack incoming webhook URL for channel notifications. |
+| `notify.slack_bot_token` | When `notify.slack_channel` is set | empty | Slack bot token with `chat:write`. Bot delivery supports thread posts and links to the previous report. |
+| `notify.slack_channel` | When `notify.slack_bot_token` is set | empty | Destination Slack channel ID for bot delivery. |
+| `notify.generic_webhook_url` | no | empty | Endpoint that receives structured JSON. |
+| `notify.email.host` | When any `notify.email` field is set | empty | SMTP host name or IP, without a scheme or port. |
+| `notify.email.port` | When any `notify.email` field is set | none | SMTP port (`1`–`65535`). |
+| `notify.email.tls` | When any `notify.email` field is set | none | `starttls` (upgrade after connect) or `tls` (implicit TLS). Unencrypted SMTP is refused. |
+| `notify.email.username` | When `notify.email.password` is set | empty | SMTP username. Omit together with `password` when SMTP authentication is not used. |
+| `notify.email.password` | When `notify.email.username` is set | empty | SMTP password. Omit together with `username` when SMTP authentication is not used. |
+| `notify.email.from` | When any `notify.email` field is set | empty | Sender address. |
+| `notify.email.to` | When any `notify.email` field is set | empty | One or more recipient addresses. |
+| `notify.language` | no | `en` | Language for Slack and email notifications and PR bodies: `en` or `ja`; other values are configuration errors. Generic webhook JSON remains in English. |
+
+### Notification mode {#notify-mode}
+
+See [Package changes](diff-logic.md#package-changes) for changes treated as differences, and [Scan notification conditions](notification-conditions.md#notification-conditions) for when notifications are sent.
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `notify.mode` | `diff` | `diff` reports changes; `full` reports all current findings on every scan. |
-| `notify.full_report_day` | `monday` | Weekday for a full report in diff mode. Use `never` to disable it. |
+| `notify.full_report_day` | `monday` | Weekday for a full report in diff mode. Use a weekday name from `monday` through `sunday`, or `never` to disable it. |
+| `notify.notify_on_clean` | `false` | Send a notification when no vulnerabilities are found. |
 
-See [Package changes](diff-logic.md#package-changes) for changes treated as differences, and [Scan notification conditions](notification-conditions.md#notification-conditions) for when notifications are sent.
+## State and environment name {#state}
 
-## State
+See [Setup instructions](getting-started.md) for persisting the directory containing `state.path`, and [History continuity](diff-logic.md#state-lifecycle) for how history is handled.
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `state.path` | `/var/lib/kestrelynx/state.json` | File used for scan history and diff calculations. |
-
-See [Setup instructions](getting-started.md) for persisting the directory containing `state.path`, and [History continuity](diff-logic.md#state-lifecycle) for how history is handled.
-
-## Image registry authentication {#registries}
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `registries` | `[]` | Per-host image registry credentials. |
-
-Configure private registry credentials in the top-level `registries` setting.
-KestreLynx uses these credentials for candidate selection and all scans that fetch images from registries, subject to the conditions below.
-
-It applies even when `remediation.enabled` is `false`, regardless of whether remediation plans exist or their preparation succeeds.
-
-| Field | Default or requirement | Format and validation |
-| --- | --- | --- |
-| `host` | required | Hostname or IPv4 address as used in image references, with an optional port from `1` to `65535`; no scheme, path, or user information. |
-| `username` | required | Nonempty string without whitespace, control characters, or `:`. |
-| `password` | required | Nonempty password or access token without whitespace or control characters. |
-| `token_hosts` | `[]` | Additional token service hosts allowed to receive credentials; each value uses the same format as `host`. |
-
-- Hostnames are case-insensitive, and `docker.io`, `index.docker.io`, and `registry-1.docker.io` are treated as the same host
-- Credential entries must not have duplicate `host` values after normalization
-- For Docker Hub authentication, set `host: docker.io` and `token_hosts: [auth.docker.io]`
-
-### Conditions for passing credentials
-
-- Credentials are passed only to scans that fetch images from registries with a resolved digest
-- Credentials are not passed when the digest is unresolved and the scan uses an image reference
-- Before scanning, KestreLynx makes anonymous requests to `/v2/` and the repository's tag list, and passes credentials only if both require authentication
-- Supported authentication is Basic, or Bearer with a token service on the same host or a host listed in `token_hosts`
-- Credentials are not passed when anonymous access is available
-- The requests that check whether authentication is required are separate from Trivy's fetch requests, so changes in registry responses between them cannot be detected
-- Connections use HTTPS only, and certificates must be trusted by the KestreLynx Pod
-- Destinations for KestreLynx's own requests, such as fetching tag lists and checking whether authentication is required
-    - Hosts listed in `host` or `token_hosts` can use private, loopback, and CGNAT (100.64.0.0/10) addresses
-    - Link-local addresses are not accessed
-    - Hosts not listed in either `host` or `token_hosts` can use only public addresses
-- These address restrictions do not apply to image fetches by Trivy
-- KestreLynx does not read credentials from `DOCKER_CONFIG` and overrides it with a dedicated configuration for each scan
-- KestreLynx logs a warning at startup if the `DOCKER_CONFIG` environment variable is set
-
-See [Credential destinations](outbound-communication.md#credential-destinations) for environment variables used by Trivy and their exemption from `token_hosts` restrictions.
-
-See [Credential destinations](outbound-communication.md#credential-destinations) for destination and redirect restrictions, and [Private image authentication](remediation-setup.md#configure-registry-auth) for setup instructions.
+| `environment.name` | empty | Name for this instance's scan history. Empty means the unnamed default environment. A non-empty value must be 1–63 bytes of lowercase alphanumerics and hyphens, starting and ending with an alphanumeric; values are not normalized. It appears as `[name]` in the Slack header and as `environment.name` in the generic webhook. Adding, changing, or removing the name does not reset history, change first-seen dates, or re-notify existing findings. |
 
 ## Remediation plans and pull requests {#remediation}
 
 See the [remediation overview](remediation.md#contents) for an entry point and [Enabling remediation](remediation-setup.md) for setup instructions.
 
-### Enablement settings {#remediation-enablement}
+### Basic settings {#remediation-basics}
+
+See [Plan and PR execution scope](remediation-logic.md#plan-and-pr-execution) for the processing enabled by each setting, and [Stored files](remediation-reference.md#stored-records) for stored content.
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `remediation.enabled` | `false` | Enable read-only remediation plans in Docker or Kubernetes mode. |
 | `remediation.pull_requests.enabled` | `false` | Enable fix pull requests; requires remediation plans and a GitHub token. |
-
-See [Plan and PR execution scope](remediation-logic.md#plan-and-pr-execution) for the processing enabled by each setting.
+| `remediation.storage_dir` | `/var/lib/kestrelynx/remediation` | Absolute directory for plans, delivery records, PR records, and the tool cache. Changing `state.path` does not change this location. |
 
 ### GitHub access {#remediation-github}
 
-| Option | Default | Format and requirements |
-| --- | --- | --- |
-| `remediation.github.token` | empty | Default GitHub token for repositories whose owners are not listed in `tokens`; must not contain whitespace or control characters. |
-| `remediation.github.tokens` | `[]` | List of GitHub tokens by owner. A matching repository owner's token is used instead of the default token. |
-| `remediation.github.tokens[].owner` | required | GitHub user or organization name. Matching is case-insensitive; duplicate owners cause an error. |
-| `remediation.github.tokens[].token` | required | Nonempty GitHub token for that owner's repositories; must not contain whitespace or control characters. |
+When remediation PRs are enabled, every repository in `remediation.mappings` requires a token.
+A repository with neither a matching token in `tokens` nor a default token causes a startup error.
 
-Existing configurations using only `remediation.github.token` continue to work unchanged.
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `remediation.github.token` | no | empty | Default GitHub token for repositories whose owners are not listed in `tokens`; must not contain whitespace or control characters. |
+| `remediation.github.tokens` | no | `[]` | List of GitHub tokens by owner. A matching repository owner's token is used instead of the default token. |
+| `remediation.github.tokens[].owner` | yes | none | GitHub user or organization name. Matching is case-insensitive; duplicate owners cause an error. |
+| `remediation.github.tokens[].token` | yes | none | Nonempty GitHub token for that owner's repositories; must not contain whitespace or control characters. |
 
-When PRs are enabled, every mapped repository requires either its owner's token or the default token.
-A missing token causes a startup error identifying the affected mapping and owner.
+#### Required token permissions
 
-When PRs are disabled, repositories with neither an owner token nor a default token are read anonymously.
-Anonymous reads are limited to public repositories.
+The following table shows the permissions required for GitHub tokens.
+Use fine-grained tokens limited to the target repositories.
 
-The startup log field `github_owner_tokens` reports the number of configured owner tokens.
-
-| Purpose | Required permissions |
+| Purpose | Required token permissions |
 | --- | --- |
-| Plans for public repositories | Anonymous reads without a token |
-| Plans for private repositories | Contents: Read on a fine-grained token limited to the target repositories |
-| Creating and managing PRs | Contents and Pull requests: Read and write on a fine-grained token limited to the target repositories |
+| Reading source code from public repositories to create remediation plans | None |
+| Reading source code from private repositories to create remediation plans | Contents: Read |
+| Creating and managing remediation PRs | Contents and Pull requests: Read and write |
 
-Restrict the configuration file to its owner.
 See [Credential destinations](outbound-communication.md#credential-destinations) for where the token is sent.
-
-### Storage location {#remediation-storage}
-
-| Option | Default | Format and description |
-| --- | --- | --- |
-| `remediation.storage_dir` | `/var/lib/kestrelynx/remediation` | Absolute directory for plans, delivery records, PR records, and the tool cache. |
-
-Changing `state.path` does not change this location.
-See [Stored files](remediation-reference.md#stored-records) for its contents.
-
 
 ### Source mappings {#remediation-mappings}
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `remediation.mappings` | `[]` | Map running Compose or Kubernetes workloads, or Docker containers that do not use Compose, to their GitHub source files. |
+Use `remediation.mappings` to specify the GitHub repository and source files associated with each running container.
+KestreLynx reads these files to create remediation plans and uses them as update targets when remediation PRs are enabled.
 
-Each entry sets `workload`, `repository`, and `base_branch`, plus one or more source types from `dockerfile`, `dependencies`, `compose`, `manifest`, `kustomize`, and `helm_values`.
-Sources within an entry share that entry's `repository` and `base_branch`.
+All sources in one entry use the same `repository` and `base_branch`.
+For sources in different repositories or on different branches, create separate entries with the same `workload`.
 
-- `container/<name>` is available only in Docker mode and only for mappings specifying `dockerfile`, `dependencies`, or both
-- The name is the `NAMES` value shown by `docker ps`, assigned with `docker run --name`; it is case-sensitive and must be 2–253 bytes matching `[a-zA-Z0-9][a-zA-Z0-9_.-]+`
-- Combining `container/<name>` with a `compose` mapping causes a configuration error that directs you to use `compose/<project>/<service>`
-- Specifying `container/<name>` in Kubernetes mode causes a configuration error
+See [Supported input formats](remediation-reference.md#supported-inputs) for supported file formats.
 
-Kubernetes mode accepts `manifest`, `kustomize`, `helm_values`, `dockerfile`, and `dependencies` mappings.
-`compose` is available only in Docker mode, and `manifest`, `kustomize`, and `helm_values` only in Kubernetes mode.
-When remediation plans are enabled and a mapping's namespace is outside `kubernetes.namespaces`, startup logs a warning and the mapping has no effect on the plan.
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `remediation.mappings` | no | `[]` | Lists the associations between running containers and the GitHub source files used for remediation plans and remediation PRs. |
 
-| Field within a mapping | Requirements and format |
-| --- | --- |
-| `workload` | Required; in Docker mode, `compose/<project>/<service>`, matching the running workload's Compose labels, or `container/<name>` for a container that does not use Compose; in Kubernetes mode, `<kind>/<namespace>/<name>/<container>`, where `kind` is `deployment`, `statefulset`, `daemonset`, `job`, `cronjob`, or `pod`. |
-| `repository` | Required; GitHub repository in `owner/name` form. |
-| `base_branch` | Required; valid Git branch name used to read sources and as the PR base. |
-| `compose.path` / `compose.service` | Required for Compose mappings; repository-relative Compose file and service name. |
-| `manifest.path` | Required for manifest mappings; repository-relative file path. |
-| `manifest.object.kind` | Optional; defaults to the workload kind and, when specified, must be the matching `Deployment`, `StatefulSet`, `DaemonSet`, `Job`, `CronJob`, or `Pod`. |
-| `manifest.object.name` | Optional; defaults to the workload name, or names the object in the file when specified. |
-| `kustomize.path` | Required for Kustomize mappings; repository-relative path whose filename is `kustomization.yaml`, `kustomization.yml`, or `Kustomization`. |
-| `kustomize.image` | Required; the target `images[].name`, without a tag or digest. |
-| `kustomize.affects` | Optional; workload keys of every other container affected by this entry, including ordinary init containers; duplicates and the mapped `workload` itself are not allowed. Omitting it means the user has confirmed that the entry affects only the mapped container. |
-| `helm_values.path` | Required for Helm values mappings; repository-relative path with a `.yaml` or `.yml` extension. |
-| `helm_values.key` | Required; at most 255 bytes of nonempty names made of `[A-Za-z0-9_-]`, separated by dots. Selects the image mapping or string, such as `image` or `app.image`; keys containing literal dots are unsupported. |
-| `helm_values.affects` | Optional; workload keys of every other container affected by this key, including ordinary init containers; duplicates and the mapped `workload` itself are not allowed. Omitting it means the user has confirmed that the key affects only the mapped container. |
-| `dockerfile.path` | Required for Dockerfile mappings; repository-relative Dockerfile. |
-| `dockerfile.target` | Optional build stage; omitting it selects the last stage; at most 128 bytes of letters, digits, `_`, `.`, or `-`, starting with a letter. |
-| `dependencies.directory` | Required for dependency-file mappings; dependency directory, with `.` representing the repository root. |
+#### docker run {#remediation-mappings-docker-run}
 
-- Paths must be normalized within the repository, without a leading `/`, `./`, `..`, or backslashes
-- An entry with no sources causes a configuration error
-- Each entry can specify at most one of the source types that determine the image tag: `compose`, `manifest`, `kustomize`, or `helm_values`
-- Each source type can be specified only once per workload across all entries
-- A workload cannot combine `manifest`, `kustomize`, and `helm_values`, even in separate entries
-- Sources in different repositories or on different branches must use separate entries with the same `workload`
-- Shared dependency directories or Dockerfiles must use the same base branch
-- A service in the same Compose file in the same repository must not be mapped to multiple workloads
-- A container of an object with the same kind, namespace, and name in the same manifest and repository must not be mapped to multiple workloads
-- Every mapping to the same Kustomize entry or the same Helm values key must declare the same combined set of `workload` and `affects`
-- Each container, including those listed in `affects`, must have only one location determining its image tag, including `manifest` locations
-- Every mapping to the same Kustomize file or Helm values file in the same repository must specify the same `base_branch`
-- Repository names are case-insensitive when checking for duplicates
+For a container started with `docker run`, set `workload` to `container/<name>`.
 
-See [Base image identification](remediation-logic.md#base-image-selection) for discovery from Compose `build` and matching against an explicit Dockerfile, and [Supported input formats](remediation-reference.md#supported-inputs) for supported inputs.
+Specify `dockerfile` to update the Dockerfile's base image or `dependencies` to update language packages.
+Configure either source type or both.
 
-See [Kustomize PR configuration](remediation-setup.md#kustomize-pull-requests) and [Helm values PR configuration](remediation-setup.md#helm-values-pull-requests) for examples and how to declare affected containers.
-Violating the mapping constraints above causes a startup error.
+```yaml
+remediation:
+  mappings:
+    - workload: container/example-api
+      repository: example/application
+      base_branch: main
+      dockerfile:
+        path: Dockerfile
+      dependencies:
+        directory: .
+```
+
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `remediation.mappings[].workload` | yes | none | Identifies the target container as `container/<name>`. Use the value shown in the `NAMES` column of `docker ps`; names are case-sensitive. |
+| `remediation.mappings[].repository` | yes | none | Specifies the GitHub repository containing the target files, in `owner/name` form. |
+| `remediation.mappings[].base_branch` | yes | none | Specifies the Git branch from which to read the target files. Remediation PRs also target this branch. |
+| `remediation.mappings[].dockerfile.path` | When `dockerfile` is set | none | Specifies the path to the Dockerfile used to build the target image, relative to the repository root. |
+| `remediation.mappings[].dockerfile.target` | no | Last stage in the Dockerfile | Names the stage used to build the target image. The base image inherited by this stage is the update target. |
+| `remediation.mappings[].dependencies.directory` | When `dependencies` is set | none | Specifies the directory containing the dependency files that manage the language packages to update, relative to the repository root. Use `.` for the repository root. |
+
+#### Compose {#remediation-mappings-compose}
+
+For a service running with Compose, set `workload` to `compose/<project>/<service>`.
+
+Choose `compose` to update image tags in a Compose file, `dockerfile` to update a Dockerfile's base image, or `dependencies` to update language packages.
+Specify one or more of these three source types.
+
+```yaml
+remediation:
+  mappings:
+    - workload: compose/shop/web
+      repository: example/shop
+      base_branch: main
+      compose:
+        path: compose.yml
+        service: web
+      dependencies:
+        directory: .
+```
+
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `remediation.mappings[].workload` | yes | none | Identifies the target service as `compose/<project>/<service>`. Use the running container's `com.docker.compose.project` label value for `project` and its `com.docker.compose.service` label value for `service`. |
+| `remediation.mappings[].repository` | yes | none | Specifies the GitHub repository containing the target files, in `owner/name` form. |
+| `remediation.mappings[].base_branch` | yes | none | Specifies the Git branch from which to read the target files. Remediation PRs also target this branch. |
+| `remediation.mappings[].compose.path` | When `compose` is set | none | Specifies the path to the target Compose file, relative to the repository root. |
+| `remediation.mappings[].compose.service` | When `compose` is set | none | Names the service whose image tag will be updated in the file specified by `compose.path`. |
+| `remediation.mappings[].dockerfile.path` | When `dockerfile` is set | none | Specifies the path to the Dockerfile used to build the target image, relative to the repository root. |
+| `remediation.mappings[].dockerfile.target` | no | Last stage in the Dockerfile | Names the stage used to build the target image. The base image inherited by this stage is the update target. |
+| `remediation.mappings[].dependencies.directory` | When `dependencies` is set | none | Specifies the directory containing the dependency files that manage the language packages to update, relative to the repository root. Use `.` for the repository root. |
+
+You can omit `dockerfile` when the Dockerfile and build stage can be determined from the Compose `build` setting.
+See [Base image selection](remediation-logic.md#base-image-selection) for the supported conditions and checks against an explicit `dockerfile` setting.
+
+#### Kubernetes {#remediation-mappings-kubernetes}
+
+For a Kubernetes container, set `workload` to `<kind>/<namespace>/<name>/<container>`.
+
+For image tag updates, choose `manifest` for a plain manifest, `kustomize` for Kustomize, or `helm_values` for a Helm values file.
+For each container, specify only the one method that manages its image tag.
+
+Specify `dockerfile` for Dockerfile base image updates or `dependencies` for language package updates.
+Each entry requires at least one source type.
+
+When remediation plans are enabled, mappings to namespaces outside the scope of `kubernetes.namespaces` produce a startup warning and are not used in plans.
+
+```yaml
+remediation:
+  mappings:
+    - workload: deployment/example/web/app
+      repository: example/application
+      base_branch: main
+      manifest:
+        path: apps/web.yaml
+      dockerfile:
+        path: docker/Dockerfile
+      dependencies:
+        directory: .
+```
+
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `remediation.mappings[].workload` | yes | none | Identifies the target container as `<kind>/<namespace>/<name>/<container>`. Use `deployment`, `statefulset`, `daemonset`, `job`, `cronjob`, or `pod` for `kind`; `namespace` is the namespace, `name` is the name of the workload of that kind, and `container` is the container name. |
+| `remediation.mappings[].repository` | yes | none | Specifies the GitHub repository containing the target files, in `owner/name` form. |
+| `remediation.mappings[].base_branch` | yes | none | Specifies the Git branch from which to read the target files. Remediation PRs also target this branch. |
+| `remediation.mappings[].manifest.path` | When `manifest` is set | none | Specifies the path to the manifest containing the target container's image tag, relative to the repository root. |
+| `remediation.mappings[].manifest.object.kind` | no | Manifest `kind` corresponding to the `workload` kind | Specifies the kind of the target object in the file. Use the `Deployment`, `StatefulSet`, `DaemonSet`, `Job`, `CronJob`, or `Pod` kind that corresponds to the `workload` kind. |
+| `remediation.mappings[].manifest.object.name` | no | `name` from `workload` | Specifies the target object's name in the file. Set this when the name in the file differs from the running workload's name. |
+| `remediation.mappings[].kustomize.path` | When `kustomize` is set | none | Specifies the path to the target Kustomize file, relative to the repository root. The filename must be `kustomization.yaml`, `kustomization.yml`, or `Kustomization`. |
+| `remediation.mappings[].kustomize.image` | When `kustomize` is set | none | Identifies the `images` entry whose `newTag` will be updated, using that entry's `name` value. Do not include a tag or digest. |
+| `remediation.mappings[].kustomize.affects` | no | `[]` | Lists every container other than `workload` affected by changing the selected `images` entry's tag, using `<kind>/<namespace>/<name>/<container>` form. Include ordinary init containers. Before omitting this setting, confirm that only the container identified by `workload` is affected. |
+| `remediation.mappings[].helm_values.path` | When `helm_values` is set | none | Specifies the path to the target values file, relative to the repository root. The extension must be `.yaml` or `.yml`. |
+| `remediation.mappings[].helm_values.key` | When `helm_values` is set | none | Identifies the key that specifies the image, such as `image` or `app.image`. Select the entry containing `repository` and `tag`, or a string entry such as `nginx:1.27.2`, rather than the `tag` field itself. Dots separate levels; each key name uses letters, digits, `_`, or `-`. |
+| `remediation.mappings[].helm_values.affects` | no | `[]` | Lists every container other than `workload` affected by changing the tag at the selected values key, using `<kind>/<namespace>/<name>/<container>` form. Include ordinary init containers. Before omitting this setting, confirm that only the container identified by `workload` is affected. |
+| `remediation.mappings[].dockerfile.path` | When `dockerfile` is set | none | Specifies the path to the Dockerfile used to build the target image, relative to the repository root. |
+| `remediation.mappings[].dockerfile.target` | no | Last stage in the Dockerfile | Names the stage used to build the target image. The base image inherited by this stage is the update target. |
+| `remediation.mappings[].dependencies.directory` | When `dependencies` is set | none | Specifies the directory containing the dependency files that manage the language packages to update, relative to the repository root. Use `.` for the repository root. |
+
+See [Kustomize PR configuration](remediation-setup.md#kustomize-pull-requests) and [Helm values PR configuration](remediation-setup.md#helm-values-pull-requests) for examples and instructions for listing affected containers.
 
 ### Processing limits {#remediation-limits}
-
-The following options are under `remediation.limits`.
-
-| Option | Default | Units and allowed range |
-| --- | --- | --- |
-| `candidate_scans_per_cycle` | `10` | Candidate-image scans per cycle; positive integer. |
-| `baseline_rescans_per_cycle` | `10` | Baseline rescans per cycle to match comparison conditions; positive integer. |
-| `registry_requests_per_cycle` | `200` | Image-registry HTTP requests per cycle, including token exchanges; positive integer. Requests that check whether authentication is required before scanning running images do not count toward this limit, but the same requests before scanning candidate images do count. |
-| `tag_pages_per_repository` | `20` | Tag-list requests per image repository, including requests to find the target version series; positive integer. |
-| `cycle_timeout` | `30m` | Deadline for planning, dependency updates, and PR processing; positive duration, excluding ordinary running-image scans. |
-| `new_prs_per_cycle` | `3` | New PRs per cycle when PRs are enabled; positive integer. |
-| `open_prs` | `10` | Open KestreLynx PRs across all configured repositories when PRs are enabled; positive integer. |
-| `dependency_jobs_per_cycle` | `3` | Dependency update units attempted per cycle; positive integer, not a count of packages or containers. |
-| `job_timeout` | `6m` | Deadline for each work container's creation, execution, and result collection; from `1m` to `60m30s`. |
 
 See [Reason codes](remediation-reference.md#reason-codes) for outcomes caused by limits, [PR management](remediation-logic.md#pr-management) for PR handling, and [Work container execution](remediation-logic.md#worker-execution) for execution deadlines and cleanup.
 
 The [Newer series check](remediation-logic.md#newer-series-check) shares the candidate-scan, baseline-rescan, tag-listing, and registry-request limits with normal processing.
-To reserve capacity for PR processing, it stops with one third of `cycle_timeout` remaining and makes no further registry request when the remaining budget is at most one quarter of `registry_requests_per_cycle`.
 
-### Work Pod configuration {#remediation-worker-kubernetes}
-
-These settings apply to language-package updates in Kubernetes mode.
-The user applies the work namespace and required resources following the [setup steps](remediation-setup.md#kubernetes-language-updates).
-
-| Setting | Default | Format and scope |
+| Option | Default | Description |
 | --- | --- | --- |
-| `remediation.worker.kubernetes.namespace` | empty | Namespace for work Pods; when unset, language-package updates other than Maven require manual action with `work_namespace_not_configured`. |
-| `remediation.worker.kubernetes.service_account` | `kestrelynx-work` | ServiceAccount for work Pods; specify one without permissions or a token. |
-| `remediation.worker.kubernetes.priority_class` | `kestrelynx-work` | PriorityClass for work Pods; specify one with `preemptionPolicy: Never`. |
-| `remediation.worker.kubernetes.receiver_image` | empty | KestreLynx image for the container receiving input files, in `repository@sha256:...` form; empty reads the digest-pinned reference from the status of KestreLynx's own Pod. |
-| `remediation.worker.kubernetes.max_concurrent_pods` | `1` | Maximum work Pods held by the same instance at once, from `1` to `16`, including finished Pods that have not been deleted and excluding Pods already being deleted; the work namespace's ResourceQuota limits the total including those. |
-| `remediation.worker.kubernetes.runtime_class` | empty | Unsupported and must remain empty; setting it requires manual action with `work_runtime_class_unsupported`. |
+| `remediation.limits.candidate_scans_per_cycle` | `10` | Candidate-image scans per cycle; positive integer. |
+| `remediation.limits.baseline_rescans_per_cycle` | `10` | Baseline rescans per cycle to match comparison conditions; positive integer. |
+| `remediation.limits.registry_requests_per_cycle` | `200` | Image-registry HTTP requests per cycle, including token exchanges; positive integer. Requests that check whether authentication is required before scanning running images do not count toward this limit, but the same requests before scanning candidate images do count. |
+| `remediation.limits.tag_pages_per_repository` | `20` | Tag-list requests per image repository, including requests to find the target version series; positive integer. |
+| `remediation.limits.cycle_timeout` | `30m` | Deadline for planning, dependency updates, and PR processing; positive duration, excluding ordinary running-image scans. |
+| `remediation.limits.new_prs_per_cycle` | `3` | New PRs per cycle when PRs are enabled; positive integer. |
+| `remediation.limits.open_prs` | `10` | Open KestreLynx PRs across all configured repositories when PRs are enabled; positive integer. |
+| `remediation.limits.dependency_jobs_per_cycle` | `3` | Dependency update units attempted per cycle; positive integer, not a count of packages or containers. |
+| `remediation.limits.job_timeout` | `6m` | Deadline for each work container's creation, execution, and result collection; from `1m` to `60m30s`. |
 
-These settings require `kubernetes.enabled: true`.
-Setting other fields without `namespace`, or supplying invalid names, image references, or numeric values, causes a startup error.
-### Work image source {#remediation-worker-registry}
+### Work containers {#remediation-worker}
 
-| Option | Default | Format and validation |
+Work containers are disposable containers used to run dependency updates (such as lockfile updates) with npm, pnpm, pip, uv, Go, or Gradle separately from KestreLynx itself when updating language packages for remediation PRs.
+
+See [Pinning official images](remediation-logic.md#worker-images) for pinning and handling unavailable work images, [Supported runtimes](remediation-reference.md#supported-runtimes) for version series, and [Work image downloads](outbound-communication.md#worker-image-downloads) for network destinations.
+
+See [Waiting after tool publication](remediation-logic.md#tool-release-age), [Tool downloads and verification](remediation-logic.md#tool-verification), and [Tool cache reuse](remediation-logic.md#tool-cache) for tool handling.
+
+See [Container inputs](remediation-logic.md#worker-inputs) for checks when passing the worker program to a container.
+
+| Option | Default | Description |
 | --- | --- | --- |
-| `remediation.worker.registry` | empty | Docker Hub mirror in lowercase `host[:port][/path]` form; empty uses Docker Hub. |
-
-- Do not include a scheme, tag, digest, `//`, or `..`
-- Paths use lowercase letters, digits, and the separators `.`, `_`, and `-`
-- The mirror must serve `library/node`, `library/python`, `library/golang`, and `library/gradle` with the same contents as the official images under the specified host and path
-
-See [Pinning official images](remediation-logic.md#worker-images) for pinning and handling unavailable images, [Supported runtimes](remediation-reference.md#supported-runtimes) for version series, and [Work image downloads](outbound-communication.md#worker-image-downloads) for network destinations.
-
-### Minimum tool release age {#remediation-tool-release-age}
-
-| Option | Default | Format and allowed range |
-| --- | --- | --- |
+| `remediation.worker.registry` | empty | Docker Hub mirror in lowercase `host[:port][/path]` form; empty uses Docker Hub. Do not include a scheme, tag, digest, `//`, or `..`; paths use lowercase letters, digits, and the separators `.`, `_`, and `-`. The mirror must serve `library/node`, `library/python`, `library/golang`, and `library/gradle` with the same contents as the official images under the specified host and path. |
 | `remediation.worker.tool_versions.min_release_age` | `72h` | Minimum wait between publication and use of npm, pnpm, or uv; positive duration such as `72h` or `30m`, excluding `0` and negative values. |
-
-See [Waiting after tool publication](remediation-logic.md#tool-release-age) for the decision rules and [Tool downloads and verification](remediation-logic.md#tool-verification) for download checks.
-
-### Tool cache capacity {#remediation-tool-cache}
-
-| Option | Default | Format and allowed range |
-| --- | --- | --- |
 | `remediation.worker.tool_versions.cache_max_size` | `1GiB` | Maximum npm, pnpm, and uv cache size; integer bytes or an integer followed by `B`, `KiB`, `MiB`, or `GiB`, with a minimum of `128MiB`. |
-
-See [Tool cache reuse](remediation-logic.md#tool-cache) for checks before reuse and handling insufficient capacity.
-
-### Worker program location {#remediation-worker-program}
-
-| Option | Default | Format and scope |
-| --- | --- | --- |
 | `remediation.worker.program_dir` | empty | Empty or an absolute directory containing a worker program for development; not required for standard releases. |
 
-See [Container inputs](remediation-logic.md#worker-inputs) for checks when passing the program to a work container.
+#### Kubernetes {#remediation-worker-kubernetes}
 
-### Startup validation {#remediation-validation}
+These settings apply to language-package updates in Kubernetes mode. The user applies the work namespace and necessary resources following the [setup steps](remediation-setup.md#kubernetes-language-updates).
 
-The following combinations cause startup errors.
+These settings require `kubernetes.enabled: true`. Invalid names, image references, or numeric values cause a startup error.
 
-- Enabling PRs without `remediation.enabled`
-- Enabling PRs when any mapped repository's owner has neither a token in `remediation.github.tokens` nor the default `remediation.github.token`
-- Specifying a `manifest`, `kustomize`, or `helm_values` mapping in Docker mode
-- Specifying a `compose` mapping in Kubernetes mode
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `remediation.worker.kubernetes.namespace` | When another `remediation.worker.kubernetes` field is set | empty | Namespace for work Pods. When unset, language-package updates other than Maven require manual action with `work_namespace_not_configured`. |
+| `remediation.worker.kubernetes.service_account` | no | `kestrelynx-work` | ServiceAccount for work Pods; specify one without permissions or a token. |
+| `remediation.worker.kubernetes.priority_class` | no | `kestrelynx-work` | PriorityClass for work Pods; specify one with `preemptionPolicy: Never`. |
+| `remediation.worker.kubernetes.receiver_image` | When updating language packages from outside the cluster | empty | KestreLynx image for the container receiving input files, in `repository@sha256:...` form. When empty, read the digest-pinned reference from the status of KestreLynx's own Pod. Outside the cluster, KestreLynx cannot obtain this reference from its own Pod, so leaving this empty prevents language-package updates with `work_image_unavailable`. |
+| `remediation.worker.kubernetes.max_concurrent_pods` | no | `1` | Maximum work Pods held by the same instance at once, from `1` to `16`, including finished Pods that have not been deleted and excluding Pods already being deleted; the work namespace's ResourceQuota limits the total including those. |
+| `remediation.worker.kubernetes.runtime_class` | no | empty | Unsupported and must remain empty; setting it requires manual action with `work_runtime_class_unsupported`. |
 
-Token format, storage, mappings, processing limits, registry credentials, and work container settings are validated even when the feature is disabled.
-These configuration checks do not establish that a remote repository or image is accessible.
+## Runtime usage {#runtime}
 
-## Runtime usage
+[Runtime usage](runtime-usage.md) is an experimental feature. See that page for Sensor setup, observation rules, muting conditions, notification resumption, and permissions.
 
-[Runtime usage](runtime-usage.md) is an experimental feature.
+Containers with the label `io.kestrelynx.runtime.exclude=true` are excluded from runtime usage assessment; only the lowercase value `true` matches.
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `runtime.enabled` | `false` | Read Sensor evidence and include runtime usage in notifications. Leave disabled when no Sensor is installed. |
+| `runtime.enabled` | `false` | Read Sensor evidence and include runtime usage in notifications. Leave disabled when no Sensor is installed. Available only for Docker; enabling it together with `kubernetes.enabled: true` is a configuration error. |
 | `runtime.mute_unfixable_not_in_use` | `false` | Mute eligible findings with no fix and no observed use for 7+ days in Slack. Requires `runtime.enabled: true`; priority is unchanged and all findings remain in the generic webhook. |
 | `runtime.evidence_dir` | `/var/lib/kestrelynx-runtime` | Absolute path where the Sensor evidence volume is mounted. Must match the Sensor's `--evidence-dir`. |
-
-With `runtime.enabled: false`, KestreLynx does not open the evidence directory
-or add runtime information to notifications. Ecosystem labels and webhook
-ecosystem fields apply independently of this setting.
-
-Setting both `runtime.enabled: true` and `kubernetes.enabled: true` is a
-configuration error. Runtime usage is available only for Docker.
-
-When enabled, KestreLynx also uses Docker API `GET /containers/{id}/json`,
-in addition to `GET /containers/json`. Containers with the label
-`io.kestrelynx.runtime.exclude=true` are excluded from runtime usage
-assessment; only the lowercase value `true` matches.
-
-See [Runtime usage](runtime-usage.md) for Sensor setup, observation rules,
-muting conditions, notification resumption, and permissions.
-
-## Kubernetes
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `kubernetes.enabled` | `false` | Scan a Kubernetes cluster instead of a Docker host. |
-| `kubernetes.api_server` | empty | Kubernetes API server URL. When empty, use `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`. A non-empty value must start with `https://`. |
-| `kubernetes.token_file` | empty | ServiceAccount token file. When empty, use `/var/run/secrets/kubernetes.io/serviceaccount/token`. |
-| `kubernetes.ca_file` | empty | Cluster CA bundle in PEM format. When empty, use `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`. |
-| `kubernetes.tls_server_name` | empty | Override the server name used to validate the API server's TLS certificate. Empty means no override. |
-| `kubernetes.namespaces` | `[]` | Namespaces to scan. Empty or omitted means every namespace. |
-
-Inside a cluster, `api_server`, `token_file`, and `ca_file` can remain empty to
-use the Pod's injected API server address and mounted ServiceAccount token and
-CA. With Kubernetes enabled, startup fails if `api_server` is empty and either
-API server environment variable is missing. The CA bundle must be readable and
-contain valid PEM certificates at runtime; there is no insecure fallback.
-
-Each namespace must be a DNS-1123 label: lowercase alphanumerics and hyphens,
-1–63 bytes, starting and ending with an alphanumeric. When namespaces are set,
-Pods, ReplicaSets, and Jobs are listed separately in each namespace. Node
-listing remains cluster-wide.
-
-## Environment
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `environment.name` | empty | Optional name for this instance's scan history. Empty means the unnamed default environment. |
-
-A non-empty name must be a DNS-1123 label: lowercase alphanumerics and hyphens,
-1–63 bytes, starting and ending with an alphanumeric. Values are not normalized;
-uppercase letters, dots, underscores, and whitespace are rejected.
-
-When set, the name appears as `[name]` in the Slack header and as `name` in the
-generic webhook payload's `environment` object. That object always includes
-`kind`, either `docker` or `kubernetes`, derived from the enabled adapter. The
-environment kind is not configurable. The webhook omits `name` when it is empty.
-
-The name labels scan history rather than identifying the host; it is not
-derived from a hostname or IP address. It is safe to keep the same name across
-host rebuilds and migrations while retaining the state file. Adding, changing,
-or removing the name does not reset history, change first-seen dates, or
-re-notify existing findings.
-
-## Exploitation-based triage
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `triage.enabled` | `true` | Enable CISA KEV- and EPSS-based prioritization. |
-| `triage.act_now_epss` | `0.10` | EPSS probability at or above which a CVE becomes act now. |
-| `triage.watch_epss` | `0.01` | EPSS probability at or above which a CVE is at least watch. |
-| `triage.kev_url` | empty | Override the CISA KEV feed URL, for example with a local mirror. |
-| `triage.epss_url` | empty | Override the EPSS feed URL, for example with a local mirror. |
-| `triage.discussion_links` | `true` | Look up Hacker News discussions for act-now CVEs. |
-
-See [Outbound communication](outbound-communication.md#outbound-communication) for where KestreLynx connects and what it sends.
-
-Thresholds must satisfy:
-
-```text
-0 < watch_epss <= act_now_epss <= 1
-```

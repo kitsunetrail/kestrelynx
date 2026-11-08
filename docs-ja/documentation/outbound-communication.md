@@ -37,7 +37,7 @@ KestreLynxと、スキャン・依存更新に使用するツールの通信先�
 security-wgの索引更新はリリースから数週間以上遅れることがあるため、セキュリティブログで補います。
 これらの公開データとの照合はローカルで行い、イメージの情報や検出したCVEは取得先へ送信しません。
 
-有効・無効の設定は[Node.js本体の脆弱性照合](configuration.md#node-runtime)、更新規則は[脅威情報の更新](scan-logic.md#intel-cache)、取得失敗時の扱いは[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)に記載しています。
+有効・無効の設定は[スキャン](configuration.md#scan)、更新規則は[脅威情報の更新](scan-logic.md#intel-cache)、取得失敗時の扱いは[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)に記載しています。
 
 ### Pythonのセキュリティ情報の取得 {#python-runtime-download}
 
@@ -51,7 +51,7 @@ security-wgの索引更新はリリースから数週間以上遅れることが
 これらの公開データは全件を取得してローカルで照合し、イメージの情報や検出したCVEは取得先へ送信しません。
 CVEレコードの取得対象はPSFの一覧で決まり、イメージの検出結果によって選びません。
 
-有効・無効の設定は[Python本体の脆弱性照合](configuration.md#python-runtime)、更新規則は[脅威情報の更新](scan-logic.md#intel-cache)、取得失敗時の扱いは[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)に記載しています。
+有効・無効の設定は[スキャン](configuration.md#scan)、更新規則は[脅威情報の更新](scan-logic.md#intel-cache)、取得失敗時の扱いは[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)に記載しています。
 
 ### Hacker Newsの検索 {#hacker-news-search}
 
@@ -102,7 +102,7 @@ PRには、イメージ参照とdigest、Workload名、リポジトリ名、ソ�
 | DockerまたはKubernetesノードのコンテナランタイム | Docker Hubまたは設定したミラー | 作業用の公式Node.js・Python・Go(`golang`)・Gradle(`gradle`)イメージを取得 | 言語パッケージの更新に必要なイメージがローカルにない場合 |
 | Kubernetesノードのコンテナランタイム | KestreLynxイメージのレジストリ | 入力ファイルを受け取るコンテナのイメージを取得 | 作業用Podに必要なイメージがローカルにない場合 |
 
-ミラーの設定は[作業用イメージの取得先](configuration.md#remediation-worker-registry)、固定と取得不能時の扱いは[公式イメージの固定](remediation-logic.md#worker-images)を参照してください。
+ミラーの設定は[作業用コンテナ](configuration.md#remediation-worker)、固定と取得不能時の扱いは[公式イメージの固定](remediation-logic.md#worker-images)を参照してください。
 
 ### ツールの取得 {#tool-downloads}
 
@@ -170,6 +170,8 @@ Webhookには、版指定・変更一覧・処理量・再試行可能な日時�
 | --- | --- |
 | GitHub token | 各要求には対象リポジトリの所有者に対応する`remediation.github.tokens`のtoken（対応する項目がなければ既定の`remediation.github.token`、どちらもなければtokenなし）だけを付け、HTTPSの`api.github.com`だけに送付し、別ホストへのリダイレクトは拒否。別の所有者への転送時も転送先の所有者に応じてtokenを選び直して付け直す。所有者ごとのtokenが1つでもあれば、所有者を含まないURLへの転送は拒否し、既定のtokenだけなら従来どおり転送に従う |
 | イメージレジストリの認証情報（`registries`） | 設定したレジストリ自身と、同じホストまたは`token_hosts`で許可したtoken serviceにHTTPSで送付 |
+| 匿名で読めるイメージ | ログイン情報を渡さない |
+| KestreLynxによるイメージレジストリへの接続先 | `host`または`token_hosts`に書いたホストにはプライベートアドレス、ループバック、CGNAT（100.64.0.0/10）でも接続し、それ以外のホストには公開アドレスだけで接続する。リンクローカルには接続しない |
 | スキャン前のログイン要否の確認 | Trivyによる取得とは別の要求で、その間のレジストリの応答の変化は検知できない |
 | KestreLynxによるイメージレジストリへの要求 | リダイレクト先へ認証情報を引き継がない |
 | Trivyによるイメージレジストリへの要求 | 同じホスト内のリダイレクトには認証情報が付く場合があるが、別ホストへは引き継がない |

@@ -8,8 +8,37 @@ import tarfile
 import tempfile
 import unittest
 import urllib.error
+import urllib.request
 
 import update_runtimes as u
+
+
+# The tests run in the workflow that pulls the images of the table, and Docker
+# Hub counts every manifest request of the runner against one limit on pulls,
+# so no test may reach the network. A request raises at once; since the script
+# turns some failures into a warning, every request is also recorded and the
+# run fails at the end when there was one.
+_network = {}
+_requests = []
+
+
+def _no_network(name):
+    def refuse(*a, **k):
+        _requests.append("%s%r" % (name, a))
+        raise AssertionError("a unit test tried to reach the network; replace the function that does it")
+    return refuse
+
+
+def setUpModule():
+    _network.update(urlopen=urllib.request.urlopen, build_opener=urllib.request.build_opener)
+    urllib.request.urlopen = _no_network("urlopen")
+    urllib.request.build_opener = _no_network("build_opener")
+
+
+def tearDownModule():
+    urllib.request.urlopen, urllib.request.build_opener = _network["urlopen"], _network["build_opener"]
+    if _requests:
+        raise AssertionError("unit tests tried to reach the network: %s" % "; ".join(_requests))
 
 
 def tar_of(entries):
@@ -486,7 +515,7 @@ class DateTest(unittest.TestCase):
         self.assertEqual([s for s, _ in u.new_series(table, "node", cycles, later, exists=lambda k, s: True)], ["26"])
 
     def test_resolve_uses_the_utc_date(self):
-        saved = (u.now_utc, u.cycles_of, u.support_dates, u.resolve_row)
+        saved = (u.now_utc, u.cycles_of, u.support_dates, u.resolve_row, u.cmd_resolve_gradle)
         seen = []
         jst = datetime.timezone(datetime.timedelta(hours=9))
         try:
@@ -494,6 +523,7 @@ class DateTest(unittest.TestCase):
             u.cycles_of = lambda kind: {}
             u.support_dates = lambda today: seen.append(today) or {}
             u.resolve_row = lambda row, facts, today, report: seen.append(today) or dict(row)
+            u.cmd_resolve_gradle = lambda table, only, today, report: seen.append(today) or False
             table = table_of({"id": "node24", "kind": "node", "series": "24", "image": "node", "eol": "2028-04-30"})
             with tempfile.TemporaryDirectory() as d:
                 p = os.path.join(d, "t.json")
@@ -501,8 +531,8 @@ class DateTest(unittest.TestCase):
                 with contextlib.redirect_stdout(io.StringIO()):
                     u.cmd_resolve(type("A", (), {"table": p, "report": os.path.join(d, "r.md"), "only": None})())
         finally:
-            u.now_utc, u.cycles_of, u.support_dates, u.resolve_row = saved
-        self.assertEqual(seen, ["2026-10-13", "2026-10-13"])
+            u.now_utc, u.cycles_of, u.support_dates, u.resolve_row, u.cmd_resolve_gradle = saved
+        self.assertEqual(seen, ["2026-10-13", "2026-10-13", "2026-10-13"])
 
 
 class TrivyTest(unittest.TestCase):

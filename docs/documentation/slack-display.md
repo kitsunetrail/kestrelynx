@@ -38,7 +38,7 @@ See the channel's [current unresolved counts](#open-now) for the unresolved stat
 Long notifications are split into multiple messages, with `(cont.)` on continued headings and a part number such as `(cont. 2/3)` on channel continuations.
 The footer is omitted when no valid link exists or the link cannot be displayed.
 
-See [Slack thread delivery conditions](notification-conditions.md#slack-thread-delivery) for when a new thread is posted.
+See [Slack thread delivery conditions](notification-conditions.md#slack-thread-delivery) for when all unresolved findings are posted as a reply.
 
 ## Notification language {#notification-language}
 

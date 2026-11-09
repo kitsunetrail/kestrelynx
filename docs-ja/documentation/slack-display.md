@@ -38,7 +38,7 @@ Botのスレッドは、`📊 未解決の所見の全体 — 日時`の見出�
 長い通知は複数のメッセージに分かれ、続きの見出しには`(続き)`、チャンネルの続きには`(続き 2/3)`のような表示が付きます。
 有効なリンクがない場合やリンクを表示できない場合は、末尾の案内を省略します。
 
-新しいスレッドを投稿する条件は[Slackスレッドの投稿条件](notification-conditions.md#slack-thread-delivery)を参照してください。
+未解決の所見の全体を返信として投稿する条件は[Slackスレッドの投稿条件](notification-conditions.md#slack-thread-delivery)を参照してください。
 
 ## 通知の言語 {#notification-language}
 

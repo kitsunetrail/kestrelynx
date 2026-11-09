@@ -170,7 +170,7 @@ runtime:
   mute_unfixable_not_in_use: true
 ```
 
-A package is muted only when all current groups for the same image and package
+A package is muted only when all groups from the latest scan for the same image and package
 meet every condition below.
 
 - No fix is available for the target platform: the status is `affected` (including `fix_deferred`, `unknown`, and related statuses) or `will_not_fix`.

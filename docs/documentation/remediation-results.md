@@ -202,8 +202,8 @@ For npm, pnpm, uv, Maven, and Gradle, a PR may include only the planned package 
 
 | Result | Interpretation |
 | --- | --- |
-| A package listed under “Update” for the PR | A change included in this PR. |
-| A package shown under “Needs a decision” or marked “left out because” | A target excluded from this update that needs separate handling. |
+| A package listed under “Update” for the PR | A change included in the displayed PR. |
+| A package shown under “Needs a decision” or marked “left out because” | A target excluded from the PR's update that needs separate handling. |
 | A package reported as unable to reach the target version and still at its original version | A target that did not reach a fixed version, without necessarily establishing why the update was unsuccessful. |
 | An open PR with exclusion details | Packages still need handling even for an update matched to an existing PR. |
 
@@ -228,7 +228,7 @@ The requirement in `rc 1.2.8` is `minimist ^1.2.0`, which allows a normal update
 | --- | --- |
 | `with mkdirp 0.5.1 → 0.5.6` | The dependent package `mkdirp` also updates to fix `minimist`. |
 | `starlette 0.32.0.post1 cannot be raised to the fixed 1.3.1 (the dependent fastapi 0.108.0 limits the version of starlette)` | Appears when the outcome is `not_fixed` and updating the dependent chain within the declared ranges does not reach a fixed version; multiple dependents are listed with their names and versions, and uv's `no_resolution`, where resolving again for the fixed version finds no solution, uses the same display. |
-| `did not reach the fixed version this time` | Appears when no dependent requirement is recorded for that package, and selecting dependent packages again does not bring the target to a fixed version in this attempt. |
+| `did not reach the fixed version this time` | Appears when no dependent requirement is recorded for that package, and selecting dependent packages again does not bring the target to a fixed version in the re-resolution performed for the remediation plan. |
 | `needs … updated as well, and that update was not adopted because …` | The update is not adopted because of failed checks or another reason. |
 | `updating … was not tried` | The attempt is skipped because of unsupported forms, processing limits, or similar conditions. |
 | `a version it brings in is less than 72 hours old, so it is tried again after …` | Processing waits until the displayed date and time. |
@@ -489,7 +489,7 @@ The following fictional example shows an external parent pom or imported BOM dec
 flowchart TD
     P["Project pom"] -->|"References its parent"| A["Parent pom<br/>com.example:parent 1.0.0"]
     P -->|"Or imports a BOM"| B["BOM<br/>org.example:platform-bom 1.2.0"]
-    subgraph E["Outside the project: declarations this file update cannot change"]
+    subgraph E["Outside the project: declarations that cannot be changed by editing project files"]
         A --> V["Sets the target package version<br/>jackson-databind 2.13.0"]
         B --> V
     end
@@ -789,6 +789,6 @@ Dependency installation and application behavior have not been checked.
 ### Saved record details {#saved-details}
 
 Use `plan.json` for information from planning time and `prs.json` for ongoing PR records.
-Check notifications for the current run's results after PR processing.
+Check notifications for the results of the latest remediation plan after PR processing.
 
 For stored contents and when they are recorded, see [Stored records](remediation-reference.md#stored-records); for retrieval steps, see [Collecting diagnostics](remediation-troubleshooting.md#collect-diagnostics).

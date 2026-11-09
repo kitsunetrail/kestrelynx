@@ -320,7 +320,7 @@
 直接依存の版が変わらない場合は、途中で更新した依存元のうち、プロジェクトに最も近いものを載せます。
 
 `through`は既存PRから補う場合もあります。
-今回の更新・検査の実行有無は、`update_executed`と`post_update_check_executed`で確認します。
+最新の修正計画の処理で更新・検査を実行したかどうかは、`update_executed`と`post_update_check_executed`で確認します。
 
 ### 実行環境 {#language-runtime-fields}
 

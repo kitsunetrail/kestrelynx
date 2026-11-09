@@ -52,14 +52,14 @@ See [Configuration](configuration.md) for the weekday and disabling options, and
 
 ## Slack thread delivery conditions {#slack-thread-delivery}
 
-For scan notifications sent through a Slack Bot in `diff` mode, a new thread is posted when the current report contains findings and any of the following applies.
+For scan notifications sent through a Slack Bot in `diff` mode, a new thread is posted when the report from the latest scan contains findings and any of the following applies.
 
 - There are changes since the previous scan
 - The weekly report is due
 - No valid previous report link exists, such as on the first notification
 - The destination channel changed and the previous report link cannot be carried over
 
-If the current report contains no findings, no detailed thread is posted, even when scans failed or history is retained.
+If the report from the latest scan contains no findings, no detailed thread is posted, even when scans failed or history is retained.
 No scan thread is posted for a cycle that sends only a remediation plan.
 
 In `full` mode, the current report is posted to the channel.
@@ -73,9 +73,9 @@ In `diff` mode, history for the next comparison is saved only after all required
 
 | Delivery result | History and next cycle |
 | --- | --- |
-| Delivery succeeds to all destinations | Saves the current state for the next comparison |
+| Delivery succeeds to all destinations | Saves the state after the latest scan for the next comparison |
 | Delivery fails to some or all destinations | Leaves comparison history unchanged and compares against the previous history next time |
-| No notification needed | Saves the current state |
+| No notification needed | Saves the state after the latest scan |
 | History cannot be saved after delivery | May report the same changes again because the next cycle still compares against the previous history |
 
 Delivery to other destinations is attempted even if one destination fails.

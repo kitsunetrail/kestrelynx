@@ -320,7 +320,7 @@ In the example where updating `mkdirp` brings `minimist` to a fixed version, `th
 If direct dependency versions stay unchanged, it lists the updated intermediate dependent packages closest to the project.
 
 `through` may also be supplemented from an existing PR.
-Check `update_executed` and `post_update_check_executed` to determine whether the update and checks run in the current cycle.
+Check `update_executed` and `post_update_check_executed` to determine whether the update and checks ran during processing of the latest remediation plan.
 
 ### Runtime {#language-runtime-fields}
 

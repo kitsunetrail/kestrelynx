@@ -374,7 +374,7 @@ Notification branches and the limits of these estimates are described in [Rebuil
 The following check uses PR records and runs only when PR processing is active through the `pull_requests` configuration.
 For a `base_layers_mismatch` item, the item reason changes to `base_update_not_deployed` when all of these conditions hold.
 
-- The repository was confirmed through GitHub in the current cycle and its repository ID matches the record
+- The repository was confirmed through GitHub during processing of the latest remediation plan and its repository ID matches the record
 - A Dockerfile PR created by KestreLynx is merged and targets the same repository, base branch, file, and stage
 - No one else has changed the PR branch or base, and its content remains as KestreLynx created it
 - That PR changed `FROM` to the same tag of the same image referenced by the current `FROM`, treating names such as `python` and `docker.io/library/python` as the same image
@@ -687,7 +687,7 @@ After:  Project → A 2.0 → Y 1.1 (with CVE-2)
 In this example, the same `CVE-2` remains in the `Y` used by `A`, so KestreLynx does not treat it as an increase in vulnerabilities.
 `CVE-2` is carried and remains unfixed by this update.
 
-A vulnerability selected for fixing in this update cannot pass the checks by qualifying as carried.
+A vulnerability selected for fixing by the dependency-file update cannot pass the checks by qualifying as carried.
 The following changes are also rejected.
 
 - A new package `Z` appears in the updated dependencies and contains a vulnerability.

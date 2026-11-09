@@ -362,6 +362,7 @@ The explanatory text in `reason` is in English regardless of the notification la
 | `image` | string | Image name. |
 | `package` | string | Package name no longer present in ordinary findings. |
 
+See [Package EOL](scan-logic.md#eol-package) for the distinction between ordinary findings and EOL findings.
 See [Resolution decisions](diff-logic.md#resolved-findings) for what resolution means.
 
 ### Image digest changes {#image-replacement-fields}
@@ -370,7 +371,7 @@ See [Resolution decisions](diff-logic.md#resolved-findings) for what resolution 
 | --- | --- | --- |
 | `ref` | string | Image name. |
 | `prev_content_ids` | array of strings | Sorted previous verified content-ID set. |
-| `content_ids` | array of strings | Sorted current verified content-ID set. |
+| `content_ids` | array of strings | Sorted set of content IDs verified during the latest scan. |
 
 Empty arrays are returned as `[]`, not `null`.
 
@@ -410,11 +411,11 @@ Changes to EOL packages folded in Slack are also included.
 | `ecosystems` | array of strings | Sorted, deduplicated ecosystems of the groups combined into this change, including `""` for unknown types. |
 | `runtime_usage` | string | `in_use`, `not_observed`, or `unavailable`; omitted when no usage assessment is available. |
 | `new_cve_ids` | array of strings | Sorted added IDs for `eol_new_cves`; omitted when empty. |
-| `critical` | integer | CRITICAL count across current EOL groups. |
-| `high` | integer | HIGH count across current EOL groups (HIGH only). |
-| `medium` | integer | MEDIUM count across current EOL groups; omitted when `0`. |
-| `low` | integer | LOW count across current EOL groups; omitted when `0`. |
-| `unknown` | integer | UNKNOWN count across current EOL groups, including unrecognized severities; omitted when `0`. |
+| `critical` | integer | CRITICAL count across EOL groups from the latest scan. |
+| `high` | integer | HIGH count across EOL groups from the latest scan (HIGH only). |
+| `medium` | integer | MEDIUM count across EOL groups from the latest scan; omitted when `0`. |
+| `low` | integer | LOW count across EOL groups from the latest scan; omitted when `0`. |
+| `unknown` | integer | UNKNOWN count across EOL groups from the latest scan, including unrecognized severities; omitted when `0`. |
 | `priority` | string | `act_now`, `watch`, or `low`; omitted when triage is disabled. |
 | `reason` | string | Evidence in English for `eol_escalated`; omitted when empty. |
 

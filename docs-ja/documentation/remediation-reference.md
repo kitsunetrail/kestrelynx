@@ -236,7 +236,7 @@ Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由
 この検査には次の限界があります。
 
 - スキャンで検出されない脆弱性や、深刻度設定の範囲外の脆弱性は確認できない
-- 持ち越した脆弱性は直らず、今回直したい脆弱性を持ち越して合格にはできない
+- 持ち越した脆弱性は直らず、更新で直す対象に選んだ脆弱性を持ち越して合格にはできない
 - プロジェクトから脆弱なパッケージまでの経路の総数は比較しない
 
 #### 公開後の待機と再試行 {#dependent-reresolution-waits}
@@ -581,7 +581,7 @@ PR処理結果の`status`には、次の値があります。
 
 | 値 | 意味 |
 | --- | --- |
-| `pr_created` | 今回の処理でPRを作成した |
+| `pr_created` | 最新の修正計画の処理でPRを作成した |
 | `pr_open` | 同じ更新を提案するPRが開いている |
 | `pr_merged` | 同じ更新のPRがマージ済みで、配置済みかは未確認 |
 | `pr_suppressed` | 未マージで閉じた更新のため、再作成を抑止した |
@@ -883,7 +883,7 @@ PR記録の`state`には、次の値があります。
 | `lockfile_inconsistent` | lockfileがプロジェクトと整合していない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
 | `no_wheel_for_version` | 対象の版に必要なプラットフォーム向けのwheelがない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
 | `release_yanked` | 対象のリリースが取り下げられている | [付随変更の検査](remediation-logic.md#change-validation) |
-| `requirements_rewrite_unsupported` | 今回の更新方法ではrequirementsを書き換えられない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
+| `requirements_rewrite_unsupported` | 修正計画で使う更新方法ではrequirementsを書き換えられない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
 | `update_set_not_applied` | 同時に更新する別のパッケージを更新できなかった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
 | `target_not_in_lockfile` | 更新対象のパッケージがlockfileに載っていない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
 | `no_reresolve_trigger` | 再解決のきっかけとして一時的に外せる依存がない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
@@ -952,7 +952,7 @@ Webhookでは、`packages[].reason`と`update.chain.reason`を併せて確認し
 | `source_changed` | 計画の元にしたファイルが変更された | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `artifact_content_missing` | 更新したファイルの内容が保持されていない | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `artifacts_unusable` | 更新したファイルをそのままPRへ書き込めない | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `open_pr_not_inherited` | 同じファイルの既存PRに、今回の更新が引き継いでいない修正がある | [古いPRの置き換え](remediation-logic.md#pr-replacement) |
+| `open_pr_not_inherited` | 同じファイルの既存PRに、新たに提案する更新が引き継いでいない修正がある | [古いPRの置き換え](remediation-logic.md#pr-replacement) |
 | `language_set_too_large` | 更新するパッケージが多すぎてPRの記録に収まらない | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `update_already_proposed` | この更新を提案するPRがすでにある | [既存PRとの照合](remediation-logic.md#existing-pr-matching) |
 
@@ -981,6 +981,6 @@ Webhookでは、`packages[].reason`と`update.chain.reason`を併せて確認し
 この記録は依存更新の処理後にも更新します。
 
 `plan.json`は、PR処理後の結果を含めて再保存しません。
-PR処理の今回の結果は通知で、継続して管理する記録は`prs.json`で確認できます。
+最新の修正計画のPR処理結果は通知で、継続して管理する記録は`prs.json`で確認できます。
 
 保存とPR処理の関係は[記録の保存順序](remediation-logic.md#record-order)、保存先の設定は[基本設定](configuration.md#remediation-basics)を参照してください。

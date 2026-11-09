@@ -98,20 +98,20 @@ Slack does not indicate whether an image is scanned by image name; this informat
 Failure to scan one target does not stop the remaining scans.
 For image names with saved history, previous findings are retained according to the following rules.
 
-| Current state | Handling of previous findings |
+| Latest scan state | Handling of findings in saved history |
 | --- | --- |
 | All scans for the same image name fail | Retain previous findings |
 | Some scans for the same image name fail | Incorporate successful results and retain previous findings that may belong to images with digests whose scans failed |
 | A Kubernetes scan by image name succeeds but the digest remains unconfirmed | Retain findings using the same rules as for partial failures |
 
-For example, if the scan of `sha256:aaa…` succeeds but the scan of `sha256:bbb…` fails for the same image name, `web:1.0`, the current results do not include findings for `sha256:bbb…`.
+For example, if the scan of `sha256:aaa…` succeeds but the scan of `sha256:bbb…` fails for the same image name, `web:1.0`, the latest scan results do not include findings for `sha256:bbb…`.
 To prevent vulnerabilities previously found for `sha256:bbb…` from appearing resolved, each package's record retains at least the previous information, using the values below.
 
 | Recorded information | Value retained |
 | --- | --- |
-| CVE IDs | CVE IDs from both the previous and current results |
-| Priority | The higher of the previous and current priorities |
-| Fix availability | A fix is recorded as available if either the previous or current results indicate one is available |
+| CVE IDs | CVE IDs from both the saved history and the latest scan results |
+| Priority | The higher priority from the saved history and the latest scan results |
+| Fix availability | A fix is recorded as available if either the saved history or the latest scan results indicate one is available |
 
 End-of-life (EOL) findings are recorded separately from ordinary findings, but the same rules apply to their CVE IDs and priority (fix availability does not apply).
 

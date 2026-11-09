@@ -581,7 +581,7 @@ PR processing results use the following `status` values.
 
 | Value | Meaning |
 | --- | --- |
-| `pr_created` | A PR was created in this run |
+| `pr_created` | A PR was created during processing of the latest remediation plan |
 | `pr_open` | A PR proposing the same update is open |
 | `pr_merged` | A PR for the same update was merged, without confirmation of deployment |
 | `pr_suppressed` | Recreation was suppressed because the update was closed without merging |
@@ -883,7 +883,7 @@ The following tables give each code's meaning and related decision rules or chec
 | `lockfile_inconsistent` | The lockfile is not consistent with the project | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
 | `no_wheel_for_version` | The target version has no wheel for the required platform | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
 | `release_yanked` | The target release was yanked | [Checking related changes](remediation-logic.md#change-validation) |
-| `requirements_rewrite_unsupported` | The requirements file cannot be rewritten with this update method | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
+| `requirements_rewrite_unsupported` | The requirements file cannot be rewritten with the update method used by the remediation plan | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
 | `update_set_not_applied` | Another package in the same update set could not be updated | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
 | `target_not_in_lockfile` | The target package has no entry in the lockfile | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
 | `no_reresolve_trigger` | No dependency can be temporarily removed to trigger resolution | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
@@ -952,7 +952,7 @@ In webhooks, check both `packages[].reason` and `update.chain.reason`.
 | `source_changed` | A file used to create the plan has changed | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `artifact_content_missing` | The updated file contents are no longer retained | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `artifacts_unusable` | The updated files cannot be written to the PR as they are | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `open_pr_not_inherited` | An existing PR for the same file contains fixes this update does not carry forward | [Replacing older PRs](remediation-logic.md#pr-replacement) |
+| `open_pr_not_inherited` | An existing PR for the same file contains fixes the newly proposed update does not carry forward | [Replacing older PRs](remediation-logic.md#pr-replacement) |
 | `language_set_too_large` | Too many packages are being updated to fit in the PR record | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `update_already_proposed` | A PR already proposes this update | [Matching existing PRs](remediation-logic.md#existing-pr-matching) |
 
@@ -981,6 +981,6 @@ Remediation plan records are stored under `remediation.storage_dir`.
 These records are also updated after dependency-update processing.
 
 `plan.json` is not saved again with PR processing results.
-Notifications contain the current run's PR processing results, while `prs.json` holds the records used for ongoing management.
+Notifications contain the PR processing results for the latest remediation plan, while `prs.json` holds the records used for ongoing management.
 
 See [Record save order](remediation-logic.md#record-order) for the relationship between storage and PR processing and [Basic settings](configuration.md#remediation-basics) for configuration.

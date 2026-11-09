@@ -10,8 +10,8 @@ See [Remediation plans in Slack](remediation-results.md#reading-results-in-slack
 | Report | Content |
 | --- | --- |
 | `diff` mode | Changes since the previous scan and the current unresolved state |
-| `full` mode | Unresolved findings confirmed by the current scan |
-| Weekly report | A full report of current unresolved findings, added to the diff notification |
+| `full` mode | Unresolved findings confirmed by the latest scan |
+| Weekly report | A full report of unresolved findings confirmed by the latest scan, added to the diff notification |
 
 Diff notifications with changes display `Changes since the last scan.`, and full mode displays `Everything currently open.`
 The weekly report heading is `📋 Weekly full report — everything currently open`.
@@ -29,11 +29,11 @@ The thread attaches to the first channel message, even when the channel report s
 
 | Footer of the first channel message | Destination |
 | --- | --- |
-| `📊 Everything open now is in this message's thread ↓` | The thread posted this cycle |
+| `📊 Everything open now is in this message's thread ↓` | The thread containing the report from the latest scan |
 | `🔗 Everything open as of the last report → thread` | The previously posted report thread |
 
 The previous report link points to the content as it was when that report was created.
-See the channel's [current unresolved counts](#open-now) for the current unresolved state.
+See the channel's [current unresolved counts](#open-now) for the unresolved state after the latest scan.
 
 Long notifications are split into multiple messages, with `(cont.)` on continued headings and a part number such as `(cont. 2/3)` on channel continuations.
 The footer is omitted when no valid link exists or the link cannot be displayed.
@@ -136,23 +136,24 @@ Image names with only scan failures are excluded from the affected count.
 
 ### Current unresolved counts {#open-now}
 
-`📌 Open now:` shows the unresolved state remaining after the current scan.
+`📌 Open now:` shows the unresolved state remaining after the latest scan.
 EOL and priority counts include history retained from the previous cycle.
+See [Package EOL](scan-logic.md#eol-package) for the distinction between ordinary findings and EOL findings.
 
 | Display | Counting unit |
 | --- | --- |
 | `⛔ N EOL base` | Image names recorded as EOL |
 | `⛔ N EOL package` | Pairs of image name and package not folded into a base OS |
-| `🚨 N act-now` | Pairs of image name and package with Act now priority on the ordinary or EOL side |
-| `👀 N watch` · `🔕 N low` | Pairs by ordinary package priority, excluding those counted as Act now |
+| `🚨 N act-now` | Pairs of image name and package with Act now priority in ordinary findings or EOL findings |
+| `👀 N watch` · `🔕 N low` | Pairs by priority in ordinary findings, excluding those counted as Act now |
 
 EOL Watch and Low findings are not added to the priority counts.
 EOL package and Act now counts may overlap.
 
-With triage disabled, severity counts sum the CVE counts of each package group in the current report separately for each severity.
+With triage disabled, severity counts sum the CVE counts of each package group in the report from the latest scan separately for each severity.
 The same CVE is counted separately if it appears in different groups.
 
-When the current report contains no findings, the following states appear instead of counts.
+When the report from the latest scan contains no findings, the following states appear instead of counts.
 
 | State | Display |
 | --- | --- |
@@ -162,7 +163,7 @@ When the current report contains no findings, the following states appear instea
 
 ### Priority line counts {#priority-counts}
 
-`Priority:` in a current-state report counts package groups in the current report.
+`Priority:` in a current-state report counts package groups in the report from the latest scan.
 Groups with different fix statuses or different digests under the same image name count separately.
 
 | Count | Included items |
@@ -189,7 +190,7 @@ EOL packages folded into a base OS use the base OS's first-seen-as-EOL date.
 However, Act now EOL packages contribute their own first-seen-as-EOL date even when folded.
 
 Retained history is also included.
-With triage enabled, ordinary packages determined to be muted this cycle are excluded from the oldest unresolved age.
+With triage enabled, ordinary packages determined to be muted during the latest scan are excluded from the oldest unresolved age.
 
 | Example display | Meaning |
 | --- | --- |
@@ -443,7 +444,7 @@ Muted findings have no individual lines and appear as a count instead.
 - Excluded from `Priority:` counts and current unresolved priority counts
 - Excluded from current unresolved counts for all severities when triage is disabled
 - Included in “not observed” runtime counts, so those counts overlap with the muted count
-- Included in retained unresolved counts when previous history is retained and muting cannot be evaluated this cycle
+- Included in retained unresolved counts when history from the previous scan is retained because of a scan failure and muting cannot be assessed in the latest scan
 
 When notifications resume, a label such as `Change: ↩️ Unmuted (now in use)` appears.
 If a change such as a newly available fix or a priority escalation applies, that change's label is used.
@@ -452,7 +453,7 @@ See [Muting findings without a fix](runtime-usage.md#muting-findings-without-a-f
 
 ## Reading warnings {#warnings}
 
-Warnings describe limitations when interpreting the current results.
+Warnings describe limitations when interpreting the latest scan results.
 Scan, threat intelligence, and Sensor warnings cover different areas.
 
 ### Scan warnings {#scan-warnings}
@@ -465,7 +466,7 @@ Scan, threat intelligence, and Sensor warnings cover different areas.
 Slack does not indicate whether an image is scanned by image name; this information is available in `identity_resolved` and `scan_target_kind` under the webhook's [Image digest](webhook-reference.md#image-identity).
 
 The holding annotation may also appear for image names without previous history.
-Image names whose scans all failed this cycle are excluded from this holding list.
+Image names for which all scans failed during the latest scan are excluded from this holding list.
 
 See [Failed scans](scan-logic.md#scan-failures) for retention behavior.
 

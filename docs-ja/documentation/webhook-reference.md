@@ -360,8 +360,9 @@ Sensorの状態の意味と観測の限界は、[稼働時の使用状況](runti
 | `diff.resolved[]`のフィールド名 | 型 | 意味 |
 | --- | --- | --- |
 | `image` | string | イメージ名 |
-| `package` | string | 通常側の検出結果からなくなったパッケージ名 |
+| `package` | string | 通常の検出結果からなくなったパッケージ名 |
 
+通常の検出結果とEOLの検出結果の区別は、[パッケージのEOL](scan-logic.md#eol-package)を参照してください。
 解消の意味は、[解消の判定](diff-logic.md#resolved-findings)を参照してください。
 
 ### digestの変更 {#image-replacement-fields}
@@ -370,7 +371,7 @@ Sensorの状態の意味と観測の限界は、[稼働時の使用状況](runti
 | --- | --- | --- |
 | `ref` | string | イメージ名 |
 | `prev_content_ids` | stringの配列 | 並べ替え済みの前回の確認済みcontent-ID集合 |
-| `content_ids` | stringの配列 | 並べ替え済みの今回の確認済みcontent-ID集合 |
+| `content_ids` | stringの配列 | 最新のスキャン時に確認できたcontent-IDの並べ替え済み集合 |
 
 配列は`null`にせず、空の場合は`[]`を出力します。
 
@@ -410,11 +411,11 @@ Slackで畳み込むEOLパッケージの変化も含めます。
 | `ecosystems` | stringの配列 | 変化にまとめたグループのエコシステムを重複なく並べ替えた一覧で、不明な種類は`""`として含む |
 | `runtime_usage` | string | `in_use`、`not_observed`、`unavailable`のいずれかで、使用状況の判定がなければ省略 |
 | `new_cve_ids` | stringの配列 | `eol_new_cves`の場合の並べ替え済み追加IDで、空なら省略 |
-| `critical` | integer | 今回のEOLグループのCRITICAL件数 |
-| `high` | integer | 今回のEOLグループのHIGH件数（HIGHのみ） |
-| `medium` | integer | 今回のEOLグループのMEDIUM件数で、`0`なら省略 |
-| `low` | integer | 今回のEOLグループのLOW件数で、`0`なら省略 |
-| `unknown` | integer | 今回のEOLグループのUNKNOWN件数（認識できない深刻度を含む）で、`0`なら省略 |
+| `critical` | integer | 最新のスキャンのEOLグループのCRITICAL件数 |
+| `high` | integer | 最新のスキャンのEOLグループのHIGH件数（HIGHのみ） |
+| `medium` | integer | 最新のスキャンのEOLグループのMEDIUM件数で、`0`なら省略 |
+| `low` | integer | 最新のスキャンのEOLグループのLOW件数で、`0`なら省略 |
+| `unknown` | integer | 最新のスキャンのEOLグループのUNKNOWN件数（認識できない深刻度を含む）で、`0`なら省略 |
 | `priority` | string | `act_now`、`watch`、`low`のいずれかで、トリアージ無効時は省略 |
 | `reason` | string | `eol_escalated`の場合の英語の判定根拠で、空なら省略 |
 
@@ -427,7 +428,7 @@ Slackで畳み込むEOLパッケージの変化も含めます。
 | --- | --- | --- |
 | `image` | string | イメージ名 |
 | `package` | string | EOL区分からなくなったパッケージ名 |
-| `still_open` | boolean | 同じイメージ名とパッケージに通常側の検出結果が残る場合は`true`で、`false`でも出力 |
+| `still_open` | boolean | 同じイメージ名とパッケージに通常の検出結果が残る場合は`true`で、`false`でも出力 |
 
 ### 未解決の最長期間 {#oldest-open-days}
 
@@ -436,7 +437,7 @@ Slackで畳み込むEOLパッケージの変化も含めます。
 
 | 対象 | 集計する初回検出日 |
 | --- | --- |
-| 通常のパッケージ | 通常側の初回検出日で、Low・通知オフ・保持中の記録も含む |
+| 通常のパッケージ | 通常の検出結果の初回検出日で、Low・通知オフ・保持中の記録も含む |
 | EOLベースOS | ベースOSの初回EOL検出日 |
 | 畳み込まれていないEOLパッケージ | パッケージの初回EOL検出日 |
 | 畳み込まれているAct nowのEOLパッケージ | パッケージの初回EOL検出日 |

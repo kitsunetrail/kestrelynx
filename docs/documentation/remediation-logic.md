@@ -217,6 +217,52 @@ The baseline and candidate are scanned and compared under the prepared database 
 - Ties favor the candidate without added findings, then the one checked first
 - `not_checked` candidates are not selected, and the result is `not_resolving` when every checked candidate leaves all targets unresolved
 
+#### Lines shown on Slack cards {#newer-series-slack-cards}
+
+Slack package cards build the `Action:` line from comparison results in the current remediation plan.
+The assessment covers findings with an available fix on that card.
+
+The comparison target determines which findings qualify and which subject the line uses.
+
+| Comparison target | Treatment on the card |
+| --- | --- |
+| Dockerfile base image | Covers findings confirmed to belong to the base image and uses `base image` as the subject |
+| Published image | Does not require attribution to a base image and uses `image` as the subject |
+
+Resolution and partial-resolution lines use the results for the candidate selected for display in the current remediation plan item.
+When Dockerfile results differ between running images, the card uses the comparison results for its image.
+
+Notes are added under the following conditions.
+Same-series results correspond to the reasons explained in the table under [Eligible items](#newer-series-eligibility).
+
+| Condition | Note added |
+| --- | --- |
+| No newer patch exists in the same series | `no newer tag in the same series` on resolution and partial-resolution lines |
+| The newer patch in the same series points to the current content | `not resolved by the newer tag of the same series` on resolution and partial-resolution lines |
+| The newer patch in the same series does not resolve the target findings | `not resolved by the newer tag of the same series` on resolution and partial-resolution lines |
+| The displayed candidate resolves findings and also adds new findings | `with new findings` on resolution and partial-resolution lines |
+| The line reports a Dockerfile base-image comparison | `base images compared`, except on a line reporting that no newer series exists |
+
+When no candidate is selected for display and the checked candidates leave findings unresolved or the item as a whole cannot be assessed, each card is checked in the following order.
+
+1. Identify candidates with comparison results for each finding on the card
+2. Check whether each finding remains unresolved in every candidate compared for that finding
+3. Show that the checked candidates also leave the findings unresolved when all findings remain and the card's results can be represented by the same line
+
+Even when the remediation plan item as a whole cannot be assessed, a card without indeterminate findings can show an unresolved line under these conditions.
+
+Cards containing indeterminate findings or findings that have not been compared are handled as follows.
+
+- If both the Dockerfile plan item and the relevant running image confirm that no newer patch exists in the same series, show a waiting line containing only that information
+- Otherwise, omit the line
+
+The line is also omitted in the following cases.
+
+- A newer patch in the same series does not resolve the findings and no matching newer series exists
+- The Dockerfile base image and the published image produce different lines for the same finding
+
+See [Resolution through image updates and waiting for newer versions](slack-display.md#base-image-wait) for display examples and the meaning of each part.
+
 #### Limits and capacity reserved for PR processing {#newer-series-limits}
 
 The check runs after planning and language-package updates, before the plan is saved.

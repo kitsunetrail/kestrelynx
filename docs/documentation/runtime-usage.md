@@ -36,7 +36,7 @@ Treating all packages in an ecosystem as in use because its runtime process is r
 Function calls and module imports are not checked. Reading a data file does not
 count as evidence of use.
 
-See [Runtime usage display](slack-display.md#runtime-display) for Slack text and observed evidence, and [Current report ordering](slack-display.md#current-order) for ordering.
+See [Runtime usage display](slack-display.md#runtime-display) for Slack text and observed evidence, and [Order within a section](slack-display.md#within-section-order) for ordering.
 Webhook fields are described in [Runtime fields](webhook-reference.md#runtime).
 
 ### Runtime executables {#runtime-executables}

@@ -17,7 +17,7 @@ Field names in each table are relative to the object indicated by that table.
 Fields without an omission condition are included whenever the object is present.
 
 Counts for `MEDIUM`, `LOW`, and `UNKNOWN` are included only when `scan.severity` selects the corresponding levels.
-With the default `[HIGH, CRITICAL]`, Slack display, webhook payloads, and logs remain unchanged.
+The default `[HIGH, CRITICAL]` excludes these severities from detection, so their counts are not included.
 
 ### Top level {#top-level}
 
@@ -110,7 +110,7 @@ Each element of `actionable`, `watch`, `wont_fix`, and `eol_packages` represents
 | Field | Type | Meaning and omission conditions |
 | --- | --- | --- |
 | `image` | string | Image name for display. |
-| `severity_counts` | object | Integer counts by severity; `CRITICAL` and `HIGH` are always included, and `HIGH` counts only HIGH vulnerabilities. |
+| `severity_counts` | object | Integer counts by severity; `CRITICAL` and `HIGH` are always included. |
 | `findings` | array of objects | [Package groups](#package-fields) belonging to this image and fix status. |
 | `containers` | array of objects | [Containers](#containers) matching this digest; `[]` when none apply. |
 | `content_id` | string | `sha256:<hex>` for a Docker scan targeting a config digest that was verified; omitted otherwise. |
@@ -154,7 +154,7 @@ Even when one image name has multiple digests, each element includes only the co
 | `installed` | string | Installed version. |
 | `fixed` | string | Fixed version; `""` when none is available. |
 | `status` | string | `fixed`, `affected`, `will_not_fix`, or `end_of_life`. |
-| `severity_counts` | object | Integer counts by severity; `CRITICAL` and `HIGH` are always included, and `HIGH` counts only HIGH vulnerabilities. |
+| `severity_counts` | object | Integer counts by severity; `CRITICAL` and `HIGH` are always included. |
 | `upgrade_risk` | string | `""`, `distro_update`, `safe`, `caution`, or `unknown`. |
 | `priority` | string | `act_now`, `watch`, or `low`; omitted when triage is disabled. |
 | `vuln_ids` | array of strings | Sorted vulnerability IDs. |
@@ -345,7 +345,7 @@ See [Change and history decisions](diff-logic.md#comparison-baseline) for the co
 | `new_cve_count` | integer | Added CVE count for `new_cves`; omitted when `0`. |
 | `new_cve_ids` | array of strings | Added IDs for `new_cves`; omitted when empty. |
 | `critical` | integer | CRITICAL count. |
-| `high` | integer | HIGH count (HIGH only). |
+| `high` | integer | HIGH count. |
 | `medium` | integer | MEDIUM count; omitted when `0`. |
 | `low` | integer | LOW count; omitted when `0`. |
 | `unknown` | integer | UNKNOWN count, including unrecognized severities; omitted when `0`. |
@@ -412,7 +412,7 @@ Changes to EOL packages folded in Slack are also included.
 | `runtime_usage` | string | `in_use`, `not_observed`, or `unavailable`; omitted when no usage assessment is available. |
 | `new_cve_ids` | array of strings | Sorted added IDs for `eol_new_cves`; omitted when empty. |
 | `critical` | integer | CRITICAL count across EOL groups from the latest scan. |
-| `high` | integer | HIGH count across EOL groups from the latest scan (HIGH only). |
+| `high` | integer | HIGH count across EOL groups from the latest scan. |
 | `medium` | integer | MEDIUM count across EOL groups from the latest scan; omitted when `0`. |
 | `low` | integer | LOW count across EOL groups from the latest scan; omitted when `0`. |
 | `unknown` | integer | UNKNOWN count across EOL groups from the latest scan, including unrecognized severities; omitted when `0`. |

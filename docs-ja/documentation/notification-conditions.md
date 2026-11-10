@@ -41,14 +41,14 @@ Kubernetesでは、ノードがdigestを報告しない場合に、スキャン�
 
 ### 週次レポートの送信 {#weekly-report}
 
-`diff`モードでは、設定した週次レポートの曜日にスキャン通知を送る場合、その通知にSlackの完全レポートを加えます。
+`diff`モードでは、設定した週次レポートの曜日にスキャン通知を送る場合、その通知にSlackの全体レポートを加えます。
 
-週次レポートの曜日でも、次の場合は完全レポートを送りません。
+週次レポートの曜日でも、次の場合は全体レポートを送りません。
 
 - スキャン通知を送る条件を満たさない回（例：検出項目も変化もなく、`notify.notify_on_clean`が`false`の回）
 - 修正計画だけを送る回
 
-曜日や無効化の設定は[設定](configuration.md)、完全レポートの表示範囲は[チャンネルのレポート](slack-display.md#channel-display)を参照してください。
+曜日や無効化の設定は[設定](configuration.md)、全体レポートの表示範囲は[チャンネルのレポート](slack-display.md#channel-display)を参照してください。
 
 ## Slackスレッドの投稿条件 {#slack-thread-delivery}
 

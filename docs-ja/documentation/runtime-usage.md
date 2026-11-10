@@ -36,7 +36,7 @@ KestreLynxは観測結果をSlackとWebhookの通知に反映します。
 関数の呼び出しやモジュールの読み込みは判定しません。
 データファイルの読み取りは使用の根拠にしません。
 
-Slackの文言と観測根拠は[稼働時の使用状況の表示](slack-display.md#runtime-display)、並び順は[現在状態レポートの並び順](slack-display.md#current-order)を参照してください。
+Slackの文言と観測根拠は[稼働時の使用状況の表示](slack-display.md#runtime-display)、並び順は[区分の中の並び順](slack-display.md#within-section-order)を参照してください。
 Webhookのフィールドは[稼働時のフィールド](webhook-reference.md#runtime)に記載しています。
 
 ### ランタイム本体の実行ファイル {#runtime-executables}

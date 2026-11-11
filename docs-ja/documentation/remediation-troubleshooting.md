@@ -65,7 +65,7 @@
 | 新規PR数やオープン中のPR数の上限に達する | 現在のPRと設定した上限を確認する | [処理の上限](configuration.md#remediation-limits) |
 | 既存PRに対応付けられる、新しいPRが作られない | 通知された既存PRと、同じ更新を未マージで閉じた履歴を確認する | [既存PRとの照合](remediation-logic.md#existing-pr-matching)・[閉じたPRの扱い](remediation-logic.md#closed-prs) |
 | PR準備中にソースや候補が変わる | 通知の詳細と現在のソース・候補を確認し、次のサイクルの結果を確認する | [PR処理の理由](remediation-reference.md#pr-reasons) |
-| GitHub操作が失敗する、結果が不明になる | アクセス、通信、操作結果を確認し、結果不明の操作はKestreLynxによる照合を待つ | [PR操作イベントのフィールド](webhook-remediation-reference.md#remediation-operation-fields)・[PR処理の理由](remediation-reference.md#pr-reasons) |
+| GitHub操作が失敗する、結果が不明になる | アクセス、通信、操作結果を確認し、結果不明の操作はKestreLynxによる照合を待つ | [PR操作イベントのフィールド](webhook-remediation-pr-reference.md#remediation-operation-fields)・[PR処理の理由](remediation-reference.md#pr-reasons) |
 
 ## 記録を照合できない場合の確認 {#check-record-failure}
 

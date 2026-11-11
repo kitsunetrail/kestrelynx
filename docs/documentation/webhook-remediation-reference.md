@@ -1,651 +1,685 @@
-# Webhook remediation fields
+---
+title: Webhook remediation overview and shared objects
+---
 
-## Common remediation plan fields {#remediation-fields}
+# Webhook remediation overview and shared objects
+
+This page describes the overall structure of a remediation plan.
+
+It also describes the fields of objects shared by published image, base image, and PR processing items.
+These are image information, comparison results, scan records, newer series check results, and services.
 
 When remediation planning is enabled, `remediation` is included in both full and diff payloads.
-See [Webhook field reference](webhook-reference.md#top-level) for the overall report format.
+See [Webhook base fields](webhook-reference.md#top-level) for the overall report structure.
 
-Field names in each table are relative to the object indicated by that table.
-Fields without an omission condition are included whenever the object is present.
-
-| `remediation` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `schema_version` | integer | Format version of this object, currently `1`. |
-| `status` | string | `ok` when a plan was produced, or `unavailable` when it could not be produced. |
-| `unavailable_reason` | string | Reason no plan was produced; omitted otherwise. |
-| `not_saved` | boolean | `true` when the plan could not be saved; omitted otherwise. |
-| `generated_at` | string | Plan generation time in RFC 3339 format; omitted when there is no plan. |
-| `conditions` | object | Comparison scan conditions; omitted when both the Trivy version and vulnerability database identity are unknown. |
-| `conditions.trivy_version` | string | Trivy version. |
-| `conditions.trivy_sha256` | string | Trivy SHA-256; omitted when unknown. |
-| `conditions.vulnerability_db_updated_at` / `conditions.java_db_updated_at` | string | Each database's update time in RFC 3339 format; omitted when unknown. |
-| `conditions.vulnerability_db_sha256` / `conditions.java_db_sha256` | string | Each database's SHA-256; omitted when unknown. |
-| `conditions.severities` | array of strings | Severities included in the comparison; omitted when empty. |
-| `conditions.analysis_settings` | string | Hash identifying the analysis settings; omitted when unknown. |
-| `limits` | object | Planning limits; omitted when there is no plan. |
-| `limits.max_candidate_scans` | integer | Candidate-image scan limit. |
-| `limits.max_baseline_rescans` | integer | Baseline rescan limit. |
-| `limits.max_tag_pages` | integer | Tag-list retrieval limit per repository. |
-| `usage` | object | Work counts during planning; omitted when there is no plan. |
-| `usage.candidate_scans` / `usage.baseline_rescans` | integer | Candidate scan and baseline rescan counts. |
-| `usage.tag_pages` / `usage.registry_requests` | integer | Tag-list retrieval and registry request counts. |
-
-`unavailable_reason` uses `databases_not_prepared` or `planner_not_built`.
-Even when there is no plan, [published-image `items`](#remediation-image-fields) is included as `[]`.
-
-See [Plan category values](remediation-reference.md#category-values) for each item's `category` and [Reason codes](remediation-reference.md#reason-codes) for `reason`.
-The item's `reason` and supplementary `detail` are omitted when empty.
-
-## Published image fields {#remediation-image-fields}
-
-| `remediation` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `summary` | object | Published-image counts with category values as keys and integer counts as values; omitted when there is no plan. |
-| `items` | array of objects | Published-image items; `[]` when none apply. |
-| `items[].key` | string | Item identifier. |
-| `items[].category` | string | Plan category value. |
-| `items[].reason` / `items[].detail` | string | Reason and additional details; omitted when empty. |
-| `items[].tag_kind` | string | Current tag classification; omitted when unknown. |
-| `items[].priority` | string | Target priority; omitted when unavailable. |
-| `items[].services` | array of objects | Associated service information; omitted when empty. |
-| `items[].services[].workload` | string | Kubernetes workload key; each Kubernetes `services[]` element contains only this field. |
-| `items[].declared` | array of objects | Image names and pull policies from Kubernetes Pod specs; omitted when empty. |
-| `items[].declared[].workload` | string | Target workload key. |
-| `items[].declared[].ref` | string | Image name from the spec; omitted when unreadable. |
-| `items[].declared[].pull_policy` | string | The spec's `imagePullPolicy`; omitted when unset. |
-| `items[].pull` | array of objects | Guidance grouped by pull policy for Kubernetes `pull_again` items; omitted when empty. |
-| `items[].pull[].guidance` | string | `restart_pulls`, `change_tag_or_digest`, or `import_to_node`; see [Re-pull guidance](remediation-logic.md#kubernetes-image-references) for their meanings. |
-| `items[].pull[].policy` | string | Effective pull policy from the spec or its default when unset. |
-| `items[].pull[].workloads` | array of strings | Workload keys covered by this guidance. |
-| `items[].management` | array of objects | Management chains for Kubernetes workloads; omitted when empty. |
-| `items[].management[].workload` | string | Target workload key. |
-| `items[].management[].chains` | array of arrays of objects | Management chains, each ordered from the owner nearest to the workload. |
-| `items[].management[].chains[][].kind` | string | Owner kind. |
-| `items[].management[].chains[][].resource` / `resource_id` / `name` / `scope` | string | Resource kind, identifier, name, and scope; each omitted when empty. |
-| `items[].management[].chains[][].confidence` | string | Confidence in the attribution; omitted when empty, with `claimed` indicating attribution inferred from management markers. |
-| `items[].management[].conflicting` | boolean | `true` when more than one management chain exists; omitted otherwise. |
-| `items[].current` | object | Current image information. |
-| `items[].candidate` | object | Candidate image information; omitted when there is no candidate. |
-| `items[].targets` | integer | Number of findings targeted for comparison. |
-| `items[].kev_targets` | integer | Number of comparison targets listed in KEV; omitted when `0`. |
-| `items[].comparison` | object | Comparison result; omitted when no result is available. |
-| `items[].scans` | array of objects | Records of scans used for comparison; omitted when empty. |
-| `items[].newer_series` | object | Newer series check result; omitted when no result is available. |
-| `items[].newer_series.status` | string | A [Newer series status value](remediation-reference.md#newer-series-status-values). |
-| `items[].newer_series.shown` | string | Tag of the candidate selected for display; omitted when none is selected. |
-| `items[].newer_series.reason` / `items[].newer_series.detail` | string | Reason, such as why the result is `not_checked`, and additional details; omitted when empty. |
-| `items[].newer_series.candidates` | array of objects | Candidate results in the order checked. |
-| `items[].newer_series.candidates[].tag` | string | Candidate tag. |
-| `items[].newer_series.candidates[].change` | string | `minor` or `major`. |
-| `items[].newer_series.candidates[].status` | string | Candidate status. |
-| `items[].newer_series.candidates[].reason` / `items[].newer_series.candidates[].detail` | string | Candidate reason and additional details; omitted when empty. |
-| `items[].newer_series.candidates[].candidate` | object | Image information in the existing `candidate` format; omitted if the candidate's content cannot be resolved. |
-| `items[].newer_series.candidates[].counts` | object | Counts of target outcomes and added findings. |
-| `items[].newer_series.candidates[].counts.targets` / `resolved` / `remaining` | integer | Target, resolved, and remaining counts. |
-| `items[].newer_series.candidates[].counts.unknown` / `undetected` | integer | Counts of indeterminate findings and findings not detected in the baseline. |
-| `items[].newer_series.candidates[].counts.introduced` / `introduced_kev` | integer | Counts of newly detected findings and newly introduced KEV-listed findings. |
-| `items[].newer_series.candidates[].comparison` | object | Uses the existing `comparison` format, with `verdicts` containing only target findings and the same list limits; `decision` is omitted, and this field is omitted when no result is available. |
-| `items[].newer_series.candidates[].scans` | array of objects | Uses the existing `scans` format without scan IDs; omitted when empty. |
-
-If the candidate tag points to the same content as the current image, scanning is skipped.
-`comparison` marks all targets as `remaining`, and `scope` contains an English statement that no scan was performed.
-
-For newer-series results, Webhook change detection uses the following information.
-
-- Includes status, the displayed candidate, reason, candidate content (digests), counts, and per-target outcomes
-- Excludes scan IDs, timestamps, and `detail`
-
-Image information in `current` and `candidate` uses the following format.
-Image information in base-image items uses the same format.
-
-| Image information field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `ref` | string | Image name. |
-| `tag` | string | Tag; omitted when unknown. |
-| `content` | string | Running image's digest; omitted when unavailable or for candidate images. |
-| `config_digest` / `manifest_digest` / `top_digest` | string | Respective digests; omitted when unknown. |
-| `platform` | string | Platform; omitted when unknown. |
-| `digest_kind_unverified` | boolean | `true` when the running image's digest kind has not been verified; omitted otherwise. |
-
-| `comparison` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `comparable` | boolean | `true` when comparison is possible. |
-| `reason` / `scope` / `decision` | string | Comparison reason, scope, and decision; omitted when empty. |
-| `targets` / `resolved` / `remaining` | integer | Target, resolved, and remaining counts. |
-| `unknown` / `undetected` / `introduced` | integer | Counts of indeterminate findings, findings not detected in the baseline, and newly detected findings. |
-| `verdicts` | array of objects | Verdicts for individual target vulnerabilities; omitted when empty. |
-| `introduced_findings` | array of objects | Verdicts for individual newly detected vulnerabilities; omitted when empty. |
-| `verdicts_truncated` / `introduced_findings_truncated` | boolean | `true` when part of the corresponding list was omitted; omitted otherwise. |
-
-| `scans[]` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `role` / `ref` | string | Scan role and image name. |
-| `requested` / `confirmed` | string | Requested and confirmed targets. |
-| `db` | string | Identity of the database used. |
-| `scanned_at` | string | Scan time in RFC 3339 format; omitted when no record is available. |
-| `failure` | string | Scan failure information; omitted when empty. |
-
-See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for comparison conditions and [Resolution in comparison results](remediation-results.md#verification-results) for interpreting results.
-
-## Base image fields {#remediation-dockerfile-fields}
-
-| `remediation` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `dockerfile_summary` | object | Counts with category values as keys and integer counts as values; omitted when no items apply. |
-| `dockerfile_items` | array of objects | Base-image items; omitted when none apply. |
-| `dockerfile_items[].key` | string | Item identifier. |
-| `dockerfile_items[].kind` | string | `dockerfile`. |
-| `dockerfile_items[].fix_class` | string | `base_image`. |
-| `dockerfile_items[].verification` | string | `base_image_comparison`. |
-| `dockerfile_items[].category` | string | Plan category value. |
-| `dockerfile_items[].reason` / `dockerfile_items[].detail` | string | Reason and additional details; omitted when empty. |
-| `dockerfile_items[].priority` | string | Target priority; omitted when unavailable. |
-| `dockerfile_items[].workloads` | array of strings | Target workloads, including `container/<name>`; `[]` when none apply. |
-| `dockerfile_items[].source` | object | Dockerfile repository, branch, and path, plus available commit, stage, and other information. |
-| `dockerfile_items[].base_ref` / `dockerfile_items[].base_kind` | string | Current base-image name and tag classification; omitted when empty. |
-| `dockerfile_items[].candidate` | object | Candidate [image information](#remediation-image-fields); omitted when there is no candidate. |
-| `dockerfile_items[].counts` | object | Integer counts named `targets`, `resolved`, `remaining`, and `introduced`. |
-| `dockerfile_items[].rebuild_runtimes` | array of objects | Aggregated runtime rebuild estimates when all running images have the `floating_base_unconfirmed` outcome; omitted when empty. |
-| `dockerfile_items[].rebuild_check` | object | Aggregate check against the current base, available only when all running images have the `floating_base_unconfirmed` outcome; omitted when no result is available. |
-| `dockerfile_items[].entities` | array of objects | Matching and comparison results for each running image; omitted when empty. |
-| `dockerfile_items[].newer_series` | object | Newer series check result across all running images; omitted when no result is available. |
-| `dockerfile_items[].newer_series.status` | string | A [Newer series status value](remediation-reference.md#newer-series-status-values). |
-| `dockerfile_items[].newer_series.shown` | string | Tag of the candidate selected for display; omitted when none is selected. |
-| `dockerfile_items[].newer_series.reason` / `dockerfile_items[].newer_series.detail` | string | Reason and additional details; omitted when empty. |
-| `dockerfile_items[].newer_series.candidates` | array of objects | Aggregate candidate results in the order checked, without `comparison` or `scans`. |
-| `dockerfile_items[].newer_series.candidates[].tag` / `change` / `status` | string | Candidate tag, change type, and status, as defined in [Published image fields](#remediation-image-fields). |
-| `dockerfile_items[].newer_series.candidates[].reason` / `detail` | string | Candidate reason and additional details; omitted when empty. |
-| `dockerfile_items[].newer_series.candidates[].candidate` | object | Candidate image information; omitted if its content cannot be resolved. |
-| `dockerfile_items[].newer_series.candidates[].counts` | object | Integer counts named `targets`, `resolved`, `remaining`, `unknown`, `undetected`, `introduced`, and `introduced_kev`, as defined in [Published image fields](#remediation-image-fields). |
-| `dockerfile_items[].entities[].newer_series` | object | Per-running-image result, including candidate, comparison, and scan records in the same format as `items[].newer_series`; omitted when no result is available. |
-| `dockerfile_items[].awaiting_deploy` | object | Merged PR information for `base_update_not_deployed`; omitted when not applicable. |
-| `dockerfile_items[].awaiting_deploy.number` | integer | PR number. |
-| `dockerfile_items[].awaiting_deploy.url` | string | PR URL; omitted when empty. |
-| `dockerfile_items[].awaiting_deploy.from` | string | Base-image name used by `FROM` before the PR, from which the running images were built. |
-| `dockerfile_items[].awaiting_deploy.to` | string | Tag set by the PR. |
-| `dockerfile_items[].final_image_verified` | boolean | Whether the rebuilt application image has been verified; always `false`. |
-| `dockerfile_items[].pull_request` | object | Matching [PR processing](#remediation-pr-fields); omitted when there is no match. |
-
-| `dockerfile_items[].entities[]` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `running_image` | object | Running image information. |
-| `current_base` / `candidate_base` | object | Current and candidate base-image information; omitted when unavailable. |
-| `layer_confirmation` / `findings_by_layer` | object | Base-layer matching results and finding counts by layer. |
-| `category` | string | Category value for the running image. |
-| `reason` / `detail` | string | Reason and additional details; omitted when empty. |
-| `services` | array of objects | Associated services; omitted when empty. |
-| `targets` | integer | Number of findings targeted for comparison. |
-| `kev_targets` | integer | Number of comparison targets listed in KEV; omitted when `0`. |
-| `comparison` | object | [Comparison result](#remediation-image-fields); omitted when no result is available. |
-| `rebuild_runtimes` | array of objects | Runtime rebuild estimates for this running image when its outcome is `floating_base_unconfirmed`; omitted when empty. |
-| `rebuild_check` | object | Check of this running image against the current base when its outcome is `floating_base_unconfirmed`; omitted when no result is available. |
-| `scans` | array of objects | [Scan records](#remediation-image-fields); omitted when empty. |
-
-Both `rebuild_runtimes[]` arrays contain estimates based on the current base's runtime version, not comparisons of the final image.
-
-| `rebuild_runtimes[]` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `package` | string | Runtime name, either `Node.js` or `Python runtime`. |
-| `installed` | string | Runtime version in the running image. |
-| `base_version` | string | Runtime version in the current base. |
-| `disappearing` | array of strings | IDs of currently detected CVEs expected to disappear if the rebuild inherits that version; omitted when empty. |
-| `remaining` | array of strings | IDs of currently detected CVEs that remain in that version; omitted when empty. |
-
-- CVE aggregation
-    - CVEs introduced by the new version are excluded
-    - Item-level records are grouped by `package`, `installed`, and `base_version`, with CVE IDs deduplicated and sorted, and IDs remaining in any running image excluded from `disappearing`
-    - Mixed outcomes across running images omit the item-level estimate while preserving individual records in `entities[]`
-
-Both `rebuild_check` objects describe estimates from matching the running image with the current base by package location and CVE, not comparisons of a completed rebuilt image; `final_image_verified` remains `false`.
-When the status is `checked` and no findings are expected to disappear, the results are still included in `rebuild_check` even though nothing is displayed in Slack or email.
-
-| `rebuild_check` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `status` | string | Check status, as defined below. |
-| `reason` / `detail` | string | Reason and additional details when no comparison was made; omitted when empty. |
-| `gone` | array of objects | Running-image findings for which the base has the package at the same location with a different version and without the CVE; omitted when empty. |
-| `remaining` | array of objects | Running-image findings whose CVE is also present at the same location in the base; omitted when empty. |
-| `not_in_base` | array of objects | OS packages and packages in a global `node_modules` absent from the same location in the base; omitted when empty. |
-| `other_not_in_base` | integer | Count of other packages absent from the same location in the base, such as application dependencies; omitted when `0`. |
-| `only_in_base` | array of objects | Base findings within the severity range whose status is `fixed` and that have a fixed version, with no corresponding finding at the same location in the running image; omitted when empty. |
-| `undetermined` | integer | Count of findings that could not be determined; omitted when `0`. |
-| `running_scan` | object | Running-image scan record in the [scan record format](#remediation-image-fields); omitted when unavailable. |
-| `base_scan` | object | Current-base scan record in the [scan record format](#remediation-image-fields); omitted when unavailable. |
-
-The `gone`, `remaining`, `not_in_base`, and `only_in_base` arrays use the following package fields.
-
-| Package field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `name` | string | Package name. |
-| `version` | string | Package version in the running image, or in the current base for `only_in_base`. |
-| `class` | string | Package class. |
-| `path` | string | Package path, or `Target` when `PkgPath` is unavailable; omitted for OS packages or when empty. |
-| `owner` | string | Owning package in a global `node_modules`; omitted when not applicable. |
-| `base_version` | string | Version at the same location in the current base for a `gone` entry; omitted when empty. |
-| `vuln_ids` | array of strings | CVE IDs belonging to this result for the package. |
-
-| `status` value | Meaning |
+| Content | Page |
 | --- | --- |
-| `checked` | All targeted findings were determined. |
-| `partial` | Some findings could not be determined. |
-| `not_checked` | No comparison was made; `reason` and `detail` explain why. |
+| Published image items (`summary`, `items`) | [Webhook remediation published image fields](webhook-remediation-image-reference.md) |
+| Base image items (`dockerfile_summary`, `dockerfile_items`) | [Webhook remediation base image fields](webhook-remediation-dockerfile-reference.md) |
+| Language package items (`language_summary`, `language_items`) | [Webhook remediation language package fields](webhook-remediation-language-reference.md) |
+| Language package update records (`language_items[].update`) | [Webhook remediation update record fields](webhook-remediation-update-reference.md) |
+| Checks before and after language package updates (`language_items[].source_check`, `artifacts`) | [Webhook remediation update check fields](webhook-remediation-check-reference.md) |
+| PR processing (`pull_request_summary`, `pull_requests`, `operations`, `problems`) | [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) |
 
-- Findings and locations
-    - Running-image targets are findings within the severity range whose status is `fixed` and that have a fixed version
-    - All base findings within the severity range are used to determine whether a CVE remains
-    - Language-runtime findings are handled by `rebuild_runtimes`
-    - Location matching and conditions for `undetermined` are described in [Base layer matching](remediation-logic.md#base-layer-matching)
-- Item-level aggregation
-    - Any `not_checked` result makes the item `not_checked`; otherwise, any `partial` result makes it `partial`
-    - `gone` includes a finding only if it disappears for every running image that has it
-    - Different base versions across platforms remain separate entries
-- Interpretation
-    - `not_in_base` cannot distinguish packages removed from the base from packages added by the Dockerfile
-    - `only_in_base` includes findings that Dockerfile instructions may remove
-    - The effects of Dockerfile instructions and other limits are described in [Rebuild guidance](remediation-results.md#rebuild-guidance)
+## Remediation plan overview {#remediation-overview}
 
-See [Verification scope by target](remediation-logic.md#verification-scope) for the scope of checks.
+The direct children of `remediation` contain the plan status, comparison conditions, work counts, and results for each target type.
+The following structure includes fields that may be omitted.
 
-## Language package fields {#remediation-language-fields}
+```text
+remediation
+├── schema_version
+├── status
+├── unavailable_reason
+├── not_saved
+├── generated_at
+├── conditions                    Comparison scan conditions
+├── limits                        Work count limits
+├── usage                         Actual work counts
+├── summary                       Published image count summary
+├── items[]                       Array of published image items
+├── dockerfile_summary            Base image count summary
+├── dockerfile_items[]            Array of base image items
+├── language_summary              Language package count summary
+├── language_items[]              Array of language package items
+├── pull_request_summary          PR processing count summary
+├── pull_requests[]               Array of PR processing items
+├── operations[]                  PR operation records
+└── problems[]                    Problems that stop PR writes
+```
 
-Packages with reason `global_node_modules` are still included in `language_items[].packages[]` even when they are not displayed under “Needs a decision” in Slack or email.
+Each target type has a count summary paired with an array of items.
+Only published images use the names `summary` and `items` without a prefix.
 
-| `remediation` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `language_summary` | object | Counts with category values as keys and integer counts as values; omitted when no items apply. |
-| `language_items` | array of objects | Language-package items; omitted when none apply. |
-| `language_items[].key` | string | Item identifier. |
-| `language_items[].category` | string | Plan category value. |
-| `language_items[].reason` / `language_items[].detail` | string | Reason and additional details; omitted when empty. |
-| `language_items[].manager` / `language_items[].priority` | string | Package manager and priority; omitted when empty. |
-| `language_items[].workloads` | array of strings or `null` | Target workloads, including `container/<name>`. |
-| `language_items[].source` | object | Source information such as the dependency files' repository, branch, and directory. |
-| `language_items[].pull_request` | object | Matching [PR processing](#remediation-pr-fields); omitted when there is no match. |
-| `language_items[].retry_after` | string | Date and time when the release waiting period ends and a retry becomes possible, in RFC 3339 format; omitted when unavailable. |
-
-### Package results {#language-package-fields}
-
-| Field relative to `language_items[]` | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `package_count` | integer | Total package count. |
-| `packages` | array of objects | Per-package results; omitted when empty. |
-| `packages_truncated` | boolean | `true` when part of the list was omitted; omitted otherwise. |
-| `packages[].name` / `packages[].ecosystem` / `packages[].installed` | string | Package name, ecosystem, and running version. |
-| `packages[].normalized` | string | Normalized package name; omitted when empty. |
-| `packages[].selection_lower_bound` / `packages[].adopted_version` | string | Update-target lower bound and adopted version; omitted when unavailable. |
-| `packages[].relation` | string | Dependency relationship classification; omitted when empty. |
-| `packages[].action` / `packages[].reason` / `packages[].detail` | string | Action, reason, and additional details; omitted when empty. |
-| `packages[].left_out` | boolean | `true` when excluded from the planned update; omitted otherwise. |
-| `packages[].through` | array of strings | Names of dependent packages updated along with the target to reach a fixed version; omitted when empty. |
-| `packages[].maven_bom` | object | Guidance on a BOM that reaches the target version; included only when `reason` is `maven_bom_series_unreached` and guidance is available. |
-| `packages[].maven_bom.bom` | string | The BOM's `groupId:artifactId`. |
-| `packages[].maven_bom.property` | string | Name of the property that determines the BOM version; omitted when none applies. |
-| `packages[].maven_bom.from` | string | The imported BOM version. |
-| `packages[].maven_bom.to` | string | The lowest regular BOM release in a later minor version within the same major version that manages the target at or above its target version. |
-| `packages[].maven_bom.manages` | string | The target's version managed by the BOM at `to`. |
-| `packages[].fix_hint` | object | [Hints when a package cannot reach its fix](remediation-results.md#fix-hints); included only when information is available and `reason` is `dependents_hold_back`, `go_line_raised_too_far`, `go_runtime_unavailable`, `fix_in_other_major_version`, `maven_version_source_unsupported`, `gradle_version_source_unsupported`, `maven_release_not_found`, `maven_fix_in_other_major`, or `target_not_updated` for Maven and Gradle. |
-| `packages[].fix_hint.decided_by` | object | The external pom deciding the target's version for Maven or Gradle; omitted when unavailable. |
-| `packages[].fix_hint.decided_by.kind` | string | `parent_pom` for a parent pom, `bom` for an imported BOM, or `spring_boot` for the Spring Boot BOM in Gradle. |
-| `packages[].fix_hint.decided_by.name` | string | The deciding pom's `groupId:artifactId`; `org.springframework.boot:spring-boot-dependencies` for `spring_boot`. |
-| `packages[].fix_hint.decided_by.version` | string | The pom version currently used; the Spring Boot plugin's version for `spring_boot`. |
-| `packages[].fix_hint.go_line` | object | The required Go version blocking a Go update and the module declaring that `go` line; omitted when unavailable. |
-| `packages[].fix_hint.go_line.module` / `packages[].fix_hint.go_line.version` | string | Path and version of the module whose `go.mod` declares the required `go` line. |
-| `packages[].fix_hint.go_line.go` | string | The `go` version declared by that `go.mod`. |
-| `packages[].fix_hint.go_line.built_with` | string | The Go version used to build the running binaries, compared for `go_line_raised_too_far`; omitted when unknown or for `go_runtime_unavailable`. |
-| `packages[].fix_hint.go_line.to` | string | The target package version requested by the update; omitted when not recorded. |
-| `packages[].fix_hint.fix` | object | Fixed-release information for another major version in Go, Maven, or Gradle; omitted when unavailable. |
-| `packages[].fix_hint.fix.version` | string | The lowest version that fixes all target vulnerabilities, selected from vulnerability information for Go and `maven_fix_in_other_major`, or from Maven Central's version list at or above the target for `maven_release_not_found`; Maven and Gradle use stable releases in another major version, requiring the same variant for `maven_release_not_found` and allowing the same variant or no variant for `maven_fix_in_other_major`. |
-| `packages[].fix_hint.direct` | boolean | `true` for Go hints about another major version when the project's `go.mod` requires the target without `// indirect`, or for Maven and Gradle `target_not_updated` when no dependent is found and the project's own module (Maven) or the configuration (Gradle) declares the target directly; omitted otherwise. |
-| `packages[].fix_hint.configuration` | string | The Gradle configuration where the target remains below its target version for `target_not_updated`; omitted when neither a dependent nor a direct declaration is identified. |
-| `packages[].fix_hint.held_by` | array of objects | Dependent packages whose requirements exclude the proposed pinned version, dependents requiring the target in Go hints about another major version, or up to five dependents bringing in the older version for Maven and Gradle `target_not_updated`; omitted when empty. |
-| `packages[].fix_hint.held_by[].parent` | string | Name of the dependent package; `groupId:artifactId` for Maven and Gradle. |
-| `packages[].fix_hint.held_by[].parent_version` | string | Current version of that dependent package. |
-| `packages[].fix_hint.held_by[].range` | string | Combined range of that version's active requirements for the target, the target version required by its `go.mod` for Go, the target version it brings in after the update for Maven, or the target version the dependent requests in the dependency tree for Gradle. |
-| `packages[].fix_hint.releases` | array of objects | Checked information about published releases of a dependent or deciding pom, using the same structure as `update.chain.hints`; omitted when unavailable. |
-| `packages[].fix_hint.releases[].package` / `packages[].fix_hint.releases[].parent` / `packages[].fix_hint.releases[].parent_version` | string | Target package name, dependent package name, and current dependent version, respectively; for Maven and Gradle, `parent` and `parent_version` identify the dependent or deciding pom and its current version. |
-| `packages[].fix_hint.releases[].in_spec` | object | For Maven and Gradle, the dependent's or deciding pom's newest stable release within its current major and minor version, including the current version, with the same child fields as `latest`; omitted when unavailable and never included for pip or Go. |
-| `packages[].fix_hint.releases[].latest` | object | The newest published stable release for pip, `@latest` for Go, or the dependent's or deciding pom's newest stable release for Maven and Gradle; omitted when unavailable, or when it is the same version as `in_spec` for Maven and Gradle. |
-| `packages[].fix_hint.releases[].latest.version` | string | The checked release of the dependent or deciding pom. |
-| `packages[].fix_hint.releases[].latest.range` | string | The range that release declares for the target, the required target version for Go, or the target version it sets for Maven and Gradle; omitted when empty. |
-| `packages[].fix_hint.releases[].latest.fixes` | boolean | `true` for pip when the range includes a published stable version that fixes all target vulnerabilities, or for Maven and Gradle when the version it sets is at or above the target and fixes all target vulnerabilities; always `false` for Go hints about another major version, and included even when `false`. |
-| `packages[].fix_hint.releases[].latest.dropped` | boolean | `true` when that release does not declare the target as a direct dependency; for Maven and Gradle, when a dependent's pom does not declare the target in `dependencies`, or a pom sets no target version; omitted otherwise. |
-| `packages[].occurrence_count` / `packages[].cve_count` / `packages[].origin_count` | integer | Counts of occurrences in dependency files, vulnerabilities, and original findings. |
-| `packages[].kev_count` | integer | Number of vulnerabilities listed in KEV; omitted when `0`. |
-| `packages[].occurrences` / `packages[].cves` / `packages[].origins` | array of objects | Lists of occurrences, vulnerabilities, and original findings; omitted when empty. |
-| `packages[].occurrences_truncated` / `packages[].cves_truncated` / `packages[].origins_truncated` | boolean | `true` when part of the corresponding list was omitted; omitted otherwise. |
-
-See [Package action values](remediation-reference.md#action-values) for `action` definitions and [Update targets and adopted versions](remediation-results.md#target-and-adopted-version) for interpreting versions.
-
-In the example where updating `mkdirp` brings `minimist` to a fixed version, `through` for `minimist` is `["mkdirp"]`.
-If direct dependency versions stay unchanged, it lists the updated intermediate dependent packages closest to the project.
-
-`through` may also be supplemented from an existing PR.
-Check `update_executed` and `post_update_check_executed` to determine whether the update and checks ran during processing of the latest remediation plan.
-
-### Runtime {#language-runtime-fields}
-
-| Field relative to `language_items[]` | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `runtime_eol` | object | Runtime requiring manual action because support has ended; omitted when none applies. |
-| `runtime_eol.id` / `runtime_eol.name` | string | Runtime identifier and name. |
-| `runtime_eol.eol` | string | End-of-support date in `YYYY-MM-DD` format; omitted when unknown. |
-| `update.runtime` | object | Runtime used for the update; omitted when no record is available. |
-| `update.runtime.id` / `update.runtime.version` | string | Runtime identifier and version. |
-| `update.runtime.pip` | string | pip version included in the Python image; omitted when unavailable. |
-| `update.runtime.image` / `update.runtime.platform` / `update.runtime.digest` | string | Work image, platform, and digest; omitted when unavailable. |
-| `update.runtime.support` / `update.runtime.eol` | string | Support status and end date; omitted when unavailable. |
-| `update.runtime.basis` | string | Runtime selection basis; omitted when unavailable. |
-| `update.runtime.declared` | array of objects | Version declarations with `source` and `value`; omitted when empty. |
-| `update.runtime.excluded` | array of objects | `id`, `why`, and additional information for version series not selected; omitted when empty. |
-| `update.runtime.engines_floor` | string | Lowest Node.js version checked for dependency compatibility; omitted when no record is available. |
-
-See [Runtime selection](remediation-logic.md#runtime-and-tool-versions) for the selection method.
-
-### Tools {#language-tool-fields}
-
-`language_items[].update.tool` is included when a record of the tool used for the update is available.
-
-| `update.tool` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `name` / `version` | string | Tool name and version. |
-| `source` | string | Version selection basis: `declared`, `default`, or `default_in_range`. |
-| `sha256` | string | Distribution SHA-256. |
-| `format` | string | Distribution format; omitted when empty. |
-| `size` | integer | Distribution size in bytes; omitted when `0`. |
-| `sha512` | string | Distribution SHA-512; omitted when empty. |
-| `published_at` | string | Publication time in RFC 3339 format. |
-| `registry_digest` | string | Distribution digest reported by the registry; omitted when empty. |
-| `spec_hash` | string | Hash declared by the project and verified against the distribution; omitted when empty. |
-
-See [Tool version selection](remediation-logic.md#tool-version-selection) for the meaning of each selection basis.
-
-### Update records {#language-update-fields}
-
-| Field relative to `language_items[]` | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `update_executed` | boolean | Whether the dependency update ran in this cycle; included even when `false`. |
-| `post_update_check_executed` | boolean | Whether the post-update check ran in this cycle; included even when `false`. |
-| `update` | object | Update record; omitted when no record is available. |
-| `update.steps` | array of objects | Records of executed operations; omitted when empty. |
-| `update.notes` | array of strings | Additional notes about update processing; omitted when empty. |
-| `update.manifest_edits` | array of objects | Manifest changes; omitted when empty. |
-| `update.manifest_edits[].file` / `section` / `name` / `from` / `to` | string | File, section, dependency name, previous value, and new value. |
-| `update.manifest_edits[].major_change` | boolean | `true` for a major-version change; omitted otherwise. |
-| `update.deprecated_changed` | integer | Number of lockfile entries with added, removed, or changed deprecation notes; omitted when `0`. |
-| `update.diff` | object | Lockfile diff; omitted when no record is available. |
-| `update.diff.added` / `update.diff.changed` / `update.diff.removed` | array of strings | Added, changed, and removed entries; omitted when empty. |
-| `update.diff.truncated` | boolean | `true` when part of the diff lists was omitted; omitted otherwise. |
-| `update.diff.followed` | array of objects | Entries whose dependency versions changed as a consequence of the update; omitted when empty. |
-| `update.diff.followed[].entry` | string | Changed entry. |
-| `update.diff.followed[].moves` | array of objects | Dependency changes with string fields `name`, `from`, and `to`. |
-| `update.chain` | object | Results of re-resolution through dependent packages or reasons for skipping it; omitted when no information is available. |
-| `source_check` | object | Dependency-file scan results before and after the update; omitted when no record is available. |
-| `source_check.counts` | array of integers | Three counts in the order resolved, remaining, and newly detected. |
-| `source_check.resolved` / `source_check.remaining` / `source_check.introduced` | array of objects | Corresponding vulnerability lists; omitted when empty. |
-| `source_check.truncated` | boolean | `true` when part of the vulnerability lists was omitted; omitted otherwise. |
-| `source_check.passed` | boolean | Whether the post-update check passed; included even when `false`. |
-| `source_check.basis` | string | Method used for [re-resolution scan comparisons](#language-chain-scan-fields); omitted when there is no additional comparison. |
-| `source_check.chain_new_findings` | array of objects | Newly detected vulnerabilities after the update, excluding carried vulnerabilities; omitted when empty. |
-| `source_check.chain_entry_growth` | array of objects | Results showing more occurrences of vulnerable packages in the lockfile; omitted when empty. |
-| `source_check.chain_edge_growth` | array of objects | Results showing more dependency relationships that use vulnerable packages; omitted when empty. |
-| `source_check.chain_carried` | array of objects | Vulnerabilities that remain in the same dependency relationships despite version changes; omitted when empty. |
-| `source_check.chain_position_refusals` | array of objects | Reasons that checks of dependency relationship changes fail; omitted when empty. |
-
-The webhook includes the count of changed deprecation notes, but not the names of affected entries.
-The PR body lists those names and whether notes were added, removed, or changed.
-
-### Results of re-resolution through dependent packages {#language-chain-fields}
-
-In the example where `mkdirp 0.5.1` requires `minimist 0.0.8`, `blocked` contains this requirement and `tops` contains `mkdirp`, whose version is selected again.
-Check `language_items[].update.chain.outcome` for the re-resolution result.
-
-| `outcome` | Meaning | Example |
-| --- | --- | --- |
-| `adopted` | Adoption | `mkdirp` updates to `0.5.6` and `minimist` to `1.2.8`, and the checks pass. |
-| `not_fixed` | Fixed version not reached, including when resolving again for the fixed version with uv found no solution | Selecting dependent packages again does not bring the target to a fixed version. |
-| `rejected` | Rejection or a stop after repeated waits | The update introduces another vulnerability. |
-| `failed` | Processing failure | The package manager exits with an error. |
-| `not_tried` | Skipped attempt | More than five direct dependencies need their versions selected again. |
-| `deferred` | Deferral | A newly introduced version is less than 72 hours old. |
-
-| Field relative to `update.chain` | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `outcome` | string | Result from the table above. |
-| `reason` / `detail` | string | Reason code and additional details; omitted when empty. When resolving again for the fixed version with uv found no solution, `outcome` is `not_fixed` and `reason` is `no_resolution`. |
-| `source` | string | `chain_job` for additional re-resolution, or `first_run` for reassessment of the initial uv update result. |
-| `blocked` | array of objects | Version requirements that prevent updates to fixed versions; `[]` when none are confirmed. |
-| `blocked[].package` / `blocked[].version` | string | Name and version of the package whose update is blocked, such as `minimist` and `0.0.8`. |
-| `blocked[].parent` / `blocked[].parent_version` | string | Name and version of the dependent package requiring an older version, such as `mkdirp` and `0.5.1`. |
-| `blocked[].range` | string | Version requirement declared by the dependent package, such as `0.0.8`. |
-| `blocked[].proof` | string | `exact` for a pin to an older version, or `upper_bound` when the required range's upper bound excludes fixed versions. |
-| `blocked[].via` | array of strings | Names of direct dependencies that lead to that dependent package; omitted when empty. |
-| `hints` | array of objects | [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) checked for npm, pnpm, and uv when the outcome is `not_fixed`, `rejected`, or `not_tried`; omitted when empty. |
-| `hints[].package` | string | Name of the target package whose update is blocked. |
-| `hints[].parent` | string | Name of the dependent package whose requirement blocks the update. |
-| `hints[].parent_version` | string | Current version of the dependent package whose requirement blocks the update. |
-| `hints[].via` | array of strings | Names of direct dependencies that lead to the dependent package; omitted when empty and does not identify which direct dependency release brings in the displayed dependent release. |
-| `hints[].direct` | boolean | `true` when the dependent package is a direct dependency of the project; omitted otherwise. |
-| `hints[].spec` | string | The range for the dependent package when it is a direct dependency (package.json for npm and pnpm, or pyproject.toml for uv); omitted when it is not a direct dependency or when the direct dependency has no version range. |
-| `hints[].in_spec` | object | Information about the newest stable release within the range (package.json for npm and pnpm, or pyproject.toml for uv); included only when `direct` is `true`, checked with no version limit when no range is specified, and omitted when information is unavailable. |
-| `hints[].latest` | object | Information about the newest published stable release; omitted when it is the same as the newest release within the range or information is unavailable. |
-| `hints[].in_spec.version` | string | Dependent version checked as the newest within the range; always included when `in_spec` is present. |
-| `hints[].in_spec.range` | string | The range that release declares for the target package; omitted when empty, including when the release does not limit the target package's version. |
-| `hints[].in_spec.fixes` | boolean | `true` when the declared range includes a published stable version that fixes all target vulnerabilities in the package; always included, even when `false`, if `in_spec` is present and does not guarantee that an update fixes the vulnerabilities. |
-| `hints[].in_spec.dropped` | boolean | `true` when that release does not declare the target package as a direct dependency; omitted otherwise, and another path may still bring the package in. |
-| `hints[].latest.version` | string | Dependent version checked as the newest published stable release; always included when `latest` is present. |
-| `hints[].latest.range` | string | The range that release declares for the target package; omitted when empty, including when the release does not limit the target package's version. |
-| `hints[].latest.fixes` | boolean | `true` when the declared range includes a published stable version that fixes all target vulnerabilities in the package; always included, even when `false`, if `latest` is present and does not guarantee that an update fixes the vulnerabilities. |
-| `hints[].latest.dropped` | boolean | `true` when that release does not declare the target package as a direct dependency; omitted otherwise, and another path may still bring the package in. |
-| `tops` | array of objects | Direct dependencies whose versions are selected again; `[]` when no information is available. |
-| `tops[].name` | string | Direct dependency name, such as `mkdirp`. |
-| `tops[].from` / `tops[].to` | string | Versions before and after the update; omitted when unavailable and equal when the version stays unchanged. |
-| `tops[].kind` | string | `top`. |
-| `moves` | array of objects | Changes outside the update targets and `tops`; omitted when empty. |
-| `moves[].name` | string | Package name, or its identifier in the lockfile when the name is unavailable. |
-| `moves[].from` / `moves[].to` | string | Versions before and after the change; omitted when no version exists, such as before an addition or after a removal. |
-| `moves[].kind` | string | `ancestor` for dependent-package changes, `followed` for other changes, `added` for additions, or `removed` for removals. |
-| `truncated` | boolean | `true` when part of the change list is omitted; omitted otherwise. |
-| `usage` | object | Processing usage details, including normal updates and reruns. |
-| `usage.containers` / `usage.lookups` / `usage.bytes` / `usage.elapsed_ms` | integer | Work container count, registry lookup count, received bytes, and elapsed milliseconds since processing starts, respectively. |
-
-`update.chain` also includes skipped attempts, so its presence alone does not establish that re-resolution runs or that its result is adopted.
-Check `language_items[].retry_after` for the date and time when the release waiting period ends.
-
-During a waiting period, some cycles include `retry_after` without `update.chain`.
-See [Release waiting periods and retries](remediation-reference.md#dependent-reresolution-waits) for waiting and stopping conditions.
-
-### Re-resolution scan comparisons {#language-chain-scan-fields}
-
-`language_items[].source_check` contains the results of checks for increases in vulnerabilities or their occurrences after the update.
-`chain_carried` lists vulnerabilities that remain unfixed by this update.
-
-| `source_check.basis` | Comparison method |
-| --- | --- |
-| `package_version_vuln_edges_positions` | Compares package names, versions, vulnerability IDs, occurrence counts, and dependency relationship counts, and also checks changed dependency relationships. |
-| `package_version_vuln_edges` | Compares package names, versions, vulnerability IDs, occurrence counts, and dependency relationship counts. |
-
-The following fields belong to the lists within `source_check`.
-
-| Field within the lists | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `chain_new_findings[].package` / `version` / `vuln_id` | string | Package name, version, and vulnerability ID of a newly detected vulnerability. |
-| `chain_new_findings[].severity` / `fixed_ver` | string | Severity and fixed-version information; omitted when empty. |
-| `chain_new_findings[].kev` | boolean | `true` when listed in KEV; omitted otherwise. |
-| `chain_entry_growth[].package` / `vuln_id` | string | Package name and vulnerability ID with an increased occurrence count. |
-| `chain_entry_growth[].version` | string | Version for a per-version increase; omitted when multiple versions are counted together. |
-| `chain_entry_growth[].before` / `after` | integer | Occurrence counts in the lockfile before and after the update. |
-| `chain_edge_growth[].package` / `vuln_id` | string | Package name and vulnerability ID with an increased dependency relationship count. |
-| `chain_edge_growth[].before` / `after` | integer | Counts before and after the update of dependency relationships that use versions affected by that vulnerability. |
-| `chain_carried[].package` | string | Name of the package in which the vulnerability remains. |
-| `chain_carried[].from` / `to` | string | Versions before and after the change; when there are multiple previous versions, `from` contains one representative value. |
-| `chain_carried[].vuln_id` | string | ID of the vulnerability that remains. |
-| `chain_carried[].positions` | integer | Number of dependency relationship locations where the same vulnerability remains, which differs from the total number of paths from the project. |
-| `chain_carried[].kev` | boolean | `true` when listed in KEV; omitted otherwise. |
-| `chain_position_refusals[].package` / `version` | string | Name and version of the package causing the check to fail, or its name and version before the split when `check` is `split`. |
-| `chain_position_refusals[].parent` | string | Name of the dependent package that uses that package; omitted when unavailable. |
-| `chain_position_refusals[].check` | string | Failure reason from the table below. |
-| `chain_position_refusals[].vuln_id` | string | One newly detected vulnerability ID for `new_vuln`; omitted otherwise. |
-
-| `chain_position_refusals[].check` | Meaning |
-| --- | --- |
-| `no_position` | The same dependency relationship cannot be confirmed before the update. |
-| `merged` | Multiple dependency paths merge, so a single previous version cannot be chosen for comparison. |
-| `name` | The dependency's package name changes. |
-| `new_vuln` | The new version contains a vulnerability absent from the old version. |
-| `split` | One version splits into multiple vulnerable versions. |
-
-`chain_carried` groups records by package name, version after the change, and vulnerability ID.
-Carried vulnerabilities do not establish that the checks pass; check `source_check.passed` for the check result and `update.chain.outcome` for adoption status.
-
-Each list contains up to 500 elements, and `source_check.truncated` is `true` when elements are omitted.
-Pass or fail decisions use all results before truncation.
-
-`source_check.counts` gives resolved, remaining, and newly detected counts by package name and vulnerability ID.
-It does not include occurrence or dependency relationship counts.
-
-See [Re-resolution check conditions](remediation-reference.md#dependent-reresolution-rules) and [Carried vulnerabilities](remediation-logic.md#dependent-reresolution-carried-findings) for check conditions and examples of carried vulnerabilities.
-
-### Updated files {#language-artifact-fields}
-
-`language_items[].artifacts` is included when information about updated files is available.
-File contents are excluded.
-
-| `artifacts[]` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `path` | string | File path within the repository. |
-| `sha256` | string | SHA-256 of the file contents. |
-| `size` | integer | File size in bytes. |
-| `mode` | string | File mode; omitted when unavailable. |
-
-## PR processing fields {#remediation-pr-fields}
-
-| `remediation` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `pull_request_summary` | object | Counts with status values as keys and integer counts as values; omitted when there are no processing units. |
-| `pull_requests` | array of objects | PR processing units; omitted when none apply. |
-| `pull_requests[].key` | string | Processing-unit identifier. |
-| `pull_requests[].kind` | string | `kubernetes` for Kubernetes manifest tag updates, `kustomize` for Kustomize `newTag` updates, `helm_values` for Helm values tag updates, `dockerfile` for base-image updates, or `language` for language-package updates; omitted for Compose tag updates. |
-| `pull_requests[].repo` / `pull_requests[].base_branch` / `pull_requests[].path` | string | Target repository, base branch, and file path. |
-| `pull_requests[].services` | array of strings | For `kind: kubernetes`, `kind: kustomize`, and `kind: helm_values`, workload keys in `<kind>/<namespace>/<name>/<container>` form; `[]` when none apply. |
-| `pull_requests[].workloads` | array of strings | Target workload keys, including `container/<name>`; omitted when empty. |
-| `pull_requests[].also_running[].workload` | string | Key of a Kubernetes workload running the same image without a manifest mapping, or outside the set listed as affected by a Kustomize entry or Helm values key. |
-| `pull_requests[].fix_targets[].location` | string | For `kind: kubernetes`, the edit location in `<Kind>/<namespace>/<name>/<container>` form; `Kind` and `name` identify the mapped object in the file, and `namespace` is the workload namespace; for `kind: kustomize`, `images[<name>].newTag`; for `kind: helm_values`, the configured `helm_values.key`. |
-| `pull_requests[].status` | string | PR processing status. |
-| `pull_requests[].reason` / `pull_requests[].detail` | string | Reason and additional details; omitted when empty. |
-| `pull_requests[].number` | integer | PR number; omitted when `0`. |
-| `pull_requests[].url` / `pull_requests[].state` | string | PR URL and state on GitHub; omitted when empty. |
-| `pull_requests[].item_key` | string | Identifier of the associated language-package item; omitted when unavailable. |
-| `pull_requests[].language` | object | Language-package update details; omitted when none apply. |
-| `pull_requests[].language.remaining` | array of objects | Packages excluded from the PR; omitted when empty. |
-| `pull_requests[].language.packages[].through` | array of strings | Names of dependent packages updated along with the target to reach a fixed version; omitted when empty. |
-| `pull_requests[].language.chain` | array of objects | Direct dependencies whose versions change through re-resolution and are included in the PR; omitted when empty. |
-| `dockerfile_items[].pull_request` | object | Matching operation's `status` and optional `reason`, `number`, `url`, and `state`; omitted when there is no match. |
-| `language_items[].pull_request` | object | Matching operation's `status` and optional reason, details, PR information, and matching identifiers; omitted when there is no match. |
-
-| `pull_requests[].language.remaining[]` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `name` / `ecosystem` | string | Package name and ecosystem. |
-| `from` / `target` | string | Running version and planned update target. |
-| `reason` | string | Reason for exclusion from the update. |
-| `relation` / `detail` | string | Dependency relationship classification and additional details; omitted when empty. |
-
-| `pull_requests[].language.chain[]` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `name` | string | Name of the direct dependency updated along with the target, such as `mkdirp`. |
-| `from` / `to` | string | Versions before and after the update, such as `0.5.1` and `0.5.6`. |
-| `held` | string | Name of the package subject to a requirement for an older version, such as `minimist`; omitted when empty. |
-| `held_range` | string | Version requirement that blocks the update, such as `0.0.8`; omitted when empty. |
-| `held_by` | string | Name of an intermediate package that requires an older version; omitted when the direct dependency itself declares the requirement or no intermediate package applies. |
-
-The `locations` field in Kubernetes manifest PR records also uses `<Kind>/<namespace>/<name>/<container>` form.
-The `locations` field in Kustomize PR records uses `images[<name>].newTag` form.
-
-The `locations` field in Helm values PR records uses the configured `helm_values.key` for both mapping and string forms.
-For example, `key: image` produces `image`, which differs from the mapping-form change location `image.tag` shown in the PR body.
-Webhook `pull_requests[]` entries do not include a `locations` array; fix target locations appear in `fix_targets[].location`.
-When a cycle matches an existing PR, package exclusion information is supplemented from the PR's `language.remaining`.
-`packages[]` may include `left_out`, `action`, and `reason` even when update and check execution flags are `false` for that cycle.
-
-See [PR status values](remediation-reference.md#pr-status-values) for status definitions and [Partial PRs](remediation-results.md#partial-pull-requests) for interpreting partial PRs.
-
-## PR operation event fields {#remediation-operation-fields}
-
-| `remediation` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `operations` | array of objects | Undelivered PR operation events; omitted when none apply. |
-| `operations[].seq` | integer | Event sequence number. |
-| `operations[].id` | string | Operation identifier. |
-| `operations[].at` | string | Time in RFC 3339 format. |
-| `operations[].phase` / `operations[].kind` / `operations[].repo` | string | Operation phase, kind, and target repository. |
-| `operations[].attempt_key` | string | Attempt identifier; omitted when empty. |
-| `operations[].number` | integer | PR number; omitted when `0`. |
-| `operations[].result` / `operations[].error` | string | Operation result and error; omitted when empty. |
-
-See [Remediation plan redelivery](notification-conditions.md#remediation-redelivery) for delivery and redelivery behavior.
-
-## Write-blocking problem fields {#remediation-problem-fields}
-
-| `remediation` field | Type | Meaning and omission conditions |
-| --- | --- | --- |
-| `problems` | array of objects | Problems that block PR writes; omitted when none apply. |
-| `problems[].code` | string | Problem classification code. |
-| `problems[].repo` / `problems[].target` | string | Target repository and update-target identifier; omitted when empty. |
-| `problems[].reason` / `problems[].detail` | string | Reason and additional details; omitted when empty. |
-
-See [Stopping writes](remediation-logic.md#write-stops) for stop conditions and [Reason codes](remediation-reference.md#reason-codes) for reasons.
-
-## Remediation plan JSON example {#remediation-json-example}
-
-This example shows selected key fields from a payload containing a partial PR.
-`example-b` was excluded from the update and is recorded in both the package results and the PR's `remaining` list.
+The following is the `remediation` output when a plan was generated successfully but no items required remediation.
+Even with no remediation targets, the plan generation time, work limits and counts, published image summary, and empty `items` array are emitted.
 
 ```json
 {
   "remediation": {
-    "language_items": [
-      {
-        "category": "pr_candidate",
-        "update_executed": true,
-        "post_update_check_executed": true,
-        "packages": [
-          {
-            "name": "example-a",
-            "ecosystem": "node-pkg",
-            "installed": "1.0.0",
-            "adopted_version": "1.0.1",
-            "action": "update",
-            "reason": "update_verified"
-          },
-          {
-            "name": "example-b",
-            "ecosystem": "node-pkg",
-            "installed": "2.0.0",
-            "selection_lower_bound": "2.0.1",
-            "action": "manual",
-            "reason": "target_not_updated",
-            "left_out": true
-          }
-        ]
-      }
-    ],
-    "pull_requests": [
-      {
-        "kind": "language",
-        "language": {
-          "remaining": [
-            {
-              "name": "example-b",
-              "ecosystem": "node-pkg",
-              "from": "2.0.0",
-              "target": "2.0.1",
-              "reason": "target_not_updated"
-            }
-          ]
-        }
-      }
-    ]
+    "schema_version": 1,
+    "status": "ok",
+    "generated_at": "2026-10-09T03:00:00Z",
+    "conditions": {
+      "trivy_version": "0.71.2",
+      "trivy_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "vulnerability_db_updated_at": "2026-10-09T00:00:00Z",
+      "vulnerability_db_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "java_db_updated_at": "2026-10-08T12:00:00Z",
+      "java_db_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "severities": [
+        "CRITICAL",
+        "HIGH"
+      ],
+      "analysis_settings": "image;scanners=default;pkg-types=default;ignore-unfixed=false;list-all-pkgs=true;env=sanitized;workdir=isolated"
+    },
+    "limits": {
+      "max_candidate_scans": 10,
+      "max_baseline_rescans": 10,
+      "max_tag_pages": 20
+    },
+    "usage": {
+      "candidate_scans": 0,
+      "baseline_rescans": 0,
+      "tag_pages": 0,
+      "registry_requests": 0
+    },
+    "summary": {
+      "deferred": 0,
+      "excluded": 0,
+      "failed": 0,
+      "manual": 0,
+      "no_candidate": 0,
+      "not_comparable": 0,
+      "pr_candidate": 0,
+      "pull_again": 0
+    },
+    "items": []
   }
 }
 ```
 
-See [Partial PR selection conditions](remediation-logic.md#partial-pr-selection) for acceptance conditions.
+Even when no plan could be generated, `remediation` and an empty `items` array are emitted.
+
+```json
+{
+  "remediation": {
+    "schema_version": 1,
+    "status": "unavailable",
+    "unavailable_reason": "databases_not_prepared",
+    "items": []
+  }
+}
+```
+
+## Common remediation plan fields {#remediation-fields}
+
+See [Report fields](webhook-reference.md#report-fields) for how to read the tables.
+See [Plan category values](remediation-reference.md#category-values) for each item's `category` and [Reason codes](remediation-reference.md#reason-codes) for `reason`.
+
+`remediation` has the following direct-child fields.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `schema_version` | integer | Version of the remediation plan JSON format, currently `1` | — |
+| `status` | string | Status indicating whether a plan could be generated | — |
+| `unavailable_reason` | string | Reason a plan could not be generated | omitted when a plan was generated |
+| `not_saved` | boolean | `true` when the generated plan could not be saved | omitted when `false` |
+| `generated_at` | string | Plan generation time in RFC 3339 format | omitted when there is no plan |
+| `conditions` | object | [Comparison scan conditions](#remediation-conditions) | omitted when condition information is unavailable |
+| `limits` | object | [Planning limits](#remediation-limits) | omitted when there is no plan |
+| `usage` | object | [Planning work counts](#remediation-usage) | omitted when there is no plan |
+| `summary` | object | Published image item counts by category, described in [Webhook remediation published image fields](webhook-remediation-image-reference.md) | omitted when there is no plan |
+| `items` | array of objects | Published image items, described in [Webhook remediation published image fields](webhook-remediation-image-reference.md) | `[]` |
+| `language_summary` | object | Language package item counts by category, described in [Webhook remediation language package fields](webhook-remediation-language-reference.md) | omitted when there are no corresponding items |
+| `language_items` | array of objects | Language package items, described in [Webhook remediation language package fields](webhook-remediation-language-reference.md) | omitted when empty |
+| `dockerfile_summary` | object | Base image item counts by category, described in [Webhook remediation base image fields](webhook-remediation-dockerfile-reference.md) | omitted when there are no corresponding items |
+| `dockerfile_items` | array of objects | Base image items, described in [Webhook remediation base image fields](webhook-remediation-dockerfile-reference.md) | omitted when empty |
+| `pull_request_summary` | object | PR processing item counts by status, described in [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) | omitted when there are no corresponding items |
+| `pull_requests` | array of objects | PR processing items, described in [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) | omitted when empty |
+| `operations` | array of objects | PR operation records, described in [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) | omitted when empty |
+| `problems` | array of objects | Problems that stop PR writes, described in [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) | omitted when empty |
+
+The values of `status` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `ok` | A plan was generated |
+| `unavailable` | A plan could not be generated |
+
+`ok` does not mean that every individual candidate check or PR processing operation succeeded.
+Check the arrays for each target type for individual item results.
+
+The values of `unavailable_reason` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `databases_not_prepared` | The scan databases could not be prepared, preventing generation of a plan that compares scans under equal conditions |
+| `planner_not_built` | The processing needed to generate a plan could not be set up |
+
+### Item counts {#remediation-summary-keys}
+
+This section explains the contents of `summary`, `dockerfile_summary`, `language_summary`, and `pull_request_summary`.
+
+The following example shows `summary`, which counts published image items by category.
+
+```json
+{
+  "summary": {
+    "deferred": 0,
+    "excluded": 0,
+    "failed": 0,
+    "manual": 1,
+    "no_candidate": 0,
+    "not_comparable": 0,
+    "pr_candidate": 2,
+    "pull_again": 1
+  }
+}
+```
+
+The key `pr_candidate` is a category name, and its value `2` means that two items in `items[]` have `category` set to `pr_candidate`.
+Likewise, there is one `manual` item and one `pull_again` item.
+
+An item counts as `1` even if it contains multiple vulnerabilities or packages.
+
+The four fields differ as follows.
+
+| Field | What is counted | Keys | Keys with zero counts | When the field itself is omitted |
+| --- | --- | --- | --- | --- |
+| `summary` | Items in `items[]` | Category names from `category` (8 values) | `0` emitted | No plan |
+| `dockerfile_summary` | Items in `dockerfile_items[]` | Category names from `category` (8 values) | `0` emitted | `dockerfile_items[]` is empty |
+| `language_summary` | Items in `language_items[]` | Category names from `category` (7 values) | `0` emitted | `language_items[]` is empty |
+| `pull_request_summary` | Items in `pull_requests[]` | [PR status values](remediation-reference.md#pr-status-values) from `status` | omitted | `pull_requests[]` is empty |
+
+When a plan exists, all eight `summary` keys are emitted with `0` even if `items[]` is empty.
+`dockerfile_summary` does not count `dockerfile_items[].entities[]` individually.
+
+`summary` and `dockerfile_summary` use eight keys: `pull_again`, `pr_candidate`, `manual`, `not_comparable`, `deferred`, `no_candidate`, `excluded`, and `failed`.
+`language_summary` uses seven keys: `pr_candidate`, `dependency_update_candidate`, `rebuild_expected`, `manual`, `not_comparable`, `deferred`, and `failed`.
+
+### Comparison scan conditions {#remediation-conditions}
+
+`conditions` has the following fields.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `trivy_version` | string | Trivy version used for comparison scans | `""` |
+| `trivy_sha256` | string | SHA-256 of the Trivy executable | omitted |
+| `vulnerability_db_updated_at` | string | Vulnerability database update time in RFC 3339 format | omitted |
+| `vulnerability_db_sha256` | string | SHA-256 of the vulnerability database file | omitted |
+| `java_db_updated_at` | string | Java database update time in RFC 3339 format | omitted |
+| `java_db_sha256` | string | SHA-256 of the Java database file | omitted |
+| `severities` | array of strings | Severities covered by comparison scans | omitted when empty |
+| `analysis_settings` | string | String identifying the analysis settings for comparison scans | omitted |
+
+The following fields have additional notes.
+
+- `conditions`
+    - Emitted when `trivy_version` is not empty
+    - Emitted even when `trivy_version` is empty if the update time corresponding to `vulnerability_db_updated_at` and a nonzero vulnerability database format version, which is not emitted in the JSON, are recorded
+    - The object itself is omitted when `trivy_version` is empty and either the update time is missing or the format version is `0`
+    - Java database or severity information alone does not cause the object to be emitted
+- `trivy_version`
+    - Emitted as an empty string inside `conditions` when only vulnerability database information is known
+- `trivy_sha256`, `vulnerability_db_sha256`, `java_db_sha256`
+    - SHA-256 is represented in hexadecimal without the `sha256:` prefix
+- `severities`
+    - The usual values are `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`
+- `analysis_settings`
+    - A string identifying analysis options, configuration files, and other settings, rather than a value consisting only of a hash
+
+See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for details of the comparison conditions.
+The following example extracts the version, update times, and severities from the conditions.
+
+```json
+{
+  "trivy_version": "0.71.2",
+  "vulnerability_db_updated_at": "2026-10-09T03:00:00Z",
+  "java_db_updated_at": "2026-10-09T03:00:00Z",
+  "severities": [
+    "CRITICAL",
+    "HIGH"
+  ]
+}
+```
+
+### Planning limits {#remediation-limits}
+
+`limits` has the following fields.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `max_candidate_scans` | integer | Maximum number of candidate image scans in one planning pass | `0` |
+| `max_baseline_rescans` | integer | Maximum number of baseline rescans in one planning pass | `0` |
+| `max_tag_pages` | integer | Maximum number of tag-list retrieval requests for one repository | `0` |
+
+A limit of `0` means that the work cannot be performed.
+`max_tag_pages` counts both tag-list page retrievals and requests that search successive tags in the same series.
+
+```json
+{
+  "max_candidate_scans": 10,
+  "max_baseline_rescans": 10,
+  "max_tag_pages": 20
+}
+```
+
+### Planning work counts {#remediation-usage}
+
+`usage` has the following fields.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `candidate_scans` | integer | Number of candidate image scans performed | `0` |
+| `baseline_rescans` | integer | Number of baseline rescans performed | `0` |
+| `tag_pages` | integer | Total number of tag-list retrieval requests | `0` |
+| `registry_requests` | integer | Number of registry requests consumed during planning | `0` |
+
+`tag_pages` totals requests across repositories, so it can exceed the per-repository limit `limits.max_tag_pages`.
+
+```json
+{
+  "candidate_scans": 2,
+  "baseline_rescans": 0,
+  "tag_pages": 0,
+  "registry_requests": 7
+}
+```
+
+## Shared objects {#remediation-common-objects}
+
+The following objects use a shared structure within published image items (`items[]`), base image items (`dockerfile_items[]`), and PR processing (`pull_requests[]`).
+Their structures are documented in this section, which the pages for each item type reference.
+
+| Object | Content | Appears in |
+| --- | --- | --- |
+| [Image information](#remediation-image-state) | Image names, digests, and other identifying information | Published images, base images |
+| [Comparison results](#remediation-comparison) | Resolved, remaining, and newly detected findings | Published images, base images |
+| [Scan records](#remediation-scan-records) | Scan targets, roles, and verification results | Published images, base images |
+| [Newer series check results](#remediation-newer-series) | Newer series candidates and their check results | Published images, base images |
+| [Services](#remediation-services) | Information about services and workloads using the image | Published images, base images, PR processing |
+
+### Image information {#remediation-image-state}
+
+Image information is emitted in the following fields.
+
+- `items[].current`, `items[].candidate`
+- `items[].newer_series.candidates[].candidate`
+- `dockerfile_items[].candidate`
+- `dockerfile_items[].entities[].running_image`, `current_base`, `candidate_base`
+- `dockerfile_items[].newer_series.candidates[].candidate`
+- `dockerfile_items[].entities[].newer_series.candidates[].candidate`
+
+`items[].current` and other image information objects have the following fields.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `ref` | string | Image name including any tag or digest specification | `""` |
+| `tag` | string | Image tag | omitted |
+| `content` | string | String identifying the running image's content, including the digest kind | omitted |
+| `config_digest` | string | Digest identifying the image configuration | omitted |
+| `manifest_digest` | string | Digest identifying the image manifest for the target platform | omitted |
+| `top_digest` | string | Digest identifying the image index or manifest that the tag or other reference points to | omitted |
+| `platform` | string | Platform in `OS/architecture` format, such as `linux/amd64` | omitted |
+| `digest_kind_unverified` | boolean | `true` when the running image's digest kind has not been verified | omitted when `false` |
+
+The following fields have additional notes.
+
+- `content`
+    - Emitted only in `items[].current` and `dockerfile_items[].entities[].running_image`
+    - The format is `config:sha256:<64 lowercase hexadecimal digits>` or `registry:sha256:<64 lowercase hexadecimal digits>@<OS>/<architecture>`
+    - Set to `unconfirmed` when a valid digest could not be obtained
+- `config_digest`, `manifest_digest`, `top_digest`
+    - The format is `sha256:<64 lowercase hexadecimal digits>`
+    - Does not include the `config:` or `registry:` prefix or the platform found in `content`
+- `top_digest`
+    - For an image containing multiple platforms, identifies the image index that lists them
+    - Equals `manifest_digest` when the reference points to a single image manifest
+- `digest_kind_unverified`
+    - When `true`, neither the `config:` notation in `content` nor `config_digest` alone confirms that the value is an image configuration digest
+    - The value obtained from the container runtime may instead be a manifest or image index digest
+
+The following is information about the current base image.
+
+```json
+{
+  "ref": "python:3.12.3-slim",
+  "tag": "3.12.3-slim",
+  "config_digest": "sha256:b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+  "manifest_digest": "sha256:b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+  "top_digest": "sha256:b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3",
+  "platform": "linux/amd64"
+}
+```
+
+### Comparison results {#remediation-comparison}
+
+Comparison results are used in `items[].comparison`, `dockerfile_items[].entities[].comparison`, and each running image's `newer_series.candidates[].comparison`.
+See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for comparison conditions and [Resolved findings in comparisons](remediation-results.md#verification-results) for interpreting results.
+
+The following example extracts the main fields from a comparison result that resolves one target finding.
+
+```json
+{
+  "comparable": true,
+  "decision": "adopt",
+  "targets": 1,
+  "resolved": 1,
+  "remaining": 0,
+  "unknown": 0,
+  "undetected": 0,
+  "introduced": 0,
+  "verdicts": [
+    {
+      "vuln_id": "CVE-2031-0000",
+      "package": "libc",
+      "severity": "HIGH",
+      "outcome": "resolved",
+      "disposition": "version_changed"
+    }
+  ]
+}
+```
+
+`items[].comparison` and other comparison result objects have the following fields.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `comparable` | boolean | `true` when the results can be compared | `false` |
+| `reason` | string | [Reason codes](remediation-reference.md#reason-codes) value explaining why comparison is not possible | omitted |
+| `scope` | string | English text describing the comparison scope, such as the severities evaluated | omitted |
+| `decision` | string | Candidate adoption decision based on the comparison results | omitted |
+| `targets` | integer | Number of target findings evaluated | `0` |
+| `resolved` | integer | Number of resolved findings | `0` |
+| `remaining` | integer | Number of findings remaining in the candidate | `0` |
+| `unknown` | integer | Number of target findings that could not be judged | `0` |
+| `undetected` | integer | Number of target findings not detected in the baseline | `0` |
+| `introduced` | integer | Number of findings newly detected in the candidate | `0` |
+| `verdicts` | array of objects | Individual verdicts for baseline findings | omitted when empty |
+| `verdicts_truncated` | boolean | `true` when some `verdicts` entries were omitted because of the count limit | omitted when `false` |
+| `introduced_findings` | array of objects | Individual verdicts for findings newly detected in the candidate | omitted when empty |
+| `introduced_findings_truncated` | boolean | `true` when some `introduced_findings` entries were omitted because of the count limit | omitted when `false` |
+
+The following fields have additional notes.
+
+- `scope`
+    - This is descriptive text rather than a fixed code, so use `comparable`, `reason`, and `decision` to identify the status
+- `resolved`, `remaining`, `unknown`, `undetected`
+    - Comparisons with a `decision` count only findings targeted by the adoption decision, excluding other findings included in `verdicts[]`
+    - For a newer series candidate, the counts match that candidate's `counts`
+    - In comparisons with neither a `decision` nor candidate `counts`, `resolved` and `remaining` are counted from the results before the `verdicts[]` count limit is applied, while `unknown` and `undetected` are `0`
+    - When `comparable` is `false`, a count of `0` does not mean that there are no targets or that they have been resolved
+- `verdicts`
+    - Ordinary published image comparisons may include findings outside the adoption decision's targets
+    - Base image comparisons and newer series candidate comparisons include only target findings
+- `verdicts`, `introduced_findings`
+    - Each list contains at most 50 entries, with the corresponding `*_truncated` set to `true` if the limit is exceeded
+    - Count fields are not reduced when list entries are omitted, so do not derive total counts from array lengths
+
+The values of `decision` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `adopt` | Adopted as a candidate that resolves all targets |
+| `adopt_partial` | Adopted as a candidate that resolves some targets |
+| `not_resolving` | No targets are resolved |
+| `introduced` | New findings are present |
+| `new_kev` | Newly detected vulnerabilities include a KEV-listed vulnerability |
+| `analysis_incomplete` | Analysis is insufficient to judge the targets |
+| `targets_not_detected` | Targets were not detected in the baseline, so resolution cannot be judged |
+| `not_comparable` | Comparison is not possible |
+
+`items[].comparison.verdicts[]` has the following fields in each element.
+The elements of `verdicts[]` and `introduced_findings[]` in each `comparison` use the same structure.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `vuln_id` | string | Vulnerability ID | — |
+| `package` | string | Name of the package being evaluated | — |
+| `ecosystem` | string | Package type | omitted |
+| `severity` | string | Vulnerability severity | omitted |
+| `outcome` | string | Comparison outcome for the finding | — |
+| `disposition` | string | How the package associated with a resolved finding changed in the candidate | omitted |
+| `reason` | string | [Reason codes](remediation-reference.md#reason-codes) value explaining why an individual finding could not be judged | omitted |
+| `before_versions` | array of strings | Package versions recorded in the baseline | omitted when empty |
+| `after_versions` | array of strings | Package versions at locations where the vulnerability was detected in the candidate | omitted when empty |
+
+The following fields have additional notes.
+
+- `ecosystem`
+    - Identifies the package type in the scan results, such as `alpine`, `debian`, `node-pkg`, or `python-pkg`
+- `severity`
+    - The usual values are `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`
+- `before_versions`, `after_versions`
+    - Duplicate versions are removed and the values are sorted lexicographically
+    - These fields do not list every installed location of the package
+- `after_versions`
+    - Omitted when `outcome` is `resolved`, and does not indicate the package version installed after the fix
+
+The values of `outcome` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `resolved` | A finding present in the baseline is absent from the candidate within the evaluated scope |
+| `remaining` | The finding is also present in the candidate |
+| `introduced` | The finding was absent from the baseline and newly detected in the candidate |
+| `unknown` | Whether the finding is resolved or remains cannot be judged |
+
+The values of `disposition` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `package_removed` | The package is absent from the candidate |
+| `version_changed` | The candidate contains only versions different from those in the baseline |
+| `same_version` | The candidate contains a version present in the baseline, but the finding is no longer detected |
+
+### Scan records {#remediation-scan-records}
+
+Scan records are used in `scans[]` for published images and base images, and in `scans[]` for newer series candidates.
+The base image fields `rebuild_check.running_scan` and `rebuild_check.base_scan` use the same structure.
+
+The following example shows records where the baseline and candidate content was confirmed and database verification after each scan succeeded.
+
+```json
+[
+  {
+    "role": "baseline",
+    "ref": "python:3.12.3-slim",
+    "requested": "registry:sha256:1111111111111111111111111111111111111111111111111111111111111111@linux/amd64",
+    "confirmed": "registry:sha256:1111111111111111111111111111111111111111111111111111111111111111@linux/amd64",
+    "db": "verified",
+    "scanned_at": "2026-10-09T02:59:00Z"
+  },
+  {
+    "role": "candidate",
+    "ref": "python:3.12.5-slim",
+    "requested": "registry:sha256:2222222222222222222222222222222222222222222222222222222222222222@linux/amd64",
+    "confirmed": "registry:sha256:2222222222222222222222222222222222222222222222222222222222222222@linux/amd64",
+    "db": "verified",
+    "scanned_at": "2026-10-09T02:59:30Z"
+  }
+]
+```
+
+`items[].scans[]` and other scan record arrays have the following fields in each element.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `role` | string | Role of the scan in the comparison | — |
+| `ref` | string | Name of the scanned image | `""` |
+| `requested` | string | Identity string of the image the scan was asked to confirm | `""` |
+| `confirmed` | string | Identity string of the image confirmed by the scan | `""` |
+| `db` | string | Result of database verification after the scan | `""` |
+| `scanned_at` | string | Scan time in RFC 3339 format | omitted when no record is available |
+| `failure` | string | Text describing the scan failure | omitted |
+
+The values of `role` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `baseline` | Baseline scan |
+| `candidate` | Scan of the candidate being compared |
+
+The values of `db` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `verified` | The databases after the scan matched the prepared databases |
+| `changed` | The databases after the scan differed from the prepared databases |
+| `check_failed` | The databases could not be checked |
+| `supplied_by_caller` | Used a scan supplied during planning and the conditions supplied with it |
+| `not_checked` | The databases were not checked because the scan failed |
+
+The following fields have additional notes.
+
+- `requested`, `confirmed`
+    - Use the same identity string with a digest kind as `content` in [Image information](#remediation-image-state)
+    - Normal scan processing emits `unconfirmed` when the target could not be identified
+    - If no string is set in the record, an empty string is emitted rather than omitting the key
+- `db`
+    - See [Comparison scan conditions](#remediation-conditions) for database update times and hashes
+- `scanned_at`
+    - Present for scans performed during planning, and omitted when a supplied scan was used as is
+
+Scan IDs are not emitted in the webhook.
+
+### Newer series check results {#remediation-newer-series}
+
+Newer series check results are used in `items[].newer_series`, `dockerfile_items[].newer_series`, and `dockerfile_items[].entities[].newer_series`.
+See [Newer series check](remediation-logic.md#newer-series-check) for candidate selection and [Newer series status values](remediation-reference.md#newer-series-status-values) for the meanings of statuses.
+
+The following example extracts a newer series candidate and its counts.
+
+```json
+{
+  "status": "resolves",
+  "shown": "2.0.1",
+  "candidates": [
+    {
+      "tag": "2.0.1",
+      "change": "major",
+      "status": "resolves",
+      "counts": {
+        "targets": 2,
+        "resolved": 2,
+        "remaining": 0,
+        "unknown": 0,
+        "undetected": 0,
+        "introduced": 0,
+        "introduced_kev": 0
+      }
+    }
+  ]
+}
+```
+
+`items[].newer_series` and other newer series check result objects have the following fields.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `status` | string | Status of the newer series check result | — |
+| `shown` | string | Candidate tag shown as the item's check result | omitted |
+| `reason` | string | [Reason codes](remediation-reference.md#reason-codes) value explaining why the check could not be completed or another outcome | omitted |
+| `detail` | string | Additional explanation of the reason | omitted |
+| `candidates` | array of objects | Results in the order candidates were checked | omitted when empty |
+
+See [Newer series status values](remediation-reference.md#newer-series-status-values) for the values of `status`.
+`shown` is omitted when no candidate resolves any target findings.
+
+`items[].newer_series.candidates[]` and other newer series candidate arrays have the following fields in each element.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `tag` | string | Candidate tag to check | — |
+| `change` | string | Kind of series change relative to the current tag | — |
+| `status` | string | Status of the candidate check result | — |
+| `reason` | string | [Reason codes](remediation-reference.md#reason-codes) value explaining the candidate's result | omitted |
+| `detail` | string | Additional explanation of the reason | omitted |
+| `candidate` | object | Candidate [Image information](#remediation-image-state) | omitted when information is unavailable |
+| `counts` | object | Counts of target resolution outcomes and newly detected findings | omitted when counts cannot be calculated |
+| `comparison` | object | Candidate [Comparison results](#remediation-comparison) | omitted when no result is available |
+| `scans` | array of objects | [Scan records](#remediation-scan-records) used for the comparison | omitted when empty |
+
+A candidate's `status` uses [Newer series status values](remediation-reference.md#newer-series-status-values), excluding `no_newer_series`.
+
+The values of `change` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `minor` | A newer minor series within the same major version |
+| `major` | A newer major series |
+
+`items[].newer_series.candidates[].counts` and other newer series count objects have the following fields.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `targets` | integer | Number of target findings evaluated | `0` |
+| `resolved` | integer | Number of resolved target findings | `0` |
+| `remaining` | integer | Number of target findings remaining in the candidate | `0` |
+| `unknown` | integer | Number of target findings that could not be judged | `0` |
+| `undetected` | integer | Number of target findings not detected in the baseline | `0` |
+| `introduced` | integer | Number of findings newly detected in the candidate | `0` |
+| `introduced_kev` | integer | Number of KEV-listed vulnerability IDs among newly detected findings | `0` |
+
+The following fields have additional notes.
+
+- `comparison`
+    - For candidates in `items[].newer_series` and `dockerfile_items[].entities[].newer_series`, `verdicts[]` contains only target findings
+    - `decision` is omitted for newer series candidates
+    - `verdicts[]` and `introduced_findings[]` are each limited to 50 entries
+- `counts`
+    - If candidate retrieval fails or processing stops before comparison, for example, the object itself is omitted rather than setting every field to `0`
+    - `introduced_kev` counts distinct vulnerability IDs
+- `dockerfile_items[].newer_series`
+    - Represents the result across all running images belonging to the base image item
+    - `candidates[]` does not include `comparison` or `scans`
+    - A candidate's `candidate` object contains the `ref`, `tag`, and `top_digest` that were obtained
+    - The candidate's `counts` is omitted if any running image is unchecked or the same candidate tag points to different content across running images
+    - Findings are deduplicated by vulnerability ID and package pair, and counted as `resolved` only when resolved in every running image that has the finding
+
+If a newer series candidate tag points to the same content as the current image, no scan is performed for that candidate.
+For published image candidates and base image candidates for individual running images, `status` is `not_resolving` and `reason` is `same_content`.
+
+In that case, `comparison` has `comparable` set to `true` and each target's `outcome` set to `remaining`.
+In both `counts` and `comparison`, `remaining` equals `targets`, while the resolved, unknown, undetected, and introduced counts are `0`.
+
+`scope` contains `the candidate is the content already in use; nothing was scanned`.
+
+Changes only to timestamps or `detail` in newer series results do not by themselves cause webhook redelivery.
+The emitted JSON still includes `detail` and `scans[].scanned_at` according to the conditions in the tables above.
+
+See [Remediation plan redelivery](notification-conditions.md#remediation-redelivery) for details.
+
+### Services {#remediation-services}
+
+Service information is used in `items[].services[]`, `dockerfile_items[].entities[].services[]`, and `pull_requests[].also_running[]`.
+
+`items[].services[]` and other service arrays have the following fields in each element.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `project` | string | Docker Compose project name | omitted |
+| `service` | string | Docker Compose service name | omitted |
+| `container` | string | Docker container name | omitted |
+| `workload` | string | Kubernetes workload key | omitted |
+
+The following fields have additional notes.
+
+- `project`, `service`, `container`
+    - Docker Compose emits the project name, service name, and container name
+    - For Docker containers that do not belong to Compose, `container` is emitted
+- `workload`
+    - Kubernetes emits only this field, omitting `project`, `service`, and `container`
+    - Replicas of the same workload are not split into separate service information entries by Pod name
+    - See [Image name updates](webhook-diff-reference.md#reference-change-fields) for the string format
+
+The following is service information for Docker Compose.
+
+```json
+{
+  "project": "shop",
+  "service": "web",
+  "container": "shop-web-1"
+}
+```

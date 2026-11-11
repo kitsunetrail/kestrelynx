@@ -91,7 +91,7 @@ A result that cannot be verified against the requested digest is treated as a sc
 When the digest cannot be retrieved, the image is scanned by image name.
 
 A scan by image name alone cannot confirm a match with the running image's digest.
-Slack does not indicate whether an image is scanned by image name; this information is available in `identity_resolved` and `scan_target_kind` under the webhook's [Digest information](webhook-reference.md#image-identity).
+Slack does not indicate whether an image is scanned by image name; this information is available in `identity_resolved` and `scan_target_kind` under the webhook's [Image elements](webhook-reference.md#image-identity).
 
 ### Handling scan failures {#scan-failures}
 
@@ -204,7 +204,7 @@ Base OS EOL is determined from the OS end-of-support status reported by Trivy.
 It is handled independently of individual CVE priorities.
 
 If the base OS is EOL, consider updating to a supported base image and rebuilding.
-See [EOL display](slack-display.md#eol-display) for how this appears in Slack.
+See [EOL display](slack-package-display.md#eol-display) for how this appears in Slack.
 
 ### Package EOL {#eol-package}
 
@@ -389,7 +389,7 @@ When neither source is usable, KestreLynx uses degraded triage.
 During degraded triage, nothing is classified as Low, and `will_not_fix` does not reduce Watch to Low.
 
 See [Ordinary package changes](diff-logic.md#normal-changes) and [EOL package changes](diff-logic.md#eol-package-changes) for escalation diffs during degraded triage.
-See [Threat intelligence warnings](slack-display.md#intel-warnings) for how unavailable sources and stale caches are displayed.
+See [Threat intelligence warnings](slack-warnings-display.md#intel-warnings) for how unavailable sources and stale caches are displayed.
 
 ### Unavailable language runtime advisory data {#node-runtime-unavailable}
 

@@ -36,8 +36,8 @@ KestreLynxは観測結果をSlackとWebhookの通知に反映します。
 関数の呼び出しやモジュールの読み込みは判定しません。
 データファイルの読み取りは使用の根拠にしません。
 
-Slackの文言と観測根拠は[稼働時の使用状況の表示](slack-display.md#runtime-display)、並び順は[区分の中の並び順](slack-display.md#within-section-order)を参照してください。
-Webhookのフィールドは[稼働時のフィールド](webhook-reference.md#runtime)に記載しています。
+Slackの文言と観測根拠は[稼働時の使用状況の表示](slack-runtime-display.md)、並び順は[区分の中の並び順](slack-display.md#within-section-order)を参照してください。
+Webhookのフィールドは[稼働時のフィールド](webhook-runtime-reference.md)に記載しています。
 
 ### ランタイム本体の実行ファイル {#runtime-executables}
 
@@ -190,8 +190,8 @@ EOLは常に通知します。
 - 使用状況を判定できない、または判定対象のコンテナの観測期間が7日に満たない
 - 修正状態が通知オフの対象から外れた
 
-Slackの表示と件数は[通知オフの表示](slack-display.md#muted-display)、ほかの変化と同時に起きた場合の判定順は[通常のパッケージの変化](diff-logic.md#normal-changes)を参照してください。
-汎用Webhookには通知オフの所見も全件残り、追加フィールドは[パッケージ](webhook-reference.md#package-fields)と[通常のパッケージの変化](webhook-reference.md#new-fields)に記載しています。
+Slackの表示と件数は[通知オフの表示](slack-runtime-display.md#muted-display)、ほかの変化と同時に起きた場合の判定順は[通常のパッケージの変化](diff-logic.md#normal-changes)を参照してください。
+汎用Webhookには通知オフの所見も全件残り、追加フィールドは[パッケージ](webhook-reference.md#package-fields)と[通常のパッケージの変化](webhook-diff-reference.md#new-fields)に記載しています。
 
 ### 観測のオプション
 
@@ -211,7 +211,7 @@ SensorのComposeの`command`には、次のオプションを指定できます�
 
 ## Sensorの状態
 
-状態ごとの警告文は[Sensorの警告](slack-display.md#sensor-warnings)、Webhookのフィールドは[Sensorの情報](webhook-reference.md#sensor-fields)を参照してください。
+状態ごとの警告文は[Sensorの警告](slack-warnings-display.md#sensor-warnings)、Webhookのフィールドは[Sensorの情報](webhook-runtime-reference.md#sensor-fields)を参照してください。
 
 | 状態 | 意味 |
 | --- | --- |

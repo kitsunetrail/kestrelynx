@@ -1,90 +1,393 @@
-# Webhookのフィールド仕様
+---
+title: Webhookの基本のフィールド
+---
+
+# Webhookの基本のフィールド
 
 ## ペイロードの範囲 {#generic-webhook}
 
-汎用Webhookは、現在のスキャン結果を構造化JSONで送信します。
-diffモードでは、現在の結果に加えて前回からの差分を含めます。
+汎用Webhookは、現在のスキャン結果をJSONで送信します。
+`diff`モードでは、現在の結果に加えて保存している履歴と最新のスキャンを比べた変化を含めます。
 
-Low、通知オフの所見、Slackで畳み込むEOLパッケージ、対象コンテナとWorkloadも含みます。
+ペイロードには、Slackでは個別に表示しないものも含めます。
+
+- 優先度が`low`の[パッケージグループ](scan-logic.md#package-grouping)
+- [通知オフ](runtime-usage.md#muting-findings-without-a-fix)のパッケージグループ
+- イメージのベースOSがEOLの場合も、そのイメージのEOLパッケージを含める
+- イメージを使っているコンテナとワークロード
+
 Slackと併用できますが、DiscordやTeams専用のメッセージ形式には変換しません。
 
-送信先は[設定](configuration.md)、送信のタイミングは[通知の送信条件](notification-conditions.md#notification-conditions)を参照してください。
-修正計画のJSONは[Webhookの修正計画フィールド](webhook-remediation-reference.md#remediation-fields)に記載しています。
+送信時の動作は次のとおりです。
+
+| 項目 | 動作 |
+| --- | --- |
+| HTTPメソッド | `POST` |
+| Content-Type | `application/json` |
+| 認証 | 送信先URLにユーザー名を含めた場合はパスワードの有無にかかわらずBasic認証の`Authorization`ヘッダーを付け、署名は付けない |
+| 応答の扱い | HTTPステータスが`2xx`なら成功、それ以外は失敗 |
+| 応答を待つ時間 | 15秒 |
+| 失敗時の再送 | その場での再送は行わず、次回以降は[スキャン通知の再送](notification-conditions.md#scan-redelivery)に従う |
+
+設定、通知の送信条件、各フィールドの詳細は、次のページを参照してください。
+
+| 内容 | ページ |
+| --- | --- |
+| 送信先 | [設定](configuration.md) |
+| 送信のタイミング | [通知の送信条件](notification-conditions.md#notification-conditions) |
+| `diff`のフィールド | [Webhookの差分のフィールド](webhook-diff-reference.md) |
+| トップレベルの`runtime`と`findings[].runtime`のフィールド | [Webhookの稼働時のフィールド](webhook-runtime-reference.md) |
+| `remediation`のフィールド | [Webhookの修正計画の全体と共通のオブジェクト](webhook-remediation-reference.md) |
+
+## ペイロードの全体像 {#payload-overview}
+
+ペイロードには、レポート全体の情報と、イメージごとの検出結果を入れます。
+省略されることがあるフィールドも含めて、主な入れ子の構造を次に示します。
+
+```text
+ペイロード
+├── generated_at
+├── environment
+├── summary
+├── eosl_images[]
+├── actionable[]・watch[]・wont_fix[]・eol_packages[]   イメージ
+│   ├── containers[]                                   コンテナ
+│   │   └── workload
+│   └── findings[]                                     パッケージグループ
+│       ├── vulns[]                                    脆弱性
+│       │   └── refs[]
+│       └── runtime
+│           └── containers[]
+│               ├── process
+│               └── instances[]
+├── scan_errors[]
+├── runtime_unchecked[]
+├── diff
+├── runtime
+└── remediation
+```
+
+`actionable`・`watch`・`wont_fix`・`eol_packages`は、要素が同じフィールドを持つイメージ配列です。
+同じイメージが複数の配列に入ることがあります。
+
+次は、`web:1.0`のパッケージグループ1件と、`broken:1`のスキャン失敗を含む、`diff`モードのペイロードの例です。
+
+```json
+{
+  "generated_at": "2026-06-24T09:00:00Z",
+  "environment": {
+    "kind": "docker"
+  },
+  "summary": {
+    "images_total": 2,
+    "images_affected": 1,
+    "priority_counts": {
+      "act_now": 1,
+      "low": 0,
+      "watch": 0
+    },
+    "intel": {
+      "degraded": false,
+      "kev_ok": true,
+      "epss_ok": true,
+      "stale_days": 0
+    }
+  },
+  "eosl_images": null,
+  "actionable": [
+    {
+      "image": "web:1.0",
+      "severity_counts": {
+        "CRITICAL": 1,
+        "HIGH": 0
+      },
+      "findings": [
+        {
+          "package": "openssl",
+          "installed": "3.0.7",
+          "fixed": "3.0.11",
+          "status": "fixed",
+          "severity_counts": {
+            "CRITICAL": 1,
+            "HIGH": 0
+          },
+          "upgrade_risk": "distro_update",
+          "priority": "act_now",
+          "vuln_ids": [
+            "CVE-2031-0001"
+          ],
+          "vulns": [
+            {
+              "id": "CVE-2031-0001",
+              "severity": "CRITICAL",
+              "url": "https://avd.example/CVE-2031-0001",
+              "title": "openssl: buffer overread",
+              "kev": true,
+              "ransomware": true,
+              "epss": 0.94321,
+              "priority": "act_now",
+              "refs": [
+                {
+                  "kind": "vendor",
+                  "label": "vendor advisory",
+                  "url": "https://vendor.example/advisory/1"
+                }
+              ]
+            }
+          ],
+          "class": "os",
+          "ecosystem": ""
+        }
+      ],
+      "containers": [],
+      "content_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "registry_digests": [],
+      "identity_resolved": true,
+      "scan_target_kind": "content_id"
+    }
+  ],
+  "watch": [],
+  "wont_fix": [],
+  "eol_packages": [],
+  "scan_errors": [
+    {
+      "image": "broken:1",
+      "error": "pull failed",
+      "cause": "unclassified"
+    }
+  ],
+  "diff": {
+    "new": [
+      {
+        "image": "web:1.0",
+        "package": "openssl",
+        "kind": "escalated",
+        "critical": 1,
+        "high": 0,
+        "priority": "act_now",
+        "reason": "CVE-2031-0001 CRITICAL · CISA KEV (exploited in the wild) · EPSS 94% · 🧨 ransomware campaign",
+        "ecosystems": [
+          ""
+        ]
+      }
+    ],
+    "resolved": [
+      {
+        "image": "web:1.0",
+        "package": "old-pkg"
+      }
+    ],
+    "replaced": [],
+    "new_eosl": [],
+    "resolved_eosl": [],
+    "oldest_open_days": 20,
+    "new_eol_packages": [],
+    "resolved_eol_packages": []
+  }
+}
+```
 
 ## レポートのフィールド {#report-fields}
 
-各表のフィールド名は、表で示すオブジェクトからの相対パスです。
-省略条件を記載していないフィールドは、そのオブジェクトがある場合に出力します。
+各表のフィールド名は、表の前の文で示すオブジェクトからの相対パスです。
+`a.b`は`a`の中の`b`、`a[]`は配列`a`の各要素を表します。
 
-`MEDIUM`・`LOW`・`UNKNOWN`の件数は、`scan.severity`にそれぞれの深刻度を含めた場合だけ出力します。
-既定の`[HIGH, CRITICAL]`では、これらの深刻度は検出対象外のため、件数を出力しません。
+「値がないとき」の表記は、次のように読みます。
+
+| 表記 | 意味 |
+| --- | --- |
+| 省略 | 値がない、該当がない、または取得できない場合はキーごと出力しない |
+| 〜なら省略 | 記載した条件に当てはまる場合はキーごと出力しない |
+| `[]`・`null`・`""`・`0`・`false` | 記載した値を出力する |
+| — | 表の対象のオブジェクトがあれば必ず値がある |
+
+### 複数のフィールドで使う値 {#common-values}
+
+複数のフィールドで使う優先度、修正状態、深刻度ごとの件数、使用状況をここにまとめます。
+
+#### 優先度 {#priority-values}
+
+脆弱性と[パッケージグループ](scan-logic.md#package-grouping)の優先度の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `act_now` | 今すぐ対応 |
+| `watch` | 緊急性は低いが継続監視 |
+| `low` | 低優先度としてまとめて対応 |
+
+判定の条件は、[悪用情報による優先度](scan-logic.md#triage)を参照してください。
+
+#### 修正状態 {#status-values}
+
+[パッケージグループ](scan-logic.md#package-grouping)の[修正状態](scan-logic.md#status)の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `fixed` | 修正版あり |
+| `affected` | 影響あり・修正版なし |
+| `will_not_fix` | 対象プラットフォームでは現時点で修正予定なし |
+| `end_of_life` | サポート範囲外 |
+
+`affected`には、Trivyの`fix_deferred`・`under_investigation`・`unknown`などもまとめます。
+
+#### 深刻度ごとの件数 {#severity-count-fields}
+
+イメージやパッケージグループにある`severity_counts`のフィールドは次のとおりです。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `CRITICAL` | integer | 深刻度が`CRITICAL`のCVE件数 | `0` |
+| `HIGH` | integer | 深刻度が`HIGH`のCVE件数 | `0` |
+| `MEDIUM` | integer | 深刻度が`MEDIUM`のCVE件数 | 0件なら省略 |
+| `LOW` | integer | 深刻度が`LOW`のCVE件数 | 0件なら省略 |
+| `UNKNOWN` | integer | 深刻度が不明、または認識できないCVEの件数 | 0件なら省略 |
+
+次のフィールドには補足があります。
+
+- `MEDIUM`・`LOW`・`UNKNOWN`
+    - `scan.severity`に指定した深刻度が検出対象
+    - 既定の`[HIGH, CRITICAL]`では検出対象外
+    - 受け取ったJSONだけでは検出対象外と0件を区別できない
+
+#### 使用状況 {#usage-values}
+
+[稼働時の使用状況](runtime-usage.md)を表す値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `in_use` | 判定方法に従って使用を確認できた状態 |
+| `not_observed` | 観測期間に使用を確認できなかった状態 |
+| `unavailable` | 証拠が足りず判定できない状態 |
+
+`not_observed`は、使われていないことを意味しません。
 
 ### トップレベル {#top-level}
 
-| フィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `generated_at` | string | RFC 3339形式のスキャン時刻 |
-| `environment` | object | [環境](#environment) |
-| `summary` | object | [サマリー](#summary) |
-| `eosl_images` | stringの配列または`null` | EOLベースイメージ名一覧で、該当なしは`null`になる場合がある |
-| `actionable` | objectの配列 | `fixed`の[イメージ](#images)で、該当なしは`[]` |
-| `watch` | objectの配列 | `affected`へ正規化したイメージで、該当なしは`[]` |
-| `wont_fix` | objectの配列 | `will_not_fix`のイメージで、該当なしは`[]` |
-| `eol_packages` | objectの配列 | 全`end_of_life`グループのイメージで、該当なしは`[]` |
-| `scan_errors` | objectの配列 | [スキャン失敗](#scan-errors)で、該当なしは`[]` |
+トップレベルには、レポート全体の情報、検出結果、スキャン失敗、差分などを入れます。
 
-| `runtime_unchecked` | objectの配列 | セキュリティ情報を利用できなかった[未照合の言語ランタイム](#runtime-unchecked)で、該当なしは省略 |
-| `diff` | object | [差分](#diff)で、fullモードでは省略 |
-| `runtime` | object | [Sensorの情報と使用状況の件数](#runtime)で、稼働時の使用状況が無効なら省略 |
-| `remediation` | object | [修正計画とPR処理の結果](webhook-remediation-reference.md#remediation-fields)で、修正計画が無効なら省略 |
+`actionable`・`watch`・`wont_fix`・`eol_packages`は、[修正状態](scan-logic.md#status)ごとの区分です。
+`watch`は修正状態を`affected`にまとめた結果の配列で、[優先度](#priority-values)の`watch`とは別です。
 
-`watch`は修正状態の区分で、優先度のWatchとは別です。
-`not_affected`は、どの検出結果の配列にも含めません。
+`not_affected`の検出結果は、4つの配列のどれにも含めません。
+
+トップレベルのフィールドは次のとおりです。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `generated_at` | string | レポートをまとめた時刻（RFC 3339形式） | — |
+| `environment` | object | [環境](#environment) | — |
+| `summary` | object | [サマリー](#summary) | — |
+| `eosl_images` | stringの配列または`null` | ベースOSがEOLのイメージ名の一覧 | `null` |
+| `actionable` | objectの配列 | 修正状態が`fixed`のパッケージグループを持つ[イメージ](#images) | `[]` |
+| `watch` | objectの配列 | 修正状態が`affected`のパッケージグループを持つイメージ | `[]` |
+| `wont_fix` | objectの配列 | 修正状態が`will_not_fix`のパッケージグループを持つイメージ | `[]` |
+| `eol_packages` | objectの配列 | 修正状態が`end_of_life`のパッケージグループを持つイメージ | `[]` |
+| `scan_errors` | objectの配列 | [スキャン失敗](#scan-errors)の一覧 | `[]` |
+| `runtime_unchecked` | objectの配列 | [未照合の言語ランタイム](#runtime-unchecked)の一覧 | 省略 |
+| `diff` | object | [差分](webhook-diff-reference.md) | `full`モードなら省略 |
+| `runtime` | object | [Sensorの情報と使用状況の件数](webhook-runtime-reference.md) | 稼働時の使用状況が無効なら省略 |
+| `remediation` | object | [修正計画とPR処理の結果](webhook-remediation-reference.md#remediation-fields) | 修正計画が無効なら省略 |
+
+JSON全体の例は、[ペイロードの全体像](#payload-overview)を参照してください。
 
 ### 環境 {#environment}
 
-| `environment`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `kind` | string | `docker`または`kubernetes` |
-| `name` | string | 設定した環境名で、未設定なら省略 |
+`environment`は、スキャンした実行環境を表します。
+`environment`のフィールドは次のとおりです。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `kind` | string | 実行環境の種類 | — |
+| `name` | string | [設定](configuration.md)の`environment.name`で指定した環境名 | 未設定なら省略 |
+
+`kind`の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `docker` | Docker Engineのホスト |
+| `kubernetes` | Kubernetesクラスタ |
 
 ### サマリー {#summary}
 
-| `summary`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `images_total` | integer | スキャン失敗を含む、一意なイメージ名とdigestの組み合わせ数 |
-| `images_affected` | integer | 対象脆弱性またはEOLベースOSがあるイメージ数 |
-| `priority_counts` | object | 優先度別のパッケージグループ件数で、トリアージ無効時は省略 |
-| `priority_counts.act_now` | integer | Act nowの件数 |
-| `priority_counts.watch` | integer | Watchの件数 |
-| `priority_counts.low` | integer | Lowの件数 |
-| `intel` | object | KEVとEPSSの利用可否と鮮度で、トリアージ無効時は省略 |
-| `intel.degraded` | boolean | KEVとEPSSの両方を利用できない場合は`true` |
-| `intel.kev_ok` | boolean | KEVを利用できる場合は`true` |
-| `intel.epss_ok` | boolean | EPSSを利用できる場合は`true` |
-| `intel.stale_days` | integer | 使用中の古い脅威情報の経過日数 |
+`summary`は、スキャンした対象と影響のあるイメージの件数、優先度ごとの件数、脅威情報の利用状況を表します。
 
-`priority_counts`には、EOLパッケージをAct nowの場合だけ加算します。
-`eol_packages`と集計対象が重なり、3値の合計は全パッケージグループ数とは限りません。
+`summary`のフィールドは次のとおりです。
 
-Node.jsまたはPython本体を照合できなかったイメージは、対応するパッケージ名とともにトップレベルの`runtime_unchecked`に含めます。
-通知と履歴の扱いは、[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)に記載しています。
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `images_total` | integer | スキャンした対象の数で、同じイメージ名でもdigestが違えば別に数え、スキャンに失敗した対象も含む | `0` |
+| `images_affected` | integer | 4つの検出結果の配列のどれかに含まれるか、ベースOSがEOLであるイメージ名の数 | `0` |
+| `priority_counts` | object | [優先度](#priority-values)ごとの[パッケージグループ](scan-logic.md#package-grouping)件数 | トリアージが無効なら省略 |
+| `priority_counts.act_now` | integer | 優先度が`act_now`の件数 | `0` |
+| `priority_counts.watch` | integer | 優先度が`watch`の件数 | `0` |
+| `priority_counts.low` | integer | 優先度が`low`の件数 | `0` |
+| `intel` | object | KEVとEPSSの利用可否とデータの古さ | トリアージが無効なら省略 |
+| `intel.degraded` | boolean | KEVとEPSSのどちらも利用できないか | `false` |
+| `intel.kev_ok` | boolean | KEVを利用できるか | `false` |
+| `intel.epss_ok` | boolean | EPSSを利用できるか | `false` |
+| `intel.stale_days` | integer | 取得し直せず使っている保存済みデータのうち最も古いものの経過日数で、最新のデータなら`0` | `0` |
+
+`priority_counts`の数え方は次のとおりです。
+
+- 単位は[パッケージグループ](scan-logic.md#package-grouping)
+- EOLパッケージは、優先度が`act_now`のものだけを数える
+- EOLパッケージの集計対象が限られるため、3つの件数の合計は4つの配列に含まれるパッケージグループの合計と一致するとは限らない
+- [通知オフ](runtime-usage.md#muting-findings-without-a-fix)のパッケージグループも数える
+
+次は、トリアージが有効な場合の`summary`の例です。
+
+```json
+{
+  "images_total": 3,
+  "images_affected": 2,
+  "priority_counts": {
+    "act_now": 3,
+    "low": 4,
+    "watch": 1
+  },
+  "intel": {
+    "degraded": false,
+    "kev_ok": true,
+    "epss_ok": true,
+    "stale_days": 0
+  }
+}
+```
 
 ### 未照合の言語ランタイム {#runtime-unchecked}
 
-| `runtime_unchecked[]`のフィールド名 | 型 | 意味 |
-| --- | --- | --- |
-| `image` | string | セキュリティ情報を利用できず本体を照合しなかったイメージ名 |
-| `package` | string | 未照合の本体のパッケージ名で、`Node.js`または`Python runtime` |
+`runtime_unchecked`は、Node.jsまたはPythonの本体を見つけたものの、セキュリティ情報を取得できず照合しなかった対象の一覧です。
+同じイメージ名と本体の組は1度だけ出力します。
+
+`runtime_unchecked[]`のフィールドは次のとおりです。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `image` | string | 本体を照合しなかったイメージ名 | — |
+| `package` | string | 照合しなかった本体のパッケージ名 | — |
+
+`package`の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `Node.js` | Node.js本体 |
+| `Python runtime` | Python本体 |
+
+通知と履歴の扱いは、[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。
 
 ### スキャン失敗 {#scan-errors}
 
-| `scan_errors[]`のフィールド名 | 型 | 意味 |
-| --- | --- | --- |
-| `image` | string | スキャンに失敗したイメージ名 |
-| `error` | string | エラー内容 |
-| `cause` | string | 原因 |
-| `registry` | string | 取得元のレジストリのホストで、分からなければ省略 |
+`scan_errors`は、スキャンに失敗した対象とエラーを示します。
+`scan_errors[]`のフィールドは次のとおりです。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `image` | string | スキャンに失敗したイメージ名 | — |
+| `error` | string | Trivyなどが返したエラーの文面 | — |
+| `cause` | string | スキャン失敗の原因 | — |
+| `registry` | string | 取得元のレジストリのホスト | 省略 |
+
+`cause`の値は次のとおりです。
 
 | 値 | 意味 |
 | --- | --- |
@@ -97,358 +400,355 @@ Node.jsまたはPython本体を照合できなかったイメージは、対応�
 | `image_mismatch` | スキャンしたイメージが、動いているイメージと一致しない |
 | `unclassified` | 原因を分類できない |
 
-`cause`の値に対応する表示と条件は、[スキャンできなかったイメージの表示](slack-display.md#scan-failure-causes)を参照してください。
+`error`の文面は固定の値ではありません。
+
+`cause`の値に対応する表示と条件は、[スキャンできなかったイメージの表示](slack-warnings-display.md#scan-failure-causes)を参照してください。
 
 失敗時の結果の扱いは、[スキャン失敗時の扱い](scan-logic.md#scan-failures)を参照してください。
 
 ## イメージのフィールド {#images}
 
-`actionable`、`watch`、`wont_fix`、`eol_packages`の各要素は、修正状態ごとのイメージ名とdigestを表します。
+`actionable`、`watch`、`wont_fix`、`eol_packages`の1つの要素は、イメージ名と動いているイメージの内容を識別する値の組に対応し、その配列の[修正状態](scan-logic.md#status)に当たる[パッケージグループ](#findings)をまとめたものです。
 
-### イメージの識別情報 {#image-identity}
+レジストリのdigestで識別する場合はプラットフォームも含むため、同じイメージ名・同じdigestでもプラットフォームが違えば別の要素になります。
 
-| フィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `image` | string | 表示用のイメージ名 |
-| `severity_counts` | object | 深刻度別の整数件数で、`CRITICAL`・`HIGH`は常に出力 |
-| `findings` | objectの配列 | このイメージと修正状態に属する[パッケージグループ](#package-fields) |
-| `containers` | objectの配列 | このイメージとdigestが一致する[コンテナ](#containers)で、該当なしは`[]` |
-| `content_id` | string | digestを確認できたDockerのconfig digest指定スキャンの`sha256:<hex>`で、それ以外は省略 |
-| `registry_digests` | stringの配列 | 成功してdigestを確認できた結果のregistry digestを、同じイメージ名について集めた一覧で、情報なしは`[]` |
-| `identity_resolved` | boolean | この要素のスキャンで稼働中イメージのdigestを確認できた場合は`true` |
-| `scan_target_kind` | string | `content_id`、`registry_digest`、`reference`のいずれか |
-| `severity_counts.MEDIUM` | integer | MEDIUM件数で、`0`なら省略 |
-| `severity_counts.LOW` | integer | LOW件数で、`0`なら省略 |
-| `severity_counts.UNKNOWN` | integer | UNKNOWN件数（認識できない深刻度を含む）で、`0`なら省略 |
+内容を識別する値を取得できなかったイメージも、該当するパッケージグループがあれば、各配列でイメージ名ごとに1つの要素にまとめて出力します。
 
-`registry_digests`は同じイメージ名について集めた情報ですが、`identity_resolved`と`scan_target_kind`は各要素の情報です。
+同じイメージに修正状態の違うパッケージグループがあれば、複数の配列に同じ`image`の要素が入ります。
+
+次は、`actionable`に入るイメージ1要素の例です。
+
+```json
+{
+  "image": "api:2.0",
+  "severity_counts": {
+    "CRITICAL": 0,
+    "HIGH": 1
+  },
+  "findings": [
+    {
+      "package": "setuptools",
+      "installed": "53.0.0",
+      "fixed": "78.1.1",
+      "status": "fixed",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 1
+      },
+      "upgrade_risk": "caution",
+      "priority": "low",
+      "vuln_ids": [
+        "CVE-2031-0008"
+      ],
+      "vulns": [
+        {
+          "id": "CVE-2031-0008",
+          "severity": "HIGH",
+          "kev": false,
+          "epss": null,
+          "priority": "low"
+        }
+      ],
+      "class": "lang",
+      "ecosystem": "python-pkg"
+    }
+  ],
+  "containers": [],
+  "content_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "registry_digests": [],
+  "identity_resolved": true,
+  "scan_target_kind": "content_id"
+}
+```
+
+### イメージの要素 {#image-identity}
+
+イメージの要素のフィールドは次のとおりです。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `image` | string | イメージ名 | — |
+| `severity_counts` | object | この要素に属する各パッケージグループのCVE件数を[深刻度ごと](#severity-count-fields)に合計した値 | — |
+| `findings` | objectの配列 | この要素に属する[パッケージグループ](#findings) | `[]` |
+| `containers` | objectの配列 | この要素に対応する[コンテナ](#containers) | `[]` |
+| `content_id` | string | イメージの内容を識別する値(config digest) | `scan_target_kind`が`content_id`以外なら省略 |
+| `registry_digests` | stringの配列 | 同じイメージ名について集めたレジストリのdigestの一覧 | `[]` |
+| `identity_resolved` | boolean | スキャン対象が動いているイメージと同じ内容だと確認できたか | `false` |
+| `scan_target_kind` | string | スキャン対象の指定方法 | — |
+
+`scan_target_kind`の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `content_id` | 動いているイメージのconfig digestを指定してスキャン（Docker） |
+| `registry_digest` | 動いているイメージのレジストリのdigestを指定してスキャン（Kubernetes） |
+| `reference` | イメージ名でスキャンし、動いているイメージと同じ内容かは未確認 |
+
+次のフィールドには補足があります。
+
+- `identity_resolved`
+    - `scan_target_kind`が`reference`以外のとき`true`
+- `content_id`
+    - `sha256:<64桁の小文字の16進数>`の形式
+- `registry_digests`
+    - スキャンに成功してdigestを確認できた結果から、同じイメージ名について集めた一覧で、この要素だけの値ではない
+    - 要素はリポジトリ名を含み、例えば`debian@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251`の形式
+- `image`
+    - 同じイメージ名を指す差分の`image`や`ref`と同じ文字列で、イメージ名による照合に使える
+- `containers`
+    - Kubernetesでは`content_id`を出力せず、`registry_digests`は同じイメージ名で共通の一覧なので、digestでは各要素を区別できない
+    - Kubernetesで同じイメージ名の要素が複数ある場合は、各要素に対応するコンテナを列挙した`containers`で区別する
 
 ### コンテナ {#containers}
 
-| `containers[]`のフィールド名 | 型 | 意味 |
+`containers[]`は、そのイメージを使って動いているコンテナを表します。
+同じイメージ名に複数のdigestがある場合も、各イメージの要素には、その要素とdigestが一致するコンテナだけを含めます。
+
+digestを確認できなかった要素には、同じイメージ名でdigestを確認できなかったコンテナを含めます。
+
+`containers[]`の1要素のフィールドは次のとおりです。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `name` | string | コンテナ名 | `""` |
+| `workload` | object | コンテナが属する[ワークロード](#workloads) | — |
+
+`name`の形式は、実行環境によって異なります。
+
+| 実行環境 | `name`の形式 |
+| --- | --- |
+| Docker | 先頭のスラッシュを除いたコンテナ名 |
+| Kubernetes | `<namespace>/<pod>/<container>` |
+
+次は、所属するワークロードが分からないコンテナの例です。
+
+```json
+{
+  "name": "web-1",
+  "workload": {
+    "kind": "unknown"
+  }
+}
+```
+
+### ワークロード {#workloads}
+
+`containers[].workload`は、コンテナが属するサービスやKubernetesリソースを表します。
+フィールドは次のとおりです。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `kind` | string | ワークロードの種類 | — |
+| `group` | string | ワークロードが属するプロジェクトまたは名前空間 | 省略 |
+| `name` | string | ワークロードの名前 | 省略 |
+
+`kind`の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `compose` | Docker Composeのサービス |
+| `deployment` | KubernetesのDeployment |
+| `statefulset` | KubernetesのStatefulSet |
+| `daemonset` | KubernetesのDaemonSet |
+| `job` | CronJobに属さないKubernetesのJob |
+| `cronjob` | KubernetesのCronJob |
+| `pod` | ほかのリソースに属さないKubernetesのPod |
+| `unknown` | 所属が分からないコンテナ（単独で動かしているDockerコンテナなど） |
+
+`group`と`name`には、実行環境に応じて次の値が入ります。
+
+| 実行環境 | `group` | `name` |
 | --- | --- | --- |
-| `name` | string | Dockerでは先頭のスラッシュとリンク別名を除いた名前、Kubernetesでは`<namespace>/<pod>/<container>` |
-| `workload` | object | [Workloadの対応情報](#workloads)で、所属が不明でも出力 |
-
-同じイメージ名に複数のdigestがある場合も、各要素にはその要素とdigestが一致するコンテナだけを含めます。
-
-### Workload {#workloads}
-
-| `containers[].workload`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `kind` | string | `unknown`、`compose`、`deployment`、`statefulset`、`daemonset`、`job`、`cronjob`、`pod`のいずれか |
-| `group` | string | Composeプロジェクトまたはnamespaceで、不明なら省略 |
-| `name` | string | Composeサービス、解決したWorkload名、単独Pod名で、不明なら省略 |
+| Docker Compose | プロジェクト名 | サービス名 |
+| Kubernetes | 名前空間 | リソース名 |
 
 ## 検出結果のフィールド {#findings}
 
-`findings[]`はパッケージグループを、その中の`vulns[]`は個々の脆弱性を表します。
+`findings[]`の1要素を「パッケージグループ」と呼びます。
+同じイメージの同じパッケージで見つかったCVEを、[修正状態](scan-logic.md#status)ごとにまとめたものです（[パッケージ単位の集約](scan-logic.md#package-grouping)）。
+
+パッケージグループの`vulns[]`には、グループに含まれる脆弱性の詳細が1件ずつ入ります。
+
+次は、`openssl`のパッケージグループ1つの例です。
+
+```json
+{
+  "package": "openssl",
+  "installed": "3.0.7",
+  "fixed": "3.0.11",
+  "status": "fixed",
+  "severity_counts": {
+    "CRITICAL": 1,
+    "HIGH": 0
+  },
+  "upgrade_risk": "distro_update",
+  "priority": "act_now",
+  "vuln_ids": [
+    "CVE-2031-0001"
+  ],
+  "vulns": [
+    {
+      "id": "CVE-2031-0001",
+      "severity": "CRITICAL",
+      "url": "https://avd.example/CVE-2031-0001",
+      "title": "openssl: buffer overread",
+      "kev": true,
+      "ransomware": true,
+      "epss": 0.94321,
+      "priority": "act_now",
+      "refs": [
+        {
+          "kind": "vendor",
+          "label": "vendor advisory",
+          "url": "https://vendor.example/advisory/1"
+        }
+      ]
+    }
+  ],
+  "class": "os",
+  "ecosystem": ""
+}
+```
 
 ### パッケージ {#package-fields}
 
-| `findings[]`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `package` | string | パッケージ名 |
-| `class` | string | `os`または`lang` |
-| `ecosystem` | string | `debian`・`python-pkg`などの種類で、不明なら`""` |
-| `installed` | string | インストール済みバージョン |
-| `fixed` | string | 修正版バージョンで、なければ`""` |
-| `status` | string | `fixed`、`affected`、`will_not_fix`、`end_of_life`のいずれか |
-| `severity_counts` | object | 深刻度別の整数件数で、`CRITICAL`・`HIGH`は常に出力 |
-| `upgrade_risk` | string | `""`、`distro_update`、`safe`、`caution`、`unknown`のいずれか |
-| `priority` | string | `act_now`、`watch`、`low`のいずれかで、トリアージ無効時は省略 |
-| `vuln_ids` | stringの配列 | 並べ替え済みの脆弱性ID |
-| `vulns` | objectの配列 | [脆弱性ごとの詳細](#vulnerability-fields) |
-| `runtime` | object | [所見の使用状況](#finding-runtime)で、使用状況の判定が付いていない場合は省略 |
-| `severity_counts.MEDIUM` | integer | MEDIUM件数で、`0`なら省略 |
-| `severity_counts.LOW` | integer | LOW件数で、`0`なら省略 |
-| `severity_counts.UNKNOWN` | integer | UNKNOWN件数（認識できない深刻度を含む）で、`0`なら省略 |
+パッケージグループを表す`findings[]`の1要素のフィールドは次のとおりです。
 
-`class`と`ecosystem`は、稼働時の使用状況が無効でも出力します。
-修正状態と優先度の判定は、[検出結果の分類](scan-logic.md#finding-classification)と[悪用情報による優先度](scan-logic.md#triage)を参照してください。
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `package` | string | パッケージ名 | `""` |
+| `class` | string | パッケージの分類 | — |
+| `ecosystem` | string | パッケージの種類 | `""` |
+| `installed` | string | インストール済みバージョン | `""` |
+| `fixed` | string | 修正版のバージョン | `""` |
+| `status` | string | パッケージグループの[修正状態](#status-values) | — |
+| `severity_counts` | object | このパッケージグループの[深刻度ごとの件数](#severity-count-fields) | — |
+| `upgrade_risk` | string | 修正版への更新の注意度 | `""` |
+| `priority` | string | パッケージグループの[対応優先度](#priority-values) | トリアージが無効なら省略 |
+| `vuln_ids` | stringの配列 | グループに含まれる脆弱性のID | `[]` |
+| `vulns` | objectの配列 | [脆弱性ごとの詳細](#vulnerability-fields) | `[]` |
+| `runtime` | object | [パッケージグループの使用状況](webhook-runtime-reference.md#finding-runtime) | 稼働時の使用状況が無効なら省略 |
+
+`class`の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `os` | OSパッケージ |
+| `lang` | 言語パッケージ |
+
+`upgrade_risk`の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `""` | 修正版なし |
+| `distro_update` | OSパッケージの修正版への更新 |
+| `safe` | 言語パッケージでメジャーバージョンが増えない更新（パッチ・マイナーの更新など） |
+| `caution` | 言語パッケージでメジャーバージョンが増える更新 |
+| `unknown` | 言語パッケージでバージョンを比較できない更新 |
+
+次のフィールドには補足があります。
+
+- `class`
+    - KestreLynxが追加するNode.js・Python本体の検出結果は`lang`
+- `ecosystem`
+    - Trivyが報告するパッケージの種類で、`debian`、`alpine`、`python-pkg`、`node-pkg`など
+    - KestreLynxが追加する本体の検出結果には`node-runtime`と`python-runtime`を使う
+    - 認識できない種類は`""`
+- `fixed`
+    - グループを作るときに最初に取り込んだ検出結果の修正版を出力
+    - CVEごとに修正版が違う場合は、そのうちの1つの版であり、`fixed`の版ですべてのCVEが直るとは限らない
+- `vuln_ids`
+    - `vulns[].id`と同じ集合
+
+更新の注意度の説明は[更新の注意度](slack-package-display.md#upgrade-risk)、優先度の判定は[悪用情報による優先度](scan-logic.md#triage)を参照してください。
 
 ### 脆弱性 {#vulnerability-fields}
 
-| `vulns[]`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `id` | string | Slackリンク表記を含まない脆弱性ID |
-| `severity` | string | 脆弱性の深刻度 |
-| `status` | string | 集約先と異なる元の脆弱性ステータスで、同じ場合は省略 |
-| `url` | string | 主要アドバイザリーURLで、取得できなければ省略 |
-| `title` | string | 脆弱性の短いタイトルで、取得できなければ省略 |
-| `kev` | boolean | 利用可能なKEVカタログに掲載されている場合は`true` |
-| `ransomware` | boolean | KEVのランサムウェアフラグで、`false`なら省略 |
-| `epss` | numberまたは`null` | EPSS確率で、不明なら`null` |
-| `priority` | string | `act_now`、`watch`、`low`のいずれかで、トリアージ無効時は省略 |
-| `refs` | objectの配列 | [追加参照](#reference-fields)で、空なら省略 |
+`vulns[]`の1要素は、パッケージグループに含まれる脆弱性1件の詳細を表します。
+フィールドは次のとおりです。
 
-`status`が省略されている場合は、所属する`findings[]`の`status`と同じ値として読みます。
-元の脆弱性ステータスがない場合は、`unknown`を出力します。
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `id` | string | 脆弱性のID | `""` |
+| `severity` | string | 脆弱性の深刻度 | `""` |
+| `status` | string | Trivyが報告した[修正状態](scan-logic.md#status) | パッケージグループの`status`と同じなら省略 |
+| `url` | string | 主要なアドバイザリーのURL | 省略 |
+| `title` | string | 脆弱性の短い説明 | 省略 |
+| `kev` | boolean | CISA KEVへの掲載が確認できれば`true` | `false` |
+| `ransomware` | boolean | KEVがランサムウェアでの悪用を既知としていれば`true` | `false`なら省略 |
+| `epss` | numberまたは`null` | EPSSのスコア | `null` |
+| `priority` | string | 脆弱性の対応優先度 | トリアージが無効なら省略 |
+| `refs` | objectの配列 | [追加参照](#reference-fields) | 該当なしなら省略 |
+
+`status`に出る代表的な値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `fix_deferred` | 修正延期 |
+| `under_investigation` | 調査中 |
+| `unknown` | 修正状態不明 |
+
+次のフィールドには補足があります。
+
+- `status`
+    - 省略されている場合は、パッケージグループの`status`と同じ値として読む
+    - Trivyの修正状態が未指定または空の場合は`unknown`を出力
+    - 上の表にない値をTrivyが返した場合、その値がそのまま出ることもある
+- `severity`
+    - Trivyが報告した値をそのまま出力し、`CRITICAL`、`HIGH`、`MEDIUM`、`LOW`、`UNKNOWN`などが入る
+- `kev`
+    - トリアージが無効のときやKEVのデータを使えないときも`false`
+- `epss`
+    - 0〜1の値で、悪用される確率を示す
+
+次は、KEVとEPSSの情報を含む脆弱性1件の例です。
+
+```json
+{
+  "id": "CVE-2031-0001",
+  "severity": "CRITICAL",
+  "url": "https://avd.example/CVE-2031-0001",
+  "title": "openssl: buffer overread",
+  "kev": true,
+  "ransomware": true,
+  "epss": 0.94321,
+  "priority": "act_now",
+  "refs": [
+    {
+      "kind": "vendor",
+      "label": "vendor advisory",
+      "url": "https://vendor.example/advisory/1"
+    }
+  ]
+}
+```
+
+`priority`は[優先度の値](#priority-values)を参照してください。
 
 ### 追加参照 {#reference-fields}
 
-| `refs[]`のフィールド名 | 型 | 意味 |
-| --- | --- | --- |
-| `kind` | string | `vendor`または`discussion` |
-| `label` | string | 表示ラベル |
-| `url` | string | 参照URL |
+`vulns[].refs[]`の1要素は、脆弱性に関する追加の参照先を表します。
+フィールドは次のとおりです。
 
-## 稼働時のフィールド {#runtime}
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `kind` | string | 参照先の種類 | — |
+| `label` | string | 参照先を表示するためのラベル | — |
+| `url` | string | 参照先のURL | — |
 
-稼働時のフィールドは、稼働時の使用状況が有効な場合に追加します。
-Sensorの状態の意味と観測の限界は、[稼働時の使用状況](runtime-usage.md)を参照してください。
+`kind`の値は次のとおりです。
 
-### Sensorの情報 {#sensor-fields}
-
-| トップレベルの`runtime`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `sensor_status` | string | `ok`、`degraded`、`stale`、`not_reporting`、`permission_denied`、`evidence_invalid`、`isolation_failed`、`isolation_degraded`のいずれか |
-| `heartbeat_at` | string | RFC 3339形式のSensorの報告時刻で、報告時刻がなければ省略 |
-| `interval_seconds` | integer | 秒単位のサンプリング間隔で、`0`なら省略 |
-| `rules` | object | 使用状況の判定方法 |
-| `rules.os_packages` | string | `executed_or_loaded_by_running_process` |
-| `rules.lang_packages_binary` | string | `in_running_binary` |
-| `rules.lang_packages_runtime` | string | `runtime_process_running` |
-| `events_status` | string | `ok`または`unavailable`で、Sensorの報告がなければ`""` |
-| `events_reason` | string | イベント観測の状態に伴う理由で、空なら省略 |
-| `counts` | object | [使用状況の件数](#runtime-counts) |
-
-### 使用状況の件数 {#runtime-counts}
-
-| `runtime.counts`のフィールド名 | 型 | 意味 |
-| --- | --- | --- |
-| `in_use` | integer | 使用中のパッケージグループ数 |
-| `not_observed` | integer | 使用が確認されないパッケージグループ数 |
-| `unavailable` | integer | 使用状況を判定できないパッケージグループ数 |
-| `muted` | integer | 通知オフのパッケージグループ数 |
-
-4つの検出結果の配列にある全グループを集計し、各件数は`0`でも出力します。
-`muted`は使用状況の件数と重なるため、4値を合計して全件数として扱わないでください。
-
-### 所見の使用状況 {#finding-runtime}
-
-| `findings[].runtime`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `usage` | string | `in_use`、`not_observed`、`unavailable`のいずれか |
-| `reason` | string | [判定できない理由](#runtime-reasons)で、空なら省略 |
-| `evidence_kinds` | stringの配列 | 観測の種類で、空なら省略 |
-| `events_coverage` | string | `since_start`、`partial`、`none`のいずれかで、情報なしは省略 |
-| `exposure` | string | `host_published_all`、`host_published_loopback`、`container_listening`、`unknown`のいずれかで、情報なしは省略 |
-| `high_privilege` | boolean | UID 0かつuser namespaceなし、危険なcapability、privilegedのいずれかに該当する場合は`true`で、それ以外は省略 |
-| `containers` | objectの配列 | [コンテナの証拠](#container-evidence)で、空なら省略 |
-| `muted` | boolean | 通知オフの場合は`true`で、それ以外は省略 |
-| `muted_reason` | string | 通知オフの理由`no_fix_not_in_use_7d`で、理由がなければ省略 |
-
-| `evidence_kinds[]`の値 | 意味 |
+| 値 | 意味 |
 | --- | --- |
-| `exe` | サンプリングで実行中を確認 |
-| `mapped_library` | サンプリングでライブラリの読み込みを確認 |
-| `exec_event` | eBPFで実行を観測 |
-| `library_load_event` | eBPFでライブラリの読み込みを観測 |
+| `vendor` | KEVに載っているベンダーのアドバイザリー |
+| `discussion` | Hacker Newsの議論 |
 
-| `events_coverage`の値 | 意味 |
-| --- | --- |
-| `since_start` | コンテナの起動前からeBPFで欠落なく観測 |
-| `partial` | 一部の期間やイベントを観測 |
-| `none` | eBPFによるイベント観測なし |
+`label`には、例えば`vendor advisory`が入ります。
 
-通知オフの条件は、[修正版がない所見の通知オフ](runtime-usage.md#muting-findings-without-a-fix)を参照してください。
+## 受信側の実装で守ること {#compatibility}
 
-### コンテナの証拠 {#container-evidence}
+受信側のプログラムは、次の決まりに従ってペイロードを読み取ってください。
 
-次の表は、`findings[].runtime.containers[]`のフィールドです。
-使用中の場合は、公開範囲、権限の順に最も強い証拠を持つコンテナを先頭に配置します。
-
-| フィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `name` | string | コンテナ名 |
-| `container_id` | string | 64桁の16進数のコンテナID |
-| `generation_started_at` | string | RFC 3339形式のコンテナの世代の起動時刻で、不明なら省略 |
-| `usage` | string | `in_use`、`not_observed`、`unavailable`のいずれか |
-| `reason` | string | 判定できない理由で、空なら省略 |
-| `last_seen` | string | RFC 3339形式の最後に確認した時刻で、不明なら省略 |
-| `ports` | stringの配列 | `0.0.0.0:443/tcp`などのポートの証拠で、空なら省略 |
-| `kinds_ambiguous` | boolean | OSパッケージの複数の観測種類を個々のプロセスに対応付けられない場合は`true`で、それ以外は省略 |
-| `process_exes` | stringの配列 | `kinds_ambiguous`の場合の、重複を除いた観測済み実行ファイルの一覧で、空なら省略 |
-| `process` | object | プロセスの観測がある場合だけ出力 |
-| `process.exe` | string | 実行ファイルのパスで、空なら省略 |
-| `process.effective_uid` | integer | 実効UIDで、`0`でも出力 |
-| `process.userns` | boolean | user namespaceの使用有無で、`false`でも出力 |
-| `process.dangerous_caps` | stringの配列 | 危険なcapabilityの一覧で、空なら省略 |
-| `process.privileged` | boolean | privilegedの使用有無で、`false`でも出力 |
-| `instances` | objectの配列 | 言語パッケージのインスタンスで、空なら省略 |
-| `instances[].type` | string | インスタンスの種類で、空なら省略 |
-| `instances[].target` | string | 対象の実行ファイルなどで、空なら省略 |
-| `instances[].pkg_path` | string | パッケージのパスで、空なら省略 |
-| `instances[].usage` | string | `in_use`、`not_observed`、`unavailable`のいずれか |
-| `instances[].reason` | string | 判定できない理由で、空なら省略 |
-
-`kinds_ambiguous`が`true`の場合は、`evidence_kinds`の各種類を`process.exe`や`process_exes`の各要素に対応付けて解釈しないでください。
-
-### 判定できない理由 {#runtime-reasons}
-
-所見、コンテナ、インスタンスの`reason`には、次の理由コードを使用します。
-
-| 理由コード | 意味 |
-| --- | --- |
-| `sensor_not_reporting` | Sensorからの報告なし |
-| `sensor_stale` | Sensorの報告が古い |
-| `evidence_invalid` | 証拠の検証に失敗 |
-| `isolation_failed` | Sensorの分離に失敗 |
-| `permission_denied` | 読み取り権限なし |
-| `initializing` | パッケージの索引を準備中 |
-| `stalled` | 観測処理が制限時間を超過 |
-| `parse_failed` | パッケージデータベースの解析に失敗 |
-| `truncated` | 読み取り上限により証拠が不足 |
-| `incomplete` | 観測の一部が欠落 |
-| `generation_unverified` | コンテナの世代とスキャン対象の対応を確認できない |
-| `container_not_observed` | 対応するコンテナの観測なし |
-| `db_absent` | パッケージデータベースなし |
-| `db_error` | パッケージデータベースの読み取り・解析エラー |
-| `db_unsupported` | 未対応のパッケージデータベース |
-| `no_file_list` | パッケージのファイル一覧なし |
-| `attribution_ambiguous` | 観測したパスの所有パッケージを一意に特定できない |
-| `file_replaced` | 観測したファイルが置き換わっている |
-| `version_mismatch` | パッケージの版が一致しない |
-| `ecosystem_unmapped` | エコシステムに対応する実行環境を特定できない |
-| `binary_path_unknown` | 実行ファイルのパスが不明 |
-
-## 差分のフィールド {#diff}
-
-`diff`は、前回からの変化を種類別に表します。
-変化が成立する条件は、[差分と履歴の判定](diff-logic.md#comparison-baseline)を参照してください。
-
-### 差分オブジェクト {#diff-fields}
-
-| `diff`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `new` | objectの配列 | [通常のパッケージの変化](#new-fields)で、該当なしは`[]` |
-| `resolved` | objectの配列 | [パッケージの解消](#resolved-fields)で、該当なしは`[]` |
-| `replaced` | objectの配列 | [digestの変更](#image-replacement-fields)で、該当なしは`[]` |
-| `reference_changes` | objectの配列 | [イメージ名の更新](#reference-change-fields)で、該当なしは省略 |
-| `new_eosl` | stringの配列 | [新規EOLベースイメージ](#eol-base-fields)で、該当なしは`[]` |
-| `resolved_eosl` | stringの配列 | [EOLとして記録されなくなったイメージ名](#eol-base-fields)で、該当なしは`[]` |
-| `new_eol_packages` | objectの配列 | [EOLパッケージの変化](#eol-change-fields)で、該当なしは`[]` |
-| `resolved_eol_packages` | objectの配列 | [EOLパッケージの解除](#eol-resolved-fields)で、該当なしは`[]` |
-| `oldest_open_days` | integer | [未解決の最長期間](#oldest-open-days)で、`0`でも出力 |
-
-### 通常のパッケージの変化 {#new-fields}
-
-| `diff.new[]`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `image` | string | イメージ名 |
-| `package` | string | パッケージ名 |
-| `kind` | string | `new`、`escalated`、`new_cves`、`now_fixable`、`unmuted`のいずれか |
-| `ecosystems` | stringの配列 | 変化にまとめたグループのエコシステムを重複なく並べ替えた一覧で、不明な種類は`""`として含む |
-| `runtime_usage` | string | `in_use`、`not_observed`、`unavailable`のいずれかで、使用状況の判定がなければ省略 |
-| `muted` | boolean | この変化の全グループが通知オフの場合は`true`で、それ以外は省略 |
-| `new_cve_count` | integer | `new_cves`の場合の追加CVE件数で、`0`なら省略 |
-| `new_cve_ids` | stringの配列 | `new_cves`の場合の追加IDで、空なら省略 |
-| `critical` | integer | CRITICAL件数 |
-| `high` | integer | HIGH件数 |
-| `medium` | integer | MEDIUM件数で、`0`なら省略 |
-| `low` | integer | LOW件数で、`0`なら省略 |
-| `unknown` | integer | UNKNOWN件数（認識できない深刻度を含む）で、`0`なら省略 |
-| `priority` | string | `act_now`、`watch`、`low`のいずれかで、優先度がなければ省略 |
-| `reason` | string | `escalated`の判定根拠または`unmuted`の理由で、空なら省略 |
-
-`new_cve_ids`はSlackリンク表記を含まず、その要素数は`new_cve_count`と一致します。
-`reason`の説明文は、通知の言語設定にかかわらず英語です。
-
-### パッケージの解消 {#resolved-fields}
-
-| `diff.resolved[]`のフィールド名 | 型 | 意味 |
-| --- | --- | --- |
-| `image` | string | イメージ名 |
-| `package` | string | 通常の検出結果からなくなったパッケージ名 |
-
-通常の検出結果とEOLの検出結果の区別は、[パッケージのEOL](scan-logic.md#eol-package)を参照してください。
-解消の意味は、[解消の判定](diff-logic.md#resolved-findings)を参照してください。
-
-### digestの変更 {#image-replacement-fields}
-
-| `diff.replaced[]`のフィールド名 | 型 | 意味 |
-| --- | --- | --- |
-| `ref` | string | イメージ名 |
-| `prev_content_ids` | stringの配列 | 並べ替え済みの前回の確認済みcontent-ID集合 |
-| `content_ids` | stringの配列 | 最新のスキャン時に確認できたcontent-IDの並べ替え済み集合 |
-
-配列は`null`にせず、空の場合は`[]`を出力します。
-
-### イメージ名の更新 {#reference-change-fields}
-
-| `diff.reference_changes[]`のフィールド名 | 型 | 意味 |
-| --- | --- | --- |
-| `repository` | string | 更新後のイメージ名からタグとdigestを除いたリポジトリで、レジストリのポートは保持 |
-| `previous_ref` | string | 省略していない更新前のイメージ名 |
-| `ref` | string | 省略していない更新後のイメージ名 |
-| `workloads` | stringの配列 | 更新前のイメージ名と更新後のイメージ名に共通するWorkloadキーの並べ替え済み一覧で、空なら`[]` |
-
-| 対象 | Workloadキーの形式 |
-| --- | --- |
-| Compose | `compose/<project>/<service>` |
-| Kubernetes | `<kind>/<namespace>/<name>/<container>` |
-| 所属Workloadが不明な単独Dockerコンテナ | `container/<name>` |
-
-履歴を引き継ぐ条件は、[イメージ名の更新](diff-logic.md#reference-changes)を参照してください。
-
-### ベースOSのEOL変化 {#eol-base-fields}
-
-| フィールド名 | 要素の型 | 意味 |
-| --- | --- | --- |
-| `diff.new_eosl[]` | string | 新たにEOLとして記録されたベースイメージ名 |
-| `diff.resolved_eosl[]` | string | EOLとして記録されなくなったイメージ名 |
-
-### EOLパッケージの変化 {#eol-change-fields}
-
-Slackで畳み込むEOLパッケージの変化も含めます。
-
-| `diff.new_eol_packages[]`のフィールド名 | 型 | 意味・省略条件 |
-| --- | --- | --- |
-| `image` | string | イメージ名 |
-| `package` | string | パッケージ名 |
-| `kind` | string | `eol_new`、`eol_new_cves`、`eol_escalated`のいずれか |
-| `ecosystems` | stringの配列 | 変化にまとめたグループのエコシステムを重複なく並べ替えた一覧で、不明な種類は`""`として含む |
-| `runtime_usage` | string | `in_use`、`not_observed`、`unavailable`のいずれかで、使用状況の判定がなければ省略 |
-| `new_cve_ids` | stringの配列 | `eol_new_cves`の場合の並べ替え済み追加IDで、空なら省略 |
-| `critical` | integer | 最新のスキャンのEOLグループのCRITICAL件数 |
-| `high` | integer | 最新のスキャンのEOLグループのHIGH件数 |
-| `medium` | integer | 最新のスキャンのEOLグループのMEDIUM件数で、`0`なら省略 |
-| `low` | integer | 最新のスキャンのEOLグループのLOW件数で、`0`なら省略 |
-| `unknown` | integer | 最新のスキャンのEOLグループのUNKNOWN件数（認識できない深刻度を含む）で、`0`なら省略 |
-| `priority` | string | `act_now`、`watch`、`low`のいずれかで、トリアージ無効時は省略 |
-| `reason` | string | `eol_escalated`の場合の英語の判定根拠で、空なら省略 |
-
-`new_cve_ids`はSlackリンク表記を含みません。
-`new_cve_count`は出力しないため、追加件数は`new_cve_ids`の要素数で確認します。
-
-### EOLパッケージの解除 {#eol-resolved-fields}
-
-| `diff.resolved_eol_packages[]`のフィールド名 | 型 | 意味 |
-| --- | --- | --- |
-| `image` | string | イメージ名 |
-| `package` | string | EOL区分からなくなったパッケージ名 |
-| `still_open` | boolean | 同じイメージ名とパッケージに通常の検出結果が残る場合は`true`で、`false`でも出力 |
-
-### 未解決の最長期間 {#oldest-open-days}
-
-`diff.oldest_open_days`は、対象となる記録の最も古い初回検出日からの日数です。
-1日未満は切り捨て、対象がない場合は`0`を出力します。
-
-| 対象 | 集計する初回検出日 |
-| --- | --- |
-| 通常のパッケージ | 通常の検出結果の初回検出日で、Low・通知オフ・保持中の記録も含む |
-| EOLベースOS | ベースOSの初回EOL検出日 |
-| 畳み込まれていないEOLパッケージ | パッケージの初回EOL検出日 |
-| 畳み込まれているAct nowのEOLパッケージ | パッケージの初回EOL検出日 |
-| 畳み込まれているAct now以外のEOLパッケージ | 個別には加算せず、ベースOSの初回EOL検出日で集計 |
-
-Slackのトリアージ有効時の経過日数とは対象が異なります。
-Slack側の定義は、[未解決の経過日数](slack-display.md#unresolved-age)を参照してください。
-
-## 互換性 {#compatibility}
-
-エコシステム、稼働時の使用状況、EOL、イメージ名の更新に関する情報は、既存のフィールドと修正状態別の構造を維持して追加しています。
-
-受信側では、未知の追加フィールドを許容し、各表の省略条件に従って処理してください。
-省略、`null`、`[]`、`""`は、それぞれ別の値として扱います。
+- Webhookの各フィールド仕様ページに記載のないフィールドが増えても、そのフィールドを無視する
+- 値の表にない値を受け取っても、処理全体を失敗させない
+- 省略・`null`・`[]`・`""`を別の値として扱い、各表の「値がないとき」に従って読む

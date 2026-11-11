@@ -36,8 +36,8 @@ Treating all packages in an ecosystem as in use because its runtime process is r
 Function calls and module imports are not checked. Reading a data file does not
 count as evidence of use.
 
-See [Runtime usage display](slack-display.md#runtime-display) for Slack text and observed evidence, and [Order within a section](slack-display.md#within-section-order) for ordering.
-Webhook fields are described in [Runtime fields](webhook-reference.md#runtime).
+See [Runtime usage display](slack-runtime-display.md) for Slack text and observed evidence, and [Order within a section](slack-display.md#within-section-order) for ordering.
+Webhook fields are described in [Runtime fields](webhook-runtime-reference.md).
 
 ### Runtime executables {#runtime-executables}
 
@@ -192,8 +192,8 @@ For the same image and package, muting ends when any of the following applies.
 - Usage cannot be assessed, or a container included in the assessment has been observed for fewer than 7 days
 - The fix status is no longer eligible for muting
 
-See [Muted findings display](slack-display.md#muted-display) for Slack display and counts, and [Normal package changes](diff-logic.md#normal-changes) for the evaluation order when other changes occur at the same time.
-The generic webhook retains all muted findings; additional fields are described in [Packages](webhook-reference.md#package-fields) and [Normal package changes](webhook-reference.md#new-fields).
+See [Muted findings display](slack-runtime-display.md#muted-display) for Slack display and counts, and [Normal package changes](diff-logic.md#normal-changes) for the evaluation order when other changes occur at the same time.
+The generic webhook retains all muted findings; additional fields are described in [Packages](webhook-reference.md#package-fields) and [Normal package changes](webhook-diff-reference.md#new-fields).
 
 ### Observation options
 
@@ -213,7 +213,7 @@ With runtime usage enabled, the main agent also uses Docker API
 
 ## Sensor status
 
-See [Sensor warnings](slack-display.md#sensor-warnings) for warning text by status, and [Sensor information](webhook-reference.md#sensor-fields) for webhook fields.
+See [Sensor warnings](slack-warnings-display.md#sensor-warnings) for warning text by status, and [Sensor information](webhook-runtime-reference.md#sensor-fields) for webhook fields.
 
 | Status | Meaning |
 | --- | --- |

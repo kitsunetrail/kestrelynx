@@ -52,7 +52,7 @@ The following notes also apply when determining changes in ordinary findings.
 - Moving from EOL findings to ordinary findings alone does not count as a new finding or added CVEs
 
 Using severity alone assigns CRITICAL to Act now and all other severities to Watch, which can raise priorities for many items at once without any actual increase in risk, so ordinary findings are not classified as priority escalations in this case.
-Unavailable sources are reported through the [Threat intelligence warnings](slack-display.md#intel-warnings) at the beginning of the notification.
+Unavailable sources are reported through the [Threat intelligence warnings](slack-warnings-display.md#intel-warnings) at the beginning of the notification.
 See [Unavailable threat intelligence](scan-logic.md#degraded-triage) for how the decision method changes depending on which sources are available.
 
 A package that moves from EOL findings to ordinary findings with `fixed` status may qualify as newly fixable.
@@ -102,7 +102,7 @@ The following table shows the decision for each combination of saved history and
     Resolution means that findings have left the scope of the latest scan; it does not prove that a patch was installed.
     This includes cases where a target from an earlier scan is no longer observed because a container stopped or an image name changed.
 
-See [Package changes](slack-display.md#package-change-labels) and [EOL display](slack-display.md#eol-display) for how these distinctions appear.
+See [Package changes](slack-package-display.md#package-change-labels) and [EOL display](slack-package-display.md#eol-display) for how these distinctions appear.
 
 ## Base OS EOL changes {#eol-base-changes}
 

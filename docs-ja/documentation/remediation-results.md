@@ -252,7 +252,7 @@ PR本文の「あわせて更新したパッケージ」には、版が変わっ
 | 再試行可能な日時 | `retry_after` |
 
 npm・pnpm・uvでの処理の流れは[依存元からの再解決](remediation-logic.md#dependent-reresolution)を参照してください。
-そのほかのフィールドは、[再解決の結果](webhook-remediation-reference.md#language-chain-fields)と[スキャン比較](webhook-remediation-reference.md#language-chain-scan-fields)にまとめています。
+そのほかのフィールドは、[再解決の結果](webhook-remediation-update-reference.md#language-chain-fields)と[スキャン比較](webhook-remediation-check-reference.md#language-chain-scan-fields)にまとめています。
 
 ### 修正版に上げられないときの案内 {#fix-hints}
 
@@ -716,7 +716,7 @@ Slackとメールの表示は、次のように分かれます。
 - 要約の件数
     - 行を出さない場合も「再ビルド」に数えない
 
-Slackとメールに表示しない場合も、結果はwebhookの[`rebuild_check`](webhook-remediation-reference.md#remediation-dockerfile-fields)で確認できます。
+Slackとメールに表示しない場合も、結果はwebhookの[`rebuild_check`](webhook-remediation-dockerfile-reference.md#remediation-dockerfile-fields)で確認できます。
 
 次は、説明用のパッケージ名と版を使った表示例です。
 
@@ -778,13 +778,13 @@ Compose・Kubernetesマニフェスト・Kustomize・Helmのvaluesのイメー�
 | 確認したい内容 | フィールド仕様 |
 | --- | --- |
 | 計画の状態、比較条件、処理上限と使用量 | [修正計画の共通フィールド](webhook-remediation-reference.md#remediation-fields) |
-| 配布イメージの候補と比較結果 | [配布イメージのフィールド](webhook-remediation-reference.md#remediation-image-fields) |
-| ベースイメージの候補とレイヤーの確認結果 | [ベースイメージのフィールド](webhook-remediation-reference.md#remediation-dockerfile-fields) |
-| パッケージごとの版・処理・除外理由、実行環境、ツール、更新検査 | [言語パッケージのフィールド](webhook-remediation-reference.md#remediation-language-fields) |
-| PRの状態と、PRに含まれず対応が残るパッケージ | [PR処理のフィールド](webhook-remediation-reference.md#remediation-pr-fields) |
-| PRの作成・照合などの操作結果 | [PR操作イベントのフィールド](webhook-remediation-reference.md#remediation-operation-fields) |
-| PRへの書き込みを止めた問題 | [書き込み停止のフィールド](webhook-remediation-reference.md#remediation-problem-fields) |
-| 部分PRを含む通知データの例 | [修正計画のJSON例](webhook-remediation-reference.md#remediation-json-example) |
+| 配布イメージの候補と比較結果 | [配布イメージのフィールド](webhook-remediation-image-reference.md#remediation-image-fields) |
+| ベースイメージの候補とレイヤーの確認結果 | [ベースイメージのフィールド](webhook-remediation-dockerfile-reference.md#remediation-dockerfile-fields) |
+| パッケージごとの版・処理・除外理由、実行環境、ツール、更新検査 | [言語パッケージのフィールド](webhook-remediation-language-reference.md#remediation-language-fields) |
+| PRの状態と、PRに含まれず対応が残るパッケージ | [PR処理のフィールド](webhook-remediation-pr-reference.md#remediation-pr-fields) |
+| PRの作成・照合などの操作結果 | [PR操作イベントのフィールド](webhook-remediation-pr-reference.md#remediation-operation-fields) |
+| PRへの書き込みを止めた問題 | [書き込み停止のフィールド](webhook-remediation-pr-reference.md#remediation-problem-fields) |
+| 部分PRを含む通知データの例 | [部分PRの例](webhook-remediation-pr-reference.md#remediation-json-example) |
 
 ### 保存記録の確認先 {#saved-details}
 

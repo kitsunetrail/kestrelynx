@@ -65,7 +65,7 @@ For saved records, see [Stored records](remediation-reference.md#stored-records)
 | The limit on new or open PRs is reached | Check current PRs and the configured limits. | [Processing limits](configuration.md#remediation-limits) |
 | An update matches an existing PR, and no new PR is created | Check the existing PR shown in the notification and whether the same update was previously closed without merging. | [Matching existing PRs](remediation-logic.md#existing-pr-matching), [Handling closed PRs](remediation-logic.md#closed-prs) |
 | Source files or candidates change during PR preparation | Check notification details and the current source and candidates, then check the next cycle's results. | [PR processing reasons](remediation-reference.md#pr-reasons) |
-| A GitHub operation fails or has an unknown outcome | Check access, connectivity, and operation results, and wait for KestreLynx to reconcile operations with unknown outcomes. | [PR operation event fields](webhook-remediation-reference.md#remediation-operation-fields), [PR processing reasons](remediation-reference.md#pr-reasons) |
+| A GitHub operation fails or has an unknown outcome | Check access, connectivity, and operation results, and wait for KestreLynx to reconcile operations with unknown outcomes. | [PR operation event fields](webhook-remediation-pr-reference.md#remediation-operation-fields), [PR processing reasons](remediation-reference.md#pr-reasons) |
 
 ## Checking record reconciliation failures {#check-record-failure}
 

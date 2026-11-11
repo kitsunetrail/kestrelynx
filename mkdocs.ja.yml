@@ -27,9 +27,24 @@ nav:
           - スキャンと優先度の判定: documentation/scan-logic.md
           - 差分と履歴の判定: documentation/diff-logic.md
           - 通知の送信条件: documentation/notification-conditions.md
-          - Slackの読み方: documentation/slack-display.md
-          - Webhookのフィールド仕様: documentation/webhook-reference.md
-          - Webhookの修正計画フィールド: documentation/webhook-remediation-reference.md
+          - Slackの読み方:
+              - レポートの構成と件数: documentation/slack-display.md
+              - パッケージカードと変化の表示: documentation/slack-package-display.md
+              - 稼働時の使用状況の表示: documentation/slack-runtime-display.md
+              - 警告の読み方: documentation/slack-warnings-display.md
+          - Webhookのフィールド仕様:
+              - 基本のフィールド: documentation/webhook-reference.md
+              - 差分のフィールド: documentation/webhook-diff-reference.md
+              - 稼働時のフィールド: documentation/webhook-runtime-reference.md
+              - 修正計画のフィールド:
+                  - 全体と共通のオブジェクト: documentation/webhook-remediation-reference.md
+                  - 配布イメージ: documentation/webhook-remediation-image-reference.md
+                  - ベースイメージ: documentation/webhook-remediation-dockerfile-reference.md
+                  - 言語パッケージ:
+                      - 項目とパッケージ: documentation/webhook-remediation-language-reference.md
+                      - 更新の記録: documentation/webhook-remediation-update-reference.md
+                      - 更新前後の検査: documentation/webhook-remediation-check-reference.md
+                  - PR処理: documentation/webhook-remediation-pr-reference.md
           - 外向きの通信: documentation/outbound-communication.md
       - 修正計画と修正PR（実験的）:
           - 概要: documentation/remediation.md

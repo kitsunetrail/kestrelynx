@@ -261,7 +261,7 @@ The line is also omitted in the following cases.
 - A newer patch in the same series does not resolve the findings and no matching newer series exists
 - The Dockerfile base image and the published image produce different lines for the same finding
 
-See [Resolution through image updates and waiting for newer versions](slack-display.md#base-image-wait) for display examples and the meaning of each part.
+See [Resolution through image updates and waiting for newer versions](slack-package-display.md#base-image-wait) for display examples and the meaning of each part.
 
 #### Limits and capacity reserved for PR processing {#newer-series-limits}
 

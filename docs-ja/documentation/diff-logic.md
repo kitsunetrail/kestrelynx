@@ -52,7 +52,7 @@ flowchart LR
 - EOLの検出結果から通常の検出結果へ移っただけでは、新規検出やCVE追加としない
 
 深刻度だけで決めるとCRITICALはAct now、それ以外はWatchとなり、危険が実際に増えたわけではなくても多くの項目の優先度が一度に上がるため、通常の検出結果の優先度昇格とは判定しません。
-情報源が利用できなかったことは、通知の冒頭の[脅威情報の警告](slack-display.md#intel-warnings)で知らせます。
+情報源が利用できなかったことは、通知の冒頭の[脅威情報の警告](slack-warnings-display.md#intel-warnings)で知らせます。
 情報源の利用可否による判定方法の違いは、[脅威情報を利用できない場合](scan-logic.md#degraded-triage)を参照してください。
 
 EOLの検出結果から通常の検出結果へ移った際に`fixed`となった場合は、修正可能化に該当することがあります。
@@ -102,7 +102,7 @@ Node.js・Python本体の照合ができなかった場合も、その本体に�
     解消は、最新のスキャンの対象から検出項目がなくなったことを示し、パッチ適用を証明しません。
     コンテナの停止やイメージ名の変更で、過去のスキャン対象が観測されなくなった場合も含みます。
 
-表示上の区別は、[パッケージの変化](slack-display.md#package-change-labels)と[EOLの表示](slack-display.md#eol-display)を参照してください。
+表示上の区別は、[パッケージの変化](slack-package-display.md#package-change-labels)と[EOLの表示](slack-package-display.md#eol-display)を参照してください。
 
 ## ベースOSのEOL変化 {#eol-base-changes}
 

@@ -252,7 +252,7 @@ A PR may include normal updates that pass the checks even when re-resolution is 
 | Earliest retry date and time | `retry_after` |
 
 See [Re-resolution through dependent packages](remediation-logic.md#dependent-reresolution) for the processing flow in npm, pnpm, and uv.
-Other fields are described in [Re-resolution results](webhook-remediation-reference.md#language-chain-fields) and [Scan comparisons](webhook-remediation-reference.md#language-chain-scan-fields).
+Other fields are described in [Re-resolution results](webhook-remediation-update-reference.md#language-chain-fields) and [Scan comparisons](webhook-remediation-check-reference.md#language-chain-scan-fields).
 
 ### Hints when a package cannot reach its fix {#fix-hints}
 
@@ -716,7 +716,7 @@ Check against the current base
 - Summary counts
     - A hidden line is not counted as `rebuild`
 
-Even when nothing is displayed in Slack or email, the results are available in the webhook's [`rebuild_check`](webhook-remediation-reference.md#remediation-dockerfile-fields).
+Even when nothing is displayed in Slack or email, the results are available in the webhook's [`rebuild_check`](webhook-remediation-dockerfile-reference.md#remediation-dockerfile-fields).
 
 The following example uses illustrative package names and versions.
 
@@ -778,13 +778,13 @@ Dependency installation and application behavior have not been checked.
 | Information needed | Field specification |
 | --- | --- |
 | Plan status, comparison conditions, processing limits, and usage | [Common remediation plan fields](webhook-remediation-reference.md#remediation-fields) |
-| Distributed image candidates and comparison results | [Distributed image fields](webhook-remediation-reference.md#remediation-image-fields) |
-| Base image candidates and layer verification results | [Base image fields](webhook-remediation-reference.md#remediation-dockerfile-fields) |
-| Versions, processing, and exclusion reasons for each package, runtimes, tools, and update checks | [Language package fields](webhook-remediation-reference.md#remediation-language-fields) |
-| PR status and packages left out of the PR that still need handling | [PR processing fields](webhook-remediation-reference.md#remediation-pr-fields) |
-| Results of operations such as PR creation and reconciliation | [PR operation event fields](webhook-remediation-reference.md#remediation-operation-fields) |
-| Problems that stopped PR writes | [Write-stopping problem fields](webhook-remediation-reference.md#remediation-problem-fields) |
-| Example notification data including a partial PR | [Remediation plan JSON example](webhook-remediation-reference.md#remediation-json-example) |
+| Distributed image candidates and comparison results | [Distributed image fields](webhook-remediation-image-reference.md#remediation-image-fields) |
+| Base image candidates and layer verification results | [Base image fields](webhook-remediation-dockerfile-reference.md#remediation-dockerfile-fields) |
+| Versions, processing, and exclusion reasons for each package, runtimes, tools, and update checks | [Language package fields](webhook-remediation-language-reference.md#remediation-language-fields) |
+| PR status and packages left out of the PR that still need handling | [PR processing fields](webhook-remediation-pr-reference.md#remediation-pr-fields) |
+| Results of operations such as PR creation and reconciliation | [PR operation event fields](webhook-remediation-pr-reference.md#remediation-operation-fields) |
+| Problems that stopped PR writes | [Write-stopping problem fields](webhook-remediation-pr-reference.md#remediation-problem-fields) |
+| Example notification data including a partial PR | [Partial PR example](webhook-remediation-pr-reference.md#remediation-json-example) |
 
 ### Saved record details {#saved-details}
 

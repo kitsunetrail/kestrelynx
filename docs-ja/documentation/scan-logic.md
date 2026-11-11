@@ -91,7 +91,7 @@ digestを取得できる場合は、そのdigestを指定してスキャンし�
 digestを取得できない場合は、イメージ名でスキャンします。
 
 イメージ名によるスキャン結果だけでは、稼働中のイメージのdigestとの一致を確認できません。
-イメージ名によるスキャンかどうかはSlackには表示せず、Webhookの[digest情報](webhook-reference.md#image-identity)の`identity_resolved`と`scan_target_kind`で確認できます。
+イメージ名によるスキャンかどうかはSlackには表示せず、Webhookの[イメージの要素](webhook-reference.md#image-identity)の`identity_resolved`と`scan_target_kind`で確認できます。
 
 ### スキャン失敗時の扱い {#scan-failures}
 
@@ -204,7 +204,7 @@ OSパッケージの`will_not_fix`は、配布元が対象OSリリースでは�
 個々のCVEの優先度とは独立した情報として扱います。
 
 ベースOSがEOLの場合は、サポート中のベースイメージへの更新と再ビルドを検討してください。
-Slackでの表示は[EOLの表示](slack-display.md#eol-display)を参照してください。
+Slackでの表示は[EOLの表示](slack-package-display.md#eol-display)を参照してください。
 
 ### パッケージのEOL {#eol-package}
 
@@ -389,7 +389,7 @@ Pythonのセキュリティ情報は、次の規則で更新とキャッシュ�
 縮退中はLowへ分類せず、`will_not_fix`によるWatchからLowへの引き下げも行いません。
 
 縮退中の昇格差分は、[通常のパッケージの変化](diff-logic.md#normal-changes)と[EOLパッケージの変化](diff-logic.md#eol-package-changes)を参照してください。
-利用不能や古いキャッシュの表示は、[脅威情報の警告](slack-display.md#intel-warnings)を参照してください。
+利用不能や古いキャッシュの表示は、[脅威情報の警告](slack-warnings-display.md#intel-warnings)を参照してください。
 
 ### 言語ランタイムのセキュリティ情報の利用不能時の扱い {#node-runtime-unavailable}
 

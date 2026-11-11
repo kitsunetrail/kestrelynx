@@ -261,7 +261,7 @@ Dockerfileで稼働イメージごとに結果が異なる場合は、カード�
 - 同じ系列の新しいパッチで解消せず、条件に合う新しい系列もない場合
 - 同じ所見について、Dockerfileの元イメージと配布イメージから異なる行が得られる場合
 
-表示例と各部分の意味は[イメージの更新による解消と新しい版待ち](slack-display.md#base-image-wait)を参照してください。
+表示例と各部分の意味は[イメージの更新による解消と新しい版待ち](slack-package-display.md#base-image-wait)を参照してください。
 
 #### 上限とPR処理の分の確保 {#newer-series-limits}
 

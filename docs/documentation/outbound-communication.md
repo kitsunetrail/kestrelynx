@@ -30,11 +30,25 @@ See [Configuration](configuration.md) for the source, and [Threat intelligence u
 | Sender | Destination | Information retrieved or sent | When |
 | --- | --- | --- | --- |
 | KestreLynx | `raw.githubusercontent.com` | Bulk download of the `nodejs/security-wg` core index containing CVEs, severities, affected ranges, and fixed ranges | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
-| KestreLynx | The listing is retrieved from `nodejs.org`. Post bodies are retrieved from `raw.githubusercontent.com`. | Retrieve the security blog listing through RSS and post bodies as Markdown from `nodejs/nodejs.org` to supplement CVEs missing from security-wg | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
+| KestreLynx | The listing is retrieved from `nodejs.org`. Post bodies are retrieved from `raw.githubusercontent.com`. | Retrieve the security blog listing through RSS and post bodies as Markdown from `nodejs/nodejs.org` | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
 | KestreLynx | `nodejs.org` | Bulk download of `dist/index.json` containing release dates | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
 | KestreLynx | `raw.githubusercontent.com` | Bulk download of `nodejs/Release`'s `schedule.json` containing release-line EOL dates | Node.js runtime checks are enabled and the data needs to be downloaded or refreshed. |
 
-The security blog supplements security-wg because index updates can lag releases by several weeks or longer.
+Because security-wg index updates can lag releases by several weeks or longer, security blog posts supplement the following information.
+
+- KestreLynx detects CVEs not yet listed in the index from posts.
+- For CVEs already listed in the index, KestreLynx detects effects on release lines absent from the index (such as 22.x) from posts.
+    - A release line absent from the index is a line included in neither the affected ranges nor the fixed ranges for that CVE.
+    - Security releases that extend fixes to other release lines are announced in new posts before the index is updated.
+    - KestreLynx uses only posts that meet all of the following conditions.
+        - The post identifies that release line as affected by that CVE.
+        - The post differs from the post referenced by the index for that CVE.
+        - The post was published after that CVE's publication date.
+            - If the index records a publication date for that CVE, that date is used.
+            - If the index does not record a publication date for that CVE, the release date of the earliest released version included in the index's fixed ranges for that CVE is used.
+    - If the index's reference for that CVE is not a security blog post (including when there is no reference), or that CVE's publication date cannot be determined using the rules above, posts do not supplement that CVE.
+    - Release lines included in the index's affected or fixed ranges for that CVE are evaluated using the index.
+
 These public datasets are matched locally; image information and detected CVEs are not sent to the download sources.
 
 Settings for enabling or disabling Node.js runtime checks are described in [Scanning](configuration.md#scan), with refresh rules in [Threat intelligence updates](scan-logic.md#intel-cache) and failure handling in [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable).

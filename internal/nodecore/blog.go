@@ -10,23 +10,39 @@ import (
 	"time"
 )
 
-// blogHeadingRe matches an advisory heading:
-// "## <title> (CVE-…[, CVE-…]) - (<severity>)".
-var blogHeadingRe = regexp.MustCompile(`(?i)^##\s+(.*?)\s*\(\s*(CVE-\d+-\d+(?:\s*,\s*CVE-\d+-\d+)*)\s*\)\s*-\s*\(\s*([a-z]+)\s*\)\s*$`)
+// blogHeadingRe matches an advisory heading at any heading level:
+// "## <title> (CVE-…[, CVE-…]) - (<severity>)". The posts have used level 2
+// and, nested under a "Patched vulnerabilities" heading, level 3.
+var blogHeadingRe = regexp.MustCompile(`(?i)^#{1,6}\s+(.*?)\s*\(\s*(CVE-\d+-\d+(?:\s*,\s*CVE-\d+-\d+)*)\s*\)\s*-\s*\(\s*([a-z]+)\s*\)\s*$`)
 
 var (
 	cveRe         = regexp.MustCompile(`CVE-\d+-\d+`)
 	majorXRe      = regexp.MustCompile(`(?:^|[^0-9.])v?(\d+)\.x`)
 	nodeJSRe      = regexp.MustCompile(`Node\.js\s+`)
 	releaseLinkRe = regexp.MustCompile(`\bv(\d+\.\d+\.\d+)\b`)
-	headingRe     = regexp.MustCompile(`^#{1,2}\s`)
 )
+
+// headingLevel is the level (1 to 6) of a Markdown heading line, or 0 when
+// the line is not a heading.
+func headingLevel(line string) int {
+	n := 0
+	for n < len(line) && line[n] == '#' {
+		n++
+	}
+	if n == 0 || n > 6 || n == len(line) || (line[n] != ' ' && line[n] != '\t') {
+		return 0
+	}
+	return n
+}
 
 // parseBlogPost reads the advisories of one security blog post. posted is
 // the post's date, used when the front matter has none. Sections whose
 // affected lines cannot be found are dropped and counted: assuming every
 // line is affected would report Node.js lines the advisory never covered.
-// A post without advisory headings yields nothing.
+// A section runs to the next heading of its own level or above, so the
+// heading level the advisories are written at does not matter and deeper
+// headings stay inside their section. A post without advisory headings
+// yields nothing.
 func parseBlogPost(slug string, data []byte, posted time.Time, log *slog.Logger) (advs []blogAdvisory, dropped int) {
 	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
 	posted = frontMatterDate(lines, posted)
@@ -37,13 +53,16 @@ func parseBlogPost(slug string, data []byte, posted time.Time, log *slog.Logger)
 	}
 	var sections []section
 	var fixed map[int]version
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		if !headingRe.MatchString(line) {
+	for i, line := range lines {
+		level := headingLevel(line)
+		if level == 0 {
 			continue
 		}
 		end := i + 1
-		for end < len(lines) && !headingRe.MatchString(lines[end]) {
+		for end < len(lines) {
+			if l := headingLevel(lines[end]); l != 0 && l <= level {
+				break
+			}
 			end++
 		}
 		body := lines[i+1 : end]

@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
 const (
@@ -428,5 +430,361 @@ func TestMatchDuplicateCVEUsesLowestID(t *testing.T) {
 func TestMatchInvalidVersion(t *testing.T) {
 	if got := fixtureSnapshot(t).Match("22.1", "linux"); got != nil {
 		t.Errorf("invalid version matched %v", got)
+	}
+}
+
+// The November 2026 post nests its advisories one level deeper than the
+// earlier posts, under a "Patched vulnerabilities" heading.
+func TestBlogPostParsingNestedHeadings(t *testing.T) {
+	advs, dropped := parseBlogPost("november-2026-security-releases", readTestdata(t, "november-2026-security-releases.md"), time.Time{}, quietLog())
+	if dropped != 0 || len(advs) != 16 {
+		t.Fatalf("advs=%d dropped=%d, want 16, 0", len(advs), dropped)
+	}
+	lines := map[string][]int{
+		"CVE-2026-123863": {24, 26},
+		"CVE-2026-123864": {22, 24, 26},
+		"CVE-2026-106071": {22, 24, 26},
+	}
+	found := 0
+	for _, a := range advs {
+		if a.posted.Format("2006-01-02") != "2026-11-11" {
+			t.Errorf("%v posted = %v", a.cves, a.posted)
+		}
+		if a.fixed[22].String() != "22.23.5" || a.fixed[24].String() != "24.22.3" || a.fixed[26].String() != "26.13.1" {
+			t.Errorf("%v fixed = %v", a.cves, a.fixed)
+		}
+		want, ok := lines[a.cves[0]]
+		if !ok {
+			continue
+		}
+		found++
+		if len(a.affected) != len(want) {
+			t.Errorf("%v affected = %v, want %v", a.cves, a.affected, want)
+		}
+		for _, n := range want {
+			if !a.affected[n] {
+				t.Errorf("%v affected = %v, want %v", a.cves, a.affected, want)
+			}
+		}
+	}
+	if found != len(lines) {
+		t.Errorf("found %d of the %d checked advisories", found, len(lines))
+	}
+}
+
+func TestBlogPostSectionBounds(t *testing.T) {
+	post := `# Security releases available
+
+## Patched vulnerabilities
+
+### Nested one (CVE-2026-1) - (high)
+
+Text.
+
+#### Impact
+
+- This vulnerability affects all users in active release lines: 22.x, 24.x
+
+### Nested two (CVE-2026-2) - (low)
+
+Nothing about lines before the next section.
+
+## Downloads and release details
+
+- [Node.js v22.1.0](/blog/release/v22.1.0/)
+- [Node.js v24.1.0](/blog/release/v24.1.0/)
+
+## Impact
+
+Every supported line is affected: 22.x, 24.x, 26.x.
+
+## Flat (CVE-2026-3) - (medium)
+
+### Details
+
+Affects 26.x.
+`
+	advs, dropped := parseBlogPost("p", []byte(post), time.Time{}, quietLog())
+	if dropped != 1 {
+		t.Errorf("dropped = %d, want 1 (the nested section must not read the lines of a later section)", dropped)
+	}
+	if len(advs) != 2 {
+		t.Fatalf("advs = %d, want 2", len(advs))
+	}
+	nested, flat := advs[0], advs[1]
+	if nested.cves[0] != "CVE-2026-1" || len(nested.affected) != 2 || !nested.affected[22] || !nested.affected[24] {
+		t.Errorf("nested advisory = %+v (a deeper heading stays inside its section)", nested)
+	}
+	if flat.cves[0] != "CVE-2026-3" || len(flat.affected) != 1 || !flat.affected[26] {
+		t.Errorf("flat advisory = %+v (a deeper heading stays inside its section)", flat)
+	}
+	for _, a := range advs {
+		if a.fixed[22].String() != "22.1.0" || a.fixed[24].String() != "24.1.0" {
+			t.Errorf("%v fixed = %v", a.cves, a.fixed)
+		}
+	}
+}
+
+func TestRefSlug(t *testing.T) {
+	tests := map[string]string{
+		"https://nodejs.org/en/blog/vulnerability/october-2026-security-releases":  "october-2026-security-releases",
+		"https://nodejs.org/en/blog/vulnerability/october-2026-security-releases/": "october-2026-security-releases",
+		"https://nodejs.org/en/blog/vulnerability/openssl-may-2016/#cve-2016-2107": "openssl-may-2016",
+		"https://nodejs.org/en/blog/vulnerability/first?x=1":                       "first",
+		" http://www.nodejs.org/blog/vulnerability/first ":                         "first",
+		"https://example.org/blog/vulnerability/first":                             "",
+		"https://github.com/nodejs/node/pull/8714?next=/blog/vulnerability/first":  "",
+		"https://github.com/nodejs/node/issues/7047#/blog/vulnerability/first":     "",
+		"https://nodejs.org/en/about?next=/blog/vulnerability/first":               "",
+		"https://nodejs.org/en/about#/blog/vulnerability/first":                    "",
+		"https://nodejs.org/en/blog/release/v22.1.0":                               "",
+		"https://nodejs.org/en/blog/vulnerability/":                                "",
+		"":       "",
+		"://bad": "",
+	}
+	for ref, want := range tests {
+		if got := refSlug(ref); got != want {
+			t.Errorf("refSlug(%q) = %q, want %q", ref, got, want)
+		}
+	}
+}
+
+func TestHeadingLevel(t *testing.T) {
+	tests := map[string]int{
+		"# One":         1,
+		"### Three":     3,
+		"###### Six":    6,
+		"####### Seven": 0,
+		"##":            0,
+		"##NoSpace":     0,
+		"Text # here":   0,
+		" ## Indented":  0,
+		"":              0,
+	}
+	for line, want := range tests {
+		if got := headingLevel(line); got != want {
+			t.Errorf("headingLevel(%q) = %d, want %d", line, got, want)
+		}
+	}
+}
+
+// novemberSnapshot joins the October and November 2026 posts with an index
+// that carries CVE-2026-106071 the way it stood after the October release:
+// line 26 only, referring to the October post. The November post names lines
+// 22 and 24 for the same CVE.
+func novemberSnapshot(t *testing.T) *Snapshot {
+	t.Helper()
+	log := quietLog()
+	wg, _, err := parseSecurityWG([]byte(`{
+	  "200": {"cve":["CVE-2026-106071"],"vulnerable":"26.x","patched":"^26.12.1","ref":"`+octoberURL+`","severity":"low","description":"Permission Model filesystem over-grant via wildcard radix lookup","affectedEnvironments":["all"]}
+	}`), log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	releases, err := parseReleases(readTestdata(t, "dist-index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	eol, err := parseSchedule(readTestdata(t, "schedule.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var blog []blogAdvisory
+	for _, post := range []string{"november", "october"} {
+		slug := post + "-2026-security-releases"
+		a, d := parseBlogPost(slug, readTestdata(t, slug+".md"), time.Time{}, log)
+		if d != 0 {
+			t.Fatalf("%s dropped %d advisories", slug, d)
+		}
+		blog = append(blog, a...)
+	}
+	return newSnapshot(wg, 0, blog, 0, releases, eol)
+}
+
+func TestMatchNovemberRelease(t *testing.T) {
+	sn := novemberSnapshot(t)
+	november := func(advs []Advisory) map[string]Advisory {
+		out := map[string]Advisory{}
+		for _, a := range advs {
+			if strings.HasSuffix(a.URL, "/november-2026-security-releases") {
+				out[a.VulnID] = a
+			}
+		}
+		return out
+	}
+
+	for _, v := range []string{"22.23.4", "24.22.2", "26.12.0"} {
+		count := map[string]int{}
+		for _, a := range sn.Match(v, "linux") {
+			if count[a.VulnID]++; count[a.VulnID] == 2 {
+				t.Errorf("%s reports %s more than once", v, a.VulnID)
+			}
+		}
+	}
+
+	got := november(sn.Match("22.23.4", "linux"))
+	if len(got) != 11 {
+		t.Errorf("22.23.4 gets %d November advisories, want 11: %v", len(got), got)
+	}
+	for id, a := range got {
+		if a.Status != scanner.StatusFixed || a.FixedVer != "22.23.5" {
+			t.Errorf("22.23.4 %s = %+v, want fixed in 22.23.5", id, a)
+		}
+	}
+	if a := got["CVE-2026-123864"]; a.Severity != "HIGH" {
+		t.Errorf("CVE-2026-123864 = %+v, want HIGH", a)
+	}
+	if _, ok := got["CVE-2026-123863"]; ok {
+		t.Error("22.23.4 should not get CVE-2026-123863 (lines 24 and 26 only)")
+	}
+	// The index names line 26 only for this CVE; the later post adds line 22.
+	if a, ok := got["CVE-2026-106071"]; !ok || a.Severity != "LOW" {
+		t.Errorf("22.23.4 CVE-2026-106071 = %+v, %v", a, ok)
+	}
+
+	got = november(sn.Match("24.22.2", "linux"))
+	if len(got) != 16 {
+		t.Errorf("24.22.2 gets %d November advisories, want 16", len(got))
+	}
+	for id, a := range got {
+		if a.Status != scanner.StatusFixed || a.FixedVer != "24.22.3" {
+			t.Errorf("24.22.2 %s = %+v, want fixed in 24.22.3", id, a)
+		}
+	}
+
+	for _, v := range []string{"22.23.5", "24.22.3", "26.13.1"} {
+		if got := november(sn.Match(v, "linux")); len(got) != 0 {
+			t.Errorf("%s gets November advisories: %v", v, got)
+		}
+	}
+
+	// Line 26 stays the index's: fixed in 26.12.1, whatever the post says.
+	all := byID(sn.Match("26.12.0", "linux"))
+	if a := all["CVE-2026-106071"]; a.FixedVer != "26.12.1" || a.URL != octoberURL {
+		t.Errorf("26.12.0 CVE-2026-106071 = %+v, want the index entry", a)
+	}
+	if _, ok := byID(sn.Match("26.12.1", "linux"))["CVE-2026-106071"]; ok {
+		t.Error("26.12.1 should not get CVE-2026-106071: the index names line 26 as patched there")
+	}
+}
+
+func TestBlogAddsToIndexedCVE(t *testing.T) {
+	const laterPost = `## Widened (CVE-2026-1) - (high)
+
+This vulnerability affects 22.x, 24.x, 26.x.
+
+## Downloads and release details
+
+- [Node.js v22.5.0](/blog/release/v22.5.0/)
+- [Node.js v24.5.0](/blog/release/v24.5.0/)
+- [Node.js v26.5.0](/blog/release/v26.5.0/)
+`
+	const base = "https://nodejs.org/en/blog/vulnerability/"
+	tests := []struct {
+		name    string
+		entries string
+		slug    string
+		version string
+		os      string
+		want    string // "" for no finding, else the fixed version
+	}{
+		{
+			name:    "a later post adds a line the index is silent about",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `first","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "22.4.0", want: "22.5.0",
+		},
+		{
+			name:    "the index decides a line it names",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `first","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "26.4.0", want: "",
+		},
+		{
+			name:    "the post the entry was written from adds nothing",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `later/","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "22.4.0", want: "",
+		},
+		{
+			name:    "a reference to the same post with a fragment adds nothing",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `later/#cve-2026-1","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "22.4.0", want: "",
+		},
+		{
+			name:    "a reference to the same post with a query adds nothing",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `later?x=1","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "22.4.0", want: "",
+		},
+		{
+			name:    "a reference that is not a post keeps the CVE to the index",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"https://github.com/nodejs/node/pull/8714","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "22.4.0", want: "",
+		},
+		{
+			name:    "a reference to a post on another site keeps the CVE to the index",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"https://example.org/blog/vulnerability/first","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "22.4.0", want: "",
+		},
+		{
+			name:    "a post older than the entry adds nothing",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `first","publish_date":"2026-07-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "22.4.0", want: "",
+		},
+		{
+			name:    "an entry without a publication date keeps the CVE to the index",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `first","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "22.4.0", want: "",
+		},
+		{
+			name:    "an entry without a reference keeps the CVE to the index",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "22.4.0", want: "",
+		},
+		{
+			name:    "an entry for another environment keeps the CVE off this one",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `first","publish_date":"2026-03-01","affectedEnvironments":["win32"]}}`,
+			slug:    "later", version: "22.4.0", os: "linux", want: "",
+		},
+		{
+			name:    "the same entry applies on its own environment",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `first","publish_date":"2026-03-01","affectedEnvironments":["win32"]}}`,
+			slug:    "later", version: "22.4.0", os: "win32", want: "22.5.0",
+		},
+		{
+			name: "every entry of the CVE has to leave the line open",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `first","publish_date":"2026-03-01","affectedEnvironments":["all"]},
+			           "2": {"cve":["CVE-2026-1"],"vulnerable":"22.x","patched":"^22.3.0","ref":"` + base + `second","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug: "later", version: "22.4.0", want: "",
+		},
+		{
+			name:    "a line the post does not name is not reported from it",
+			entries: `{"1": {"cve":["CVE-2026-1"],"vulnerable":"26.x","patched":"^26.4.0","ref":"` + base + `first","publish_date":"2026-03-01","affectedEnvironments":["all"]}}`,
+			slug:    "later", version: "20.19.0", want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wg, _, err := parseSecurityWG([]byte(tt.entries), quietLog())
+			if err != nil {
+				t.Fatal(err)
+			}
+			blog, dropped := parseBlogPost(tt.slug, []byte(laterPost), time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), quietLog())
+			if len(blog) != 1 || dropped != 0 {
+				t.Fatalf("blog=%d dropped=%d", len(blog), dropped)
+			}
+			// Line 20 ended between the entries' publication and the post:
+			// the index does not count it as end of life, and without an
+			// index entry the post alone would.
+			eol := map[int]time.Time{20: time.Date(2026, 4, 30, 0, 0, 0, 0, time.UTC)}
+			sn := newSnapshot(wg, 0, blog, 0, map[version]time.Time{}, eol)
+			a, ok := byID(sn.Match(tt.version, tt.os))["CVE-2026-1"]
+			if tt.want == "" {
+				if ok {
+					t.Errorf("%s got %+v, want no finding", tt.version, a)
+				}
+				return
+			}
+			if !ok || a.Status != scanner.StatusFixed || a.FixedVer != tt.want || a.URL != blogPostURLBase+tt.slug {
+				t.Errorf("%s got %+v, %v, want fixed in %s from the post", tt.version, a, ok, tt.want)
+			}
+		})
 	}
 }

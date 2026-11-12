@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -34,7 +35,7 @@ type Advisory struct {
 type Snapshot struct {
 	wg      []wgEntry // ascending id
 	blog    []blogAdvisory
-	covered map[string]bool // CVEs of the used security-wg entries
+	covered map[string][]int // CVE -> indexes into wg of the entries that carry it
 	eol     map[int]time.Time
 
 	// Counts for the load log.
@@ -217,7 +218,7 @@ func parseSchedule(data []byte) (map[int]time.Time, error) {
 func newSnapshot(wg []wgEntry, wgSkipped int, blog []blogAdvisory, blogDropped int, releases map[version]time.Time, eol map[int]time.Time) *Snapshot {
 	sn := &Snapshot{
 		wg:          wg,
-		covered:     map[string]bool{},
+		covered:     map[string][]int{},
 		eol:         eol,
 		wgSkipped:   wgSkipped,
 		blogDropped: blogDropped,
@@ -226,7 +227,7 @@ func newSnapshot(wg []wgEntry, wgSkipped int, blog []blogAdvisory, blogDropped i
 	for i := range sn.wg {
 		e := &sn.wg[i]
 		for _, c := range e.cves {
-			sn.covered[c] = true
+			sn.covered[c] = append(sn.covered[c], i)
 		}
 		if e.published.IsZero() {
 			e.published = earliestRelease(e.patched.lowerBounds(), releases)
@@ -270,7 +271,8 @@ func (sn *Snapshot) Match(ver, osName string) []Advisory {
 		osName = "linux"
 	}
 	var out []Advisory
-	seen := map[string]bool{}
+	seen := map[string]bool{}     // CVEs an index entry has been tried for
+	reported := map[string]bool{} // CVEs in out
 
 	for _, e := range sn.wg {
 		if !e.appliesTo(osName) {
@@ -289,6 +291,7 @@ func (sn *Snapshot) Match(ver, osName string) []Advisory {
 			if !ok {
 				continue
 			}
+			reported[id] = true
 			out = append(out, Advisory{
 				VulnID:   id,
 				Title:    e.title,
@@ -306,10 +309,10 @@ func (sn *Snapshot) Match(ver, osName string) []Advisory {
 			continue
 		}
 		for _, id := range b.cves {
-			if sn.covered[id] || seen[id] {
+			if reported[id] || !sn.blogAdds(b, id, v[0], osName) {
 				continue
 			}
-			seen[id] = true
+			reported[id] = true
 			out = append(out, Advisory{
 				VulnID:   id,
 				Title:    b.title,
@@ -321,6 +324,53 @@ func (sn *Snapshot) Match(ver, osName string) []Advisory {
 		}
 	}
 	return out
+}
+
+// blogAdds reports whether post advisory b may report CVE id for the line
+// major on osName. A CVE the index does not carry is the post's to report.
+// For a CVE the index carries, the index decides the environments and every
+// line it names. A post adds a line it names that the index is silent about
+// only when it was published after the index entry and is not the post the
+// entry refers to: a release that extends a fix to more lines is announced
+// in a new post before the index entry follows. An entry whose publication
+// date or post is unknown keeps the CVE to the index.
+func (sn *Snapshot) blogAdds(b blogAdvisory, id string, major int, osName string) bool {
+	entries, ok := sn.covered[id]
+	if !ok {
+		return true
+	}
+	if !b.affected[major] {
+		return false
+	}
+	for _, i := range entries {
+		e := sn.wg[i]
+		if !e.appliesTo(osName) || e.vulnerable.touchesMajor(major) || e.patched.touchesMajor(major) {
+			return false
+		}
+		if ref := refSlug(e.url); ref == "" || ref == b.slug {
+			return false
+		}
+		if e.published.IsZero() || !b.posted.After(e.published) {
+			return false
+		}
+	}
+	return true
+}
+
+// refSlug is the slug of the nodejs.org security blog post an index entry
+// refers to, or "" when the entry refers to no such post (no reference, or a
+// pull request, a report or another site).
+func refSlug(ref string) string {
+	u, err := url.Parse(strings.TrimSpace(ref))
+	if err != nil || (u.Host != "nodejs.org" && u.Host != "www.nodejs.org") {
+		return ""
+	}
+	_, rest, ok := strings.Cut(u.Path, "/blog/vulnerability/")
+	if !ok {
+		return ""
+	}
+	slug, _, _ := strings.Cut(rest, "/")
+	return slug
 }
 
 func upperSeverity(s string) string {

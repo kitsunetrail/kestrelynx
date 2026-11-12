@@ -14,14 +14,14 @@
       "id": "node22",
       "kind": "node",
       "series": "22",
-      "version": "22.23.4",
+      "version": "22.23.5",
       "image": "node",
       "tag": "22-trixie-slim",
-      "exact_tag": "22.23.4-trixie-slim",
-      "index_digest": "sha256:be1e2a3dc2c4fd68cdfadad2a696a280e0d2749098bee509230174d72fb768c6",
+      "exact_tag": "22.23.5-trixie-slim",
+      "index_digest": "sha256:68c76cfad89921b927eae28ba21407475e29d0ce450afcdbe70c1532db042b64",
       "platforms": {
-        "linux/amd64": "sha256:8658a93ea0778be81c513e04eba758202973b91f8c83144f5a41efbb5d2bf0a9",
-        "linux/arm64": "sha256:46d668ccd1d1ab1d33c3681f16fa5b8708eac04f483a6c7c5afcefa14493ddd0"
+        "linux/amd64": "sha256:33d41cc7365593a3622f3f1ce1c6af788de32c0709016ec15685de7aaa681d97",
+        "linux/arm64": "sha256:39f1e114378b809e9db27ecdcaa96c754bd543ff80a92190d303065639a8659d"
       },
       "covered_paths": [
         "/tmp",
@@ -33,23 +33,23 @@
       "support": "maintenance",
       "eol": "2027-04-30",
       "lts_from": "2024-10-29",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
-        "linux/amd64": "sha256:8658a93ea0778be81c513e04eba758202973b91f8c83144f5a41efbb5d2bf0a9"
+        "linux/amd64": "sha256:33d41cc7365593a3622f3f1ce1c6af788de32c0709016ec15685de7aaa681d97"
       }
     },
     {
       "id": "node24",
       "kind": "node",
       "series": "24",
-      "version": "24.22.2",
+      "version": "24.22.3",
       "image": "node",
       "tag": "24-trixie-slim",
-      "exact_tag": "24.22.2-trixie-slim",
-      "index_digest": "sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d",
+      "exact_tag": "24.22.3-trixie-slim",
+      "index_digest": "sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0",
       "platforms": {
-        "linux/amd64": "sha256:947528b072c170d980592b851c802155d84dcad60d3f550b8a0451b84d65dabd",
-        "linux/arm64": "sha256:6bf5010c9b37bcb8a580b99181dcc73344e15a2fb8d8345af13a81fd89d9db71"
+        "linux/amd64": "sha256:60587baa7c895cf438d44f691e4ac8248b36c13b26be77332f874bebb3a64201",
+        "linux/arm64": "sha256:510b934906506f9bdc870448de519d4a403af85cc5cd7cc37521ad598782e8f4"
       },
       "covered_paths": [
         "/tmp",
@@ -61,23 +61,23 @@
       "support": "maintenance",
       "eol": "2028-04-30",
       "lts_from": "2025-10-28",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
-        "linux/amd64": "sha256:947528b072c170d980592b851c802155d84dcad60d3f550b8a0451b84d65dabd"
+        "linux/amd64": "sha256:60587baa7c895cf438d44f691e4ac8248b36c13b26be77332f874bebb3a64201"
       }
     },
     {
       "id": "node26",
       "kind": "node",
       "series": "26",
-      "version": "26.13.0",
+      "version": "26.13.1",
       "image": "node",
       "tag": "26-trixie-slim",
-      "exact_tag": "26.13.0-trixie-slim",
-      "index_digest": "sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072",
+      "exact_tag": "26.13.1-trixie-slim",
+      "index_digest": "sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc",
       "platforms": {
-        "linux/amd64": "sha256:6f3406bb40734a2cbe3c78c3a5d9a467113b41b7a4c653a8d0534a276c67afdf",
-        "linux/arm64": "sha256:09d555867f72716747921204358450bf0cd9799f293541927fbdf97ce9aee750"
+        "linux/amd64": "sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258",
+        "linux/arm64": "sha256:f97629c56128784f159ec8259ff5a85afe01064e6aa91adb1d54428bb6cce9d7"
       },
       "covered_paths": [
         "/tmp",
@@ -89,9 +89,9 @@
       "support": "lts",
       "eol": "2029-04-30",
       "lts_from": "2026-10-28",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
-        "linux/amd64": "sha256:6f3406bb40734a2cbe3c78c3a5d9a467113b41b7a4c653a8d0534a276c67afdf"
+        "linux/amd64": "sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258"
       }
     },
     {
@@ -133,7 +133,7 @@
       "healthcheck": false,
       "support": "security",
       "eol": "2027-10-31",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
         "linux/amd64": "sha256:b701198cb708b68d9413ca67d6311bd97c9389a2c5fe4da0511fc652642366cd"
       }
@@ -161,7 +161,7 @@
       "healthcheck": false,
       "support": "security",
       "eol": "2028-10-31",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
         "linux/amd64": "sha256:05a994d2344eb364cc186910f4fc8786a38215f39f00d0acc25bff33a08f4177"
       }
@@ -189,7 +189,7 @@
       "healthcheck": false,
       "support": "security",
       "eol": "2029-10-31",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
         "linux/amd64": "sha256:48d884813cf44e927cf64c5529dd630dd3b18338c6dc727991eef9b71e934a20"
       }
@@ -217,7 +217,7 @@
       "healthcheck": false,
       "support": "bugfix",
       "eol": "2030-10-31",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
         "linux/amd64": "sha256:ac25e5afbfdb4a94ff99cc24b0345719210133144481480bcba6085efa36a341"
       }
@@ -245,7 +245,7 @@
       "healthcheck": false,
       "support": "bugfix",
       "eol": "2031-10-31",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
         "linux/amd64": "sha256:fd2aef5e0d8438208de9fe154ab5b331a2428fc0c9838d41611e611fd7a80d85"
       }
@@ -254,14 +254,14 @@
       "id": "golang1.26",
       "kind": "golang",
       "series": "1.26",
-      "version": "1.26.10",
+      "version": "1.26.11",
       "image": "golang",
       "tag": "1.26-trixie",
-      "exact_tag": "1.26.10-trixie",
-      "index_digest": "sha256:fd9a91f0ece5664556f4851d06dce5e5b505a71166dffd385a03ba9d200b6983",
+      "exact_tag": "1.26.11-trixie",
+      "index_digest": "sha256:19ce7a1fdc59527aa568805ea100c380900d059d251e914fb86e11fd0ce68952",
       "platforms": {
-        "linux/amd64": "sha256:78773c59d6d4ecedc0845b1a8e5379e7bf0e0be62f4ea796e689bbc97dab3ceb",
-        "linux/arm64": "sha256:7117c9e4e2c0becd23d1dbede3aea73ba91d084847c68e12d7e1fa3d9b3abf20"
+        "linux/amd64": "sha256:6327cb290853a5d13091c436b88259b4f35ff70e49b1f8d9e5d1dd1757e9c6ba",
+        "linux/arm64": "sha256:3df77c8477bb2de6bea4e835b6d422a65ed88463a248fb2590467732af2f6f7d"
       },
       "covered_paths": [
         "/tmp",
@@ -273,23 +273,23 @@
       "healthcheck": false,
       "support": "supported",
       "eol": "2027-02-10",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
-        "linux/amd64": "sha256:78773c59d6d4ecedc0845b1a8e5379e7bf0e0be62f4ea796e689bbc97dab3ceb"
+        "linux/amd64": "sha256:6327cb290853a5d13091c436b88259b4f35ff70e49b1f8d9e5d1dd1757e9c6ba"
       }
     },
     {
       "id": "golang1.27",
       "kind": "golang",
       "series": "1.27",
-      "version": "1.27.3",
+      "version": "1.27.4",
       "image": "golang",
       "tag": "1.27-trixie",
-      "exact_tag": "1.27.3-trixie",
-      "index_digest": "sha256:af1bfc2614ebb1dbd31af514b78740fd678850e76498762b425ecee4c5c6ea80",
+      "exact_tag": "1.27.4-trixie",
+      "index_digest": "sha256:c47c3fda018d13d43a6bf5ebac3e5bba8a23a35782aa4faf531afaf47c64c39f",
       "platforms": {
-        "linux/amd64": "sha256:a5406f41680f17b4aa0b49de641e00f116215f5c8829d548d29cb44c4f85aa4f",
-        "linux/arm64": "sha256:4f03804fe5085b5e565347663bc51a54177634097cc71e9f816af6c2672f7662"
+        "linux/amd64": "sha256:2cd7e1ebf475c6208122d2b9cefc638d98fcc8dfd8554c8872c9dd0c21f4ac61",
+        "linux/arm64": "sha256:96335ac31f35abde9f40cbb1032e06d8571fc43c51230e9a90e14145debc6199"
       },
       "covered_paths": [
         "/tmp",
@@ -301,9 +301,9 @@
       "healthcheck": false,
       "support": "supported",
       "eol": "2027-08-19",
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
-        "linux/amd64": "sha256:a5406f41680f17b4aa0b49de641e00f116215f5c8829d548d29cb44c4f85aa4f"
+        "linux/amd64": "sha256:2cd7e1ebf475c6208122d2b9cefc638d98fcc8dfd8554c8872c9dd0c21f4ac61"
       }
     },
     {
@@ -332,7 +332,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -361,7 +361,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -390,7 +390,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -419,7 +419,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -448,7 +448,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -477,7 +477,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -506,7 +506,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -535,7 +535,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -564,7 +564,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -593,7 +593,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -622,7 +622,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -651,7 +651,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -680,7 +680,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -709,7 +709,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -738,7 +738,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -767,7 +767,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -796,7 +796,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -825,7 +825,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -854,7 +854,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -883,7 +883,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -912,7 +912,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -941,7 +941,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -970,7 +970,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -999,7 +999,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1028,7 +1028,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1057,7 +1057,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1086,7 +1086,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1115,7 +1115,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1144,7 +1144,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1173,7 +1173,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1202,7 +1202,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1231,7 +1231,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1260,7 +1260,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1289,7 +1289,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1318,7 +1318,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1347,7 +1347,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1376,7 +1376,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1405,10 +1405,68 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
         "linux/amd64": "sha256:e9e7c1b6eae0e2d5f21756477b5344cd02584fcca44c885c7197f46ab17a9fd7"
       }
+    },
+    {
+      "id": "gradle8.14.7-jdk17",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.7",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "8.14.7-jdk17",
+      "exact_tag": "8.14.7-jdk17",
+      "index_digest": "sha256:609766f13dc60161290954fbd1e2438791ac03b4ff23c72377c16e9be99b5b27",
+      "platforms": {
+        "linux/amd64": "sha256:6f1a78e930401382b5a78caebe3d24ac62ee1b2df2f58c233faa59050bb15a76",
+        "linux/arm64": "sha256:4068047815557a269e8c6eb5e1a0b20b47511094c41d9fa7629f71749430a264"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-12",
+      "tested": {}
+    },
+    {
+      "id": "gradle8.14.7-jdk21",
+      "kind": "gradle",
+      "series": "8",
+      "version": "8.14.7",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "8.14.7-jdk21",
+      "exact_tag": "8.14.7-jdk21",
+      "index_digest": "sha256:e4bd2ed9b24e0db00e1ad22b5858524bfe6fae952d4ed1fd2cc17a49dcad039b",
+      "platforms": {
+        "linux/amd64": "sha256:6d511d8e210316244afd78a9d56851d97344634817d22c6261f80ac3d06912b9",
+        "linux/arm64": "sha256:e60de21fd5cba7c60d752f98fc0b506a9da0bea980e84903443abefe2472c902"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-12",
+      "tested": {}
     },
     {
       "id": "gradle9.0.0-jdk17",
@@ -1436,7 +1494,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1465,7 +1523,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1494,7 +1552,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1523,7 +1581,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1552,7 +1610,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1581,7 +1639,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1610,7 +1668,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1639,7 +1697,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1668,7 +1726,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1697,7 +1755,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1726,7 +1784,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1755,7 +1813,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1784,7 +1842,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1813,7 +1871,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1842,7 +1900,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1871,7 +1929,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1900,7 +1958,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1929,7 +1987,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1958,7 +2016,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -1987,7 +2045,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2016,7 +2074,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2045,7 +2103,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2074,7 +2132,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2103,7 +2161,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2132,7 +2190,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2161,7 +2219,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2190,7 +2248,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2219,7 +2277,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2248,7 +2306,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2277,7 +2335,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2306,7 +2364,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2335,7 +2393,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2364,7 +2422,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2393,7 +2451,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2422,7 +2480,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2451,7 +2509,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2480,7 +2538,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2509,7 +2567,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2538,7 +2596,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2567,7 +2625,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2596,7 +2654,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2625,7 +2683,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2654,7 +2712,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2683,7 +2741,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2712,7 +2770,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2741,7 +2799,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2770,7 +2828,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {}
     },
     {
@@ -2799,7 +2857,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
         "linux/amd64": "sha256:d661bd000e2c318ad873a3b47c6113fb3474e6ab41d23b8da71927cedd276c8b"
       }
@@ -2830,7 +2888,7 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
       "tested": {
         "linux/amd64": "sha256:771201176072cfb7eb17d660c9e6fa6c1fbe996739f389da34a0fa9d97f857bb"
       }
@@ -2861,7 +2919,94 @@
         "/home/gradle/.gradle"
       ],
       "healthcheck": false,
-      "checked": "2026-11-09",
+      "checked": "2026-11-12",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.9.1-jdk17",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.9.1",
+      "jdk": "17",
+      "image": "gradle",
+      "tag": "9.9.1-jdk17",
+      "exact_tag": "9.9.1-jdk17",
+      "index_digest": "sha256:f41ea3e1cc368aaf1da2f9113a650e9c50543bb0a633d8ac96422865bc40a4e3",
+      "platforms": {
+        "linux/amd64": "sha256:82dbb238b60cd745983349bf980c41b08e88bf71850663b4253da36098af3034",
+        "linux/arm64": "sha256:63f88e8070f66d197b1fcc2c07537a5b2e7cc074841080d9ac86c097fbfb3b13"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-12",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.9.1-jdk21",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.9.1",
+      "jdk": "21",
+      "image": "gradle",
+      "tag": "9.9.1-jdk21",
+      "exact_tag": "9.9.1-jdk21",
+      "index_digest": "sha256:7c78326107c31b05c7cb13ac84da588a02c257a78279a23067917c46ad84abed",
+      "platforms": {
+        "linux/amd64": "sha256:eb3d65a6b101fc8f03649d2b50ede7123b7e4f19157af81c6f20a1d0a7b2576b",
+        "linux/arm64": "sha256:282ab90bd8225c04a4b8f1fcc82e709280bafcc476d36093524c89dc85e2d4e7"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-12",
+      "tested": {}
+    },
+    {
+      "id": "gradle9.9.1-jdk25",
+      "kind": "gradle",
+      "series": "9",
+      "version": "9.9.1",
+      "jdk": "25",
+      "image": "gradle",
+      "tag": "9.9.1-jdk25",
+      "exact_tag": "9.9.1-jdk25",
+      "index_digest": "sha256:550b31f6ce877521dd75a62edda57a116e2d399c75cf49b3bac7a0e8ee4cc23d",
+      "platforms": {
+        "linux/amd64": "sha256:922e1fe044c268c1c95d21b19e83ddea1bfcb032edd481e610da6ca50a2f047d",
+        "linux/arm64": "sha256:0a42f83becb1a2a3eae38ae0b4a3d1439539c91643c3d51b6997677465e0a6be"
+      },
+      "covered_paths": [
+        "/home/gradle",
+        "/home/gradle/.gradle",
+        "/run/lock",
+        "/tmp",
+        "/var/lib/pebble/default",
+        "/var/tmp"
+      ],
+      "volumes": [
+        "/home/gradle/.gradle"
+      ],
+      "healthcheck": false,
+      "checked": "2026-11-12",
       "tested": {}
     }
   ]

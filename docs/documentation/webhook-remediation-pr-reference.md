@@ -43,7 +43,7 @@ Use `repo` and `number` together to identify a PR.
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
 | `kind` | string | Update target type, as described in [Update target kinds](#pr-unit-kinds) | omitted when updating Compose tags |
-| `key` | string | Identifier of the processing unit that groups update targets | — |
+| `key` | string | Value identifying one element of `pull_requests[]` | — |
 | `repo` | string | `owner/name` of the repository to update | — |
 | `base_branch` | string | Branch into which the PR is to be merged | — |
 | `path` | string | Path within the repository of the file representing the update target | — |
@@ -84,7 +84,8 @@ The following fields have additional notes.
     - Match `pull_requests[].target_key` across notifications to associate proposals for the same edit target
 - `update_key`
     - Distinguishes the previous reference and candidate tag and digest for image updates, or adopted versions and dependency file changes for language package updates
-    - Also distinguishes the set of affected workloads for Kubernetes manifest, Kustomize, and Helm values updates
+    - For Kubernetes manifest updates, also distinguishes the combination of containers specified by `workload` in [Source mappings](configuration.md#remediation-mappings)
+    - For Kustomize and Helm values updates, also distinguishes the combination of containers specified by `workload` and `affects` in the configuration
     - Match `pull_requests[].update_key` across notifications to associate proposals for the same update
 - `attempt_key`
     - Changes when the base commit or file contents before or after the edit change, even for the same update
@@ -94,7 +95,9 @@ The following fields have additional notes.
     - Values are 64-character hexadecimal strings representing SHA-256 hashes; compare the received strings as they are
     - If processing stops partway through, keys that have not yet been determined are omitted
 - `also_running`
-    - Includes services without a Compose mapping and workloads outside the Kubernetes mappings or the set of affected workloads
+    - For Compose, includes services without a mapping
+    - For Kubernetes manifest updates, includes containers not specified by `workload` in the configuration
+    - For Kustomize and Helm values updates, includes containers not specified by `workload` or `affects` in the configuration
 - `user_modified`
     - `true` when the PR head commit, base, head repository, or similar information differs from the creation record
 - `replaced_by`, `replacing`, `replaced`
@@ -114,18 +117,42 @@ The following fields have additional notes.
 | `dockerfile` | Updates one `FROM` in a Dockerfile |
 | `language` | Updates packages together for one dependency file directory |
 
+The values of `path` and `services` for each `kind` are as follows.
+
+| `kind` | File identified by `path` | Values in `services` |
+| --- | --- | --- |
+| omitted (Compose) | Compose file | Service names in the Compose file being edited |
+| `kubernetes` | Kubernetes manifest | Workload keys as described in [Image name updates](webhook-diff-reference.md#reference-change-fields) |
+| `kustomize` | kustomization file | Workload keys as described in [Image name updates](webhook-diff-reference.md#reference-change-fields) |
+| `helm_values` | values file | Workload keys as described in [Image name updates](webhook-diff-reference.md#reference-change-fields) |
+| `dockerfile` | Dockerfile | Names extracted from each workload key, with duplicates removed |
+| `language` | Dependency file representing the update target | Names extracted from each workload key, with duplicates removed |
+
+When `kind` is `language`, `path` identifies the following dependency file.
+
+| Package manager | Dependency file |
+| --- | --- |
+| npm | `package-lock.json` |
+| pnpm | `pnpm-lock.yaml` |
+| uv | `uv.lock` |
+| pip | `requirements.txt` |
+| Go | `go.mod` |
+| Maven | Root `pom.xml` |
+| Gradle | `gradle.lockfile` |
+
+Language package PRs may also change dependency files other than `path`.
+
+For `dockerfile` and `language`, the following names are extracted from workload keys.
+
+| Target | Name extracted |
+| --- | --- |
+| Compose | Service name |
+| Kubernetes | Workload name |
+| Docker container with an unknown workload | Container name |
+| Kubernetes container with an unknown workload | Pod name |
+
 The following fields have additional notes.
 
-- `path`
-    - The Compose file for Compose, the manifest for `kubernetes`, the kustomization file for `kustomize`, or the values file for `helm_values`
-    - The Dockerfile for `dockerfile`
-    - For `language`, the dependency file representing the update target: `package-lock.json` for npm, `pnpm-lock.yaml` for pnpm, `uv.lock` for uv, `requirements.txt` for pip, `go.mod` for Go, the root `pom.xml` for Maven, or `gradle.lockfile` for Gradle
-    - Language package PRs may also change dependency files other than `path`
-- `services`
-    - For Compose, service names in the Compose file being edited
-    - For `kubernetes`, `kustomize`, and `helm_values`, workload keys as described in [Image name updates](webhook-diff-reference.md#reference-change-fields)
-    - For `dockerfile` and `language`, a list of names extracted from each workload key, with duplicates removed
-    - The extracted name is the service name for Compose, workload name for Kubernetes, container name for Docker containers with an unknown workload, or Pod name for Kubernetes containers with an unknown workload
 - `current_ref`
     - For Compose, `kubernetes`, `kustomize`, and `helm_values`, the running image reference used by the update targets
     - For `dockerfile`, the base image reference specified in the target `FROM`
@@ -157,16 +184,14 @@ The following fields have additional notes.
 - `package`
     - For language packages, this may be the normalized name used for matching against dependency files
 
-Helm values use the configured key for both mapping and string forms.
-For example, if `helm_values.key` is `image`, `location` is `image`, not `image.tag`, even when changing the tag in mapping form.
-
 The list contains at most 100 entries.
 Check `pull_requests[].fix_target_count` for the full count; `pull_requests[].fix_targets_truncated` is `true` when there are more than 100 entries.
 
 The count distinguishes locations and packages rather than grouping only by vulnerability ID.
 Base image updates also count targets separately when the sets of layers containing the findings differ.
 
-Layer information is not emitted in this array, so receivers must not remove elements as duplicates merely because their visible fields are identical.
+Layer information is not emitted in this array.
+Programs receiving the webhook must not remove elements as duplicates merely because their visible fields are identical.
 
 ### PR replacement {#pr-replacing-fields}
 
@@ -282,7 +307,8 @@ See [Supported input formats](remediation-reference.md#supported-inputs) for sup
 
 ### Packages to update {#pr-language-package-fields}
 
-`pull_requests[].language.packages[]` has the following fields in each element.
+Each element of `pull_requests[].language.packages[]` represents one package updated by the PR.
+Its fields are as follows.
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
@@ -314,7 +340,8 @@ The following fields have additional notes.
 
 ### Version specification changes in dependency files {#pr-language-edit-fields}
 
-`pull_requests[].language.manifest_edits[]` has the following fields in each element.
+Each element of `pull_requests[].language.manifest_edits[]` represents a change to one version specification in a dependency file.
+Its fields are as follows.
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
@@ -329,6 +356,38 @@ The following fields have additional notes.
 `from` and `to` are version specifications such as `^4.17.15`; check `pull_requests[].language.packages[].to` for the version actually adopted.
 
 ### Direct dependencies updated along with the targets {#pr-language-chain-fields}
+
+Each element of `pull_requests[].language.chain[]` represents one direct dependency updated to enable an update to a target package.
+
+The following diagram shows the dependencies between the project and packages A, B, and C.
+
+```text
+Project
+└── A            Updated from 1.0.0 to 1.1.0
+    └── B        Requires version 0.5.0 of C
+        └── C    Package to update
+```
+
+The field containing the name of each package is as follows.
+
+| Package | Field containing its name |
+| --- | --- |
+| A | `name` |
+| B | `held_by` |
+| C | `held` |
+
+The following element of `chain[]` represents the update of A.
+
+```json
+{
+  "name": "A",
+  "from": "1.0.0",
+  "to": "1.1.0",
+  "held": "C",
+  "held_range": "0.5.0",
+  "held_by": "B"
+}
+```
 
 `pull_requests[].language.chain[]` has the following fields in each element.
 
@@ -346,7 +405,8 @@ See [Re-resolution check conditions](remediation-reference.md#dependent-reresolu
 
 ### Packages excluded from the PR update {#pr-language-remaining-fields}
 
-`pull_requests[].language.remaining[]` has the following fields in each element.
+Each element of `pull_requests[].language.remaining[]` represents one package planned for update but excluded from the PR update.
+Its fields are as follows.
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
@@ -359,17 +419,28 @@ See [Re-resolution check conditions](remediation-reference.md#dependent-reresolu
 | `detail` | string | Explanatory text supplementing the exclusion reason | omitted |
 | `maven_bom` | object | [BOM information for excluded packages](#pr-language-bom-fields) identifying a version that reaches the update lower bound | omitted |
 
-In a cycle matched to an existing PR, exclusion information from `pull_requests[].language.remaining[]` supplements `language_items[].packages[]` entries with the same name and ecosystem.
-`language_items[].packages[]` may include `left_out: true`, `action: "manual"`, and `reason` even when `language_items[].update_executed` and `language_items[].post_update_check_executed` are `false`.
+In a cycle matched to an existing PR, exclusion information is supplemented from `pull_requests[].language.remaining[]`.
+The destination is the element of `language_items[].packages[]` with the same name and package type.
 
-Additional details are also reflected in `language_items[].packages[].detail` when available, and applicable BOM information in `language_items[].packages[].maven_bom`.
 Packages with the reason `global_node_modules` are excluded from this supplementation.
+Supplementation occurs even when `language_items[].update_executed` and `language_items[].post_update_check_executed` are `false`.
+
+The destination fields and their values are as follows.
+
+| Field | Value supplied |
+| --- | --- |
+| `language_items[].packages[].left_out` | `true` |
+| `language_items[].packages[].action` | `"manual"` |
+| `language_items[].packages[].reason` | Exclusion reason |
+| `language_items[].packages[].detail` | Explanatory text, when available |
+| `language_items[].packages[].maven_bom` | Applicable BOM information, when available |
 
 See [Partial PRs](remediation-results.md#partial-pull-requests) for interpreting partial updates.
 
 ### BOM information for excluded packages {#pr-language-bom-fields}
 
-`pull_requests[].language.remaining[].maven_bom` has the following fields.
+`pull_requests[].language.remaining[].maven_bom` describes a candidate BOM version that manages the excluded package at or above the update lower bound.
+Its fields are as follows.
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
@@ -386,7 +457,8 @@ See [Version sources and edits](remediation-logic.md#maven-version-sources) and 
 
 ### Language package update example {#pr-language-example}
 
-The following example shows the output of `pull_requests[].language`.
+The following example shows `pull_requests[].language` for a PR that updates the npm packages lodash and minimist.
+Check `packages` for the versions before and after the update, and `manifest_edits` for the change to the lodash version specification in `package.json`.
 
 ```json
 {
@@ -486,11 +558,14 @@ See [Partial PR conditions](remediation-logic.md#partial-pr-selection) for adopt
 `operations[]` emits PR operation events that have not yet been recorded as delivered, in ascending sequence number order.
 The record before sending an operation, its result, and any result confirmed later are separate events for that operation.
 
+PR processing records are saved in `prs.json` under `remediation.storage_dir`.
+See [Stored files](remediation-reference.md#stored-records) for what is saved.
+
 `operations[]` has the following fields in each element.
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
-| `seq` | integer | Event sequence number that increases within the same saved PR processing records | — |
+| `seq` | integer | Event sequence number that increases within the same `prs.json` | — |
 | `id` | string | Identifier linking the phases of the same operation | — |
 | `at` | string | Time the event was recorded, in UTC RFC 3339 format | — |
 | `phase` | string | Value indicating which phase of the operation the event records | — |
@@ -532,7 +607,7 @@ The record before sending an operation, its result, and any result confirmed lat
 The following fields have additional notes.
 
 - `seq`
-    - Increases across all PR processing that shares the same saved records, rather than separately for each repository
+    - Increases across all PR processing that uses the same `prs.json`, rather than separately for each repository
     - The same event has the same value when redelivered
 - `id`
     - Uses the form `op-<sequence number>`, with the sequence number of the first event
@@ -548,14 +623,20 @@ The following fields have additional notes.
 - `error`
     - Explanatory text rather than a fixed code; for `settled`, it may contain confirmation details even when `result` is `ok`
 
-To deduplicate events at the receiver, use `seq` within the same saved records from the same sender.
+Programs receiving the webhook should deduplicate events using `seq` within the same `prs.json` from the same sender.
 Deduplicating by `id` or `attempt_key` alone would discard results and later confirmation events for the same operation.
 
-`seq` and `id` are reused after the saved records are initialized.
-The webhook contains no value that uniquely identifies the sender or identifies initialization of the saved records, and neither `environment.kind` nor `environment.name` is guaranteed to be unique.
+If `prs.json` is deleted or the storage directory is changed to one without `prs.json`, `seq` starts at 1.
+As a result, previously used `seq` and `id` values are used again.
 
-Received data alone cannot reliably distinguish events from multiple senders or events before and after initialization.
-Operational measures are required, such as using a separate receiving URL for each sender and switching the receiver's deduplication records when the saved records are initialized.
+The webhook contains no value that uniquely identifies the sender or identifies recreation of `prs.json`.
+Neither `environment.kind` nor `environment.name` is guaranteed to be unique.
+
+Received data alone cannot reliably distinguish events from multiple senders or events before and after recreation of `prs.json`.
+The following operational measures are available.
+
+- Use a separate receiving URL for each sender
+- When recreating `prs.json`, switch the deduplication records used by the program receiving the webhook
 
 See [Remediation plan redelivery](notification-conditions.md#remediation-redelivery) for delivery and redelivery behavior.
 

@@ -175,6 +175,42 @@ See the respective update records for Go, Maven, and Gradle changes.
 
 ### Entries with changes only to dependency versions {#language-update-followed}
 
+Each element of `language_items[].update.diff.followed[]` represents one package whose dependency versions changed even though it was not an update target.
+The package's own version stays the same.
+
+The following example shows a project that uses A and B directly, with both A and B using C.
+The versions before and after updating A are listed below.
+
+| Item | Before the update | After the update |
+| --- | --- | --- |
+| A's version | `1.0` | `1.1` |
+| B's version | `2.0` | `2.0` |
+| C version used by A | `1.0` | `1.1` |
+| C version used by B | `1.0` | `1.1` |
+
+Whether each package in this example appears in `followed` and the reasons are listed below.
+
+| Package | `followed` | Reason |
+| --- | --- | --- |
+| A | Not included | It is an update target |
+| B | Included | Its own version stays the same, and only the C version it uses changed |
+| C | Not included | Its version changed as a result of A's update |
+
+The following is one element of `followed[]` representing B in this example.
+
+```json
+{
+  "entry": "B@2.0",
+  "moves": [
+    {
+      "name": "C",
+      "from": "1.0",
+      "to": "1.1"
+    }
+  ]
+}
+```
+
 The fields in each element of `language_items[].update.diff.followed[]` are listed below.
 
 | Field | Type | Meaning | When there is no value |
@@ -182,12 +218,7 @@ The fields in each element of `language_items[].update.diff.followed[]` are list
 | `entry` | string | Entry whose dependency versions changed, expressed as `package-name@version`. | — |
 | `moves` | array of objects | Version changes in dependencies referenced by that entry. | — |
 
-`followed` records packages also used through paths separate from the update targets whose own versions stay the same while only their dependency versions change.
 Before the lists are truncated, entries recorded in `followed` also appear in `changed`.
-
-For example, suppose the project uses A and B directly, and both A and B depend on C.
-If updating A leaves B's own version unchanged but changes the C version referenced by B from `1.0` to `1.1`, B appears in `followed`.
-
 For npm, pnpm, uv, and pip, `entry` uses the `name@version` format, which differs from the identifiers in `added`, `changed`, and `removed`.
 
 The fields in each element of `language_items[].update.diff.followed[].moves[]` are listed below.

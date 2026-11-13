@@ -257,6 +257,37 @@ The following conditions determine the fix status and displayed version.
 
 The EOL rule follows Node.js security posts, which state that EOL versions are always affected.
 
+The Node.js runtime vulnerability index can take several weeks or longer to reflect releases, so security blog posts supplement it.
+A release line means versions sharing a major version, such as `22.x`.
+
+The information supplemented from posts depends on whether the CVE is already in the index.
+
+| CVE registration status | Information supplemented from posts |
+| --- | --- |
+| Not yet in the index | CVE information described in the post |
+| Already in the index | Effects on release lines absent from the index |
+
+A release line absent from the index is included in neither the affected ranges nor the fixed ranges for that CVE.
+Security releases extending fixes to other release lines are announced in new posts before the index is updated.
+
+Posts supplementing an indexed CVE must meet all the following conditions.
+
+1. The post identifies the target release line as affected by that CVE
+2. The post differs from the post referenced by the index for that CVE
+3. The post was published after that CVE's publication date
+
+The CVE's publication date is determined using the following rules.
+
+| Information in the index | Date used as the publication date |
+| --- | --- |
+| A CVE publication date is recorded | The recorded publication date |
+| No CVE publication date is recorded | The release date of the earliest released version included in the index's fixed ranges |
+
+If the index's reference is not a security blog post, or there is no reference, posts do not supplement the indexed CVE.
+Posts also do not supplement the CVE when its publication date cannot be determined using the date rules.
+
+Release lines included in the index's affected or fixed ranges for that CVE are evaluated using the index.
+
 Node.js runtime matching has the following limitations.
 
 - The following information in Node.js security advisories is not used for Node.js runtime matching.

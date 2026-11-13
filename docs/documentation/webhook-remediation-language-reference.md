@@ -19,13 +19,7 @@ The language package fields in `remediation` are listed below.
 `language_summary` counts items in `language_items[]`, not packages.
 The keys are `pr_candidate`, `dependency_update_candidate`, `rebuild_expected`, `manual`, `not_comparable`, `deferred`, and `failed`, with `0` included for categories that have no matching items.
 
-Each element of `language_items[]` groups findings from workloads mapped to the same repository, base branch, and directory by package manager.
-Before the manager is identified, items are separated by ecosystem, and findings whose running image could not be confirmed and the Go standard library may appear as separate items.
-
-Use `key` to identify an item.
-Do not combine items with different `key` values, even when they share a directory or package name.
-
-The following example extracts the summary and the main fields of one item.
+The following example extracts `language_summary`.
 
 ```json
 {
@@ -37,21 +31,31 @@ The following example extracts the summary and the main fields of one item.
     "not_comparable": 0,
     "pr_candidate": 0,
     "rebuild_expected": 1
-  },
-  "language_items": [
-    {
-      "key": "deps:ex/app@main:backend",
-      "category": "dependency_update_candidate",
-      "reason": "update_candidate_in_source",
-      "manager": "npm",
-      "workloads": [
-        "compose/shop/api"
-      ],
-      "update_executed": false,
-      "post_update_check_executed": false,
-      "package_count": 4
-    }
-  ]
+  }
+}
+```
+
+### Item grouping and fields {#language-item-fields}
+
+`language_items[]` contains one item per language for each directory containing dependency files such as `package.json` or `go.mod`.
+
+This directory is specified by `remediation.mappings[].dependencies.directory` in [Source mappings](configuration.md#remediation-mappings).
+Findings from multiple workloads mapped to the same directory are grouped into one item per language.
+
+The following excerpt shows the main fields of an item where npm was identified.
+
+```json
+{
+  "key": "deps:ex/app@main:backend#npm",
+  "category": "dependency_update_candidate",
+  "reason": "update_candidate_in_source",
+  "manager": "npm",
+  "workloads": [
+    "compose/shop/api"
+  ],
+  "update_executed": false,
+  "post_update_check_executed": false,
+  "package_count": 4
 }
 ```
 
@@ -59,7 +63,7 @@ The main fields of an item whose update and checks ran look like this.
 
 ```json
 {
-  "key": "lang-key",
+  "key": "deps:ex/app@main:backend#npm",
   "category": "pr_candidate",
   "reason": "update_verified",
   "update_executed": true,
@@ -71,7 +75,7 @@ The fields in each element of `language_items[]` are listed below.
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
-| `key` | string | Key identifying the item within the plan | — |
+| `key` | string | [Key identifying the item within the plan](#language-item-key) | — |
 | `category` | string | Item-wide category from [Plan category values](remediation-reference.md#category-values) | — |
 | `reason` | string | Code explaining the category, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
 | `detail` | string | Additional explanation of the category or reason | omitted |
@@ -117,6 +121,45 @@ The following fields have additional notes.
     - See [Release waiting periods and retries](remediation-reference.md#dependent-reresolution-waits) for waiting and retry conditions
 - `packages`
     - Includes packages with reason `global_node_modules` even when they are not displayed under “Needs a decision” in Slack or email
+
+#### Item `key` values {#language-item-key}
+
+`language_items[].key` is the value that identifies an item within the plan.
+`key` uses the format `deps:<repository>@<base-branch>:<directory>#<suffix>`, with the repository name converted to lowercase.
+
+The `key` in the first example above refers to the `backend` directory on the `main` branch of the `ex/app` repository.
+The `key` suffix is `#npm`.
+
+The `key` suffixes and the findings included in each item are listed below.
+
+| `key` suffix | Findings in the item |
+| --- | --- |
+| `#npm`, `#pnpm` | Findings for Node.js packages |
+| `#uv`, `#pip` | Findings for Python packages |
+| `#go` | Findings for modules or the standard library included in Go binaries |
+| `#maven`, `#gradle` | Findings for packages included in Java archives |
+| `#node-pkg` | Findings for Node.js packages whose package manager could not be identified |
+| `#python-pkg` | Findings for Python packages whose package manager could not be identified |
+| `#go-stdlib` | Findings for the Go standard library |
+| `#unverified` | Findings from scans that could not confirm the running image's contents |
+
+The following suffixes have additional notes.
+
+- `#npm`, `#pnpm`, `#uv`, `#pip`, `#go`, `#maven`, `#gradle`
+    - The suffix has the same value as `manager`
+- `#node-pkg`, `#python-pkg`
+    - Output when processing stops before the manager is identified, or when the dependency file pair cannot be identified
+    - `manager` is omitted
+- `#go-stdlib`
+    - Only the standard library findings are separated when there are findings for both Go modules and the standard library
+    - When there are only standard library findings, they remain in the `#go` item without separation
+- `#unverified`
+    - Findings are grouped into one item across languages
+    - `category` is `not_comparable`, and `reason` is `scan_not_pinned`
+    - `manager` is omitted
+
+Use `key` to identify an item.
+Do not combine items with different `key` values, even when they share a directory or package name.
 
 ### Source of dependency files {#language-source-fields}
 
@@ -224,11 +267,13 @@ See [Matching existing PRs](remediation-logic.md#existing-pr-matching) for match
 
 ## Package results {#language-package-fields}
 
-Each element of `language_items[].packages[]` represents an ecosystem, package name, and running version combination.
-For Python, packages with the same normalized matching name are grouped together.
+Each element of `language_items[].packages[]` represents the result for packages found in the running image that share the same package type, name, and version.
 
-Even for the same combination, project packages and packages in a global `node_modules` are separate elements.
-Receivers must not use this combination as a unique key to merge elements.
+Packages installed from dependency files and packages in a global `node_modules` are separate elements even when their type, name, and version are the same.
+As a result, two elements may have the same type, name, and version.
+
+An element for a package in a global `node_modules` has `global_node_modules` as its `reason`.
+Programs receiving the webhook must not discard elements as duplicates because they have the same type, name, and version.
 
 The following example extracts the main fields of a package.
 
@@ -295,6 +340,8 @@ The values of `relation` are listed below.
 | `mixed` | Includes both direct and transitive dependency occurrences |
 
 `normalized` is the name converted to lowercase, with consecutive `-`, `_`, and `.` characters collapsed to a single `-`.
+Python packages are grouped into one element when this value and the version are the same, even if their names are written differently.
+
 For example, `Foo_Bar..Baz` becomes `foo-bar-baz`, and the field is included even when its value is identical to the original name.
 
 The list count limits are listed below.
@@ -489,7 +536,21 @@ The fields in `language_items[].packages[].fix_hint` are listed below.
 | `decided_by` | object | External [POM deciding the target version](#language-fix-decider-fields) | omitted |
 | `configuration` | string | Gradle configuration where the target remained below its target version | omitted |
 
-The `reason` values eligible for `fix_hint` are `dependents_hold_back`, `go_line_raised_too_far`, `go_runtime_unavailable`, `fix_in_other_major_version`, `maven_version_source_unsupported`, `gradle_version_source_unsupported`, `maven_release_not_found`, `maven_fix_in_other_major`, and `target_not_updated` for Maven and Gradle.
+The `reason` values eligible for `fix_hint` are listed below.
+
+| `reason` | Meaning |
+| --- | --- |
+| `dependents_hold_back` | A package that depends on it limits its version |
+| `go_line_raised_too_far` | The `go` or `toolchain` version exceeds the lowest Go version used to build the running binaries, or changes while the build version is unknown |
+| `go_runtime_unavailable` | No supported Go is as new as the update needs |
+| `fix_in_other_major_version` | The fix is in another major version, which Go names as another module path |
+| `maven_version_source_unsupported` | Editing the project's POM files cannot change the target's version |
+| `gradle_version_source_unsupported` | Editing the project's files cannot change the target's version |
+| `maven_release_not_found` | Maven Central has no release the update can use |
+| `maven_fix_in_other_major` | The fix is only in another major version |
+| `target_not_updated` | The package did not reach the target version after the update |
+
+`target_not_updated` is eligible for `fix_hint` only for Maven and Gradle.
 Even for an eligible reason, `fix_hint` or its child fields are omitted when the information cannot be retrieved.
 
 See [Reason codes](remediation-reference.md#reason-codes) for the meanings of reasons and [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) for interpreting the hints.

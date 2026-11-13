@@ -19,13 +19,7 @@ title: Webhookの修正計画の言語パッケージのフィールド
 `language_summary`はパッケージ数ではなく、`language_items[]`の項目数を数えます。
 出力するキーは`pr_candidate`、`dependency_update_candidate`、`rebuild_expected`、`manual`、`not_comparable`、`deferred`、`failed`で、該当項目がない分類も`0`で出力します。
 
-`language_items[]`の1要素は、同じリポジトリ・基準ブランチ・ディレクトリに対応付けたワークロードの所見を、パッケージマネージャーごとにまとめたものです。
-マネージャーを特定する前はエコシステムごとに分かれ、稼働イメージを確認できない所見やGoの標準ライブラリは別の項目になる場合があります。
-
-項目の識別には`key`を使います。
-同じディレクトリや同じパッケージ名でも、`key`が異なる項目をまとめないでください。
-
-次は、集計と1項目の主要フィールドを抜粋した例です。
+次は、`language_summary`を抜粋した例です。
 
 ```json
 {
@@ -37,21 +31,31 @@ title: Webhookの修正計画の言語パッケージのフィールド
     "not_comparable": 0,
     "pr_candidate": 0,
     "rebuild_expected": 1
-  },
-  "language_items": [
-    {
-      "key": "deps:ex/app@main:backend",
-      "category": "dependency_update_candidate",
-      "reason": "update_candidate_in_source",
-      "manager": "npm",
-      "workloads": [
-        "compose/shop/api"
-      ],
-      "update_executed": false,
-      "post_update_check_executed": false,
-      "package_count": 4
-    }
-  ]
+  }
+}
+```
+
+### 項目の単位とフィールド {#language-item-fields}
+
+`language_items[]`には、`package.json`や`go.mod`といった依存ファイルを置いているディレクトリ1つにつき、言語ごとに1項目を作ります。
+
+このディレクトリは、[ソースの対応付け](configuration.md#remediation-mappings)の`remediation.mappings[].dependencies.directory`で指定したものです。
+同じディレクトリに対応付けた複数のワークロードの所見は、言語ごとに1項目にまとめます。
+
+次は、npmを特定できた項目の主要フィールドの抜粋です。
+
+```json
+{
+  "key": "deps:ex/app@main:backend#npm",
+  "category": "dependency_update_candidate",
+  "reason": "update_candidate_in_source",
+  "manager": "npm",
+  "workloads": [
+    "compose/shop/api"
+  ],
+  "update_executed": false,
+  "post_update_check_executed": false,
+  "package_count": 4
 }
 ```
 
@@ -59,7 +63,7 @@ title: Webhookの修正計画の言語パッケージのフィールド
 
 ```json
 {
-  "key": "lang-key",
+  "key": "deps:ex/app@main:backend#npm",
   "category": "pr_candidate",
   "reason": "update_verified",
   "update_executed": true,
@@ -71,7 +75,7 @@ title: Webhookの修正計画の言語パッケージのフィールド
 
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
-| `key` | string | 計画内の項目を識別するキー | — |
+| `key` | string | [計画内の項目を識別するキー](#language-item-key) | — |
 | `category` | string | 項目全体の[計画の分類値](remediation-reference.md#category-values) | — |
 | `reason` | string | 分類の根拠となる[理由コード](remediation-reference.md#reason-codes) | 省略 |
 | `detail` | string | 分類や理由を補足する説明文 | 省略 |
@@ -117,6 +121,45 @@ title: Webhookの修正計画の言語パッケージのフィールド
     - 待機と再試行の条件は[公開後の待機と再試行](remediation-reference.md#dependent-reresolution-waits)を参照する
 - `packages`
     - 理由が`global_node_modules`のパッケージは、Slackとメールの「要判断」に出ない場合も含む
+
+#### 項目の`key`の値 {#language-item-key}
+
+`language_items[].key`は、計画内で項目を識別する値です。
+`key`は`deps:<リポジトリ>@<基準ブランチ>:<ディレクトリ>#<末尾>`の形式で、リポジトリ名は小文字にそろえます。
+
+上の1つ目の例の`key`は、リポジトリ`ex/app`の`main`ブランチにある`backend`ディレクトリを指します。
+`key`の末尾が`#npm`になります。
+
+`key`の末尾と項目に入る所見は次のとおりです。
+
+| `key`の末尾 | 項目に入る所見 |
+| --- | --- |
+| `#npm`・`#pnpm` | Node.jsのパッケージの所見 |
+| `#uv`・`#pip` | Pythonのパッケージの所見 |
+| `#go` | Goバイナリに含まれるモジュールや標準ライブラリの所見 |
+| `#maven`・`#gradle` | Javaアーカイブに含まれるパッケージの所見 |
+| `#node-pkg` | パッケージマネージャーを特定できなかったNode.jsのパッケージの所見 |
+| `#python-pkg` | パッケージマネージャーを特定できなかったPythonのパッケージの所見 |
+| `#go-stdlib` | Goの標準ライブラリの所見 |
+| `#unverified` | スキャンが稼働イメージの内容を確認できなかった所見 |
+
+次の末尾には補足があります。
+
+- `#npm`・`#pnpm`・`#uv`・`#pip`・`#go`・`#maven`・`#gradle`
+    - 末尾は`manager`と同じ値になる
+- `#node-pkg`・`#python-pkg`
+    - マネージャーを特定する前に処理が止まった場合、または依存ファイルの組を特定できなかった場合に出力する
+    - `manager`は省略する
+- `#go-stdlib`
+    - Goのモジュールと標準ライブラリの両方に所見がある場合に、標準ライブラリの所見だけを分ける
+    - 標準ライブラリの所見だけの場合は分けずに`#go`の項目に入れる
+- `#unverified`
+    - 言語をまたいで1項目にまとめる
+    - `category`は`not_comparable`、`reason`は`scan_not_pinned`になる
+    - `manager`は省略する
+
+項目の識別には`key`を使います。
+同じディレクトリや同じパッケージ名でも、`key`が異なる項目をまとめないでください。
 
 ### 依存ファイルの取得元 {#language-source-fields}
 
@@ -224,11 +267,13 @@ PRを作成できなかった処理も含むため、`pull_request`があって�
 
 ## パッケージの結果 {#language-package-fields}
 
-`language_items[].packages[]`の1要素は、エコシステム・パッケージ名・稼働版の組み合わせに対応します。
-Pythonでは、照合用に正規化した名前が同じものをまとめます。
+`language_items[].packages[]`の1要素は、稼働イメージで見つかったパッケージのうち、パッケージの種類・名前・版が同じもの1つ分の結果を表します。
 
-同じ組み合わせでも、プロジェクト内のパッケージとグローバルな`node_modules`のパッケージは別の要素になります。
-受信側では、この組み合わせを一意のキーとして要素をまとめないでください。
+依存ファイルから入れたパッケージとグローバルな`node_modules`にあるパッケージは、種類・名前・版が同じでも別の要素になります。
+そのため、種類・名前・版が同じ要素が2つ出ることがあります。
+
+グローバルな`node_modules`にあるパッケージの要素は、`reason`が`global_node_modules`になります。
+Webhookを受け取るプログラムでは、種類・名前・版が同じ要素を重複として除かないでください。
 
 次は、パッケージの主要フィールドを抜粋した例です。
 
@@ -295,6 +340,8 @@ Pythonでは、照合用に正規化した名前が同じものをまとめま�
 | `mixed` | 直接依存と推移的依存の出現箇所を含む |
 
 `normalized`は、名前を小文字にし、連続する`-`・`_`・`.`を1つの`-`にまとめた値です。
+Pythonのパッケージは、名前の表記が違っても、この値と版が同じなら1要素にまとめます。
+
 たとえば、`Foo_Bar..Baz`は`foo-bar-baz`になり、元の名前と同じ値になる場合も出力します。
 
 一覧の件数上限は次のとおりです。
@@ -489,7 +536,21 @@ Pythonでは、`name`に正規化前の表記を保持するため、同じパ�
 | `decided_by` | object | 対象の版を決める[プロジェクト外のPOM](#language-fix-decider-fields) | 省略 |
 | `configuration` | string | Gradleで対象が目標版より低い版に残った構成名 | 省略 |
 
-`fix_hint`を付与する対象の`reason`は、`dependents_hold_back`、`go_line_raised_too_far`、`go_runtime_unavailable`、`fix_in_other_major_version`、`maven_version_source_unsupported`、`gradle_version_source_unsupported`、`maven_release_not_found`、`maven_fix_in_other_major`、Maven・Gradleの`target_not_updated`です。
+`fix_hint`を付ける`reason`は次のとおりです。
+
+| `reason` | 意味 |
+| --- | --- |
+| `dependents_hold_back` | 依存元がこのパッケージの版を制限している |
+| `go_line_raised_too_far` | `go`・`toolchain`の版が稼働バイナリのビルド時のGoの最も低い版を超えるか、ビルド時の版が不明なまま変わる |
+| `go_runtime_unavailable` | 更新に必要な版以上の、サポート中のGoを選べない |
+| `fix_in_other_major_version` | 修正版が別のメジャー版にあり、Goでは別のモジュールパスになる |
+| `maven_version_source_unsupported` | プロジェクトのPOMファイルの変更では対象の版を変えられない |
+| `gradle_version_source_unsupported` | プロジェクトのファイルの変更では対象の版を変えられない |
+| `maven_release_not_found` | 更新に使える版がMaven Centralにない |
+| `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない |
+| `target_not_updated` | 更新しても目標の版に上がらなかった |
+
+`target_not_updated`に`fix_hint`を付けるのは、MavenとGradleの場合だけです。
 対象の理由でも、情報を取得できなければ`fix_hint`やその子フィールドを省略します。
 
 理由の意味は[理由コード](remediation-reference.md#reason-codes)、案内の読み方は[修正版に上げられないときの案内](remediation-results.md#fix-hints)を参照してください。

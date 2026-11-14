@@ -13,6 +13,7 @@ theme:
   name: material
   custom_dir: overrides
   language: en
+  favicon: assets/site/favicon.svg
   icon:
     repo: fontawesome/brands/github
   palette:
@@ -127,7 +128,7 @@ plugins:
       cards_layout: kestrelynx
       cards_layout_options:
         font_family: Noto Sans JP
-        # Add logo: path/to/logo.png here once the logo is ready.
+        logo: overrides/social/logo.png
 
 watch:
   - overrides/social

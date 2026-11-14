@@ -12,6 +12,11 @@
   <link rel="stylesheet" href="{{ 'assets/site/site.css' | url }}">
 {% endblock %}
 
+{#- The tab icon is set by theme.favicon; this adds the home screen icon. -#}
+{% block extrahead %}
+  <link rel="apple-touch-icon" href="{{ 'assets/site/apple-touch-icon.png' | url }}">
+{% endblock %}
+
 {#- The section links live in the header (partials/header.html). -#}
 {% block tabs %}{% endblock %}
 

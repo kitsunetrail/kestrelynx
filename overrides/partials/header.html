@@ -7,7 +7,7 @@
       {% set icon = config.theme.icon.menu or "material/menu" %}
       {% include ".icons/" ~ icon ~ ".svg" %}
     </label>
-    <a href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}" class="kl-wordmark">KestreLynx</a>
+    <a href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}" class="kl-wordmark">{% include ".icons/kestrelynx/mark.svg" %}KestreLynx</a>
     <ul class="kl-topnav">
       {% for nav_item in nav.items %}
         {#- A section links to its first page; a top-level page links to itself. -#}

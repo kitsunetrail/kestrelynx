@@ -92,7 +92,7 @@ body {
 }
 
 .md-grid {
-  max-width: 1216px;
+  max-width: 1312px;
 }
 
 /* ---------------------------------------------------------------- header */
@@ -121,12 +121,22 @@ body {
 }
 
 .kl-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-right: 36px;
   color: var(--kl-ink);
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.01em;
   white-space: nowrap;
+}
+
+.kl-wordmark svg {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  fill: currentcolor;
 }
 
 .kl-topnav {
@@ -222,6 +232,13 @@ body {
 
   .kl-lang__link + .kl-lang__link::before {
     content: none;
+  }
+}
+
+/* Narrow phones: the mark is dropped so the row fits. */
+@media screen and (max-width: 23.9375em) {
+  .kl-wordmark svg {
+    display: none;
   }
 }
 

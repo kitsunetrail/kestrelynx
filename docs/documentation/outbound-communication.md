@@ -145,7 +145,7 @@ To explain why those dependents need updates, re-resolution PRs also send their 
 
 If a package between the dependent and the package held at an old version requires an older version, its name is also included.
 
-See [PR management](remediation-logic.md#pr-management) for management conditions and [Enabling PR creation](remediation-setup.md#enable-pr-creation) for workflows triggered by PRs.
+See [PR management](remediation-pr-logic.md#pr-management) for management conditions and [Enabling PR creation](remediation-setup.md#enable-pr-creation) for workflows triggered by PRs.
 
 ### Image candidate downloads {#candidate-registry-communication}
 
@@ -155,7 +155,7 @@ KestreLynx specifies image names, tags, and digests in requests and retrieves ta
 The destination is the public registry or registry with configured authentication specified by the image name.
 For Docker Hub, KestreLynx connects to `registry-1.docker.io`.
 
-See [Image registry authentication](configuration.md#registries) for authentication and [Image candidate selection](remediation-logic.md#image-selection) for discovery.
+See [Image registry authentication](configuration.md#registries) for authentication and [Image candidate selection](remediation-image-logic.md#image-selection) for discovery.
 
 ### Work image downloads {#worker-image-downloads}
 
@@ -169,7 +169,7 @@ Requests include work image names and digests.
 | Docker or the Kubernetes node's container runtime | Docker Hub or the configured mirror | Official Node.js, Python, Go (`golang`), and Gradle (`gradle`) images |
 | Kubernetes node's container runtime | Registry specified by the KestreLynx image name | Image for the container receiving input files in the work Pod |
 
-See [Pinning official images](remediation-logic.md#worker-images) for pinning and handling unavailable images.
+See [Pinning official images](remediation-worker-logic.md#worker-images) for pinning and handling unavailable images.
 
 The official-image mirror is set through [`remediation.worker.registry`](configuration.md#remediation-worker), and container runtime mirror settings also affect actual destinations.
 The input container image is set through [`remediation.worker.kubernetes.receiver_image`](configuration.md#remediation-worker-kubernetes), or taken from KestreLynx's own Pod when unset.
@@ -184,7 +184,7 @@ KestreLynx specifies tool names or versions in requests and makes the following 
 | KestreLynx | `pypi.org` and `files.pythonhosted.org` | uv version information and distributions |
 
 Tool download requests and redirects are restricted to HTTPS (TCP port 443) on the hosts in the table.
-See [Tool downloads and verification](remediation-logic.md#tool-verification) for retrieval and verification, and [Tool cache reuse](remediation-logic.md#tool-cache) for reuse.
+See [Tool downloads and verification](remediation-node-python-logic.md#tool-verification) for retrieval and verification, and [Tool cache reuse](remediation-node-python-logic.md#tool-cache) for reuse.
 
 ### Dependency downloads {#dependency-downloads}
 
@@ -208,7 +208,7 @@ KestreLynx retrieves the following information to check versions and dependencie
 
 The following details explain retrieval conditions and how the information is used.
 
-- npm, pnpm, and uv re-resolution check blocking version requirements and the [72-hour wait after publication](remediation-reference.md#dependent-reresolution-waits) for newly introduced versions
+- npm, pnpm, and uv re-resolution check blocking version requirements and the [72-hour wait after publication](remediation-reresolution-logic.md#dependent-reresolution-waits) for newly introduced versions
 - Go also retrieves version information when finding alternatives to versions the publisher has retracted from use
 - Go retrieves version information from `.info`, `go.mod` from `.mod`, the latest version from `@latest`, version lists from `@v/list`, and hashes from `lookup`
 - Maven and Gradle read published versions from `maven-metadata.xml` and dependency and version requirements from `.pom` files
@@ -223,7 +223,7 @@ For Gradle, the retrieved POMs include the Spring Boot BOM, its parent POMs, oth
 When a package cannot reach a fixed version, KestreLynx performs additional checks to suggest updates.
 It checks target package versions specified by published Maven parent or BOM releases, or Spring Boot BOM releases.
 
-See [Update processing by package manager](remediation-logic.md#manager-update-methods) for update methods and [Re-resolution support and limits](remediation-reference.md#dependent-reresolution-limits) for transfer and other limits.
+See [Update processing by package manager](remediation-package-logic.md#manager-update-methods) for update methods and [Re-resolution support and limits](remediation-reresolution-logic.md#dependent-reresolution-limits) for transfer and other limits.
 
 #### Downloads by work containers {#dependency-workers}
 
@@ -240,7 +240,7 @@ Work containers make the following connections to resolve dependencies, generate
 Gradle connects to the [download destination for `mavenCentral()`](https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.dsl.RepositoryHandler.html).
 Gradle Plugin Portal distributions are retrieved through [redirects to `plugins-artifacts.gradle.org`](https://plugins.gradle.org/docs/mirroring).
 
-Only plugin types and versions listed under KestreLynx's [Plugin allowlist](remediation-reference.md#gradle-plugins) can be used.
+Only plugin types and versions listed under KestreLynx's [Plugin allowlist](remediation-dependency-formats.md#gradle-plugins) can be used.
 
 #### Downloads by Trivy {#dependency-trivy}
 
@@ -433,4 +433,4 @@ The example permits public HTTPS sites generally, rather than only npm and PyPI.
 A networking implementation (CNI) that enforces NetworkPolicy is required, and standard NetworkPolicy does not block communication between a Pod and its execution node.
 Until the CNI finishes applying restrictions to a new Pod, egress may be unrestricted for a few seconds (observed with the default K3s CNI).
 
-See [Kubernetes language-package updates](remediation-setup.md#kubernetes-language-updates) for installation adjustments and [Runtime restrictions](remediation-logic.md#worker-restrictions) for restrictions other than networking.
+See [Kubernetes language-package updates](remediation-setup-work-pods.md#kubernetes-language-updates) for installation adjustments and [Runtime restrictions](remediation-worker-logic.md#worker-restrictions) for restrictions other than networking.

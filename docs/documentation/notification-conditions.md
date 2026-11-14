@@ -172,4 +172,4 @@ Delivery is recorded for each destination at the following times.
 Slack and email deliveries are each recorded when their condition above is met, even if delivery to other destinations fails.
 If saving a record fails, content already sent may be sent again.
 Resending a notification does not recreate existing PRs.
-See [Stored files](remediation-reference.md#stored-records) for saved contents and [Matching existing PRs](remediation-logic.md#existing-pr-matching) for PR checks.
+See [Stored files](remediation-pr-logic.md#stored-records) for saved contents and [Matching existing PRs](remediation-pr-logic.md#existing-pr-matching) for PR checks.

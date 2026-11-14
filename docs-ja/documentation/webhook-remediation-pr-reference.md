@@ -26,7 +26,7 @@ PR作成が有効で修正計画がある場合、処理対象があれば`pull_
 
 `pull_request_summary`のキーと件数の読み方、0件の扱いは、[件数の集計](webhook-remediation-reference.md#remediation-summary-keys)を参照してください。
 
-状態値の定義は、[PRの状態値](remediation-reference.md#pr-status-values)を参照してください。
+状態値の定義は、[PRの状態値](remediation-reason-codes.md#pr-status-values)を参照してください。
 
 ### 更新対象とPRの対応 {#pr-unit-fields}
 
@@ -53,12 +53,12 @@ PRを識別するときは、`repo`と`number`を組み合わせます。
 | `current_ref` | string | 更新前のイメージ名 | `""` |
 | `candidate_tag` | string | 更新先イメージのタグ | 省略 |
 | `candidate_digest` | string | 更新先イメージのmanifestまたはイメージインデックスのdigest | 省略 |
-| `status` | string | [PR処理の状態](remediation-reference.md#pr-status-values) | — |
-| `reason` | string | PR処理結果の[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `status` | string | [PR処理の状態](remediation-reason-codes.md#pr-status-values) | — |
+| `reason` | string | PR処理結果の[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | PR処理結果を補足する説明文 | 省略 |
 | `number` | integer | 対応するPRの番号 | `0`なら省略 |
 | `url` | string | 対応するPRのURL | 省略 |
-| `state` | string | 対応するPRについて記録された[状態](remediation-reference.md#pr-status-values) | 省略 |
+| `state` | string | 対応するPRについて記録された[状態](remediation-reason-codes.md#pr-status-values) | 省略 |
 | `user_modified` | boolean | 作成時の記録と異なる変更がPRに見つかったかどうか | `false`なら省略 |
 | `target_key` | string | 編集するファイルと位置の組み合わせを識別する値 | 省略 |
 | `update_key` | string | 同じ編集対象に対する更新内容を識別する値 | 省略 |
@@ -215,7 +215,7 @@ Webhookを受け取るプログラムでは、見えているフィールドが�
 `replacing[].state`が`closed`でも、クローズの完了確認を表すとは限りません。
 `replaced[]`には、置き換え処理が`done`となり、古いPRの状態も`replaced`と確認された番号が入ります。
 
-置き換えの条件は、[古いPRの置き換え](remediation-logic.md#pr-replacement)を参照してください。
+置き換えの条件は、[古いPRの置き換え](remediation-pr-logic.md#pr-replacement)を参照してください。
 
 ### PR処理の例 {#pr-unit-examples}
 
@@ -401,7 +401,7 @@ Webhookを受け取るプログラムでは、見えているフィールドが�
 | `held_by` | string | 直接依存と`held`の間で古い版を指定していたパッケージ名 | 省略 |
 
 `held_by`は、直接依存自身が古い版を指定している場合には省略します。
-再解決の条件は、[再解決の検査条件](remediation-reference.md#dependent-reresolution-rules)を参照してください。
+再解決の条件は、[再解決の検査条件](remediation-reresolution-logic.md#dependent-reresolution-rules)を参照してください。
 
 ### PRの更新から除外したパッケージ {#pr-language-remaining-fields}
 
@@ -415,7 +415,7 @@ Webhookを受け取るプログラムでは、見えているフィールドが�
 | `relation` | string | [プロジェクトから見た依存関係の区分](#pr-language-package-fields) | 省略 |
 | `from` | string | 除外したパッケージの稼働版 | — |
 | `target` | string | 予定していた更新先の下限の版 | `""` |
-| `reason` | string | 更新から除外した[理由コード](remediation-reference.md#reason-codes) | — |
+| `reason` | string | 更新から除外した[理由コード](remediation-reason-codes.md#reason-codes) | — |
 | `detail` | string | 除外理由を補足する説明文 | 省略 |
 | `maven_bom` | object | 更新先の下限に届く[BOMの情報](#pr-language-bom-fields) | 省略 |
 
@@ -435,7 +435,7 @@ Webhookを受け取るプログラムでは、見えているフィールドが�
 | `language_items[].packages[].detail` | 補足がある場合にその説明文 |
 | `language_items[].packages[].maven_bom` | 該当するBOM情報がある場合にその情報 |
 
-部分的な更新の読み方は、[部分PR](remediation-results.md#partial-pull-requests)を参照してください。
+部分的な更新の読み方は、[部分PR](remediation-update-results.md#partial-pull-requests)を参照してください。
 
 ### 除外したパッケージのBOM情報 {#pr-language-bom-fields}
 
@@ -453,7 +453,7 @@ Webhookを受け取るプログラムでは、見えているフィールドが�
 このオブジェクトは、`pull_requests[].language.remaining[].reason`が`maven_bom_series_unreached`で、BOMの候補情報がある場合に出力します。
 BOMの版は`from`と`to`、対象パッケージの版は`manages`で区別してください。
 
-候補の意味は、[版の出所と書き換え](remediation-logic.md#maven-version-sources)と[Gradleの版の宣言と書き換え](remediation-logic.md#gradle-version-sources)を参照してください。
+候補の意味は、[版の出所と書き換え](remediation-maven-logic.md#maven-version-sources)と[Gradleの版の宣言と書き換え](remediation-gradle-logic.md#gradle-version-sources)を参照してください。
 
 ### 言語パッケージ更新の例 {#pr-language-example}
 
@@ -494,7 +494,7 @@ BOMの版は`from`と`to`、対象パッケージの版は`manages`で区別し�
 
 ### 部分PRの例 {#remediation-json-example}
 
-[部分PR](remediation-results.md#partial-pull-requests)は、まとめて更新しようとしたパッケージの一部だけを更新したPRです。
+[部分PR](remediation-update-results.md#partial-pull-requests)は、まとめて更新しようとしたパッケージの一部だけを更新したPRです。
 
 次の例は、部分PRを含むペイロードから主要なフィールドだけを抜粋したものです。
 更新できたパッケージと、更新から除外したパッケージの記録先を確認してください。
@@ -551,7 +551,7 @@ BOMの版は`from`と`to`、対象パッケージの版は`manages`で区別し�
 }
 ```
 
-採用条件は、[部分PRの成立条件](remediation-logic.md#partial-pr-selection)を参照してください。
+採用条件は、[部分PRの成立条件](remediation-package-logic.md#partial-pr-selection)を参照してください。
 
 ## PR操作イベントのフィールド {#remediation-operation-fields}
 
@@ -559,7 +559,7 @@ BOMの版は`from`と`to`、対象パッケージの版は`manages`で区別し�
 1つの操作について、送信前の記録、操作結果、後から確認した結果は、それぞれ別のイベントです。
 
 PR処理の記録は、`remediation.storage_dir`の下の`prs.json`に保存します。
-保存する内容は、[保存ファイル](remediation-reference.md#stored-records)を参照してください。
+保存する内容は、[保存ファイル](remediation-pr-logic.md#stored-records)を参照してください。
 
 `operations[]`の1要素のフィールドは次のとおりです。
 
@@ -652,7 +652,7 @@ Webhookには、送信元を一意に識別する値や、`prs.json`の作り直
 | `code` | string | 書き込みを停止する問題の分類 | — |
 | `repo` | string | 問題があるリポジトリの`owner/name` | 全リポジトリに関わる場合は省略 |
 | `target` | string | 問題があるファイルと対象位置を表す表示用文字列 | 対象を限定しない場合は省略 |
-| `reason` | string | 問題の具体的な原因を示す[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `reason` | string | 問題の具体的な原因を示す[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 問題の内容を補足する説明文 | 省略 |
 
 `code`の値は次のとおりです。
@@ -679,4 +679,4 @@ Webhookには、送信元を一意に識別する値や、`prs.json`の作り直
     - `fix_targets`の省略・切り詰めや処理対象の変化があるため、その通知だけで対応する`pull_requests[]`の要素を特定できない場合がある
     - `repo`があり`target`がなければ、そのリポジトリ全体に関わる問題
 
-停止条件は、[書き込みの停止](remediation-logic.md#write-stops)を参照してください。
+停止条件は、[書き込みの停止](remediation-pr-logic.md#write-stops)を参照してください。

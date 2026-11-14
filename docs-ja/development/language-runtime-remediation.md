@@ -50,7 +50,7 @@
     - 修正版がないイメージには修正計画の項目が作られないため、系列を上げる案内は通知の検出結果の注記に載せる
     - 注記は「サポート終了(EOL): この系列には修正版が出ないため、系列を上げる必要がある(手動)」とする
 
-詳しい条件は[ベースレイヤーの照合](../documentation/remediation-logic.md#base-layer-matching)、案内の読み方は[再ビルドの案内](../documentation/remediation-results.md#rebuild-guidance)にまとめている。
+詳しい条件は[ベースレイヤーの照合](../documentation/remediation-base-image-logic.md#base-layer-matching)、案内の読み方は[再ビルドの案内](../documentation/remediation-update-results.md#rebuild-guidance)にまとめている。
 
 ## 検証方法
 

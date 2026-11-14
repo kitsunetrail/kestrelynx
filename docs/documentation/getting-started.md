@@ -118,7 +118,7 @@ Choose the instructions that suit your environment.
     ```
 
     - This creates a ServiceAccount, a read-only ClusterRole and its ClusterRoleBinding, a ConfigMap, a PVC, and a Deployment.
-    - This command does not apply `work/`, so apply it separately following [Work Pod configuration](remediation-setup.md#kubernetes-language-updates) only if you use language-package updates.
+    - This command does not apply `work/`, so apply it separately following [Work Pod configuration](remediation-setup-work-pods.md#kubernetes-language-updates) only if you use language-package updates.
 
 !!! warning "Do not run two copies"
 

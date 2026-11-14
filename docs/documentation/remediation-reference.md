@@ -1,986 +1,183 @@
-# Supported inputs and reason codes
+---
+title: Remediation support scope
+---
 
-This page lists the input formats, runtimes, result values, and reason codes used by remediation plans and fix pull requests.
-See [Setup steps](remediation-setup.md) to enable them.
+# Remediation support scope
+
+Use this page to check supported environments, update targets, input files, and runtimes for remediation plans and pull requests.
+For setup, see [Enabling remediation plans](remediation-setup.md#enable-fix-plans).
+
+To look up a file type, start with [Supported input formats](#supported-inputs).
+Use the following sections to find what you need.
+
+| What you want to check | Section |
+| --- | --- |
+| Environments and update targets | [Scope and requirements](#scope-and-requirements) |
+| File syntax | [Supported input formats](#supported-inputs) |
+| Runtime versions | [Supported runtimes](#supported-runtimes) |
+
+For the terms used on this page, see [Terms](remediation.md#terms).
 
 ## Scope and requirements {#scope-and-requirements}
 
+This section shows which targets can have update candidates in a plan and which files remediation pull requests can update.
+
 ### Supported environments {#supported-environments}
 
-| Item | Support |
+The table lists operating requirements and requirements for work containers.
+
+| Item | Requirement |
 | --- | --- |
-| Container environment | Remediation plans and PR creation are supported in Docker and Kubernetes modes |
-| Source mappings | Specify source edit locations for Compose workloads; Dockerfiles and dependency directories for Docker containers that do not use Compose; or manifests, Kustomize `images` entries, Helm values keys, Dockerfiles, and dependency directories for Kubernetes workloads |
+| Container environment | Plans and PR creation supported in Docker and Kubernetes modes |
 | Source host | GitHub |
-| Work containers | Linux `amd64` and `arm64` |
-| Language update runtimes | Series listed in [Supported runtimes](#supported-runtimes) |
-| Sensor | Not required for remediation plans or fix pull requests |
-| Kubernetes plans | Published-image and Dockerfile base-image update candidates, guidance for pulling floating tags again, and language-package update candidates |
-| Kubernetes PRs | Supports image tag updates in plain manifests, Kustomize `images[].newTag` updates, image tag updates in Helm values, base image updates in Dockerfiles, and Maven `pom.xml` updates; npm / pnpm / pip / uv / Go / Gradle updates require [work Pods configured](remediation-setup.md#kubernetes-language-updates) |
+| Work container architecture | Linux `amd64` and `arm64` (see the [Supported runtimes](#supported-runtimes) for Gradle restrictions) |
+| Runtime for language updates | Versions in [Supported runtimes](#supported-runtimes) |
+| Sensor | Not required |
+
+The table shows the target and files you can specify for each environment.
+
+| Running target | `workload` syntax | Files you can map |
+| --- | --- | --- |
+| Compose service | `compose/<project>/<service>` | Compose (`compose`), Dockerfile (`dockerfile`), dependency directory (`dependencies`) |
+| Docker container without Compose | `container/<name>` | Dockerfile (`dockerfile`), dependency directory (`dependencies`) |
+| Kubernetes container | `<kind>/<namespace>/<name>/<container>` | Manifest (`manifest`), Kustomize (`kustomize`), Helm values (`helm_values`), Dockerfile (`dockerfile`), dependency directory (`dependencies`) |
+
+For the dependency directory, specify the directory containing dependency declarations and lockfiles.
+For the files and directory scope each manager reads, follow its link in [Supported input formats](#supported-inputs).
+
+Across all mappings with the same `workload`, use only one of `manifest`, `kustomize`, or `helm_values` to manage Kubernetes image tags.
+For the syntax of each value, see [Source mappings](configuration.md#remediation-mappings).
+
+The table shows Kubernetes plan contents, files a PR can update, and whether a work Pod is required.
+
+| Update target | Plan | PR | Work Pod required |
+| --- | --- | --- | --- |
+| Published image | Update candidates | Image tag in a plain manifest | No |
+| Published image (Kustomize) | Update candidates | `images[].newTag` | No |
+| Published image (Helm values) | Update candidates | Image tag in values | No |
+| Dockerfile base image | Update candidates | Dockerfile `FROM` | No |
+| Re-pulling a floating tag | Re-pull guidance | No PR | No |
+| Maven dependencies | Update candidates | `pom.xml` | No |
+| npm, pnpm, pip, uv, Go, and Gradle dependencies | Update candidates | Dependency files for each tool | Yes |
+
+For updates that require a work Pod, see [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates).
 
 ### docker run containers {#docker-run-containers}
 
-- `container/<name>` mappings support Dockerfile base image and dependency package updates; they do not create PRs that change the image tag used to start the container
-- Only containers running when the container list is retrieved in each cycle are included; short-lived jobs using `--rm` may be missed
-- Renaming or recreating a container takes effect in the next cycle; after renaming a container, also update the mapping's `workload`
+A `container/<name>` mapping supports updates to Dockerfile base images and dependencies.
+It does not create PRs to change the image tag specified when starting the container.
 
-When a tag is reassigned to another image, handling of an older container that is still running depends on the image store and the operation.
+Targets are checked under the following conditions in each cycle.
 
-| Operation and image store | Handling of the older container |
-| --- | --- |
-| Rebuilding with `docker build` using the same tag; containerd | The old image is removed, so it cannot be scanned and does not appear in remediation plans |
-| Rebuilding with `docker build` using the same tag; classic overlay2 | The old image remains and is included in scans and remediation plans |
-| Reassigning the tag with `docker tag` | Included in scans and remediation plans with either image store |
+- Targets are containers running when the container list is retrieved in each cycle
+- Short-lived jobs run with `--rm` may not be included
+- Renamed or recreated containers are reflected from the next cycle, and renaming also requires changing the mapping's `workload`
 
-If the old image has been removed from the containerd image store, recreate the container with the new image to include it.
-See [Mapping docker run containers](remediation-setup.md#docker-run-mappings) for a configuration example.
+Set the run time with `schedule.daily_at`; if omitted, execution is every 24 hours (see [Schedule](configuration.md#schedule)).
+How an old container still running after its tag is reassigned is handled depends on the operation and image store.
+
+| Operation | Image store | Handling of the old container |
+| --- | --- | --- |
+| Run `docker build` again with the same tag | containerd image store enabled | Excluded from scans and remediation plans because the old image is removed |
+| Run `docker build` again with the same tag | containerd image store disabled (overlay2) | Included in scans and remediation plans because the old image remains |
+| Reassign a tag with `docker tag` | containerd or overlay2 | Included in scans and remediation plans |
+
+If the containerd image store removes the old image, recreating the container with the new image makes it eligible.
+For configuration examples, see [Mapping docker run containers](remediation-setup-docker.md#docker-run-mappings).
 
 ### Supported targets {#supported-targets}
 
-| Target | Source | Source mapping |
-| --- | --- | --- |
-| Distributed image | Public registries and private registries with authentication configured | Not required to display comparison results; required for PRs that change Compose, Kubernetes manifests, Kustomize, or Helm values |
-| Dockerfile base image | Public registries and private registries with authentication configured | A Dockerfile or Compose mapping is required from the planning stage |
-| npm and pnpm dependencies | Public npm registry | A dependency-directory mapping is required from the planning stage |
-| pip and uv dependencies | Public PyPI | A dependency-directory mapping is required from the planning stage |
-| Go module dependencies | Public Go module proxy (`proxy.golang.org`) and `sum.golang.org` | A dependency-directory mapping is required from the planning stage |
-| Maven dependencies (`pom.xml`) | Maven Central | A dependency-directory mapping is required from the planning stage |
-| Gradle dependencies (`gradle.lockfile`) | Maven Central | A dependency-directory mapping is required from the planning stage |
+The table shows where each update target is obtained and when a source mapping becomes necessary.
 
-Private npm registries, private PyPI sources, and private Go modules are not supported for updates.
-Image registry authentication is not used to retrieve dependency packages.
+| Update target | Where specified or target file | Source | Source mapping |
+| --- | --- | --- | --- |
+| Published image | Image specified when starting a container | Public registries and private registries with authentication configured | Required for PRs |
+| Base image | Image specified in a Dockerfile's `FROM` instruction | Public registries and private registries with authentication configured | Required for plans |
+| npm and pnpm dependencies | Dependency directory | Public npm registry | Required for plans |
+| pip and uv dependencies | Dependency directory | Public PyPI | Required for plans |
+| Go dependency modules | Dependency directory | Public Go module proxy (`proxy.golang.org`) and `sum.golang.org` | Required for plans |
+| Maven dependencies | `pom.xml` | Maven Central | Required for plans |
+| Gradle dependencies | `gradle.lockfile` | Maven Central | Required for plans |
+
+Published image comparison results do not require a mapping, but PRs require a mapping to Compose, Kubernetes manifests, Kustomize, or Helm values.
+Base image plans require a Dockerfile or Compose mapping, and dependency plans require a dependency directory mapping.
+
+Private npm registries, private PyPI repositories, and private Go modules cannot be update targets.
+Image registry credentials are not used to obtain dependencies.
 
 ## Supported input formats {#supported-inputs}
 
-### Compose formats {#compose-formats}
+The table links each file type to the section describing supported syntax and update scope.
 
-| Input | Support |
+| File | Format description |
 | --- | --- |
-| Edit location | Image name written directly in `services.<service>.image` |
-| Image name | A string matching the running repository and tag, with an identifiable edit location |
-| Pinned tag | A tag specifying a full version can be changed to a newer patch in the same series |
-| Floating tag | Can produce a re-pull candidate, without a PR rewriting an image name that uses the same tag |
-| Variables and digests | Unsupported in image names being edited |
-| YAML anchors, aliases, and merge keys | Unsupported when they affect the edit location |
-| Block scalars and non-string `image` values | Unsupported |
-| `include` and `extends` on the target service | Unsupported for automatic editing |
-| Services with `build:` | Completed images are excluded from distributed-image searches |
-
-See [Distributed image tags](remediation-logic.md#published-image-tags) for tag selection and [Excluding local builds](remediation-logic.md#local-builds) for handling build targets.
-
-### Manifest formats {#manifest-formats}
-
-| Input | Support |
-| --- | --- |
-| YAML documents | Plain manifests, including files containing multiple documents |
-| Objects | `Deployment`, `StatefulSet`, and `DaemonSet` in `apps/v1`; `Job` and `CronJob` in `batch/v1`; `Pod` in `v1` |
-| Target selection | Selects exactly one document by `apiVersion`, `kind`, `metadata.name`, and `metadata.namespace` when the file specifies a value, then selects the edit location by container name |
-| Edit location | `image` in regular containers and native sidecars with `restartPolicy: Always` |
-| Edited text | Changes only the explicit tag matching the declared and running image, preserving formatting and comments |
-| Duplicate keys | Checks all YAML documents before and after editing and rejects duplicates |
-| Digests, `$` variables, and missing tags | Require manual action in image names being edited |
-| Block scalars and `image` values other than simple strings | Require manual action |
-| YAML anchors, aliases, and merge keys | Require manual action when involved in the edit path or document identity, including `metadata` |
-| Flux `$imagepolicy` | Requires manual action when the marker appears on the target `image` line |
-| `{{` | Requires manual action when present anywhere in the file |
-| Objects inside `List` and ordinary init containers | Not edited |
-| `.argocd-source-*.yaml` | Requires manual action when an Argo CD Image Updater write-back file exists in the same directory |
-
-Even when the file omits the target namespace, overlapping mappings to the same document prevent PR creation.
-See [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) for creation requirements.
-
-### Kustomize formats {#kustomize-formats}
-
-Following the [example of `images` in `kustomization.yaml` and `affects`](remediation-setup.md#kustomize-pull-requests), KestreLynx edits only `newTag` in the entry selected by name.
-
-| Input | Support |
-| --- | --- |
-| File | `kustomization.yaml`, `kustomization.yml`, or `Kustomization`, containing exactly one YAML document |
-| Target selection | Selects exactly one entry whose `images[].name` matches `kustomize.image` |
-| Edited text | Changes only the existing string `newTag`, preserving quotes, comments, and line endings |
-| `newName` | Preserves the existing value and checks the resulting image name against declared and running image names; changing `newName` itself requires manual action |
-| Missing or empty `newTag` | Requires manual action with `kustomize_tag_not_set` |
-| Numbers, non-string values, and values with explicit YAML tags | Require manual action with `kustomize_not_string`; quote tags that would otherwise be parsed as numbers |
-| Block scalars and values containing `$` | Require manual action with `kustomize_block_scalar` or `kustomize_variable` |
-| Digests | A `digest` field in the target entry or a digest in its image name requires manual action with `kustomize_digest` |
-| YAML anchors, aliases, and merge keys | Require manual action when involved in the document root, `images`, its entries, or values being read |
-| `{{` | Requires manual action with `kustomize_template` when present anywhere in the file |
-| Field spelling and duplicate keys | Spellings that differ from known field names in case, such as `Newtag`, and duplicate keys differing only in case require manual action with `kustomize_invalid` |
-| `imageTags`, `patches`, `replacements`, `components`, `helmCharts`, and `helmGlobals` | Files using these fields require manual action with `kustomize_unsupported_feature` |
-| `generators`, `transformers`, `vars`, `patchesStrategicMerge`, and `patchesJson6902` | Files using these fields require manual action with `kustomize_unsupported_feature` |
-| Remote `resources` and `bases` | Require manual action with `kustomize_unsupported_feature` |
-| Interference from another `images` entry | Accounts for Kustomize matching `name` as a regular expression; cases such as another entry affecting the target's name or image names before or after the edit require manual action with `kustomize_image_chained` |
-| A `name` that is not a valid regular expression | Checks all `images` entries, including non-target entries, and requires manual action with `kustomize_invalid` |
-| Flux `$imagepolicy` | A marker on the `newTag` line requires manual action with `kustomize_image_automation` |
-| `.argocd-source-*.yaml` | An Argo CD Image Updater write-back file in the same directory requires manual action with `image_updater_file` |
-
-A missing file uses `manifest_file_not_found`, and a file of a type that cannot be edited uses `manifest_file_unusable`.
-If the image name derived from the file differs from the declared or running image name, the reason is `source_mismatch`.
-
-See [Kustomize PRs](remediation-logic.md#kustomize-prs) for checks across the whole set and handling of ordinary init containers.
-
-### Helm values formats {#helm-values-formats}
-
-KestreLynx edits only the image tag selected by `helm_values.key` in the [configuration example](remediation-setup.md#helm-values-pull-requests).
-The repository, including its registry, and tag must match both the declared image and the running image.
-
-| Input | Support |
-| --- | --- |
-| File | A `.yaml` or `.yml` values file containing one YAML document without duplicate keys |
-| Mapping form | A mapping containing `repository` and a string `tag`, with optional `registry` |
-| String form | An image name in `"repo:tag"` form |
-| Target selection | Selects the path in `helm_values.key`; a missing value requires manual action with `helm_key_missing` |
-| Edited text | Changes only the tag, preserving existing quotes and comments |
-| Quoting a new tag | If the mapping form's old tag is unquoted and the new tag would not be a string in Helm, such as `1.10` or `on`, writes it in double quotes and explains this in the PR body |
-| Missing or empty-string tag | Requires manual action with `helm_tag_from_chart` because the chart's default is used |
-| Numbers, booleans, null, and values with explicit YAML tags | Require manual action with `helm_not_string`, including an existing unquoted tag that Helm does not read as a string |
-| Block scalars and values containing `$` | Require manual action with `helm_block_scalar` or `helm_variable` when present in values being read |
-| Digests | A nonempty `digest` in the mapping or a digest in the string form requires manual action with `helm_digest` |
-| `repository` format | A repository containing a tag or digest requires manual action with `helm_values_shape` |
-| `name` or `image` in the same mapping as `repository` | Requires manual action with `helm_values_shape` when present |
-| YAML anchors and aliases | Require manual action with `helm_anchor_or_alias` when involved in the path to the target key or values being read |
-| Anchors and aliases on keys | An anchored key in a mapping on the path or in the target mapping requires manual action with `helm_invalid`; an aliased key anywhere in the file requires manual action with `helm_anchor_or_alias` |
-| Merge keys | Require manual action with `helm_merge_key` at the document root, on the path to the target key, or in the target mapping |
-| Unquoted keys that Helm does not read as strings, or pairs that resolve to the same key | Require manual action with `helm_invalid` in mappings on the path or in the target mapping, including pairs such as `"true"` and `on` |
-| Multiple documents, duplicate keys, and invalid YAML | Require manual action with `helm_invalid`; duplicate keys are checked throughout the file |
-| `{{` | Requires manual action with `helm_template` when present anywhere in the file |
-| Flux `$imagepolicy` | A marker on the `repository`, `registry`, or `tag` line, or on the string-form image line, requires manual action with `helm_image_automation` |
-| `.argocd-source-*.yaml` | Requires manual action with `image_updater_file` when an Argo CD Image Updater write-back file exists in the same directory |
-
-A missing file uses `manifest_file_not_found`, and a file whose type cannot be edited uses `manifest_file_unusable`.
-An image name derived from the file that differs from the declared or running image name uses `source_mismatch`.
-
-See [Helm values PRs](remediation-logic.md#helm-values-prs) for checks across the whole set, handling of ordinary init containers, and the premise about the final value.
-### Dockerfile formats {#dockerfile-formats}
-
-| Input | Support |
-| --- | --- |
-| Pinned `FROM` tag | Editable when the image name has no variables or digest and the tag location can be identified |
-| Floating `FROM` tag | Used for base verification, but excluded from tag-update PRs |
-| Build `target` | A stage name can be specified; defaults to the last stage |
-| Inheritance from earlier stages | Supported when inheritance can be followed to an external base image |
-| `--platform` | Static values are supported on the `FROM` specifying the external base, but unsupported on intermediate `FROM` instructions |
-| Variables in `FROM`, `scratch`, and image names containing digests | Unsupported for automatic editing |
-| Nonstandard syntax frontends and the `escape` directive | Unsupported for automatic editing |
-| `ONBUILD` in inherited stages or base images | Unsupported for automatic updates |
-| Compose build context | Static paths within the repository are supported |
-| Compose `dockerfile` and `target` | Supported static values can identify the Dockerfile edit location |
-| Remote build contexts, `dockerfile_inline`, and `additional_contexts` | Unsupported for determining edit locations from Compose |
-
-See [Base image selection](remediation-logic.md#base-image-selection) for determining edit locations and checking mappings.
-
-### npm dependency files {#npm-inputs}
-
-| Input | Support |
-| --- | --- |
-| Required files | `package.json` and `package-lock.json` for a single project |
-| Lockfile format | `lockfileVersion` 2 or 3, with a root entry in `packages` |
-| Package source | Distributions from the public npm registry |
-| Workspaces | Unsupported |
-| Git, URL, local references, and aliased installations | Unsupported for automatic updates of target packages |
-| Bundled dependencies and package-specific shrinkwrap | Unsupported for automatic updates of target packages |
-| Versions forced by `overrides` | Affected packages require manual handling |
-| Private registry settings in `.npmrc` | Unsupported |
-| Re-resolution through dependent packages | Applies to packages that do not reach fixed versions through normal updates and whose dependent packages are confirmed to require older versions, including packages declared directly by the project if they meet the [eligibility conditions](remediation-logic.md#dependent-reresolution-eligibility) |
-
-#### Re-resolution support and limits {#dependent-reresolution-limits}
-
-This mechanism applies to packages whose dependent packages' version requirements prevent updates to fixed versions, including packages that the project also declares directly in `package.json`, `pyproject.toml`, or the lockfile's root requirements.
-The project's own declarations follow the [same rules as normal updates](remediation-logic.md#direct-dependencies) and are rewritten if they exclude the fixed version and their forms are supported.
-
-The following examples assume a lowest fixed version of `1.2.8` for npm and pnpm, and `2.0.0` for uv.
-
-| Example requirement from a dependent package | Use of this mechanism | Notes |
-| --- | --- | --- |
-| npm or pnpm `0.0.8` | Yes | Exact requirement for a version before the fix |
-| npm or pnpm `<1.0` | Yes | The upper bound excludes fixed versions |
-| uv `==1.2.3` or `<1.0` | Yes | The exact requirement or upper bound excludes fixed versions |
-| uv `~=1.4` | Yes | Allows versions from 1.4 up to but excluding 2.0 when fixed versions start at 2.0 |
-| npm or pnpm `^1.2.0` | No | The range allows a fixed version |
-| npm or pnpm ranges containing `\|\|`, or tags such as `latest` | No | These specifications do not establish grounds for re-resolution |
-| uv `!=1.2.3`, `===1.2.3`, or `==1.2.*` | No | Exclusions, arbitrary equality, and wildcards do not establish grounds for re-resolution |
-
-The following cases are excluded.
-
-- The version of the target package used directly by the project is below the fixed version and differs from the version found in the running image
-- The target or a required dependent package uses an alias, local, Git, or URL reference, or has its version forced by `overrides`.
-- Conflicting declarations for the same dependency prevent a single version requirement from being determined.
-- The project uses pip or a pnpm version outside series 9, 10, 11, and 12.x from 12.10.0.
-
-| Limited resource | Limit and handling |
-| --- | --- |
-| Direct dependencies used as starting points for re-resolution | Up to 5 packages; exceeding this limit requires manual handling with `dependents_update_limit` |
-| Packages added, changed, or removed outside the update targets | Up to 64 in total; results exceeding this limit fail with `chain_move_limit` |
-| Work per item | Execution counts, communication volume, work time, and other resources have limits; repeated deferrals require manual handling with `dependents_update_limit` |
-
-#### Re-resolution check conditions {#dependent-reresolution-rules}
-
-Results with the following changes are not adopted.
-In webhooks, check both the per-package `packages[].reason` and `update.chain.reason`, which gives the detailed reason.
-
-| Example change | Recorded reason code |
-| --- | --- |
-| A version decreases on any path, or versions before and after the update cannot be matched | `chain_downgrade` |
-| The version or reference of a direct dependency changes when it is neither a normal update target nor a starting point for re-resolution | `unexplained_dependency_diff` |
-| The number of packages changed outside the update targets exceeds the limit | `chain_move_limit` |
-| The vulnerability targeted for fixing remains detectable in the post-update scan | `source_target_still_detected` |
-| A new vulnerable package appears | `source_introduced_findings` |
-| More dependent packages use a vulnerable package | `source_introduced_findings` |
-| A new version contains a vulnerability absent from the corresponding old version | `source_introduced_findings` |
-| One version splits into multiple vulnerable versions, or multiple paths merge so that a single old version of the vulnerable package cannot be determined | `source_introduced_findings` |
-| A KEV-listed vulnerability is introduced or is involved in the increases, splits, merges, or similar changes above | `source_introduced_kev` |
-
-A vulnerability may qualify as carried when only the version changes at the same dependency position and vulnerabilities present in the old version remain without an increase.
-See [Carried vulnerabilities](remediation-logic.md#dependent-reresolution-carried-findings) for an example.
-
-These checks have the following limits.
-
-- The checks cannot identify vulnerabilities absent from scan results or outside the configured severity range.
-- Carried vulnerabilities remain unfixed, and a vulnerability targeted for fixing cannot pass by qualifying as carried.
-- The checks do not compare the total number of paths from the project to vulnerable packages.
-
-#### Release waiting periods and retries {#dependent-reresolution-waits}
-
-Newly introduced versions must wait 72 hours after publication.
-A package version already present in the original lockfile is exempt, and a version whose publication time cannot be confirmed is not adopted.
-
-- The webhook's `retry_after` field shows the retry time for a release waiting period.
-- Three consecutive deferrals caused by release waiting periods or by the same type of processing limit stop re-resolution for the same inputs.
-- Cycles skipped before the retry time do not count toward the three deferrals.
-- After re-resolution stops, normal update results that pass the checks are still adopted, and remaining targets require manual handling with the following reason codes.
-
-| Stop cause | Reason code for remaining targets |
-| --- | --- |
-| Three consecutive release waits | `dependents_update_rejected` |
-| Three consecutive deferrals caused by the same type of processing limit | `dependents_update_limit` |
-
-### pnpm dependency files {#pnpm-inputs}
-
-| Input | Support |
-| --- | --- |
-| Required files | `package.json` and `pnpm-lock.yaml` |
-| Lockfile format | `lockfileVersion: '9.0'` with only the `.` importer |
-| Manifest consistency | Direct dependency declarations must match the importer |
-| Workspaces, catalogs, and patched dependencies | Unsupported |
-| Sources other than the public npm registry | Unsupported for automatic updates of target packages |
-| Lockfiles recording automatic runtime downloads | Unsupported |
-| `resolutions`, `configDependencies`, `executionEnv`, and similar settings | Unsupported settings that alter resolution or additional downloads |
-| pnpm 12 | Supported from 12.10.0; 12.x releases before 12.10.0 require manual handling |
-| Re-resolution through dependent packages | Applies to packages that do not reach fixed versions through normal updates and whose dependent packages are confirmed to require older versions, including packages declared directly by the project if they meet the [eligibility conditions](remediation-logic.md#dependent-reresolution-eligibility) |
-
-A `pnpm-workspace.yaml` in the same directory can be read if it contains only the following settings.
-The file's presence alone does not establish a workspace.
-
-| Setting | Supported form |
-| --- | --- |
-| `allowBuilds` | A mapping from package specifications to boolean or string values |
-| `onlyBuiltDependencies`, `ignoredBuiltDependencies`, and `neverBuiltDependencies` | Lists of package-name strings |
-| `supportedArchitectures` | Lists of strings for `os`, `cpu`, and `libc` |
-| `packages` | Unsupported because it is treated as a workspace declaration |
-| Other keys | Unsupported |
-| `pnpm-workspace.yaml` above the dependency directory | Checked up to the repository root; its presence requires manual handling |
-
-The `pnpm` settings in `package.json` also support the build-permission and architecture settings listed above.
-Scripts remain disabled during updates even when readable build-permission settings are present.
-
-### pip dependency files {#pip-inputs}
-
-| Input | Support |
-| --- | --- |
-| Required file | UTF-8 `requirements.txt` |
-| Strict version pins | `name==1.2.3` can be updated |
-| Version ranges or no version specification | Reports an expected fix through rebuilding if a fixed version is allowed, without rewriting to a pinned version |
-| Extras | `name[extra]` can be read |
-| Comments and continuation lines | Readable |
-| Existing `--hash` values | Updated from PyPI wheel information when changing a pinned version |
-| Environment markers | Not evaluated automatically; target packages require manual handling |
-| References to other files, such as `-r` and `-c` | Unsupported |
-| Options that change package sources | Unsupported |
-| Git, URL, and local references | Unsupported for automatic updates of target packages |
-| Versions with only source distributions | Unsupported for automatic updates |
-
-See [pip verification environment](remediation-logic.md#pip-target-environment) for verification requirements based on the running image.
-
-### uv dependency files {#uv-inputs}
-
-| Input | Support |
-| --- | --- |
-| Required files | Static `pyproject.toml` and `uv.lock` for a single project |
-| Lockfile format | `version = 1` and `revision = 5` |
-| Project | Must have `[project]` and require no dynamic metadata |
-| Python requirements | Automatic updates require `requires-python` in `[project]` |
-| Package source | Public PyPI |
-| Workspaces | Unsupported |
-| Git, URL, and local references | Unsupported for automatic updates of target packages |
-| Dependencies requiring source builds | Unsupported for automatic updates |
-| `[tool.uv]` | `required-version`, `dev-dependencies`, `sources`, and `package` can be read |
-| Other `[tool.uv]` settings | Unsupported |
-| `uv.toml` | Unsupported if present anywhere from the dependency directory to the repository root |
-| Re-resolution through dependent packages | Applies to packages whose dependent packages are confirmed to require older versions, including packages declared directly by the project if they meet the [eligibility conditions](remediation-logic.md#dependent-reresolution-eligibility), and includes reassessment of an initial update result rejected by dependency diff checks |
-
-Readable `[tool.uv]` keys still require supported dependency sources and project structure.
-
-### Go dependency files {#go-inputs}
-
-| Input | Support |
-| --- | --- |
-| Required files | `go.mod` and `go.sum` in the mapped dependency directory |
-| Target findings | Findings from Go binaries in the running image that Trivy detects as `gobinary` |
-| Matching binaries | Only binaries whose main module path matches `module` in `go.mod` are targeted; findings from unmatched binaries, such as tools in the base image, are excluded from the plan |
-| Built-in dependencies | Module versions that do not match `require` in `go.mod`, or a truncated package list, require manual handling with `go_binary_not_from_source` |
-| Source | Only public `proxy.golang.org` and `sum.golang.org`; private modules are excluded |
-| `replace` and `exclude` | Any occurrence requires manual handling |
-| `go` line | Requires 1.21 or later; a missing line or a version below 1.21 requires manual handling |
-| `toolchain` line | Supports released Go versions in `go1.N.M` form; `default`, custom suffixes, release candidates, and similar forms require manual handling |
-| `go.work` | Requires manual handling if present in the dependency directory or any ancestor up to the repository root |
-| `vendor` | Requires manual handling if present in the dependency directory |
-| Another major version | Fixes available only under another module path require manual handling with `fix_in_other_major_version`, with [hints when a package cannot reach its fix](remediation-results.md#fix-hints) showing the lowest fixed version and whether the project or a dependent requires the package, when known |
-| Standard library `stdlib` | No PR is created; the remediation plan recommends building with a newer Go version |
-
-See [Go candidate selection](remediation-logic.md#go-package-selection) for candidate selection and standard library guidance, and [Go update validation](remediation-logic.md#go-update-validation) for acceptance conditions.
-
-### Maven dependency files {#maven-inputs}
-
-| Input | Support |
-| --- | --- |
-| Required files | `pom.xml` in the mapped dependency directory and each module's `pom.xml` reached through `modules` |
-| Target findings | Findings from Java archives in the running image that Trivy detects as `jar` |
-| Target dependencies | Compile and runtime dependencies; test, provided, and system dependencies are excluded from updates |
-| Source | Maven Central only |
-| Module paths | Relative paths beneath the mapped directory; absolute paths, `..`, hidden directories, and paths specified by POM filename require manual handling |
-| Module structure | A missing `pom.xml`, duplicate `groupId:artifactId`, a parent cycle, more than 100 modules including the root, or more than 8 levels below the root requires manual handling with `maven_reactor_unsupported` |
-| Root inheritance | All modules must inherit from the root's `pom.xml` for updates; otherwise, manual handling is required |
-| Parent lookup locations | Check the `relativePath` destination and `../pom.xml`; a POM with the same artifactId as the parent must also match its groupId and version and be among the modules read |
-| Parent mismatch | A POM with the same artifactId as the parent that has a different groupId or version or is not among the modules read, or a `relativePath` pointing outside the repository requires manual handling with `maven_parent_mismatch` |
-| Project profiles | Changes to dependencies, management, properties, parents, modules, or repositories require manual handling |
-| Project retrieval settings | `repositories` or `pluginRepositories` declarations, or `.mvn/maven.config` or `.mvn/extensions.xml` at the root, require manual handling |
-| Dependency and management declarations | `optional` on direct dependencies, version ranges, relocation, duplicate dependency or management declarations, or `optional` or `exclusions` in management require manual handling |
-| Target versions and types | A SNAPSHOT version in the running image or a target direct dependency, or a classifier or non-jar type on a target direct dependency, requires manual handling |
-| Multiple running versions | Multiple running versions of the same package require manual handling |
-| Version sources | Supports directly written versions, properties, parent property overrides, BOM version properties, and pins through `dependencyManagement`; targets whose edit locations cannot be determined require manual handling |
-
-- Maven updates do not use work containers or Pods; KestreLynx rewrites `pom.xml`
-
-See [Maven candidate selection](remediation-logic.md#maven-package-selection) for candidates and edit methods, and [Maven update validation](remediation-logic.md#maven-update-validation) for acceptance conditions.
-
-### Gradle dependency files {#gradle-inputs}
-
-| Input | Support |
-| --- | --- |
-| Required files | `gradle.lockfile`, `build.gradle` or `build.gradle.kts`, `settings.gradle` or `settings.gradle.kts`, and `gradle/wrapper/gradle-wrapper.properties` in the mapped dependency directory |
-| Optional files | Reads `gradle.properties`, `gradle/libs.versions.toml`, `settings-gradle.lockfile`, and `buildscript-gradle.lockfile`; `settings-gradle.lockfile` is also required when using a catalog |
-| Target findings | Findings from Java archives in the running image that Trivy detects as `jar` |
-| Target dependencies | Dependencies in `gradle.lockfile`'s `compileClasspath`, `runtimeClasspath`, or `productionRuntimeClasspath` that match the finding's name and running version |
-| Sources | Dependencies come only from Maven Central; plugins are retrieved from Gradle Plugin Portal and Maven Central |
-| Locking configuration | `dependencyLocking` must contain `lockAllConfigurations()` and `lockMode = LockMode.STRICT` exactly once each, and lockfile entries or `empty=` must include `compileClasspath` and `runtimeClasspath` |
-| Gradle version | Uses the same version as the wrapper's `distributionUrl`; URLs must have the form `https://services.gradle.org/distributions/gradle-<version>-bin.zip` or `-all.zip` |
-| JDK | Uses the version specified by `languageVersion` in `java.toolchain`, or 21 if not declared |
-| Runtime combinations | Limited to the Gradle version, JDK, and platform combinations in [Supported runtimes](#supported-runtimes) |
-| Project structure | Supports a single project; `include`, `includeBuild`, `allprojects`, `subprojects`, `buildSrc`, or `gradle/dependency-locks` requires manual handling |
-| Script selection | Having both Groovy and Kotlin build scripts, or both settings files, requires manual handling |
-| Multiple running versions | Multiple running versions of the same package require manual handling |
-
-#### Build script forms {#gradle-build-forms}
-
-Build scripts accept the following statements and argument forms.
-
-| Statement | Support |
-| --- | --- |
-| `plugins { }` | `java`, `java-library`, and `application` without versions; external plugin IDs and versions written directly as listed in the [allowed plugins table](#gradle-plugins) |
-| `group`, `version`, and `description` | String literals |
-| `java { }` | `toolchain { languageVersion = JavaLanguageVersion.of(N) }`, and assignments of strings, numbers, or `JavaVersion.VERSION_n` to `sourceCompatibility` and `targetCompatibility` |
-| `repositories { }` | Only `mavenCentral()` |
-| `configurations { }` | `compileOnly { extendsFrom(configurations.annotationProcessor.get()) }`; Groovy also supports `compileOnly { extendsFrom annotationProcessor }` |
-| `dependencies { }` | `configurationName("g:a:v")`, `configurationName("g:a")`, `configurationName(libs.x)`, and `configurationName(libs.bundles.x)`, and the same forms inside `constraints { }` |
-| `dependencyLocking { }` | Only `lockAllConfigurations()` and `lockMode = LockMode.STRICT`, with the block appearing once in the entire file |
-| `extra` and `ext` | Kotlin's `extra["p"] = "v"`, and Groovy's `ext["p"] = "v"` or `ext.p = "v"`, with names and values written directly |
-| Test tasks | Only `useJUnitPlatform()` inside `test { }`, `tasks.withType<Test> { }`, `tasks.withType(Test) { }`, `tasks.named<Test>("test") { }`, or `tasks.named("test") { }` |
-| `application { }` | `mainClass = "..."`; Kotlin also supports `mainClass.set("...")` |
-
-- Groovy dependency declarations can omit parentheses, as in `implementation 'g:a:v'`
-- Groovy also accepts directly written top-level `sourceCompatibility` and `targetCompatibility` values
-- Dependency and constraint configuration names can be `implementation`, `api`, `compileOnly`, `runtimeOnly`, `testImplementation`, `testCompileOnly`, `testRuntimeOnly`, `annotationProcessor`, or `testAnnotationProcessor`
-    - When using the Spring Boot plugin, `developmentOnly` is also read, but manual handling is required if standard configuration inheritance cannot determine whether the target is a direct dependency
-- Settings can contain `rootProject.name = "..."` and `gradlePluginPortal()` or `mavenCentral()` inside `pluginManagement { repositories { } }`
-    - Settings plugins are checked against the [allowed plugins table](#gradle-plugins); no combinations are currently allowed
-
-`gradle.properties` is limited to the following keys and values.
-
-| Key | Support |
-| --- | --- |
-| `org.gradle.parallel`, `org.gradle.caching`, `org.gradle.daemon`, and `org.gradle.configuration-cache` | `true` or `false` |
-| `org.gradle.jvmargs` | Space-separated memory settings using `-Xmx`, `-Xms`, or `-XX:MaxMetaspaceSize=`, and `-Dfile.encoding=UTF-8` |
-| Keys ending in `.version` | Versions written directly, limited to properties defined by the Spring Boot BOM in use |
-
-- For properties set through `extra` or `ext`, also read the Spring Boot BOM and its parents during the update and check that the names are defined
-- Catalogs accept only `[versions]`, `[libraries]`, `[bundles]`, and `[plugins]` in `gradle/libs.versions.toml`
-    - Libraries can be `"g:a:v"` or tables with `module` or `group` and `name`; versions can be string literals, `version.ref`, or omitted
-    - Bundles are lists of library aliases; duplicate aliases that map to the same accessor require manual handling
-    - Do not update `[versions]` values referenced by `[plugins]`; applying plugins through `alias(libs.plugins.x)` also requires manual handling
-- Statements absent from the table, including `apply from`, `buildscript { }`, `dependencyManagement { }`, `dependencyResolutionManagement { }`, `resolutionStrategy`, and `configurations.all`, require manual handling
-- Argument forms absent from the table, including string interpolation or construction, dynamic versions or version ranges, and `platform(...)` in dependency declarations, require manual handling
-- Other `gradle.properties` keys, Java agents, JVM arguments other than those allowed, line continuations, escapes, and duplicate keys require manual handling
-
-#### Allowed plugins {#gradle-plugins}
-
-| Plugin | Allowed version | Gradle version |
-| --- | --- | --- |
-| `java`, `java-library`, and `application` | No version specified | Gradle versions in [Supported runtimes](#supported-runtimes) |
-| `org.springframework.boot` | `4.1.2` | `9.8.2` |
-| `io.spring.dependency-management` | `1.1.7` | `9.8.2` |
-| `org.gradle.toolchains.foojay-resolver-convention` (settings) | No allowed combination | No allowed combination |
-
-- External plugins are allowed only in combinations whose versions have been checked; a version string that does not match exactly or a combination absent from the table requires manual handling with `gradle_plugin_unsupported`
-- Gradle updates use work containers or Pods, where build scripts and allowed plugin code run
-
-See [Gradle candidate selection](remediation-logic.md#gradle-package-selection) for candidates and edit methods, and [Gradle update validation](remediation-logic.md#gradle-update-validation) for acceptance conditions.
-
-### Node.js version declarations {#node-declarations}
-
-| Declaration | Supported form |
-| --- | --- |
-| `.nvmrc` and `.node-version` | Numeric values such as `22`, `22.14`, and `22.14.0` on the first nonempty line, with an optional leading `v` |
-| LTS declarations in `.nvmrc` | `lts/*` and recognized LTS series names |
-| `engines.node` in `package.json` | Exact versions and interpretable ranges, including comparison operators, `^`, `~`, and wildcards |
-| `devEngines.runtime` and `engines.runtime` | Objects or arrays specifying Node.js and its version range |
-| Values such as `system` and `current` | Unsupported because they do not identify an execution series |
-| Ranges with prerelease boundaries | Unsupported |
-| `onFail: download` in runtime declarations | Unsupported |
-
-Version files select the major series; the actual minor and patch version comes from the bundled table.
-See [Node.js selection](remediation-logic.md#node-selection) for how declarations are combined.
-
-### Python version declarations {#python-declarations}
-
-| Declaration | Supported form |
-| --- | --- |
-| uv `requires-python` | Interpretable Python version conditions such as `>=3.12,<3.15` |
-| `.python-version` | Values such as `3.13` and `3.13.5` on the first nonempty line |
-| CPython prefixes | Forms such as `cpython-3.13` and `cpython@3.13` |
-| `.python-versions` | Multiple-version declarations are unsupported |
-| PyPy, GraalPy, Pyodide, and `system` | Unsupported |
-| Free-threaded versions | Unsupported |
-
-`.python-version` selects the Python X.Y series, and its patch version may differ from the execution version.
-See [Python selection for uv](remediation-logic.md#uv-python-selection) for declaration consistency requirements.
-
-### Tool version declarations {#tool-declarations}
-
-| Declaration | Supported form |
-| --- | --- |
-| `packageManager` | Manager name and exact version, such as `npm@11.21.0` or `pnpm@11.28.5` |
-| Hash in `packageManager` | `name@version+<algorithm>.<hex>` |
-| Hash algorithms | `sha1`, `sha224`, `sha256`, `sha384`, and `sha512` |
-| `devEngines.packageManager` | Manager name and an exact version or interpretable range |
-| `engines.npm` and `engines.pnpm` | Exact version or interpretable range |
-| `tool.uv.required-version` | Exact version such as `==0.13.0`, or an interpretable range |
-| Tool versions with prerelease or build metadata | Unsupported |
-
-| Tool | Supported versions | Default version |
-| --- | --- | --- |
-| npm | Versions in series 9–12 compatible with the selected Node.js version | `11.21.0` |
-| pnpm | Versions in series 9–12 compatible with the selected Node.js version (12.x: 12.10.0 or later) | `11.28.5` |
-| uv | Supported stable versions at or above `0.12.22` | `0.13.0` |
-| pip | Version included in the official Python work image | `26.2.1` in the Python 3.13 work image |
-
-See [Tool version selection](remediation-logic.md#tool-version-selection) for choosing declared or default versions and [Waiting after tool release](remediation-logic.md#tool-release-age) for release-age requirements.
+| Compose file | [Compose formats](remediation-source-formats.md#compose-formats) |
+| Kubernetes manifest | [Manifest formats](remediation-source-formats.md#manifest-formats) |
+| Kustomize file | [Kustomize formats](remediation-source-formats.md#kustomize-formats) |
+| Helm values file | [Helm values formats](remediation-source-formats.md#helm-values-formats) |
+| Dockerfile | [Dockerfile formats](remediation-source-formats.md#dockerfile-formats) |
+| `package.json` and `package-lock.json` | [npm dependency files](remediation-dependency-formats.md#npm-inputs) |
+| `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml` | [pnpm dependency files](remediation-dependency-formats.md#pnpm-inputs) |
+| `requirements.txt` | [pip dependency files](remediation-dependency-formats.md#pip-inputs) |
+| `pyproject.toml` and `uv.lock` | [uv dependency files](remediation-dependency-formats.md#uv-inputs) |
+| `go.mod` and `go.sum` | [Go dependency files](remediation-dependency-formats.md#go-inputs) |
+| `pom.xml` | [Maven dependency files](remediation-dependency-formats.md#maven-inputs) |
+| `gradle.lockfile`, build scripts, and related files | [Gradle dependency files](remediation-dependency-formats.md#gradle-inputs) |
+| `.nvmrc`, `.node-version`, and `package.json` | [Node.js version declarations](remediation-dependency-formats.md#node-declarations) |
+| `.python-version` and `pyproject.toml` | [Python version declarations](remediation-dependency-formats.md#python-declarations) |
+| `package.json` and `pyproject.toml` | [Tool version declarations](remediation-dependency-formats.md#tool-declarations) |
 
 ## Supported runtimes {#supported-runtimes}
 
-Supported runtimes for Node.js, Python, and Go are the supported series in the bundled table, currently Node.js 22, 24, and 26, Python 3.11–3.15, and Go 1.26 and 1.27.
-The following versions and dates are information held by KestreLynx and change with KestreLynx updates.
+This is the list of supported versions built into KestreLynx, showing supported release lines, execution versions, and end-of-support dates.
+The Node.js, Python, and Go runtimes used to update dependencies are selected from the supported release lines in this list.
 
-| Series | Execution version in the bundled table | Support end date |
-| --- | --- | --- |
-| Node.js 22 | `22.23.4` | 2027-04-30 |
-| Node.js 24 | `24.22.1` | 2028-04-30 |
-| Node.js 26 | `26.12.1` | 2029-04-30 |
-| Python 3.11 | `3.11.17` | 2027-10-31 |
-| Python 3.12 | `3.12.15` | 2028-10-31 |
-| Python 3.13 | `3.13.17` | 2029-10-31 |
-| Python 3.14 | `3.14.9` | 2030-10-31 |
-| Python 3.15 | `3.15.1` | 2031-10-31 |
-| Go 1.26 | `1.26.10` | 2027-02-10 |
-| Go 1.27 | `1.27.3` | 2027-08-19 |
-| Gradle 8 / JDK 21 | `8.14.6` | No end date is set |
-| Gradle 9 / JDK 17 and 21 | `9.8.2` | No end date is set |
+| Release line | Execution version | End of support | platform |
+| --- | --- | --- | --- |
+| Node.js 22 | `22.23.5` | 2027-04-30 | `linux/amd64` and `linux/arm64` |
+| Node.js 24 | `24.22.3` | 2028-04-30 | `linux/amd64` and `linux/arm64` |
+| Node.js 26 | `26.13.1` | 2029-04-30 | `linux/amd64` and `linux/arm64` |
+| Python 3.11 | `3.11.18` | 2027-10-31 | `linux/amd64` and `linux/arm64` |
+| Python 3.12 | `3.12.16` | 2028-10-31 | `linux/amd64` and `linux/arm64` |
+| Python 3.13 | `3.13.18` | 2029-10-31 | `linux/amd64` and `linux/arm64` |
+| Python 3.14 | `3.14.10` | 2030-10-31 | `linux/amd64` and `linux/arm64` |
+| Python 3.15 | `3.15.2` | 2031-10-31 | `linux/amd64` and `linux/arm64` |
+| Go 1.26 | `1.26.11` | 2027-02-10 | `linux/amd64` and `linux/arm64` |
+| Go 1.27 | `1.27.4` | 2027-08-19 | `linux/amd64` and `linux/arm64` |
+| Gradle 8 / JDK 21 | `8.14.6` | No end date configured | `linux/amd64` |
+| Gradle 9 / JDK 17 and 21 | `9.8.2` | No end date configured | `linux/amd64` |
 
-- Gradle supports only `linux/amd64`, on which the Gradle version and JDK combinations above have been run in integration tests
-- Even if an image is in the bundled Gradle table, it is not used unless its digest is recorded as having passed integration tests on that platform
-- Other Gradle version, JDK, and platform combinations require manual handling with `gradle_version_unsupported` or `gradle_toolchain_unsupported`
+These versions and dates are information maintained by KestreLynx and change with KestreLynx updates.
+Gradle supports only `linux/amd64` with the execution versions and JDKs listed in the table.
 
-| Use | Default runtime |
+Other Gradle versions, JDKs, or platforms require manual handling.
+The reason code is `gradle_version_unsupported` or `gradle_toolchain_unsupported`.
+
+The KestreLynx developers run the Gradle integration tests and record the passing image digests in the supported version list.
+Users do not need to add or configure these records; KestreLynx uses only images with a record for the execution platform.
+
+The table shows the default runtime for each purpose and when declarations determine the selection.
+
+| Purpose | Default runtime |
 | --- | --- |
-| npm and pnpm updates without Node.js declarations | Currently Node.js 24; Node.js 26 becomes eligible on 2026-10-28 according to the LTS start date in the bundled table |
-| Work containers for pip updates | Python 3.13 |
-| uv updates | Selected according to Python declarations |
-| Go updates | Selected from go.mod and the target versions' go lines |
-| Gradle updates | The same Gradle version as the wrapper, with the JDK specified by the toolchain (21 if not declared) |
+| npm or pnpm updates without a Node.js declaration | Latest release line in LTS (currently Node.js 26) |
+| Work container for pip updates | Python 3.13 |
+| uv updates | Selected from Python declarations |
+| Go updates | See [Go runtime selection](remediation-go-logic.md#go-runtime-selection) |
+| Gradle updates | Same Gradle version as the wrapper, with the JDK specified by the toolchain (21 if undeclared) |
 
-| Series in the bundled table whose support has ended | Support end date |
+Without a Node.js declaration, the current first candidate is Node.js 26, which entered LTS on 2026-10-28.
+If it does not meet the package manager's compatibility requirements, other supported release lines are checked from newest to oldest.
+
+For detailed selection conditions, see [Node.js selection](remediation-node-python-logic.md#node-selection).
+
+The following release lines remain in the supported version list but have reached the end of support.
+
+| Release line past end of support | End of support |
 | --- | --- |
 | Node.js 20 | 2026-04-30 |
 | Python 3.9 | 2025-10-31 |
 | Python 3.10 | 2026-10-01 |
 
-Series past their support end date are not used for updates.
-See [Runtime selection](remediation-logic.md#runtime-and-tool-versions) for selection requirements.
-
-## Result values {#result-values}
-
-### Plan category values {#category-values}
-
-`category` classifies an entire plan item, such as an image or dependency directory.
-
-| Value | Meaning |
-| --- | --- |
-| `pr_candidate` | A candidate that passed checks and can be proposed as a PR |
-| `dependency_update_candidate` | A dependency update candidate selected from source and fixed-version information, with update results not yet verified |
-| `pull_again` | A compared candidate expected to improve findings by retrieving new content under the same tag |
-| `rebuild_expected` | A dependency range is expected to install a fixed version on rebuild (Slack's "Rebuild" also shows guidance for a floating-tag base, whose category is `not_comparable`) |
-| `manual` | Requires a user's decision or manual handling without proceeding automatically |
-| `not_comparable` | Required comparison information or conditions are missing |
-| `deferred` | Processing is deferred because of limits, waiting periods, retrieval problems, or similar conditions |
-| `no_candidate` | No newer candidate exists, content is unchanged, or the candidate does not resolve targets |
-| `excluded` | Outside automatic candidate selection |
-| `failed` | Processing failed |
-
-### Newer series status values {#newer-series-status-values}
-
-`newer_series.status` and each candidate's `status` describe whether a newer series resolves the target findings.
-The item's overall `category` remains unchanged.
-
-| Value | Meaning |
-| --- | --- |
-| `resolves` | All targets are resolved without added findings |
-| `resolves_partially` | Some targets are resolved, some remain, and no findings are added |
-| `resolves_with_new` | At least one target is resolved, but new findings or KEV-listed findings are added |
-| `not_resolving` | No targets are resolved |
-| `not_checked` | Checking could not be completed because of retrieval or scan failures, limits, deadlines, indeterminate targets, or targets not detected in the baseline |
-| `no_newer_series` | No newer-series tag meets the conditions |
-
-See [Newer series check](remediation-logic.md#newer-series-check) for candidate selection and comparison scope.
-
-### Package action values {#action-values}
-
-`action` describes how an individual package is handled.
-Check it separately from the item's overall `category`.
-
-| Value | Meaning |
-| --- | --- |
-| `update` | Target for a dependency-file update |
-| `rebuild_expected` | The current dependency range allows a fixed version, with resolution expected through rebuilding |
-| `manual` | Target requiring manual handling |
-
-`update` alone does not mean that update execution or verification is complete.
-See [Target and adopted versions](remediation-results.md#target-and-adopted-version) for distinguishing version values.
-
-### PR status values {#pr-status-values}
-
-PR processing results use the following `status` values.
-
-| Value | Meaning |
-| --- | --- |
-| `pr_created` | A PR was created during processing of the latest remediation plan |
-| `pr_open` | A PR proposing the same update is open |
-| `pr_merged` | A PR for the same update was merged, without confirmation of deployment |
-| `pr_suppressed` | Recreation was suppressed because the update was closed without merging |
-| `manual` | Automatic editing is unavailable and manual handling is required |
-| `deferred` | Processing was deferred because of limits, candidate changes, or similar conditions |
-| `failed` | A GitHub write or another operation failed |
-| `write_blocked` | Writes stopped because of problems with records, GitHub state, or similar conditions |
-| `write_disabled` | Indicates that PR creation is disabled; not generated during normal PR processing |
-
-PR records use the following `state` values.
-
-| Value | Meaning |
-| --- | --- |
-| `open` | Open |
-| `closed` | Closed without merging |
-| `merged` | Merged |
-| `replaced` | Closed by KestreLynx to replace it with a newer PR |
-
-## Reason codes {#reason-codes}
-
-A result's `reason` describes why a candidate was selected or why processing could not proceed.
-The following tables give each code's meaning and related decision rules or checks.
-
-### Image candidate reasons {#image-reasons}
-
-| Code | Meaning | Details |
-| --- | --- | --- |
-| `scan_failed` | A scan failed | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `entity_unverified` | The running image could not be confirmed or compared with the registry content | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `conditions_unknown` | The conditions of a scan are unknown | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `conditions_differ` | The scans were made under different conditions | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `platform_unknown` | The platform of the image is unknown | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `platform_differ` | The compared images are for different platforms | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `variant_unsupported` | The image variant is not supported | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `packages_missing` | The scan result has no package list | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `packages_truncated` | The package list of the scan result is truncated | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `unknown_package_type` | A finding names an unsupported package type | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `type_not_analysed` | The candidate scan did not analyse the target package type | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `no_newer_tag` | No newer tag exists | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `same_content` | The newer tag has the same content | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `candidate_does_not_resolve_targets` | The candidate does not resolve the target findings | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `auth_required` | The registry requires a login | [Private image authentication](remediation-setup.md#configure-registry-auth) |
-| `platform_not_found` | The candidate has no image for the same platform | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `platform_ambiguous` | More than one image of the candidate matches the platform | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `platform_mismatch` | The platform of the candidate differs from the running image | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `registry_error` | The registry returned an error | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `targets_not_detected_on_baseline` | The baseline scan did not detect the target findings | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `analysis_incomplete` | The analysis of the image was incomplete | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `tag_listing_incomplete` | The tag list could not be read to the end | [Tag discovery](remediation-logic.md#tag-discovery) |
-| `newer_series_tag_list_incomplete` | The full tag list needed to select a newer series could not be read to the end | [Newer series check](remediation-logic.md#newer-series-check) |
-| `newer_series_reserved` | The newer series check stopped to reserve time and registry requests for PR processing | [Newer series check](remediation-logic.md#newer-series-check) |
-| `candidate_scan_limit` | The limit on candidate scans in a run was reached | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `baseline_rescan_limit` | The limit on baseline image rescans was reached | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `tag_page_limit` | The limit on tag list requests was reached | [Tag discovery](remediation-logic.md#tag-discovery) |
-| `registry_budget_exhausted` | The registry request budget was exhausted | [Tag discovery](remediation-logic.md#tag-discovery) |
-| `rate_limited` | The registry limited the request rate | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `cycle_deadline` | The time limit of the run was reached | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `registry_timeout` | A registry request timed out | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `locally_built` | The image was built on its host and is excluded from distributed-image searches | [Excluding local builds](remediation-logic.md#local-builds) |
-| `partial_improvement` | The candidate resolves only some of the findings | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `introduced_findings` | The candidate brings new findings | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `introduced_kev` | The candidate brings a new vulnerability on the KEV list | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `adopted` | The candidate was adopted | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `declared_ref_mismatch` | At least one container using the same running image name has a different image name in its Pod spec, resulting in `not_comparable` | [Kubernetes image names and re-pull guidance](remediation-logic.md#kubernetes-image-references) |
-| `declared_ref_unavailable` | The Pod spec's image name cannot be read for at least one container using the same running image name, resulting in `not_comparable` | [Kubernetes image names and re-pull guidance](remediation-logic.md#kubernetes-image-references) |
-| `digest_only` | The image name has a digest and no tag | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `tag_and_digest` | The image name has both a tag and a digest | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `prerelease` | The tag has a prerelease version format | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `bare_digest` | The image name is a bare digest with no identifiable repository | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `unparsable` | The image name cannot be parsed | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `unsupported_tag_format` | The format of the tag is not supported | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `base_layers_mismatch` | The base image behind the tag does not match the start of the running image's layers | [Base layer matching](remediation-logic.md#base-layer-matching) |
-| `base_update_not_deployed` | The base-update PR is merged, but the running images are unchanged since the PR was created | [Base layer matching](remediation-logic.md#base-layer-matching) |
-| `base_layers_unusable` | The layers of the running image and base image cannot be compared | [Base layer matching](remediation-logic.md#base-layer-matching) |
-| `base_onbuild` | The base image has `ONBUILD` triggers | [Base image selection](remediation-logic.md#base-image-selection) |
-| `no_base_derived_findings` | No fixable finding lies in the base image's layers | [Base layer matching](remediation-logic.md#base-layer-matching) |
-| `base_unchanged` | The layers of the base the tag points to now match the start of the running image, so no base update is visible | [Base layer matching](remediation-logic.md#base-layer-matching) |
-| `floating_base_unconfirmed` | The layers of the current base referenced by a floating-tag `FROM` do not match the start of the running image's layers | [Base layer matching](remediation-logic.md#base-layer-matching) |
-| `dockerfile_set_not_adopted` | The same candidate could not be adopted for every workload sharing the Dockerfile (check each workload's own reason too) | [Base image selection](remediation-logic.md#base-image-selection) |
-| `compose_set_not_adopted` | The same candidate could not be adopted for every service sharing the image (check each service's own reason too) | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `instances_missing` | A mapped container has no running instance, a running image name is unavailable, or an instance in the update target has no plan item | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
-| `mixed_references` | Running instances do not all declare or run the same image name | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
-| `kubernetes_set_not_adopted` | Containers updating the same image in the same file do not agree on one adopted candidate | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
-
-### Source reasons {#source-reasons}
-
-| Code | Meaning | Details |
-| --- | --- | --- |
-| `dockerfile_file_not_found` | The Dockerfile is not at the configured path | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `dockerfile_file_unusable` | The Dockerfile is not a file that can be edited | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `dockerfile_invalid` | The Dockerfile cannot be parsed, or the edit failed its check | |
-| `dockerfile_target_missing` | The specified build stage does not exist | [Base image selection](remediation-logic.md#base-image-selection) |
-| `dockerfile_stage_cycle` | The stage references never reach an external image | [Base image selection](remediation-logic.md#base-image-selection) |
-| `dockerfile_variable` | The base image or platform contains a variable | |
-| `dockerfile_scratch` | The base is `scratch` | |
-| `dockerfile_digest` | The base is given by a digest | |
-| `dockerfile_tag_unsupported` | The base tag has a form excluded from candidate searches | [Distributed image tags](remediation-logic.md#published-image-tags) |
-| `dockerfile_frontend` | The Dockerfile specifies a nonstandard syntax frontend | |
-| `dockerfile_escape` | The Dockerfile sets the `escape` directive | |
-| `dockerfile_ambiguous_range` | The tag cannot be located exactly in the file | |
-| `dockerfile_onbuild` | An inherited stage has `ONBUILD` | |
-| `dockerfile_stage_platform` | An intermediate `FROM` has `--platform` | |
-| `dockerfile_not_editable` | The base is not a pinned tag | [Base image selection](remediation-logic.md#base-image-selection) |
-| `dockerfile_source_mismatch` | The base image in the file differs from the expected one | [Base image selection](remediation-logic.md#base-image-selection) |
-| `dockerfile_mapping_differs` | The configured Dockerfile and the one named by Compose disagree | [Base image selection](remediation-logic.md#base-image-selection) |
-| `compose_no_build` | The target service has no `build` section | [Base image selection](remediation-logic.md#base-image-selection) |
-| `compose_build_remote_context` | The build context is a URL or a repository | |
-| `compose_build_inline` | The build uses `dockerfile_inline` | |
-| `compose_build_additional` | The build uses `additional_contexts` | |
-| `compose_build_path` | A build path is absolute, leaves the repository, or is malformed | |
-| `compose_build_unsupported_form` | The `build` section uses an unsupported form | |
-| `compose_build_undetermined` | How the service is built cannot be determined | [Excluding local builds](remediation-logic.md#local-builds) |
-| `compose_invalid` | The Compose file cannot be parsed, or the edit failed its check | |
-| `compose_service_missing` | The target service or its `image` key is missing from the Compose file | |
-| `compose_build` | The service builds its image | [Excluding local builds](remediation-logic.md#local-builds) |
-| `compose_include_or_extends` | The Compose file uses `include` or `extends` | |
-| `compose_merge_key` | The path to `image` goes through a merge key | |
-| `compose_anchor_or_alias` | The `image` involves a YAML anchor or alias | |
-| `compose_not_string` | The `image` value is not a plain string | |
-| `compose_block_scalar` | The `image` value is a block scalar | |
-| `compose_variable` | The `image` value contains a variable | |
-| `compose_digest` | The `image` value carries a digest | |
-| `compose_source_mismatch` | The `image` in the file differs from the running image | [Source verification](remediation-logic.md#source-verification) |
-| `compose_file_not_found` | The Compose file is not at the configured path | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `compose_file_unusable` | The Compose file is not a file that can be edited | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `manifest_file_not_found` | The manifest is not at the configured path | [Manifest formats](#manifest-formats) |
-| `manifest_file_unusable` | The manifest is not a file that can be edited | [Manifest formats](#manifest-formats) |
-| `manifest_invalid` | The manifest cannot be parsed, repeats a key, or the edit failed verification | [Manifest formats](#manifest-formats) |
-| `manifest_anchor_or_alias` | The path to the container or document identity involves a YAML anchor or alias | [Manifest formats](#manifest-formats) |
-| `manifest_merge_key` | The path to the container or document identity contains a merge key | [Manifest formats](#manifest-formats) |
-| `manifest_not_string` | The `image` value is not a simple string | [Manifest formats](#manifest-formats) |
-| `manifest_block_scalar` | The `image` value is a block scalar | [Manifest formats](#manifest-formats) |
-| `manifest_variable` | The `image` value contains a variable | [Manifest formats](#manifest-formats) |
-| `manifest_digest` | The `image` value carries a digest | [Manifest formats](#manifest-formats) |
-| `manifest_tag_missing` | The `image` value has no tag | [Manifest formats](#manifest-formats) |
-| `manifest_image_automation` | The `image` line carries a Flux image automation marker | [Manifest formats](#manifest-formats) |
-| `manifest_template` | The manifest contains a template expression | [Manifest formats](#manifest-formats) |
-| `image_updater_file` | The same directory contains an Argo CD Image Updater write-back file | [Manifest formats](#manifest-formats) |
-| `source_object_missing` | No document in the manifest matches the workload's object | [Manifest formats](#manifest-formats) |
-| `source_object_ambiguous` | More than one document in the manifest matches the workload's object | [Manifest formats](#manifest-formats) |
-| `source_container_missing` | The object has no editable container with that name | [Manifest formats](#manifest-formats) |
-| `source_mismatch` | The image name derived from the file differs from the declared or running image name | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs), [Helm values PRs](remediation-logic.md#helm-values-prs) |
-| `mapping_conflict` | Two or more mappings to the file resolve to the same container in the same document | [Kubernetes manifest PRs](remediation-logic.md#kubernetes-manifest-prs) |
-| `kustomize_invalid` | The kustomization is not one well-formed YAML document, repeats a key, or fails the check after the edit | [Kustomize formats](#kustomize-formats) |
-| `kustomize_image_missing` | The kustomization has no `images` entry of the mapped name | [Kustomize formats](#kustomize-formats) |
-| `kustomize_image_ambiguous` | More than one `images` entry has the mapped name | [Kustomize formats](#kustomize-formats) |
-| `kustomize_tag_not_set` | The `images` entry has no `newTag`, or it is empty | [Kustomize formats](#kustomize-formats) |
-| `kustomize_unsupported_feature` | The kustomization uses a feature that can change what an `images` entry acts on | [Kustomize formats](#kustomize-formats) |
-| `kustomize_image_chained` | Another `images` entry acts on the name of this entry or on its result | [Kustomize formats](#kustomize-formats) |
-| `kustomize_digest` | The `images` entry pins a digest | [Kustomize formats](#kustomize-formats) |
-| `kustomize_anchor_or_alias` | An anchor or alias is involved in the `images` entry | [Kustomize formats](#kustomize-formats) |
-| `kustomize_merge_key` | A merge key is involved in the `images` entry | [Kustomize formats](#kustomize-formats) |
-| `kustomize_not_string` | A value of the `images` entry is not a simple string | [Kustomize formats](#kustomize-formats) |
-| `kustomize_block_scalar` | A value of the `images` entry is a block scalar | [Kustomize formats](#kustomize-formats) |
-| `kustomize_variable` | A value of the `images` entry contains a variable | [Kustomize formats](#kustomize-formats) |
-| `kustomize_template` | The kustomization contains a template expression | [Kustomize formats](#kustomize-formats) |
-| `kustomize_image_automation` | The `newTag` line carries a Flux image automation marker | [Kustomize formats](#kustomize-formats) |
-| `helm_invalid` | The values file is not one well-formed YAML document, repeats a key, or fails the check after the edit | [Helm values formats](#helm-values-formats) |
-| `helm_key_missing` | The values file has no value at the mapped key | [Helm values formats](#helm-values-formats) |
-| `helm_tag_from_chart` | The key has no tag, so the chart's own default is used | [Helm values formats](#helm-values-formats) |
-| `helm_digest` | The image at the key is pinned by a digest | [Helm values formats](#helm-values-formats) |
-| `helm_values_shape` | The key holds neither `repository` and `tag` nor a `repository:tag` string | [Helm values formats](#helm-values-formats) |
-| `helm_not_string` | A value at the key is not a plain string, a number for one | [Helm values formats](#helm-values-formats) |
-| `helm_block_scalar` | A value at the key is a block scalar | [Helm values formats](#helm-values-formats) |
-| `helm_variable` | A value at the key contains a variable | [Helm values formats](#helm-values-formats) |
-| `helm_template` | The values file holds a template expression | [Helm values formats](#helm-values-formats) |
-| `helm_anchor_or_alias` | A node on the path to the key has an anchor or is an alias | [Helm values formats](#helm-values-formats) |
-| `helm_merge_key` | A mapping on the path to the key has a merge key | [Helm values formats](#helm-values-formats) |
-| `helm_image_automation` | A line of the image carries a Flux image automation marker | [Helm values formats](#helm-values-formats) |
-| `undeclared_affected_workload` | An unlisted container declares the same image name as the Kustomize `images` entry or Helm values key and may be affected by the edit | [Kustomize PRs](remediation-logic.md#kustomize-prs), [Helm values PRs](remediation-logic.md#helm-values-prs) |
-| `init_container_unverified` | A listed init container could not be shown to have run the same image as the running containers | [Kustomize PRs](remediation-logic.md#kustomize-prs) |
-| `dependency_files_not_found` | No dependency files were found | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `ambiguous_dependency_files` | More than one set of dependency files matches, so no unique set can be selected | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `dependency_file_unusable` | A dependency file cannot be used | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `unsupported_lockfile` | The lockfile format is not supported | |
-| `go_replace_unsupported` | `go.mod` has a `replace` directive, which is not handled | [Go dependency files](#go-inputs) |
-| `go_exclude_unsupported` | `go.mod` has an `exclude` directive, which is not handled | [Go dependency files](#go-inputs) |
-| `go_binary_not_from_source` | The Go binary of the image does not match this `go.mod`, or its package list is incomplete and cannot be compared | [Go dependency files](#go-inputs) |
-| `jar_bundled_copy` | a copy of the package is bundled inside another archive, which no change of the pom files reaches | [Maven candidate selection](remediation-logic.md#maven-package-selection), [Gradle candidate selection](remediation-logic.md#gradle-package-selection) |
-| `maven_app_jar_ambiguous` | the image's archive of this project cannot be told apart | [Maven dependency files](#maven-inputs) |
-| `maven_model_unsupported` | the pom files use a form whose resolution the check of the update does not reproduce | [Maven dependency files](#maven-inputs) |
-| `maven_parent_mismatch` | a pom file where the parent is looked for does not match the declared parent | [Maven dependency files](#maven-inputs) |
-| `maven_reactor_unsupported` | the modules of the project cannot be read as one build | [Maven dependency files](#maven-inputs) |
-| `gradle_build_unsupported` | the build definition has a form that cannot be checked | [Build script forms](#gradle-build-forms) |
-| `gradle_locking_unenforced` | the build is not set to build exactly what gradle.lockfile lists (lock mode STRICT with every configuration locked) | [Gradle dependency files](#gradle-inputs) |
-| `gradle_plugin_unsupported` | the build uses a plugin or a plugin version that is not allowed | [Allowed plugins](#gradle-plugins) |
-| `workspace_unsupported` | The project's workspace layout is not supported | |
-| `workspace_settings_unsupported` | The workspace settings file contains unsupported settings | |
-| `dynamic_metadata` | The project's metadata is dynamic | |
-| `unsupported_requirements` | The requirements file uses an unsupported form | |
-| `unparsable_source` | A dependency file cannot be parsed | |
-| `unsupported_source_settings` | The project sets an unsupported package source | |
-| `scan_not_pinned` | The scan result is not tied to one image | [Source verification](remediation-logic.md#source-verification) |
-| `not_found_in_source` | The dependency files do not list the package at the running version | [Source verification](remediation-logic.md#source-verification) |
-| `global_node_modules` | The package is in global `node_modules` and cannot be fixed by updating dependency files. It is included only in the webhook, not under “Needs a decision” in Slack or email (the entire item is omitted when no other packages remain to display, except that items with reason `runtime_eol` indicating the end of support for a language runtime remain visible) | [Source verification](remediation-logic.md#source-verification) |
-| `non_registry_source` | The package does not come from a supported public registry | |
-| `sdist_only` | The package has only a source distribution | |
-| `forced_by_override` | The package version is forced by an override | |
-| `marker_not_evaluated` | The requirement's environment marker has not been evaluated | |
-| `invalid_marker` | The requirement's environment marker is invalid | |
-| `multiple_versions` | Several versions or occurrences of the same package cannot be handled as one update | |
-| `unparsable_version` | A package version cannot be parsed | |
-| `source_not_found` | The source repository or branch was not found | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `source_access_denied` | Access to the source repository was denied | [Preparing GitHub access](remediation-setup.md#prepare-github-access) |
-| `source_too_large` | The source is too large to read | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `file_too_large` | A dependency file is too large to read | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `byte_budget_exhausted` | The limit on bytes read from the source was reached | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `source_error` | Reading the source failed | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `github_budget_exhausted` | The limit on GitHub requests was reached | [Checking missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `source_read_failed` | Reading the dependency files again failed | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-
-### Runtime reasons {#runtime-reasons}
-
-| Code | Meaning | Details |
-| --- | --- | --- |
-| `node_spec_invalid` | The declared Node.js version cannot be parsed | [Node.js selection](remediation-logic.md#node-selection) |
-| `python_spec_invalid` | The declared Python version cannot be parsed | [Python selection for uv](remediation-logic.md#uv-python-selection) |
-| `manager_spec_invalid` | The declared package manager version cannot be parsed | [Tool version selection](remediation-logic.md#tool-version-selection) |
-| `node_spec_conflict` | The Node.js version declarations contradict each other | [Node.js selection](remediation-logic.md#node-selection) |
-| `python_spec_conflict` | The Python version declarations contradict each other | [Python selection for uv](remediation-logic.md#uv-python-selection) |
-| `manager_spec_conflict` | The package manager declarations contradict each other | [Tool version selection](remediation-logic.md#tool-version-selection) |
-| `node_spec_unsupported` | The declared Node.js version is not supported | [Node.js selection](remediation-logic.md#node-selection) |
-| `python_spec_unsupported` | The declared Python version is not supported | [Python selection for uv](remediation-logic.md#uv-python-selection) |
-| `manager_spec_unsupported` | The declared package manager version is not supported | [Tool version selection](remediation-logic.md#tool-version-selection) |
-| `work_program_mismatch` | The program in the work container differs from the one bundled with the running KestreLynx | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `work_environment_rejected` | The work container did not meet its program's execution requirements | [Execution restrictions](remediation-logic.md#worker-restrictions) |
-| `go_version_too_old` | `go.mod` declares no `go` version, or one below 1.21 | [Go dependency files](#go-inputs) |
-| `go_toolchain_unsupported` | The `toolchain` line of `go.mod` is not a released Go version | [Go dependency files](#go-inputs) |
-| `go_runtime_unavailable` | No supported Go is as new as the update needs | [Go selection](remediation-logic.md#go-runtime-selection), [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
-| `gradle_version_unsupported` | the build uses a Gradle version that is not supported | [Gradle dependency files](#gradle-inputs) |
-| `gradle_toolchain_unsupported` | the build asks for a Java toolchain that is not supported | [Gradle execution settings](remediation-logic.md#gradle-worker-settings) |
-| `runtime_eol` | The runtime targeted by the update is past the end of its support | [Runtime selection](remediation-logic.md#runtime-and-tool-versions) |
-| `runtime_engines_mismatch` | An updated dependency does not support the minimum Node.js version declared by the project | [Node.js compatibility requirements](remediation-logic.md#node-compatibility) |
-| `requires_python_unsupported` | The Python version requirement cannot be satisfied, is missing, or cannot be interpreted | [Python selection for uv](remediation-logic.md#uv-python-selection) |
-| `pip_target_undecidable` | The environment the packages run in cannot be determined | [pip verification environment](remediation-logic.md#pip-target-environment) |
-| `pip_target_mismatch` | The environment pip resolves for differs from the one the packages run in | [pip verification environment](remediation-logic.md#pip-target-environment) |
-| `work_image_not_configured` | No work environment is available for updates | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `work_namespace_not_configured` | The work namespace required for language-package updates other than Maven on Kubernetes is not configured, so manual action is required | [Work Pod configuration](configuration.md#remediation-worker-kubernetes) |
-| `work_runtime_class_unsupported` | An unsupported RuntimeClass is configured for work Pods, so manual action is required | [Work Pod configuration](configuration.md#remediation-worker-kubernetes) |
-| `work_cluster_too_old` | The cluster is older than Kubernetes 1.30, which the work Pod policy requires, so manual action is required | [Prerequisites](remediation-setup.md#kubernetes-language-updates) |
-| `work_pod_limit` | The work Pod count or namespace quota is at its limit, so the update waits for the next cycle | [Work Pod configuration](configuration.md#remediation-worker-kubernetes) |
-| `work_admission_unverified` | The work namespace's Pod creation rules could not be confirmed to be in force, so no work Pod is started | [Work Pod execution](remediation-logic.md#kubernetes-work-pods) |
-| `work_priority_class_missing` | The PriorityClass configured for work Pods is missing or does not match the required settings, so manual action is required | [Setup steps](remediation-setup.md#kubernetes-language-updates) |
-| `work_pod_not_started` | The work Pod did not start in time, so the update waits for the next cycle | [Work Pod checks](remediation-troubleshooting.md#check-update-failure) |
-| `work_image_unavailable` | The work image could not be made ready | [Pinning official images](remediation-logic.md#worker-images) |
-
-### Tool retrieval reasons {#tool-reasons}
-
-| Code | Meaning | Details |
-| --- | --- | --- |
-| `tool_fetch_config_unsupported` | The project configures the package manager to fetch tools itself or uses unsupported resolution settings | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `tool_version_unsupported` | The package manager version is not supported | [Tool version selection](remediation-logic.md#tool-version-selection) |
-| `tool_version_not_found` | The specified package manager version was not found | [Tool retrieval and verification](remediation-logic.md#tool-verification) |
-| `tool_hash_mismatch` | The tool distribution does not match its checksum | [Tool retrieval and verification](remediation-logic.md#tool-verification) |
-| `tool_hash_unsupported` | The tool distribution's checksum cannot be verified | [Tool retrieval and verification](remediation-logic.md#tool-verification) |
-| `tool_artifact_invalid` | The tool distribution is invalid | [Tool retrieval and verification](remediation-logic.md#tool-verification) |
-| `tool_metadata_invalid` | The tool release metadata is invalid | [Tool retrieval and verification](remediation-logic.md#tool-verification) |
-| `tool_too_new` | The tool release cannot be confirmed to meet the waiting period | [Waiting after tool release](remediation-logic.md#tool-release-age) |
-| `tool_fetch_failed` | Fetching the tool failed | [Tool retrieval and verification](remediation-logic.md#tool-verification) |
-| `tool_fetch_budget` | The limit on tool retrievals was reached | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `tool_cache_full` | Enough space cannot be made in the tool cache | [Tool cache reuse](remediation-logic.md#tool-cache) |
-| `tool_file_mismatch` | The cached tool distribution differs from the recorded one | [Tool cache reuse](remediation-logic.md#tool-cache) |
-
-### Update result reasons {#update-reasons}
-
-| Code | Meaning | Details |
-| --- | --- | --- |
-| `update_candidate_in_source` | A fixed-version update candidate exists for the package in the source | [Fixed-version lower bound](remediation-logic.md#fix-lower-bound) |
-| `range_allows_fix` | The version range allows the fixed version, so a rebuild is expected to install it | [Direct dependency version specifications](remediation-logic.md#direct-dependencies) |
-| `go_stdlib_needs_newer_go` | The Go standard library vulnerability is fixed by building with a newer Go, rather than by updating `go.mod` | [Go candidate selection](remediation-logic.md#go-package-selection) |
-| `fix_in_other_major_version` | The fix is in another major version, which Go names as another module path | [Go candidate selection](remediation-logic.md#go-package-selection), [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
-| `go_release_retracted` | The target version is retracted and no alternative fixed release can be selected, or dependency requirements raise a target above its target version to a retracted release | [Go candidate selection](remediation-logic.md#go-package-selection), [Go update validation](remediation-logic.md#go-update-validation) |
-| `go_line_raised_too_far` | A changed `go` or `toolchain` line exceeds the lowest Go version the running binaries were built with, or a line's version changes while the build version is unknown | [Go update validation](remediation-logic.md#go-update-validation), [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
-| `go_dependencies_uncheckable` | The module versions followed to check the updated dependency requirements cannot all be checked because there are too many | [Go update validation](remediation-logic.md#go-update-validation) |
-| `maven_fix_in_other_major` | the fix is only in another major version | [Maven candidate selection](remediation-logic.md#maven-package-selection), [Gradle target versions](remediation-logic.md#gradle-target-versions), [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
-| `maven_version_source_unsupported` | the version is decided in a way no edit of the project's pom files changes | [Version sources and edits](remediation-logic.md#maven-version-sources), [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
-| `maven_release_not_found` | Maven Central lists no release the update can take | [Target versions and Maven Central releases](remediation-logic.md#maven-target-versions), [Gradle target versions](remediation-logic.md#gradle-target-versions), [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
-| `maven_bom_series_unreached` | no release of the BOM in the minor version the project imports reaches the fixed version | [Version sources and edits](remediation-logic.md#maven-version-sources), [Gradle version declarations and edits](remediation-logic.md#gradle-version-sources) |
-| `maven_dependency_held_back` | the update leaves a dependency of the new release below the version the release declares | [Maven update validation](remediation-logic.md#maven-update-validation) |
-| `gradle_version_source_unsupported` | the version is decided in a way no edit of the project's files changes | [Version declarations and edits](remediation-logic.md#gradle-version-sources), [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
-| `gradle_lock_entry_removed` | the update took an entry out of gradle.lockfile | [Gradle update validation](remediation-logic.md#gradle-update-validation) |
-| `gradle_lock_configurations_changed` | the update changed the configurations gradle.lockfile locks | [Gradle update validation](remediation-logic.md#gradle-update-validation) |
-| `gradle_lock_version_unsupported` | the updated gradle.lockfile locks a snapshot version | [Gradle update validation](remediation-logic.md#gradle-update-validation) |
-| `no_fixed_version_above_installed` | There is no fixed version above the running one, or nothing to fix | [Fixed-version lower bound](remediation-logic.md#fix-lower-bound) |
-| `constraint_excludes_fix` | The candidate or updated version does not satisfy the dependency constraints | [Direct dependency version specifications](remediation-logic.md#direct-dependencies), [Transitive dependency update scope](remediation-logic.md#transitive-dependencies) |
-| `constraint_not_evaluable` | The version constraint cannot be evaluated, or the fixed version is a prerelease pip does not select | [Direct dependency version specifications](remediation-logic.md#direct-dependencies) |
-| `packages_need_manual_update` | None of the packages can be updated automatically | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `update_job_limit` | The limit on update jobs in a run was reached | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `update_input_limit` | The update input files exceed the size limit | [Container inputs](remediation-logic.md#worker-inputs) |
-| `update_job_failed` | The update job failed | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `update_result_invalid` | The update job result is invalid | [Result collection](remediation-logic.md#worker-results) |
-| `update_job_timed_out` | The update job timed out | [Execution restrictions](remediation-logic.md#worker-restrictions) |
-| `distribution_lookup_failed` | Looking up a package in the registry failed | [Checking related changes](remediation-logic.md#change-validation) |
-| `source_scan_failed` | Scanning the dependency files failed | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `update_input_invalid` | The update input is invalid | [Container inputs](remediation-logic.md#worker-inputs) |
-| `update_job_input_rejected` | The update job refused its input | [Container inputs](remediation-logic.md#worker-inputs) |
-| `manifest_edit_required` | The manifest requires a change that automatic updates cannot make | [Direct dependency version specifications](remediation-logic.md#direct-dependencies) |
-| `input_modified` | A settings file intended only for reading was changed | [Checking related changes](remediation-logic.md#change-validation) |
-| `lockfile_inconsistent` | The lockfile is not consistent with the project | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
-| `no_wheel_for_version` | The target version has no wheel for the required platform | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
-| `release_yanked` | The target release was yanked | [Checking related changes](remediation-logic.md#change-validation) |
-| `requirements_rewrite_unsupported` | The requirements file cannot be rewritten with the update method used by the remediation plan | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
-| `update_set_not_applied` | Another package in the same update set could not be updated | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
-| `target_not_in_lockfile` | The target package has no entry in the lockfile | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
-| `no_reresolve_trigger` | No dependency can be temporarily removed to trigger resolution | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
-| `pnpm12_removal_unsupported` | The current update method cannot be used with pnpm 12 releases before 12.10.0 | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
-| `update_step_failed` | A step of the update failed | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
-| `post_update_check_failed` | The check after the update failed | [Checking related changes](remediation-logic.md#change-validation) |
-| `unexpected_files` | The update changed unexpected files | [Checking related changes](remediation-logic.md#change-validation) |
-| `release_age_violation` | A dependency release is younger than the minimum release age set by the project | [Checking related changes](remediation-logic.md#change-validation) |
-| `manifest_changed` | The update made an unpermitted manifest change | [Checking related changes](remediation-logic.md#change-validation) |
-| `output_files_invalid` | The output files are invalid or cannot be read | [Result collection](remediation-logic.md#worker-results) |
-| `lockfile_format_changed` | The update changed the lockfile format | [Checking related changes](remediation-logic.md#change-validation) |
-| `target_not_updated` | The package did not reach the target version after the update | [Partial PR conditions](remediation-logic.md#partial-pr-selection), [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
-| `target_removed` | The target package is missing after the update or is no longer reachable through dependencies | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
-| `fix_condition_not_met` | The updated version does not meet the vulnerability's fixed-version condition | [Partial PR conditions](remediation-logic.md#partial-pr-selection) |
-| `unexplained_dependency_diff` | The update changed dependencies it cannot explain, or raised the Go `go` line to a version that does not exactly match the highest version required by the upgraded or added modules | [Checking related changes](remediation-logic.md#change-validation), [Go update validation](remediation-logic.md#go-update-validation) |
-| `distribution_mismatch` | A package differs from what the registry publishes or pip resolution reports | [Checking related changes](remediation-logic.md#change-validation) |
-| `registry_check_limit` | The limit on registry lookups during the update was reached | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `update_package_limit` | The update changes more packages than the limit allows | [Checking update failures](remediation-troubleshooting.md#check-update-failure) |
-| `resolved_source_changed` | A package now resolves from another source | [Checking related changes](remediation-logic.md#change-validation) |
-| `post_update_lockfile_unstable` | The lockfile changes again when regenerated | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
-| `drop_side_effect` | A dependency temporarily removed to trigger resolution did not return to its original state | [Update methods by package manager](remediation-logic.md#manager-update-methods) |
-| `source_target_not_detected_before` | The target vulnerability was not detected in the dependency files before the update | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `source_target_not_analysed_after` | The dependency files could not be analysed for the target after the update | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `source_target_still_detected` | The target vulnerability is still detected after the update | [Verification scope by target](remediation-logic.md#verification-scope) |
-| `source_introduced_findings` | The update brings new findings into the dependency files | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `source_introduced_kev` | The update brings a new vulnerability on the KEV list into the dependency files | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `source_scan_incomplete` | The dependency-file scan was incomplete | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `update_verified` | Verification of the update result is complete | [Verification scope by target](remediation-logic.md#verification-scope) |
-| `dependents_update_not_fixed` | Re-resolution of dependent packages does not reach a fixed version in this attempt | [Re-resolution through dependent packages](remediation-logic.md#dependent-reresolution) |
-| `no_resolution` | Resolving again for the fixed version found no solution | [Re-resolution through dependent packages](remediation-logic.md#dependent-reresolution) |
-| `dependents_update_rejected` | The dependent-package update fails the checks | [Re-resolution check conditions](#dependent-reresolution-rules) |
-| `dependents_update_unsupported` | KestreLynx cannot update the dependent packages | [Re-resolution support and limits](#dependent-reresolution-limits) |
-| `dependents_update_limit` | The dependent-package update exceeds a limit | [Re-resolution support and limits](#dependent-reresolution-limits) |
-| `dependents_hold_back` | A package that depends on it limits its version | [Update methods by package manager](remediation-logic.md#manager-update-methods), [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) |
-| `release_too_new` | A version introduced by the update is less than 72 hours old | [Release waiting periods and retries](#dependent-reresolution-waits) |
-| `chain_downgrade` | The update downgrades a package, or the correspondence between versions cannot be determined | [Re-resolution check conditions](#dependent-reresolution-rules) |
-| `chain_move_limit` | The update changes more packages than the limit allows | [Re-resolution support and limits](#dependent-reresolution-limits) |
-| `chain_item_budget` | The work required by the update exceeds a per-item limit | [Release waiting periods and retries](#dependent-reresolution-waits) |
-
-Re-resolution through dependent packages records per-package reasons separately from the detailed reason for the overall re-resolution result.
-In webhooks, check both `packages[].reason` and `update.chain.reason`.
-
-- `dependents_update_rejected` also covers re-resolution stopped after three consecutive release waits.
-- `dependents_update_limit` also covers stops caused by repeated deferrals for the same type of work limit or an inability to save waiting records.
-- `source_introduced_findings` and `source_introduced_kev` also cover increases in vulnerable entry or requirement counts and refusals from checks of positions in the dependency relationships.
-- Execution and retrieval failures also use failure codes shared with normal updates.
-
-### PR processing reasons {#pr-reasons}
-
-| Code | Meaning | Details |
-| --- | --- | --- |
-| `pr_limit` | The limit on PRs created in a run (`new_prs_per_cycle`) was reached | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `open_pr_limit` | The limit on open KestreLynx PRs across all configured repositories (`open_prs`) was reached | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_changed` | The candidate changed while the PR was being prepared, or a Dockerfile candidate tag pointed to different content across running images during the newer series check | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr), [Newer series check](remediation-logic.md#newer-series-check) |
-| `base_moved` | The base branch advanced while the PR was being prepared | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `github_rate_limited` | GitHub limited the request rate | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `write_outcome_unknown` | The result of a GitHub write cannot be confirmed | [Stopping writes](remediation-logic.md#write-stops) |
-| `reconciliation_failed` | Existing PRs could not be reconciled | [Matching existing PRs](remediation-logic.md#existing-pr-matching) |
-| `repository_mismatch` | The repository differs from the recorded one | [Stopping writes](remediation-logic.md#write-stops) |
-| `attempt_unsettled` | An earlier attempt to create the PR is not settled | [Matching existing PRs](remediation-logic.md#existing-pr-matching) |
-| `branch_not_ours` | A branch with the same name exists and was not created by KestreLynx | [Stopping writes](remediation-logic.md#write-stops) |
-| `pull_request_not_as_created` | The PR differs from its state at creation | [Stopping writes](remediation-logic.md#write-stops) |
-| `github_refused` | GitHub refused the write | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `github_error` | GitHub returned an error | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_recheck_failed` | The candidate could not be checked again before PR creation | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `source_changed` | A file used to create the plan has changed | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `artifact_content_missing` | The updated file contents are no longer retained | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `artifacts_unusable` | The updated files cannot be written to the PR as they are | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `open_pr_not_inherited` | An existing PR for the same file contains fixes the newly proposed update does not carry forward | [Replacing older PRs](remediation-logic.md#pr-replacement) |
-| `language_set_too_large` | Too many packages are being updated to fit in the PR record | [Checking missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `update_already_proposed` | A PR already proposes this update | [Matching existing PRs](remediation-logic.md#existing-pr-matching) |
-
-### Storage reasons {#storage-reasons}
-
-| Code | Meaning | Details |
-| --- | --- | --- |
-| `store_locked` | The PR records are locked by another process | [Checking record reconciliation failures](remediation-troubleshooting.md#check-record-failure) |
-| `storage_failed` | The PR records could not be saved | [Record save order](remediation-logic.md#record-order) |
-| `storage_full` | Enough space cannot be made in the PR records | [Stopping writes](remediation-logic.md#write-stops) |
-| `records_unverified` | Existing PR records could not be verified | [Record recovery](remediation-logic.md#record-recovery) |
-| `proposal_not_found` | The record of the PR that proposed this update cannot be found | [Matching existing PRs](remediation-logic.md#existing-pr-matching) |
-
-## Stored files {#stored-records}
-
-Remediation plan records are stored under `remediation.storage_dir`.
-
-| File or directory | Contents | Save point |
-| --- | --- | --- |
-| `plan.json` | Latest plan, source locations, scans used for comparison, and check results for dependency updates that ran | After dependency-update processing, before PR processing |
-| `delivered.json` | Separate identifiers for the delivered plan and the content displayed in Slack | After delivery of the corresponding notification |
-| `prs.json` | PR identities, states, creation attempts, recreation suppression, and GitHub operation records | During PR processing, reconciliation, and operation-result recording |
-| `tools` | Cache of retrieved and verified npm, pnpm, and uv distributions | During tool retrieval and related operations |
-
-`prs.json` also stores waiting times for re-resolution through dependent packages, consecutive deferral counts by type, and stop records for each set of inputs.
-These records are also updated after dependency-update processing.
-
-`plan.json` is not saved again with PR processing results.
-Notifications contain the PR processing results for the latest remediation plan, while `prs.json` holds the records used for ongoing management.
-
-See [Record save order](remediation-logic.md#record-order) for the relationship between storage and PR processing and [Basic settings](configuration.md#remediation-basics) for configuration.
+Release lines past their support deadline are not used for updates.
+For selection conditions, see [Runtime selection](remediation-package-logic.md#runtime-and-tool-versions).

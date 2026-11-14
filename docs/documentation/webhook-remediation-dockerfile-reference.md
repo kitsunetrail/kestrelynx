@@ -22,7 +22,7 @@ The base image fields in `remediation` are as follows.
 `dockerfile_summary` counts `dockerfile_items[]` by `category`.
 The keys are `pr_candidate`, `pull_again`, `manual`, `not_comparable`, `deferred`, `no_candidate`, `excluded`, and `failed`, and keys with zero counts are also emitted when items exist.
 
-See [Plan category values](remediation-reference.md#category-values) for the meaning of each category.
+See [Plan category values](remediation-reason-codes.md#category-values) for the meaning of each category.
 
 ```json
 {
@@ -81,8 +81,8 @@ Each element of `dockerfile_items[]` has the following fields.
 | `fix_class` | string | Type of fix | — |
 | `verification` | string | Target of verification | — |
 | `final_image_verified` | boolean | Whether the final image after rebuilding has been verified | `false` |
-| `category` | string | Item-wide category from [Plan category values](remediation-reference.md#category-values) | — |
-| `reason` | string | Code explaining the category, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `category` | string | Item-wide category from [Plan category values](remediation-reason-codes.md#category-values) | — |
+| `reason` | string | Code explaining the category, as defined in [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Additional explanation of the category or reason | omitted |
 | `priority` | string | Highest priority among fixable findings in the target workloads' running images, as defined in [Priorities](webhook-reference.md#priority-values) | omitted |
 | `workloads` | array of strings | List of target workload keys, as defined in [Image name updates](webhook-diff-reference.md#reference-change-fields) | `[]` |
@@ -270,7 +270,7 @@ In this case, `dockerfile_items[].reason` is `base_update_not_deployed`.
 | `from` | string | Base image name referenced by `FROM` before the PR, from which the running images were built | — |
 | `to` | string | Tag set in `FROM` by the PR | — |
 
-See [Rebuild guidance](remediation-results.md#rebuild-guidance) for how to interpret results awaiting deployment.
+See [Rebuild guidance](remediation-update-results.md#rebuild-guidance) for how to interpret results awaiting deployment.
 
 ### PR processing results {#dockerfile-pull-request-fields}
 
@@ -283,11 +283,11 @@ It also includes processing results such as manual handling or deferral where no
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
-| `status` | string | PR processing status from [PR status values](remediation-reference.md#pr-status-values) | — |
-| `reason` | string | Code explaining the PR processing result, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `status` | string | PR processing status from [PR status values](remediation-reason-codes.md#pr-status-values) | — |
+| `reason` | string | Code explaining the PR processing result, as defined in [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `number` | integer | Associated PR number | omitted |
 | `url` | string | Associated PR URL | omitted |
-| `state` | string | Associated PR record state from [PR status values](remediation-reference.md#pr-status-values) | omitted |
+| `state` | string | Associated PR record state from [PR status values](remediation-reason-codes.md#pr-status-values) | omitted |
 
 The following is an example of a result after creating a PR.
 
@@ -324,8 +324,8 @@ Each element of `dockerfile_items[].entities[]` has the following fields.
 | `candidate_base` | object | [Image information](webhook-remediation-reference.md#remediation-image-state) for the candidate base | omitted |
 | `layer_confirmation` | object | [Layer matching results](#dockerfile-layer-confirmation-fields) for the running image and current base | — |
 | `findings_by_layer` | object | [Finding counts by layer](#dockerfile-layer-count-fields) for the running image | — |
-| `category` | string | Category for the running image from [Plan category values](remediation-reference.md#category-values) | — |
-| `reason` | string | Code explaining the category, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `category` | string | Category for the running image from [Plan category values](remediation-reason-codes.md#category-values) | — |
+| `reason` | string | Code explaining the category, as defined in [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Additional explanation of the category or reason | omitted |
 | `targets` | integer | Number of fix targets belonging to the base | `0` |
 | `kev_targets` | integer | Number of fix targets listed in CISA KEV | omitted when the count is zero |
@@ -395,7 +395,7 @@ The following is an excerpt from the results for a running image.
 | `unusable` | Layer information is insufficient or unusable, preventing matching |
 | `not_checked` | Layer matching has not been reached |
 
-See [Base layer matching](remediation-logic.md#base-layer-matching) for the scope and conditions of matching.
+See [Base layer matching](remediation-base-image-logic.md#base-layer-matching) for the scope and conditions of matching.
 
 ### Finding counts by layer {#dockerfile-layer-count-fields}
 
@@ -454,7 +454,7 @@ The following fields have additional notes.
     - An ID in `remaining` in any grouped record is excluded from the item-wide `disappearing` list
 
 These results are estimates based on runtime versions, not verification of the final image.
-See [Base layer matching](remediation-logic.md#base-layer-matching) and [Rebuild guidance](remediation-results.md#rebuild-guidance) for conditions and limitations.
+See [Base layer matching](remediation-base-image-logic.md#base-layer-matching) and [Rebuild guidance](remediation-update-results.md#rebuild-guidance) for conditions and limitations.
 
 ## Check against the current base {#dockerfile-rebuild-check}
 
@@ -468,7 +468,7 @@ The findings used in the check are as follows.
 | Running image | Findings within the compared severity range whose fix status is `fixed` and that have fixed version information |
 | Current base | All findings within the compared severity range, including those without fixed versions (to check whether a CVE remains) |
 
-See [Base layer matching](remediation-logic.md#base-layer-matching) for location matching and conditions that leave findings undetermined.
+See [Base layer matching](remediation-base-image-logic.md#base-layer-matching) for location matching and conditions that leave findings undetermined.
 
 The inclusion conditions are as follows.
 
@@ -486,7 +486,7 @@ The webhook emits results even when `status` is `checked` and no findings are ex
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
 | `status` | string | Status of the check | — |
-| `reason` | string | Code explaining why comparison was not possible, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `reason` | string | Code explaining why comparison was not possible, as defined in [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Additional explanation of why comparison was not possible | omitted |
 | `gone` | array of objects | [Package records](#dockerfile-rebuild-package-fields) for which the base has a different version at the same location without the target CVE | omitted |
 | `remaining` | array of objects | [Package records](#dockerfile-rebuild-package-fields) whose target CVE is also present at the same location in the base | omitted |
@@ -586,4 +586,4 @@ The following notes also apply to item-wide aggregation.
 - When the item-wide result is `not_checked`, package lists from checked running images are retained in individual results but excluded from the item-wide result
 - When current base versions differ by platform, separate records are kept for each `base_version`
 
-See [Rebuild guidance](remediation-results.md#rebuild-guidance) for limitations of the estimates, including the effects of Dockerfile instructions.
+See [Rebuild guidance](remediation-update-results.md#rebuild-guidance) for limitations of the estimates, including the effects of Dockerfile instructions.

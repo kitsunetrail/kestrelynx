@@ -1,986 +1,183 @@
-# 対応形式と理由コード
+---
+title: 修正計画と修正PRの対応範囲
+---
 
-修正計画と修正PRが扱う入力形式、実行環境、結果の値、理由コードをまとめます。
-有効化は[有効化の手順](remediation-setup.md)を参照してください。
+# 修正計画と修正PRの対応範囲
+
+修正計画と修正PRを利用できる環境、更新対象、入力ファイル、実行環境を確認するページです。
+有効化は[修正計画の有効化](remediation-setup.md#enable-fix-plans)を参照してください。
+
+ファイルの種類から調べる場合は、[対応する入力形式](#supported-inputs)を入口にしてください。
+調べたいことに応じて、次の節を参照してください。
+
+| 調べたいこと | 節 |
+| --- | --- |
+| 環境と更新対象 | [対応範囲](#scope-and-requirements) |
+| ファイルの書き方 | [対応する入力形式](#supported-inputs) |
+| 実行環境の版 | [対応する実行環境](#supported-runtimes) |
+
+このページで使う用語は[用語](remediation.md#terms)を参照してください。
 
 ## 対応範囲 {#scope-and-requirements}
 
+修正計画で候補を確認できる対象と、修正PRでファイルを更新できる対象を示します。
+
 ### 利用環境 {#supported-environments}
 
-| 項目 | 対応範囲 |
+動作条件と、作業用コンテナの条件を示します。
+
+| 項目 | 条件 |
 | --- | --- |
-| コンテナ環境 | Docker・Kubernetesモードで修正計画とPR作成に対応 |
-| ソースの対応付け | ComposeのWorkloadに対して変更先のソースを指定し、Composeを使わないDockerコンテナにはDockerfile・依存ディレクトリ、KubernetesのWorkloadにはマニフェスト・Kustomizeの`images`の項目・Helmのvaluesのキー・Dockerfile・依存ディレクトリを指定 |
+| コンテナ環境 | Docker・Kubernetesモードで計画とPR作成をサポート |
 | ソースホスト | GitHub |
-| 作業用コンテナ | Linuxの`amd64`・`arm64` |
-| 言語更新の実行環境 | [対応する実行環境](#supported-runtimes)に記載した系列 |
-| Sensor | 修正計画と修正PRの利用には不要 |
-| Kubernetesの計画 | 配布イメージ・Dockerfileのベースイメージの更新候補、浮動タグの再取得の案内、言語パッケージの更新候補の提示 |
-| KubernetesのPR | プレーンなマニフェストのイメージタグ、Kustomizeの`images[].newTag`、Helmのvaluesのイメージタグ、Dockerfileのベースイメージ、Mavenの`pom.xml`の更新に対応し、npm・pnpm・pip・uv・Go・Gradleの更新には[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)が必要 |
+| 作業用コンテナのアーキテクチャ | Linuxの`amd64`・`arm64`（Gradleの制限は[対応する実行環境](#supported-runtimes)を参照） |
+| 言語更新の実行環境 | [対応する実行環境](#supported-runtimes)に記載した版 |
+| Sensor | 不要 |
+
+環境ごとの対象と、指定できるファイルを示します。
+
+| 稼働しているもの | `workload`の書き方 | 対応付けられるファイル |
+| --- | --- | --- |
+| Composeのサービス | `compose/<project>/<service>` | Compose（`compose`）、Dockerfile（`dockerfile`）、依存ディレクトリ（`dependencies`） |
+| Composeを使わないDockerコンテナ | `container/<名前>` | Dockerfile（`dockerfile`）、依存ディレクトリ（`dependencies`） |
+| Kubernetesのコンテナ | `<kind>/<namespace>/<name>/<container>` | マニフェスト（`manifest`）、Kustomize（`kustomize`）、Helmのvalues（`helm_values`）、Dockerfile（`dockerfile`）、依存ディレクトリ（`dependencies`） |
+
+依存ディレクトリには、依存宣言やlockfileを置くディレクトリを指定します。
+読み取るファイルと範囲は、[対応する入力形式](#supported-inputs)から各マネージャーの節を参照してください。
+
+Kubernetesのイメージタグは、同じ`workload`を指定する対応付け全体で、`manifest`・`kustomize`・`helm_values`のうち1種類だけで管理します。
+各値の書き方は[ソースの対応付け](configuration.md#remediation-mappings)を参照してください。
+
+Kubernetesで計画に出る内容、PRで更新できるファイル、作業用Podの要否を示します。
+
+| 更新対象 | 計画 | PR | 作業用Podの要否 |
+| --- | --- | --- | --- |
+| 配布イメージ | 更新候補 | 通常のマニフェストのイメージタグ | 不要 |
+| 配布イメージ（Kustomize） | 更新候補 | `images[].newTag` | 不要 |
+| 配布イメージ（Helmのvalues） | 更新候補 | valuesのイメージタグ | 不要 |
+| Dockerfileのベースイメージ | 更新候補 | Dockerfileの`FROM` | 不要 |
+| 浮動タグの再取得 | 再取得の案内 | 作成なし | 不要 |
+| Mavenの依存パッケージ | 更新候補 | `pom.xml` | 不要 |
+| npm・pnpm・pip・uv・Go・Gradleの依存パッケージ | 更新候補 | 各ツールの依存ファイル | 必要 |
+
+作業用Podが必要な更新は、[作業用Podの準備](remediation-setup-work-pods.md#kubernetes-language-updates)を参照してください。
 
 ### docker runのコンテナ {#docker-run-containers}
 
-- `container/<名前>`の対応付けでは、Dockerfileのベースイメージと依存パッケージの更新に対応し、起動時のイメージタグを変更するPRは作らない
-- 対象は各サイクルのコンテナ一覧取得時に稼働していたコンテナで、`--rm`で短時間だけ動くジョブは対象にならないことがある
-- 改名・作り直しは次のサイクルから反映され、改名した場合は対応付けの`workload`も変更する必要がある
+`container/<名前>`の対応付けでは、Dockerfileのベースイメージと依存パッケージを更新できます。
+起動時のイメージタグを変更するPRは作りません。
 
-同じタグを別のイメージに付け替えた後も動いている古いコンテナは、イメージストアと操作によって扱いが異なります。
+各サイクルでは、次の条件で対象を確認します。
 
-| 操作・イメージストア | 古いコンテナの扱い |
-| --- | --- |
-| 同じタグで`docker build`し直す・containerd | 古いイメージが消えるためスキャンできず、修正計画にも出ない |
-| 同じタグで`docker build`し直す・従来のoverlay2 | 古いイメージが残り、スキャン・修正計画の対象になる |
-| `docker tag`でタグを付け替える | どちらのイメージストアでもスキャン・修正計画の対象になる |
+- 各サイクルのコンテナ一覧取得時に稼働しているコンテナが対象
+- `--rm`で短時間だけ動くジョブは対象にならない場合がある
+- 改名・作り直しは次のサイクルから反映され、改名した場合は対応付けの`workload`も変更が必要
 
-containerdで古いイメージが消えた場合は、コンテナを新しいイメージで作り直すと対象になります。
-設定例は[docker runのコンテナの対応付け](remediation-setup.md#docker-run-mappings)を参照してください。
+実行時刻は`schedule.daily_at`で指定し、未指定なら24時間ごとに実行します（[スケジュール](configuration.md#schedule)）。
+同じタグを別のイメージに付け替えた後も動いている古いコンテナの扱いは、操作とイメージストアで異なります。
+
+| 操作 | イメージストア | 古いコンテナの扱い |
+| --- | --- | --- |
+| 同じタグで`docker build`し直す | containerdのイメージストアを使用 | 古いイメージが消えるため、スキャン・修正計画の対象外 |
+| 同じタグで`docker build`し直す | containerdのイメージストアを不使用（overlay2） | 古いイメージが残るため、スキャン・修正計画の対象 |
+| `docker tag`でタグを付け替える | containerd・overlay2 | スキャン・修正計画の対象 |
+
+containerdのイメージストアで古いイメージが消えた場合は、新しいイメージでコンテナを作り直すと対象になります。
+設定例は[docker runのコンテナの対応付け](remediation-setup-docker.md#docker-run-mappings)を参照してください。
 
 ### 更新対象 {#supported-targets}
 
-| 対象 | 取得元 | ソースの対応付け |
-| --- | --- | --- |
-| 配布イメージ | 公開レジストリ、認証を設定した非公開レジストリ | 比較結果の表示には不要で、Compose・Kubernetesマニフェスト・Kustomize・Helmのvaluesを変更するPRには必要 |
-| Dockerfileのベースイメージ | 公開レジストリ、認証を設定した非公開レジストリ | 計画の作成からDockerfileまたはComposeの対応付けが必要 |
-| npm・pnpmの依存パッケージ | 公開npmレジストリ | 計画の作成から依存ディレクトリの対応付けが必要 |
-| pip・uvの依存パッケージ | 公開PyPI | 計画の作成から依存ディレクトリの対応付けが必要 |
-| Goの依存モジュール | 公開のGo module proxy (`proxy.golang.org`)と`sum.golang.org` | 計画の作成から依存ディレクトリの対応付けが必要 |
-| Mavenの依存パッケージ (`pom.xml`) | Maven Central | 計画の作成から依存ディレクトリの対応付けが必要 |
-| Gradleの依存パッケージ(`gradle.lockfile`) | Maven Central | 計画の作成から依存ディレクトリの対応付けが必要 |
+更新対象ごとに、取得元とソースの対応付けが必要になる段階を示します。
+
+| 更新対象 | 指定箇所・対象ファイル | 取得元 | ソースの対応付け |
+| --- | --- | --- | --- |
+| 配布イメージ | コンテナの起動に指定するイメージ | 公開レジストリ・認証を設定した非公開レジストリ | PRに必要 |
+| ベースイメージ | Dockerfileの`FROM`に指定するイメージ | 公開レジストリ・認証を設定した非公開レジストリ | 計画に必要 |
+| npm・pnpmの依存パッケージ | 依存ディレクトリ | 公開npmレジストリ | 計画に必要 |
+| pip・uvの依存パッケージ | 依存ディレクトリ | 公開PyPI | 計画に必要 |
+| Goの依存モジュール | 依存ディレクトリ | 公開のGo module proxy（`proxy.golang.org`）・`sum.golang.org` | 計画に必要 |
+| Mavenの依存パッケージ | `pom.xml` | Maven Central | 計画に必要 |
+| Gradleの依存パッケージ | `gradle.lockfile` | Maven Central | 計画に必要 |
+
+配布イメージの比較結果は対応付けなしで表示でき、PRにはCompose・Kubernetesマニフェスト・Kustomize・Helmのvaluesの対応付けが必要です。
+ベースイメージの計画にはDockerfileまたはCompose、依存パッケージの計画には依存ディレクトリを対応付けます。
 
 非公開npmレジストリ・非公開PyPI・非公開Goモジュールは更新対象にできません。
 イメージレジストリの認証は、依存パッケージの取得には使いません。
 
 ## 対応する入力形式 {#supported-inputs}
 
-### Composeの形式 {#compose-formats}
+ファイルの種類ごとに、読み取れる記述と更新できる範囲を説明している節を案内します。
 
-| 入力 | 対応範囲 |
+| ファイル | 形式の説明 |
 | --- | --- |
-| 編集箇所 | `services.<service>.image`に直接記述したイメージ名 |
-| イメージ名 | 稼働中のリポジトリとタグに一致し、変更箇所を特定できる文字列 |
-| 固定タグ | 完全な版を指定するタグを、同じ系列の新しいパッチへ変更可能 |
-| 浮動タグ | 再pullの候補となり、同じタグを使うイメージ名を書き換えるPRは作らない |
-| 変数・digest | 編集対象のイメージ名では未対応 |
-| YAMLのアンカー・エイリアス・マージキー | 編集箇所に関わる場合は未対応 |
-| ブロックスカラー・文字列以外の`image` | 未対応 |
-| `include`・対象サービスの`extends` | 自動編集では未対応 |
-| `build:`を持つサービス | 完成イメージを配布イメージの検索から除外 |
-
-タグの選び方は[配布イメージのタグ](remediation-logic.md#published-image-tags)、ビルド対象の扱いは[ローカルビルドの除外](remediation-logic.md#local-builds)を参照してください。
-
-### マニフェストの形式 {#manifest-formats}
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| YAML文書 | 1ファイルに複数の文書を含むプレーンなマニフェストに対応 |
-| オブジェクト | `apps/v1`の`Deployment`・`StatefulSet`・`DaemonSet`、`batch/v1`の`Job`・`CronJob`、`v1`の`Pod` |
-| 対象の選択 | `apiVersion`・`kind`・`metadata.name`と、ファイルに値がある場合は`metadata.namespace`で文書を一意に選び、コンテナ名で編集箇所を選ぶ |
-| 編集箇所 | 通常のコンテナと、`restartPolicy: Always`を持つネイティブsidecarの`image` |
-| 編集する文字列 | 宣言と稼働中のイメージに一致する明示的なタグの部分だけを書き換え、書式とコメントを保つ |
-| 重複キー | 編集の前後で全YAML文書を検査し、重複があれば拒否 |
-| digest・`$`変数・タグなし | 編集対象のイメージ名では手動対応 |
-| ブロックスカラー・単純な文字列以外の`image` | 手動対応 |
-| YAMLのアンカー・エイリアス・マージキー | 編集箇所への経路や、文書の識別に使う`metadata`などに関わる場合は手動対応 |
-| Fluxの`$imagepolicy` | 編集対象の`image`の行に印がある場合は手動対応 |
-| `{{` | ファイル内のどこかに含まれる場合は手動対応 |
-| `List`内のオブジェクト・通常のinit container | 編集対象外 |
-| `.argocd-source-*.yaml` | 同じディレクトリにArgo CD Image Updaterの書き戻しファイルがある場合は手動対応 |
-
-対象の名前空間をファイルで省略していても、同じ文書への対応付けが重なる場合はPRを作成しません。
-作成条件は[KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs)を参照してください。
-
-### Kustomizeの形式 {#kustomize-formats}
-
-`kustomization.yaml`の`images`と`affects`の[設定例](remediation-setup.md#kustomize-pull-requests)を基に、名前で指定した項目の`newTag`だけを編集します。
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| ファイル | `kustomization.yaml`・`kustomization.yml`・`Kustomization`で、1つのYAML文書だけを含むファイル |
-| 対象の選択 | `kustomize.image`と`images[].name`が一致する項目を一意に選択 |
-| 編集する文字列 | 既存の文字列の`newTag`だけを書き換え、引用符・コメント・改行を保持 |
-| `newName` | 既存の値を維持し、得られるイメージ名を宣言したイメージ名・稼働中のイメージ名と照合するが、`newName`自体の変更は手動対応 |
-| `newTag`の未設定・空文字列 | `kustomize_tag_not_set`で手動対応 |
-| 数値・文字列以外・明示的なYAMLタグ付きの値 | `kustomize_not_string`で手動対応し、数値として解釈されるタグは引用符で囲む |
-| ブロックスカラー・`$`を含む値 | `kustomize_block_scalar`・`kustomize_variable`で手動対応 |
-| digest | 対象項目に`digest`がある場合や、イメージ名にdigestを含む場合は`kustomize_digest`で手動対応 |
-| YAMLのアンカー・エイリアス・マージキー | 文書のルート、`images`、その項目や読み取る値に関わる場合は手動対応 |
-| `{{` | ファイル内のどこかに含まれる場合は`kustomize_template`で手動対応 |
-| フィールド名の綴り・重複 | `Newtag`など既知のフィールド名と大小文字が異なる綴りや、大小文字だけが異なる重複キーは`kustomize_invalid`で手動対応 |
-| `imageTags`・`patches`・`replacements`・`components`・`helmCharts`・`helmGlobals` | 使用するファイルは`kustomize_unsupported_feature`で手動対応 |
-| `generators`・`transformers`・`vars`・`patchesStrategicMerge`・`patchesJson6902` | 使用するファイルは`kustomize_unsupported_feature`で手動対応 |
-| リモートの`resources`・`bases` | `kustomize_unsupported_feature`で手動対応 |
-| 別の`images`の項目による影響 | Kustomizeが`name`を正規表現として照合することを踏まえ、別の項目が対象の名前や変更前後のイメージ名に作用する場合などは`kustomize_image_chained`で手動対応 |
-| 正規表現として不正な`name` | 対象以外も含む`images`の項目を検査し、`kustomize_invalid`で手動対応 |
-| Fluxの`$imagepolicy` | `newTag`の行に印がある場合は`kustomize_image_automation`で手動対応 |
-| `.argocd-source-*.yaml` | 同じディレクトリにArgo CD Image Updaterの書き戻しファイルがある場合は`image_updater_file`で手動対応 |
-
-ファイルが見つからない場合は`manifest_file_not_found`、編集できる種類のファイルでない場合は`manifest_file_unusable`を使います。
-ファイルから得るイメージ名が宣言したイメージ名または稼働中のイメージ名と異なる場合は`source_mismatch`になります。
-
-集合全体の確認条件と通常のinit containerの扱いは[KustomizeのPR](remediation-logic.md#kustomize-prs)を参照してください。
-
-### Helmのvaluesの形式 {#helm-values-formats}
-
-[設定例](remediation-setup.md#helm-values-pull-requests)の`helm_values.key`で指定したイメージのタグ部分だけを編集します。
-registryを含むリポジトリとタグが、宣言したイメージと稼働中のイメージの両方に一致することが必要です。
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| ファイル | `.yaml`・`.yml`のvaluesファイルで、重複キーのない1つのYAML文書に対応 |
-| mapping形式 | `repository`と文字列の`tag`を持つmappingに対応し、`registry`は任意 |
-| 文字列形式 | `"repo:tag"`形式のイメージ名に対応 |
-| 対象の選択 | `helm_values.key`の経路で選び、値がない場合は`helm_key_missing`で手動対応 |
-| 編集内容 | タグ部分だけを書き換え、既存の引用符とコメントを保つ |
-| 新しいタグの引用符 | mapping形式の元のタグが引用符なしで、新しいタグが`1.10`・`on`などHelmで文字列にならない値の場合は、二重引用符で囲み、PR本文に記載 |
-| タグの未設定・空文字列 | チャートの既定値を使うため、`helm_tag_from_chart`で手動対応 |
-| 数値・真偽値・null・明示的なYAMLタグ付きの値 | `helm_not_string`で手動対応し、引用符なしの既存タグがHelmで文字列にならない場合も対象 |
-| ブロックスカラー・`$`を含む値 | 読み取る値に含まれる場合は`helm_block_scalar`・`helm_variable`で手動対応 |
-| digest | mappingの非空の`digest`や文字列形式のdigestは`helm_digest`で手動対応 |
-| `repository`の形式 | タグやdigestを含む場合は`helm_values_shape`で手動対応 |
-| `repository`と同じmapping内の`name`・`image` | 存在する場合は`helm_values_shape`で手動対応 |
-| YAMLのアンカー・エイリアス | 対象キーまでの経路や読み取る値に関わる場合は`helm_anchor_or_alias`で手動対応 |
-| キー側のアンカー・エイリアス | 経路上のmappingや対象のmappingのキーにアンカーがある場合は`helm_invalid`、ファイル内のどこかのキーがエイリアスの場合は`helm_anchor_or_alias`で手動対応 |
-| マージキー | 文書のルート、対象キーまでの経路、対象のmappingにある場合は`helm_merge_key`で手動対応 |
-| Helmで文字列にならない引用符なしのキー・同じキーに解釈される組 | 経路上のmappingや対象のmappingにある場合は`helm_invalid`で手動対応し、`"true"`と`on`の組なども対象 |
-| 複数文書・重複キー・不正なYAML | `helm_invalid`で手動対応し、重複キーはファイル全体を検査 |
-| `{{` | ファイル内のどこかに含まれる場合は`helm_template`で手動対応 |
-| Fluxの`$imagepolicy` | `repository`・`registry`・`tag`または文字列形式のイメージの行に印がある場合は`helm_image_automation`で手動対応 |
-| `.argocd-source-*.yaml` | 同じディレクトリにArgo CD Image Updaterの書き戻しファイルがある場合は`image_updater_file`で手動対応 |
-
-ファイルが見つからない場合は`manifest_file_not_found`、編集できる種類のファイルでない場合は`manifest_file_unusable`を使います。
-ファイルから得るイメージ名が宣言したイメージ名または稼働中のイメージ名と異なる場合は`source_mismatch`になります。
-
-集合全体の確認条件、通常のinit containerの扱い、最終的な値についての前提は[HelmのvaluesのPR](remediation-logic.md#helm-values-prs)を参照してください。
-### Dockerfileの形式 {#dockerfile-formats}
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| `FROM`の固定タグ | 変数やdigestを使わず、タグの位置を特定できるイメージ名を編集可能 |
-| `FROM`の浮動タグ | ベースの確認対象となるが、タグ更新PRの対象外 |
-| ビルド`target` | ステージ名を指定可能で、省略時は最後のステージが対象 |
-| 前のステージの継承 | 外部のベースイメージまでたどれる構成に対応 |
-| `--platform` | 外部ベースを指定する`FROM`の静的な指定に対応し、継承途中の`FROM`での指定は未対応 |
-| `FROM`内の変数・`scratch`・digestを含むイメージ名 | 自動編集では未対応 |
-| 標準以外の構文フロントエンド・`escape`ディレクティブ | 自動編集では未対応 |
-| 継承元ステージやベースイメージの`ONBUILD` | 自動更新では未対応 |
-| Composeのbuild context | リポジトリ内の静的なパスに対応 |
-| Composeの`dockerfile`・`target` | 対応する静的な指定からDockerfileの編集先を特定可能 |
-| リモートbuild context・`dockerfile_inline`・`additional_contexts` | Composeからの編集先の特定では未対応 |
-
-編集先の決め方と対応付けの照合は[ベースイメージの特定](remediation-logic.md#base-image-selection)を参照してください。
-
-### npmの依存ファイル {#npm-inputs}
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| 必須ファイル | 単一プロジェクトの`package.json`と`package-lock.json` |
-| lockfile形式 | `lockfileVersion`が2または3で、`packages`にルートの記録がある形式 |
-| 取得元 | 公開npmレジストリの配布物 |
-| workspace | 未対応 |
-| Git・URL・ローカル参照・別名でのインストール | 対象パッケージの自動更新では未対応 |
-| 同梱依存・独自のshrinkwrap | 対象パッケージの自動更新では未対応 |
-| `overrides`による版の固定 | 該当するパッケージは手動対応 |
-| `.npmrc`の非公開レジストリ指定 | 未対応 |
-| 依存元からの再解決 | 通常更新で修正版に届かず、依存元が古い版を要求していると確認できるパッケージが対象で、プロジェクトが直接宣言するものも[対象条件](remediation-logic.md#dependent-reresolution-eligibility)を満たせば含む |
-
-#### 再解決の対応範囲と上限 {#dependent-reresolution-limits}
-
-依存元の版指定が修正版への更新を妨げるパッケージに使い、プロジェクト自身が`package.json`・`pyproject.toml`・lockfileの根の要求で直接宣言しているものも対象に含めます。
-プロジェクト自身の宣言は[通常の更新と同じ規則](remediation-logic.md#direct-dependencies)で扱い、修正版を許さない場合は対応する形式に限り書き換えます。
-
-次の例では、最小の修正版をnpm・pnpmでは`1.2.8`、uvでは`2.0.0`と仮定します。
-
-| 依存元の指定の例 | 使われるか | 補足 |
-| --- | --- | --- |
-| npm・pnpmの`0.0.8` | 使われる | 修正前の版への完全一致 |
-| npm・pnpmの`<1.0` | 使われる | 上限が修正版に届かない |
-| uvの`==1.2.3`・`<1.0` | 使われる | 完全一致または上限により修正版に届かない |
-| uvの`~=1.4` | 使われる | 1.4以上2.0未満の指定で、修正版が2.0以上の場合 |
-| npm・pnpmの`^1.2.0` | 使われない | 指定範囲内で修正版を選べる |
-| npm・pnpmの`\|\|`を含む範囲・`latest`などのタグ | 使われない | 再解決を始める根拠にしない |
-| uvの`!=1.2.3`・`===1.2.3`・`==1.2.*` | 使われない | 除外指定・厳密一致・ワイルドカードは再解決を始める根拠にしない |
-
-次の場合は対象外です。
-
-- 直したいパッケージをプロジェクトが直接使う版が修正版より古く、稼働中のイメージで見つかった版がその直接使う版と異なる
-- 対象や必要な依存元が別名・ローカル・Git・URL参照、または`overrides`で固定されている
-- 同じ依存先への宣言が食い違い、版指定を一つに決められない
-- pipを使っている、またはpnpmが9・10・11・12.10.0以上の12.xのいずれでもない
-
-| 上限の対象 | 上限と対処 |
-| --- | --- |
-| 再解決の起点となる直接依存 | 5パッケージまで、超える場合は`dependents_update_limit`で手動対応 |
-| 更新対象以外に追加・変更・削除するパッケージ | 合計64まで、超える結果は`chain_move_limit`で不合格 |
-| 1項目の処理量 | 実行回数・通信量・作業時間などに上限があり、保留を繰り返すと`dependents_update_limit`で手動対応 |
-
-#### 再解決の検査条件 {#dependent-reresolution-rules}
-
-次の変化がある結果は採用しません。
-Webhookでは、パッケージごとの`packages[].reason`と、詳しい理由を示す`update.chain.reason`を併せて確認します。
-
-| 変化の例 | 記録される理由コード |
-| --- | --- |
-| どこかの経路で版が下がる、または更新前後の版を対応付けられない | `chain_downgrade` |
-| 通常更新の対象でも再解決の起点でもない直接依存の版や参照先が変わる | `unexplained_dependency_diff` |
-| 更新対象以外に動くパッケージが上限を超える | `chain_move_limit` |
-| 直したい脆弱性が更新後のスキャンでも検出される | `source_target_still_detected` |
-| 脆弱な新しいパッケージが入る | `source_introduced_findings` |
-| 脆弱なパッケージを使う依存元が増える | `source_introduced_findings` |
-| 新しい版に、対応する旧版にはない脆弱性がある | `source_introduced_findings` |
-| 1つの版が複数の脆弱な版に分かれる、または複数の経路が合流して脆弱なパッケージの旧版を一つに決められない | `source_introduced_findings` |
-| KEV掲載の脆弱性が新たに入る、または上記の増加・分岐・合流などにKEV掲載の脆弱性が関わる | `source_introduced_kev` |
-
-依存関係上の同じ位置で版だけが変わり、旧版にもある脆弱性が増えずに残る場合は、持ち越しとして認めることがあります。
-例は[脆弱性の持ち越し](remediation-logic.md#dependent-reresolution-carried-findings)を参照してください。
-
-この検査には次の限界があります。
-
-- スキャンで検出されない脆弱性や、深刻度設定の範囲外の脆弱性は確認できない
-- 持ち越した脆弱性は直らず、更新で直す対象に選んだ脆弱性を持ち越して合格にはできない
-- プロジェクトから脆弱なパッケージまでの経路の総数は比較しない
-
-#### 公開後の待機と再試行 {#dependent-reresolution-waits}
-
-新たに入る版は公開から72時間待ちます。
-元のlockfileに同じパッケージの同じ版がある場合は待機の対象外で、公開日時を確認できない版は採用しません。
-
-- 公開後の待機による再試行時刻はWebhookの`retry_after`で確認する
-- 公開後の待機、または同じ種類の処理上限で3回連続して保留になると、同じ入力での再解決を停止する
-- 再試行時刻より前に処理を見送る回は、3回に含めない
-- 停止後も検査に合格する通常更新の結果は採用し、残る対象は次の理由コードで手動対応にする
-
-| 停止の原因 | 残る対象の理由コード |
-| --- | --- |
-| 公開後の待機が3回連続する | `dependents_update_rejected` |
-| 同じ種類の処理上限による保留が3回連続する | `dependents_update_limit` |
-
-### pnpmの依存ファイル {#pnpm-inputs}
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| 必須ファイル | `package.json`と`pnpm-lock.yaml` |
-| lockfile形式 | `lockfileVersion: '9.0'`で、importerが`.`だけの形式 |
-| manifestとの整合 | 直接依存の宣言とimporterが一致する構成 |
-| workspace・catalog・パッチ適用済み依存 | 未対応 |
-| 公開npmレジストリ以外の取得元 | 対象パッケージの自動更新では未対応 |
-| runtimeの自動取得を記録したlockfile | 未対応 |
-| `resolutions`・`configDependencies`・`executionEnv`など | 解決方法や追加取得を変える未対応設定 |
-| pnpm 12 | 12.10.0以上に対応。12.10.0より前の12.xは手動対応 |
-| 依存元からの再解決 | 通常更新で修正版に届かず、依存元が古い版を要求していると確認できるパッケージが対象で、プロジェクトが直接宣言するものも[対象条件](remediation-logic.md#dependent-reresolution-eligibility)を満たせば含む |
-
-同じディレクトリの`pnpm-workspace.yaml`は、次の設定だけを持つ場合に読み取れます。
-ファイルがあるだけでworkspaceとは判断しません。
-
-| 設定 | 対応する形式 |
-| --- | --- |
-| `allowBuilds` | パッケージの指定をキーとし、真偽値または文字列を値とする対応表 |
-| `onlyBuiltDependencies`・`ignoredBuiltDependencies`・`neverBuiltDependencies` | パッケージ名の文字列リスト |
-| `supportedArchitectures` | `os`・`cpu`・`libc`ごとの文字列リスト |
-| `packages` | workspace宣言として扱うため未対応 |
-| 上記以外のキー | 未対応 |
-| 依存ディレクトリより上にある`pnpm-workspace.yaml` | リポジトリのルートまで確認し、存在する場合は手動対応 |
-
-`package.json`の`pnpm`設定も、上表のビルド許可とアーキテクチャの設定が対象です。
-読み取れるビルド許可設定があっても、更新時のスクリプト実行は無効です。
-
-### pipの依存ファイル {#pip-inputs}
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| 必須ファイル | UTF-8の`requirements.txt` |
-| 厳密な固定版 | `name==1.2.3`形式を更新可能 |
-| 範囲指定・版指定なし | 修正版を許す場合は再ビルドの見込みを示し、固定版への書き換えは行わない |
-| extras | `name[extra]`形式を読み取り可能 |
-| コメント・継続行 | 読み取り可能 |
-| 既存の`--hash` | 固定版の更新時に、PyPIのwheel情報から更新 |
-| 環境マーカー | 自動評価せず、対象パッケージを手動対応にする |
-| `-r`・`-c`などの別ファイル参照 | 未対応 |
-| 取得元を変更するオプション | 未対応 |
-| Git・URL・ローカル参照 | 対象パッケージの自動更新では未対応 |
-| ソース配布物しかない版 | 自動更新では未対応 |
-
-稼働イメージに合わせた検証対象の条件は[pipの検証環境](remediation-logic.md#pip-target-environment)を参照してください。
-
-### uvの依存ファイル {#uv-inputs}
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| 必須ファイル | 単一プロジェクトの静的な`pyproject.toml`と`uv.lock` |
-| lockfile形式 | `version = 1`・`revision = 5` |
-| プロジェクト | `[project]`があり、動的なメタデータを要求しない構成 |
-| Pythonの要件 | 自動更新には`[project]`の`requires-python`が必要 |
-| 取得元 | 公開PyPI |
-| workspace | 未対応 |
-| Git・URL・ローカル参照 | 対象パッケージの自動更新では未対応 |
-| ソースのビルドが必要な依存 | 自動更新では未対応 |
-| `[tool.uv]` | `required-version`・`dev-dependencies`・`sources`・`package`を読み取り可能 |
-| 上記以外の`[tool.uv]`設定 | 未対応 |
-| `uv.toml` | 依存ディレクトリからリポジトリのルートまでのいずれかに存在する場合は未対応 |
-| 依存元からの再解決 | 依存元が古い版を要求していると確認できるパッケージが対象で、プロジェクトが直接宣言するものも[対象条件](remediation-logic.md#dependent-reresolution-eligibility)を満たせば含み、最初の更新結果が依存の差分検査で拒否された場合も再判定する |
-
-`[tool.uv]`のキーを読み取れる場合も、依存の取得元やプロジェクト構成が対応範囲内である必要があります。
-
-### Goの依存ファイル {#go-inputs}
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| 必須ファイル | 対応付けた依存ディレクトリの`go.mod`と`go.sum` |
-| 対象の所見 | 稼働イメージのGoバイナリをTrivyが`gobinary`として検出した所見 |
-| バイナリとの対応 | メインモジュールのパスが`go.mod`の`module`と一致するバイナリだけを対象とし、ベースイメージのツールなど一致しないバイナリの所見は計画に含めない |
-| 組み込まれた依存 | モジュールの版が`go.mod`の`require`と一致しない場合や、パッケージ一覧が切り詰められている場合は`go_binary_not_from_source`で手動対応 |
-| 取得元 | 公開の`proxy.golang.org`と`sum.golang.org`だけを使用し、非公開モジュールは対象外 |
-| `replace`・`exclude` | いずれかが1行でもある場合は手動対応 |
-| `go`の行 | 1.21以上が必要で、行がない場合や1.21より古い場合は手動対応 |
-| `toolchain`の行 | 公開されたGoの版を表す`go1.N.M`形式に対応し、`default`・独自の接尾辞・RCなどは手動対応 |
-| `go.work` | 依存ディレクトリまたはリポジトリのルートまでの上位ディレクトリにある場合は手動対応 |
-| `vendor` | 依存ディレクトリにある場合は手動対応 |
-| 別のメジャー版 | 修正版が別のモジュールパスにしかない場合は`fix_in_other_major_version`で手動対応とし、確認できた最小の修正版と、直接指定か依存元による要求かを[修正版に上げられないときの案内](remediation-results.md#fix-hints)に表示 |
-| 標準ライブラリの`stdlib` | PRを作らず、ビルドに使うGoの版を上げる案内を修正計画に表示 |
-
-候補の決め方と標準ライブラリの案内は[Goの候補選定](remediation-logic.md#go-package-selection)、採用条件は[Goの更新結果の検査](remediation-logic.md#go-update-validation)を参照してください。
-
-### Mavenの依存ファイル {#maven-inputs}
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| 必須ファイル | 対応付けた依存ディレクトリの`pom.xml`と、`modules`がたどる各モジュールの`pom.xml` |
-| 対象の所見 | 稼働イメージのJavaアーカイブをTrivyが`jar`として検出した所見 |
-| 対象の依存 | compile・runtimeの依存で、test・provided・systemの依存は更新対象外 |
-| 取得元 | Maven Centralのみ |
-| モジュールのパス | 対応付けたディレクトリの下の相対パスで、絶対パス・`..`・隠しディレクトリ・POMファイル名による指定は手動対応 |
-| モジュールの構成 | `pom.xml`がない、同じ`groupId:artifactId`が重複する、親が循環する、ルートを含め100モジュール、またはルートから8階層を超える場合は`maven_reactor_unsupported`で手動対応 |
-| ルートの継承 | 更新時に全モジュールがルートの`pom.xml`を継承する必要があり、満たさなければ手動対応 |
-| 親を探す場所 | `relativePath`の指定先と`../pom.xml`を確認し、親と同じartifactIdのPOMがあればgroupId・versionも一致し、読み取ったモジュールに含まれることが必要 |
-| 親の不一致 | 親と同じartifactIdのPOMでgroupId・versionが一致しない、読み取ったモジュールに含まれない、または`relativePath`がリポジトリの外を指す場合は`maven_parent_mismatch`で手動対応 |
-| プロジェクトのprofile | 依存・管理・プロパティ・親・モジュール・リポジトリを変える場合は手動対応 |
-| プロジェクトの取得設定 | `repositories`・`pluginRepositories`の宣言、ルートの`.mvn/maven.config`・`.mvn/extensions.xml`がある場合は手動対応 |
-| 依存・管理の宣言 | 直接依存の`optional`、版の範囲指定、relocation、依存や管理の重複、管理の`optional`・`exclusions`がある場合は手動対応 |
-| 対象の版と種類 | 稼働版や対象の直接依存のSNAPSHOT、対象の直接依存のclassifier・jar以外のtypeは手動対応 |
-| 複数の稼働版 | 同じパッケージが複数の版で稼働している場合は手動対応 |
-| 版の出所 | 直書き・プロパティ・親のプロパティの上書き・BOMの版のプロパティ・`dependencyManagement`での固定に対応し、変更する場所を決められない対象は手動対応 |
-
-- Mavenの更新では作業用コンテナ・Podを使わず、KestreLynxが`pom.xml`を書き換える
-
-候補と編集方法は[Mavenの候補選定](remediation-logic.md#maven-package-selection)、採用条件は[Mavenの更新結果の検査](remediation-logic.md#maven-update-validation)を参照してください。
-
-### Gradleの依存ファイル {#gradle-inputs}
-
-| 入力 | 対応範囲 |
-| --- | --- |
-| 必須ファイル | 対応付けた依存ディレクトリの`gradle.lockfile`、`build.gradle`または`build.gradle.kts`、`settings.gradle`または`settings.gradle.kts`、`gradle/wrapper/gradle-wrapper.properties` |
-| 任意のファイル | `gradle.properties`・`gradle/libs.versions.toml`・`settings-gradle.lockfile`・`buildscript-gradle.lockfile`を読み、catalogを使う場合は`settings-gradle.lockfile`も必須 |
-| 対象の所見 | 稼働イメージのJavaアーカイブをTrivyが`jar`として検出した所見 |
-| 対象の依存 | `gradle.lockfile`の`compileClasspath`・`runtimeClasspath`・`productionRuntimeClasspath`にある、所見の名前と稼働版が一致する依存 |
-| 取得元 | 依存はMaven Centralのみで、プラグインの取得にはGradle Plugin PortalとMaven Centralを使用 |
-| lockの設定 | `dependencyLocking`に`lockAllConfigurations()`と`lockMode = LockMode.STRICT`をそれぞれ1回書き、lockfileのエントリまたは`empty=`に`compileClasspath`・`runtimeClasspath`があることが必要 |
-| Gradleの版 | wrapperの`distributionUrl`が指す版と同じ版を使用し、URLは`https://services.gradle.org/distributions/gradle-<版>-bin.zip`または`-all.zip`の形式に限定 |
-| JDK | `java.toolchain`の`languageVersion`で指定した版を使用し、宣言がなければ21 |
-| 実行環境の組 | [対応する実行環境](#supported-runtimes)にあるGradleの版・JDK・platformの組に限定 |
-| プロジェクトの構成 | 単一プロジェクトに対応し、`include`・`includeBuild`・`allprojects`・`subprojects`・`buildSrc`・`gradle/dependency-locks`がある場合は手動対応 |
-| スクリプトの選択 | GroovyとKotlinのビルドスクリプトが両方ある場合や、settingsが両方ある場合は手動対応 |
-| 複数の稼働版 | 同じパッケージが複数の版で稼働している場合は手動対応 |
-
-#### ビルドスクリプトの書き方 {#gradle-build-forms}
-
-ビルドスクリプトは、次の文と引数の形を受け付けます。
-
-| 文 | 対応範囲 |
-| --- | --- |
-| `plugins { }` | `java`・`java-library`・`application`は版なし、外部プラグインは[許可表](#gradle-plugins)のIDと版を直書き |
-| `group`・`version`・`description` | 文字列の直書き |
-| `java { }` | `toolchain { languageVersion = JavaLanguageVersion.of(N) }`と、`sourceCompatibility`・`targetCompatibility`への文字列・数値・`JavaVersion.VERSION_n`の代入 |
-| `repositories { }` | `mavenCentral()`のみ |
-| `configurations { }` | `compileOnly { extendsFrom(configurations.annotationProcessor.get()) }`で、Groovyでは`compileOnly { extendsFrom annotationProcessor }`も対応 |
-| `dependencies { }` | `構成名("g:a:v")`・`構成名("g:a")`・`構成名(libs.x)`・`構成名(libs.bundles.x)`と、`constraints { }`内の同じ形 |
-| `dependencyLocking { }` | `lockAllConfigurations()`と`lockMode = LockMode.STRICT`のみで、ブロックはファイル全体で1回 |
-| `extra`・`ext` | Kotlinの`extra["p"] = "v"`、Groovyの`ext["p"] = "v"`・`ext.p = "v"`で、名前と値を直書き |
-| テストタスク | `test { }`・`tasks.withType<Test> { }`・`tasks.withType(Test) { }`・`tasks.named<Test>("test") { }`・`tasks.named("test") { }`内の`useJUnitPlatform()`のみ |
-| `application { }` | `mainClass = "..."`で、Kotlinでは`mainClass.set("...")`も対応 |
-
-- Groovyの依存宣言は`implementation 'g:a:v'`のように括弧を省略できる
-- Groovyではトップレベルの`sourceCompatibility`・`targetCompatibility`の直書きも受け付ける
-- 依存とconstraintsの構成名は`implementation`・`api`・`compileOnly`・`runtimeOnly`・`testImplementation`・`testCompileOnly`・`testRuntimeOnly`・`annotationProcessor`・`testAnnotationProcessor`を受け付ける
-    - Spring Bootプラグインを使う場合は`developmentOnly`も読み取るが、対象の直接依存かどうかを標準の構成の継承から判定できなければ手動対応にする
-- settingsには`rootProject.name = "..."`と、`pluginManagement { repositories { } }`内の`gradlePluginPortal()`・`mavenCentral()`を置ける
-    - settingsのプラグインは[許可表](#gradle-plugins)で判定し、現時点で許可する組はない
-
-`gradle.properties`は次のキーと値に限ります。
-
-| キー | 対応範囲 |
-| --- | --- |
-| `org.gradle.parallel`・`org.gradle.caching`・`org.gradle.daemon`・`org.gradle.configuration-cache` | `true`または`false` |
-| `org.gradle.jvmargs` | `-Xmx`・`-Xms`・`-XX:MaxMetaspaceSize=`のメモリ指定と`-Dfile.encoding=UTF-8`を空白で区切った値 |
-| `.version`で終わるキー | 版の直書きで、使用するSpring BootのBOMが定義するプロパティに限定 |
-
-- `extra`・`ext`で設定するプロパティも、更新時にSpring BootのBOMと親を読み、定義されている名前であることを確認する
-- catalogは`gradle/libs.versions.toml`の`[versions]`・`[libraries]`・`[bundles]`・`[plugins]`だけを受け付ける
-    - ライブラリは`"g:a:v"`または`module`か`group`・`name`を持つ表で、版は文字列の直書き・`version.ref`・省略を受け付ける
-    - bundleはライブラリの別名の一覧とし、同じアクセサーになる別名の重複は手動対応にする
-    - `[plugins]`から参照する`[versions]`の値は更新せず、`alias(libs.plugins.x)`によるプラグインの適用も手動対応にする
-- `apply from`・`buildscript { }`・`dependencyManagement { }`・`dependencyResolutionManagement { }`・`resolutionStrategy`・`configurations.all`など、表にない文は手動対応にする
-- 文字列の補間・組み立て、動的な版・版の範囲、依存宣言の`platform(...)`など、表にない引数の形は手動対応にする
-- `gradle.properties`のほかのキー、Javaエージェントや許可したもの以外のJVM引数、行の継続・エスケープ・重複キーは手動対応にする
-
-#### プラグインの許可 {#gradle-plugins}
-
-| プラグイン | 許可する版 | Gradleの版 |
-| --- | --- | --- |
-| `java`・`java-library`・`application` | 版を指定しない | [対応する実行環境](#supported-runtimes)のGradle |
-| `org.springframework.boot` | `4.1.2` | `9.8.2` |
-| `io.spring.dependency-management` | `1.1.7` | `9.8.2` |
-| `org.gradle.toolchains.foojay-resolver-convention`(settings) | 許可する組なし | 許可する組なし |
-
-- 外部プラグインは版を確かめた組だけを許可し、版の文字列が完全に一致しない場合や表にない組は`gradle_plugin_unsupported`で手動対応にする
-- Gradleの更新では作業用コンテナ・Podを使い、ビルドスクリプトと許可したプラグインのコードがその中で動く
-
-候補と編集方法は[Gradleの候補選定](remediation-logic.md#gradle-package-selection)、採用条件は[Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation)を参照してください。
-
-### Node.jsの版宣言 {#node-declarations}
-
-| 宣言 | 対応する形式 |
-| --- | --- |
-| `.nvmrc`・`.node-version` | 最初の空でない行にある`22`・`22.14`・`22.14.0`などの数値指定で、先頭の`v`も使用可能 |
-| `.nvmrc`のLTS指定 | `lts/*`と、認識できるLTS系列名 |
-| `package.json`の`engines.node` | 正確な版、比較演算子、`^`・`~`、ワイルドカードなどの解釈可能な範囲 |
-| `devEngines.runtime`・`engines.runtime` | Node.jsを指定するオブジェクトまたは配列と、その版の範囲 |
-| `system`・`current`などの指定 | 実行する系列を特定できないため未対応 |
-| プレリリースを境界に含む範囲 | 未対応 |
-| runtime宣言の`onFail: download` | 未対応 |
-
-版ファイルはmajor系列の選択に使い、実際のminor・patch版は同梱の表に従います。
-宣言の組み合わせ方は[Node.jsの選定](remediation-logic.md#node-selection)を参照してください。
-
-### Pythonの版宣言 {#python-declarations}
-
-| 宣言 | 対応する形式 |
-| --- | --- |
-| uvの`requires-python` | `>=3.12,<3.15`などの解釈可能なPython版の条件 |
-| `.python-version` | 最初の空でない行にある`3.13`・`3.13.5`などの指定 |
-| CPythonの接頭辞 | `cpython-3.13`・`cpython@3.13`など |
-| `.python-versions` | 複数版の指定は未対応 |
-| PyPy・GraalPy・Pyodide・`system` | 未対応 |
-| free-threaded版 | 未対応 |
-
-`.python-version`はPython X.Y系列の選択に使い、記載したpatch版と実行版の違いは許容します。
-宣言の整合条件は[uv用Pythonの選定](remediation-logic.md#uv-python-selection)を参照してください。
-
-### ツールの版宣言 {#tool-declarations}
-
-| 宣言 | 対応する形式 |
-| --- | --- |
-| `packageManager` | `npm@11.21.0`・`pnpm@11.28.5`などのマネージャー名と正確な版 |
-| `packageManager`のハッシュ | `name@version+<algorithm>.<hex>`形式 |
-| ハッシュのアルゴリズム | `sha1`・`sha224`・`sha256`・`sha384`・`sha512` |
-| `devEngines.packageManager` | マネージャー名と、正確な版または解釈可能な範囲 |
-| `engines.npm`・`engines.pnpm` | 正確な版または解釈可能な範囲 |
-| `tool.uv.required-version` | `==0.13.0`などの正確な版、または解釈可能な範囲 |
-| プレリリース・ビルドメタデータ付きのツール版 | 未対応 |
-
-| ツール | 扱える版 | 既定の版 |
-| --- | --- | --- |
-| npm | 9〜12系列で、選んだNode.jsと互換性がある版 | `11.21.0` |
-| pnpm | 9〜12系列で、選んだNode.jsと互換性がある版（12系列は12.10.0以上） | `11.28.5` |
-| uv | `0.12.22`以上の対応する安定版 | `0.13.0` |
-| pip | 作業用の公式Pythonイメージに含まれる版 | Python 3.13の作業用イメージでは`26.2.1` |
-
-宣言版と既定版の選び方は[ツール版の選定](remediation-logic.md#tool-version-selection)、公開後の利用条件は[ツール公開後の待機](remediation-logic.md#tool-release-age)を参照してください。
+| Composeファイル | [Composeの形式](remediation-source-formats.md#compose-formats) |
+| Kubernetesマニフェスト | [マニフェストの形式](remediation-source-formats.md#manifest-formats) |
+| Kustomizeファイル | [Kustomizeの形式](remediation-source-formats.md#kustomize-formats) |
+| Helmのvaluesファイル | [Helmのvaluesの形式](remediation-source-formats.md#helm-values-formats) |
+| Dockerfile | [Dockerfileの形式](remediation-source-formats.md#dockerfile-formats) |
+| `package.json`・`package-lock.json` | [npmの依存ファイル](remediation-dependency-formats.md#npm-inputs) |
+| `package.json`・`pnpm-lock.yaml`・`pnpm-workspace.yaml` | [pnpmの依存ファイル](remediation-dependency-formats.md#pnpm-inputs) |
+| `requirements.txt` | [pipの依存ファイル](remediation-dependency-formats.md#pip-inputs) |
+| `pyproject.toml`・`uv.lock` | [uvの依存ファイル](remediation-dependency-formats.md#uv-inputs) |
+| `go.mod`・`go.sum` | [Goの依存ファイル](remediation-dependency-formats.md#go-inputs) |
+| `pom.xml` | [Mavenの依存ファイル](remediation-dependency-formats.md#maven-inputs) |
+| `gradle.lockfile`・ビルドスクリプトなど | [Gradleの依存ファイル](remediation-dependency-formats.md#gradle-inputs) |
+| `.nvmrc`・`.node-version`・`package.json` | [Node.jsの版宣言](remediation-dependency-formats.md#node-declarations) |
+| `.python-version`・`pyproject.toml` | [Pythonの版宣言](remediation-dependency-formats.md#python-declarations) |
+| `package.json`・`pyproject.toml` | [ツールの版宣言](remediation-dependency-formats.md#tool-declarations) |
 
 ## 対応する実行環境 {#supported-runtimes}
 
-Node.js・Python・Goで対応する実行環境は、同梱の表にあるサポート中の系列(現時点でNode.js 22・24・26、Python 3.11〜3.15、Go 1.26・1.27)です。
-次の版と期限はKestreLynxが持つ情報であり、KestreLynxの更新に伴って変わります。
+KestreLynxに組み込まれた対応版の一覧として、サポート中の系列と実行版、サポート終了日を示します。
+依存パッケージの更新処理に使うNode.js・Python・Goは、一覧にあるサポート中の系列から選びます。
 
-| 系列 | 同梱の表の実行版 | サポート終了日 |
-| --- | --- | --- |
-| Node.js 22 | `22.23.4` | 2027-04-30 |
-| Node.js 24 | `24.22.1` | 2028-04-30 |
-| Node.js 26 | `26.12.1` | 2029-04-30 |
-| Python 3.11 | `3.11.17` | 2027-10-31 |
-| Python 3.12 | `3.12.15` | 2028-10-31 |
-| Python 3.13 | `3.13.17` | 2029-10-31 |
-| Python 3.14 | `3.14.9` | 2030-10-31 |
-| Python 3.15 | `3.15.1` | 2031-10-31 |
-| Go 1.26 | `1.26.10` | 2027-02-10 |
-| Go 1.27 | `1.27.3` | 2027-08-19 |
-| Gradle 8 / JDK 21 | `8.14.6` | 終了日は設定していない |
-| Gradle 9 / JDK 17・21 | `9.8.2` | 終了日は設定していない |
+| 系列 | 実行版 | サポート終了日 | platform |
+| --- | --- | --- | --- |
+| Node.js 22 | `22.23.5` | 2027-04-30 | `linux/amd64`・`linux/arm64` |
+| Node.js 24 | `24.22.3` | 2028-04-30 | `linux/amd64`・`linux/arm64` |
+| Node.js 26 | `26.13.1` | 2029-04-30 | `linux/amd64`・`linux/arm64` |
+| Python 3.11 | `3.11.18` | 2027-10-31 | `linux/amd64`・`linux/arm64` |
+| Python 3.12 | `3.12.16` | 2028-10-31 | `linux/amd64`・`linux/arm64` |
+| Python 3.13 | `3.13.18` | 2029-10-31 | `linux/amd64`・`linux/arm64` |
+| Python 3.14 | `3.14.10` | 2030-10-31 | `linux/amd64`・`linux/arm64` |
+| Python 3.15 | `3.15.2` | 2031-10-31 | `linux/amd64`・`linux/arm64` |
+| Go 1.26 | `1.26.11` | 2027-02-10 | `linux/amd64`・`linux/arm64` |
+| Go 1.27 | `1.27.4` | 2027-08-19 | `linux/amd64`・`linux/arm64` |
+| Gradle 8 / JDK 21 | `8.14.6` | 終了日の設定なし | `linux/amd64` |
+| Gradle 9 / JDK 17・21 | `9.8.2` | 終了日の設定なし | `linux/amd64` |
 
-- Gradleは上の版とJDKの組を統合テストで動かした`linux/amd64`だけに対応する
-- Gradleの同梱表にイメージがあっても、そのplatformで統合テストを通ったdigestの記録がなければ使わない
-- それ以外のGradleの版・JDK・platformの組は`gradle_version_unsupported`または`gradle_toolchain_unsupported`で手動対応にする
+版と期限はKestreLynxが持つ情報であり、KestreLynxの更新に伴って変わります。
+Gradleは、表に記載した実行版とJDKを使う`linux/amd64`だけをサポートします。
+
+それ以外のGradleの版・JDK・platformでは、手動対応になります。
+理由コードは`gradle_version_unsupported`または`gradle_toolchain_unsupported`です。
+
+Gradleの統合テストはKestreLynxの開発者が実施し、合格したイメージのdigestを対応版の一覧に記録しています。
+利用者が記録を追加・設定する必要はなく、KestreLynxは実行するplatformの記録があるイメージだけを使います。
+
+用途ごとの既定の実行環境と、宣言に従って選ぶ場合を示します。
 
 | 用途 | 既定の実行環境 |
 | --- | --- |
-| Node.jsの宣言がないnpm・pnpm更新 | 現時点ではNode.js 24で、同梱の表のLTS開始日に従い2026-10-28から26が候補になる |
+| Node.jsの宣言がないnpm・pnpm更新 | LTSに入っている最新の系列（今はNode.js 26） |
 | pip更新の作業用コンテナ | Python 3.13 |
 | uv更新 | Pythonの宣言に従って選定 |
-| Go更新 | go.mod と目標版の go の行から選ぶ |
-| Gradle更新 | wrapperと同じGradleの版と、toolchainで指定したJDK(宣言がなければ21) |
+| Go更新 | [Goの選定](remediation-go-logic.md#go-runtime-selection)を参照 |
+| Gradle更新 | wrapperと同じGradleの版と、toolchainで指定したJDK（宣言がなければ21） |
 
-| 同梱の表にある終了済み系列 | サポート終了日 |
+Node.jsの宣言がない場合、2026-10-28にLTSに入ったNode.js 26が現在の最初の候補です。
+パッケージマネージャーとの互換条件を満たさない場合は、ほかのサポート中の系列を新しい順に調べます。
+
+詳しい選定条件は[Node.jsの選定](remediation-node-python-logic.md#node-selection)を参照してください。
+
+対応版の一覧に残っている、サポートが終わった系列を示します。
+
+| サポートが終わった系列 | サポート終了日 |
 | --- | --- |
 | Node.js 20 | 2026-04-30 |
 | Python 3.9 | 2025-10-31 |
 | Python 3.10 | 2026-10-01 |
 
 サポート期限を過ぎた系列は更新に使いません。
-選定条件は[実行環境の選定](remediation-logic.md#runtime-and-tool-versions)を参照してください。
-
-## 結果の値 {#result-values}
-
-### 計画の分類値 {#category-values}
-
-`category`は、イメージや依存ディレクトリなどの計画項目全体の分類です。
-
-| 値 | 意味 |
-| --- | --- |
-| `pr_candidate` | 検査を通り、PRでの変更を提案できる候補 |
-| `dependency_update_candidate` | ソースと修正版情報から選んだ依存更新候補で、更新結果は未検証 |
-| `pull_again` | 同じタグの内容を再取得することで改善が見込める、比較済みの候補 |
-| `rebuild_expected` | 依存範囲から、再ビルドで修正版が入る見込み（Slackの「再ビルド」には、分類が`not_comparable`の浮動タグのベースの案内も表示される） |
-| `manual` | 自動では進めず、利用者の判断や手動対応が必要 |
-| `not_comparable` | 比較に必要な情報や条件がそろわない |
-| `deferred` | 上限、待機、取得の問題などで処理を保留 |
-| `no_candidate` | 新しい候補がない、内容が同じ、または候補で対象が解消しない |
-| `excluded` | 自動で候補を探す対象外 |
-| `failed` | 処理に失敗 |
-
-### 新しい系列の状態値 {#newer-series-status-values}
-
-`newer_series.status`と候補の`status`は、新しい系列で対象の所見が解消するかを表します。
-項目全体の`category`は変更しません。
-
-| 値 | 意味 |
-| --- | --- |
-| `resolves` | 対象がすべて解消し、新しい所見の増加がない |
-| `resolves_partially` | 対象の一部が解消し、残りがあり、新しい所見の増加がない |
-| `resolves_with_new` | 対象が1件以上解消し、新しい所見またはKEV掲載の所見が増える |
-| `not_resolving` | 解消した対象が0件 |
-| `not_checked` | 取得・スキャンの失敗、上限、期限、判断できない対象、比較元で検出されない対象があるため確認できない |
-| `no_newer_series` | 条件に合う新しい系列のタグがない |
-
-候補の選び方と比較範囲は[新しい系列の確認](remediation-logic.md#newer-series-check)を参照してください。
-
-### パッケージの処理値 {#action-values}
-
-`action`は個々のパッケージの扱いです。
-項目全体の`category`とは別に確認してください。
-
-| 値 | 意味 |
-| --- | --- |
-| `update` | 依存ファイルを更新する対象 |
-| `rebuild_expected` | 現在の依存範囲が修正版を許し、再ビルドによる解消を見込む対象 |
-| `manual` | 手動対応が必要な対象 |
-
-`update`だけでは更新の実行や検証の完了を表しません。
-版の読み分けは[更新目標と採用版](remediation-results.md#target-and-adopted-version)を参照してください。
-
-### PRの状態値 {#pr-status-values}
-
-PR処理結果の`status`には、次の値があります。
-
-| 値 | 意味 |
-| --- | --- |
-| `pr_created` | 最新の修正計画の処理でPRを作成した |
-| `pr_open` | 同じ更新を提案するPRが開いている |
-| `pr_merged` | 同じ更新のPRがマージ済みで、配置済みかは未確認 |
-| `pr_suppressed` | 未マージで閉じた更新のため、再作成を抑止した |
-| `manual` | 自動編集できず、手動対応が必要 |
-| `deferred` | 上限や候補の変化などにより、後の処理へ延期した |
-| `failed` | GitHubへの書き込みなどに失敗した |
-| `write_blocked` | 記録やGitHub上の状態などの問題により、書き込みを停止した |
-| `write_disabled` | PR作成が無効であることを表す値で、通常のPR処理では生成しない |
-
-PR記録の`state`には、次の値があります。
-
-| 値 | 意味 |
-| --- | --- |
-| `open` | オープン中 |
-| `closed` | 未マージでクローズ済み |
-| `merged` | マージ済み |
-| `replaced` | 新しいPRに置き換えるため、KestreLynxがクローズ済み |
-
-## 理由コード {#reason-codes}
-
-結果の`reason`には、候補を選んだ理由や処理を進められなかった理由が入ります。
-コードの意味と、関連する判定・確認操作を次に示します。
-
-### イメージ候補の理由 {#image-reasons}
-
-| コード | 意味 | 詳しい説明 |
-| --- | --- | --- |
-| `scan_failed` | スキャンに失敗した | [比較条件](remediation-logic.md#comparison-conditions) |
-| `entity_unverified` | 稼働イメージを確認できない、またはレジストリの内容と比較できない | [比較条件](remediation-logic.md#comparison-conditions) |
-| `conditions_unknown` | スキャンの条件が分からない | [比較条件](remediation-logic.md#comparison-conditions) |
-| `conditions_differ` | スキャンの条件がそろっていない | [比較条件](remediation-logic.md#comparison-conditions) |
-| `platform_unknown` | イメージのプラットフォームが分からない | [比較条件](remediation-logic.md#comparison-conditions) |
-| `platform_differ` | 比較するイメージのプラットフォームが異なる | [比較条件](remediation-logic.md#comparison-conditions) |
-| `variant_unsupported` | 対応していない種類のイメージである | [比較条件](remediation-logic.md#comparison-conditions) |
-| `packages_missing` | スキャン結果にパッケージ一覧がない | [比較条件](remediation-logic.md#comparison-conditions) |
-| `packages_truncated` | スキャン結果のパッケージ一覧が途中で切れている | [比較条件](remediation-logic.md#comparison-conditions) |
-| `unknown_package_type` | 対応していない種類のパッケージの所見がある | [比較条件](remediation-logic.md#comparison-conditions) |
-| `type_not_analysed` | 候補のスキャンが対象の種類のパッケージを解析していない | [比較条件](remediation-logic.md#comparison-conditions) |
-| `no_newer_tag` | より新しいタグがない | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `same_content` | 新しいタグも内容が同じである | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `candidate_does_not_resolve_targets` | 候補では対象の所見が解消しない | [比較条件](remediation-logic.md#comparison-conditions) |
-| `auth_required` | レジストリへのログインが必要である | [非公開イメージの認証](remediation-setup.md#configure-registry-auth) |
-| `platform_not_found` | 候補に同じプラットフォームのイメージがない | [比較条件](remediation-logic.md#comparison-conditions) |
-| `platform_ambiguous` | 候補にプラットフォームが合うイメージが複数ある | [比較条件](remediation-logic.md#comparison-conditions) |
-| `platform_mismatch` | 候補のプラットフォームが稼働イメージと異なる | [比較条件](remediation-logic.md#comparison-conditions) |
-| `registry_error` | レジストリがエラーを返した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `targets_not_detected_on_baseline` | 比較元のスキャンで対象の所見が検出されなかった | [比較条件](remediation-logic.md#comparison-conditions) |
-| `analysis_incomplete` | イメージの解析が不完全だった | [比較条件](remediation-logic.md#comparison-conditions) |
-| `tag_listing_incomplete` | タグ一覧を最後まで取得できなかった | [タグ一覧の探索](remediation-logic.md#tag-discovery) |
-| `newer_series_tag_list_incomplete` | 新しい系列を選ぶためのタグ一覧の全体を最後まで取得できなかった | [新しい系列の確認](remediation-logic.md#newer-series-check) |
-| `newer_series_reserved` | PR処理の時間とレジストリ要求を残すため、新しい系列の確認を止めた | [新しい系列の確認](remediation-logic.md#newer-series-check) |
-| `candidate_scan_limit` | 1回の実行でスキャンできる候補数の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `baseline_rescan_limit` | 比較元イメージを再スキャンできる数の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `tag_page_limit` | タグ一覧の取得回数の上限に達した | [タグ一覧の探索](remediation-logic.md#tag-discovery) |
-| `registry_budget_exhausted` | レジストリへの要求数の上限に達した | [タグ一覧の探索](remediation-logic.md#tag-discovery) |
-| `rate_limited` | レジストリのレート制限に掛かった | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `cycle_deadline` | 実行時間の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `registry_timeout` | レジストリへの要求がタイムアウトした | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `locally_built` | ホストでビルドしたイメージのため、配布イメージの検索対象外である | [ローカルビルドの除外](remediation-logic.md#local-builds) |
-| `partial_improvement` | 候補では一部の所見だけが解消する | [比較条件](remediation-logic.md#comparison-conditions) |
-| `introduced_findings` | 候補で新たな所見が入る | [比較条件](remediation-logic.md#comparison-conditions) |
-| `introduced_kev` | 候補でKEV掲載の脆弱性が新たに入る | [比較条件](remediation-logic.md#comparison-conditions) |
-| `adopted` | 候補を採用した | [比較条件](remediation-logic.md#comparison-conditions) |
-| `declared_ref_mismatch` | 稼働中のイメージ名が同じコンテナのいずれかで、Podのspecのイメージ名と稼働中のイメージ名が一致しないため`not_comparable`になる | [Kubernetesのイメージ名と再取得](remediation-logic.md#kubernetes-image-references) |
-| `declared_ref_unavailable` | 稼働中のイメージ名が同じコンテナのいずれかで、Podのspecのイメージ名を読み取れないため`not_comparable`になる | [Kubernetesのイメージ名と再取得](remediation-logic.md#kubernetes-image-references) |
-| `digest_only` | タグがなくdigestだけで指定されている | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `tag_and_digest` | タグとdigestの両方で指定されている | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `prerelease` | タグがプレリリース版の形式である | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `bare_digest` | digestだけで指定されたイメージ名で、リポジトリが分からない | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `unparsable` | イメージ名を解釈できない | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `unsupported_tag_format` | 対応していない形式のタグである | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `base_layers_mismatch` | タグが指すベースのレイヤーが、稼働イメージの先頭部分と一致しない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
-| `base_update_not_deployed` | ベース更新のPRはマージ済みだが、稼働イメージはPR作成時のまま | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
-| `base_layers_unusable` | 稼働イメージとベースイメージのレイヤーを比較できない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
-| `base_onbuild` | ベースイメージに`ONBUILD`トリガーがある | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
-| `no_base_derived_findings` | 修正可能な所見が、ベースイメージのレイヤーにない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
-| `base_unchanged` | タグが指す現在のベースのレイヤーが稼働イメージの先頭と一致し、ベースの更新を確認できない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
-| `floating_base_unconfirmed` | 浮動タグの`FROM`が現在指すベースのレイヤーが、稼働イメージの先頭のレイヤーと一致しない | [ベースレイヤーの照合](remediation-logic.md#base-layer-matching) |
-| `dockerfile_set_not_adopted` | 同じDockerfileを使うWorkloadのすべてで、同じ候補を採用できなかった（個々のWorkloadの理由も確認する） | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
-| `compose_set_not_adopted` | 同じイメージを使うサービスのすべてで、同じ候補を採用できなかった（個々のサービスの理由も確認する） | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `instances_missing` | 対応付けたコンテナの稼働インスタンスがない、稼働中のイメージ名を取得できない、または更新対象に計画の項目がないインスタンスがある | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
-| `mixed_references` | 稼働インスタンスの間で、宣言したイメージ名または稼働中のイメージ名が一致しない | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
-| `kubernetes_set_not_adopted` | 同じファイルで同じイメージを更新するコンテナの間で、採用した候補が一致しない | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
-
-### ソースの理由 {#source-reasons}
-
-| コード | 意味 | 詳しい説明 |
-| --- | --- | --- |
-| `dockerfile_file_not_found` | 設定したパスにDockerfileがない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `dockerfile_file_unusable` | Dockerfileが編集できる種類のファイルではない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `dockerfile_invalid` | Dockerfileを解釈できない、または編集の検証に失敗した | |
-| `dockerfile_target_missing` | 指定したビルドステージがない | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
-| `dockerfile_stage_cycle` | ステージの参照をたどっても外部イメージに行き着かない | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
-| `dockerfile_variable` | ベースイメージまたはプラットフォームに変数が含まれる | |
-| `dockerfile_scratch` | ベースが`scratch`である | |
-| `dockerfile_digest` | ベースがdigestで指定されている | |
-| `dockerfile_tag_unsupported` | ベースのタグが候補を探せない形式である | [配布イメージのタグ](remediation-logic.md#published-image-tags) |
-| `dockerfile_frontend` | 標準以外の構文フロントエンドを指定している | |
-| `dockerfile_escape` | `escape`ディレクティブを設定している | |
-| `dockerfile_ambiguous_range` | ファイル内でタグの位置を正確に特定できない | |
-| `dockerfile_onbuild` | 継承元のステージに`ONBUILD`がある | |
-| `dockerfile_stage_platform` | 継承途中の`FROM`に`--platform`がある | |
-| `dockerfile_not_editable` | ベースが固定タグではない | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
-| `dockerfile_source_mismatch` | ファイルのベースイメージが想定と異なる | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
-| `dockerfile_mapping_differs` | 設定したDockerfileとComposeが指すDockerfileが一致しない | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
-| `compose_no_build` | 対象サービスに`build`の指定がない | [ベースイメージの特定](remediation-logic.md#base-image-selection) |
-| `compose_build_remote_context` | build contextがURLまたはリポジトリである | |
-| `compose_build_inline` | `dockerfile_inline`を使っている | |
-| `compose_build_additional` | `additional_contexts`を使っている | |
-| `compose_build_path` | ビルドのパスが絶対パス、リポジトリ外、または不正な形式である | |
-| `compose_build_unsupported_form` | `build`の書き方に対応していない | |
-| `compose_build_undetermined` | サービスのビルド方法を判断できない | [ローカルビルドの除外](remediation-logic.md#local-builds) |
-| `compose_invalid` | Composeファイルを解釈できない、または編集の検証に失敗した | |
-| `compose_service_missing` | Composeファイルに対象サービスまたは`image`キーがない | |
-| `compose_build` | サービスがイメージをビルドしている | [ローカルビルドの除外](remediation-logic.md#local-builds) |
-| `compose_include_or_extends` | Composeファイルが`include`または`extends`を使っている | |
-| `compose_merge_key` | `image`への経路にマージキーがある | |
-| `compose_anchor_or_alias` | `image`がYAMLのアンカーまたはエイリアスに関わっている | |
-| `compose_not_string` | `image`の値が単純な文字列ではない | |
-| `compose_block_scalar` | `image`の値がブロックスカラーである | |
-| `compose_variable` | `image`の値に変数が含まれる | |
-| `compose_digest` | `image`の値にdigestが付いている | |
-| `compose_source_mismatch` | ファイルの`image`が稼働イメージと異なる | [ソースの確認](remediation-logic.md#source-verification) |
-| `compose_file_not_found` | 設定したパスにComposeファイルがない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `compose_file_unusable` | Composeファイルが編集できる種類のファイルではない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `manifest_file_not_found` | 設定したパスにマニフェストがない | [マニフェストの形式](#manifest-formats) |
-| `manifest_file_unusable` | マニフェストが編集できる形のファイルではない | [マニフェストの形式](#manifest-formats) |
-| `manifest_invalid` | マニフェストを解釈できない、キーが重複している、または編集の検証に失敗した | [マニフェストの形式](#manifest-formats) |
-| `manifest_anchor_or_alias` | コンテナへの経路または文書の識別情報がYAMLのアンカー・エイリアスに関わっている | [マニフェストの形式](#manifest-formats) |
-| `manifest_merge_key` | コンテナへの経路または文書の識別情報にマージキーがある | [マニフェストの形式](#manifest-formats) |
-| `manifest_not_string` | `image`の値が単純な文字列ではない | [マニフェストの形式](#manifest-formats) |
-| `manifest_block_scalar` | `image`の値がブロックスカラーである | [マニフェストの形式](#manifest-formats) |
-| `manifest_variable` | `image`の値に変数が含まれる | [マニフェストの形式](#manifest-formats) |
-| `manifest_digest` | `image`の値にdigestが付いている | [マニフェストの形式](#manifest-formats) |
-| `manifest_tag_missing` | `image`の値にタグがない | [マニフェストの形式](#manifest-formats) |
-| `manifest_image_automation` | `image`の行にFlux image automationの印がある | [マニフェストの形式](#manifest-formats) |
-| `manifest_template` | マニフェストにテンプレートの式がある | [マニフェストの形式](#manifest-formats) |
-| `image_updater_file` | 同じディレクトリにArgo CD Image Updaterの書き戻しファイルがある | [マニフェストの形式](#manifest-formats) |
-| `source_object_missing` | マニフェストにワークロードのオブジェクトの文書がない | [マニフェストの形式](#manifest-formats) |
-| `source_object_ambiguous` | マニフェストにワークロードのオブジェクトの文書が複数ある | [マニフェストの形式](#manifest-formats) |
-| `source_container_missing` | オブジェクトに、その名前の編集できるコンテナがない | [マニフェストの形式](#manifest-formats) |
-| `source_mismatch` | ファイルから得るイメージ名が宣言したイメージ名または稼働中のイメージ名と異なる | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs)・[HelmのvaluesのPR](remediation-logic.md#helm-values-prs) |
-| `mapping_conflict` | ファイルの2つ以上の対応付けが、同じ文書の同じコンテナを指している | [KubernetesのマニフェストPR](remediation-logic.md#kubernetes-manifest-prs) |
-| `kustomize_invalid` | kustomizationが1つの正しいYAML文書でない、キーが重複している、または編集後の検査に通らない | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_image_missing` | kustomizationに対応付けた名前の`images`の項目がない | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_image_ambiguous` | 対応付けた名前の`images`の項目が複数ある | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_tag_not_set` | `images`の項目に`newTag`がない、または空である | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_unsupported_feature` | kustomizationが、`images`の項目の作用先を変えうる機能を使っている | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_image_chained` | 別の`images`の項目が、この項目の名前または結果に作用する | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_digest` | `images`の項目がdigestを固定している | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_anchor_or_alias` | `images`の項目に関わるアンカーまたはエイリアスがある | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_merge_key` | `images`の項目に関わるマージキーがある | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_not_string` | `images`の項目の値が単純な文字列ではない | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_block_scalar` | `images`の項目の値がブロックスカラーである | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_variable` | `images`の項目の値に変数がある | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_template` | kustomizationにテンプレートの式がある | [Kustomizeの形式](#kustomize-formats) |
-| `kustomize_image_automation` | `newTag`の行にFlux image automationの印がある | [Kustomizeの形式](#kustomize-formats) |
-| `helm_invalid` | valuesファイルが1つの正しいYAML文書でない、キーが重複している、または編集後の検査に通らない | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_key_missing` | valuesファイルに対応付けたキーの値がない | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_tag_from_chart` | キーにタグがなく、チャート自身の既定値が使われる | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_digest` | キーのイメージがdigestで固定されている | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_values_shape` | キーが`repository`と`tag`の組でも`repository:tag`の文字列でもない | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_not_string` | キーの値が文字列でない（数値など） | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_block_scalar` | キーの値がブロックスカラー | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_variable` | キーの値に変数がある | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_template` | valuesファイルにテンプレートの式がある | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_anchor_or_alias` | キーまでの経路のノードにアンカーまたはエイリアスがある | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_merge_key` | キーまでの経路のマッピングにマージキーがある | [Helmのvaluesの形式](#helm-values-formats) |
-| `helm_image_automation` | イメージの行にFlux image automationの目印がある | [Helmのvaluesの形式](#helm-values-formats) |
-| `undeclared_affected_workload` | 列挙されていないコンテナがKustomizeの`images`の項目またはHelmのvaluesのキーと同じイメージ名を宣言しており、編集の影響を受けうる | [KustomizeのPR](remediation-logic.md#kustomize-prs)・[HelmのvaluesのPR](remediation-logic.md#helm-values-prs) |
-| `init_container_unverified` | 列挙したinit containerが、稼働コンテナと同じイメージを動かしたことを確認できない | [KustomizeのPR](remediation-logic.md#kustomize-prs) |
-| `dependency_files_not_found` | 依存ファイルが見つからない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `ambiguous_dependency_files` | 依存ファイルの組み合わせが複数あり、一意に決められない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `dependency_file_unusable` | 依存ファイルを利用できない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `unsupported_lockfile` | lockfileの形式に対応していない | |
-| `go_replace_unsupported` | `go.mod`に`replace`があり、対応していない | [Goの依存ファイル](#go-inputs) |
-| `go_exclude_unsupported` | `go.mod`に`exclude`があり、対応していない | [Goの依存ファイル](#go-inputs) |
-| `go_binary_not_from_source` | イメージのGoバイナリが、この`go.mod`と一致しない、またはパッケージ一覧が不完全で照合できない | [Goの依存ファイル](#go-inputs) |
-| `jar_bundled_copy` | パッケージの写しが別のアーカイブに同梱されていて、pom ファイルの変更では直らない | [Mavenの候補選定](remediation-logic.md#maven-package-selection)・[Gradleの候補選定](remediation-logic.md#gradle-package-selection) |
-| `maven_app_jar_ambiguous` | イメージの中で、このプロジェクトのアーカイブを特定できない | [Mavenの依存ファイル](#maven-inputs) |
-| `maven_model_unsupported` | pom ファイルが、更新の確認で解決を再現できない書き方をしている | [Mavenの依存ファイル](#maven-inputs) |
-| `maven_parent_mismatch` | 親を探す場所にある pom ファイルが、宣言された親と一致しない | [Mavenの依存ファイル](#maven-inputs) |
-| `maven_reactor_unsupported` | プロジェクトのモジュールを、1つのビルドとして読めない | [Mavenの依存ファイル](#maven-inputs) |
-| `gradle_build_unsupported` | ビルドの定義に、確かめられない書き方がある | [ビルドスクリプトの書き方](#gradle-build-forms) |
-| `gradle_locking_unenforced` | lockfile のとおりにビルドされる設定(lockMode の STRICT と全構成の lock)になっていない | [Gradleの依存ファイル](#gradle-inputs) |
-| `gradle_plugin_unsupported` | 許可していないプラグインか版を使っている | [プラグインの許可](#gradle-plugins) |
-| `workspace_unsupported` | プロジェクトのworkspace構成に対応していない | |
-| `workspace_settings_unsupported` | workspace設定ファイルの内容に対応していない | |
-| `dynamic_metadata` | プロジェクトのメタデータが動的に決まる | |
-| `unsupported_requirements` | requirementsの書き方に対応していない | |
-| `unparsable_source` | 依存ファイルを解析できない | |
-| `unsupported_source_settings` | 対応していないパッケージ取得元の設定がある | |
-| `scan_not_pinned` | スキャン結果が特定のイメージに結び付いていない | [ソースの確認](remediation-logic.md#source-verification) |
-| `not_found_in_source` | 依存ファイルに稼働版のパッケージが載っていない | [ソースの確認](remediation-logic.md#source-verification) |
-| `global_node_modules` | グローバルな`node_modules`にあるため、依存ファイルの更新では修正できない。Slackとメールの「要判断」には出さず、webhookにだけ載せる（他に表示するパッケージがなければ項目ごと出さない。ただし、言語ランタイムのサポート終了を知らせる`runtime_eol`の項目は残る） | [ソースの確認](remediation-logic.md#source-verification) |
-| `non_registry_source` | 対応する公開レジストリ以外から取得されるパッケージである | |
-| `sdist_only` | パッケージにソース配布物しかない | |
-| `forced_by_override` | パッケージの版がoverrideで固定されている | |
-| `marker_not_evaluated` | 依存指定の環境マーカーを評価していない | |
-| `invalid_marker` | 依存指定の環境マーカーが不正である | |
-| `multiple_versions` | 同名パッケージの複数の版や出現箇所を、1つの更新として扱えない | |
-| `unparsable_version` | パッケージの版を解釈できない | |
-| `source_not_found` | 取得元のリポジトリまたはブランチが見つからない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `source_access_denied` | 取得元のリポジトリにアクセスできない | [GitHubアクセスの準備](remediation-setup.md#prepare-github-access) |
-| `source_too_large` | 取得元が大きすぎて読み込めない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `file_too_large` | 依存ファイルが大きすぎて読み込めない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `byte_budget_exhausted` | 取得元から読み込める容量の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `source_error` | 取得元の読み込みに失敗した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `github_budget_exhausted` | GitHubへの要求数の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `source_read_failed` | 依存ファイルの再取得に失敗した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-
-### 実行環境の理由 {#runtime-reasons}
-
-| コード | 意味 | 詳しい説明 |
-| --- | --- | --- |
-| `node_spec_invalid` | 宣言されたNode.jsの版を解釈できない | [Node.jsの選定](remediation-logic.md#node-selection) |
-| `python_spec_invalid` | 宣言されたPythonの版を解釈できない | [uv用Pythonの選定](remediation-logic.md#uv-python-selection) |
-| `manager_spec_invalid` | 宣言されたパッケージマネージャーの版を解釈できない | [ツール版の選定](remediation-logic.md#tool-version-selection) |
-| `node_spec_conflict` | Node.jsの版宣言どうしが矛盾している | [Node.jsの選定](remediation-logic.md#node-selection) |
-| `python_spec_conflict` | Pythonの版宣言どうしが矛盾している | [uv用Pythonの選定](remediation-logic.md#uv-python-selection) |
-| `manager_spec_conflict` | パッケージマネージャーの宣言どうしが矛盾している | [ツール版の選定](remediation-logic.md#tool-version-selection) |
-| `node_spec_unsupported` | 宣言されたNode.jsの版に対応していない | [Node.jsの選定](remediation-logic.md#node-selection) |
-| `python_spec_unsupported` | 宣言されたPythonの版に対応していない | [uv用Pythonの選定](remediation-logic.md#uv-python-selection) |
-| `manager_spec_unsupported` | 宣言されたパッケージマネージャーの版に対応していない | [ツール版の選定](remediation-logic.md#tool-version-selection) |
-| `work_program_mismatch` | 作業用コンテナ内のプログラムが、実行中のKestreLynxに付属するものと異なる | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `work_environment_rejected` | 作業用コンテナがプログラムの実行要件を満たしていない | [実行時の制限](remediation-logic.md#worker-restrictions) |
-| `go_version_too_old` | `go.mod`に`go`の版の指定がない、または1.21より古い | [Goの依存ファイル](#go-inputs) |
-| `go_toolchain_unsupported` | `go.mod`の`toolchain`の行が、公開されたGoの版ではない | [Goの依存ファイル](#go-inputs) |
-| `go_runtime_unavailable` | 更新に必要な版以上の、サポート中のGoを選べない | [Goの選定](remediation-logic.md#go-runtime-selection)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
-| `gradle_version_unsupported` | 対応していない Gradle の版を使っている | [Gradleの依存ファイル](#gradle-inputs) |
-| `gradle_toolchain_unsupported` | 対応していない Java の toolchain を指定している | [Gradleの実行設定](remediation-logic.md#gradle-worker-settings) |
-| `runtime_eol` | 更新対象の実行環境がサポート終了している | [実行環境の選定](remediation-logic.md#runtime-and-tool-versions) |
-| `runtime_engines_mismatch` | 更新した依存が、プロジェクトの宣言する最小Node.js版に対応していない | [Node.jsの互換条件](remediation-logic.md#node-compatibility) |
-| `requires_python_unsupported` | 必要なPython版の条件を満たせない、または条件がない・解釈できない | [uv用Pythonの選定](remediation-logic.md#uv-python-selection) |
-| `pip_target_undecidable` | パッケージが動く環境を判断できない | [pipの検証環境](remediation-logic.md#pip-target-environment) |
-| `pip_target_mismatch` | pipの依存解決対象と、パッケージが動く環境が一致しない | [pipの検証環境](remediation-logic.md#pip-target-environment) |
-| `work_image_not_configured` | 更新用の作業環境が用意されていない | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `work_namespace_not_configured` | KubernetesでのMaven以外の言語パッケージ更新に必要な作業用namespaceが設定されていないため手動対応 | [作業用Podの設定](configuration.md#remediation-worker-kubernetes) |
-| `work_runtime_class_unsupported` | 作業用Podに未対応のRuntimeClassが設定されているため手動対応 | [作業用Podの設定](configuration.md#remediation-worker-kubernetes) |
-| `work_cluster_too_old` | クラスタが作業用Podのポリシーに必要なKubernetes 1.30より古いため手動対応 | [導入条件](remediation-setup.md#kubernetes-language-updates) |
-| `work_pod_limit` | 作業用Pod数またはnamespaceのクォータが上限で、更新を次回に持ち越す | [作業用Podの設定](configuration.md#remediation-worker-kubernetes) |
-| `work_admission_unverified` | 作業用namespaceのPod作成規則が有効と確認できず、作業用Podを起動しない | [作業用Podの実行](remediation-logic.md#kubernetes-work-pods) |
-| `work_priority_class_missing` | 作業用Podに設定したPriorityClassが存在しない、または必要な設定と一致しないため手動対応 | [導入手順](remediation-setup.md#kubernetes-language-updates) |
-| `work_pod_not_started` | 作業用Podが時間内に起動せず、更新を次回に持ち越す | [作業用Podの確認](remediation-troubleshooting.md#check-update-failure) |
-| `work_image_unavailable` | 作業用イメージを用意できなかった | [公式イメージの固定](remediation-logic.md#worker-images) |
-
-### ツール取得の理由 {#tool-reasons}
-
-| コード | 意味 | 詳しい説明 |
-| --- | --- | --- |
-| `tool_fetch_config_unsupported` | マネージャー自身によるツール取得や、未対応の解決設定が指定されている | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `tool_version_unsupported` | パッケージマネージャーの版に対応していない | [ツール版の選定](remediation-logic.md#tool-version-selection) |
-| `tool_version_not_found` | 指定したパッケージマネージャーの版が見つからない | [ツールの取得と照合](remediation-logic.md#tool-verification) |
-| `tool_hash_mismatch` | ツールの配布物がチェックサムと一致しない | [ツールの取得と照合](remediation-logic.md#tool-verification) |
-| `tool_hash_unsupported` | ツールの配布物のチェックサムを検証できない | [ツールの取得と照合](remediation-logic.md#tool-verification) |
-| `tool_artifact_invalid` | ツールの配布物が不正である | [ツールの取得と照合](remediation-logic.md#tool-verification) |
-| `tool_metadata_invalid` | ツールのリリース情報が不正である | [ツールの取得と照合](remediation-logic.md#tool-verification) |
-| `tool_too_new` | ツールの公開後待機時間を満たしたと確認できない | [ツール公開後の待機](remediation-logic.md#tool-release-age) |
-| `tool_fetch_failed` | ツールの取得に失敗した | [ツールの取得と照合](remediation-logic.md#tool-verification) |
-| `tool_fetch_budget` | ツールの取得回数の上限に達した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `tool_cache_full` | ツールキャッシュに空きを確保できない | [ツールキャッシュの再利用](remediation-logic.md#tool-cache) |
-| `tool_file_mismatch` | キャッシュ内のツール配布物が記録と異なる | [ツールキャッシュの再利用](remediation-logic.md#tool-cache) |
-
-### 更新結果の理由 {#update-reasons}
-
-| コード | 意味 | 詳しい説明 |
-| --- | --- | --- |
-| `update_candidate_in_source` | ソース内のパッケージに対応する修正版の更新候補がある | [修正版の下限](remediation-logic.md#fix-lower-bound) |
-| `range_allows_fix` | 依存範囲が修正版を許し、再ビルドで入る見込みがある | [直接依存の版指定](remediation-logic.md#direct-dependencies) |
-| `go_stdlib_needs_newer_go` | Goの標準ライブラリの脆弱性で、`go.mod`の更新ではなく、新しいGoでビルドし直すと直る | [Goの候補選定](remediation-logic.md#go-package-selection) |
-| `fix_in_other_major_version` | 修正版が別のメジャー版にあり、Goでは別のモジュールパスになる | [Goの候補選定](remediation-logic.md#go-package-selection)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
-| `go_release_retracted` | 目標版が撤回されていて代わりの修正版を選べない、または依存の要求で目標を超えた対象の版が撤回されている | [Goの候補選定](remediation-logic.md#go-package-selection)・[Goの更新結果の検査](remediation-logic.md#go-update-validation) |
-| `go_line_raised_too_far` | 変更後の`go`・`toolchain`の行の版が稼働バイナリをビルドしたGoの最も低い版を超える、またはビルドした版が不明なまま行の版が変わる | [Goの更新結果の検査](remediation-logic.md#go-update-validation)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
-| `go_dependencies_uncheckable` | 更新後の依存の要求を確かめるためにたどるモジュールの版が多すぎる | [Goの更新結果の検査](remediation-logic.md#go-update-validation) |
-| `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない | [Mavenの候補選定](remediation-logic.md#maven-package-selection)・[Gradleの目標版](remediation-logic.md#gradle-target-versions)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
-| `maven_version_source_unsupported` | 版が、プロジェクトの pom ファイルの変更では変えられない形で決まっている | [版の出所と書き換え](remediation-logic.md#maven-version-sources)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
-| `maven_release_not_found` | 更新で使える版が Maven Central にない | [目標版とMaven Centralの版](remediation-logic.md#maven-target-versions)・[Gradleの目標版](remediation-logic.md#gradle-target-versions)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
-| `maven_bom_series_unreached` | 取り込んでいる BOM と同じマイナー版では修正版に届かない | [版の出所と書き換え](remediation-logic.md#maven-version-sources)・[Gradleの版の宣言と書き換え](remediation-logic.md#gradle-version-sources) |
-| `maven_dependency_held_back` | 更新後も、新しい版が要求する依存が要求より低い版のまま残る | [Mavenの更新結果の検査](remediation-logic.md#maven-update-validation) |
-| `gradle_version_source_unsupported` | 版が、プロジェクトのファイルの変更では変えられない形で決まっている | [版の宣言と書き換え](remediation-logic.md#gradle-version-sources)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
-| `gradle_lock_entry_removed` | 更新で gradle.lockfile のエントリが削除された | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
-| `gradle_lock_configurations_changed` | 更新で gradle.lockfile が lock する構成が変わった | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
-| `gradle_lock_version_unsupported` | 更新後の gradle.lockfile にスナップショット版が含まれる | [Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation) |
-| `no_fixed_version_above_installed` | 稼働版より新しい修正版がない、または修正対象がない | [修正版の下限](remediation-logic.md#fix-lower-bound) |
-| `constraint_excludes_fix` | 候補または更新後の版が依存の制約を満たさない | [直接依存の版指定](remediation-logic.md#direct-dependencies)・[推移的依存の更新範囲](remediation-logic.md#transitive-dependencies) |
-| `constraint_not_evaluable` | 版の制約を評価できない、または修正版がpipで選ばれないプレリリースである | [直接依存の版指定](remediation-logic.md#direct-dependencies) |
-| `packages_need_manual_update` | 自動更新できるパッケージがない | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `update_job_limit` | 1回の実行で行える更新ジョブ数の上限に達した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `update_input_limit` | 更新に使うファイルがサイズ上限を超えている | [コンテナへの入力](remediation-logic.md#worker-inputs) |
-| `update_job_failed` | 更新の実行に失敗した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `update_result_invalid` | 更新ジョブの結果が不正である | [結果の回収](remediation-logic.md#worker-results) |
-| `update_job_timed_out` | 更新の実行がタイムアウトした | [実行時の制限](remediation-logic.md#worker-restrictions) |
-| `distribution_lookup_failed` | npm・PyPIなどのレジストリからパッケージの情報を読む処理に失敗した | [付随変更の検査](remediation-logic.md#change-validation) |
-| `source_scan_failed` | 依存ファイルのスキャンに失敗した | [比較条件](remediation-logic.md#comparison-conditions) |
-| `update_input_invalid` | 更新の入力が不正である | [コンテナへの入力](remediation-logic.md#worker-inputs) |
-| `update_job_input_rejected` | 更新ジョブが入力を受け付けなかった | [コンテナへの入力](remediation-logic.md#worker-inputs) |
-| `manifest_edit_required` | 自動更新では行えないmanifestの変更が必要である | [直接依存の版指定](remediation-logic.md#direct-dependencies) |
-| `input_modified` | 読み取り専用のはずの設定ファイルが変更された | [付随変更の検査](remediation-logic.md#change-validation) |
-| `lockfile_inconsistent` | lockfileがプロジェクトと整合していない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
-| `no_wheel_for_version` | 対象の版に必要なプラットフォーム向けのwheelがない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
-| `release_yanked` | 対象のリリースが取り下げられている | [付随変更の検査](remediation-logic.md#change-validation) |
-| `requirements_rewrite_unsupported` | 修正計画で使う更新方法ではrequirementsを書き換えられない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
-| `update_set_not_applied` | 同時に更新する別のパッケージを更新できなかった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
-| `target_not_in_lockfile` | 更新対象のパッケージがlockfileに載っていない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
-| `no_reresolve_trigger` | 再解決のきっかけとして一時的に外せる依存がない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
-| `pnpm12_removal_unsupported` | 12.10.0より前のpnpm 12では、現在の更新方法を使えない | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
-| `update_step_failed` | 更新中の処理に失敗した | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
-| `post_update_check_failed` | 更新後の検査に失敗した | [付随変更の検査](remediation-logic.md#change-validation) |
-| `unexpected_files` | 更新で想定外のファイルが変更された | [付随変更の検査](remediation-logic.md#change-validation) |
-| `release_age_violation` | 依存のリリースが、プロジェクトの定める公開後の最低経過期間を満たさない | [付随変更の検査](remediation-logic.md#change-validation) |
-| `manifest_changed` | 更新でmanifestに許可していない変更が入った | [付随変更の検査](remediation-logic.md#change-validation) |
-| `output_files_invalid` | 出力ファイルが不正、または読み取れない | [結果の回収](remediation-logic.md#worker-results) |
-| `lockfile_format_changed` | 更新でlockfileの形式が変わった | [付随変更の検査](remediation-logic.md#change-validation) |
-| `target_not_updated` | 更新しても目標の版に上がらなかった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
-| `target_removed` | 更新後に対象パッケージがなくなった、または依存関係から到達できなくなった | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
-| `fix_condition_not_met` | 更新後の版が脆弱性の修正条件を満たさない | [部分PRの成立条件](remediation-logic.md#partial-pr-selection) |
-| `unexplained_dependency_diff` | 更新との関係を説明できない依存の変更や、版が上がった・追加されたモジュールが要求する版の最大と一致しないGoの`go`の行の引き上げがある | [付随変更の検査](remediation-logic.md#change-validation)・[Goの更新結果の検査](remediation-logic.md#go-update-validation) |
-| `distribution_mismatch` | パッケージがレジストリの公開内容やpipの解決結果と一致しない | [付随変更の検査](remediation-logic.md#change-validation) |
-| `registry_check_limit` | 更新時にnpm・PyPIなどのレジストリに問い合わせた回数が上限に達した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `update_package_limit` | 更新するパッケージ数が上限を超えている | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `resolved_source_changed` | パッケージの取得元が変わった | [付随変更の検査](remediation-logic.md#change-validation) |
-| `post_update_lockfile_unstable` | lockfileを再生成すると、さらに内容が変わる | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
-| `drop_side_effect` | 再解決のために一時的に外した依存が元の状態に戻らなかった | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods) |
-| `source_target_not_detected_before` | 更新前の依存ファイルで対象の脆弱性が検出されなかった | [比較条件](remediation-logic.md#comparison-conditions) |
-| `source_target_not_analysed_after` | 更新後の依存ファイルで対象を解析できなかった | [比較条件](remediation-logic.md#comparison-conditions) |
-| `source_target_still_detected` | 更新後も対象の脆弱性が検出される | [対象別の検証範囲](remediation-logic.md#verification-scope) |
-| `source_introduced_findings` | 更新で依存ファイルに新たな所見が入る | [比較条件](remediation-logic.md#comparison-conditions) |
-| `source_introduced_kev` | 更新で依存ファイルにKEV掲載の脆弱性が新たに入る | [比較条件](remediation-logic.md#comparison-conditions) |
-| `source_scan_incomplete` | 依存ファイルのスキャンが不完全だった | [比較条件](remediation-logic.md#comparison-conditions) |
-| `update_verified` | 更新結果の検証が完了した | [対象別の検証範囲](remediation-logic.md#verification-scope) |
-| `dependents_update_not_fixed` | 依存元を解決し直したが、今回の再解決では修正版に届かなかった | [依存元からの再解決](remediation-logic.md#dependent-reresolution) |
-| `no_resolution` | 修正版を指定した再解決は成立しなかった | [依存元からの再解決](remediation-logic.md#dependent-reresolution) |
-| `dependents_update_rejected` | 依存元の更新が検査を通らなかった | [再解決の検査条件](#dependent-reresolution-rules) |
-| `dependents_update_unsupported` | 依存元をこのツールでは更新できない | [再解決の対応範囲と上限](#dependent-reresolution-limits) |
-| `dependents_update_limit` | 依存元の更新が上限を超える | [再解決の対応範囲と上限](#dependent-reresolution-limits) |
-| `dependents_hold_back` | 依存元がこのパッケージの版を制限している | [マネージャー別の更新処理](remediation-logic.md#manager-update-methods)・[修正版に上げられないときの案内](remediation-results.md#fix-hints) |
-| `release_too_new` | 更新で入る版の公開から72時間経っていない | [公開後の待機と再試行](#dependent-reresolution-waits) |
-| `chain_downgrade` | 更新でパッケージが古い版に下がる、または版の対応を確定できない | [再解決の検査条件](#dependent-reresolution-rules) |
-| `chain_move_limit` | 更新で動くパッケージ数が上限を超える | [再解決の対応範囲と上限](#dependent-reresolution-limits) |
-| `chain_item_budget` | 更新に必要な作業が1項目の上限を超える | [公開後の待機と再試行](#dependent-reresolution-waits) |
-
-依存元からの再解決では、パッケージごとの理由と、再解決全体の詳しい理由を分けて記録します。
-Webhookでは、`packages[].reason`と`update.chain.reason`を併せて確認します。
-
-- `dependents_update_rejected`には、公開後の待機が3回続いて再解決を停止した場合も含む
-- `dependents_update_limit`には、同じ種類の作業上限による停止や、待機記録を保存できない場合も含む
-- `source_introduced_findings`と`source_introduced_kev`には、脆弱なエントリ数・要求数の増加や、依存関係上の位置の検査による拒否も含む
-- 実行や取得に失敗した場合は、通常更新と共通の失敗コードも使う
-
-### PR処理の理由 {#pr-reasons}
-
-| コード | 意味 | 詳しい説明 |
-| --- | --- | --- |
-| `pr_limit` | 1回の実行で作成するPR数の上限（`new_prs_per_cycle`）に達した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `open_pr_limit` | 設定したリポジトリ全体で開いているKestreLynxのPR数の上限（`open_prs`）に達した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_changed` | PRの準備中に候補が変わった、または新しい系列の確認でDockerfileの候補タグが稼働イメージごとに異なる内容を指した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr)、[新しい系列の確認](remediation-logic.md#newer-series-check) |
-| `base_moved` | PRの準備中にベースブランチが進んだ | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `github_rate_limited` | GitHubのレート制限に掛かった | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `write_outcome_unknown` | GitHubへの書き込み結果を確認できない | [書き込みの停止](remediation-logic.md#write-stops) |
-| `reconciliation_failed` | 既存PRとの照合に失敗した | [既存PRとの照合](remediation-logic.md#existing-pr-matching) |
-| `repository_mismatch` | リポジトリが記録と異なる | [書き込みの停止](remediation-logic.md#write-stops) |
-| `attempt_unsettled` | 前回のPR作成結果がまだ確定していない | [既存PRとの照合](remediation-logic.md#existing-pr-matching) |
-| `branch_not_ours` | 同名のブランチが存在し、KestreLynxが作成したものではない | [書き込みの停止](remediation-logic.md#write-stops) |
-| `pull_request_not_as_created` | PRが作成時の状態と異なる | [書き込みの停止](remediation-logic.md#write-stops) |
-| `github_refused` | GitHubが書き込みを拒否した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `github_error` | GitHubがエラーを返した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_recheck_failed` | PR作成前に候補を再確認できなかった | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `source_changed` | 計画の元にしたファイルが変更された | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `artifact_content_missing` | 更新したファイルの内容が保持されていない | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `artifacts_unusable` | 更新したファイルをそのままPRへ書き込めない | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `open_pr_not_inherited` | 同じファイルの既存PRに、新たに提案する更新が引き継いでいない修正がある | [古いPRの置き換え](remediation-logic.md#pr-replacement) |
-| `language_set_too_large` | 更新するパッケージが多すぎてPRの記録に収まらない | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `update_already_proposed` | この更新を提案するPRがすでにある | [既存PRとの照合](remediation-logic.md#existing-pr-matching) |
-
-### 保存処理の理由 {#storage-reasons}
-
-| コード | 意味 | 詳しい説明 |
-| --- | --- | --- |
-| `store_locked` | PRの記録が別のプロセスにロックされている | [記録を照合できない場合](remediation-troubleshooting.md#check-record-failure) |
-| `storage_failed` | PRの記録を保存できなかった | [記録の保存順序](remediation-logic.md#record-order) |
-| `storage_full` | PRの記録に空きを確保できない | [書き込みの停止](remediation-logic.md#write-stops) |
-| `records_unverified` | 既存PRの記録を確認できない | [記録の復旧](remediation-logic.md#record-recovery) |
-| `proposal_not_found` | この更新を提案していたPRの記録が見つからない | [既存PRとの照合](remediation-logic.md#existing-pr-matching) |
-
-## 保存ファイル {#stored-records}
-
-修正計画の記録は、`remediation.storage_dir`の下に保存します。
-
-| ファイル・ディレクトリ | 内容 | 記録時点 |
-| --- | --- | --- |
-| `plan.json` | 最新の計画、ソースの場所、比較に使ったスキャン、実行した依存更新の検査結果 | 依存更新の処理後、PR処理前 |
-| `delivered.json` | 配信した計画と、Slackに表示した内容をそれぞれ識別する情報 | 対応する通知の配信後 |
-| `prs.json` | PRの識別情報、状態、作成試行、再作成の抑止、GitHub操作の記録 | PRの処理や照合、操作結果の記録時 |
-| `tools` | 取得・照合したnpm・pnpm・uvのキャッシュ | ツールの取得時など |
-
-`prs.json`には、依存元からの再解決の待機時刻、同じ種類の保留が続いた回数、入力ごとの停止記録も保存します。
-この記録は依存更新の処理後にも更新します。
-
-`plan.json`は、PR処理後の結果を含めて再保存しません。
-最新の修正計画のPR処理結果は通知で、継続して管理する記録は`prs.json`で確認できます。
-
-保存とPR処理の関係は[記録の保存順序](remediation-logic.md#record-order)、保存先の設定は[基本設定](configuration.md#remediation-basics)を参照してください。
+選定条件は[実行環境の選定](remediation-package-logic.md#runtime-and-tool-versions)を参照してください。

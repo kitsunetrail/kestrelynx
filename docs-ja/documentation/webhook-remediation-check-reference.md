@@ -345,7 +345,7 @@ title: Webhookの修正計画の更新前後の検査のフィールド
 | `split` | 更新前の1つのパッケージの記録が、更新後の複数の脆弱なパッケージの記録に分かれる |
 
 持ち越しがあっても合格とは限らず、検査の合否は`language_items[].source_check.passed`で確認します。
-再解決の採否は`language_items[].update.chain.outcome`で確認し、値の意味は[依存元からの再解決の結果](remediation-results.md#dependent-reresolution-results)を参照してください。
+再解決の採否は`language_items[].update.chain.outcome`で確認し、値の意味は[依存元からの再解決の結果](remediation-update-results.md#dependent-reresolution-results)を参照してください。
 
 `language_items[].source_check`は、処理結果に残した1回分の検査記録です。
 次のフィールドには補足があります。
@@ -361,7 +361,7 @@ title: Webhookの修正計画の更新前後の検査のフィールド
 5つの一覧はそれぞれ最大500件で、省略がある場合は`language_items[].source_check.truncated`が`true`になります。
 再解決のスキャン比較の合否は、省略前の全件で判定します。
 
-検査条件は[再解決の検査条件](remediation-reference.md#dependent-reresolution-rules)、持ち越しの例は[脆弱性の持ち越し](remediation-logic.md#dependent-reresolution-carried-findings)を参照してください。
+検査条件は[再解決の検査条件](remediation-reresolution-logic.md#dependent-reresolution-rules)、持ち越しの例は[脆弱性の持ち越し](remediation-reresolution-logic.md#dependent-reresolution-carried-findings)を参照してください。
 
 ## 更新ファイル {#language-artifact-fields}
 

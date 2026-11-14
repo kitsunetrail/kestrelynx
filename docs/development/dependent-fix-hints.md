@@ -25,7 +25,7 @@ flowchart LR
 
 For this situation, the notification adds whether a newer `@nestjs/platform-express` release can use a fixed `multer`.
 
-For display details, see [Hints when a package cannot reach its fix](../documentation/remediation-results.md#fix-hints), and for update outcomes, see [Re-resolution results](../documentation/remediation-results.md#dependent-reresolution-results).
+For display details, see [Hints when a package cannot reach its fix](../documentation/remediation-fix-hints.md#fix-hints), and for update outcomes, see [Re-resolution results](../documentation/remediation-update-results.md#dependent-reresolution-results).
 
 The Go `go` line, Maven and Gradle parent poms, BOMs and Spring Boot, retracted fixes, and fixes in another major version are covered in [Development of notifications and updates for packages blocked from reaching a fix by Go, parent poms, BOMs, and other constraints](version-source-fix-hints.md).
 
@@ -164,7 +164,7 @@ The fixed versions of `minimist` are `0.2.4` and `1.2.6`; the verified PR raises
 - Apply normal update rules to the target's own declaration, rewriting it only in supported forms when it excludes the fixed version
 - Check that the target vulnerability is fixed and vulnerabilities do not increase at each position in the dependency relationships
 
-For eligibility, see [Re-resolution eligibility](../documentation/remediation-logic.md#dependent-reresolution-eligibility), and for checks by dependency position, see [Development of re-resolution through dependent packages](dependent-reresolution.md).
+For eligibility, see [Re-resolution eligibility](../documentation/remediation-reresolution-logic.md#dependent-reresolution-eligibility), and for checks by dependency position, see [Development of re-resolution through dependent packages](dependent-reresolution.md).
 
 ### uv resolution failures
 
@@ -216,7 +216,7 @@ The “Found” path identifies `botocore` as the dependent a person needs to re
 - Keep `post_update_check_failed` when no blocking dependent is found
 - If other update targets remain in the same file, update those again from the original input and create a PR if the checks pass
 
-For processing conditions, see [Update methods by package manager](../documentation/remediation-logic.md#manager-update-methods) and [Partial PR conditions](../documentation/remediation-logic.md#partial-pr-selection).
+For processing conditions, see [Update methods by package manager](../documentation/remediation-package-logic.md#manager-update-methods) and [Partial PR conditions](../documentation/remediation-package-logic.md#partial-pr-selection).
 
 ### Maven and Gradle dependency paths
 
@@ -249,7 +249,7 @@ For packages marked `target_not_updated` because they remain below the target af
 
 Use Gradle dependency trees to explain the notification, without using them to decide whether an update is accepted.
 
-For recording conditions, see [Maven update validation](../documentation/remediation-logic.md#maven-update-validation) and [Gradle update validation](../documentation/remediation-logic.md#gradle-update-validation).
+For recording conditions, see [Maven update validation](../documentation/remediation-maven-logic.md#maven-update-validation) and [Gradle update validation](../documentation/remediation-gradle-logic.md#gradle-update-validation).
 
 ### Notifications and records
 
@@ -285,7 +285,7 @@ starlette 0.32.0.post1 cannot be raised to the fixed 1.3.1 (the dependent fastap
 | npm, pnpm, and uv | `language_items[].update.chain.hints` |
 | pip, Maven, and Gradle | `language_items[].packages[].fix_hint` |
 
-For reason codes, see [Update result reasons](../documentation/remediation-reference.md#update-reasons), and for the meaning and limitations of the display, see [Hints when a package cannot reach its fix](../documentation/remediation-results.md#fix-hints).
+For reason codes, see [Update result reasons](../documentation/remediation-update-reason-codes.md#update-reasons), and for the meaning and limitations of the display, see [Hints when a package cannot reach its fix](../documentation/remediation-fix-hints.md#fix-hints).
 
 ### Timing and limits for reading published release information
 

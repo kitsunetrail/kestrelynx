@@ -19,7 +19,7 @@ Show users where to consider a change and which fixed versions could be identifi
 For a retracted Go fixed release, find an alternative in the same major version and use it for a PR.
 Show a fix in another major version as information for deciding on a migration.
 
-For how to read the display, see [Hints when a package cannot reach its fix](../documentation/remediation-results.md#fix-hints).
+For how to read the display, see [Hints when a package cannot reach its fix](../documentation/remediation-fix-hints.md#fix-hints).
 Cases caused by dependents in npm, pnpm, uv, pip, Maven, and Gradle are covered in [Development of notifications and updates for packages blocked from reaching a fix by dependent requirements](dependent-fix-hints.md).
 
 ## Approach
@@ -72,7 +72,7 @@ The PRs target `v1.0.26` and `v2.5.15`, respectively.
 - Record in the update notes that an alternative release was selected because of retraction
 - Require manual handling with `go_release_retracted` if no release qualifies or the version list cannot be retrieved
 
-For selection rules, see [Go module target versions](../documentation/remediation-logic.md#go-target-versions).
+For selection rules, see [Go module target versions](../documentation/remediation-go-logic.md#go-target-versions).
 
 ### Modules declaring the Go go line
 
@@ -104,7 +104,7 @@ The fixed `golang.org/x/net v0.60.0` declares the required `Go 1.26.0`.
 - Omit the module declaration display when the project's own `go` or `toolchain` line is the cause
 - Also omit `fix_hint.go_line` when only the `toolchain` line is the cause
 
-For the conditions, see [Go selection](../documentation/remediation-logic.md#go-runtime-selection) and [Go update validation](../documentation/remediation-logic.md#go-update-validation).
+For the conditions, see [Go selection](../documentation/remediation-go-logic.md#go-runtime-selection) and [Go update validation](../documentation/remediation-go-logic.md#go-update-validation).
 
 ### Go fixes in another major version
 
@@ -182,7 +182,7 @@ Record the deciding pom in `packages[].fix_hint.decided_by`.
 - For a parent pom, read the dependency declaration and use management if the declaration has no version
 - For a BOM, read its managed version and also check parents and imported BOMs
 
-For the recording conditions, see [Maven version sources and edits](../documentation/remediation-logic.md#maven-version-sources) and [Gradle version declarations and edits](../documentation/remediation-logic.md#gradle-version-sources).
+For the recording conditions, see [Maven version sources and edits](../documentation/remediation-maven-logic.md#maven-version-sources) and [Gradle version declarations and edits](../documentation/remediation-gradle-logic.md#gradle-version-sources).
 
 ### Maven and Gradle fix checks
 
@@ -220,7 +220,7 @@ The following table is also a fictional example, showing the difference between 
 For `maven_release_not_found` and `maven_fix_in_other_major`, record the lowest qualifying fixed release in another major version.
 Select it from the retrieved Maven Central version list for the former and from fixes in the vulnerability information for the latter.
 
-For selection rules, see [Maven target versions and Maven Central releases](../documentation/remediation-logic.md#maven-target-versions); for reason codes, see [Update result reasons](../documentation/remediation-reference.md#update-reasons).
+For selection rules, see [Maven target versions and Maven Central releases](../documentation/remediation-maven-logic.md#maven-target-versions); for reason codes, see [Update result reasons](../documentation/remediation-update-reason-codes.md#update-reasons).
 
 ### Notification display and records
 
@@ -255,8 +255,8 @@ com.fasterxml.jackson.core:jackson-databind 2.13.0 cannot be raised to the fixed
 
 Do not claim that every release at or above a checked version fixes the target.
 
-For display examples and how to read the records, see [Hints when a package cannot reach its fix](../documentation/remediation-results.md#fix-hints).
-For displays when dependents are updated together with the target, see [Results of re-resolution through dependent packages](../documentation/remediation-results.md#dependent-reresolution-results).
+For display examples and how to read the records, see [Hints when a package cannot reach its fix](../documentation/remediation-fix-hints.md#fix-hints).
+For displays when dependents are updated together with the target, see [Results of re-resolution through dependent packages](../documentation/remediation-update-results.md#dependent-reresolution-results).
 
 ### Timing and limits for reading published release information
 

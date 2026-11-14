@@ -34,7 +34,7 @@ An earlier option was to include dependent packages in notifications, but the de
 - **Wait 72 hours after release before introducing a package version.**
     - This avoids adopting versions immediately after release.
 
-See [Re-resolution through dependent packages](../documentation/remediation-logic.md#dependent-reresolution) for the mechanism and [Re-resolution support and limits](../documentation/remediation-reference.md#dependent-reresolution-limits) for its scope and limits.
+See [Re-resolution through dependent packages](../documentation/remediation-reresolution-logic.md#dependent-reresolution) for the mechanism and [Re-resolution support and limits](../documentation/remediation-reresolution-logic.md#dependent-reresolution-limits) for its scope and limits.
 
 ## Decisions
 
@@ -88,7 +88,7 @@ In the table below, `→` represents a dependency, and `⇒` represents a change
 | One version splits into multiple vulnerable versions | `A → X 1.0`, `B → X 1.0` ⇒ `A → X 1.1 (vulnerable)`, `B → X 1.2 (vulnerable)` | A split from one old version into multiple vulnerable versions cannot qualify as carrying vulnerabilities |
 | Multiple paths merge into one | `A → X 1.0`, `B → X 2.0` ⇒ `A → X 3.0`, `B → X 3.0` | A single old version cannot be determined for comparison with X after the merge |
 
-See [Re-resolution check conditions](../documentation/remediation-reference.md#dependent-reresolution-rules) for the detailed conditions.
+See [Re-resolution check conditions](../documentation/remediation-reresolution-logic.md#dependent-reresolution-rules) for the detailed conditions.
 
 ## Verification methods and results
 

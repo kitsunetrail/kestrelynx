@@ -76,8 +76,8 @@ title: Webhookの修正計画の言語パッケージのフィールド
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
 | `key` | string | [計画内の項目を識別するキー](#language-item-key) | — |
-| `category` | string | 項目全体の[計画の分類値](remediation-reference.md#category-values) | — |
-| `reason` | string | 分類の根拠となる[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `category` | string | 項目全体の[計画の分類値](remediation-reason-codes.md#category-values) | — |
+| `reason` | string | 分類の根拠となる[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 分類や理由を補足する説明文 | 省略 |
 | `manager` | string | 依存ファイルを扱うパッケージマネージャー | 特定できなければ省略 |
 | `priority` | string | 対象脆弱性の中で最も高い[優先度](webhook-reference.md#priority-values) | 省略 |
@@ -118,7 +118,7 @@ title: Webhookの修正計画の言語パッケージのフィールド
     - 検査で不合格になった場合も`true`になり、検査の合格は`source_check.passed`で確認する
 - `retry_after`
     - 待機中は、この日時だけを含み、`update.chain`を含まない場合がある
-    - 待機と再試行の条件は[公開後の待機と再試行](remediation-reference.md#dependent-reresolution-waits)を参照する
+    - 待機と再試行の条件は[公開後の待機と再試行](remediation-reresolution-logic.md#dependent-reresolution-waits)を参照する
 - `packages`
     - 理由が`global_node_modules`のパッケージは、Slackとメールの「要判断」に出ない場合も含む
 
@@ -242,7 +242,7 @@ Dockerfileの取得元にも、同じフィールドを持つファイル情報�
 | `eol` | string | サポート終了日を`YYYY-MM-DD`形式で示す | 不明なら省略 |
 
 この情報は、項目の`reason`が`runtime_eol`の場合に付与します。
-実行環境の選定は[実行環境の選定](remediation-logic.md#runtime-and-tool-versions)を参照してください。
+実行環境の選定は[実行環境の選定](remediation-package-logic.md#runtime-and-tool-versions)を参照してください。
 
 ### PR処理の結果 {#language-pull-request-fields}
 
@@ -250,12 +250,12 @@ Dockerfileの取得元にも、同じフィールドを持つファイル情報�
 
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
-| `status` | string | 対応するPR処理の[状態値](remediation-reference.md#pr-status-values) | — |
-| `reason` | string | PR処理結果の[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `status` | string | 対応するPR処理の[状態値](remediation-reason-codes.md#pr-status-values) | — |
+| `reason` | string | PR処理結果の[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | PR処理結果を補足する説明文 | 省略 |
 | `number` | integer | GitHubのPR番号 | 省略 |
 | `url` | string | GitHubのPRのURL | 省略 |
-| `state` | string | PR自体の[状態値](remediation-reference.md#pr-status-values) | 省略 |
+| `state` | string | PR自体の[状態値](remediation-reason-codes.md#pr-status-values) | 省略 |
 | `target_key` | string | リポジトリ内の更新対象を識別するキー | 省略 |
 | `update_key` | string | 対象に提案する更新内容を識別するキー | 省略 |
 | `attempt_key` | string | 更新元のコミットと変更するファイル内容を含む、更新の試行を識別するキー | 省略 |
@@ -263,7 +263,7 @@ Dockerfileの取得元にも、同じフィールドを持つファイル情報�
 `pull_requests[]`のうち、`kind`が`language`で、`item_key`がこの言語項目の`key`と一致する処理の情報を載せます。
 PRを作成できなかった処理も含むため、`pull_request`があっても`number`や`url`があるとは限りません。
 
-識別キーによる照合は[既存PRとの照合](remediation-logic.md#existing-pr-matching)を参照してください。
+識別キーによる照合は[既存PRとの照合](remediation-pr-logic.md#existing-pr-matching)を参照してください。
 
 ## パッケージの結果 {#language-package-fields}
 
@@ -304,8 +304,8 @@ Webhookを受け取るプログラムでは、種類・名前・版が同じ要�
 | `selection_lower_bound` | string | 更新候補の選定を始める修正版の下限 | 省略 |
 | `adopted_version` | string | 更新後の依存ファイルにある対象パッケージの最も低い版 | 省略 |
 | `relation` | string | プロジェクトから見た依存関係の区分 | 判定できなければ省略 |
-| `action` | string | パッケージごとの[処理値](remediation-reference.md#action-values) | 省略 |
-| `reason` | string | パッケージの処理の[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `action` | string | パッケージごとの[処理値](remediation-reason-codes.md#action-values) | 省略 |
+| `reason` | string | パッケージの処理の[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 処理や理由を補足する説明文 | 省略 |
 | `left_out` | boolean | 計画した更新から除外された場合に`true`になる | 省略 |
 | `through` | stringの配列 | 修正版に上げるために、あわせて更新した依存元の名前 | 省略 |
@@ -356,7 +356,7 @@ Pythonのパッケージは、名前の表記が違っても、この値と版�
 `cve_count`はパッケージ内で脆弱性IDを重複なく数え、`kev_count`も一覧の省略前に数えます。
 `origin_count`はイメージ、パッケージ、脆弱性、検出箇所、ワークロードを含む検出元の組み合わせを重複なく数えるため、同じ脆弱性IDでも複数件になる場合があります。
 
-`selection_lower_bound`と`adopted_version`の読み分けは[更新目標と採用版](remediation-results.md#target-and-adopted-version)を参照してください。
+`selection_lower_bound`と`adopted_version`の読み分けは[更新目標と採用版](remediation-update-results.md#target-and-adopted-version)を参照してください。
 `action`が`update`でも、更新や検査を実行したとは限りません。
 
 `mkdirp`の更新で`minimist`を修正版に上げる例では、`minimist`の`through`は`["mkdirp"]`です。
@@ -372,7 +372,7 @@ Pythonのパッケージは、名前の表記が違っても、この値と版�
 最新の修正計画の処理で更新・検査を実行したかどうかは、`update_executed`と`post_update_check_executed`で確認します。
 
 `left_out`と、その除外を示す`action`・`reason`・`detail`も、対応するPRの情報から補う場合があります。
-部分PRの読み方は[部分PR](remediation-results.md#partial-pull-requests)を参照してください。
+部分PRの読み方は[部分PR](remediation-update-results.md#partial-pull-requests)を参照してください。
 
 ### 出現箇所・脆弱性・検出元 {#language-package-lists}
 
@@ -388,7 +388,7 @@ Pythonのパッケージは、名前の表記が違っても、この値と版�
 | `marker` | string | Pythonの依存宣言に付いている環境マーカー | 省略 |
 | `extras` | stringの配列 | Pythonの依存宣言で指定した追加機能の名前 | 省略 |
 | `matched` | boolean | 依存ファイルの記述を稼働パッケージに対応付けられた場合に`true`になる | 省略 |
-| `manual_reason` | string | この出現箇所を自動更新できない[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `manual_reason` | string | この出現箇所を自動更新できない[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 出現箇所や手動対応の理由を補足する説明文 | 省略 |
 
 次のフィールドには補足があります。
@@ -520,7 +520,7 @@ Pythonでは、`name`に正規化前の表記を保持するため、同じパ�
 - `manages`
     - BOM自体の版ではなく、そのBOMが設定する対象パッケージの版を示す
 
-版の管理方法は[Mavenの版の出所と書き換え](remediation-logic.md#maven-version-sources)を参照してください。
+版の管理方法は[Mavenの版の出所と書き換え](remediation-maven-logic.md#maven-version-sources)を参照してください。
 
 ### 修正版に上げられないときの案内 {#language-fix-hint}
 
@@ -553,7 +553,7 @@ Pythonでは、`name`に正規化前の表記を保持するため、同じパ�
 `target_not_updated`に`fix_hint`を付けるのは、MavenとGradleの場合だけです。
 対象の理由でも、情報を取得できなければ`fix_hint`やその子フィールドを省略します。
 
-理由の意味は[理由コード](remediation-reference.md#reason-codes)、案内の読み方は[修正版に上げられないときの案内](remediation-results.md#fix-hints)を参照してください。
+理由の意味は[理由コード](remediation-reason-codes.md#reason-codes)、案内の読み方は[修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)を参照してください。
 
 次のフィールドには補足があります。
 
@@ -625,7 +625,7 @@ Maven・Gradleの`held_by`は最大5件で、pip・Goにはこの5件の制限�
 Maven・Gradleの`maven_release_not_found`では、稼働版と同じ系統の版を使います。
 `maven_fix_in_other_major`では、稼働版と同じ系統、または系統の指定がない版を使います。
 
-版の系統と選定条件は[Mavenの目標版とMaven Centralの版](remediation-logic.md#maven-target-versions)を参照してください。
+版の系統と選定条件は[Mavenの目標版とMaven Centralの版](remediation-maven-logic.md#maven-target-versions)を参照してください。
 
 #### 対象の版を決めるPOM {#language-fix-decider-fields}
 
@@ -725,4 +725,4 @@ Maven・Gradleの`in_spec`には、現在使っている`parent_version`と同�
     - 別の依存経路から対象パッケージが入る可能性は残る
 
 公開版の情報がないことは、修正可能な公開版が存在しないことを意味しません。
-情報の読み方と調査の上限は[修正版に上げられないときの案内](remediation-results.md#fix-hints)を参照してください。
+情報の読み方と調査の上限は[修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)を参照してください。

@@ -76,8 +76,8 @@ The fields in each element of `language_items[]` are listed below.
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
 | `key` | string | [Key identifying the item within the plan](#language-item-key) | — |
-| `category` | string | Item-wide category from [Plan category values](remediation-reference.md#category-values) | — |
-| `reason` | string | Code explaining the category, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `category` | string | Item-wide category from [Plan category values](remediation-reason-codes.md#category-values) | — |
+| `reason` | string | Code explaining the category, as defined in [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Additional explanation of the category or reason | omitted |
 | `manager` | string | Package manager that handles the dependency files | omitted when not identified |
 | `priority` | string | Highest target vulnerability priority from [Priorities](webhook-reference.md#priority-values) | omitted |
@@ -118,7 +118,7 @@ The following fields have additional notes.
     - Also `true` when checks fail; use `source_check.passed` to determine whether checks passed
 - `retry_after`
     - While waiting, an item may contain only this timestamp without `update.chain`
-    - See [Release waiting periods and retries](remediation-reference.md#dependent-reresolution-waits) for waiting and retry conditions
+    - See [Release waiting periods and retries](remediation-reresolution-logic.md#dependent-reresolution-waits) for waiting and retry conditions
 - `packages`
     - Includes packages with reason `global_node_modules` even when they are not displayed under “Needs a decision” in Slack or email
 
@@ -242,7 +242,7 @@ The fields in `language_items[].runtime_eol` are listed below.
 | `eol` | string | End-of-support date in `YYYY-MM-DD` format | omitted when unknown |
 
 This information is included when the item's `reason` is `runtime_eol`.
-See [Runtime selection](remediation-logic.md#runtime-and-tool-versions) for how runtimes are selected.
+See [Runtime selection](remediation-package-logic.md#runtime-and-tool-versions) for how runtimes are selected.
 
 ### PR processing results {#language-pull-request-fields}
 
@@ -250,12 +250,12 @@ The fields in `language_items[].pull_request` are listed below.
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
-| `status` | string | Status of the matching PR processing result, as defined in [PR status values](remediation-reference.md#pr-status-values) | — |
-| `reason` | string | Code for the PR processing result, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `status` | string | Status of the matching PR processing result, as defined in [PR status values](remediation-reason-codes.md#pr-status-values) | — |
+| `reason` | string | Code for the PR processing result, as defined in [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Additional explanation of the PR processing result | omitted |
 | `number` | integer | GitHub PR number | omitted |
 | `url` | string | GitHub PR URL | omitted |
-| `state` | string | State of the PR itself, as defined in [PR status values](remediation-reference.md#pr-status-values) | omitted |
+| `state` | string | State of the PR itself, as defined in [PR status values](remediation-reason-codes.md#pr-status-values) | omitted |
 | `target_key` | string | Key identifying the update target within the repository | omitted |
 | `update_key` | string | Key identifying the update proposed for the target | omitted |
 | `attempt_key` | string | Key identifying an update attempt, including the base commit and the file content to change | omitted |
@@ -263,7 +263,7 @@ The fields in `language_items[].pull_request` are listed below.
 This contains information from the element of `pull_requests[]` whose `kind` is `language` and whose `item_key` matches this language item's `key`.
 Processing results that did not create a PR are also included, so the presence of `pull_request` does not guarantee that `number` or `url` is available.
 
-See [Matching existing PRs](remediation-logic.md#existing-pr-matching) for matching by identifier keys.
+See [Matching existing PRs](remediation-pr-logic.md#existing-pr-matching) for matching by identifier keys.
 
 ## Package results {#language-package-fields}
 
@@ -304,8 +304,8 @@ The fields in each element of `language_items[].packages[]` are listed below.
 | `selection_lower_bound` | string | Fixed-version lower bound from which update candidate selection starts | omitted |
 | `adopted_version` | string | Lowest target package version in the updated dependency files | omitted |
 | `relation` | string | Dependency relationship from the project's perspective | omitted when undetermined |
-| `action` | string | Per-package action from [Package action values](remediation-reference.md#action-values) | omitted |
-| `reason` | string | Code for the package action, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `action` | string | Per-package action from [Package action values](remediation-reason-codes.md#action-values) | omitted |
+| `reason` | string | Code for the package action, as defined in [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Additional explanation of the action or reason | omitted |
 | `left_out` | boolean | `true` when excluded from the planned update | omitted |
 | `through` | array of strings | Names of dependent packages updated along with the target to reach a fixed version | omitted |
@@ -356,7 +356,7 @@ The list count limits are listed below.
 `cve_count` counts unique vulnerability IDs within the package, and `kev_count` is also counted before list truncation.
 `origin_count` counts unique combinations of finding origins, including image, package, vulnerability, detection location, and workload, so the same vulnerability ID can contribute multiple entries.
 
-See [Update targets and adopted versions](remediation-results.md#target-and-adopted-version) for the distinction between `selection_lower_bound` and `adopted_version`.
+See [Update targets and adopted versions](remediation-update-results.md#target-and-adopted-version) for the distinction between `selection_lower_bound` and `adopted_version`.
 An `action` of `update` does not necessarily mean that an update or checks ran.
 
 In the example where updating `mkdirp` brings `minimist` to a fixed version, `through` for `minimist` is `["mkdirp"]`.
@@ -372,7 +372,7 @@ The following fields have additional notes.
 Check `update_executed` and `post_update_check_executed` to determine whether the update and checks ran during processing of the latest remediation plan.
 
 `left_out` and the `action`, `reason`, and `detail` describing that exclusion may also be supplemented from the matching PR.
-See [Partial PRs](remediation-results.md#partial-pull-requests) for how to interpret partial PRs.
+See [Partial PRs](remediation-update-results.md#partial-pull-requests) for how to interpret partial PRs.
 
 ### Occurrences, vulnerabilities, and finding origins {#language-package-lists}
 
@@ -388,7 +388,7 @@ The fields in each element of `language_items[].packages[].occurrences[]` are li
 | `marker` | string | Environment marker attached to a Python dependency declaration | omitted |
 | `extras` | array of strings | Names of extras specified in the Python dependency declaration | omitted |
 | `matched` | boolean | `true` when the dependency file declaration was matched to the running package | omitted |
-| `manual_reason` | string | Code explaining why this occurrence cannot be updated automatically, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `manual_reason` | string | Code explaining why this occurrence cannot be updated automatically, as defined in [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Additional explanation of the occurrence or the reason for manual handling | omitted |
 
 The following fields have additional notes.
@@ -520,7 +520,7 @@ The following fields have additional notes.
 - `manages`
     - The version set for the target package by that BOM, not the BOM's own version
 
-See [Version sources and edits](remediation-logic.md#maven-version-sources) for Maven version management.
+See [Version sources and edits](remediation-maven-logic.md#maven-version-sources) for Maven version management.
 
 ### Hints when a package cannot reach its fix {#language-fix-hint}
 
@@ -553,7 +553,7 @@ The `reason` values eligible for `fix_hint` are listed below.
 `target_not_updated` is eligible for `fix_hint` only for Maven and Gradle.
 Even for an eligible reason, `fix_hint` or its child fields are omitted when the information cannot be retrieved.
 
-See [Reason codes](remediation-reference.md#reason-codes) for the meanings of reasons and [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) for interpreting the hints.
+See [Reason codes](remediation-reason-codes.md#reason-codes) for the meanings of reasons and [Hints when a package cannot reach its fix](remediation-fix-hints.md#fix-hints) for interpreting the hints.
 
 The following fields have additional notes.
 
@@ -625,7 +625,7 @@ The interpretation of `version` depends on the package's `reason`.
 For Maven and Gradle `maven_release_not_found`, the version must have the same variant as the running version.
 For `maven_fix_in_other_major`, the version may have the same variant as the running version or no variant.
 
-See [Target versions and Maven Central releases](remediation-logic.md#maven-target-versions) for version variants and selection conditions.
+See [Target versions and Maven Central releases](remediation-maven-logic.md#maven-target-versions) for version variants and selection conditions.
 
 #### POM deciding the target version {#language-fix-decider-fields}
 
@@ -725,4 +725,4 @@ The following fields have additional notes.
     - The target package may still be brought in through another dependency path
 
 The absence of published release information does not mean that no release capable of fixing the package exists.
-See [Hints when a package cannot reach its fix](remediation-results.md#fix-hints) for interpreting the information and for lookup limits.
+See [Hints when a package cannot reach its fix](remediation-fix-hints.md#fix-hints) for interpreting the information and for lookup limits.

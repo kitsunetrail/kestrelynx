@@ -64,8 +64,8 @@ The fields in each element of `items[]` are listed below.
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
 | `key` | string | Item identifier formed by joining the running image name and content identity | — |
-| `category` | string | [Plan category values](remediation-reference.md#category-values) | — |
-| `reason` | string | Code explaining the category or processing result, as defined in [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `category` | string | [Plan category values](remediation-reason-codes.md#category-values) | — |
+| `reason` | string | Code explaining the category or processing result, as defined in [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Explanatory text supplementing the reason | omitted |
 | `tag_kind` | string | Tag classification for the current image name | omitted when not classified |
 | `priority` | string | Highest priority among the findings targeted for comparison, using the values in [Priorities](webhook-reference.md#priority-values) | omitted when unavailable |
@@ -101,7 +101,7 @@ The values of `tag_kind` are listed below.
 | `floating` | A floating tag, such as `latest`, `16`, `1.25`, or `16-alpine` |
 | `excluded` | An image name excluded from candidate lookup, such as a digest-pinned reference, a prerelease, or an unsupported format |
 
-See [Distributed image tags](remediation-logic.md#published-image-tags) for candidate selection and [Image candidate reasons](remediation-reference.md#image-reasons) for reasons for exclusion.
+See [Distributed image tags](remediation-image-logic.md#published-image-tags) for candidate selection and [Image candidate reasons](remediation-image-reason-codes.md#image-reasons) for reasons for exclusion.
 
 ## Kubernetes workload information {#remediation-image-kubernetes}
 
@@ -140,7 +140,7 @@ The following fields have additional notes.
 - `pull_policy`
     - Defaults are not filled in when the policy is unset; guidance based on the effective pull policy is output in `pull[]`
 
-See [Kubernetes image names and re-pull guidance](remediation-logic.md#kubernetes-image-references) for how declarations are checked against running image names.
+See [Kubernetes image names and re-pull guidance](remediation-kubernetes-logic.md#kubernetes-image-references) for how declarations are checked against running image names.
 
 ### Re-pull guidance {#remediation-image-pull}
 
@@ -175,7 +175,7 @@ The following fields have additional notes.
     - Normal plan generation outputs only pull policies with at least one target
     - If a record without a value is output, the key is retained with `null`
 
-See [Kubernetes image names and re-pull guidance](remediation-logic.md#kubernetes-image-references) for re-pull conditions.
+See [Kubernetes image names and re-pull guidance](remediation-kubernetes-logic.md#kubernetes-image-references) for re-pull conditions.
 
 ### Management chains {#remediation-image-management}
 

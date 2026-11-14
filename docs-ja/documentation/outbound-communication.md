@@ -145,7 +145,7 @@ PRの内容には次の情報が含まれる場合があります。
 
 依存元と古い版に留められているパッケージの間にあるパッケージが古い版を指定している場合は、その名前も含めます。
 
-管理の条件は[PRの管理](remediation-logic.md#pr-management)、PRによるワークフローの起動は[PR作成の有効化](remediation-setup.md#enable-pr-creation)を参照してください。
+管理の条件は[PRの管理](remediation-pr-logic.md#pr-management)、PRによるワークフローの起動は[PR作成の有効化](remediation-setup.md#enable-pr-creation)を参照してください。
 
 ### イメージ候補の取得 {#candidate-registry-communication}
 
@@ -155,7 +155,7 @@ KestreLynxはイメージ名・タグ・digestを要求に指定し、タグ一�
 接続先は、イメージ名が示す公開または認証設定済みのレジストリです。
 Docker Hubの場合は`registry-1.docker.io`へ接続します。
 
-認証は[イメージレジストリの認証](configuration.md#registries)、候補の探索は[イメージ候補の選定](remediation-logic.md#image-selection)を参照してください。
+認証は[イメージレジストリの認証](configuration.md#registries)、候補の探索は[イメージ候補の選定](remediation-image-logic.md#image-selection)を参照してください。
 
 ### 作業用イメージの取得 {#worker-image-downloads}
 
@@ -169,7 +169,7 @@ Docker Hubの場合は`registry-1.docker.io`へ接続します。
 | DockerまたはKubernetesノードのコンテナランタイム | Docker Hubまたは設定したミラー | 公式Node.js・Python・Go（`golang`）・Gradle（`gradle`）イメージ |
 | Kubernetesノードのコンテナランタイム | KestreLynxイメージ名のレジストリ | 作業用Podで入力ファイルを受け取るコンテナのイメージ |
 
-イメージの固定と取得不能時の扱いは[公式イメージの固定](remediation-logic.md#worker-images)を参照してください。
+イメージの固定と取得不能時の扱いは[公式イメージの固定](remediation-worker-logic.md#worker-images)を参照してください。
 
 公式イメージのミラーは[`remediation.worker.registry`](configuration.md#remediation-worker)で指定し、実際の接続先にはコンテナランタイムのミラー設定も関係します。
 入力用のイメージは[`remediation.worker.kubernetes.receiver_image`](configuration.md#remediation-worker-kubernetes)、未設定ならKestreLynx自身のPodのイメージで決まります。
@@ -184,7 +184,7 @@ KestreLynxはツール名や版を要求に指定し、版情報の確認や配�
 | KestreLynx | `pypi.org`・`files.pythonhosted.org` | uvの版情報と配布物 |
 
 ツール取得の要求とリダイレクトは、表に挙げたホストへのHTTPS（TCP 443）に制限します。
-取得・照合は[ツールの取得と照合](remediation-logic.md#tool-verification)、再利用は[ツールキャッシュの再利用](remediation-logic.md#tool-cache)を参照してください。
+取得・照合は[ツールの取得と照合](remediation-node-python-logic.md#tool-verification)、再利用は[ツールキャッシュの再利用](remediation-node-python-logic.md#tool-cache)を参照してください。
 
 ### 依存パッケージの取得 {#dependency-downloads}
 
@@ -208,7 +208,7 @@ KestreLynxは、更新に必要な版や依存関係、更新結果を確認す�
 
 取得条件と、取得した情報の用途には次の補足があります。
 
-- npm・pnpm・uvの再解決では、更新を妨げる版指定と、新たに入る版の[公開から72時間の待機](remediation-reference.md#dependent-reresolution-waits)を確認する
+- npm・pnpm・uvの再解決では、更新を妨げる版指定と、新たに入る版の[公開から72時間の待機](remediation-reresolution-logic.md#dependent-reresolution-waits)を確認する
 - Goでは、公開元が利用を撤回した版の代わりを探す場合も版情報を取得する
 - Goでは、版情報を`.info`、`go.mod`を`.mod`、最新版を`@latest`、版一覧を`@v/list`、ハッシュを`lookup`で取得する
 - Maven・Gradleでは、公開版を`maven-metadata.xml`、依存関係や版の指定を`.pom`から読む
@@ -223,7 +223,7 @@ Gradleで取得するPOMには、Spring BootのBOM、その親POM、Spring Boot�
 修正版に上げられない場合は、更新先を案内するために追加の確認を行います。
 Mavenの親・BOMやSpring BootのBOMについて、公開版が指定する対象パッケージの版を調べます。
 
-更新方法は[マネージャー別の更新処理](remediation-logic.md#manager-update-methods)、通信量などの上限は[再解決の対応範囲と上限](remediation-reference.md#dependent-reresolution-limits)を参照してください。
+更新方法は[マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods)、通信量などの上限は[再解決の対応範囲と上限](remediation-reresolution-logic.md#dependent-reresolution-limits)を参照してください。
 
 #### 作業用コンテナによる取得 {#dependency-workers}
 
@@ -240,7 +240,7 @@ Mavenの親・BOMやSpring BootのBOMについて、公開版が指定する対�
 Gradleは[`mavenCentral()`の取得先](https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.dsl.RepositoryHandler.html)へ接続します。
 Gradle Plugin Portalの配布物は[`plugins-artifacts.gradle.org`へのリダイレクト](https://plugins.gradle.org/docs/mirroring)で取得します。
 
-利用できるプラグインは、KestreLynxの[プラグインの許可](remediation-reference.md#gradle-plugins)に記載された種類と版に限ります。
+利用できるプラグインは、KestreLynxの[プラグインの許可](remediation-dependency-formats.md#gradle-plugins)に記載された種類と版に限ります。
 
 #### Trivyによる取得 {#dependency-trivy}
 
@@ -433,4 +433,4 @@ TCP 443の許可からは、プライベートアドレス（`10.0.0.0/8`・`172
 NetworkPolicyを実施するネットワーク機能（CNI）が必要で、標準のNetworkPolicyではPodと実行ノードの通信は遮断しません。
 CNIが新しいPodに制限を設定し終えるまでの数秒間は、送信が制限されない場合があります（K3sの既定のCNIで確認）。
 
-導入時の調整は[Kubernetesの言語パッケージ更新](remediation-setup.md#kubernetes-language-updates)、ネットワーク以外の制限は[実行時の制限](remediation-logic.md#worker-restrictions)を参照してください。
+導入時の調整は[Kubernetesの言語パッケージ更新](remediation-setup-work-pods.md#kubernetes-language-updates)、ネットワーク以外の制限は[実行時の制限](remediation-worker-logic.md#worker-restrictions)を参照してください。

@@ -22,7 +22,7 @@ JSON例は、出力の一部を抜粋したものです。
 `dockerfile_summary`は、`dockerfile_items[]`を`category`ごとに数えます。
 キーは`pr_candidate`・`pull_again`・`manual`・`not_comparable`・`deferred`・`no_candidate`・`excluded`・`failed`で、項目がある場合は0件のキーも出力します。
 
-各分類の意味は[計画の分類値](remediation-reference.md#category-values)を参照してください。
+各分類の意味は[計画の分類値](remediation-reason-codes.md#category-values)を参照してください。
 
 ```json
 {
@@ -81,8 +81,8 @@ Dockerfileの取得や解析に失敗して`FROM`を特定できない場合は�
 | `fix_class` | string | 修正の種類 | — |
 | `verification` | string | 検証の対象 | — |
 | `final_image_verified` | boolean | 再ビルド後の完成イメージを検証したかを示す値 | `false` |
-| `category` | string | 項目全体の[計画の分類値](remediation-reference.md#category-values) | — |
-| `reason` | string | 分類の根拠となる[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `category` | string | 項目全体の[計画の分類値](remediation-reason-codes.md#category-values) | — |
+| `reason` | string | 分類の根拠となる[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 分類や理由に関する補足の説明文 | 省略 |
 | `priority` | string | 対象ワークロードの稼働イメージの修正可能な所見で最も高い[優先度](webhook-reference.md#priority-values) | 省略 |
 | `workloads` | stringの配列 | 対象の[ワークロードキー](webhook-diff-reference.md#reference-change-fields)の一覧 | `[]` |
@@ -270,7 +270,7 @@ Dockerfileの取得や解析に失敗して`FROM`を特定できない場合は�
 | `from` | string | PR前に`FROM`が指していた、稼働イメージの作成元のベースイメージ名 | — |
 | `to` | string | PRが`FROM`に設定したタグ | — |
 
-反映待ちの結果の読み方は[再ビルドの案内](remediation-results.md#rebuild-guidance)を参照してください。
+反映待ちの結果の読み方は[再ビルドの案内](remediation-update-results.md#rebuild-guidance)を参照してください。
 
 ### PR処理の結果 {#dockerfile-pull-request-fields}
 
@@ -283,11 +283,11 @@ PRを作成していない手動対応や保留などの処理結果も含みま
 
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
-| `status` | string | [PR処理の状態値](remediation-reference.md#pr-status-values) | — |
-| `reason` | string | PR処理の結果に関する[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `status` | string | [PR処理の状態値](remediation-reason-codes.md#pr-status-values) | — |
+| `reason` | string | PR処理の結果に関する[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `number` | integer | 対応するPRの番号 | 省略 |
 | `url` | string | 対応するPRのURL | 省略 |
-| `state` | string | 対応する[PR記録の状態値](remediation-reference.md#pr-status-values) | 省略 |
+| `state` | string | 対応する[PR記録の状態値](remediation-reason-codes.md#pr-status-values) | 省略 |
 
 次は、PRを作成した結果の例です。
 
@@ -324,8 +324,8 @@ PRを作成していない手動対応や保留などの処理結果も含みま
 | `candidate_base` | object | 更新候補のベースの[イメージ情報](webhook-remediation-reference.md#remediation-image-state) | 省略 |
 | `layer_confirmation` | object | 稼働イメージと現在のベースの[レイヤーの照合結果](#dockerfile-layer-confirmation-fields) | — |
 | `findings_by_layer` | object | 稼働イメージの[レイヤー別の所見件数](#dockerfile-layer-count-fields) | — |
-| `category` | string | 稼働イメージごとの[計画の分類値](remediation-reference.md#category-values) | — |
-| `reason` | string | 分類の根拠となる[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `category` | string | 稼働イメージごとの[計画の分類値](remediation-reason-codes.md#category-values) | — |
+| `reason` | string | 分類の根拠となる[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 分類や理由に関する補足の説明文 | 省略 |
 | `targets` | integer | ベースに属する修正対象の件数 | `0` |
 | `kev_targets` | integer | 修正対象のうちCISA KEVに掲載された対象の件数 | 0件なら省略 |
@@ -395,7 +395,7 @@ PRを作成していない手動対応や保留などの処理結果も含みま
 | `unusable` | レイヤー情報が不足または利用不能で照合できない |
 | `not_checked` | レイヤーの照合に到達していない |
 
-照合の範囲と判定条件は[ベースレイヤーの照合](remediation-logic.md#base-layer-matching)を参照してください。
+照合の範囲と判定条件は[ベースレイヤーの照合](remediation-base-image-logic.md#base-layer-matching)を参照してください。
 
 ### レイヤー別の所見件数 {#dockerfile-layer-count-fields}
 
@@ -454,7 +454,7 @@ PRを作成していない手動対応や保留などの処理結果も含みま
     - まとめた記録のいずれかで`remaining`にあるIDは、項目全体の`disappearing`に含めない
 
 この結果はランタイムの版から求めた見込みで、完成イメージの検証ではありません。
-条件と制約は[ベースレイヤーの照合](remediation-logic.md#base-layer-matching)と[再ビルドの案内](remediation-results.md#rebuild-guidance)を参照してください。
+条件と制約は[ベースレイヤーの照合](remediation-base-image-logic.md#base-layer-matching)と[再ビルドの案内](remediation-update-results.md#rebuild-guidance)を参照してください。
 
 ## 現在のベースとの突き合わせ {#dockerfile-rebuild-check}
 
@@ -468,7 +468,7 @@ PRを作成していない手動対応や保留などの処理結果も含みま
 | 稼働イメージ | 比較する深刻度の範囲内で、修正状態が`fixed`かつ修正版の情報がある所見 |
 | 現在のベース | 修正版のない所見も含め、比較する深刻度の範囲内のすべての所見（CVEが残っているかを確かめるため） |
 
-場所の照合と未判定になる条件は[ベースレイヤーの照合](remediation-logic.md#base-layer-matching)を参照してください。
+場所の照合と未判定になる条件は[ベースレイヤーの照合](remediation-base-image-logic.md#base-layer-matching)を参照してください。
 
 付く条件は次のとおりです。
 
@@ -486,7 +486,7 @@ PRを作成していない手動対応や保留などの処理結果も含みま
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
 | `status` | string | 突き合わせの確認状態 | — |
-| `reason` | string | 比較できなかった理由を表す[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `reason` | string | 比較できなかった理由を表す[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 比較できなかった理由に関する補足の説明文 | 省略 |
 | `gone` | objectの配列 | ベースの同じ場所に別の版があり、対象のCVEがない[パッケージの記録](#dockerfile-rebuild-package-fields) | 省略 |
 | `remaining` | objectの配列 | ベースの同じ場所にも対象のCVEがある[パッケージの記録](#dockerfile-rebuild-package-fields) | 省略 |
@@ -586,4 +586,4 @@ CVEごとに結果が異なる場合は、同じパッケージが複数の配�
 - 項目全体が`not_checked`の場合は、確認できた稼働イメージのパッケージ一覧も項目全体には載せず、個別の結果に残す
 - プラットフォームによって現在のベースの版が違う場合は、`base_version`ごとに別の記録にする
 
-Dockerfileの手順の効果など、見込みの制約は[再ビルドの案内](remediation-results.md#rebuild-guidance)を参照してください。
+Dockerfileの手順の効果など、見込みの制約は[再ビルドの案内](remediation-update-results.md#rebuild-guidance)を参照してください。

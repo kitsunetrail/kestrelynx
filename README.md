@@ -52,11 +52,11 @@
     - Compare resolved, remaining, and newly introduced findings
 - Create remediation pull requests on GitHub that update the following parts of files you already use
     - Published image tags in Compose files
-    - Image tags in plain Kubernetes manifests, [Kustomize `images[].newTag`](docs/documentation/remediation-setup.md#kustomize-pull-requests), and [image tags in Helm values](docs/documentation/remediation-setup.md#helm-values-pull-requests)
+    - Image tags in plain Kubernetes manifests, [Kustomize `images[].newTag`](docs/documentation/remediation-setup-kubernetes.md#kustomize-pull-requests), and [image tags in Helm values](docs/documentation/remediation-setup-kubernetes.md#helm-values-pull-requests)
     - Base image tags in Dockerfiles
     - Dependency files for npm, pnpm, pip, uv, Go, Maven (`pom.xml`), and Gradle (`gradle.lockfile`)
     - Updates to dependent packages and dependency re-resolution for npm, pnpm, and uv under the supported conditions
-    - npm, pnpm, pip, uv, Go, and Gradle updates on Kubernetes require [work Pod configuration](docs/documentation/remediation-setup.md#kubernetes-language-updates)
+    - npm, pnpm, pip, uv, Go, and Gradle updates on Kubernetes require [work Pod configuration](docs/documentation/remediation-setup-work-pods.md#kubernetes-language-updates)
 - Check for resolved findings in the next scan after merge and deployment
     - You review the changes, run CI before merging, merge, rebuild, and deploy
     - KestreLynx carries history forward from before the update and reports resolved findings
@@ -84,12 +84,12 @@ After PR #1 was merged and the running `proxy` container was replaced with nginx
 
 | Topic | Detailed page |
 | --- | --- |
-| Find the page for your task | [Overview](docs/documentation/remediation.md) |
+| Find the page for your task | [Page guide](docs/documentation/remediation.md#contents) |
 | Enable remediation plans and fix pull requests | [Enabling remediation](docs/documentation/remediation-setup.md) |
 | Diagnose missing candidates or PRs | [When no candidate or pull request appears](docs/documentation/remediation-troubleshooting.md) |
-| Read Slack and PR contents | [Reading the results](docs/documentation/remediation-results.md) |
-| Understand candidate selection and PR processing | [How candidates and pull requests are decided](docs/documentation/remediation-logic.md) |
-| Look up supported inputs and reason codes | [Supported inputs and reason codes](docs/documentation/remediation-reference.md) |
+| Read Slack and PR contents | [Notifications](docs/documentation/remediation-results.md) and [PR contents and pre-merge checks](docs/documentation/remediation-pr-results.md) |
+| Understand candidate selection and PR processing | [Processing flow](docs/documentation/remediation-logic.md) |
+| Look up supported inputs and reason codes | [Support scope](docs/documentation/remediation-reference.md) and [Result values and reason codes](docs/documentation/remediation-reason-codes.md) |
 | Look up settings and required permissions | [Configuration reference](docs/documentation/configuration.md) |
 | Check notification conditions, webhook specifications, and outbound communication | [How KestreLynx works](docs/documentation/how-it-works.md) |
 

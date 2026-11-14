@@ -48,11 +48,38 @@ nav:
           - 外向きの通信: documentation/outbound-communication.md
       - 修正計画と修正PR（実験的）:
           - 概要: documentation/remediation.md
-          - 有効化の手順: documentation/remediation-setup.md
+          - 有効化の手順:
+              - 共通の準備: documentation/remediation-setup.md
+              - Docker: documentation/remediation-setup-docker.md
+              - Kubernetes: documentation/remediation-setup-kubernetes.md
+              - Kubernetesの作業用Pod: documentation/remediation-setup-work-pods.md
           - 候補やPRが出ない場合: documentation/remediation-troubleshooting.md
-          - 結果の読み方: documentation/remediation-results.md
-          - 候補選定とPR処理の仕組み: documentation/remediation-logic.md
-          - 対応形式と理由コード: documentation/remediation-reference.md
+          - 結果の読み方:
+              - 通知の読み方: documentation/remediation-results.md
+              - 更新結果と案内の読み方: documentation/remediation-update-results.md
+              - PRの内容とマージ前の確認: documentation/remediation-pr-results.md
+              - 修正版に上げられないときの案内: documentation/remediation-fix-hints.md
+          - 候補選定とPR処理の仕組み:
+              - 処理の流れ: documentation/remediation-logic.md
+              - 配布イメージ: documentation/remediation-image-logic.md
+              - Kubernetesのタグ更新PR: documentation/remediation-kubernetes-logic.md
+              - ベースイメージ: documentation/remediation-base-image-logic.md
+              - 言語パッケージ:
+                  - 共通の規則: documentation/remediation-package-logic.md
+                  - npm・pnpm・uv・pip: documentation/remediation-node-python-logic.md
+                  - 依存元からの再解決: documentation/remediation-reresolution-logic.md
+                  - Go: documentation/remediation-go-logic.md
+                  - Maven: documentation/remediation-maven-logic.md
+                  - Gradle: documentation/remediation-gradle-logic.md
+                  - 作業用コンテナ: documentation/remediation-worker-logic.md
+              - PRの管理と記録: documentation/remediation-pr-logic.md
+          - 対応形式と理由コード:
+              - 対応範囲: documentation/remediation-reference.md
+              - イメージを指定するファイルの形式: documentation/remediation-source-formats.md
+              - 依存ファイルと版宣言の形式: documentation/remediation-dependency-formats.md
+              - 結果の値と理由コード: documentation/remediation-reason-codes.md
+              - イメージとソースの理由コード: documentation/remediation-image-reason-codes.md
+              - 更新とPR処理の理由コード: documentation/remediation-update-reason-codes.md
       - 稼働時の使用状況（実験的）:
           - 稼働時の使用状況: documentation/runtime-usage.md
   - 開発ログ:

@@ -26,7 +26,7 @@ The notation in “When there is no value” follows [Report fields](webhook-ref
 
 See [Item counts](webhook-remediation-reference.md#remediation-summary-keys) for how to read the keys and counts in `pull_request_summary` and how zero counts are handled.
 
-See [PR status values](remediation-reference.md#pr-status-values) for status definitions.
+See [PR status values](remediation-reason-codes.md#pr-status-values) for status definitions.
 
 ### Matching update targets to PRs {#pr-unit-fields}
 
@@ -53,12 +53,12 @@ Use `repo` and `number` together to identify a PR.
 | `current_ref` | string | Image name before the update | `""` |
 | `candidate_tag` | string | Tag of the update candidate image | omitted |
 | `candidate_digest` | string | Manifest or image index digest of the update candidate image | omitted |
-| `status` | string | PR processing status from [PR status values](remediation-reference.md#pr-status-values) | — |
-| `reason` | string | Reason for the PR processing result from [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `status` | string | PR processing status from [PR status values](remediation-reason-codes.md#pr-status-values) | — |
+| `reason` | string | Reason for the PR processing result from [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Explanatory text supplementing the PR processing result | omitted |
 | `number` | integer | Number of the associated PR | omitted when `0` |
 | `url` | string | URL of the associated PR | omitted |
-| `state` | string | Recorded state of the associated PR from [PR status values](remediation-reference.md#pr-status-values) | omitted |
+| `state` | string | Recorded state of the associated PR from [PR status values](remediation-reason-codes.md#pr-status-values) | omitted |
 | `user_modified` | boolean | Whether changes differing from the creation record were found in the PR | omitted when `false` |
 | `target_key` | string | Value identifying the combination of file and locations to edit | omitted |
 | `update_key` | string | Value identifying the update contents for the same edit target | omitted |
@@ -215,7 +215,7 @@ Each element of `pull_requests[].replacing[]` represents the progress of replaci
 A `replacing[].state` of `closed` does not necessarily mean that closure has been confirmed.
 `replaced[]` contains the numbers for which the replacement process is `done` and the older PR's state has also been confirmed as `replaced`.
 
-See [Replacing older PRs](remediation-logic.md#pr-replacement) for replacement conditions.
+See [Replacing older PRs](remediation-pr-logic.md#pr-replacement) for replacement conditions.
 
 ### PR processing examples {#pr-unit-examples}
 
@@ -401,7 +401,7 @@ The following element of `chain[]` represents the update of A.
 | `held_by` | string | Name of the package between the direct dependency and `held` that required an older version | omitted |
 
 `held_by` is omitted when the direct dependency itself requires the older version.
-See [Re-resolution check conditions](remediation-reference.md#dependent-reresolution-rules) for re-resolution conditions.
+See [Re-resolution check conditions](remediation-reresolution-logic.md#dependent-reresolution-rules) for re-resolution conditions.
 
 ### Packages excluded from the PR update {#pr-language-remaining-fields}
 
@@ -415,7 +415,7 @@ Its fields are as follows.
 | `relation` | string | Dependency relationship classification from the project's perspective, as described in [Packages to update](#pr-language-package-fields) | omitted |
 | `from` | string | Running version of the excluded package | — |
 | `target` | string | Planned lower bound for the update version | `""` |
-| `reason` | string | Reason for exclusion from the update from [Reason codes](remediation-reference.md#reason-codes) | — |
+| `reason` | string | Reason for exclusion from the update from [Reason codes](remediation-reason-codes.md#reason-codes) | — |
 | `detail` | string | Explanatory text supplementing the exclusion reason | omitted |
 | `maven_bom` | object | [BOM information for excluded packages](#pr-language-bom-fields) identifying a version that reaches the update lower bound | omitted |
 
@@ -435,7 +435,7 @@ The destination fields and their values are as follows.
 | `language_items[].packages[].detail` | Explanatory text, when available |
 | `language_items[].packages[].maven_bom` | Applicable BOM information, when available |
 
-See [Partial PRs](remediation-results.md#partial-pull-requests) for interpreting partial updates.
+See [Partial PRs](remediation-update-results.md#partial-pull-requests) for interpreting partial updates.
 
 ### BOM information for excluded packages {#pr-language-bom-fields}
 
@@ -453,7 +453,7 @@ Its fields are as follows.
 This object is emitted when `pull_requests[].language.remaining[].reason` is `maven_bom_series_unreached` and BOM candidate information is available.
 Use `from` and `to` for BOM versions and `manages` for the target package version.
 
-See [Version sources and edits](remediation-logic.md#maven-version-sources) and [Version declarations and edits](remediation-logic.md#gradle-version-sources) for the meaning of the candidate.
+See [Version sources and edits](remediation-maven-logic.md#maven-version-sources) and [Version declarations and edits](remediation-gradle-logic.md#gradle-version-sources) for the meaning of the candidate.
 
 ### Language package update example {#pr-language-example}
 
@@ -494,7 +494,7 @@ Check `packages` for the versions before and after the update, and `manifest_edi
 
 ### Partial PR example {#remediation-json-example}
 
-A [partial PR](remediation-results.md#partial-pull-requests) updates only some of the packages that were intended to be updated together.
+A [partial PR](remediation-update-results.md#partial-pull-requests) updates only some of the packages that were intended to be updated together.
 
 The following example extracts only the main fields from a payload containing a partial PR.
 Check where the successfully updated package and the package excluded from the update are recorded.
@@ -551,7 +551,7 @@ Check where the successfully updated package and the package excluded from the u
 }
 ```
 
-See [Partial PR conditions](remediation-logic.md#partial-pr-selection) for adoption conditions.
+See [Partial PR conditions](remediation-package-logic.md#partial-pr-selection) for adoption conditions.
 
 ## PR operation event fields {#remediation-operation-fields}
 
@@ -559,7 +559,7 @@ See [Partial PR conditions](remediation-logic.md#partial-pr-selection) for adopt
 The record before sending an operation, its result, and any result confirmed later are separate events for that operation.
 
 PR processing records are saved in `prs.json` under `remediation.storage_dir`.
-See [Stored files](remediation-reference.md#stored-records) for what is saved.
+See [Stored files](remediation-pr-logic.md#stored-records) for what is saved.
 
 `operations[]` has the following fields in each element.
 
@@ -652,7 +652,7 @@ A problem is included in each cycle's plan while it persists, with one entry per
 | `code` | string | Classification of the problem that stops writes | — |
 | `repo` | string | `owner/name` of the repository with the problem | omitted when the problem concerns all repositories |
 | `target` | string | Display string identifying the file and target locations with the problem | omitted when the problem is not limited to a target |
-| `reason` | string | Specific cause of the problem from [Reason codes](remediation-reference.md#reason-codes) | omitted |
+| `reason` | string | Specific cause of the problem from [Reason codes](remediation-reason-codes.md#reason-codes) | omitted |
 | `detail` | string | Explanatory text supplementing the problem | omitted |
 
 `code` uses the following values.
@@ -679,4 +679,4 @@ The following fields have additional notes.
     - Because `fix_targets` may be omitted or truncated and processing targets may change, the corresponding element of `pull_requests[]` may not be identifiable from that notification alone
     - If `repo` is present and `target` is absent, the problem concerns the entire repository
 
-See [Stopping writes](remediation-logic.md#write-stops) for stop conditions.
+See [Stopping writes](remediation-pr-logic.md#write-stops) for stop conditions.

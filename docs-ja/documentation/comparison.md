@@ -33,7 +33,7 @@
 
 - Dependabot・Renovateはリポジトリ内の記載を更新し、稼働イメージ内の有無は見ない
 - KestreLynxは稼働イメージで脆弱性を検出したパッケージのGitHub依存ファイルを更新する
-- KestreLynxは配布イメージの浮動タグ（`latest`など）を[再取得の案内（更新PRなし）](remediation-logic.md#published-image-tags)の対象として扱う
+- KestreLynxは配布イメージの浮動タグ（`latest`など）を[再取得の案内（更新PRなし）](remediation-image-logic.md#published-image-tags)の対象として扱う
 
 ## 更新方法 {#update-methods}
 
@@ -122,7 +122,7 @@ KestreLynxの更新PR作成は設定で有効にした場合だけで、既定�
     - [結果の読み方](remediation-results.md)、[対応する入力形式](remediation-reference.md)、[スキャン範囲](scan-logic.md)、[履歴と解消の判定](diff-logic.md)
     - [デモの更新PR #1](https://github.com/kitsunetrail/kestrelynx-demo/pull/1)、[コンテナ入れ替え後のデモ結果](../index.md)
     - [修正対象](remediation-reference.md#supported-targets)、[範囲と要件](remediation-reference.md#scope-and-requirements)、[対応するファイル形式](remediation-reference.md#supported-inputs)
-    - [docker runのコンテナ](remediation-reference.md#docker-run-containers)、[Node.jsの版の指定ファイル](remediation-reference.md#node-declarations)、[ベースイメージとの対応](remediation-logic.md#base-layer-matching)、[Kubernetesの作業用Pod](remediation-setup.md#kubernetes-language-updates)
+    - [docker runのコンテナ](remediation-reference.md#docker-run-containers)、[Node.jsの版の指定ファイル](remediation-dependency-formats.md#node-declarations)、[ベースイメージとの対応](remediation-base-image-logic.md#base-layer-matching)、[Kubernetesの作業用Pod](remediation-setup-work-pods.md#kubernetes-language-updates)
 - Trivy
     - [コンテナイメージのスキャン](https://trivy.dev/docs/latest/guide/target/container_image/)
 - Dependabot

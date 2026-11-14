@@ -115,7 +115,7 @@ Even when no plan could be generated, `remediation` and an empty `items` array a
 ## Common remediation plan fields {#remediation-fields}
 
 See [Report fields](webhook-reference.md#report-fields) for how to read the tables.
-See [Plan category values](remediation-reference.md#category-values) for each item's `category` and [Reason codes](remediation-reference.md#reason-codes) for `reason`.
+See [Plan category values](remediation-reason-codes.md#category-values) for each item's `category` and [Reason codes](remediation-reason-codes.md#reason-codes) for `reason`.
 
 `remediation` has the following direct-child fields.
 
@@ -190,7 +190,7 @@ The four fields differ as follows.
 | `summary` | Items in `items[]` | Category names from `category` (8 values) | `0` emitted | No plan |
 | `dockerfile_summary` | Items in `dockerfile_items[]` | Category names from `category` (8 values) | `0` emitted | `dockerfile_items[]` is empty |
 | `language_summary` | Items in `language_items[]` | Category names from `category` (7 values) | `0` emitted | `language_items[]` is empty |
-| `pull_request_summary` | Items in `pull_requests[]` | [PR status values](remediation-reference.md#pr-status-values) from `status` | omitted | `pull_requests[]` is empty |
+| `pull_request_summary` | Items in `pull_requests[]` | [PR status values](remediation-reason-codes.md#pr-status-values) from `status` | omitted | `pull_requests[]` is empty |
 
 When a plan exists, all eight `summary` keys are emitted with `0` even if `items[]` is empty.
 `dockerfile_summary` does not count `dockerfile_items[].entities[]` individually.
@@ -356,7 +356,7 @@ The following is information about the current base image.
 ### Comparison results {#remediation-comparison}
 
 Comparison results are used in `items[].comparison`, `dockerfile_items[].entities[].comparison`, and each running image's `newer_series.candidates[].comparison`.
-See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for comparison conditions and [Resolved findings in comparisons](remediation-results.md#verification-results) for interpreting results.
+See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for comparison conditions and [Resolved findings in comparisons](remediation-pr-results.md#verification-results) for interpreting results.
 
 The following example extracts the main fields from a comparison result that resolves one target finding.
 
@@ -387,7 +387,7 @@ The following example extracts the main fields from a comparison result that res
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
 | `comparable` | boolean | `true` when the results can be compared | `false` |
-| `reason` | string | [Reason codes](remediation-reference.md#reason-codes) value explaining why comparison is not possible | omitted |
+| `reason` | string | [Reason codes](remediation-reason-codes.md#reason-codes) value explaining why comparison is not possible | omitted |
 | `scope` | string | English text describing the comparison scope, such as the severities evaluated | omitted |
 | `decision` | string | Candidate adoption decision based on the comparison results | omitted |
 | `targets` | integer | Number of target findings evaluated | `0` |
@@ -441,7 +441,7 @@ The elements of `verdicts[]` and `introduced_findings[]` in each `comparison` us
 | `severity` | string | Vulnerability severity | omitted |
 | `outcome` | string | Comparison outcome for the finding | — |
 | `disposition` | string | How the package associated with a resolved finding changed in the candidate | omitted |
-| `reason` | string | [Reason codes](remediation-reference.md#reason-codes) value explaining why an individual finding could not be judged | omitted |
+| `reason` | string | [Reason codes](remediation-reason-codes.md#reason-codes) value explaining why an individual finding could not be judged | omitted |
 | `before_versions` | array of strings | Package versions recorded in the baseline | omitted when empty |
 | `after_versions` | array of strings | Package versions at locations where the vulnerability was detected in the candidate | omitted when empty |
 
@@ -547,7 +547,7 @@ Scan IDs are not emitted in the webhook.
 ### Newer series check results {#remediation-newer-series}
 
 Newer series check results are used in `items[].newer_series`, `dockerfile_items[].newer_series`, and `dockerfile_items[].entities[].newer_series`.
-See [Newer series check](remediation-logic.md#newer-series-check) for candidate selection and [Newer series status values](remediation-reference.md#newer-series-status-values) for the meanings of statuses.
+See [Newer series check](remediation-image-logic.md#newer-series-check) for candidate selection and [Newer series status values](remediation-reason-codes.md#newer-series-status-values) for the meanings of statuses.
 
 The following example extracts a newer series candidate and its counts.
 
@@ -580,11 +580,11 @@ The following example extracts a newer series candidate and its counts.
 | --- | --- | --- | --- |
 | `status` | string | Status of the newer series check result | — |
 | `shown` | string | Candidate tag shown as the item's check result | omitted |
-| `reason` | string | [Reason codes](remediation-reference.md#reason-codes) value explaining why the check could not be completed or another outcome | omitted |
+| `reason` | string | [Reason codes](remediation-reason-codes.md#reason-codes) value explaining why the check could not be completed or another outcome | omitted |
 | `detail` | string | Additional explanation of the reason | omitted |
 | `candidates` | array of objects | Results in the order candidates were checked | omitted when empty |
 
-See [Newer series status values](remediation-reference.md#newer-series-status-values) for the values of `status`.
+See [Newer series status values](remediation-reason-codes.md#newer-series-status-values) for the values of `status`.
 `shown` is omitted when no candidate resolves any target findings.
 
 `items[].newer_series.candidates[]` and other newer series candidate arrays have the following fields in each element.
@@ -594,14 +594,14 @@ See [Newer series status values](remediation-reference.md#newer-series-status-va
 | `tag` | string | Candidate tag to check | — |
 | `change` | string | Kind of series change relative to the current tag | — |
 | `status` | string | Status of the candidate check result | — |
-| `reason` | string | [Reason codes](remediation-reference.md#reason-codes) value explaining the candidate's result | omitted |
+| `reason` | string | [Reason codes](remediation-reason-codes.md#reason-codes) value explaining the candidate's result | omitted |
 | `detail` | string | Additional explanation of the reason | omitted |
 | `candidate` | object | Candidate [Image information](#remediation-image-state) | omitted when information is unavailable |
 | `counts` | object | Counts of target resolution outcomes and newly detected findings | omitted when counts cannot be calculated |
 | `comparison` | object | Candidate [Comparison results](#remediation-comparison) | omitted when no result is available |
 | `scans` | array of objects | [Scan records](#remediation-scan-records) used for the comparison | omitted when empty |
 
-A candidate's `status` uses [Newer series status values](remediation-reference.md#newer-series-status-values), excluding `no_newer_series`.
+A candidate's `status` uses [Newer series status values](remediation-reason-codes.md#newer-series-status-values), excluding `no_newer_series`.
 
 The values of `change` are as follows.
 

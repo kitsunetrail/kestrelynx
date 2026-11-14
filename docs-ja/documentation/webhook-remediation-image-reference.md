@@ -64,8 +64,8 @@ title: Webhookの修正計画の配布イメージのフィールド
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
 | `key` | string | 稼働中のイメージ名と内容の識別情報を連結した項目の識別子 | — |
-| `category` | string | [計画の分類値](remediation-reference.md#category-values) | — |
-| `reason` | string | 分類や処理結果を説明する[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `category` | string | [計画の分類値](remediation-reason-codes.md#category-values) | — |
+| `reason` | string | 分類や処理結果を説明する[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 理由を補う説明文 | 省略 |
 | `tag_kind` | string | 現在のイメージ名に対するタグの分類 | 分類していなければ省略 |
 | `priority` | string | 比較対象の所見のうち最も高い[優先度](webhook-reference.md#priority-values) | 情報がなければ省略 |
@@ -101,7 +101,7 @@ title: Webhookの修正計画の配布イメージのフィールド
 | `floating` | `latest`・`16`・`1.25`・`16-alpine`などの浮動タグ |
 | `excluded` | digestによる固定、プレリリース、対応していない形式など、候補探索の対象外となるイメージ名 |
 
-候補の選び方は[配布イメージのタグ](remediation-logic.md#published-image-tags)、対象外となる理由は[イメージ候補の理由](remediation-reference.md#image-reasons)を参照してください。
+候補の選び方は[配布イメージのタグ](remediation-image-logic.md#published-image-tags)、対象外となる理由は[イメージ候補の理由](remediation-image-reason-codes.md#image-reasons)を参照してください。
 
 ## Kubernetesのワークロードの情報 {#remediation-image-kubernetes}
 
@@ -140,7 +140,7 @@ title: Webhookの修正計画の配布イメージのフィールド
 - `pull_policy`
     - 未指定時の既定値は補わず、実際の取得方針に基づく案内は`pull[]`に出力する
 
-宣言と稼働中のイメージ名の照合は、[Kubernetesのイメージ名と再取得](remediation-logic.md#kubernetes-image-references)を参照してください。
+宣言と稼働中のイメージ名の照合は、[Kubernetesのイメージ名と再取得](remediation-kubernetes-logic.md#kubernetes-image-references)を参照してください。
 
 ### 再取得の案内 {#remediation-image-pull}
 
@@ -175,7 +175,7 @@ title: Webhookの修正計画の配布イメージのフィールド
     - 通常の計画作成では、対象が1つ以上ある取得方針だけを出力する
     - 値がない記録を出力する場合は、キーを省略せず`null`となる
 
-再取得の条件は、[Kubernetesのイメージ名と再取得](remediation-logic.md#kubernetes-image-references)を参照してください。
+再取得の条件は、[Kubernetesのイメージ名と再取得](remediation-kubernetes-logic.md#kubernetes-image-references)を参照してください。
 
 ### 管理元のつながり {#remediation-image-management}
 

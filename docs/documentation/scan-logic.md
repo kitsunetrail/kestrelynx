@@ -225,7 +225,7 @@ These findings differ from Trivy findings in the following two ways.
 
 - Remediation plans treat runtime vulnerabilities as fixable by updating the base image when the running image uses an official `node` or `python` image as its base image and uses its runtime unchanged.
     - For tags such as `node:22`, whose contents are updated under the same tag, the plan estimates how many vulnerabilities would be resolved by rebuilding with the base image that the tag currently points to.
-    - [Base layer matching](remediation-logic.md#base-layer-matching) describes the conditions for treating vulnerabilities as fixable by updating the base image and the limitations of the estimate.
+    - [Base layer matching](remediation-base-image-logic.md#base-layer-matching) describes the conditions for treating vulnerabilities as fixable by updating the base image and the limitations of the estimate.
 - Notifications indicate that a runtime series must be upgraded when the series (such as Node.js 18) has reached end of life (EOL) and no fix will be released for it.
     - The notification's fix field displays "end-of-life: no fix will be released for this series, so the series has to be upgraded (manual)".
 

@@ -34,7 +34,7 @@
 - **新しく入る版は公開から72時間待つ**
     - 公開直後の版をすぐに取り込まないため
 
-仕組みは[依存元からの再解決](../documentation/remediation-logic.md#dependent-reresolution)、対応範囲と上限は[再解決の対応範囲と上限](../documentation/remediation-reference.md#dependent-reresolution-limits)にまとめている。
+仕組みは[依存元からの再解決](../documentation/remediation-reresolution-logic.md#dependent-reresolution)、対応範囲と上限は[再解決の対応範囲と上限](../documentation/remediation-reresolution-logic.md#dependent-reresolution-limits)にまとめている。
 
 ## 決定事項
 
@@ -88,7 +88,7 @@
 | 1つの版が複数の脆弱な版に分かれる | `A → X 1.0`, `B → X 1.0` ⇒ `A → X 1.1（脆弱）`, `B → X 1.2（脆弱）` | 旧版から複数の脆弱な版への分岐は、持ち越しとして扱えない |
 | 複数の経路が1つに合流する | `A → X 1.0`, `B → X 2.0` ⇒ `A → X 3.0`, `B → X 3.0` | 合流後の X と比べる旧版を一つに決められない |
 
-詳しい条件は[再解決の検査条件](../documentation/remediation-reference.md#dependent-reresolution-rules)にまとめている。
+詳しい条件は[再解決の検査条件](../documentation/remediation-reresolution-logic.md#dependent-reresolution-rules)にまとめている。
 
 ## 検証方法と結果
 

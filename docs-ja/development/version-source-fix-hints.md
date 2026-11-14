@@ -19,7 +19,7 @@
 撤回された Go の修正版には、同じメジャー版の代わりを探して PR につなぐ。
 別メジャーの修正版は、移行を判断するための情報として表示する。
 
-表示の読み方は[修正版に上げられないときの案内](../documentation/remediation-results.md#fix-hints)を参照。
+表示の読み方は[修正版に上げられないときの案内](../documentation/remediation-fix-hints.md#fix-hints)を参照。
 npm・pnpm・uv・pip と Maven・Gradle の依存元が原因の場合は、[依存元の指定で修正版に上げられないパッケージの通知と更新の開発](dependent-fix-hints.md)で扱う。
 
 ## 方針
@@ -72,7 +72,7 @@ v2.5.12         v2.5.14         v2.5.15
 - 撤回のため代わりの版を選んだことを更新の注記に残す
 - 条件に合う版がない場合や版の一覧を取得できない場合は、`go_release_retracted` で手動対応にする
 
-選定の規則は[Go のモジュールの目標版](../documentation/remediation-logic.md#go-target-versions)を参照。
+選定の規則は[Go のモジュールの目標版](../documentation/remediation-go-logic.md#go-target-versions)を参照。
 
 ### Go の go 行を宣言するモジュール
 
@@ -104,7 +104,7 @@ flowchart LR
 - プロジェクト自身の `go`・`toolchain` 行が原因の場合は、モジュールを宣言元とする表示を記録しない
 - `toolchain` 行だけが原因の場合も `fix_hint.go_line` を記録しない
 
-条件は[Go の選定](../documentation/remediation-logic.md#go-runtime-selection)と[Go の更新結果の検査](../documentation/remediation-logic.md#go-update-validation)を参照。
+条件は[Go の選定](../documentation/remediation-go-logic.md#go-runtime-selection)と[Go の更新結果の検査](../documentation/remediation-go-logic.md#go-update-validation)を参照。
 
 ### Go の別のメジャー版の修正版
 
@@ -182,7 +182,7 @@ flowchart TD
 - 親 pom は依存の宣言を読み、宣言に版がなければ管理の版を使う
 - BOM は管理の版を読み、親と取り込む BOM も確認する
 
-記録する条件は[Maven の版の出所と書き換え](../documentation/remediation-logic.md#maven-version-sources)と[Gradle の版の宣言と書き換え](../documentation/remediation-logic.md#gradle-version-sources)を参照。
+記録する条件は[Maven の版の出所と書き換え](../documentation/remediation-maven-logic.md#maven-version-sources)と[Gradle の版の宣言と書き換え](../documentation/remediation-gradle-logic.md#gradle-version-sources)を参照。
 
 ### Maven・Gradle の修正の判定
 
@@ -220,7 +220,7 @@ Maven・Gradle では、版の数字を一律に比べず、同じ系列と flav
 `maven_release_not_found`・`maven_fix_in_other_major` では、別のメジャー版で条件に合う最も低い修正版を記録する。
 前者は取得した Maven Central の版一覧、後者は脆弱性情報にある修正版から選ぶ。
 
-選定の規則は[Maven の目標版と Maven Central の版](../documentation/remediation-logic.md#maven-target-versions)、理由コードは[更新結果の理由](../documentation/remediation-reference.md#update-reasons)を参照。
+選定の規則は[Maven の目標版と Maven Central の版](../documentation/remediation-maven-logic.md#maven-target-versions)、理由コードは[更新結果の理由](../documentation/remediation-update-reason-codes.md#update-reasons)を参照。
 
 ### 通知の表示と記録
 
@@ -255,8 +255,8 @@ com.fasterxml.jackson.core:jackson-databind 2.13.0 を修正版の 2.13.4 に上
 
 確認した版以降ならすべて直るとは示さない。
 
-表示例と記録の読み方は[修正版に上げられないときの案内](../documentation/remediation-results.md#fix-hints)を参照。
-依存元をあわせて更新する場合の表示は[依存元からの再解決の結果](../documentation/remediation-results.md#dependent-reresolution-results)にまとめている。
+表示例と記録の読み方は[修正版に上げられないときの案内](../documentation/remediation-fix-hints.md#fix-hints)を参照。
+依存元をあわせて更新する場合の表示は[依存元からの再解決の結果](../documentation/remediation-update-results.md#dependent-reresolution-results)にまとめている。
 
 ### 公開版情報の読み込み時期と上限
 

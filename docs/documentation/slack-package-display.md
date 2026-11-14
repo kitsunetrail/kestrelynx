@@ -201,7 +201,7 @@ However, when the base image is known to have no newer version in the same serie
 A change to the card's `Action:` line alone does not resend the full report in the thread.
 See [Slack thread delivery conditions](notification-conditions.md#slack-thread-delivery) for when another report is posted.
 
-See [Lines shown on Slack cards](remediation-logic.md#newer-series-slack-cards) for detailed display conditions and [Versions checked](remediation-logic.md#newer-series-versions) for candidate selection.
+See [Lines shown on Slack cards](remediation-image-logic.md#newer-series-slack-cards) for detailed display conditions and [Versions checked](remediation-image-logic.md#newer-series-versions) for candidate selection.
 See [Displayed fields](remediation-results.md#slack-fields) for reading remediation plan messages.
 
 ### Upgrade risk {#upgrade-risk}

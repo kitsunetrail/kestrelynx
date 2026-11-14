@@ -72,11 +72,38 @@ nav:
           - Outbound communication: documentation/outbound-communication.md
       - Remediation plans and pull requests (experimental):
           - Overview: documentation/remediation.md
-          - Enabling remediation: documentation/remediation-setup.md
+          - Enabling remediation:
+              - Common preparation: documentation/remediation-setup.md
+              - Docker: documentation/remediation-setup-docker.md
+              - Kubernetes: documentation/remediation-setup-kubernetes.md
+              - Kubernetes work Pods: documentation/remediation-setup-work-pods.md
           - When no candidate or pull request appears: documentation/remediation-troubleshooting.md
-          - Reading the results: documentation/remediation-results.md
-          - How candidates and pull requests are decided: documentation/remediation-logic.md
-          - Supported inputs and reason codes: documentation/remediation-reference.md
+          - Reading the results:
+              - Notifications: documentation/remediation-results.md
+              - Update results and guidance: documentation/remediation-update-results.md
+              - PR contents and pre-merge checks: documentation/remediation-pr-results.md
+              - Hints when a package cannot reach its fix: documentation/remediation-fix-hints.md
+          - How candidates and pull requests are decided:
+              - Processing flow: documentation/remediation-logic.md
+              - Published images: documentation/remediation-image-logic.md
+              - Kubernetes tag update PRs: documentation/remediation-kubernetes-logic.md
+              - Base images: documentation/remediation-base-image-logic.md
+              - Language packages:
+                  - Common rules: documentation/remediation-package-logic.md
+                  - npm, pnpm, uv, and pip: documentation/remediation-node-python-logic.md
+                  - Re-resolution through dependents: documentation/remediation-reresolution-logic.md
+                  - Go: documentation/remediation-go-logic.md
+                  - Maven: documentation/remediation-maven-logic.md
+                  - Gradle: documentation/remediation-gradle-logic.md
+                  - Work containers: documentation/remediation-worker-logic.md
+              - PR management and records: documentation/remediation-pr-logic.md
+          - Supported inputs and reason codes:
+              - Support scope: documentation/remediation-reference.md
+              - Files that specify images: documentation/remediation-source-formats.md
+              - Dependency files and version declarations: documentation/remediation-dependency-formats.md
+              - Result values and reason codes: documentation/remediation-reason-codes.md
+              - Image and source reason codes: documentation/remediation-image-reason-codes.md
+              - Update and PR processing reason codes: documentation/remediation-update-reason-codes.md
       - Runtime usage (experimental):
           - Runtime usage: documentation/runtime-usage.md
   - Development:

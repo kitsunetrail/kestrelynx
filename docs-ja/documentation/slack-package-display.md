@@ -201,7 +201,7 @@ EOLのカードに添える案内は、[EOLの表示](#eol-display)を参照し�
 カードの`対応:`行だけが変わっても、スレッドの全体レポートは送り直しません。
 再投稿の条件は[Slackスレッドの投稿条件](notification-conditions.md#slack-thread-delivery)を参照してください。
 
-細かな表示条件は[Slackのカードに出す行](remediation-logic.md#newer-series-slack-cards)、候補の選び方は[調べる版](remediation-logic.md#newer-series-versions)を参照してください。
+細かな表示条件は[Slackのカードに出す行](remediation-image-logic.md#newer-series-slack-cards)、候補の選び方は[調べる版](remediation-image-logic.md#newer-series-versions)を参照してください。
 修正計画メッセージの読み方は[表示項目](remediation-results.md#slack-fields)で確認できます。
 
 ### 更新の注意度 {#upgrade-risk}

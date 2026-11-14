@@ -137,7 +137,7 @@ Slack Incoming WebhookとBot Tokenの組み合わせを同時には設定でき�
 
 ### 基本設定 {#remediation-basics}
 
-各設定で行う処理は[計画とPRの実行範囲](remediation-logic.md#plan-and-pr-execution)、保存する内容は[保存ファイル](remediation-reference.md#stored-records)を参照してください。
+各設定で行う処理は[計画とPRの実行範囲](remediation-logic.md#plan-and-pr-execution)、保存する内容は[保存ファイル](remediation-pr-logic.md#stored-records)を参照してください。
 
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
@@ -244,7 +244,7 @@ remediation:
 | `remediation.mappings[].dependencies.directory` | `dependencies`を設定する場合 | なし | 更新対象の言語パッケージを管理する依存ファイルのあるディレクトリを、リポジトリのルートからのパスで指定します。ルートにある場合は`.`を指定します。 |
 
 Composeの`build`からDockerfileとビルド対象ステージを特定できる場合は、`dockerfile`の指定を省略できます。
-特定できる条件と、明示した`dockerfile`との照合は[ベースイメージの特定](remediation-logic.md#base-image-selection)を参照してください。
+特定できる条件と、明示した`dockerfile`との照合は[ベースイメージの特定](remediation-base-image-logic.md#base-image-selection)を参照してください。
 
 #### Kubernetes {#remediation-mappings-kubernetes}
 
@@ -290,13 +290,13 @@ remediation:
 | `remediation.mappings[].dockerfile.target` | いいえ | Dockerfileの最後のステージ | 対象イメージのビルドに使うステージ名を指定します。そのステージが継承するベースイメージが更新対象になります。 |
 | `remediation.mappings[].dependencies.directory` | `dependencies`を設定する場合 | なし | 更新対象の言語パッケージを管理する依存ファイルのあるディレクトリを、リポジトリのルートからのパスで指定します。ルートにある場合は`.`を指定します。 |
 
-設定例と影響を受けるコンテナの指定方法は、[KustomizeのPR設定](remediation-setup.md#kustomize-pull-requests)と[HelmのvaluesのPR設定](remediation-setup.md#helm-values-pull-requests)を参照してください。
+設定例と影響を受けるコンテナの指定方法は、[KustomizeのPR設定](remediation-setup-kubernetes.md#kustomize-pull-requests)と[HelmのvaluesのPR設定](remediation-setup-kubernetes.md#helm-values-pull-requests)を参照してください。
 
 ### 処理の上限 {#remediation-limits}
 
-上限による結果は[理由コード](remediation-reference.md#reason-codes)、PRの扱いは[PRの管理](remediation-logic.md#pr-management)、実行期限と後処理は[作業用コンテナの実行](remediation-logic.md#worker-execution)を参照してください。
+上限による結果は[理由コード](remediation-reason-codes.md#reason-codes)、PRの扱いは[PRの管理](remediation-pr-logic.md#pr-management)、実行期限と後処理は[作業用コンテナの実行](remediation-worker-logic.md#worker-execution)を参照してください。
 
-[新しい系列の確認](remediation-logic.md#newer-series-check)も、候補スキャン・比較元の再スキャン・タグ一覧の取得・レジストリ要求の上限を通常の処理と共有します。
+[新しい系列の確認](remediation-image-logic.md#newer-series-check)も、候補スキャン・比較元の再スキャン・タグ一覧の取得・レジストリ要求の上限を通常の処理と共有します。
 
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
@@ -314,11 +314,11 @@ remediation:
 
 作業用コンテナは、修正PRで言語パッケージを更新する際に、npm・pnpm・pip・uv・Go・Gradleによる依存の更新（lockfileの更新など）をKestreLynx本体とは別に実行するための使い捨てのコンテナです。
 
-作業用イメージの固定と取得不能時の扱いは[公式イメージの固定](remediation-logic.md#worker-images)、系列は[対応する実行環境](remediation-reference.md#supported-runtimes)、通信先は[作業用イメージの取得](outbound-communication.md#worker-image-downloads)を参照してください。
+作業用イメージの固定と取得不能時の扱いは[公式イメージの固定](remediation-worker-logic.md#worker-images)、系列は[対応する実行環境](remediation-reference.md#supported-runtimes)、通信先は[作業用イメージの取得](outbound-communication.md#worker-image-downloads)を参照してください。
 
-ツールの扱いは[ツール公開後の待機](remediation-logic.md#tool-release-age)、[ツールの取得と照合](remediation-logic.md#tool-verification)、[ツールキャッシュの再利用](remediation-logic.md#tool-cache)を参照してください。
+ツールの扱いは[ツール公開後の待機](remediation-node-python-logic.md#tool-release-age)、[ツールの取得と照合](remediation-node-python-logic.md#tool-verification)、[ツールキャッシュの再利用](remediation-node-python-logic.md#tool-cache)を参照してください。
 
-作業プログラムをコンテナに渡す際の検査は[コンテナへの入力](remediation-logic.md#worker-inputs)を参照してください。
+作業プログラムをコンテナに渡す際の検査は[コンテナへの入力](remediation-worker-logic.md#worker-inputs)を参照してください。
 
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
@@ -329,7 +329,7 @@ remediation:
 
 #### Kubernetes {#remediation-worker-kubernetes}
 
-Kubernetesモードの言語パッケージ更新に使います。[導入手順](remediation-setup.md#kubernetes-language-updates)に従い、利用者が作業用namespaceと必要なリソースを適用します。
+Kubernetesモードの言語パッケージ更新に使います。[導入手順](remediation-setup-work-pods.md#kubernetes-language-updates)に従い、利用者が作業用namespaceと必要なリソースを適用します。
 
 これらの設定には`kubernetes.enabled: true`が必要です。名前・イメージ名・数値の形式が不正な場合は、起動時にエラーになります。
 

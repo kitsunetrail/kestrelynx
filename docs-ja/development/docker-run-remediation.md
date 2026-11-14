@@ -21,7 +21,7 @@ Compose を使わずに `docker run` で動かしているコンテナも、Dock
 - **コンテナ名による対応付け**
     - Workload キーは `container/<コンテナ名>` とし、`docker run --name` で付けた `docker ps` の `NAMES` に出る名前を使う
     - ベースイメージは `dockerfile`、言語パッケージは `dependencies` に対応付け、両方を指定する場合は項目を分ける
-    - 設定方法は [docker run のコンテナの対応付け](../documentation/remediation-setup.md#docker-run-mappings)に記載
+    - 設定方法は [docker run のコンテナの対応付け](../documentation/remediation-setup-docker.md#docker-run-mappings)に記載
 
 - **イメージ名で書く案の不採用**
     - `nginx` などの公開イメージは複数の場所で使われ、修正先を決めるにはコンテナの指定が残るため、イメージ名による対応付けは採らない

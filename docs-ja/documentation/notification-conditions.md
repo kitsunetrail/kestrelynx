@@ -172,4 +172,4 @@ Webhookでは、スキャン通知やSlackの修正計画を送る回にも、�
 Slackとメールは、ほかの通知先への送信が失敗しても、それぞれ上の条件を満たせば記録します。
 記録の保存に失敗した場合は、送った内容をもう一度送ることがあります。
 通知を再送しても、作成済みのPRを作り直すことはありません。
-保存内容は[保存ファイル](remediation-reference.md#stored-records)、PRの確認は[既存PRとの照合](remediation-logic.md#existing-pr-matching)を参照してください。
+保存内容は[保存ファイル](remediation-pr-logic.md#stored-records)、PRの確認は[既存PRとの照合](remediation-pr-logic.md#existing-pr-matching)を参照してください。

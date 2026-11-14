@@ -21,7 +21,7 @@ Since there is no file containing the startup command, KestreLynx does not creat
 - **Mappings by container name**
     - The workload key is `container/<name>`, using the name assigned with `docker run --name` and shown in the `NAMES` column of `docker ps`
     - Base image updates use `dockerfile`, and language package updates use `dependencies`; configuring both requires separate entries
-    - Configuration instructions are provided in [Mapping docker run containers](../documentation/remediation-setup.md#docker-run-mappings)
+    - Configuration instructions are provided in [Mapping docker run containers](../documentation/remediation-setup-docker.md#docker-run-mappings)
 
 - **Rejection of mappings by image name**
     - Public images such as `nginx` are used in multiple places, so identifying the change location would still require specifying a container; mappings by image name were therefore rejected

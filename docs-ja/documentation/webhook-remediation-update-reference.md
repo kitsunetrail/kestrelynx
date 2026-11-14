@@ -104,7 +104,7 @@ title: Webhookの修正計画の更新の記録のフィールド
 | `gradle.update_locks` | Gradleによる対象パッケージのlockfile更新 |
 
 同じ段階を再実行する場合があるため、`id`を配列内で一意なキーとして扱わないでください。
-各操作の範囲は[マネージャー別の更新処理](remediation-logic.md#manager-update-methods)を参照してください。
+各操作の範囲は[マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods)を参照してください。
 
 ### 直接依存の版指定の変更 {#language-update-manifest-edits}
 
@@ -136,7 +136,7 @@ title: Webhookの修正計画の更新の記録のフィールド
 - `major_change`
     - `0.x`ではマイナー版の変更をメジャー版の変更として扱う
 
-変更する条件は[直接依存の版指定](remediation-logic.md#direct-dependencies)を参照してください。
+変更する条件は[直接依存の版指定](remediation-node-python-logic.md#direct-dependencies)を参照してください。
 
 ### 依存関係の差分 {#language-update-diff}
 
@@ -229,7 +229,7 @@ Aを更新する前と後の版は次のとおりです。
 | `from` | string | 変更前に参照していた版 | — |
 | `to` | string | 変更後に参照する版 | — |
 
-変更を認める条件は[付随変更の検査](remediation-logic.md#change-validation)を参照してください。
+変更を認める条件は[付随変更の検査](remediation-node-python-logic.md#change-validation)を参照してください。
 
 ## 更新に使う実行環境 {#language-runtime-fields}
 
@@ -296,7 +296,7 @@ Aを更新する前と後の版は次のとおりです。
 - `engines_floor`
     - プロジェクトの宣言が許す最低Node.js版と、選定した実行環境のNode.js版が異なる場合に記録する
 
-選定方法は[実行環境の選定](remediation-logic.md#runtime-and-tool-versions)を参照してください。
+選定方法は[実行環境の選定](remediation-package-logic.md#runtime-and-tool-versions)を参照してください。
 
 ### 選定根拠となった版宣言 {#language-runtime-declared}
 
@@ -399,7 +399,7 @@ Aを更新する前と後の版は次のとおりです。
 pip・Go・Gradleは作業用イメージに含まれるツールを使うため、このオブジェクトを出力しません。
 Mavenの更新も、このオブジェクトを出力しません。
 
-選定方法は[ツール版の選定](remediation-logic.md#tool-version-selection)、照合方法は[ツールの取得と照合](remediation-logic.md#tool-verification)を参照してください。
+選定方法は[ツール版の選定](remediation-node-python-logic.md#tool-version-selection)、照合方法は[ツールの取得と照合](remediation-node-python-logic.md#tool-verification)を参照してください。
 
 ## 依存元からの再解決の結果 {#language-chain-fields}
 
@@ -411,7 +411,7 @@ Mavenの更新も、このオブジェクトを出力しません。
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
 | `outcome` | string | 再解決の結果 | — |
-| `reason` | string | 結果の[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `reason` | string | 結果の[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 結果や理由についての補足説明 | 省略 |
 | `source` | string | 見送りの場合も含む再解決の方法 | — |
 | `blocked` | objectの配列 | [修正版への更新を妨げる版指定](#language-chain-blocked) | `[]` |
@@ -463,7 +463,7 @@ Mavenの更新も、このオブジェクトを出力しません。
 実行有無と公開後の待機が終わる日時は、[言語パッケージのフィールド](webhook-remediation-language-reference.md#remediation-language-fields)の`update_executed`・`post_update_check_executed`・`retry_after`で確認します。
 
 待機中は、`retry_after`だけを含み、`update.chain`を含まない回もあります。
-待機や停止の条件は[公開後の待機と再試行](remediation-reference.md#dependent-reresolution-waits)を参照してください。
+待機や停止の条件は[公開後の待機と再試行](remediation-reresolution-logic.md#dependent-reresolution-waits)を参照してください。
 
 ### 更新を妨げる版指定 {#language-chain-blocked}
 
@@ -529,7 +529,7 @@ Mavenの更新も、このオブジェクトを出力しません。
 | `elapsed_ms` | integer | その項目の処理開始から記録時点までの経過ミリ秒 | `0` |
 
 処理量には、その回の通常更新、依存元からの再解決、必要になった再実行を含めます。
-処理の上限は[再解決の対応範囲と上限](remediation-reference.md#dependent-reresolution-limits)を参照してください。
+処理の上限は[再解決の対応範囲と上限](remediation-reresolution-logic.md#dependent-reresolution-limits)を参照してください。
 
 ## Goの更新の記録 {#language-go-update}
 
@@ -562,7 +562,7 @@ Mavenの更新も、このオブジェクトを出力しません。
 | `from` | string | 更新前の依存モジュールの版 | 追加されたモジュールなら省略 |
 | `to` | string | 更新後の依存モジュールの版 | — |
 
-採用条件は[Goの更新結果の検査](remediation-logic.md#go-update-validation)を参照してください。
+採用条件は[Goの更新結果の検査](remediation-go-logic.md#go-update-validation)を参照してください。
 
 ## Mavenの更新の記録 {#language-maven-update}
 
@@ -604,7 +604,7 @@ Mavenの更新も、このオブジェクトを出力しません。
 `moves`の版は、更新前後の依存ファイルのスキャンで解決されたものです。
 追加されたパッケージでは`from`を、なくなったパッケージでは`to`を省略します。
 
-変更方法は[Mavenの版の出所と書き換え](remediation-logic.md#maven-version-sources)、採用条件は[Mavenの更新結果の検査](remediation-logic.md#maven-update-validation)を参照してください。
+変更方法は[Mavenの版の出所と書き換え](remediation-maven-logic.md#maven-version-sources)、採用条件は[Mavenの更新結果の検査](remediation-maven-logic.md#maven-update-validation)を参照してください。
 
 ## Gradleの更新の記録 {#language-gradle-update}
 
@@ -665,4 +665,4 @@ lockfileからパッケージがなくなる更新は採用しないため、生
     - 複数の更新対象が版指定を共有する場合、他の対象の変更に伴うパッケージとして、更新対象自身も含まれることがある
 
 `companions`には、共有する変更後の版がMaven Centralに存在することを確認したパッケージを記録します。
-変更方法は[Gradleの版の宣言と書き換え](remediation-logic.md#gradle-version-sources)、採用条件は[Gradleの更新結果の検査](remediation-logic.md#gradle-update-validation)を参照してください。
+変更方法は[Gradleの版の宣言と書き換え](remediation-gradle-logic.md#gradle-version-sources)、採用条件は[Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation)を参照してください。

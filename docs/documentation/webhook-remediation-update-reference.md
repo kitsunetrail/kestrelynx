@@ -104,7 +104,7 @@ The values of `op` are listed below.
 | `gradle.update_locks` | Lockfile update for target packages by Gradle. |
 
 Do not treat `id` as a unique key within the array, because a stage may run again.
-See [Update methods by package manager](remediation-logic.md#manager-update-methods) for the scope of each operation.
+See [Update methods by package manager](remediation-package-logic.md#manager-update-methods) for the scope of each operation.
 
 ### Direct dependency version specification changes {#language-update-manifest-edits}
 
@@ -136,7 +136,7 @@ The following fields have additional notes.
 - `major_change`
     - For `0.x`, a minor-version change is treated as a major-version change
 
-See [Direct dependency version specifications](remediation-logic.md#direct-dependencies) for the conditions under which changes are made.
+See [Direct dependency version specifications](remediation-node-python-logic.md#direct-dependencies) for the conditions under which changes are made.
 
 ### Dependency diff {#language-update-diff}
 
@@ -229,7 +229,7 @@ The fields in each element of `language_items[].update.diff.followed[].moves[]` 
 | `from` | string | Version referenced before the change. | — |
 | `to` | string | Version referenced after the change. | — |
 
-See [Checking related changes](remediation-logic.md#change-validation) for the conditions under which changes are allowed.
+See [Checking related changes](remediation-node-python-logic.md#change-validation) for the conditions under which changes are allowed.
 
 ## Runtime for the update {#language-runtime-fields}
 
@@ -296,7 +296,7 @@ The following fields have additional notes.
 - `engines_floor`
     - Recorded when the lowest Node.js version allowed by the project's declarations differs from the Node.js version in the selected runtime
 
-See [Runtime selection](remediation-logic.md#runtime-and-tool-versions) for the selection method.
+See [Runtime selection](remediation-package-logic.md#runtime-and-tool-versions) for the selection method.
 
 ### Version declarations used for selection {#language-runtime-declared}
 
@@ -399,7 +399,7 @@ The following fields have additional notes.
 pip, Go, and Gradle use tools included in the work image, so they do not emit this object.
 Maven updates do not emit this object either.
 
-See [Tool version selection](remediation-logic.md#tool-version-selection) for the selection method and [Tool retrieval and verification](remediation-logic.md#tool-verification) for verification.
+See [Tool version selection](remediation-node-python-logic.md#tool-version-selection) for the selection method and [Tool retrieval and verification](remediation-node-python-logic.md#tool-verification) for verification.
 
 ## Results of re-resolution through dependent packages {#language-chain-fields}
 
@@ -411,7 +411,7 @@ The fields in `language_items[].update.chain` are listed below.
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
 | `outcome` | string | Re-resolution result. | — |
-| `reason` | string | [Reason code](remediation-reference.md#reason-codes) for the result. | omitted |
+| `reason` | string | [Reason code](remediation-reason-codes.md#reason-codes) for the result. | omitted |
 | `detail` | string | Additional details about the result or reason. | omitted |
 | `source` | string | Re-resolution method, including skipped attempts. | — |
 | `blocked` | array of objects | [Version requirements blocking updates](#language-chain-blocked) to fixed versions. | `[]` |
@@ -463,7 +463,7 @@ The following fields have additional notes.
 Check `update_executed`, `post_update_check_executed`, and `retry_after` in [Language package fields](webhook-remediation-language-reference.md#remediation-language-fields) for execution status and the date and time when the release waiting period ends.
 
 During a waiting period, some cycles include `retry_after` without `update.chain`.
-See [Release waiting periods and retries](remediation-reference.md#dependent-reresolution-waits) for waiting and stopping conditions.
+See [Release waiting periods and retries](remediation-reresolution-logic.md#dependent-reresolution-waits) for waiting and stopping conditions.
 
 ### Version requirements blocking updates {#language-chain-blocked}
 
@@ -529,7 +529,7 @@ The fields in `language_items[].update.chain.usage` are listed below.
 | `elapsed_ms` | integer | Milliseconds elapsed from the start of processing the item to the time the usage was recorded. | `0` |
 
 Usage includes the normal update, re-resolution through dependent packages, and any required reruns in that cycle.
-See [Re-resolution support and limits](remediation-reference.md#dependent-reresolution-limits) for processing limits.
+See [Re-resolution support and limits](remediation-reresolution-logic.md#dependent-reresolution-limits) for processing limits.
 
 ## Go update records {#language-go-update}
 
@@ -562,7 +562,7 @@ The fields in each element of `language_items[].update.go.collateral[]` are list
 | `from` | string | Dependency module version before the update. | omitted when the module was added |
 | `to` | string | Dependency module version after the update. | — |
 
-See [Go update validation](remediation-logic.md#go-update-validation) for adoption conditions.
+See [Go update validation](remediation-go-logic.md#go-update-validation) for adoption conditions.
 
 ## Maven update records {#language-maven-update}
 
@@ -604,7 +604,7 @@ The fields in each element of `language_items[].update.maven.moves[]` are listed
 The versions in `moves` are those resolved by scans of the dependency files before and after the update.
 `from` is omitted for added packages, and `to` is omitted for packages that are no longer present.
 
-See [Version sources and edits](remediation-logic.md#maven-version-sources) for the change methods and [Maven update validation](remediation-logic.md#maven-update-validation) for adoption conditions.
+See [Version sources and edits](remediation-maven-logic.md#maven-version-sources) for the change methods and [Maven update validation](remediation-maven-logic.md#maven-update-validation) for adoption conditions.
 
 ## Gradle update records {#language-gradle-update}
 
@@ -665,4 +665,4 @@ The following fields have additional notes.
     - When multiple update targets share a version specification, an update target itself may be included as a package affected by a change for another target
 
 `companions` records packages confirmed to exist on Maven Central at the shared version after the change.
-See [Version declarations and edits](remediation-logic.md#gradle-version-sources) for the change methods and [Gradle update validation](remediation-logic.md#gradle-update-validation) for adoption conditions.
+See [Version declarations and edits](remediation-gradle-logic.md#gradle-version-sources) for the change methods and [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) for adoption conditions.

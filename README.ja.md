@@ -52,11 +52,11 @@
     - 解消する所見・残る所見・新たに入る所見を比較
 - すでに使っているファイルの次の部分を更新する修正PRをGitHubに作る
     - Composeファイルの配布イメージのタグ
-    - Kubernetesのプレーンなマニフェストのイメージタグ、[Kustomizeの`images[].newTag`](docs-ja/documentation/remediation-setup.md#kustomize-pull-requests)、[Helmのvaluesのイメージタグ](docs-ja/documentation/remediation-setup.md#helm-values-pull-requests)
+    - Kubernetesのプレーンなマニフェストのイメージタグ、[Kustomizeの`images[].newTag`](docs-ja/documentation/remediation-setup-kubernetes.md#kustomize-pull-requests)、[Helmのvaluesのイメージタグ](docs-ja/documentation/remediation-setup-kubernetes.md#helm-values-pull-requests)
     - Dockerfileのベースイメージのタグ
     - npm・pnpm・pip・uv・Go・Maven(`pom.xml`)・Gradle(`gradle.lockfile`)の依存ファイル
     - npm・pnpm・uvでは、対応する条件の下で依存元のパッケージも更新して再解決
-    - Kubernetesでnpm・pnpm・pip・uv・Go・Gradleを更新するには、[作業用Podの設定](docs-ja/documentation/remediation-setup.md#kubernetes-language-updates)が必要
+    - Kubernetesでnpm・pnpm・pip・uv・Go・Gradleを更新するには、[作業用Podの設定](docs-ja/documentation/remediation-setup-work-pods.md#kubernetes-language-updates)が必要
 - マージ・デプロイ後の次のスキャンで解消を確かめる
     - 利用者が変更内容を確認し、マージ前のCI、マージ、再ビルド、デプロイを実施
     - KestreLynxが更新前からの履歴を引き継ぎ、所見の解消を通知
@@ -84,12 +84,12 @@ PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ�
 
 | 知りたいこと | 詳細ページ |
 | --- | --- |
-| 目的に合うページを探す | [修正計画の案内](docs-ja/documentation/remediation.md) |
+| 目的に合うページを探す | [ページの案内](docs-ja/documentation/remediation.md#contents) |
 | 修正計画と修正PRを有効にする | [有効化の手順](docs-ja/documentation/remediation-setup.md) |
 | 候補やPRが出ない原因を切り分ける | [候補やPRが出ない場合](docs-ja/documentation/remediation-troubleshooting.md) |
-| SlackやPRの内容を読む | [結果の読み方](docs-ja/documentation/remediation-results.md) |
-| 候補の選定とPRの処理を確認する | [候補選定とPR処理の仕組み](docs-ja/documentation/remediation-logic.md) |
-| 対応する入力と理由コードを調べる | [対応形式と理由コード](docs-ja/documentation/remediation-reference.md) |
+| SlackやPRの内容を読む | [通知の読み方](docs-ja/documentation/remediation-results.md)・[PRの内容とマージ前の確認](docs-ja/documentation/remediation-pr-results.md) |
+| 候補の選定とPRの処理を確認する | [処理の流れ](docs-ja/documentation/remediation-logic.md) |
+| 対応する入力と理由コードを調べる | [対応範囲](docs-ja/documentation/remediation-reference.md)・[結果の値と理由コード](docs-ja/documentation/remediation-reason-codes.md) |
 | 設定値と必要な権限を調べる | [設定リファレンス](docs-ja/documentation/configuration.md) |
 | 通知条件、Webhook仕様、外向きの通信を確認する | [KestreLynxの仕組み](docs-ja/documentation/how-it-works.md) |
 

@@ -115,7 +115,7 @@ remediation
 ## 修正計画の共通フィールド {#remediation-fields}
 
 表の読み方は、[レポートのフィールド](webhook-reference.md#report-fields)を参照してください。
-各項目の`category`は[計画の分類値](remediation-reference.md#category-values)、`reason`は[理由コード](remediation-reference.md#reason-codes)を参照してください。
+各項目の`category`は[計画の分類値](remediation-reason-codes.md#category-values)、`reason`は[理由コード](remediation-reason-codes.md#reason-codes)を参照してください。
 
 `remediation`の直下のフィールドは次のとおりです。
 
@@ -190,7 +190,7 @@ remediation
 | `summary` | `items[]`の項目 | `category`の分類名（8種類） | `0`で出力 | 計画がない場合 |
 | `dockerfile_summary` | `dockerfile_items[]`の項目 | `category`の分類名（8種類） | `0`で出力 | `dockerfile_items[]`が空の場合 |
 | `language_summary` | `language_items[]`の項目 | `category`の分類名（7種類） | `0`で出力 | `language_items[]`が空の場合 |
-| `pull_request_summary` | `pull_requests[]`の項目 | `status`の[PRの状態値](remediation-reference.md#pr-status-values) | 省略 | `pull_requests[]`が空の場合 |
+| `pull_request_summary` | `pull_requests[]`の項目 | `status`の[PRの状態値](remediation-reason-codes.md#pr-status-values) | 省略 | `pull_requests[]`が空の場合 |
 
 計画があれば、`items[]`が空でも`summary`の8キーをすべて`0`で出力します。
 `dockerfile_summary`では、`dockerfile_items[].entities[]`を個別に数えません。
@@ -356,7 +356,7 @@ remediation
 ### 比較結果 {#remediation-comparison}
 
 比較結果は、`items[].comparison`、`dockerfile_items[].entities[].comparison`と、各稼働イメージの`newer_series.candidates[].comparison`で使います。
-比較条件は[スキャンの比較条件](remediation-logic.md#comparison-conditions)、結果の解釈は[比較結果の解消](remediation-results.md#verification-results)を参照してください。
+比較条件は[スキャンの比較条件](remediation-logic.md#comparison-conditions)、結果の解釈は[比較結果の解消](remediation-pr-results.md#verification-results)を参照してください。
 
 次は、対象の所見1件を解消した比較結果から、主要なフィールドを抜粋した例です。
 
@@ -387,7 +387,7 @@ remediation
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
 | `comparable` | boolean | 比較できる結果の場合は`true` | `false` |
-| `reason` | string | 比較できない理由を表す[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `reason` | string | 比較できない理由を表す[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `scope` | string | 比較した深刻度などの範囲を説明する英文 | 省略 |
 | `decision` | string | 比較結果に基づく候補の採用判定 | 省略 |
 | `targets` | integer | 判定対象の所見数 | `0` |
@@ -441,7 +441,7 @@ remediation
 | `severity` | string | 脆弱性の深刻度 | 省略 |
 | `outcome` | string | 所見の比較結果 | — |
 | `disposition` | string | 解消した所見のパッケージが候補でどう変わったか | 省略 |
-| `reason` | string | 個別の判定ができない理由を表す[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `reason` | string | 個別の判定ができない理由を表す[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `before_versions` | stringの配列 | 比較元で記録されたパッケージの版 | 空なら省略 |
 | `after_versions` | stringの配列 | 候補でその脆弱性が検出された箇所のパッケージの版 | 空なら省略 |
 
@@ -547,7 +547,7 @@ WebhookにはスキャンIDを出力しません。
 ### 新しい系列の確認結果 {#remediation-newer-series}
 
 新しい系列の確認結果は、`items[].newer_series`、`dockerfile_items[].newer_series`、`dockerfile_items[].entities[].newer_series`で使います。
-候補の選び方は[新しい系列の確認](remediation-logic.md#newer-series-check)、状態の意味は[新しい系列の状態値](remediation-reference.md#newer-series-status-values)を参照してください。
+候補の選び方は[新しい系列の確認](remediation-image-logic.md#newer-series-check)、状態の意味は[新しい系列の状態値](remediation-reason-codes.md#newer-series-status-values)を参照してください。
 
 次は、新しい系列の候補と件数を抜粋した例です。
 
@@ -580,11 +580,11 @@ WebhookにはスキャンIDを出力しません。
 | --- | --- | --- | --- |
 | `status` | string | 新しい系列を確認した結果の状態 | — |
 | `shown` | string | 項目の確認結果として示す候補のタグ | 省略 |
-| `reason` | string | 確認できない理由などを表す[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `reason` | string | 確認できない理由などを表す[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 理由の補足説明 | 省略 |
 | `candidates` | objectの配列 | 候補を調べた順に並べた結果 | 空なら省略 |
 
-`status`の値は[新しい系列の状態値](remediation-reference.md#newer-series-status-values)を参照してください。
+`status`の値は[新しい系列の状態値](remediation-reason-codes.md#newer-series-status-values)を参照してください。
 `shown`は、対象の所見を解消する候補がなければ省略します。
 
 `items[].newer_series.candidates[]`などの1要素のフィールドは次のとおりです。
@@ -594,14 +594,14 @@ WebhookにはスキャンIDを出力しません。
 | `tag` | string | 確認する候補のタグ | — |
 | `change` | string | 現在のタグに対する系列の変更の種類 | — |
 | `status` | string | 候補を確認した結果の状態 | — |
-| `reason` | string | 候補の結果を説明する[理由コード](remediation-reference.md#reason-codes) | 省略 |
+| `reason` | string | 候補の結果を説明する[理由コード](remediation-reason-codes.md#reason-codes) | 省略 |
 | `detail` | string | 理由の補足説明 | 省略 |
 | `candidate` | object | 候補の[イメージ情報](#remediation-image-state) | 情報がなければ省略 |
 | `counts` | object | 対象の解消状況と新規検出の件数 | 集計できなければ省略 |
 | `comparison` | object | 候補の[比較結果](#remediation-comparison) | 結果がなければ省略 |
 | `scans` | objectの配列 | 比較に使った[スキャンの記録](#remediation-scan-records) | 空なら省略 |
 
-候補の`status`は[新しい系列の状態値](remediation-reference.md#newer-series-status-values)のうち、`no_newer_series`を除く値です。
+候補の`status`は[新しい系列の状態値](remediation-reason-codes.md#newer-series-status-values)のうち、`no_newer_series`を除く値です。
 
 `change`の値は次のとおりです。
 

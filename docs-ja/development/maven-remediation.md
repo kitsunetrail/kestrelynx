@@ -10,7 +10,7 @@
 稼働イメージの jar を Trivy が `jar` として検出した脆弱性から、対応付けたディレクトリの `pom.xml` を更新する PR を作る。
 
 マルチモジュールでは、ルートと各モジュールの `pom.xml` を扱う。
-対応範囲は[Mavenの依存ファイル](../documentation/remediation-reference.md#maven-inputs)、更新の規則は[Mavenの候補選定](../documentation/remediation-logic.md#maven-package-selection)を参照。
+対応範囲は[Mavenの依存ファイル](../documentation/remediation-dependency-formats.md#maven-inputs)、更新の規則は[Mavenの候補選定](../documentation/remediation-maven-logic.md#maven-package-selection)を参照。
 
 ## 方針
 

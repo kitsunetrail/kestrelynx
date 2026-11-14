@@ -25,7 +25,7 @@ flowchart LR
 
 通知はこの状況で、「`@nestjs/platform-express` の新しい版なら、修正版の `multer` を使えるか」を添える。
 
-表示は[修正版に上げられないときの案内](../documentation/remediation-results.md#fix-hints)、更新の結果は[依存元からの再解決の結果](../documentation/remediation-results.md#dependent-reresolution-results)を参照。
+表示は[修正版に上げられないときの案内](../documentation/remediation-fix-hints.md#fix-hints)、更新の結果は[依存元からの再解決の結果](../documentation/remediation-update-results.md#dependent-reresolution-results)を参照。
 
 Go の `go` 行、Maven・Gradle の親 pom・BOM・Spring Boot、修正版の撤回や別メジャーの修正版は、[Go・親 pom・BOM などで修正版に上げられないパッケージの通知と更新の開発](version-source-fix-hints.md)で扱う。
 
@@ -164,7 +164,7 @@ flowchart TB
 - 対象自身の宣言は通常更新と同じ規則で扱い、修正版を許さなければ対応する形式に限って書き換える
 - 対象の脆弱性の解消と、依存関係の位置ごとに脆弱性が増えないことを検査する
 
-対象条件は[再解決の対象条件](../documentation/remediation-logic.md#dependent-reresolution-eligibility)、位置ごとの検査の考え方は[依存元からの再解決の開発](dependent-reresolution.md)を参照。
+対象条件は[再解決の対象条件](../documentation/remediation-reresolution-logic.md#dependent-reresolution-eligibility)、位置ごとの検査の考え方は[依存元からの再解決の開発](dependent-reresolution.md)を参照。
 
 ### uv の解決不能の扱い
 
@@ -216,7 +216,7 @@ flowchart TD
 - 依存元が見つからなければ、理由は `post_update_check_failed` のままにする
 - 同じファイルにほかの更新対象が残る場合は、元の入力から残りを更新し直し、検査を通れば PR にする
 
-処理の条件は[マネージャー別の更新処理](../documentation/remediation-logic.md#manager-update-methods)と[部分PRの成立条件](../documentation/remediation-logic.md#partial-pr-selection)を参照。
+処理の条件は[マネージャー別の更新処理](../documentation/remediation-package-logic.md#manager-update-methods)と[部分PRの成立条件](../documentation/remediation-package-logic.md#partial-pr-selection)を参照。
 
 ### Maven・Gradle の依存経路
 
@@ -249,7 +249,7 @@ flowchart LR
 
 Gradle の依存の木は通知の説明に使い、更新結果を採用するかの判定には使わない。
 
-記録の条件は[Mavenの更新結果の検査](../documentation/remediation-logic.md#maven-update-validation)と[Gradleの更新結果の検査](../documentation/remediation-logic.md#gradle-update-validation)を参照。
+記録の条件は[Mavenの更新結果の検査](../documentation/remediation-maven-logic.md#maven-update-validation)と[Gradleの更新結果の検査](../documentation/remediation-gradle-logic.md#gradle-update-validation)を参照。
 
 ### 通知と記録
 
@@ -285,7 +285,7 @@ starlette 0.32.0.post1 を修正版の 1.3.1 に上げられない（依存元�
 | npm・pnpm・uv | `language_items[].update.chain.hints` |
 | pip・Maven・Gradle | `language_items[].packages[].fix_hint` |
 
-理由コードは[更新結果の理由](../documentation/remediation-reference.md#update-reasons)、表示の意味と限界は[修正版に上げられないときの案内](../documentation/remediation-results.md#fix-hints)を参照。
+理由コードは[更新結果の理由](../documentation/remediation-update-reason-codes.md#update-reasons)、表示の意味と限界は[修正版に上げられないときの案内](../documentation/remediation-fix-hints.md#fix-hints)を参照。
 
 ### 公開版情報の読み込み時期と上限
 

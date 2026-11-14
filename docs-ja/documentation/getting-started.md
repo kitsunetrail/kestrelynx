@@ -118,7 +118,7 @@ docker compose logs -f
     ```
 
     - ServiceAccount、読み取り専用のClusterRoleとClusterRoleBinding、ConfigMap、PVC、Deploymentが作成される
-    - `work/`はこのコマンドでは適用されないため、言語パッケージの更新を使う場合だけ、[作業用Podの設定](remediation-setup.md#kubernetes-language-updates)に従って別途適用する
+    - `work/`はこのコマンドでは適用されないため、言語パッケージの更新を使う場合だけ、[作業用Podの設定](remediation-setup-work-pods.md#kubernetes-language-updates)に従って別途適用する
 
 !!! warning "同時に動かさない"
 

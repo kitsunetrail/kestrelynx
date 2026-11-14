@@ -8,7 +8,7 @@
 
 Create remediation PRs for Gradle projects that have `gradle.lockfile` by updating build definitions and `gradle.lockfile` in mapped directories from vulnerabilities that Trivy reports as `jar` for jar files in running images.
 
-For supported inputs, see [Gradle dependency files](../documentation/remediation-reference.md#gradle-inputs), and for update rules, see [Gradle candidate selection](../documentation/remediation-logic.md#gradle-package-selection).
+For supported inputs, see [Gradle dependency files](../documentation/remediation-dependency-formats.md#gradle-inputs), and for update rules, see [Gradle candidate selection](../documentation/remediation-gradle-logic.md#gradle-package-selection).
 
 ## Approach
 
@@ -35,7 +35,7 @@ Because reports from Gradle inside the worker container can be falsified, Kestre
 
 For projects using a version catalog, the user must create `settings-gradle.lockfile` with `--write-locks` and commit it beforehand. In the verification application, `empty=incomingCatalogForLibs0` was recorded in this file.
 
-For allowed statements and forms requiring manual action, see [Build script forms](../documentation/remediation-reference.md#gradle-build-forms), and for plugin version combinations, see [Allowed plugins](../documentation/remediation-reference.md#gradle-plugins).
+For allowed statements and forms requiring manual action, see [Build script forms](../documentation/remediation-dependency-formats.md#gradle-build-forms), and for plugin version combinations, see [Allowed plugins](../documentation/remediation-dependency-formats.md#gradle-plugins).
 
 ### Updating versions
 
@@ -49,7 +49,7 @@ Choose where to make the edit according to where the version is determined.
 
 Changing a BOM property or catalog value also changes other packages whose versions are determined by the same value, so verify that those versions exist on Maven Central as well. Verification confirmed that version 11.0.25 existed for the six packages whose versions were determined by `tomcat.version`.
 
-For target version rules, see [Target versions](../documentation/remediation-logic.md#gradle-target-versions), and for rewrite rules, see [Version declarations and edits](../documentation/remediation-logic.md#gradle-version-sources).
+For target version rules, see [Target versions](../documentation/remediation-gradle-logic.md#gradle-target-versions), and for rewrite rules, see [Version declarations and edits](../documentation/remediation-gradle-logic.md#gradle-version-sources).
 
 ### Worker containers
 
@@ -69,7 +69,7 @@ The official image declares `/home/gradle/.gradle` as a `VOLUME`, and leaving it
 | Docker | Cover with tmpfs |
 | Kubernetes | Cover with an empty read-only memory volume with a 1 MiB size limit |
 
-For execution settings, see [Gradle execution settings](../documentation/remediation-logic.md#gradle-worker-settings).
+For execution settings, see [Gradle execution settings](../documentation/remediation-gradle-logic.md#gradle-worker-settings).
 
 ### Checking the returned results
 
@@ -84,7 +84,7 @@ Check the worker container's results in the following order before creating a PR
 
 In the verification application using a version catalog and constraints, the rewritten catalog and constraints were returned unchanged, and commons-text and commons-lang3 in the lockfile reached their target versions.
 
-For acceptance conditions, see [Gradle update validation](../documentation/remediation-logic.md#gradle-update-validation), and for exclusion conditions, see [Conditions for excluding targets and updating the rest](../documentation/remediation-logic.md#gradle-update-exclusions).
+For acceptance conditions, see [Gradle update validation](../documentation/remediation-gradle-logic.md#gradle-update-validation), and for exclusion conditions, see [Conditions for excluding targets and updating the rest](../documentation/remediation-gradle-logic.md#gradle-update-exclusions).
 
 ### Remaining limitations
 

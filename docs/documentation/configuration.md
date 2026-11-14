@@ -137,7 +137,7 @@ See the [remediation overview](remediation.md#contents) for an entry point and [
 
 ### Basic settings {#remediation-basics}
 
-See [Plan and PR execution scope](remediation-logic.md#plan-and-pr-execution) for the processing enabled by each setting, and [Stored files](remediation-reference.md#stored-records) for stored content.
+See [Plan and PR execution scope](remediation-logic.md#plan-and-pr-execution) for the processing enabled by each setting, and [Stored files](remediation-pr-logic.md#stored-records) for stored content.
 
 | Option | Default | Description |
 | --- | --- | --- |
@@ -244,7 +244,7 @@ remediation:
 | `remediation.mappings[].dependencies.directory` | When `dependencies` is set | none | Specifies the directory containing the dependency files that manage the language packages to update, relative to the repository root. Use `.` for the repository root. |
 
 You can omit `dockerfile` when the Dockerfile and build stage can be determined from the Compose `build` setting.
-See [Base image selection](remediation-logic.md#base-image-selection) for the supported conditions and checks against an explicit `dockerfile` setting.
+See [Base image selection](remediation-base-image-logic.md#base-image-selection) for the supported conditions and checks against an explicit `dockerfile` setting.
 
 #### Kubernetes {#remediation-mappings-kubernetes}
 
@@ -290,13 +290,13 @@ remediation:
 | `remediation.mappings[].dockerfile.target` | no | Last stage in the Dockerfile | Names the stage used to build the target image. The base image inherited by this stage is the update target. |
 | `remediation.mappings[].dependencies.directory` | When `dependencies` is set | none | Specifies the directory containing the dependency files that manage the language packages to update, relative to the repository root. Use `.` for the repository root. |
 
-See [Kustomize PR configuration](remediation-setup.md#kustomize-pull-requests) and [Helm values PR configuration](remediation-setup.md#helm-values-pull-requests) for examples and instructions for listing affected containers.
+See [Kustomize PR configuration](remediation-setup-kubernetes.md#kustomize-pull-requests) and [Helm values PR configuration](remediation-setup-kubernetes.md#helm-values-pull-requests) for examples and instructions for listing affected containers.
 
 ### Processing limits {#remediation-limits}
 
-See [Reason codes](remediation-reference.md#reason-codes) for outcomes caused by limits, [PR management](remediation-logic.md#pr-management) for PR handling, and [Work container execution](remediation-logic.md#worker-execution) for execution deadlines and cleanup.
+See [Reason codes](remediation-reason-codes.md#reason-codes) for outcomes caused by limits, [PR management](remediation-pr-logic.md#pr-management) for PR handling, and [Work container execution](remediation-worker-logic.md#worker-execution) for execution deadlines and cleanup.
 
-The [Newer series check](remediation-logic.md#newer-series-check) shares the candidate-scan, baseline-rescan, tag-listing, and registry-request limits with normal processing.
+The [Newer series check](remediation-image-logic.md#newer-series-check) shares the candidate-scan, baseline-rescan, tag-listing, and registry-request limits with normal processing.
 
 | Option | Default | Description |
 | --- | --- | --- |
@@ -314,11 +314,11 @@ The [Newer series check](remediation-logic.md#newer-series-check) shares the can
 
 Work containers are disposable containers used to run dependency updates (such as lockfile updates) with npm, pnpm, pip, uv, Go, or Gradle separately from KestreLynx itself when updating language packages for remediation PRs.
 
-See [Pinning official images](remediation-logic.md#worker-images) for pinning and handling unavailable work images, [Supported runtimes](remediation-reference.md#supported-runtimes) for version series, and [Work image downloads](outbound-communication.md#worker-image-downloads) for network destinations.
+See [Pinning official images](remediation-worker-logic.md#worker-images) for pinning and handling unavailable work images, [Supported runtimes](remediation-reference.md#supported-runtimes) for version series, and [Work image downloads](outbound-communication.md#worker-image-downloads) for network destinations.
 
-See [Waiting after tool publication](remediation-logic.md#tool-release-age), [Tool downloads and verification](remediation-logic.md#tool-verification), and [Tool cache reuse](remediation-logic.md#tool-cache) for tool handling.
+See [Waiting after tool publication](remediation-node-python-logic.md#tool-release-age), [Tool downloads and verification](remediation-node-python-logic.md#tool-verification), and [Tool cache reuse](remediation-node-python-logic.md#tool-cache) for tool handling.
 
-See [Container inputs](remediation-logic.md#worker-inputs) for checks when passing the worker program to a container.
+See [Container inputs](remediation-worker-logic.md#worker-inputs) for checks when passing the worker program to a container.
 
 | Option | Default | Description |
 | --- | --- | --- |
@@ -329,7 +329,7 @@ See [Container inputs](remediation-logic.md#worker-inputs) for checks when passi
 
 #### Kubernetes {#remediation-worker-kubernetes}
 
-These settings apply to language-package updates in Kubernetes mode. The user applies the work namespace and necessary resources following the [setup steps](remediation-setup.md#kubernetes-language-updates).
+These settings apply to language-package updates in Kubernetes mode. The user applies the work namespace and necessary resources following the [setup steps](remediation-setup-work-pods.md#kubernetes-language-updates).
 
 These settings require `kubernetes.enabled: true`. Invalid names, image names, or numeric values cause a startup error.
 

@@ -334,8 +334,8 @@ runtime:
 #   # or appears in a listed workload's Pod spec.
 #   # Only an existing string newTag in one YAML document is edited; quotes,
 #   # comments and line endings are preserved. Existing newName values stay unchanged.
-#   # See docs/documentation/remediation-reference.md#kustomize-formats for
-#   # unsupported inputs and docs/documentation/remediation-logic.md#kustomize-prs
+#   # See docs/documentation/remediation-source-formats.md#kustomize-formats for
+#   # unsupported inputs and docs/documentation/remediation-kubernetes-logic.md#kustomize-prs
 #   # for the full creation requirements.
 #   #
 #   # Helm example: apps/values.yaml contains:
@@ -377,8 +377,8 @@ runtime:
 #   # and running image. Only the tag is edited, preserving quotes and comments.
 #   # If an unquoted tag's replacement would not remain a string in Helm,
 #   # it is written in double quotes and the PR body explains the change.
-#   # See docs/documentation/remediation-reference.md#helm-values-formats for
-#   # unsupported inputs and docs/documentation/remediation-logic.md#helm-values-prs
+#   # See docs/documentation/remediation-source-formats.md#helm-values-formats for
+#   # unsupported inputs and docs/documentation/remediation-kubernetes-logic.md#helm-values-prs
 #   # for the full creation requirements.
 #   #
 #   # Kubernetes manifest, Kustomize, Helm values and Dockerfile PRs use the read-only scan RBAC.
@@ -546,7 +546,7 @@ runtime:
 #   #   # Kubernetes language-package updates, including supported re-resolution
 #   #   # through dependent packages. Requires kubernetes.enabled: true,
 #   #   # Kubernetes 1.30+, and user-applied deploy/kubernetes/work/ manifests.
-#   #   # See docs/documentation/remediation-setup.md#kubernetes-language-updates.
+#   #   # See docs/documentation/remediation-setup-work-pods.md#kubernetes-language-updates.
 #   #   # Nodes need containerLogMaxSize >= 144Mi and Pod PID limits;
 #   #   # the example NetworkPolicy requires a CNI that enforces it.
 #   #   # Omit this entire subsection to leave Kubernetes language updates manual.

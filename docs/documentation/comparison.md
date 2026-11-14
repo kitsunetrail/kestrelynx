@@ -33,7 +33,7 @@
 
 - Dependabot and Renovate update packages recorded in repository files without checking their presence in running images
 - KestreLynx updates GitHub dependency files for packages with vulnerabilities detected in running images
-- KestreLynx handles floating tags such as `latest` for distributed images through [re-pull guidance (no update pull requests)](remediation-logic.md#published-image-tags)
+- KestreLynx handles floating tags such as `latest` for distributed images through [re-pull guidance (no update pull requests)](remediation-image-logic.md#published-image-tags)
 
 ## Update methods {#update-methods}
 
@@ -122,7 +122,7 @@ Checked on 2026-10-31
     - [Reading results](remediation-results.md), [Supported inputs](remediation-reference.md), [Scan scope](scan-logic.md), [History and resolution](diff-logic.md)
     - [Demo update pull request #1](https://github.com/kitsunetrail/kestrelynx-demo/pull/1), [Demo results after container replacement](../index.md)
     - [Supported targets](remediation-reference.md#supported-targets), [Scope and requirements](remediation-reference.md#scope-and-requirements), [Supported file formats](remediation-reference.md#supported-inputs)
-    - [docker run containers](remediation-reference.md#docker-run-containers), [Node.js version files](remediation-reference.md#node-declarations), [Base image attribution](remediation-logic.md#base-layer-matching), [Kubernetes work Pods](remediation-setup.md#kubernetes-language-updates)
+    - [docker run containers](remediation-reference.md#docker-run-containers), [Node.js version files](remediation-dependency-formats.md#node-declarations), [Base image attribution](remediation-base-image-logic.md#base-layer-matching), [Kubernetes work Pods](remediation-setup-work-pods.md#kubernetes-language-updates)
 - Trivy
     - [Container image scanning](https://trivy.dev/docs/latest/guide/target/container_image/)
 - Dependabot

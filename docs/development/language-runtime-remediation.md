@@ -50,7 +50,7 @@ The remedy depends on the Dockerfile's tag specification and whether the release
     - Put guidance to move to a newer release line in the finding's notification annotation because images without a fixed version do not receive a remediation plan item
     - Use the annotation “end-of-life: no fix will be released for this series, so the series has to be upgraded (manual)”
 
-Detailed conditions are covered in [Base layer matching](../documentation/remediation-logic.md#base-layer-matching), and notification interpretation in [Rebuild guidance](../documentation/remediation-results.md#rebuild-guidance).
+Detailed conditions are covered in [Base layer matching](../documentation/remediation-base-image-logic.md#base-layer-matching), and notification interpretation in [Rebuild guidance](../documentation/remediation-update-results.md#rebuild-guidance).
 
 ## Verification methods
 

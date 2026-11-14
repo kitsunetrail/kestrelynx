@@ -10,7 +10,7 @@ Extend language package remediation PRs to Maven.
 Create PRs that update `pom.xml` in mapped directories from vulnerabilities that Trivy reports as `jar` for jar files in running images.
 
 For projects with multiple modules, handle the root `pom.xml` and each module's `pom.xml`.
-For supported inputs, see [Maven dependency files](../documentation/remediation-reference.md#maven-inputs), and for update rules, see [Maven candidate selection](../documentation/remediation-logic.md#maven-package-selection).
+For supported inputs, see [Maven dependency files](../documentation/remediation-dependency-formats.md#maven-inputs), and for update rules, see [Maven candidate selection](../documentation/remediation-maven-logic.md#maven-package-selection).
 
 ## Approach
 

@@ -345,7 +345,7 @@ The values of `check` are as follows.
 | `split` | One package entry before the update splits into multiple vulnerable package entries after the update |
 
 Carried vulnerabilities do not establish that the checks pass; check `language_items[].source_check.passed` for the check result.
-Check `language_items[].update.chain.outcome` for re-resolution adoption status, and see [Results of re-resolution through dependent packages](remediation-results.md#dependent-reresolution-results) for the meanings of its values.
+Check `language_items[].update.chain.outcome` for re-resolution adoption status, and see [Results of re-resolution through dependent packages](remediation-update-results.md#dependent-reresolution-results) for the meanings of its values.
 
 `language_items[].source_check` is the record of one check retained in the processing result.
 The following fields have additional notes.
@@ -361,7 +361,7 @@ The following fields have additional notes.
 Each of the five lists contains up to 500 elements, and `language_items[].source_check.truncated` is `true` when elements are omitted.
 Pass or fail decisions for re-resolution scan comparisons use all results before truncation.
 
-See [Re-resolution check conditions](remediation-reference.md#dependent-reresolution-rules) for check conditions and [Carried vulnerabilities](remediation-logic.md#dependent-reresolution-carried-findings) for examples of carried vulnerabilities.
+See [Re-resolution check conditions](remediation-reresolution-logic.md#dependent-reresolution-rules) for check conditions and [Carried vulnerabilities](remediation-reresolution-logic.md#dependent-reresolution-carried-findings) for examples of carried vulnerabilities.
 
 ## Updated files {#language-artifact-fields}
 

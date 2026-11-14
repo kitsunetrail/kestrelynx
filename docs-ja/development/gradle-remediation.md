@@ -8,7 +8,7 @@
 
 `gradle.lockfile` がある Gradle プロジェクトに修正 PR を作るため、稼働イメージの jar から Trivy が `jar` として検出した脆弱性をもとに、対応付けたディレクトリのビルドの定義と `gradle.lockfile` を更新する。
 
-対応範囲は[Gradleの依存ファイル](../documentation/remediation-reference.md#gradle-inputs)、更新の規則は[Gradleの候補選定](../documentation/remediation-logic.md#gradle-package-selection)を参照。
+対応範囲は[Gradleの依存ファイル](../documentation/remediation-dependency-formats.md#gradle-inputs)、更新の規則は[Gradleの候補選定](../documentation/remediation-gradle-logic.md#gradle-package-selection)を参照。
 
 ## 方針
 
@@ -35,7 +35,7 @@
 
 version catalog を使うプロジェクトでは、利用者が `--write-locks` で `settings-gradle.lockfile` を作ってコミットしておく。検証のアプリでは、このファイルに `empty=incomingCatalogForLibs0` が記録された。
 
-認める文と手動対応にする形は[ビルドスクリプトの書き方](../documentation/remediation-reference.md#gradle-build-forms)、プラグインの版の組は[プラグインの許可](../documentation/remediation-reference.md#gradle-plugins)を参照。
+認める文と手動対応にする形は[ビルドスクリプトの書き方](../documentation/remediation-dependency-formats.md#gradle-build-forms)、プラグインの版の組は[プラグインの許可](../documentation/remediation-dependency-formats.md#gradle-plugins)を参照。
 
 ### 版の直し方
 
@@ -49,7 +49,7 @@ version catalog を使うプロジェクトでは、利用者が `--write-locks`
 
 BOM のプロパティや catalog の値を変えると、同じ値で版が決まるほかのパッケージも変わるため、その版が Maven Central にあることも確かめる。検証では、`tomcat.version` で版が決まる6件について 11.0.25 があることを確かめた。
 
-目標版の規則は[Gradleの目標版](../documentation/remediation-logic.md#gradle-target-versions)、書き換えの規則は[版の宣言と書き換え](../documentation/remediation-logic.md#gradle-version-sources)を参照。
+目標版の規則は[Gradleの目標版](../documentation/remediation-gradle-logic.md#gradle-target-versions)、書き換えの規則は[版の宣言と書き換え](../documentation/remediation-gradle-logic.md#gradle-version-sources)を参照。
 
 ### 作業用コンテナ
 
@@ -69,7 +69,7 @@ BOM のプロパティや catalog の値を変えると、同じ値で版が決�
 | Docker | tmpfs で覆う |
 | Kubernetes | 容量上限 1 MiB の空のメモリボリュームで読み取り専用に覆う |
 
-実行の設定は[Gradleの実行設定](../documentation/remediation-logic.md#gradle-worker-settings)を参照。
+実行の設定は[Gradleの実行設定](../documentation/remediation-gradle-logic.md#gradle-worker-settings)を参照。
 
 ### 返ってきた結果の確かめ方
 
@@ -84,7 +84,7 @@ BOM のプロパティや catalog の値を変えると、同じ値で版が決�
 
 検証の version catalog と constraints を使うアプリでは、書き換えた catalog と constraints がそのまま返り、lockfile の commons-text と commons-lang3 が目標の版になった。
 
-採用条件は[Gradleの更新結果の検査](../documentation/remediation-logic.md#gradle-update-validation)、対象を外す条件は[対象を外して残りを更新する条件](../documentation/remediation-logic.md#gradle-update-exclusions)を参照。
+採用条件は[Gradleの更新結果の検査](../documentation/remediation-gradle-logic.md#gradle-update-validation)、対象を外す条件は[対象を外して残りを更新する条件](../documentation/remediation-gradle-logic.md#gradle-update-exclusions)を参照。
 
 ### 残る限界
 

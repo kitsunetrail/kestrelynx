@@ -7,24 +7,29 @@ hide:
 ---
 
 <div class="kl-hero" markdown>
-<div class="kl-hero__text" markdown>
 
 Docker · Compose · Kubernetes · GitHub pull requests
 { .kl-eyebrow }
 
-# Remediation plans, pull requests, and resolution checks after deployment
+# Vulnerability notifications and remediation PRs, <span>resolution checks after deployment</span>
 
-KestreLynx is open-source software that rescans update candidates under the same conditions for comparison and creates remediation pull requests on GitHub to update the Compose files, Kubernetes manifests, Kustomize configuration files, Helm values files, Dockerfiles, and dependency files you already use. After you merge and deploy the changes, the next scan carries history forward to check for resolved findings.
-Scanning running images with [Trivy](https://trivy.dev/), prioritizing findings with [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and [EPSS](https://www.first.org/epss/), and notifying Slack, email, or webhooks provide the starting point for remediation and a way to check the results.
+KestreLynx is open-source software that reports vulnerabilities in images used by running containers, compares update candidates, and creates remediation PRs on GitHub. After you merge and deploy, the next scan carries history forward to check for resolution.
+{ .kl-lede }
 
 [Setup](documentation/getting-started.md){ .md-button .md-button--primary }
 [GitHub](https://github.com/kitsunetrail/kestrelynx){ .md-button }
 { .kl-actions }
 
-Open source · AGPL-3.0
+Open source · AGPL-3.0 · Scans with [Trivy](https://trivy.dev/) · Prioritizes with [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and [EPSS](https://www.first.org/epss/)
 { .kl-license }
 
 </div>
+
+<div class="kl-section kl-demo" markdown>
+
+## Fix plan notification from the demo { .kl-eyebrow }
+
+<div class="kl-demo__body" markdown>
 <figure class="kl-notification">
 <div class="kl-slack">
 <div class="kl-slack__channel"># security-alerts</div>
@@ -46,243 +51,177 @@ Open source · AGPL-3.0
 </div>
 <figcaption>The fix plan actually produced by the demo repository.</figcaption>
 </figure>
-</div>
 
 <div class="kl-callouts" markdown>
 
 - **Created PRs** “Pull request” #1, #2, and #3 and “File to change” identify where the changes go.
-- **A base image update without a PR** The python 3.12.15-slim candidate brings new findings, so no PR is created; “Needs a decision” means you choose whether to update or wait for another tag.
-- **Updates including dependent packages** Updating body-parser and path-to-regexp also updates express, which depends on them, from 4.18.2 to 4.22.3.
+- **A candidate without a PR** The python 3.12.15-slim candidate introduces vulnerabilities and is marked “Needs a decision”; you decide whether to update or wait for another tag.
+- **Updates to dependent packages** Updating body-parser and path-to-regexp also updates express, which depends on them, from 4.18.2 to 4.22.3.
 
 </div>
+</div>
+</div>
 
-<div class="kl-section kl-features" markdown>
+<div class="kl-section" markdown>
+
+How it works
+{ .kl-eyebrow }
+
+## Remediation PRs and resolution checks
+
+<div class="kl-stages" markdown>
 <div markdown>
 
-:material-magnify-scan:
-
-## Update candidate comparison
+### Comparing update candidates
 
 Rescans before and after an update use the same conditions to compare resolved, remaining, and newly introduced findings.
 
-- Published images: compare the current and candidate images
-- Dockerfiles: compare the current and candidate base images
-- Language packages: compare dependency files before and after the update
+</div>
+<div markdown>
+
+### Creating remediation PRs
+
+KestreLynx creates PRs in GitHub repositories mapped to running containers, updating existing files. Version specifications can stay where they are.
 
 </div>
 <div markdown>
 
-:material-source-pull:
+### Checking resolution
 
-## Pull requests to update image tags and dependency files
-
-KestreLynx creates PRs that update the following parts of files already used in mapped GitHub repositories. There is no need to move version specifications to new configuration files or a different management method.
-
-- Published image tags in Compose files
-- Image tags in plain Kubernetes manifests
-- Kustomize `images[].newTag`
-- Image tags in Helm values
-- Base image tags in Dockerfiles
-- Dependency files for npm, pnpm, pip, uv, Go, Maven (`pom.xml`), and Gradle (`gradle.lockfile`)
-
-</div>
-<div markdown>
-
-:material-history:
-
-## Resolution checks after merge and deployment
-
-After you merge a PR and deploy the new image, the next scan carries history forward to check for resolved findings.
-
-- Use history from before the update to identify findings no longer detected in the running image
-- Check notifications for resolutions since the last scan and findings that remain open
+After you merge a PR and deploy the new image, the next scan carries history forward to check for resolution.
 
 </div>
 </div>
 
-<div class="kl-section" markdown>
-
-## Remediation examples from the demo repository (experimental)
-
-These screenshots show actual output from the [demo repository](https://github.com/kitsunetrail/kestrelynx-demo), which intentionally pins older images and dependencies, with the [generated PRs available on GitHub](https://github.com/kitsunetrail/kestrelynx-demo/pulls).
-
-The Slack fix plan lists three created PRs and a Dockerfile base image update candidate marked “Needs a decision” because the candidate introduces new findings.
-
-![Slack fix plan showing Compose, pip, and npm update PRs and a Dockerfile base image update candidate requiring a decision](assets/screenshots/slack-fix-plan.png)
-
-[PR #1](https://github.com/kitsunetrail/kestrelynx-demo/pull/1) proposes updating nginx from 1.27.0 to 1.27.5 and records the candidate scan comparison: 17 targeted findings resolved, 86 remaining.
-
-![GitHub PR body with What, Change, and Verification sections, including 94 other findings remaining and no introduced findings](assets/screenshots/pr-compose-body.png)
-
-After PR #1 was merged and the running `proxy` container was replaced with nginx 1.27.5, the next scan reported resolutions for four packages with history carried over.
-
-![Slack scan notification showing the nginx image update and resolutions for libabsl20220623, libavif15, libfreetype6, and liblzma5](assets/screenshots/slack-resolved.png)
-
-A candidate or pull request does not mean the running image has been fixed.
-Review the comparison scope and run your CI before merging; rebuilding and
-deploying remain separate steps.
-
-Supported language-package sources and source hosts are limited to the following.
-
-- Language packages are retrieved only from the public npm registry, public PyPI, the public Go module proxy, and Maven Central
-- Private language-package registries are not supported
-- GitHub is the only supported source host
-
-See [Remediation plans and pull requests (experimental)](documentation/remediation.md)
-for setup, notifications, and permissions.
-
-</div>
-
-<div class="kl-section" markdown>
-
-## Scanning and notifications
-
-Regular scans and notifications provide the starting point for remediation and a way to check results after deployment.
-
-<div class="kl-features" markdown>
-<div markdown>
-
-:material-history:
-
-## Changes since the last scan
-
-Diff notifications show which findings have changed since the previous scan.
-
-- Notifications cover new findings, added CVEs, newly available fixes, priority escalations, and findings that leave the monitored scope
-- Open findings trigger a short notification even on days without changes
-- Monday notifications include a full report by default
-
-</div>
-<div markdown>
-
-:material-sort-variant:
-
-## Priorities based on KEV and EPSS
-
-Severity, CISA KEV, and EPSS provide context for deciding which findings to review first.
-
-- Findings are grouped into Act now, Watch, and Low
-- These priorities do not establish whether your environment can be exploited
-
-</div>
-<div markdown>
-
-:material-magnify-scan:
-
-## Trivy results and runtime checks
-
-Trivy scans report HIGH and CRITICAL vulnerabilities by default, including findings without available fixes.
-
-- Package summaries show fixed versions when available and upgrade-risk guidance, without guaranteeing compatibility
-- Checks against each project's security information add findings for the runtimes in official `node` and `python` images that Trivy does not report
-
-</div>
-</div>
-
-<figure class="kl-notification">
-<div class="kl-slack">
-<div class="kl-slack__channel"># security-alerts</div>
-<div class="kl-slack__message">
-<div class="kl-slack__avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/></svg></div>
-<div class="kl-slack__body">
-<p class="kl-slack__meta"><strong>KestreLynx</strong> <span class="kl-slack__badge">APP</span> <span class="kl-slack__time">9:00 AM</span></p>
-<p>🛡️ <strong>KestreLynx</strong> [prod-vps] — scan results for 2026-06-28 09:00<br>12 images scanned, 1 affected<br><em>Changes since the last scan.</em></p>
-<hr>
-<p><strong>🆕 New since last scan (1)</strong><br>Image: <code>nginx:1.25.3</code></p>
-<p><strong>◆ libnghttp2-14</strong><br><strong>Installed:</strong> 1.52.0-1<br><strong>Fixed in:</strong> 1.52.0-1+deb12u1<br><strong>Upgrade risk:</strong> 🟢 distro security patch<br><strong>Findings:</strong> CRITICAL 0 / HIGH 2</p>
-<p><strong>Top CVE:</strong> <span class="kl-slack__link">CVE-2023-44487</span> · HIGH · EPSS &gt;99% (+1 more CVE(s) in this package)<br><strong>Exploitation:</strong> CISA KEV (exploited in the wild)<br><strong>References:</strong> <span class="kl-slack__link">advisory</span> · <span class="kl-slack__link">vendor advisory</span> · 💬 <span class="kl-slack__link">HN (166 pts)</span></p>
-<hr>
-<p>📌 <strong>Open now:</strong> 🚨 1 act-now</p>
-</div>
-</div>
-</div>
-<figcaption>Sample notification in the default <code>diff</code> mode. Values are illustrative, not from a live scan.</figcaption>
-</figure>
-
-</div>
-
-<div class="kl-section" markdown>
-
-## Scope and access
-
-KestreLynx is suited to continuously checking vulnerabilities in images used by running containers, creating remediation pull requests,
-and checking for resolved findings after you merge and deploy the changes.
-
-See [Comparison with other tools](documentation/comparison.md) for a running nginx example covering update pull requests and vulnerability checks before and after updates.
-
-<dl class="kl-scope" markdown>
-<dt>Docker</dt>
-<dd markdown="span">One instance per host covers running containers across Compose projects and standalone deployments.</dd>
-<dt>Kubernetes</dt>
-<dd markdown="span">An in-cluster Deployment discovers running containers across all or selected namespaces through read-only API operations, with additional permissions limited to a work namespace only when language-package updates are configured.</dd>
-<dt>Verified scope</dt>
-<dd markdown="span">Single-node K3s with containerd on linux/amd64. Multi-node clusters, arm64, managed Kubernetes remain unverified. [Verification record](development/kubernetes-support.md)</dd>
-<dt>Discovery</dt>
-<dd markdown="span">Containers must be running when discovered. Kubernetes native sidecars are included; ordinary init containers and ephemeral containers are excluded.</dd>
-<dt>Docker socket access</dt>
-<dd markdown="span">KestreLynx reads container information and Trivy reads images through the Docker API; with remediation pull requests enabled, KestreLynx also creates, starts, and removes work containers for language-package updates. Mounting the socket with `:ro` does not restrict API permissions and does not need to change to `:rw`, so the mounted image must be trusted.</dd>
+<dl class="kl-rows" markdown>
+<dt>Published image tags</dt>
+<dd markdown="span">Compose files · plain Kubernetes manifests · Kustomize `images[].newTag` · Helm values</dd>
+<dt>Base image tags</dt>
+<dd markdown="span">Dockerfile</dd>
+<dt>Dependency files</dt>
+<dd markdown="span">npm · pnpm · pip · uv · Go · Maven (`pom.xml`) · Gradle (`gradle.lockfile`)</dd>
 </dl>
 
 </div>
 
-<div class="kl-section kl-steps" markdown>
+<div class="kl-section" markdown>
 
-## Setup
+Demo remediation example (experimental)
+{ .kl-eyebrow }
 
-These steps use Docker Compose. You need a Docker host with Docker Compose and
-at least one notification destination: a Slack Incoming Webhook, a Slack bot
-with a destination channel, email, or a generic webhook. For Kubernetes, see
-[Setup instructions](documentation/getting-started.md#run-on-kubernetes).
+## One PR, from proposal to resolution check
 
-1. Clone the repository and enter its directory
+Actual output in English from the [demo repository](https://github.com/kitsunetrail/kestrelynx-demo), which pins older images and dependencies. The [generated PRs](https://github.com/kitsunetrail/kestrelynx-demo/pulls) are also public.
+{ .kl-section__lede }
 
-    ```sh
-    git clone https://github.com/kitsunetrail/kestrelynx.git
-    cd kestrelynx
-    ```
+<div class="kl-example" markdown>
+<figure class="kl-shot kl-shot--crop" markdown="span">
+![GitHub PR body showing 94 out-of-scope vulnerabilities remaining and none newly introduced](assets/screenshots/pr-compose-body.png)
+</figure>
+<div markdown>
 
-2. Create the configuration file
+Remediation pull request
+{ .kl-label }
 
-    Copy the example to `config.yml` and set a notification destination.
-    { .kl-step-note }
+### nginx 1.27.0 → 1.27.5
 
-    ```sh
-    cp config.example.yml config.yml
-    ${EDITOR:-vi} config.yml
-    ```
+The candidate scan comparison records 17 targeted vulnerabilities resolved and 86 remaining.
 
-3. Start KestreLynx
+[Open PR #1 on GitHub →](https://github.com/kitsunetrail/kestrelynx-demo/pull/1)
 
-    ```sh
-    docker compose up -d
-    ```
+</div>
+</div>
 
-4. Check startup and scans in the logs
+<figure class="kl-shot kl-shot--padded" markdown="span">
+![Slack notification showing the nginx update and resolved vulnerabilities in libabsl20220623, libavif15, libfreetype6, and liblzma5](assets/screenshots/slack-resolved.png)
+<figcaption><strong>After merge and deployment</strong> After PR #1 was merged and the running <code>proxy</code> container was replaced with nginx 1.27.5, the next scan reported resolutions for four packages with history carried over.</figcaption>
+</figure>
 
-    The example configuration runs one scan at startup, then scans daily at
-    09:00.
-    { .kl-step-note }
+<div class="kl-caveat" markdown>
 
-    ```sh
-    docker compose logs -f
-    ```
+Creating a candidate or PR does not fix the running image. Checking the comparison scope and running CI are required before merging. You rebuild and deploy the image.
 
-5. Enable remediation plans
+GitHub is the only supported source host, and language packages are retrieved only from public registries. [Remediation plans and pull requests (experimental) →](documentation/remediation.md)
 
-    Remediation plans and pull requests are both disabled by default.
-    { .kl-step-note }
-
-    - Follow [Enabling remediation](documentation/remediation-setup.md) to first [enable remediation plans](documentation/remediation-setup.md#enable-fix-plans), which do not write to GitHub
-    - After reviewing the plan, [enable fix pull requests separately](documentation/remediation-setup.md#enable-pull-requests)
-
-:material-information-outline: Trial reports are welcome in [Discussions](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx).
-{ .kl-note }
+</div>
 
 </div>
 
 <div class="kl-section" markdown>
 
-## Documentation, development logs, and articles
+Scanning and notifications
+{ .kl-eyebrow }
+
+## Vulnerability changes and priorities
+
+<div class="kl-cards" markdown>
+<div markdown>
+
+<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7v5l3 2"/></svg>
+
+### Changes since the last scan
+
+Notifications show changes in findings since the previous scan.
+
+</div>
+<div markdown>
+
+<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h11"/><path d="M4 18h6"/></svg>
+
+### Remediation priorities
+
+Priorities combine severity, known exploitation (KEV), and predicted exploitation probability (EPSS).
+
+</div>
+<div markdown>
+
+<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/><path d="M3 7V3h4"/><path d="M21 7V3h-4"/></svg>
+
+### Scanning with Trivy
+
+Trivy scans report HIGH and CRITICAL vulnerabilities by default, including findings without available fixes.
+
+</div>
+</div>
+
+</div>
+
+<div class="kl-section kl-setup" markdown>
+
+Setup
+{ .kl-eyebrow }
+
+## Steps with Docker Compose
+
+Setup requires a Docker host with Docker Compose and at least one notification destination: Slack Incoming Webhook, a Slack bot and channel, email, or a generic webhook.
+{ .kl-section__lede }
+
+```sh
+# 1. Clone the repository and enter its directory
+git clone https://github.com/kitsunetrail/kestrelynx.git
+cd kestrelynx
+
+# 2. Copy the example; set a notification destination
+cp config.example.yml config.yml
+${EDITOR:-vi} config.yml
+
+# 3. Start KestreLynx and check startup and scans in the logs
+docker compose up -d
+docker compose logs -f
+```
+
+The example configuration runs one scan at startup, then scans daily at 09:00. Remediation planning and PR creation are disabled by default.
+
+[Setup instructions →](documentation/getting-started.md)
+[Run on Kubernetes →](documentation/getting-started.md#run-on-kubernetes)
+[Enable remediation plans →](documentation/remediation-setup.md)
+{ .kl-more-links }
+
+</div>
+
+<div class="kl-section" markdown>
+
+## Documentation, development logs, and articles { .kl-eyebrow }
 
 <div class="kl-links" markdown>
 <div markdown>
@@ -318,8 +257,7 @@ with a destination channel, email, or a generic webhook. For Kubernetes, see
 </div>
 </div>
 
-Report a bug or suggest an improvement on
-[GitHub Issues](https://github.com/kitsunetrail/kestrelynx/issues).
-{ .kl-issues }
+Bug reports and suggestions go to [GitHub Issues](https://github.com/kitsunetrail/kestrelynx/issues); trial reports go to [Discussions](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx).
+{ .kl-feedback }
 
 </div>

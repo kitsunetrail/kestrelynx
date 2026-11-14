@@ -1,0 +1,19 @@
+{#- Site footer: the copyright line with the links from extra.social as icons. -#}
+<footer class="md-footer">
+  <div class="kl-footer">
+    <div class="md-grid kl-footer__inner">
+      {% if config.copyright %}
+        <span>{{ config.copyright }}</span>
+      {% endif %}
+      {% if config.extra.social %}
+        <div class="kl-footer__social">
+          {% for social in config.extra.social %}
+            <a href="{{ social.link }}" title="{{ social.name | e }}" aria-label="{{ social.name | e }}">
+              {% include ".icons/" ~ social.icon ~ ".svg" %}
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</footer>

@@ -4,33 +4,367 @@
 
 開発ログは検討・実装の過程の記録です。現在利用できる機能の導入・運用方法は[ドキュメント](../documentation/index.md)を参照してください。
 
-- 2026年11月4日 — [Go・親 pom・BOM などで修正版に上げられないパッケージの通知と更新の開発](version-source-fix-hints.md) — 必要な Go の宣言元と親 pom・BOM・Spring Boot による版の決定元、撤回された修正版の選び直しと別メジャーの修正版の表示（実装済み、手元の Docker で Go の PR 作成と更新制限の記録、Maven の BOM の記録を確認）
-- 2026年11月3日 — [依存元の指定で修正版に上げられないパッケージの通知と更新の開発](dependent-fix-hints.md) — 依存元の公開版が修正版を使えるかの表示と、宣言されたパッケージの依存元ごとの再解決（実装済み、本番運用環境で通知、検証用のリポジトリで npm の PR と Gradle の依存経路の表示を確認）
-- 2026年11月2日 — [Gradle の修正 PR の開発](gradle-remediation.md) — 稼働イメージの jar の所見から版の宣言を書き換え、公式の Gradle で gradle.lockfile を更新し、Trivy で更新前後を比べる仕組み(実装済み、検証用のリポジトリで PR の作成を確認)
-- 2026年11月1日 — [Maven の修正 PR の開発](maven-remediation.md) — 稼働イメージの jar の所見から、Maven を実行せずに pom.xml を書き換え、Trivy で更新前後を比べる仕組み(実装済み、検証用のリポジトリで PR の作成を確認)
-- 2026年10月29日 — [Go modules の修正 PR の開発](go-modules-remediation.md) — 稼働イメージの Go バイナリの所見から、対応付けた go.mod・go.sum を更新する仕組み(実装済み、検証用のリポジトリで PR の作成を確認)
-- 2026年10月29日 — [新しい系列での解消確認の開発](newer-series-check.md) — 同じ系列で直らない固定タグを新しい系列の最大2つの版で比較し、PR を作らず修正計画とカードで知らせる仕組み(実装済み、手元での検証まで)
-- 2026年10月27日 — [docker run での修正 PR の開発](docker-run-remediation.md) — コンテナ名で修正先を対応付け、Dockerfile のベースイメージと lockfile を更新する仕組み(実装済み、手元での検証まで)
-- 2026年10月25日 — [言語ランタイム本体の修正計画の開発](language-runtime-remediation.md) — Node.js・Python 本体の検出結果を Dockerfile のベース更新と再ビルドの案内につなぐ仕組み(実装済み、本番運用環境で再ビルドの案内、検証用のホストで PR の作成を確認)
-- 2026年10月25日 — [言語ランタイム本体の脆弱性通知の開発](language-runtime-advisories.md) — Trivy の検出範囲外の Node.js・Python 本体を NODE_VERSION / PYTHON_VERSION と各言語の開発元のセキュリティ情報で照合する仕組み(実装済み、Node.js は本番運用環境、Python は検証用のホストで通知を確認)
-- 2026年10月20日 — [Kubernetes での修正 PR の開発](kubernetes-remediation.md) — 修正先を利用者が明示し、言語パッケージの更新をクラスタ内の使い捨ての Pod で動かす仕組み(実装済み、検証用のホストで PR の作成から GitOps による反映まで確認)
-- 2026年10月15日 — [依存元からの再解決の開発](dependent-reresolution.md) — 依存元を指定範囲内で上げて脆弱性を直し、依存関係の位置ごとに脆弱性の増加を確かめる仕組み(実装済み、本番運用環境で PR の作成を確認)
-- 2026年10月8日 — [修正計画と修正PRの開発](remediation-pull-requests.md) — 稼働中のコンテナの所見から修正候補を選び、比較・通知とGitHubの修正PRにつなぐ設計(実装中)
-- 2026年10月3日 — [短命なコンテナのスキャンの開発](short-lived-containers.md) — 短命なコンテナの実行を記録し、名前ごとに最後に動いた版を14日間スキャンと通知の対象に残す設計(設計、実装未着手)
-- 2026年10月2日 — [KubernetesでのSensorの成立性の検証](kubernetes-runtime-sensor.md) — Docker向けSensorの権限・隔離の成立性と、cgroup名前空間・AppArmorで必要な変更を確かめた検証(設計・成立性の検証まで、実装未着手)
-- 2026年9月25日 — [実行時証拠による優先順位付けの開発](runtime-prioritization-development.md) — Sensor と本体の表示の実装、常時運用で確認した負荷・通知と継続観察の記録(実装・運用検証済み)
-- 2026年9月22日 — [実行時証拠の観測環境の検証](runtime-environment-validation.md) — 採用した実行時証拠を実装する前に、観測に必要な権限、常駐時の負荷、実運用環境での開始条件と利用経路を確かめた検証(計測完了)
-- 2026年9月19日 — [実行時証拠の網羅性の検証](runtime-coverage-validation.md) — ワークロードが実際に使ったパッケージ全体のうち各方式がどれだけ確認できるかを、独立した正解データで評価した検証(計測済み)
-- 2026年9月13日 — [eBPFによる実行時証拠の観測調査](runtime-event-evidence.md) — サンプリングでは確認できなかった短命プロセスと言語パッケージを、eBPF による実行と読み込みのイベント観測で確認できるかの調査
-- 2026年9月9日 — [実行時証拠による優先順位付けの成立性調査](runtime-prioritization.md) — プロセス・待ち受けポート・権限を
-  脆弱性の検出結果に紐づけ、優先順位付けの改善に使えるかを検証した調査(検証完了)
-- 2026年9月6日 — [Kubernetes対応の開発](kubernetes-support.md) — K3s + containerdを出発点に、KubernetesのWorkloadを
-  スキャン・優先順位付け・差分通知へつなぐ実装(実装済み・K3s実環境でエンドツーエンド検証済み)
-- 2026年9月5日 — [Kubernetes向け脆弱性スキャンツールの調査](kubernetes-scanning-landscape.md) — Kubernetes対応に着手する前に、
-  既存ツールの機能と追加実装が必要な点を整理した記録(調査ノート)
-- 2026年8月31日 — [修正関係モデルの設計](remediation-relations-model.md) — 検出した脆弱性を「どこを直せば消えるか」の
-  提案につなげるための関係モデル(モデル定義済み)
-- 2026年8月25日 — [Environment / Workloadモデルの開発](environment-workload-model.md) — 実行環境の識別と、
-  containerとサービスの対応付けを脆弱性の記録へ結び付けるモデルの実装(実装済み)
-- 2026年8月22日 — [イメージ識別モデルの開発](image-identity-model.md) — イメージ名を中心とした処理から、実際の内容を
-  特定できる不変なimage digestでイメージ実体を識別する処理への移行(実装済み)
+## 2026年11月
+
+<div class="kl-log__item" markdown>
+
+2026年11月4日
+{ .kl-log__date }
+
+[Go・親 pom・BOM などで修正版に上げられないパッケージの通知と更新の開発](version-source-fix-hints.md)
+{ .kl-log__title }
+
+必要な Go の宣言元と親 pom・BOM・Spring Boot による版の決定元、撤回された修正版の選び直しと別メジャーの修正版の表示
+
+**状態** 実装済み、手元の Docker で Go の PR 作成と更新制限の記録、Maven の BOM の記録を確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年11月3日
+{ .kl-log__date }
+
+[依存元の指定で修正版に上げられないパッケージの通知と更新の開発](dependent-fix-hints.md)
+{ .kl-log__title }
+
+依存元の公開版が修正版を使えるかの表示と、宣言されたパッケージの依存元ごとの再解決
+
+**状態** 実装済み、本番運用環境で通知、検証用のリポジトリで npm の PR と Gradle の依存経路の表示を確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年11月2日
+{ .kl-log__date }
+
+[Gradle の修正 PR の開発](gradle-remediation.md)
+{ .kl-log__title }
+
+稼働イメージの jar の所見から版の宣言を書き換え、公式の Gradle で gradle.lockfile を更新し、Trivy で更新前後を比べる仕組み
+
+**状態** 実装済み、検証用のリポジトリで PR の作成を確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年11月1日
+{ .kl-log__date }
+
+[Maven の修正 PR の開発](maven-remediation.md)
+{ .kl-log__title }
+
+稼働イメージの jar の所見から、Maven を実行せずに pom.xml を書き換え、Trivy で更新前後を比べる仕組み
+
+**状態** 実装済み、検証用のリポジトリで PR の作成を確認
+{ .kl-log__status }
+
+</div>
+
+## 2026年10月
+
+<div class="kl-log__item" markdown>
+
+2026年10月29日
+{ .kl-log__date }
+
+[Go modules の修正 PR の開発](go-modules-remediation.md)
+{ .kl-log__title }
+
+稼働イメージの Go バイナリの所見から、対応付けた go.mod・go.sum を更新する仕組み
+
+**状態** 実装済み、検証用のリポジトリで PR の作成を確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年10月29日
+{ .kl-log__date }
+
+[新しい系列での解消確認の開発](newer-series-check.md)
+{ .kl-log__title }
+
+同じ系列で直らない固定タグを新しい系列の最大2つの版で比較し、PR を作らず修正計画とカードで知らせる仕組み
+
+**状態** 実装済み、手元での検証まで
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年10月27日
+{ .kl-log__date }
+
+[docker run での修正 PR の開発](docker-run-remediation.md)
+{ .kl-log__title }
+
+コンテナ名で修正先を対応付け、Dockerfile のベースイメージと lockfile を更新する仕組み
+
+**状態** 実装済み、手元での検証まで
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年10月25日
+{ .kl-log__date }
+
+[言語ランタイム本体の修正計画の開発](language-runtime-remediation.md)
+{ .kl-log__title }
+
+Node.js・Python 本体の検出結果を Dockerfile のベース更新と再ビルドの案内につなぐ仕組み
+
+**状態** 実装済み、本番運用環境で再ビルドの案内、検証用のホストで PR の作成を確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年10月25日
+{ .kl-log__date }
+
+[言語ランタイム本体の脆弱性通知の開発](language-runtime-advisories.md)
+{ .kl-log__title }
+
+Trivy の検出範囲外の Node.js・Python 本体を NODE_VERSION / PYTHON_VERSION と各言語の開発元のセキュリティ情報で照合する仕組み
+
+**状態** 実装済み、Node.js は本番運用環境、Python は検証用のホストで通知を確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年10月20日
+{ .kl-log__date }
+
+[Kubernetes での修正 PR の開発](kubernetes-remediation.md)
+{ .kl-log__title }
+
+修正先を利用者が明示し、言語パッケージの更新をクラスタ内の使い捨ての Pod で動かす仕組み
+
+**状態** 実装済み、検証用のホストで PR の作成から GitOps による反映まで確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年10月15日
+{ .kl-log__date }
+
+[依存元からの再解決の開発](dependent-reresolution.md)
+{ .kl-log__title }
+
+依存元を指定範囲内で上げて脆弱性を直し、依存関係の位置ごとに脆弱性の増加を確かめる仕組み
+
+**状態** 実装済み、本番運用環境で PR の作成を確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年10月8日
+{ .kl-log__date }
+
+[修正計画と修正PRの開発](remediation-pull-requests.md)
+{ .kl-log__title }
+
+稼働中のコンテナの所見から修正候補を選び、比較・通知とGitHubの修正PRにつなぐ設計
+
+**状態** 実装中
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年10月3日
+{ .kl-log__date }
+
+[短命なコンテナのスキャンの開発](short-lived-containers.md)
+{ .kl-log__title }
+
+短命なコンテナの実行を記録し、名前ごとに最後に動いた版を14日間スキャンと通知の対象に残す設計
+
+**状態** 設計、実装未着手
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年10月2日
+{ .kl-log__date }
+
+[KubernetesでのSensorの成立性の検証](kubernetes-runtime-sensor.md)
+{ .kl-log__title }
+
+Docker向けSensorの権限・隔離の成立性と、cgroup名前空間・AppArmorで必要な変更を確かめた検証
+
+**状態** 設計・成立性の検証まで、実装未着手
+{ .kl-log__status }
+
+</div>
+
+## 2026年9月
+
+<div class="kl-log__item" markdown>
+
+2026年9月25日
+{ .kl-log__date }
+
+[実行時証拠による優先順位付けの開発](runtime-prioritization-development.md)
+{ .kl-log__title }
+
+Sensor と本体の表示の実装、常時運用で確認した負荷・通知と継続観察の記録
+
+**状態** 実装・運用検証済み
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年9月22日
+{ .kl-log__date }
+
+[実行時証拠の観測環境の検証](runtime-environment-validation.md)
+{ .kl-log__title }
+
+採用した実行時証拠を実装する前に、観測に必要な権限、常駐時の負荷、実運用環境での開始条件と利用経路を確かめた検証
+
+**状態** 計測完了
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年9月19日
+{ .kl-log__date }
+
+[実行時証拠の網羅性の検証](runtime-coverage-validation.md)
+{ .kl-log__title }
+
+ワークロードが実際に使ったパッケージ全体のうち各方式がどれだけ確認できるかを、独立した正解データで評価した検証
+
+**状態** 計測済み
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年9月13日
+{ .kl-log__date }
+
+[eBPFによる実行時証拠の観測調査](runtime-event-evidence.md)
+{ .kl-log__title }
+
+サンプリングでは確認できなかった短命プロセスと言語パッケージを、eBPF による実行と読み込みのイベント観測で確認できるかの調査
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年9月9日
+{ .kl-log__date }
+
+[実行時証拠による優先順位付けの成立性調査](runtime-prioritization.md)
+{ .kl-log__title }
+
+プロセス・待ち受けポート・権限を脆弱性の検出結果に紐づけ、優先順位付けの改善に使えるかを検証した調査
+
+**状態** 検証完了
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年9月6日
+{ .kl-log__date }
+
+[Kubernetes対応の開発](kubernetes-support.md)
+{ .kl-log__title }
+
+K3s + containerdを出発点に、KubernetesのWorkloadをスキャン・優先順位付け・差分通知へつなぐ実装
+
+**状態** 実装済み・K3s実環境でエンドツーエンド検証済み
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年9月5日
+{ .kl-log__date }
+
+[Kubernetes向け脆弱性スキャンツールの調査](kubernetes-scanning-landscape.md)
+{ .kl-log__title }
+
+Kubernetes対応に着手する前に、既存ツールの機能と追加実装が必要な点を整理した記録
+
+**状態** 調査ノート
+{ .kl-log__status }
+
+</div>
+
+## 2026年8月
+
+<div class="kl-log__item" markdown>
+
+2026年8月31日
+{ .kl-log__date }
+
+[修正関係モデルの設計](remediation-relations-model.md)
+{ .kl-log__title }
+
+検出した脆弱性を「どこを直せば消えるか」の提案につなげるための関係モデル
+
+**状態** モデル定義済み
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年8月25日
+{ .kl-log__date }
+
+[Environment / Workloadモデルの開発](environment-workload-model.md)
+{ .kl-log__title }
+
+実行環境の識別と、containerとサービスの対応付けを脆弱性の記録へ結び付けるモデルの実装
+
+**状態** 実装済み
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+2026年8月22日
+{ .kl-log__date }
+
+[イメージ識別モデルの開発](image-identity-model.md)
+{ .kl-log__title }
+
+イメージ名を中心とした処理から、実際の内容を特定できる不変なimage digestでイメージ実体を識別する処理への移行
+
+**状態** 実装済み
+{ .kl-log__status }
+
+</div>

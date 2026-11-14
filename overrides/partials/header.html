@@ -1,0 +1,53 @@
+{#- Site header: wordmark, home and section links, search, colour scheme toggle,
+    language links and the repository link in a single row. The section links
+    replace Material's tab bar, which main.html leaves empty. -#}
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="{{ lang.t('header') }}">
+    <label class="md-header__button md-icon kl-header__menu" for="__drawer">
+      {% set icon = config.theme.icon.menu or "material/menu" %}
+      {% include ".icons/" ~ icon ~ ".svg" %}
+    </label>
+    <a href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}" class="kl-wordmark">KestreLynx</a>
+    <ul class="kl-topnav">
+      {% for nav_item in nav.items %}
+        {#- A section links to its first page; a top-level page links to itself. -#}
+        {% set target = (nav_item.children | first) if nav_item.children else nav_item %}
+        <li>
+          <a href="{{ target.url | url }}" class="kl-topnav__link{% if nav_item.active %} kl-topnav__link--active{% endif %}"{% if nav_item.active %} aria-current="true"{% endif %}>
+            {{ nav_item.title }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="kl-header__tools">
+      {% if "material/search" in config.plugins %}
+        {% set search = config.plugins["material/search"] | attr("config") %}
+        {% if search.enabled %}
+          <label class="md-header__button md-icon" for="__search">
+            {% set icon = config.theme.icon.search or "material/magnify" %}
+            {% include ".icons/" ~ icon ~ ".svg" %}
+          </label>
+          {% include "partials/search.html" %}
+        {% endif %}
+      {% endif %}
+      {% if config.theme.palette %}
+        {% if not config.theme.palette is mapping %}
+          {% include "partials/palette.html" %}
+        {% endif %}
+      {% endif %}
+      {% if not config.theme.palette is mapping %}
+        {% include "partials/javascripts/palette.html" %}
+      {% endif %}
+      {% if config.extra.alternate %}
+        <div class="kl-lang">
+          {% for alt in config.extra.alternate %}
+            <a href="{{ alt.link | url }}" hreflang="{{ alt.lang }}" class="md-select__link kl-lang__link{% if alt.lang == config.theme.language %} kl-lang__link--current{% endif %}"{% if alt.lang == config.theme.language %} aria-current="true"{% endif %}>{{ alt.name }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if config.repo_url %}
+        <a href="{{ config.repo_url }}" class="kl-header__link">GitHub</a>
+      {% endif %}
+    </div>
+  </nav>
+</header>

@@ -87,6 +87,8 @@ KestreLynxの更新PR作成は設定で有効にした場合だけで、既定�
 - ファイルを書き換えるには稼働中のコンテナとGitHubリポジトリのファイルの対応付けを設定する必要があり、対応形式と条件は[リファレンス](remediation-reference.md)に記載
 - 言語パッケージの取得元は公開npm・公開PyPI・公開Go module proxyと`sum.golang.org`・Maven Centralのみ
 - 更新前の比較では再ビルドしたアプリケーション全体のイメージや動作は確認せず、詳細は[更新先の確認範囲](remediation-logic.md#verification-scope)に記載
+- Kubernetesはlinux/amd64の単一ノードK3s＋containerdのみ検証済みで、複数ノード・arm64・マネージドKubernetesは未検証とし、詳細は[検証の記録](../development/kubernetes-support.md)に記載
+- Docker socketはコンテナ情報やイメージの読み取りに加え、修正PR有効時は言語パッケージ更新用コンテナの作成・起動・削除にも使い、`:ro`ではDocker APIの操作が制限されず`:rw`への変更も不要なため、接続先のイメージを信頼できることが前提
 
 ## 他のツールの補足 {#tool-notes}
 

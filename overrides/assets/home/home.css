@@ -1,364 +1,531 @@
-/* Site home (overrides/home.html). Colours come from Material's theme
-   variables so the page follows the light and dark palettes. */
+/* Site home (overrides/home.html). Colours and the type scale come from the
+   site stylesheet, so the page follows the light and dark colour schemes. */
 
-.kl-home {
-  max-width: 48rem;
-  margin: 0 auto;
+.md-typeset .kl-home > :first-child {
+  margin-top: 0;
 }
 
-.kl-home h1 {
-  margin: 0 0 0.6em;
-  color: var(--md-default-fg-color);
-  font-size: 2em;
-  font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-}
-
-.kl-home h2 {
-  margin: 0 0 0.5em;
-  color: var(--md-default-fg-color);
-  font-size: 1.625em;
-  font-weight: 500;
-}
-
-.kl-home h3 {
-  margin: 0 0 0.75em;
-  color: var(--md-default-fg-color--light);
-  font-size: 0.8125em;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.kl-section {
-  padding: 2.5em 0;
-  border-top: 1px solid var(--md-default-fg-color--lightest);
-}
-
-.kl-section > :last-child {
-  margin-bottom: 0;
-}
-
-/* Hero: description and a sample notification side by side. */
+/* ---------------------------------------------------------------- hero */
 
 .kl-hero {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2.5em;
-  align-items: flex-start;
-  padding: 1.5em 0 2em;
+  padding: 40px 0 72px;
 }
 
-.kl-hero__text {
-  flex: 1 1 18em;
-  min-width: 0;
-  padding-top: 0.5em;
-}
-
-.kl-hero__text p {
-  color: var(--md-default-fg-color--light);
-}
-
-.kl-home .kl-eyebrow {
-  margin: 0 0 0.9em;
-  color: var(--md-accent-fg-color);
-  font-size: 0.75em;
+.md-typeset .kl-hero .kl-eyebrow {
+  margin: 0 0 20px;
+  color: var(--kl-accent);
+  font-family: var(--kl-mono);
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.kl-home .kl-actions {
+.md-typeset .kl-hero h1 {
+  max-width: 900px;
+  margin: 0;
+  font-size: clamp(34px, 4.4vw, 56px);
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+
+:lang(ja) .md-typeset .kl-hero h1 {
+  font-size: clamp(30px, 4vw, 50px);
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+/* The second line of the title carries the accent colour. */
+.kl-hero h1 span {
+  display: block;
+  color: var(--kl-accent);
+}
+
+.md-typeset .kl-hero .kl-lede {
+  max-width: 720px;
+  margin: 28px 0 0;
+  color: var(--kl-body);
+  font-size: 20px;
+  line-height: 1.55;
+}
+
+:lang(ja) .md-typeset .kl-hero .kl-lede {
+  font-size: 18px;
+  line-height: 1.9;
+}
+
+.md-typeset .kl-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75em;
-  margin: 1.75em 0 0;
+  gap: 12px;
+  margin: 36px 0 0;
 }
 
-.kl-home .kl-actions .md-button {
-  margin: 0;
+.md-typeset .kl-license {
+  margin: 20px 0 0;
+  color: var(--kl-muted);
+  font-size: 13px;
 }
 
-.kl-home .kl-license {
-  margin: 0.9em 0 0;
-  font-size: 0.8125em;
+/* ---------------------------------------------------------------- sections */
+
+.kl-section {
+  padding: 72px 0;
+  border-top: 1px solid var(--kl-line);
 }
 
-/* Sample Slack message. */
+.kl-section:last-child {
+  padding-bottom: 16px;
+}
 
-.kl-notification {
-  flex: 1 1 26em;
+.md-typeset .kl-section > .kl-eyebrow {
+  margin: 0 0 12px;
+}
+
+.md-typeset .kl-section h2 {
+  max-width: 760px;
+  margin: 0 0 40px;
+  padding: 0;
+  border: 0;
+  font-size: clamp(26px, 3.4vw, 32px);
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+:lang(ja) .md-typeset .kl-section h2 {
+  font-size: clamp(24px, 3.2vw, 30px);
+  letter-spacing: 0;
+  line-height: 1.4;
+  word-break: auto-phrase;
+}
+
+/* A heading that only labels the section. */
+.md-typeset .kl-section h2.kl-eyebrow {
+  max-width: none;
+  margin: 0 0 28px;
+  color: var(--kl-muted);
+  font-family: var(--kl-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+:lang(ja) .md-typeset .kl-section h2.kl-eyebrow {
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
+.md-typeset .kl-section h2:has(+ .kl-section__lede) {
+  margin-bottom: 16px;
+}
+
+.md-typeset .kl-section__lede {
+  max-width: 720px;
+  margin: 0 0 40px;
+  color: var(--kl-secondary);
+}
+
+.md-typeset .kl-section h3 {
+  margin: 0 0 8px;
+  font-size: 19px;
+  line-height: 1.4;
+}
+
+:lang(ja) .md-typeset .kl-section h3 {
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- sample notification */
+
+.kl-demo {
+  padding-top: 56px;
+}
+
+.kl-demo__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+  align-items: flex-start;
+}
+
+.md-typeset .kl-notification {
+  display: block;
+  flex: 3 1 480px;
   min-width: 0;
+  max-width: none;
   margin: 0;
+  text-align: left;
 }
 
 .kl-slack {
   overflow: hidden;
-  border: 1px solid var(--md-default-fg-color--lightest);
-  border-radius: 0.6em;
-  background-color: var(--md-default-bg-color);
-  box-shadow: var(--md-shadow-z2);
-  text-align: left;
+  border: 1px solid var(--kl-line);
+  border-radius: 12px;
+  background: var(--kl-surface);
+  color: var(--kl-ink);
 }
 
 .kl-slack__channel {
-  padding: 0.6em 1em;
-  border-bottom: 1px solid var(--md-default-fg-color--lightest);
-  background-color: var(--md-code-bg-color);
-  color: var(--md-default-fg-color);
-  font-size: 0.8125em;
-  font-weight: 700;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--kl-line);
+  font-family: var(--kl-mono);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .kl-slack__message {
   display: flex;
-  gap: 0.75em;
-  padding: 1em 1.1em 1.1em;
+  gap: 12px;
+  padding: 18px 20px 20px;
 }
 
 .kl-slack__avatar {
   display: flex;
-  flex: 0 0 2.25em;
+  flex: 0 0 36px;
   align-items: center;
   justify-content: center;
-  width: 2.25em;
-  height: 2.25em;
-  border-radius: 0.375em;
-  background-color: var(--md-primary-fg-color);
-  color: var(--md-primary-bg-color);
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: var(--kl-ink);
+  color: var(--kl-ground);
 }
 
 .kl-slack__avatar svg {
-  width: 1.25em;
-  height: 1.25em;
+  width: 20px;
+  height: 20px;
 }
 
 .kl-slack__body {
-  flex: 1 1 auto;
   min-width: 0;
-  color: var(--md-typeset-color);
-  font-size: 0.84em;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
-.kl-home .kl-slack__body p {
+.md-typeset .kl-slack__body p {
   margin: 0;
 }
 
-.kl-home .kl-slack__body p + p {
-  margin-top: 0.5em;
+.md-typeset .kl-slack__body hr {
+  margin: 10px 0;
+  border-bottom-color: var(--kl-line);
 }
 
-.kl-home .kl-slack__body hr {
-  margin: 0.6em 0;
-  border-bottom-color: var(--md-default-fg-color--lightest);
-}
-
-.kl-home .kl-slack__meta {
-  margin-bottom: 0.25em;
+.md-typeset .kl-slack__body .kl-slack__meta {
+  margin-bottom: 10px;
 }
 
 .kl-slack__badge {
-  margin-left: 0.3em;
-  padding: 0.05em 0.3em;
-  border-radius: 0.2em;
-  background-color: var(--md-default-fg-color--lightest);
-  font-size: 0.7em;
-  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--kl-code-bg);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .kl-slack__time {
-  margin-left: 0.3em;
-  color: var(--md-default-fg-color--light);
-  font-size: 0.85em;
+  color: var(--kl-muted);
+  font-size: 12px;
 }
 
 .kl-slack__link {
-  color: var(--md-typeset-a-color);
+  color: var(--kl-accent);
 }
 
-.kl-notification figcaption {
+.md-typeset .kl-notification figcaption {
   max-width: none;
-  margin: 0.75em 0 0;
-  color: var(--md-default-fg-color--light);
-  font-size: 0.8125em;
+  margin: 12px 0 0;
+  color: var(--kl-muted);
+  font-size: 13px;
   font-style: normal;
   text-align: left;
 }
 
-/* Where to read the sample notification. */
+.kl-callouts {
+  flex: 2 1 280px;
+  min-width: 0;
+}
 
-.kl-home .kl-callouts > ul {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15em, 1fr));
-  gap: 1.25em;
-  margin: 0 0 2.5em;
+.md-typeset .kl-callouts > ul {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.kl-home .kl-callouts > ul > li {
+.md-typeset .kl-callouts > ul > li {
   margin: 0;
-  list-style: none;
-  padding-top: 0.6em;
-  border-top: 3px solid var(--md-primary-fg-color);
-  color: var(--md-default-fg-color--light);
-  font-size: 0.875em;
+  padding-top: 14px;
+  border-top: 2px solid var(--kl-ink);
+  color: var(--kl-secondary);
+  font-size: 15px;
 }
 
 .kl-callouts strong {
   display: block;
-  color: var(--md-default-fg-color);
+  margin-bottom: 6px;
+  color: var(--kl-ink);
+  font-size: 16px;
+}
+
+/* ---------------------------------------------------------------- stages and supported files */
+
+.kl-stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 32px;
+  counter-reset: kl-stage;
+}
+
+.kl-stages > div::before {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--kl-accent);
+  font-family: var(--kl-mono);
+  font-size: 13px;
+  content: counter(kl-stage, decimal-leading-zero);
+  counter-increment: kl-stage;
+}
+
+.md-typeset .kl-stages p,
+.md-typeset .kl-cards p,
+.md-typeset .kl-example p {
+  margin: 0;
+  color: var(--kl-secondary);
+  font-size: 15px;
+}
+
+/* Supported files: plain rows divided by hairlines, like the tables. */
+.md-typeset .kl-rows {
+  margin: 48px 0 0;
+  border-bottom: 1px solid var(--kl-line);
+  font-size: 15px;
+}
+
+.md-typeset .kl-rows dt {
+  padding-top: 18px;
+  border-top: 1px solid var(--kl-line);
+  color: var(--kl-ink);
   font-weight: 700;
 }
 
-/* Features. */
-
-.kl-features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15em, 1fr));
-  gap: 2em;
+.md-typeset .kl-rows dd {
+  margin: 4px 0 0;
+  padding-bottom: 18px;
+  color: var(--kl-secondary);
 }
 
-.kl-home .kl-features > div > :first-child .twemoji {
-  --md-icon-size: 1.6em;
-  color: var(--md-accent-fg-color);
+@media screen and (min-width: 45em) {
+  .md-typeset .kl-rows {
+    display: grid;
+    grid-template-columns: 224px minmax(0, 1fr);
+  }
+
+  .md-typeset .kl-rows dt,
+  .md-typeset .kl-rows dd {
+    margin: 0;
+    padding: 18px 0;
+    border-top: 1px solid var(--kl-line);
+  }
+
+  .md-typeset .kl-rows dt {
+    padding-right: 24px;
+  }
 }
 
-.kl-home .kl-features h2 {
-  margin: 0.4em 0 0.5em;
-  font-size: 1.125em;
+/* ---------------------------------------------------------------- worked example */
+
+.kl-example {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+  align-items: flex-start;
 }
 
-.kl-home .kl-features p {
+.kl-example > figure {
+  flex: 3 1 440px;
+}
+
+.kl-example > div {
+  flex: 2 1 280px;
+  min-width: 0;
+}
+
+.md-typeset .kl-shot {
+  display: block;
+  max-width: none;
   margin: 0;
-  color: var(--md-default-fg-color--light);
-  font-size: 0.9em;
+  text-align: left;
 }
 
-/* Scope and access. */
-
-.kl-home .kl-scope {
-  display: grid;
-  grid-template-columns: minmax(7.5em, 11em) minmax(0, 1fr);
-  gap: 0.9em 1.5em;
-  margin: 1.5em 0 0;
+.md-typeset .kl-shot img {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--kl-line);
+  border-radius: 12px;
+  background: #ffffff;
 }
 
-.kl-home .kl-scope dt {
-  margin: 0;
+/* Show the top of a tall screenshot. */
+.md-typeset .kl-shot--crop img {
+  height: 430px;
+  object-fit: cover;
+  object-position: top;
+}
+
+.md-typeset .kl-shot--padded img {
+  padding: 12px 16px;
+}
+
+.md-typeset .kl-example + .kl-shot {
+  margin-top: 48px;
+}
+
+.md-typeset .kl-shot figcaption {
+  max-width: 720px;
+  margin: 16px 0 0;
+  color: var(--kl-secondary);
+  font-size: 15px;
+  font-style: normal;
+  text-align: left;
+}
+
+.kl-shot figcaption strong {
+  margin-right: 0.4em;
+  color: var(--kl-ink);
+}
+
+.md-typeset .kl-example .kl-label {
+  margin: 0 0 10px;
+  color: var(--kl-accent);
+  font-size: 13px;
   font-weight: 500;
 }
 
-.kl-home .kl-scope dd {
+.md-typeset .kl-example p:last-child {
+  margin-top: 20px;
+}
+
+.kl-caveat {
+  max-width: 720px;
+  margin-top: 40px;
+  padding: 2px 0 2px 20px;
+  border-left: 2px solid var(--kl-ink);
+  font-size: 15px;
+}
+
+.md-typeset .kl-caveat p {
   margin: 0;
-  color: var(--md-default-fg-color--light);
 }
 
-/* Setup steps. */
-
-.kl-home .kl-steps > ol {
-  margin: 1.5em 0 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: kl-step;
+.md-typeset .kl-caveat p + p {
+  margin-top: 10px;
+  color: var(--kl-secondary);
 }
 
-.kl-home .kl-steps > ol > li {
-  position: relative;
-  margin: 0 0 1.5em;
-  list-style: none;
-  padding-left: 2.25em;
-  counter-increment: kl-step;
+/* ---------------------------------------------------------------- scanning and notifications */
+
+.kl-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 40px;
 }
 
-.kl-steps > ol > li::before {
-  position: absolute;
-  top: 0.05em;
-  left: 0;
+.kl-cards svg {
+  display: block;
+  width: 32px;
+  height: 32px;
+  color: var(--kl-accent);
+}
+
+.md-typeset .kl-cards h3 {
+  margin: 16px 0 8px;
+  font-size: 20px;
+}
+
+/* ---------------------------------------------------------------- setup */
+
+.md-typeset .kl-setup pre {
+  margin: 0;
+}
+
+.md-typeset .kl-setup pre > code {
+  padding: 24px 28px;
+  border-radius: 12px;
+}
+
+.md-typeset .kl-setup .highlight + p {
+  max-width: 720px;
+  margin: 20px 0 0;
+  color: var(--kl-secondary);
+  font-size: 15px;
+}
+
+.md-typeset .kl-more-links {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5em;
-  height: 1.5em;
-  border-radius: 50%;
-  background-color: var(--md-primary-fg-color);
-  color: var(--md-primary-bg-color);
-  font-size: 0.8125em;
-  font-weight: 700;
-  content: counter(kl-step);
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 20px 0 0;
+  font-size: 15px;
 }
 
-.kl-home .kl-steps > ol > li > p {
-  margin: 0 0 0.5em;
-}
-
-.kl-home .kl-steps .kl-step-note {
-  color: var(--md-default-fg-color--light);
-  font-size: 0.875em;
-}
-
-.kl-home .kl-steps > ol > li > .highlight {
-  margin: 0.5em 0 0;
-}
-
-.kl-home .kl-note {
-  margin: 0;
-  color: var(--md-default-fg-color--light);
-  font-size: 0.875em;
-}
-
-/* Documentation, development logs and articles. */
+/* ---------------------------------------------------------------- links */
 
 .kl-links {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15em, 1fr));
-  gap: 1.25em;
-  margin: 1.5em 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 32px;
 }
 
-.kl-links > div {
-  padding: 1.1em 1.25em;
-  border: 1px solid var(--md-default-fg-color--lightest);
-  border-radius: 0.3em;
+.md-typeset .kl-links h3 {
+  margin: 0 0 12px;
+  font-size: 17px;
 }
 
-.kl-home .kl-links ul {
+.md-typeset .kl-links ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin: 0;
   padding: 0;
+  font-size: 15px;
+  line-height: 1.6;
   list-style: none;
 }
 
-.kl-home .kl-links ul li {
-  margin: 0 0 0.6em;
-  list-style: none;
-  line-height: 1.45;
+.md-typeset .kl-links ul li {
+  margin: 0;
 }
 
-.kl-home .kl-links ul li:last-child {
-  margin-bottom: 0;
+.md-typeset .kl-links .kl-more {
+  color: var(--kl-muted);
 }
 
-.kl-home .kl-links .kl-more {
-  color: var(--md-default-fg-color--light);
+.md-typeset .kl-feedback {
+  margin: 40px 0 0;
+  color: var(--kl-muted);
+  font-size: 14px;
 }
 
-.kl-home .kl-issues {
-  margin: 1.5em 0 0;
-}
+/* ---------------------------------------------------------------- narrow screens */
 
-@media screen and (max-width: 44.9375em) {
-  .kl-home h1 {
-    font-size: 1.6em;
+@media screen and (max-width: 59.9375em) {
+  .kl-hero {
+    padding: 16px 0 48px;
   }
 
-  .kl-home .kl-scope {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.2em;
+  .kl-section,
+  .kl-demo {
+    padding: 48px 0;
   }
 
-  .kl-home .kl-scope dd {
-    margin-bottom: 0.8em;
+  .kl-section:last-child {
+    padding-bottom: 16px;
   }
 }

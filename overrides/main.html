@@ -1,5 +1,104 @@
 {% extends "base.html" %}
 
+{#- Fonts for the site stylesheet. Japanese pages add a Japanese face. -#}
+{% block fonts %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600{% if config.theme.language == 'ja' %}&family=Noto+Sans+JP:wght@400;500;700{% endif %}&display=swap">
+{% endblock %}
+
+{% block styles %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ 'assets/site/site.css' | url }}">
+{% endblock %}
+
+{#- The section links live in the header (partials/header.html). -#}
+{% block tabs %}{% endblock %}
+
+{#- Development logs and articles are read as a list and its entries, so the
+    page list in the left sidebar is hidden on wide screens. The sidebar stays
+    in the markup because it is the navigation drawer on narrow screens. -#}
+{% block site_nav %}
+  {% set section = page.file.src_uri.split("/")[0] if page and page.file else "" %}
+  {% if nav %}
+    {% if page.meta and page.meta.hide %}
+      {% set hidden = "hidden" if "navigation" in page.meta.hide %}
+    {% endif %}
+    {% if section in ["development", "articles"] %}
+      {% set hidden = "hidden" %}
+    {% endif %}
+    <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" {{ hidden }}>
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          {% include "partials/nav.html" %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  {% if "toc.integrate" not in features %}
+    {% set hidden = "" %}
+    {% if page.meta and page.meta.hide %}
+      {% set hidden = "hidden" if "toc" in page.meta.hide %}
+    {% endif %}
+    <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" {{ hidden }}>
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          {% include "partials/toc.html" %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  {% set section = page.file.src_uri.split("/")[0] if page and page.file else "" %}
+  {% if section in ["development", "articles"] and page.is_index %}
+    <div class="kl-log kl-log--{{ section }}">
+      {% include "partials/content.html" %}
+    </div>
+  {% elif section in ["development", "articles"] %}
+    {% set index = page.parent.children | first %}
+    {#- Previous and next entries of the same list; the list page itself is
+        reached through the link above the title. -#}
+    {% set prev = page.previous_page %}
+    {% if prev and (prev.parent != page.parent or prev.is_index) %}
+      {% set prev = none %}
+    {% endif %}
+    {% set next = page.next_page %}
+    {% if next and (next.parent != page.parent or next.is_index) %}
+      {% set next = none %}
+    {% endif %}
+    <a class="kl-back" href="{{ index.url | url }}">← {{ page.parent.title }}</a>
+    <div class="kl-entry kl-entry--{{ section }}">
+      {% include "partials/content.html" %}
+      {% if prev or next %}
+        <nav class="kl-pager" aria-label="{{ lang.t('footer') }}">
+          {% if prev %}
+            {% set direction = lang.t("footer.previous") %}
+            <a href="{{ prev.url | url }}" class="kl-pager__link kl-pager__link--prev" aria-label="{{ direction }}: {{ prev.title | e }}">
+              <span class="kl-pager__direction">← {{ direction }}</span>
+              <span class="kl-pager__title">{{ prev.title }}</span>
+            </a>
+          {% endif %}
+          {% if next %}
+            {% set direction = lang.t("footer.next") %}
+            <a href="{{ next.url | url }}" class="kl-pager__link kl-pager__link--next" aria-label="{{ direction }}: {{ next.title | e }}">
+              <span class="kl-pager__direction">{{ direction }} →</span>
+              <span class="kl-pager__title">{{ next.title }}</span>
+            </a>
+          {% endif %}
+        </nav>
+      {% endif %}
+    </div>
+  {% else %}
+    {#- The name of the section the page belongs to sits above its title. -#}
+    {% if page and page.parent %}
+      <p class="kl-crumb">{{ page.parent.title }}</p>
+    {% endif %}
+    {% include "partials/content.html" %}
+  {% endif %}
+{% endblock %}
+
 {% block scripts %}
   {{ super() }}
   <!-- Cloudflare Web Analytics -->

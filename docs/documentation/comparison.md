@@ -87,6 +87,8 @@ KestreLynx creates update pull requests only when enabled in settings; this is d
 - Editing files requires a mapping between a running container and files in a GitHub repository, with supported formats and conditions described in the [reference](remediation-reference.md)
 - Language package sources are limited to public npm, public PyPI, the public Go module proxy with `sum.golang.org`, and Maven Central
 - Comparisons before an update do not check the complete rebuilt application image or application behavior, as explained in the [verification scope](remediation-logic.md#verification-scope)
+- Kubernetes has only been verified on single-node K3s with containerd on linux/amd64, while multi-node clusters, arm64, and managed Kubernetes remain unverified, as documented in the [verification record](../development/kubernetes-support.md)
+- The Docker socket is used to read container information and images and, when remediation PRs are enabled, to create, start, and remove containers for language-package updates; mounting it with `:ro` does not restrict Docker API operations or require a change to `:rw`, so images given access to the socket must be trusted
 
 ## Notes on other tools {#tool-notes}
 

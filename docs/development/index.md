@@ -5,34 +5,367 @@ This section covers the problems being addressed, approaches tried, lessons lear
 Development logs record how features were explored and implemented.
 For instructions on currently available features, see [Documentation](../documentation/index.md).
 
-- November 4, 2026 — [Development of notifications and updates for packages blocked from reaching a fix by Go, parent poms, BOMs, and other constraints](version-source-fix-hints.md) — identifying required Go declarations and version sources in parent poms, BOMs, and Spring Boot, selecting alternatives to retracted fixes, and showing fixes in another major version (implemented; Go PR creation and update-constraint records, and Maven BOM records verified with local Docker)
-- November 3, 2026 — [Development of notifications and updates for packages blocked from reaching a fix by dependent requirements](dependent-fix-hints.md) — showing whether published dependent releases can use fixed versions and re-resolving declared packages through dependents (implemented; notifications verified in the production environment, and npm PR creation and Gradle dependency-path displays verified in validation repositories)
-- November 2, 2026 — [Gradle remediation pull request development](gradle-remediation.md) — rewriting version declarations from jar findings in running images, updating gradle.lockfile with official Gradle, and comparing the result before and after the update with Trivy (implemented; PR creation verified in a validation repository)
-- November 1, 2026 — [Maven remediation pull request development](maven-remediation.md) — rewriting pom.xml files without running Maven from jar findings in running images, and comparing the result before and after the update with Trivy (implemented; PR creation verified in a validation repository)
-- October 29, 2026 — [Go modules remediation pull request development](go-modules-remediation.md) — updating mapped go.mod and go.sum files from findings in Go binaries in running images (implemented; PR creation verified in a validation repository)
-- October 29, 2026 — [Newer series check development](newer-series-check.md) — comparing up to two newer-series versions and reporting resolution results in remediation plans and cards, with capacity reserved for PR processing (implemented; local verification only)
-- October 27, 2026 — [docker run remediation pull request development](docker-run-remediation.md) — container name mappings for Dockerfile and lockfile updates, trust in configuration, and verification with two image stores (implemented; local verification only)
-- October 25, 2026 — [Development of remediation plans for language runtimes](language-runtime-remediation.md) — connecting Node.js and Python runtime findings to Dockerfile base image updates and rebuild guidance (implemented; rebuild guidance verified in the production environment and PR creation on a validation host)
-- October 25, 2026 — [Development of language runtime vulnerability notifications](language-runtime-advisories.md) — matching Node.js and Python runtimes outside Trivy's detection coverage against security information from their developers using NODE_VERSION / PYTHON_VERSION (implemented; notifications verified for Node.js in the production environment and Python on a validation host)
-- October 20, 2026 — [Kubernetes remediation pull request development](kubernetes-remediation.md) — explicit user mappings of change locations and language package updates in disposable Pods within the cluster (implemented; verified from PR creation through GitOps deployment on a validation host)
-- October 15, 2026 — [Development of re-resolution through dependent packages](dependent-reresolution.md) — updating dependent packages within declared ranges and checking each dependency position for vulnerability increases (implemented; PR creation verified in the production environment)
-- October 8, 2026 — [Remediation plan and pull request development](remediation-pull-requests.md) — selecting candidate fixes from running container findings and connecting comparisons and notifications to GitHub PRs (implementation in progress)
-- October 3, 2026 — [Short-lived container scanning development](short-lived-containers.md) — design for recording short-lived container executions and keeping the last version that ran under each image name in scan and notification scope for 14 days (design; implementation not started)
-- October 2, 2026 — [Kubernetes Sensor Feasibility](kubernetes-runtime-sensor.md) — validation of the Docker Sensor's permissions and isolation on Kubernetes and the changes needed for cgroup namespaces and AppArmor (design and feasibility validation only; implementation not started)
-- September 25, 2026 — [Runtime Evidence Prioritization Development](runtime-prioritization-development.md) — implementation of the Sensor and the main application's display, with overhead, notifications, and ongoing observations from continuous operation (implemented and operationally validated)
-- September 22, 2026 — [Runtime Evidence Observation Environment Validation](runtime-environment-validation.md) — the permissions, continuous-observation overhead, and production start conditions and workflows verified before implementing the adopted runtime evidence (measurement complete)
-- September 19, 2026 — [Runtime Evidence Coverage Validation](runtime-coverage-validation.md) — how much of the packages a workload really used each method confirmed, evaluated against independent ground truth (measured)
-- September 13, 2026 — [Runtime evidence observation with eBPF: feasibility research](runtime-event-evidence.md) — whether eBPF-based execution and
-  file-loading events can confirm the short-lived programs and language packages that sampling could not
-- September 9, 2026 — [Runtime evidence prioritization: feasibility research](runtime-prioritization.md) — whether processes,
-  listening ports, and privileges can be linked to vulnerability findings to improve prioritization (research complete)
-- September 6, 2026 — [Developing Kubernetes support](kubernetes-support.md) — connecting Kubernetes workloads to scanning, prioritization,
-  and diff notifications, starting with K3s + containerd (implemented; verified end to end on a real K3s cluster)
-- September 5, 2026 — [The Kubernetes vulnerability scanning landscape](kubernetes-scanning-landscape.md) — what existing tools already
-  cover and what we found missing, ahead of Kubernetes support (research note)
-- August 31, 2026 — [Designing the remediation relations model](remediation-relations-model.md) — the relation models that connect
-  a detected vulnerability to a proposal for where to fix it (models defined)
-- August 25, 2026 — [Developing the environment and workload model](environment-workload-model.md) — identifying environments and
-  mapping containers to services, connected to vulnerability records (implemented)
-- August 22, 2026 — [Developing the image identity model](image-identity-model.md) — migration from image-name-based processing to identifying
-  image content by immutable digests (implemented)
+## November 2026
+
+<div class="kl-log__item" markdown>
+
+November 4, 2026
+{ .kl-log__date }
+
+[Development of notifications and updates for packages blocked from reaching a fix by Go, parent poms, BOMs, and other constraints](version-source-fix-hints.md)
+{ .kl-log__title }
+
+Identifying required Go declarations and version sources in parent poms, BOMs, and Spring Boot, selecting alternatives to retracted fixes, and showing fixes in another major version
+
+**Status** Implemented; Go PR creation and update-constraint records, and Maven BOM records verified with local Docker
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+November 3, 2026
+{ .kl-log__date }
+
+[Development of notifications and updates for packages blocked from reaching a fix by dependent requirements](dependent-fix-hints.md)
+{ .kl-log__title }
+
+Showing whether published dependent releases can use fixed versions and re-resolving declared packages through dependents
+
+**Status** Implemented; notifications verified in the production environment, and npm PR creation and Gradle dependency-path displays verified in validation repositories
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+November 2, 2026
+{ .kl-log__date }
+
+[Gradle remediation pull request development](gradle-remediation.md)
+{ .kl-log__title }
+
+Rewriting version declarations from jar findings in running images, updating gradle.lockfile with official Gradle, and comparing the result before and after the update with Trivy
+
+**Status** Implemented; PR creation verified in a validation repository
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+November 1, 2026
+{ .kl-log__date }
+
+[Maven remediation pull request development](maven-remediation.md)
+{ .kl-log__title }
+
+Rewriting pom.xml files without running Maven from jar findings in running images, and comparing the result before and after the update with Trivy
+
+**Status** Implemented; PR creation verified in a validation repository
+{ .kl-log__status }
+
+</div>
+
+## October 2026
+
+<div class="kl-log__item" markdown>
+
+October 29, 2026
+{ .kl-log__date }
+
+[Go modules remediation pull request development](go-modules-remediation.md)
+{ .kl-log__title }
+
+Updating mapped go.mod and go.sum files from findings in Go binaries in running images
+
+**Status** Implemented; PR creation verified in a validation repository
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+October 29, 2026
+{ .kl-log__date }
+
+[Newer series check development](newer-series-check.md)
+{ .kl-log__title }
+
+Comparing up to two newer-series versions and reporting resolution results in remediation plans and cards, with capacity reserved for PR processing
+
+**Status** Implemented; local verification only
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+October 27, 2026
+{ .kl-log__date }
+
+[docker run remediation pull request development](docker-run-remediation.md)
+{ .kl-log__title }
+
+Container name mappings for Dockerfile and lockfile updates, trust in configuration, and verification with two image stores
+
+**Status** Implemented; local verification only
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+October 25, 2026
+{ .kl-log__date }
+
+[Development of remediation plans for language runtimes](language-runtime-remediation.md)
+{ .kl-log__title }
+
+Connecting Node.js and Python runtime findings to Dockerfile base image updates and rebuild guidance
+
+**Status** Implemented; rebuild guidance verified in the production environment and PR creation on a validation host
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+October 25, 2026
+{ .kl-log__date }
+
+[Development of language runtime vulnerability notifications](language-runtime-advisories.md)
+{ .kl-log__title }
+
+Matching Node.js and Python runtimes outside Trivy's detection coverage against security information from their developers using NODE_VERSION / PYTHON_VERSION
+
+**Status** Implemented; notifications verified for Node.js in the production environment and Python on a validation host
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+October 20, 2026
+{ .kl-log__date }
+
+[Kubernetes remediation pull request development](kubernetes-remediation.md)
+{ .kl-log__title }
+
+Explicit user mappings of change locations and language package updates in disposable Pods within the cluster
+
+**Status** Implemented; verified from PR creation through GitOps deployment on a validation host
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+October 15, 2026
+{ .kl-log__date }
+
+[Development of re-resolution through dependent packages](dependent-reresolution.md)
+{ .kl-log__title }
+
+Updating dependent packages within declared ranges and checking each dependency position for vulnerability increases
+
+**Status** Implemented; PR creation verified in the production environment
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+October 8, 2026
+{ .kl-log__date }
+
+[Remediation plan and pull request development](remediation-pull-requests.md)
+{ .kl-log__title }
+
+Selecting candidate fixes from running container findings and connecting comparisons and notifications to GitHub PRs
+
+**Status** Implementation in progress
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+October 3, 2026
+{ .kl-log__date }
+
+[Short-lived container scanning development](short-lived-containers.md)
+{ .kl-log__title }
+
+Design for recording short-lived container executions and keeping the last version that ran under each image name in scan and notification scope for 14 days
+
+**Status** Design; implementation not started
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+October 2, 2026
+{ .kl-log__date }
+
+[Kubernetes Sensor Feasibility](kubernetes-runtime-sensor.md)
+{ .kl-log__title }
+
+Validation of the Docker Sensor's permissions and isolation on Kubernetes and the changes needed for cgroup namespaces and AppArmor
+
+**Status** Design and feasibility validation only; implementation not started
+{ .kl-log__status }
+
+</div>
+
+## September 2026
+
+<div class="kl-log__item" markdown>
+
+September 25, 2026
+{ .kl-log__date }
+
+[Runtime Evidence Prioritization Development](runtime-prioritization-development.md)
+{ .kl-log__title }
+
+Implementation of the Sensor and the main application's display, with overhead, notifications, and ongoing observations from continuous operation
+
+**Status** Implemented and operationally validated
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+September 22, 2026
+{ .kl-log__date }
+
+[Runtime Evidence Observation Environment Validation](runtime-environment-validation.md)
+{ .kl-log__title }
+
+The permissions, continuous-observation overhead, and production start conditions and workflows verified before implementing the adopted runtime evidence
+
+**Status** Measurement complete
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+September 19, 2026
+{ .kl-log__date }
+
+[Runtime Evidence Coverage Validation](runtime-coverage-validation.md)
+{ .kl-log__title }
+
+How much of the packages a workload really used each method confirmed, evaluated against independent ground truth
+
+**Status** Measured
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+September 13, 2026
+{ .kl-log__date }
+
+[Runtime evidence observation with eBPF: feasibility research](runtime-event-evidence.md)
+{ .kl-log__title }
+
+Whether eBPF-based execution and file-loading events can confirm the short-lived programs and language packages that sampling could not
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+September 9, 2026
+{ .kl-log__date }
+
+[Runtime evidence prioritization: feasibility research](runtime-prioritization.md)
+{ .kl-log__title }
+
+Whether processes, listening ports, and privileges can be linked to vulnerability findings to improve prioritization
+
+**Status** Research complete
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+September 6, 2026
+{ .kl-log__date }
+
+[Developing Kubernetes support](kubernetes-support.md)
+{ .kl-log__title }
+
+Connecting Kubernetes workloads to scanning, prioritization, and diff notifications, starting with K3s + containerd
+
+**Status** Implemented; verified end to end on a real K3s cluster
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+September 5, 2026
+{ .kl-log__date }
+
+[The Kubernetes vulnerability scanning landscape](kubernetes-scanning-landscape.md)
+{ .kl-log__title }
+
+What existing tools already cover and what we found missing, ahead of Kubernetes support
+
+**Status** Research note
+{ .kl-log__status }
+
+</div>
+
+## August 2026
+
+<div class="kl-log__item" markdown>
+
+August 31, 2026
+{ .kl-log__date }
+
+[Designing the remediation relations model](remediation-relations-model.md)
+{ .kl-log__title }
+
+The relation models that connect a detected vulnerability to a proposal for where to fix it
+
+**Status** Models defined
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+August 25, 2026
+{ .kl-log__date }
+
+[Developing the environment and workload model](environment-workload-model.md)
+{ .kl-log__title }
+
+Identifying environments and mapping containers to services, connected to vulnerability records
+
+**Status** Implemented
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
+August 22, 2026
+{ .kl-log__date }
+
+[Developing the image identity model](image-identity-model.md)
+{ .kl-log__title }
+
+Migration from image-name-based processing to identifying image content by immutable digests
+
+**Status** Implemented
+{ .kl-log__status }
+
+</div>

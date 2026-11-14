@@ -1,4 +1,4 @@
-# Overview
+# How it works
 
 ## Feature overview {#overview}
 

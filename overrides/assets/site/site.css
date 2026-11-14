@@ -89,6 +89,8 @@
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Digits share one width so that dates and versions line up. */
+  font-variant-numeric: tabular-nums;
 }
 
 .md-grid {
@@ -1017,7 +1019,6 @@ body {
 :lang(ja) .md-typeset .kl-log__item > .kl-log__date {
   font-family: inherit;
   font-size: 13.5px;
-  font-variant-numeric: tabular-nums;
 }
 
 .md-typeset .kl-log__item > .kl-log__title {

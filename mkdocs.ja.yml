@@ -1,6 +1,6 @@
 INHERIT: mkdocs.yml
 
-site_name: KestreLynx ドキュメント
+site_name: KestreLynx
 site_url: https://kestrelynx.dev/ja/
 site_description: >-
   Docker・Compose・Kubernetesの修正計画とGitHubへの修正PR、

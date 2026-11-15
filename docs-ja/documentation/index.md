@@ -2,20 +2,20 @@
 
 このセクションでは、KestreLynxのインストール、設定、運用方法について記載します。
 
-## KestreLynxについて
+## ページの案内 {#contents}
 
-- [他のツールとの比較](comparison.md) — 更新PR・イメージへのパッチ適用の違いと、更新前後の脆弱性の確認
-- [セットアップ手順](getting-started.md) — Docker Compose、`docker run`、またはKubernetesで
-  KestreLynxを導入します。
-- [設定](configuration.md) — 実行スケジュール、通知先、Kubernetes、環境名、状態管理、
-  脆弱性の優先順位付けを設定します。
-- [KestreLynxの仕組み](how-it-works.md) — 機能の概要と、判定の仕組み・Slackの読み方・Webhookのフィールド仕様・外向きの通信の目次
-- [修正計画と修正PR（実験的）](remediation.md#contents) — 導入、結果の読み方、判定の仕組み、対応形式の案内
-- [稼働時の使用状況（実験的）](runtime-usage.md) — 任意のDocker向けSensorを追加し、優先度を変えずに使用中のパッケージに印を付けます。
+KestreLynxの比較・導入・設定・仕組み・修正計画・稼働時の使用状況を調べるページを案内します。
 
-KestreLynxは現在も開発中です。特記がない限り、このドキュメントは最新の
-コンテナイメージと`main`ブランチの内容を説明しています。
+| 知りたいこと | ページ |
+| --- | --- |
+| 更新PRとイメージへのパッチ適用の違い・更新前後の脆弱性の確認 | [他のツールとの比較](comparison.md) |
+| Docker Compose・`docker run`・Kubernetesでの導入 | [セットアップ](getting-started.md) |
+| 実行スケジュール・通知先・Kubernetes・環境名・状態管理・脆弱性の優先順位付けの設定 | [設定](configuration.md) |
+| 機能の概要と判定の仕組み・Slackの読み方・Webhookのフィールド仕様・外向きの通信 | [仕組み](how-it-works.md) |
+| 修正計画と修正PRの導入・結果の読み方・判定の仕組み・利用できるファイルと版指定 | [修正計画と修正PR（実験的）](remediation.md#contents) |
+| 任意のDocker向けSensorによる、優先度を変えない使用中パッケージの表示 | [稼働時の使用状況（実験的）](runtime-usage.md) |
 
-バグ、機能要望、ドキュメントの修正は
-[GitHubリポジトリ](https://github.com/kitsunetrail/kestrelynx/issues)へIssueを
-作成してください。
+KestreLynxは現在も開発中です。
+特記がない限り、このドキュメントは最新のコンテナイメージと`main`ブランチの内容を説明しています。
+
+バグ、機能要望、ドキュメントの修正は[GitHubリポジトリ](https://github.com/kitsunetrail/kestrelynx/issues)へIssueを作成してください。

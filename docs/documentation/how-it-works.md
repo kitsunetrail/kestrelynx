@@ -9,103 +9,49 @@ Slack and email show changes and current findings, while the generic webhook pro
 Notification conditions and explanations of notification displays and fields are documented on separate pages.
 
 KestreLynx can also send remediation plans for Docker, Compose, and Kubernetes and create remediation PRs on GitHub (experimental, disabled by default).
-Plans propose image and dependency updates; users handle merging, building, and deployment. See [Remediation plans and pull requests](remediation.md) for details.
+Plans propose image and dependency updates; users handle merging, building, and deployment.
+See [Remediation plans and pull requests](remediation.md) for details.
 
 See [Getting started](getting-started.md) for setup instructions and [Configuration](configuration.md) for settings.
 
-## Contents {#contents}
+## Page guide {#contents}
 
-- [Scan and priority decisions](scan-logic.md)
-    - [Processing flow](scan-logic.md#scan-cycle)
-    - [Scan targets](scan-logic.md#scan-targets)
-    - [Scan result verification](scan-logic.md#scan-verification)
-    - [Package-level grouping](scan-logic.md#package-grouping)
-    - [Finding classification](scan-logic.md#finding-classification)
-    - <span id="cve"></span><span id="cve-priority-rules"></span>[Exploitation-based priority](scan-logic.md#triage)
-- [Change and history decisions](diff-logic.md)
-    - [Comparison baseline](diff-logic.md#comparison-baseline)
-    - [Package changes](diff-logic.md#package-changes)
-    - [Base OS EOL changes](diff-logic.md#eol-base-changes)
-    - [Image digest changes](diff-logic.md#image-content-changes)
-    - [Image name updates](diff-logic.md#reference-changes)
-    - [History continuity](diff-logic.md#state-lifecycle)
-- [Notification conditions](notification-conditions.md)
-    - <span id="notification-conditions"></span>[Scan notification conditions](notification-conditions.md#notification-conditions)
-    - [Slack thread delivery conditions](notification-conditions.md#slack-thread-delivery)
-    - [Scan notification redelivery](notification-conditions.md#scan-redelivery)
-    - <span id="remediation-slack-delivery"></span><span id="remediation-webhook-delivery"></span><span id="remediation-redelivery"></span>[Remediation plan delivery conditions](notification-conditions.md#remediation-delivery)
-- [Slack report structure and counts](slack-display.md)
-    - <span id="slack-display"></span>[Where to find reports](slack-display.md#slack-display)
-    - <span id="notification-language"></span>[Notification language](slack-display.md#notification-language)
-    - [Section order](slack-display.md#section-order)
-    - [Reading counts](slack-display.md#counts)
-- [Slack package cards and change labels](slack-package-display.md)
-    - [Reading package cards](slack-package-display.md#package-card)
-    - [Change labels](slack-package-display.md#change-labels)
-- [Slack runtime usage display](slack-runtime-display.md)
-    - [Usage labels](slack-runtime-display.md#usage-labels)
-    - [Runtime evidence](slack-runtime-display.md#runtime-evidence)
-    - [Muted findings](slack-runtime-display.md#muted-display)
-- [Reading Slack warnings](slack-warnings-display.md)
-    - [Scan warnings](slack-warnings-display.md#scan-warnings)
-    - [Threat intelligence warnings](slack-warnings-display.md#intel-warnings)
-    - [Sensor warnings](slack-warnings-display.md#sensor-warnings)
-- [Webhook base fields](webhook-reference.md)
-    - <span id="generic-webhook"></span>[Payload scope](webhook-reference.md#generic-webhook)
-    - [Payload overview](webhook-reference.md#payload-overview)
-    - [Report fields](webhook-reference.md#report-fields)
-    - [Image fields](webhook-reference.md#images)
-    - [Finding fields](webhook-reference.md#findings)
-    - [Receiver implementation requirements](webhook-reference.md#compatibility)
-- [Webhook diff fields](webhook-diff-reference.md)
-    - [Diff object](webhook-diff-reference.md#diff-fields)
-    - [Ordinary package changes](webhook-diff-reference.md#new-fields)
-    - [Package resolutions](webhook-diff-reference.md#resolved-fields)
-    - [Image digest changes](webhook-diff-reference.md#image-replacement-fields)
-    - [Image name updates](webhook-diff-reference.md#reference-change-fields)
-    - [Base OS EOL changes](webhook-diff-reference.md#eol-base-fields)
-    - [EOL package changes](webhook-diff-reference.md#eol-change-fields)
-    - [EOL package clearances](webhook-diff-reference.md#eol-resolved-fields)
-    - [Oldest unresolved age](webhook-diff-reference.md#oldest-open-days)
-- [Webhook runtime fields](webhook-runtime-reference.md)
-    - [Sensor information](webhook-runtime-reference.md#sensor-fields)
-    - [Usage counts](webhook-runtime-reference.md#runtime-counts)
-    - [Package group usage](webhook-runtime-reference.md#finding-runtime)
-    - [Container evidence](webhook-runtime-reference.md#container-evidence)
-    - [Reasons usage is unavailable](webhook-runtime-reference.md#runtime-reasons)
-- [Webhook remediation overview and shared objects](webhook-remediation-reference.md)
-    - [Remediation plan overview](webhook-remediation-reference.md#remediation-overview)
-    - <span id="remediation-fields"></span>[Common remediation plan fields](webhook-remediation-reference.md#remediation-fields)
-    - [Shared objects](webhook-remediation-reference.md#remediation-common-objects)
-- [Webhook remediation published image fields](webhook-remediation-image-reference.md)
-    - <span id="remediation-image-fields"></span>[Published image fields](webhook-remediation-image-reference.md#remediation-image-fields)
-    - [Kubernetes workload information](webhook-remediation-image-reference.md#remediation-image-kubernetes)
-- [Webhook remediation base image fields](webhook-remediation-dockerfile-reference.md)
-    - <span id="remediation-dockerfile-fields"></span>[Base image fields](webhook-remediation-dockerfile-reference.md#remediation-dockerfile-fields)
-    - [Results for each running image](webhook-remediation-dockerfile-reference.md#dockerfile-entity-fields)
-    - [Runtime rebuild estimates](webhook-remediation-dockerfile-reference.md#dockerfile-rebuild-runtimes)
-    - [Check against the current base](webhook-remediation-dockerfile-reference.md#dockerfile-rebuild-check)
-- [Webhook remediation language package fields](webhook-remediation-language-reference.md)
-    - <span id="remediation-language-fields"></span>[Language package fields](webhook-remediation-language-reference.md#remediation-language-fields)
-    - [Package results](webhook-remediation-language-reference.md#language-package-fields)
-    - [Webhook remediation update record fields](webhook-remediation-update-reference.md)
-        - [Update records](webhook-remediation-update-reference.md#language-update-fields)
-        - [Runtime for the update](webhook-remediation-update-reference.md#language-runtime-fields)
-        - [Tools for the update](webhook-remediation-update-reference.md#language-tool-fields)
-        - [Results of re-resolution through dependent packages](webhook-remediation-update-reference.md#language-chain-fields)
-        - [Go update records](webhook-remediation-update-reference.md#language-go-update)
-        - [Maven update records](webhook-remediation-update-reference.md#language-maven-update)
-        - [Gradle update records](webhook-remediation-update-reference.md#language-gradle-update)
-    - [Webhook remediation update check fields](webhook-remediation-check-reference.md)
-        - [Checks before and after updates](webhook-remediation-check-reference.md#language-source-check-fields)
-        - [Re-resolution scan comparisons](webhook-remediation-check-reference.md#language-chain-scan-fields)
-        - [Updated files](webhook-remediation-check-reference.md#language-artifact-fields)
-- [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md)
-    - <span id="remediation-pr-fields"></span>[PR processing fields](webhook-remediation-pr-reference.md#remediation-pr-fields)
-    - <span id="remediation-json-example"></span>[Language package update details](webhook-remediation-pr-reference.md#pr-language-fields)
-    - <span id="remediation-operation-fields"></span>[PR operation event fields](webhook-remediation-pr-reference.md#remediation-operation-fields)
-    - <span id="remediation-problem-fields"></span>[Write-blocking problem fields](webhook-remediation-pr-reference.md#remediation-problem-fields)
-- [Outbound communication](outbound-communication.md)
-    - <span id="outbound-communication"></span><span id="kev-download"></span><span id="epss-download"></span><span id="hacker-news-search"></span><span id="trivy-downloads"></span><span id="github-communication"></span><span id="candidate-registry-communication"></span><span id="worker-image-downloads"></span><span id="tool-downloads"></span><span id="dependency-downloads"></span><span id="notification-delivery"></span>[Communication destinations](outbound-communication.md#outbound-communication)
-    - <span id="credential-destinations"></span>[Credential destinations](outbound-communication.md#credential-destinations)
-    - <span id="worker-network"></span>[Work container network](outbound-communication.md#worker-network)
+This guide lists pages on decision logic, reading notifications, webhook field specifications, and outbound communication.
+
+The following pages explain scan, change, and notification decisions, and outbound communication.
+
+| What you want to know | Page |
+| --- | --- |
+| Scan targets, result grouping, and exploitation-based priority | <span id="cve"></span><span id="cve-priority-rules"></span>[Scan and priority decisions](scan-logic.md) |
+| Package and image changes, and history transfer | [Change and history decisions](diff-logic.md) |
+| Delivery conditions and redelivery for scan notifications and remediation plans | <span id="notification-conditions"></span><span id="remediation-slack-delivery"></span><span id="remediation-webhook-delivery"></span><span id="remediation-redelivery"></span>[Notification conditions](notification-conditions.md) |
+| Communication destinations, transmitted information, and credential destinations | <span id="outbound-communication"></span><span id="kev-download"></span><span id="epss-download"></span><span id="hacker-news-search"></span><span id="trivy-downloads"></span><span id="github-communication"></span><span id="candidate-registry-communication"></span><span id="worker-image-downloads"></span><span id="tool-downloads"></span><span id="dependency-downloads"></span><span id="notification-delivery"></span><span id="credential-destinations"></span><span id="worker-network"></span>[Outbound communication](outbound-communication.md) |
+
+The following pages explain how to read Slack displays and counts.
+
+| What you want to know | Page |
+| --- | --- |
+| Report locations, notification language, section order, and counts | <span id="slack-display"></span><span id="notification-language"></span>[Report structure and counts](slack-display.md) |
+| Package card contents and change labels | [Package cards and change labels](slack-package-display.md) |
+| Usage labels, observation evidence, and muted finding displays | [Runtime usage display](slack-runtime-display.md) |
+| Scan, threat intelligence, and Sensor (a container that observes packages in use) warnings | [Warnings](slack-warnings-display.md) |
+
+The following pages describe the base, diff, and runtime field specifications for the generic webhook.
+
+| What you want to know | Page |
+| --- | --- |
+| Fields for the overall payload, reports, images, and findings | <span id="generic-webhook"></span>[Base fields](webhook-reference.md) |
+| Fields for package, image, and EOL changes | [Diff fields](webhook-diff-reference.md) |
+| Fields for Sensor status, usage, and observation evidence | [Runtime fields](webhook-runtime-reference.md) |
+
+The following pages describe the field specifications for remediation plans included in the generic webhook.
+
+| What you want to know | Page |
+| --- | --- |
+| Remediation plan overview and shared objects | <span id="remediation-fields"></span>[Overview and shared objects](webhook-remediation-reference.md) |
+| Published image items and Kubernetes workload information | <span id="remediation-image-fields"></span>[Published images](webhook-remediation-image-reference.md) |
+| Base image plans, results for each running image, and rebuild estimates | <span id="remediation-dockerfile-fields"></span>[Base images](webhook-remediation-dockerfile-reference.md) |
+| Results for each language package and guidance when a fixed version cannot be reached | <span id="remediation-language-fields"></span>[Items and packages](webhook-remediation-language-reference.md) |
+| Language package update records, runtimes, and tools | [Update records](webhook-remediation-update-reference.md) |
+| Checks before and after language package updates, and updated files | [Update checks](webhook-remediation-check-reference.md) |
+| PR processing results, operation events, and problems that stop writes | <span id="remediation-pr-fields"></span><span id="remediation-json-example"></span><span id="remediation-operation-fields"></span><span id="remediation-problem-fields"></span>[PR processing](webhook-remediation-pr-reference.md) |

@@ -2,22 +2,20 @@
 
 This section covers installing, configuring, and operating KestreLynx.
 
-## About KestreLynx
+## Page guide {#contents}
 
-- [Comparison with other tools](comparison.md) — Update pull requests, image patching, and vulnerability checks before and after updates
-- [Setup instructions](getting-started.md) — install KestreLynx with Docker
-  Compose, `docker run`, or Kubernetes.
-- [Configuration](configuration.md) — configure the schedule, notification
-  destinations, Kubernetes, environment name, state management, and vulnerability
-  prioritization.
-- [How KestreLynx works](how-it-works.md) — feature overview and a contents guide to decision logic, reading Slack notifications, webhook field specifications, and outbound communication
-- [Remediation plans and pull requests (experimental)](remediation.md#contents) — find setup instructions, guidance on reading results, decision logic, and supported formats
-- [Runtime usage (experimental)](runtime-usage.md) — add the optional Docker Sensor to mark
-  packages in use without changing their priority.
+This guide lists pages on KestreLynx comparisons, setup, configuration, how it works, remediation plans, and runtime usage.
 
-KestreLynx is under active development. Unless otherwise noted, this
-documentation describes the latest container image and the current `main`
-branch.
+| What you want to know | Page |
+| --- | --- |
+| Differences between update PRs and image patching, and vulnerability checks before and after updates | [Comparison with other tools](comparison.md) |
+| Installation with Docker Compose, `docker run`, or Kubernetes | [Setup](getting-started.md) |
+| Settings for schedules, notification destinations, Kubernetes, environment names, state management, and vulnerability prioritization | [Configuration](configuration.md) |
+| Feature overview, decision logic, reading Slack notifications, webhook field specifications, and outbound communication | [How it works](how-it-works.md) |
+| Setup, reading results, decision logic, and supported files and version specifications for remediation plans and pull requests | [Remediation plans and pull requests (experimental)](remediation.md#contents) |
+| Marking packages in use with the optional Docker Sensor without changing priority | [Runtime usage (experimental)](runtime-usage.md) |
 
-For bugs, feature requests, and documentation corrections, open an issue in the
-[GitHub repository](https://github.com/kitsunetrail/kestrelynx/issues).
+KestreLynx is under active development.
+Unless otherwise noted, this documentation describes the latest container image and the current `main` branch.
+
+For bugs, feature requests, and documentation corrections, open an issue in the [GitHub repository](https://github.com/kitsunetrail/kestrelynx/issues).

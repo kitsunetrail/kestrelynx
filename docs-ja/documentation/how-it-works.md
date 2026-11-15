@@ -14,99 +14,44 @@ Docker・Compose・Kubernetesでは、検出結果を直すための修正計画
 
 導入方法は[セットアップ手順](getting-started.md)、設定値は[設定](configuration.md)を参照してください。
 
-## 目次 {#contents}
+## ページの案内 {#contents}
 
-- [スキャンと優先度の判定](scan-logic.md)
-    - [処理の流れ](scan-logic.md#scan-cycle)
-    - [スキャン対象](scan-logic.md#scan-targets)
-    - [スキャン結果の確認](scan-logic.md#scan-verification)
-    - [パッケージ単位の集約](scan-logic.md#package-grouping)
-    - [検出結果の分類](scan-logic.md#finding-classification)
-    - <span id="cve"></span><span id="cve-priority-rules"></span>[悪用情報による優先度](scan-logic.md#triage)
-- [差分と履歴の判定](diff-logic.md)
-    - [差分の比較単位](diff-logic.md#comparison-baseline)
-    - [パッケージの変化](diff-logic.md#package-changes)
-    - [ベースOSのEOL変化](diff-logic.md#eol-base-changes)
-    - [digestの変更](diff-logic.md#image-content-changes)
-    - [イメージ名の更新](diff-logic.md#reference-changes)
-    - [履歴の継続](diff-logic.md#state-lifecycle)
-- [通知の送信条件](notification-conditions.md)
-    - <span id="notification-conditions"></span>[スキャン通知の送信条件](notification-conditions.md#notification-conditions)
-    - [Slackスレッドの投稿条件](notification-conditions.md#slack-thread-delivery)
-    - [スキャン通知の再送](notification-conditions.md#scan-redelivery)
-    - <span id="remediation-slack-delivery"></span><span id="remediation-webhook-delivery"></span><span id="remediation-redelivery"></span>[修正計画の送信条件](notification-conditions.md#remediation-delivery)
-- [Slackのレポートの構成と件数](slack-display.md)
-    - <span id="slack-display"></span>[レポートの確認場所](slack-display.md#slack-display)
-    - <span id="notification-language"></span>[通知の言語](slack-display.md#notification-language)
-    - [区分の並び順](slack-display.md#section-order)
-    - [件数の読み方](slack-display.md#counts)
-- [Slackのパッケージカードと変化の表示](slack-package-display.md)
-    - [パッケージカードの読み方](slack-package-display.md#package-card)
-    - [変化の表示](slack-package-display.md#change-labels)
-- [Slackの稼働時の使用状況の表示](slack-runtime-display.md)
-    - [使用状況のラベル](slack-runtime-display.md#usage-labels)
-    - [観測根拠の表示](slack-runtime-display.md#runtime-evidence)
-    - [通知オフの表示](slack-runtime-display.md#muted-display)
-- [Slackの警告の読み方](slack-warnings-display.md)
-    - [スキャンの警告](slack-warnings-display.md#scan-warnings)
-    - [脅威情報の警告](slack-warnings-display.md#intel-warnings)
-    - [Sensorの警告](slack-warnings-display.md#sensor-warnings)
-- [Webhookの基本のフィールド](webhook-reference.md)
-    - <span id="generic-webhook"></span>[ペイロードの範囲](webhook-reference.md#generic-webhook)
-    - [ペイロードの全体像](webhook-reference.md#payload-overview)
-    - [レポートのフィールド](webhook-reference.md#report-fields)
-    - [イメージのフィールド](webhook-reference.md#images)
-    - [検出結果のフィールド](webhook-reference.md#findings)
-    - [受信側の実装で守ること](webhook-reference.md#compatibility)
-- [Webhookの差分のフィールド](webhook-diff-reference.md)
-    - [差分オブジェクト](webhook-diff-reference.md#diff-fields)
-    - [通常のパッケージの変化](webhook-diff-reference.md#new-fields)
-    - [パッケージの解消](webhook-diff-reference.md#resolved-fields)
-    - [digestの変更](webhook-diff-reference.md#image-replacement-fields)
-    - [イメージ名の更新](webhook-diff-reference.md#reference-change-fields)
-    - [ベースOSのEOL変化](webhook-diff-reference.md#eol-base-fields)
-    - [EOLパッケージの変化](webhook-diff-reference.md#eol-change-fields)
-    - [EOLパッケージの解除](webhook-diff-reference.md#eol-resolved-fields)
-    - [未解決の最長期間](webhook-diff-reference.md#oldest-open-days)
-- [Webhookの稼働時のフィールド](webhook-runtime-reference.md)
-    - [Sensorの情報](webhook-runtime-reference.md#sensor-fields)
-    - [使用状況の件数](webhook-runtime-reference.md#runtime-counts)
-    - [パッケージグループの使用状況](webhook-runtime-reference.md#finding-runtime)
-    - [コンテナの証拠](webhook-runtime-reference.md#container-evidence)
-    - [判定できない理由](webhook-runtime-reference.md#runtime-reasons)
-- [Webhookの修正計画の全体と共通のオブジェクト](webhook-remediation-reference.md)
-    - [修正計画の全体像](webhook-remediation-reference.md#remediation-overview)
-    - <span id="remediation-fields"></span>[修正計画の共通フィールド](webhook-remediation-reference.md#remediation-fields)
-    - [共通のオブジェクト](webhook-remediation-reference.md#remediation-common-objects)
-- [Webhookの修正計画の配布イメージのフィールド](webhook-remediation-image-reference.md)
-    - <span id="remediation-image-fields"></span>[配布イメージのフィールド](webhook-remediation-image-reference.md#remediation-image-fields)
-    - [Kubernetesのワークロードの情報](webhook-remediation-image-reference.md#remediation-image-kubernetes)
-- [Webhookの修正計画のベースイメージのフィールド](webhook-remediation-dockerfile-reference.md)
-    - <span id="remediation-dockerfile-fields"></span>[ベースイメージのフィールド](webhook-remediation-dockerfile-reference.md#remediation-dockerfile-fields)
-    - [稼働イメージごとの結果](webhook-remediation-dockerfile-reference.md#dockerfile-entity-fields)
-    - [ランタイムの再ビルドの見込み](webhook-remediation-dockerfile-reference.md#dockerfile-rebuild-runtimes)
-    - [現在のベースとの突き合わせ](webhook-remediation-dockerfile-reference.md#dockerfile-rebuild-check)
-- [Webhookの修正計画の言語パッケージのフィールド](webhook-remediation-language-reference.md)
-    - <span id="remediation-language-fields"></span>[言語パッケージのフィールド](webhook-remediation-language-reference.md#remediation-language-fields)
-    - [パッケージの結果](webhook-remediation-language-reference.md#language-package-fields)
-    - [Webhookの修正計画の更新の記録のフィールド](webhook-remediation-update-reference.md)
-        - [更新の記録](webhook-remediation-update-reference.md#language-update-fields)
-        - [更新に使う実行環境](webhook-remediation-update-reference.md#language-runtime-fields)
-        - [更新に使うツール](webhook-remediation-update-reference.md#language-tool-fields)
-        - [依存元からの再解決の結果](webhook-remediation-update-reference.md#language-chain-fields)
-        - [Goの更新の記録](webhook-remediation-update-reference.md#language-go-update)
-        - [Mavenの更新の記録](webhook-remediation-update-reference.md#language-maven-update)
-        - [Gradleの更新の記録](webhook-remediation-update-reference.md#language-gradle-update)
-    - [Webhookの修正計画の更新前後の検査のフィールド](webhook-remediation-check-reference.md)
-        - [更新前後の検査](webhook-remediation-check-reference.md#language-source-check-fields)
-        - [再解決のスキャン比較](webhook-remediation-check-reference.md#language-chain-scan-fields)
-        - [更新ファイル](webhook-remediation-check-reference.md#language-artifact-fields)
-- [Webhookの修正計画のPR処理のフィールド](webhook-remediation-pr-reference.md)
-    - <span id="remediation-pr-fields"></span>[PR処理のフィールド](webhook-remediation-pr-reference.md#remediation-pr-fields)
-    - <span id="remediation-json-example"></span>[言語パッケージ更新の内容](webhook-remediation-pr-reference.md#pr-language-fields)
-    - <span id="remediation-operation-fields"></span>[PR操作イベントのフィールド](webhook-remediation-pr-reference.md#remediation-operation-fields)
-    - <span id="remediation-problem-fields"></span>[書き込み停止のフィールド](webhook-remediation-pr-reference.md#remediation-problem-fields)
-- [外向きの通信](outbound-communication.md)
-    - <span id="outbound-communication"></span><span id="kev-download"></span><span id="epss-download"></span><span id="hacker-news-search"></span><span id="trivy-downloads"></span><span id="github-communication"></span><span id="candidate-registry-communication"></span><span id="worker-image-downloads"></span><span id="tool-downloads"></span><span id="dependency-downloads"></span><span id="notification-delivery"></span>[通信先一覧](outbound-communication.md#outbound-communication)
-    - <span id="credential-destinations"></span>[認証情報の送付範囲](outbound-communication.md#credential-destinations)
-    - <span id="worker-network"></span>[作業用コンテナのネットワーク](outbound-communication.md#worker-network)
+判定の仕組み、通知の読み方、Webhookのフィールド仕様、外向きの通信を調べるページを案内します。
+
+スキャン・差分・通知の判定と外向きの通信は、次のページで説明しています。
+
+| 知りたいこと | ページ |
+| --- | --- |
+| スキャン対象・結果の集約と悪用情報による優先度 | <span id="cve"></span><span id="cve-priority-rules"></span>[スキャンと優先度の判定](scan-logic.md) |
+| パッケージ・イメージの変化と履歴の引き継ぎ | [差分と履歴の判定](diff-logic.md) |
+| スキャン通知・修正計画の送信条件と再送 | <span id="notification-conditions"></span><span id="remediation-slack-delivery"></span><span id="remediation-webhook-delivery"></span><span id="remediation-redelivery"></span>[通知の送信条件](notification-conditions.md) |
+| 通信先・送信情報・認証情報の送付範囲 | <span id="outbound-communication"></span><span id="kev-download"></span><span id="epss-download"></span><span id="hacker-news-search"></span><span id="trivy-downloads"></span><span id="github-communication"></span><span id="candidate-registry-communication"></span><span id="worker-image-downloads"></span><span id="tool-downloads"></span><span id="dependency-downloads"></span><span id="notification-delivery"></span><span id="credential-destinations"></span><span id="worker-network"></span>[外向きの通信](outbound-communication.md) |
+
+Slackの表示と件数の読み方は、次のページで確認できます。
+
+| 知りたいこと | ページ |
+| --- | --- |
+| レポートの確認場所・通知の言語・区分の順序・件数 | <span id="slack-display"></span><span id="notification-language"></span>[レポートの構成と件数](slack-display.md) |
+| パッケージカードの内容と変化の表示 | [パッケージカードと変化の表示](slack-package-display.md) |
+| 使用状況のラベル・観測根拠・通知オフの表示 | [稼働時の使用状況の表示](slack-runtime-display.md) |
+| スキャン・脅威情報・Sensor（使用中のパッケージを観測するコンテナ）の警告 | [警告の読み方](slack-warnings-display.md) |
+
+汎用Webhookの基本・差分・稼働時のフィールド仕様は、次のページで確認できます。
+
+| 知りたいこと | ページ |
+| --- | --- |
+| ペイロード全体・レポート・イメージ・検出結果のフィールド | <span id="generic-webhook"></span>[基本のフィールド](webhook-reference.md) |
+| パッケージ・イメージ・EOLの変化を表すフィールド | [差分のフィールド](webhook-diff-reference.md) |
+| Sensorの状態・使用状況・観測根拠のフィールド | [稼働時のフィールド](webhook-runtime-reference.md) |
+
+汎用Webhookに含まれる修正計画のフィールド仕様は、次のページで確認できます。
+
+| 知りたいこと | ページ |
+| --- | --- |
+| 修正計画の全体像と共通オブジェクト | <span id="remediation-fields"></span>[全体と共通のオブジェクト](webhook-remediation-reference.md) |
+| 配布イメージの項目とKubernetesのワークロード情報 | <span id="remediation-image-fields"></span>[配布イメージ](webhook-remediation-image-reference.md) |
+| ベースイメージの計画・稼働イメージごとの結果・再ビルドの見込み | <span id="remediation-dockerfile-fields"></span>[ベースイメージ](webhook-remediation-dockerfile-reference.md) |
+| 言語パッケージごとの結果と修正版に上げられないときの案内 | <span id="remediation-language-fields"></span>[項目とパッケージ](webhook-remediation-language-reference.md) |
+| 言語パッケージの更新記録・実行環境・ツール | [更新の記録](webhook-remediation-update-reference.md) |
+| 言語パッケージの更新前後の検査と更新ファイル | [更新前後の検査](webhook-remediation-check-reference.md) |
+| PR処理の結果・操作イベント・書き込みを停止する問題 | <span id="remediation-pr-fields"></span><span id="remediation-json-example"></span><span id="remediation-operation-fields"></span><span id="remediation-problem-fields"></span>[PR処理](webhook-remediation-pr-reference.md) |

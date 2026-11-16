@@ -7,14 +7,20 @@ title: Dockerでの修正計画と修正PRの有効化
 Composeのサービスと、`docker run`で起動したコンテナを対象に、修正計画と修正PRを有効にします。
 先に[修正計画の有効化](remediation-setup.md#enable-fix-plans)の共通の準備を済ませてください。
 
-配布イメージの候補だけを調べ、対応付けを設定しない場合は、ホスト側の`config.yml`で`remediation.enabled: true`と`remediation.pull_requests.enabled: false`だけを設定し、[修正計画の起動確認](#verify-fix-plans)へ進みます。
+配布イメージの候補だけを調べ、対応付けを設定しない場合は、ホスト側の`config.yml`に次の最小設定を統合します。
+
+```yaml
+remediation:
+  enabled: true
+```
+
+[修正計画の起動確認](#verify-fix-plans)へ進みます。
+
 対応付けを設定する場合は、監視対象の起動方法に合う節で設定し、[修正計画の起動確認](#verify-fix-plans)、[修正PRの有効化](#docker-enable-pull-requests)の順に進みます。
-設定を反映するコマンドは、KestreLynx自身の起動方法に合わせて選びます。
 
 編集するのは、KestreLynxの配置ディレクトリにある、ホスト側の`config.yml`です。
 [設定ファイルの準備](getting-started.md#prepare-config)で作成したファイルは、コンテナ内の`/etc/kestrelynx/config.yml`にマウントされます。
 
-設定例は既存の設定に統合し、`remediation`を重複して追加しないでください。
 このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## Composeのサービスの対応付け {#compose-mappings}
@@ -40,13 +46,10 @@ Composeプロジェクト名はリポジトリ名やディレクトリ名と異�
 2. ホスト側の`config.yml`の`remediation`に、次の設定を統合する
 
     Composeファイルのイメージタグを更新する場合の例です。
-    `path: compose.yml`は、GitHubリポジトリ`example/deployment`のルートにあるファイルを指します。
 
     ```yaml
     remediation:
       enabled: true
-      pull_requests:
-        enabled: false
       mappings:
         - workload: compose/example/web
           repository: example/deployment
@@ -62,8 +65,6 @@ Composeプロジェクト名はリポジトリ名やディレクトリ名と異�
     ```yaml
     remediation:
       enabled: true
-      pull_requests:
-        enabled: false
       mappings:
         - workload: compose/example/web
           repository: example/application
@@ -73,8 +74,6 @@ Composeプロジェクト名はリポジトリ名やディレクトリ名と異�
           dependencies:
             directory: .
     ```
-
-    `path: Dockerfile`と`directory: .`は、GitHubリポジトリ`example/application`のルートを基準に指定しています。
 
 設定キーと複数の対応付けの制約は[Composeの設定](configuration.md#remediation-mappings-compose)、有効化キーは[基本設定](configuration.md#remediation-basics)を参照してください。
 
@@ -89,13 +88,10 @@ GitHub上のDockerfileや依存ファイルを更新する場合は、次の手�
 2. ホスト側の`config.yml`の`remediation`に、次の設定を実際の値に置き換えて統合する
 
     `example-api`のDockerfileと依存ディレクトリを1つの項目で対応付ける例です。
-    ベースイメージの更新には`dockerfile`、言語パッケージの更新には`dependencies`を指定します。
 
     ```yaml
     remediation:
       enabled: true
-      pull_requests:
-        enabled: false
       mappings:
         - workload: container/example-api
           repository: example/application
@@ -105,8 +101,6 @@ GitHub上のDockerfileや依存ファイルを更新する場合は、次の手�
           dependencies:
             directory: .
     ```
-
-    GitHubリポジトリ`example/application`内で、`path: Dockerfile`はルートのファイル、`directory: .`はルートディレクトリを指します。
 
     リポジトリやブランチが異なる場合は、同じ`workload`を指定した別の項目に分けてください。
     依存ディレクトリの準備は共通の[ソースの対応付け](remediation-setup.md#map-source)、名前と設定の制約は[docker runの設定](configuration.md#remediation-mappings-docker-run)を参照してください。
@@ -151,7 +145,6 @@ KestreLynxは指定したリポジトリからコンテナが作られたこと�
 4. 起動後または次の予定時刻のスキャンで、対象イメージの`scanned image`と、修正計画の`fix plan built`を確認する
 
     候補数の`update_candidate`・`dependency_update_candidates`・`dockerfile_update_candidates`が0でも、計画が無効という意味ではありません。
-    `fix plan enabled`と`fix plan built`で、有効化と計画の作成を確認できます。
 
 5. 通知が届いたら、対象のワークロード、ソース、更新対象が意図したものか、[表示項目](remediation-results.md#slack-fields)と照らして確認する
 

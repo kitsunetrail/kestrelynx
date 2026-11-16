@@ -45,8 +45,7 @@ Read the changes included in each PR and the remaining work as follows.
 | `Needs a decision: package-b …` | The update of `package-b` is not included in PR #12 and still needs attention |
 | `Pull request: #13 (open)` and the following `Update` | PR #13, which raises the base image to `3.12.4-slim`, is open |
 
-“The cause could not be determined” means that the cause preventing the update was not identified.
-See [Overview of the hints](remediation-fix-hints.md#fix-hints) for how to investigate.
+See [Overview of the hints](remediation-fix-hints.md#fix-hints) for how to investigate when “the cause could not be determined” is displayed.
 
 ### Displayed fields {#slack-fields}
 
@@ -126,7 +125,6 @@ The following fictional example shows a relationship between a Deployment and an
 Managed by (from markers): deployment shop/web → Argo CD app web-app
 ```
 
-The line identifies `web-app` as the manager of the Deployment named `shop/web`.
 This is an inference from labels and annotations, not confirmation of the actual management relationship.
 
 #### Newer-series lines {#newer-series-lines}
@@ -155,8 +153,6 @@ Newer series: base image python 3.11.9-slim → 3.13.1-slim (minor update, resol
 Needs a decision: nginx 1.24.1 → 2.0.1 in a newer series resolves 1 finding(s) and adds 2 (major update, compatibility not checked)
 ```
 
-A newer-series line is guidance and does not create a PR to update to that version.
-
 A change to the newer-series line causes the remediation plan message to be sent as a change.
 See [Checking newer series](remediation-image-logic.md#newer-series-check) for scope and candidate selection, and [Newer series status values](remediation-reason-codes.md#newer-series-status-values) for value definitions.
 
@@ -181,8 +177,7 @@ Each summary counts a different kind of result.
 | `resolves … finding(s)` | Target findings no longer detected in the comparison |
 | `… KEV` | Counts related to CISA KEV-listed vulnerabilities included in the displayed results |
 
-When results include a PR number, the opening summary groups counts by PR processing state.
-It includes updates that “need a decision,” are “deferred,” or are “blocked or failed” without a PR, so it does not count only existing PRs.
+The summary by PR processing state includes updates that “need a decision,” are “deferred,” or are “blocked or failed” without a PR, so it does not count only existing PRs.
 
 States without a PR appear in the body as follows.
 
@@ -203,12 +198,8 @@ It shows how counts change with PR availability in a notification containing no 
 | No PR, with `package-a` as an update candidate | `1 update candidate(s) · 1 need a decision` | One decision entry for the same item |
 | A PR containing only `package-a` is created in this cycle | `Pull requests: 1 created` | Still shown as needing a decision in the body, without a separate PR summary entry |
 
-The following rules apply to counts.
-
-- PR processing counts differ from the number of packages or vulnerabilities being updated
-- In summaries by proposal category, an item with both a candidate and a need for a decision counts once in each category
-- Several packages needing a decision within one item do not produce a separate decision count for each package
-- “Resolved in a newer series” does not count resolved findings or PRs
+PR processing counts also differ from the number of vulnerabilities.
+Several packages needing a decision within one item do not produce a separate “need a decision” count for each package.
 
 Resolved-finding counts for image candidates merge detections with the same CVE ID, package name, package type, and classification into one.
 Detecting the same CVE at several versions or locations does not directly turn the number of locations into the finding count.
@@ -246,7 +237,6 @@ See [Reason codes](remediation-reason-codes.md#reason-codes) for reason definiti
 
 ### Webhook details {#webhook-details}
 
-Webhook field specifications help you read received notification data if you receive webhooks.
 Inspect the actual data in the program that receives the webhook, and use the following links to interpret its fields.
 
 | Information needed | Field specification |

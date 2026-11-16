@@ -33,7 +33,6 @@ The process from planning to PR creation follows these steps.
 Planning alone stops after step 2.
 For npm, pnpm, and uv, planning assigns manual handling if the runtime has reached its support end date or version conditions cannot be met.
 
-Dependency updates and post-update checks run when remediation PRs are enabled.
 An update target from planning alone is not a verified update result.
 
 ### Fixed-version lower bounds {#fix-lower-bound}

@@ -23,8 +23,6 @@ Kubernetesで動かしているKestreLynxで、修正計画を確認してから
       enabled: true
     ```
 
-    `remediation`を重複して追加せず、PR作成は`remediation.pull_requests.enabled: false`（既定値）のままにしてください。
-
 2. 言語パッケージやベースイメージも調べる場合は、対応付けを追加する
 
     `deploy/kubernetes/configmap.yaml`の`data`内の`config.yml`（Secretの場合は`config.yml`）で、言語パッケージとベースイメージを指定する例です。
@@ -55,9 +53,7 @@ Kubernetesで動かしているKestreLynxで、修正計画を確認してから
 
 編集した設定を反映し、修正計画が動くことを確認します。
 
-1. `deploy/kubernetes/configmap.yaml`の`data`内の`config.yml`（Secretの場合は`config.yml`）に、[修正計画の設定](#kubernetes-plans)を統合したことを確認する
-
-2. リポジトリのルートで、ConfigMapを適用してKestreLynxのPodを再起動する
+1. リポジトリのルートで、ConfigMapを適用してKestreLynxのPodを再起動する
 
     Secretの場合は、先頭のConfigMap適用を[クラスタ内での非公開レジストリの認証](getting-started.md#kubernetes-private-registry)にあるSecretの更新手順に置き換えてください。
 
@@ -67,7 +63,7 @@ Kubernetesで動かしているKestreLynxで、修正計画を確認してから
     kubectl rollout status -n kestrelynx deployment/kestrelynx
     ```
 
-3. 次のコマンドで、設定の読み込みと修正計画の処理結果を確認する
+2. 次のコマンドで、設定の読み込みと修正計画の処理結果を確認する
 
     ```sh
     kubectl logs -n kestrelynx deployment/kestrelynx -f
@@ -106,7 +102,6 @@ Kubernetesで動かしているKestreLynxで、修正計画を確認してから
 | 言語パッケージ | `dependencies` | [ソースの対応付け](remediation-setup.md#map-source)と[作業用Podの準備](remediation-setup-work-pods.md#kubernetes-language-updates) |
 
 1つのコンテナのイメージタグには、`manifest`・`kustomize`・`helm_values`のうち1種類だけを指定してください。
-言語パッケージの更新には、Mavenを除き、作業用Podが必要です。
 
 ### マニフェストとDockerfileのPR設定 {#kubernetes-pull-requests}
 
@@ -134,13 +129,12 @@ remediation:
 `target: runtime`の`runtime`は、`docker/Dockerfile`の`FROM ... AS runtime`で付けたステージ名です。
 対象イメージをビルドするステージ名に置き換え、最後のステージを使う場合は`target`を省略できます。
 
-言語パッケージも更新する場合、npm・pnpm・pip・uv・Go・Gradleには[作業用Podの準備](remediation-setup-work-pods.md#kubernetes-language-updates)が必要です。
 編集できる書式は[マニフェストの書式](remediation-source-formats.md#manifest-formats)、PRの作成条件は[KubernetesのマニフェストPR](remediation-kubernetes-logic.md#kubernetes-manifest-prs)を参照してください。
 
 ### KustomizeのPR設定 {#kustomize-pull-requests}
 
 Kustomizeの`images`で管理するタグの更新先と、タグの変更で影響を受けるコンテナを指定します。
-同じコンテナのイメージタグには1種類だけを指定するため、既存の`manifest`または`helm_values`の指定は`kustomize`に置き換えてください。
+既存の`manifest`または`helm_values`の指定は`kustomize`に置き換えてください。
 
 1. 対象リポジトリの`apps/kustomization.yaml`で、更新する`images`の項目を確認する
 
@@ -202,7 +196,7 @@ Kustomizeの`images`で管理するタグの更新先と、タグの変更で影
 ### HelmのvaluesのPR設定 {#helm-values-pull-requests}
 
 Helmのvaluesで管理するタグの更新先と、タグの変更で影響を受けるコンテナを指定します。
-同じコンテナのイメージタグには1種類だけを指定するため、既存の`manifest`または`kustomize`の指定は`helm_values`に置き換えてください。
+既存の`manifest`または`kustomize`の指定は`helm_values`に置き換えてください。
 
 1. 対象リポジトリの`apps/values.yaml`で、イメージを指定しているYAMLのキーを確認する
 
@@ -283,15 +277,7 @@ Helmのvaluesで管理するタグの更新先と、タグの変更で影響を�
 
     マニフェスト・Dockerfile・Kustomize・Helmのvaluesの更新には、スキャン用の読み取り専用RBACだけを使います。
 
-2. リポジトリのルートで、ConfigMapを適用してKestreLynxのPodを再起動する
-
-    Secretの場合は、先頭のConfigMap適用を[クラスタ内での非公開レジストリの認証](getting-started.md#kubernetes-private-registry)にあるSecretの更新手順に置き換えてください。
-
-    ```sh
-    kubectl apply -f deploy/kubernetes/configmap.yaml
-    kubectl rollout restart -n kestrelynx deployment/kestrelynx
-    kubectl rollout status -n kestrelynx deployment/kestrelynx
-    ```
+2. リポジトリのルートで、[修正計画の起動確認](#kubernetes-verify-plans)の手順1と同じコマンドを実行し、ConfigMapを適用してKestreLynxのPodを再起動する
 
 3. 次のコマンドで、PR作成の有効化と処理結果を確認する
 

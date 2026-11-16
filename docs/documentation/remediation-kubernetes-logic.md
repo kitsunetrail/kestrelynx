@@ -76,7 +76,6 @@ It compares which containers are checked, which are updated, and which PRs are s
 | `worker/app` | `nginx:1.27.2` | Running state and the `1.27.3` candidate | Tag update to `1.27.3` | All PRs for the file are skipped |
 | `api/app` | A different image with nothing to fix | Running state | No change | All PRs for the file are skipped |
 
-Because `web/app` and `worker/app` are targets for the same image update, each needs a plan item and the same candidate.
 The `api/app` container is excluded from the update and does not block other PRs merely because it has nothing to fix.
 
 Even though `api/app` is not updated, it must have instances with status `running`, and all their running image references must be available.

@@ -99,8 +99,6 @@ With owner-specific tokens, redirects to repository-ID URLs without an owner are
 
 Language-package updating applies candidate updates and checks the resulting dependency files.
 
-KestreLynx retrieves and verifies npm, pnpm, and uv before passing them to a work container.
-
 When candidates are not updated, use the following table to match notification reasons with checks.
 
 | Symptom | What to check | Reference |

@@ -14,17 +14,31 @@ title: 修正計画と修正PRの有効化の手順
 
 ## 修正計画の有効化 {#enable-fix-plans}
 
-修正計画の有効化は、共通の準備から始め、環境ごとの起動確認へ進めます。
+`config.yml`のうち修正計画と修正PRに関わるキーの入れ子と、設定を進める節・ページを次に示します。
+
+```yaml
+registries:              # 非公開イメージの認証（このページ）
+remediation:
+  enabled:               # 修正計画の有効化（環境ごとのページ）
+  github:
+    token:               # GitHubアクセスの準備（このページ）
+    tokens:              # GitHubアクセスの準備（このページ）
+  mappings:              # ソースの対応付け（キーの選び方はこのページ、記述は環境ごとのページ）
+  pull_requests:
+    enabled:             # 修正PRの有効化（環境ごとのページ）
+```
+
+編集するファイル／設定の場所と反映方法は、「KestreLynxの起動方法」の表で確認してください。
 
 配布イメージの候補だけを調べる場合は、GitHubリポジトリ・token・対応付けの準備を省き、手順3から進んでください。
 ベースイメージや言語パッケージも調べる場合は、手順1から進んでください。
 
 次の順で作業してください。
 
-1. [GitHubアクセスの準備](#prepare-github-access)で、対象リポジトリと必要なtokenを用意する
-2. [ソースの対応付け](#map-source)で、更新対象に合う設定キーと対象ファイルの場所を決める
-3. 非公開イメージを使う場合は、[非公開イメージの認証](#configure-registry-auth)を設定する
-4. 監視対象の環境に合うページへ進み、必要な設定を編集・反映して起動と通知を確認する
+1. [GitHubアクセスの準備](#prepare-github-access)で、対象リポジトリと必要なtoken（`remediation.github.token`または`remediation.github.tokens`）を用意する
+2. [ソースの対応付け](#map-source)で、`remediation.mappings`で使う、更新対象に合う設定キーと対象ファイルの場所を決める
+3. 非公開イメージを使う場合は、[非公開イメージの認証](#configure-registry-auth)をトップレベルの`registries`に設定する
+4. 監視対象の環境に合うページへ進み、必要な設定（`remediation.enabled`・`remediation.mappings`・`remediation.pull_requests.enabled`）を編集・反映して起動と通知を確認する
 
 監視対象の環境に合わせて、次のページへ進んでください。
 
@@ -53,7 +67,7 @@ title: 修正計画と修正PRの有効化の手順
 
 ### GitHubアクセスの準備 {#prepare-github-access}
 
-GitHubアクセスの準備では、ソースの取得元・PRの宛先と、必要なtokenを決めます。
+`remediation.github.token`または`remediation.github.tokens`の設定に向けて、ソースの取得元・PRの宛先と、必要なtokenを決めます。
 用途に合わせて、tokenの要否と権限を確認してください。
 
 | やりたいこと | token |
@@ -93,7 +107,7 @@ PR作成が無効で、所有者ごとのtokenも既定のtokenもない場合�
 
 ### ソースの対応付け {#map-source}
 
-更新したいものと監視対象の環境に合わせて、設定するキーを選んでください。
+`remediation.mappings`を環境ごとのページで記述するために、更新したいものと監視対象の環境に合わせて、使うキーと対象ファイルの場所を決めます。
 
 | 更新したいもの | 設定するキー | 使える環境 |
 | --- | --- | --- |
@@ -103,9 +117,6 @@ PR作成が無効で、所有者ごとのtokenも既定のtokenもない場合�
 | Helmのvaluesのイメージタグ | `helm_values` | Kubernetes |
 | Dockerfileのベースイメージ | `dockerfile` | Compose・docker run・Kubernetes |
 | 言語パッケージ | `dependencies` | Compose・docker run・Kubernetes |
-
-ここでは、更新対象の設定キーと対象ファイルの場所を決めます。
-`remediation.mappings`の編集と修正計画の有効化は、環境ごとのページで行ってください。
 
 `path`と`directory`は、GitHubリポジトリのルートからのパスです。
 たとえば`path: compose.yml`は、リポジトリのルートにある`compose.yml`を指します。
@@ -125,7 +136,7 @@ Gradleのlockの設定や必要なファイルは、[Gradleの依存ファイル
 
 ### 非公開イメージの認証 {#configure-registry-auth}
 
-非公開イメージの認証は、修正計画と通常のスキャンでイメージを読み取るための設定です。
+トップレベルの`registries`に、修正計画と通常のスキャンで非公開イメージを読み取るための認証情報を設定します。
 公開イメージだけを扱う場合、この設定は不要です。
 
 認証が必要な場合は、次の順で`config.yml`を編集してください。
@@ -159,7 +170,7 @@ Kubernetesクラスタ内での設定と反映は、[クラスタ内での非公
 
 ## 修正PRの有効化 {#enable-pull-requests}
 
-修正PRの設定・反映・確認は、環境ごとのページで行います。
+`remediation.pull_requests.enabled`の設定・反映と修正PRの確認は、環境ごとのページで行います。
 環境ごとの手順で修正計画の起動を確認し、通知のワークロード・ソース・更新対象が意図したものか確認してから進んでください。
 
 先に[PR作成の前提と注意](#enable-pr-creation)を確認し、監視対象の環境に合う節へ進んでください。
@@ -182,5 +193,3 @@ PRの重複を防ぐ仕組みはホストごとです。
 
 PRを作ると、対象リポジトリの`pull_request`を契機とするワークフローが起動することがあります。
 PR本文を編集する場合は、記録の照合と復旧に使うHTMLコメントの識別マーカーを残してください。
-
-設定の編集と反映は、Dockerでは[修正PRの有効化](remediation-setup-docker.md#docker-enable-pull-requests)、Kubernetesでは[PR作成の有効化と反映](remediation-setup-kubernetes.md#kubernetes-enable-pr-creation)に従ってください。

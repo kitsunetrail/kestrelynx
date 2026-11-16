@@ -56,7 +56,6 @@ Gradleの更新目標の下限、Maven Centralから選ぶ公開版、別のメ�
 同じ対象について、版あり・版なしの依存宣言が混在する場合は手動対応にします。
 
 版なしの直接依存は、Spring BootのBOMが版を指定していなければ手動対応にします。
-`constraints`の追記を検討するのは、対象の依存宣言がなく、Spring BootのBOMも版を指定していない推移的依存です。
 
 書き換える場所ごとの編集内容は次のとおりです。
 
@@ -69,7 +68,6 @@ Gradleの更新目標の下限、Maven Centralから選ぶ公開版、別のメ�
 | 未設定のSpring BootのBOMのプロパティ | `gradle.properties`に追記する |
 | 対象の依存宣言がなく、Spring BootのBOMも版を指定していない推移的依存 | ビルドスクリプトの末尾に`constraints`を追記する |
 
-書き換えの条件は、選んだ変更方法に応じて確認します。
 変更方法を決められない対象は、`gradle_version_source_unsupported`で手動対応にします。
 
 次の表の条件は、その変更方法を使う場合だけ適用します。

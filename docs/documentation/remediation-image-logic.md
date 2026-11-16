@@ -28,7 +28,6 @@ The running image's tag type determines which candidate is compared and how an a
 | Floating tag | Select the content that the same tag currently points to in the registry | If an improvement is confirmed, recommend pulling the image again without creating a PR, because the image reference does not change |
 
 The following hypothetical example shows only tag classification when the current tag is `1.27.2-alpine`.
-If multiple tags qualify, the tag with the highest patch number is selected.
 
 | Tag being considered | Treatment as an update candidate in the same series |
 | --- | --- |
@@ -139,7 +138,6 @@ The tag being checked and the scope over which these conditions must hold depend
 | Dockerfile | The `FROM` tag in a mapped Dockerfile | Every running image |
 
 Published images do not require a mapping.
-For Dockerfiles, the reasons may differ between running images.
 
 The following three reasons qualify for the check.
 
@@ -301,9 +299,6 @@ flowchart TD
     W -->|"Yes"| G["Show only a waiting line stating that no newer patch exists in the same series"]
     W -->|"No"| H["Omit the line"]
 ```
-
-Even when the plan item as a whole cannot be assessed, a card whose findings can be confirmed as unresolved can show an unresolved line.
-The waiting-only branch applies only when both the Dockerfile plan item and the relevant running image confirm that no newer patch exists in the same series.
 
 When no newer-series tag meets the conditions, a waiting-for-a-newer-version line is shown on cards where no newer patch exists in the same series either.
 

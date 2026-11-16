@@ -93,9 +93,6 @@ flowchart TD
     E -->|"No"| G["Examine BOMs imported by the module and its parents"]
 ```
 
-Direct dependency declarations and explicit `dependencyManagement` entries are each searched from the module toward its parents, using the nearest matching declaration.
-If the nearest direct dependency declaration has no version, the search proceeds to explicit `dependencyManagement` and then imported BOMs.
-
 The “root's `pom.xml`” used for edits is the `pom.xml` in the mapped dependency directory.
 Editable sources are changed as follows.
 
@@ -109,7 +106,6 @@ Editable sources are changed as follows.
 | One BOM specifies the version, and its import version is a property | Change or override the property to update the BOM's dependencies together |
 
 The parent version is not raised.
-Updates use property changes, property overrides, or target version pins.
 
 Before changing a property, KestreLynx checks its effects on other uses.
 

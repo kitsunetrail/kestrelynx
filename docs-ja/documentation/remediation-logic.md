@@ -126,8 +126,6 @@ KestreLynxの検査は、読み取ったソース、比較するイメージ、�
 
 公式nodeイメージのnpm・corepackに含まれるパッケージも、この扱いに含めます。
 
-たとえば、コンテナ名が`example-api`なら、対応付けには`container/example-api`を使います。
-
 `container/<名前>`の対応付けでは、次の範囲を確かめます。
 
 | 確認する関係 | 扱い |

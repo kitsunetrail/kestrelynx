@@ -22,7 +22,6 @@ See [Terms](index.md#terms) for the terminology used on this page.
 ## Compose formats {#compose-formats}
 
 For Compose, KestreLynx edits the tag in an image name written directly in `services.<service>.image`.
-It compares the image repository name and tag with those of the running image.
 
 The following checks establish whether the current file declaration matches the running image.
 

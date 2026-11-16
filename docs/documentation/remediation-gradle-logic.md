@@ -56,7 +56,6 @@ An uneditable dependency declaration or BOM property does not cause KestreLynx t
 Mixed versioned and unversioned dependency declarations for the same target require manual handling.
 
 An unversioned direct dependency requires manual handling unless the Spring Boot BOM specifies its version.
-Adding `constraints` is considered for a transitive dependency with no dependency declaration for the target and no version specified by the Spring Boot BOM.
 
 Declarations are edited as follows.
 
@@ -69,7 +68,6 @@ Declarations are edited as follows.
 | Unset Spring Boot BOM property | Append it to `gradle.properties` |
 | Transitive dependency with no target dependency declaration and no version specified by the Spring Boot BOM | Append `constraints` to the end of the build script |
 
-Edit conditions are checked according to the selected edit method.
 A target whose edit method cannot be determined requires manual handling with `gradle_version_source_unsupported`.
 
 Each condition in the following table applies only when that edit method is used.

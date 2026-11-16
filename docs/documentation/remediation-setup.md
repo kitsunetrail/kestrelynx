@@ -14,17 +14,31 @@ See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Enabling remediation plans {#enable-fix-plans}
 
-Enabling remediation plans starts with shared preparation and continues with startup verification for your environment.
+The outline below shows the nesting of the keys in `config.yml` related to remediation plans and remediation PRs, along with the sections and pages for configuring them.
+
+```yaml
+registries:              # Configuring private image authentication (this page)
+remediation:
+  enabled:               # Enabling remediation plans (environment-specific pages)
+  github:
+    token:               # Preparing GitHub access (this page)
+    tokens:              # Preparing GitHub access (this page)
+  mappings:              # Mapping the source (choose keys on this page, write settings on environment-specific pages)
+  pull_requests:
+    enabled:             # Enabling remediation pull requests (environment-specific pages)
+```
+
+Check the “How KestreLynx runs” table for the file or configuration location to edit and how to apply changes.
 
 If you only want to check candidates for published images, skip preparing GitHub repositories, tokens, and mappings, and start at step 3.
 If you also want to check base images or language packages, start at step 1.
 
 Follow these steps in order.
 
-1. [Prepare GitHub access](#prepare-github-access) by choosing the repositories and obtaining any required tokens
-2. Use [Mapping the source](#map-source) to choose configuration keys and file locations for the update targets
-3. If you use private images, [configure registry authentication](#configure-registry-auth)
-4. Follow the page for the environment being monitored to edit and apply the required configuration and verify startup and notifications
+1. [Prepare GitHub access](#prepare-github-access) by choosing the repositories and obtaining any required tokens (`remediation.github.token` or `remediation.github.tokens`)
+2. Use [Mapping the source](#map-source) to choose the configuration keys to use in `remediation.mappings` and file locations for the update targets
+3. If you use private images, [configure registry authentication](#configure-registry-auth) in the top-level `registries` setting
+4. Follow the page for the environment being monitored to edit and apply the required configuration (`remediation.enabled`, `remediation.mappings`, and `remediation.pull_requests.enabled`) and verify startup and notifications
 
 Choose the next page based on the environment being monitored.
 
@@ -53,7 +67,7 @@ If you change `remediation.storage_dir`, choose a location that survives contain
 
 ### Preparing GitHub access {#prepare-github-access}
 
-Preparing GitHub access means choosing where to read source files, where to target PRs, and which tokens are needed.
+To prepare for setting `remediation.github.token` or `remediation.github.tokens`, choose where to read source files, where to target PRs, and which tokens are needed.
 Check token requirements and permissions for your intended use.
 
 | What you want to do | Token |
@@ -93,7 +107,7 @@ See [GitHub access](configuration.md#remediation-github) for configuration detai
 
 ### Mapping the source {#map-source}
 
-Choose the configuration key based on what you want to update and the environment being monitored.
+To prepare for writing `remediation.mappings` on the environment-specific pages, choose the keys to use and target file locations based on what you want to update and the environment being monitored.
 
 | What you want to update | Configuration key | Supported environments |
 | --- | --- | --- |
@@ -103,9 +117,6 @@ Choose the configuration key based on what you want to update and the environmen
 | Image tags in Helm values | `helm_values` | Kubernetes |
 | Dockerfile base images | `dockerfile` | Compose, docker run, Kubernetes |
 | Language packages | `dependencies` | Compose, docker run, Kubernetes |
-
-Use this page to choose configuration keys and file locations for the update targets.
-Follow the page for your environment to edit `remediation.mappings` and enable remediation plans.
 
 Both `path` and `directory` are relative to the GitHub repository root.
 For example, `path: compose.yml` refers to `compose.yml` at the repository root.
@@ -125,7 +136,7 @@ See [Source mappings](configuration.md#remediation-mappings) for constraints on 
 
 ### Configuring private image authentication {#configure-registry-auth}
 
-Private image authentication provides credentials for reading images during remediation planning and regular scans.
+Set credentials for reading private images during remediation planning and regular scans in the top-level `registries` setting.
 This configuration is unnecessary if you use only public images.
 
 If authentication is required, edit `config.yml` in the following order.
@@ -159,7 +170,7 @@ To configure and apply authentication inside a Kubernetes cluster, follow [Authe
 
 ## Enabling remediation pull requests {#enable-pull-requests}
 
-Follow the page for your environment to configure, apply, and verify remediation pull requests.
+Follow the environment-specific pages to set and apply `remediation.pull_requests.enabled` and verify remediation PRs.
 Complete remediation plan startup verification for your environment and confirm that the notifications show the intended workloads, sources, and update targets before continuing.
 
 First check [PR creation prerequisites and cautions](#enable-pr-creation), then follow the section for the environment being monitored.
@@ -182,5 +193,3 @@ On other hosts, omit the relevant mappings or enable plans only with `remediatio
 
 Creating a PR may trigger workflows in the target repository that run on `pull_request`.
 When editing the PR body, preserve the identifying marker in its HTML comment, which is used to reconcile and recover records.
-
-To edit and apply the configuration, follow [Enabling remediation pull requests](remediation-setup-docker.md#docker-enable-pull-requests) for Docker or [Enable and apply PR creation](remediation-setup-kubernetes.md#kubernetes-enable-pr-creation).

@@ -7,7 +7,6 @@ title: Remediation support scope
 Use this page to check supported environments, update targets, input files, and runtimes for remediation plans and pull requests.
 For setup, see [Enabling remediation plans](remediation-setup.md#enable-fix-plans).
 
-To look up a file type, start with [Supported input formats](#supported-inputs).
 Use the following sections to find what you need.
 
 | What you want to check | Section |
@@ -152,9 +151,6 @@ Gradle supports only `linux/amd64` with the execution versions and JDKs listed i
 
 Other Gradle versions, JDKs, or platforms require manual handling.
 The reason code is `gradle_version_unsupported` or `gradle_toolchain_unsupported`.
-
-The KestreLynx developers run the Gradle integration tests and record the passing image digests in the supported version list.
-Users do not need to add or configure these records; KestreLynx uses only images with a record for the execution platform.
 
 The table shows the default runtime for each purpose and when declarations determine the selection.
 

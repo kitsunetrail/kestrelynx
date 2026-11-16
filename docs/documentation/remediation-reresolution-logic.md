@@ -74,7 +74,6 @@ project
         `-- t    Update target: select a fixed version
 ~~~
 
-Both `middle` and the project's direct dependency `top` are selected again.
 The project's declared range for `top` is not widened.
 
 Even if re-resolution cannot be adopted, normal updates that pass validation can be adopted under [Partial PR conditions](remediation-package-logic.md#partial-pr-selection).

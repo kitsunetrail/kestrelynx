@@ -99,8 +99,6 @@ kubectl -n kestrelynx logs deployment/kestrelynx -c kestrelynx > kestrelynx.log 
 
 言語パッケージの更新は、候補を実際に更新し、変更後の依存ファイルを検査する処理です。
 
-KestreLynxはnpm・pnpm・uvを取得・照合して、作業用コンテナへ渡します。
-
 候補が更新されない場合は、次の表で通知の理由と確認先を照合してください。
 
 | 症状 | 確認すること | 参照先 |

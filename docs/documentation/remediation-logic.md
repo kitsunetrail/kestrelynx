@@ -126,8 +126,6 @@ This applies when the image path is under `<prefix>/lib/node_modules` and the pa
 
 Packages included in npm and corepack in the official node images are also handled this way.
 
-For example, a container named `example-api` uses `container/example-api` in its mapping.
-
 For a `container/<name>` mapping, KestreLynx checks the following scope.
 
 | Relationship | Handling |

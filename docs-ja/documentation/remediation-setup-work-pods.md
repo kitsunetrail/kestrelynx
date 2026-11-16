@@ -7,7 +7,6 @@ title: Kubernetesの言語パッケージ更新の準備
 ## 作業用Podの準備 {#kubernetes-language-updates}
 
 npm・pnpm・pip・uv・Go・Gradleの更新は、利用者が用意した作業用namespaceにKestreLynxが作る使い捨ての作業用Podで実行します。
-npm・pnpm・uvでは、更新を妨げる依存元も更新する[依存元からの再解決](remediation-reresolution-logic.md#dependent-reresolution)にも同じPodを使います。
 
 Mavenの更新はKestreLynxによる`pom.xml`の編集とTrivyの検査で行うため、作業用Podの準備は不要です。
 
@@ -79,9 +78,6 @@ PriorityClassの名前は、次のファイルの各キーでそろえます。
 | --- | --- |
 | `20-priorityclass.yaml` | `metadata.name` |
 | `52-policy-params.yaml` | `data.priorityClass` |
-
-入力ファイルを受け取るコンテナに許可するKestreLynxイメージのリポジトリは、`receiverRepository`で指定します。
-パッケージマネージャーを実行するコンテナに許可するイメージのリポジトリは、`workRepositories`で指定します。
 
 KestreLynxのServiceAccount、イメージ、アーキテクチャ、通信先は、次のキーを編集します。
 

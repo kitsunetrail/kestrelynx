@@ -23,8 +23,6 @@ Choose what remediation plans will examine.
       enabled: true
     ```
 
-    Merge into the existing `remediation` section without duplicating it, and keep PR creation at `remediation.pull_requests.enabled: false` (the default).
-
 2. Add mappings to also examine language packages or base images
 
     This example specifies language packages and a base image in the `config.yml` entry under `data` in `deploy/kubernetes/configmap.yaml` (or `config.yml` for a Secret).
@@ -55,9 +53,7 @@ Remediation plans additionally LIST `deployments`, `statefulsets`, `daemonsets`,
 
 Apply the edited configuration and verify that remediation plans run.
 
-1. Verify that you have merged the [remediation plan settings](#kubernetes-plans) into the `config.yml` entry under `data` in `deploy/kubernetes/configmap.yaml` (or `config.yml` for a Secret)
-
-2. From the repository root, apply the ConfigMap and restart the KestreLynx Pod
+1. From the repository root, apply the ConfigMap and restart the KestreLynx Pod
 
     For a Secret, replace the first command that applies the ConfigMap with the Secret update procedure in [Authenticate to private registries inside the cluster](getting-started.md#kubernetes-private-registry).
 
@@ -67,7 +63,7 @@ Apply the edited configuration and verify that remediation plans run.
     kubectl rollout status -n kestrelynx deployment/kestrelynx
     ```
 
-3. Run the following command to check configuration loading and remediation plan results
+2. Run the following command to check configuration loading and remediation plan results
 
     ```sh
     kubectl logs -n kestrelynx deployment/kestrelynx -f
@@ -106,7 +102,6 @@ Use the update target to choose the configuration key and procedure.
 | Language packages | `dependencies` | [Mapping the source](remediation-setup.md#map-source) and [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
 
 Specify only one of `manifest`, `kustomize`, and `helm_values` for a container's image tag.
-Language package updates, except Maven updates, require work Pods.
 
 ### Configure PRs for manifests and Dockerfiles {#kubernetes-pull-requests}
 
@@ -134,13 +129,12 @@ remediation:
 The `runtime` in `target: runtime` is the stage name assigned by `FROM ... AS runtime` in `docker/Dockerfile`.
 Replace it with the stage name used to build the target image, or omit `target` when using the last stage.
 
-To also update language packages, npm, pnpm, pip, uv, Go, and Gradle require [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates).
 See [Manifest formats](remediation-source-formats.md#manifest-formats) for editable formats and [Kubernetes manifest PRs](remediation-kubernetes-logic.md#kubernetes-manifest-prs) for PR creation conditions.
 
 ### Configure Kustomize PRs {#kustomize-pull-requests}
 
 Specify where to update tags managed by Kustomize `images` and which containers a tag change affects.
-Because a container's image tag must have only one source, replace any existing `manifest` or `helm_values` setting with `kustomize`.
+Replace any existing `manifest` or `helm_values` setting with `kustomize`.
 
 1. Check the `images` entry to update in `apps/kustomization.yaml` in the target repository
 
@@ -202,7 +196,7 @@ See [Kubernetes mappings](configuration.md#remediation-mappings-kubernetes) for 
 ### Configure Helm values PRs {#helm-values-pull-requests}
 
 Specify where to update tags managed by Helm values and which containers a tag change affects.
-Because a container's image tag must have only one source, replace any existing `manifest` or `kustomize` setting with `helm_values`.
+Replace any existing `manifest` or `kustomize` setting with `helm_values`.
 
 1. Check the YAML key that specifies the image in `apps/values.yaml` in the target repository
 
@@ -283,15 +277,7 @@ For the storage location, check [`remediation.storage_dir` in Basic settings](co
 
     Manifest, Dockerfile, Kustomize, and Helm values updates use only the read-only RBAC permissions for scanning.
 
-2. From the repository root, apply the ConfigMap and restart the KestreLynx Pod
-
-    For a Secret, replace the first command that applies the ConfigMap with the Secret update procedure in [Authenticate to private registries inside the cluster](getting-started.md#kubernetes-private-registry).
-
-    ```sh
-    kubectl apply -f deploy/kubernetes/configmap.yaml
-    kubectl rollout restart -n kestrelynx deployment/kestrelynx
-    kubectl rollout status -n kestrelynx deployment/kestrelynx
-    ```
+2. From the repository root, run the same commands as in step 1 of [Verify remediation plan startup](#kubernetes-verify-plans) to apply the ConfigMap and restart the KestreLynx Pod
 
 3. Run the following command to verify that PR creation is enabled and check its results
 

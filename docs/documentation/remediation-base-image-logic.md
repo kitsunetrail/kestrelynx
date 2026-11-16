@@ -39,7 +39,6 @@ The selected stage determines which `FROM` is considered for a tag change.
 | Omitted or `runtime` | `runtime` → external image | `FROM debian:12.5.1-slim AS runtime` |
 
 References in `COPY --from` are not followed when identifying the base.
-When the final `runtime` stage is selected, the `FROM` in `build` is not an update target.
 
 The tag determines whether KestreLynx compares update candidates or provides guidance.
 Here, the “current base” is the image that the tag in the current Dockerfile's `FROM` points to in the registry now.
@@ -131,8 +130,7 @@ It considers only CVEs currently detected in that runtime and does not count CVE
 
 Because this is not a comparison of finished images, the classification remains `not_comparable` (“Not comparable”).
 
-Guidance for the entire item combines estimates for all running images using the same `FROM`.
-It includes an estimate for the entire item only when every target running image has the reason `floating_base_unconfirmed`.
+An estimate for the entire item is included only when every target running image has the reason `floating_base_unconfirmed`.
 
 For example, suppose two running images use the same `FROM`, with one image's layers mismatching the current base and the other's matching it.
 The mismatching image retains its individual `rebuild_runtimes` record, but no estimate is included for the entire item.
@@ -250,7 +248,6 @@ For an item with the reason `base_layers_mismatch`, KestreLynx checks all five c
 - The `FROM` after the PR's change and the `FROM` in the current Dockerfile specify the same image and tag
 - Every running image's image ID matches an ID recorded for the running images when the PR was created
 
-For example, using A and B as illustrative tags of the same image, the PR changed A to B and the current Dockerfile also specifies B.
 Image names are matched allowing equivalent names such as `python` and `docker.io/library/python`.
 
 If all conditions are met, the item's reason changes to `base_update_not_deployed`.

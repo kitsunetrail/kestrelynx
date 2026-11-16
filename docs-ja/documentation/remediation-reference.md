@@ -7,7 +7,6 @@ title: 修正計画と修正PRの対応範囲
 修正計画と修正PRを利用できる環境、更新対象、入力ファイル、実行環境を確認するページです。
 有効化は[修正計画の有効化](remediation-setup.md#enable-fix-plans)を参照してください。
 
-ファイルの種類から調べる場合は、[対応する入力形式](#supported-inputs)を入口にしてください。
 調べたいことに応じて、次の節を参照してください。
 
 | 調べたいこと | 節 |
@@ -152,9 +151,6 @@ Gradleは、表に記載した実行版とJDKを使う`linux/amd64`だけをサ�
 
 それ以外のGradleの版・JDK・platformでは、手動対応になります。
 理由コードは`gradle_version_unsupported`または`gradle_toolchain_unsupported`です。
-
-Gradleの統合テストはKestreLynxの開発者が実施し、合格したイメージのdigestを対応版の一覧に記録しています。
-利用者が記録を追加・設定する必要はなく、KestreLynxは実行するplatformの記録があるイメージだけを使います。
 
 用途ごとの既定の実行環境と、宣言に従って選ぶ場合を示します。
 

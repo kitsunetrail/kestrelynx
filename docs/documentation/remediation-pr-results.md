@@ -159,7 +159,6 @@ Spring Boot BOM property overrides remain until removed.
 Remove an override when upgrading the Spring Boot plugin to a version whose BOM specifies a fixed version of the target package.
 
 Added constraints also remain until removed.
-For an update target that a constraint requires at a fixed version or later, decide when to remove the constraint based on updates to the dependent package that requires the target.
 
 Remove the added constraint when upgrading the dependent package to a version that requires a fixed version of the update target.
 After removing the constraint, confirm that the update target still resolves to a fixed version.
@@ -202,7 +201,6 @@ Dockerfile base image updates target findings attributed to the base image's lay
 They also include Node.js and Python runtime findings whose layer is unknown when the version environment variables match between the running image and the base image.
 
 For details, see [Handling language runtime findings](remediation-base-image-logic.md#base-runtime-findings).
-Other findings remaining in the candidate and introduced findings are displayed separately from resolved and remaining targeted findings.
 
 Compose, Kubernetes manifest, Kustomize, and Helm values pull requests also show the count of other findings no longer detected in the candidate.
 The list of other findings no longer detected is included only when such findings exist.

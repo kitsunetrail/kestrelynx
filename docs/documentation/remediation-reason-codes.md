@@ -53,7 +53,6 @@ Category values have the following meanings.
 | `excluded` | Outside automatic candidate selection |
 | `failed` | Processing failed |
 
-`not_comparable` means a comparison cannot be made, `deferred` means processing is postponed, and `failed` means processing failed.
 Check the same item's `reason` for the specific cause.
 
 Slack sometimes uses a display label different from the category value.

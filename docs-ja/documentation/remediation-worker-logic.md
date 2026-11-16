@@ -126,7 +126,6 @@ Kubernetesでは、実行ごとの鍵で暗号化した結果をPodのログか�
 Podのログには、結果の暗号文と定型の状態表示だけを出します。
 
 回収対象はKestreLynxがマネージャーごとに決め、作業用コンテナへの実行指示に含めます。
-利用者による出力ファイルの指定は不要です。
 
 npm・pnpm・uv・Goでは[コンテナへの入力](#worker-inputs)にある依存ファイルを回収し、pnpmの`pnpm-workspace.yaml`は含めません。
 pipでは`requirements.txt`と依存解決のレポートを回収します。

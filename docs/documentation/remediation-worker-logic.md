@@ -126,7 +126,6 @@ After collection, KestreLynx attempts to delete the work container or Pod and va
 Pod logs contain only the encrypted result and fixed status messages.
 
 KestreLynx determines the files to collect for each manager and includes them in the instructions sent to the work container.
-Users do not need to specify output files.
 
 For npm, pnpm, uv, and Go, it collects the dependency files listed in [Container inputs](#worker-inputs), excluding pnpm's `pnpm-workspace.yaml`.
 For pip, it collects `requirements.txt` and the dependency resolution report.

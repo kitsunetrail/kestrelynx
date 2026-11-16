@@ -209,7 +209,6 @@ See [Go candidate selection](remediation-go-logic.md#go-package-selection) for c
 ## Maven dependency files {#maven-inputs}
 
 KestreLynx reads the root and module `pom.xml` files and rewrites the declarations that determine dependency versions.
-Maven updates do not use work containers or Pods.
 
 The required files and update eligibility conditions are listed below.
 
@@ -509,4 +508,3 @@ See [Tool version selection](remediation-node-python-logic.md#tool-version-selec
 | pip | The version in the official Python work image | `26.2.2` in the Python 3.13 work image |
 
 Meeting the version number requirements also requires satisfying [Tool retrieval and verification](remediation-node-python-logic.md#tool-verification) and [Waiting after tool publication](remediation-node-python-logic.md#tool-release-age).
-See [Tool version selection](remediation-node-python-logic.md#tool-version-selection) for how declared and default versions are chosen.

@@ -74,7 +74,6 @@ project
         `-- t    更新対象：修正版を選ぶ
 ~~~
 
-`middle`だけでなく、プロジェクトが直接指定する`top`も選び直します。
 `top`に対するプロジェクトの指定範囲は広げません。
 
 再解決の結果を採用できなくても、通常更新で検査を通る部分は[部分PRの成立条件](remediation-package-logic.md#partial-pr-selection)に従って採用できます。

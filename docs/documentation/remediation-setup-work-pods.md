@@ -7,7 +7,6 @@ title: Preparing Kubernetes language-package updates
 ## Preparing work Pods {#kubernetes-language-updates}
 
 KestreLynx runs npm, pnpm, pip, uv, Go, and Gradle updates in disposable work Pods that it creates in a namespace you prepare.
-For npm, pnpm, and uv, the same Pods also run [re-resolution through dependent packages](remediation-reresolution-logic.md#dependent-reresolution), which updates dependent packages that block the update.
 
 Maven updates use KestreLynx to edit `pom.xml` and Trivy to scan it, so they do not require work Pod setup.
 
@@ -79,9 +78,6 @@ Use the same PriorityClass name for these keys in each file.
 | --- | --- |
 | `20-priorityclass.yaml` | `metadata.name` |
 | `52-policy-params.yaml` | `data.priorityClass` |
-
-Use `receiverRepository` to specify the allowed repository for the KestreLynx image in the container that receives input files.
-Use `workRepositories` to specify the allowed image repositories for the container that runs the package manager.
 
 Edit these keys for the KestreLynx ServiceAccount, images, architecture, and network destinations.
 

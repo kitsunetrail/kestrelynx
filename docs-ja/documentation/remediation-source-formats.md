@@ -22,7 +22,6 @@ Compose、Kubernetesマニフェスト、Kustomize、Helmのvalues、Dockerfile�
 ## Composeの形式 {#compose-formats}
 
 Composeでは、`services.<service>.image`に直接書かれたイメージ名のタグを編集します。
-稼働イメージと、イメージのリポジトリ名とタグを照合します。
 
 現在のファイルの記述と稼働イメージが一致するかを、次のように確認します。
 

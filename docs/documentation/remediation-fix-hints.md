@@ -146,9 +146,6 @@ When the newest pip dependent release is its current version, the check proceeds
 | Fixed versions to compare | Find published stable target releases that fix all target vulnerabilities |
 | Notification conclusion | Report “can use” if any of those fixed releases satisfies every dependent requirement |
 
-When a dependent declares multiple requirements for the target, all of them must be satisfied at the same time.
-If no fixed release satisfies those requirements, the result is “cannot use”.
-
 Slack wording describes the checked dependent release as follows.
 
 | Slack display excerpt | Meaning |
@@ -175,9 +172,6 @@ project
     `-- mkdirp       # Dependent: requirements checked for the release on the preceding “newest” line
         `-- target   # Target: whether that mkdirp requirement allows a fixed version is checked
 ```
-
-The `mkdirp` in the note is the release on the preceding “newest” line.
-The `express` release that uses it has not been checked.
 
 For a dependent package that is not a direct dependency, the note appears below the newest release line when both conditions hold.
 
@@ -361,7 +355,6 @@ flowchart LR
     G -.->|"When declared directly with no dependent"| T
 ```
 
-The dependent brings in the older version, and for Gradle the check also identifies the configuration retaining it.
 The following fictional example shows the notification when a dependent is found.
 
 ```text
@@ -380,11 +373,6 @@ For Gradle, the wording depends on the declaration identified.
 <h3>Conditions</h3>
 
 These hints apply when the target version after the update does not reach the Maven Central release selected for the update (`target_not_updated`).
-The wording depends on the declaration identified.
-
-- For Maven and Gradle, show the names and versions of identified dependents
-- For Gradle, when no dependent is found and the configuration declares the target directly, show the configuration name and the directly declared target version
-
 See [Maven update validation](remediation-maven-logic.md#maven-update-validation) and [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) for the conditions under which they are recorded.
 
 ## Fix checks in Maven and Gradle {#fix-hints-maven-judgement}
@@ -449,7 +437,6 @@ Declarations and read scope also have these conditions.
 
 - If the dependent’s pom does not declare the target, show “does not specify”
 - Check `dependencyManagement` through four successive BOM imports from the initial BOM
-- Do not follow further imports from a BOM four levels beyond the initial BOM
 
 The check result determines the Slack wording as follows.
 

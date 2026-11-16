@@ -209,7 +209,6 @@ Mavenでは、ルートの`pom.xml`から`modules`でたどる子モジュール
 ## Mavenの依存ファイル {#maven-inputs}
 
 ルートと各モジュールの`pom.xml`を読み、KestreLynxが依存の版を決める宣言を書き換えます。
-Mavenの更新では、作業用コンテナ・Podを使いません。
 
 必要なファイルと、更新対象の条件は次のとおりです。
 
@@ -509,4 +508,3 @@ Gradleの更新には作業用コンテナ・Podを使い、ビルドスクリ�
 | pip | 作業用の公式Pythonイメージに含まれる版 | Python 3.13の作業用イメージでは`26.2.2` |
 
 版番号の条件を満たしても、[ツールの取得と照合](remediation-node-python-logic.md#tool-verification)と[ツール公開後の待機](remediation-node-python-logic.md#tool-release-age)の条件を満たす必要があります。
-宣言版と既定版の選び方は[ツール版の選定](remediation-node-python-logic.md#tool-version-selection)を参照してください。

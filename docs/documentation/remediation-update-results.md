@@ -62,9 +62,6 @@ Failure to reach a fixed version does not necessarily mean that the cause was id
 Also, an item being a PR candidate does not mean that every package was updated.
 Go updates are not split into partial PRs.
 
-For pip fixed-version updates, packages blocked by their dependents (`dependents_hold_back`) may be excluded and the remaining updates retried.
-If the remaining updates pass the checks, a PR is created for only those updates.
-
 See [Conditions for partial PRs](remediation-package-logic.md#partial-pr-selection), [Conditions for excluding Maven targets and updating the rest](remediation-maven-logic.md#maven-update-exclusions), and [Conditions for excluding Gradle targets and updating the rest](remediation-gradle-logic.md#gradle-update-exclusions) for the conditions.
 See [Fix pull request contents and pre-merge checks](remediation-pr-results.md) for PR review and [Checking update failures](remediation-troubleshooting.md#check-update-failure) for investigating remaining targets.
 
@@ -86,7 +83,6 @@ project
     `-- minimist 1.2.0           # A normal update can select a fixed version
 ```
 
-A normal update alone cannot bring the `minimist` required by `mkdirp` to a fixed version.
 Dependencies after the update are as follows.
 
 ```text
@@ -97,7 +93,6 @@ project
     `-- minimist 1.2.x           # A fixed version is adopted
 ```
 
-Raising `mkdirp` to `0.5.6` allows `minimist` to reach a fixed version.
 The project's `mkdirp ^0.5.1` requirement stays unchanged.
 
 When `minimist 1.2.8` is adopted, Slack displays the following.
@@ -239,7 +234,6 @@ Rebuild: the first layers of the running image do not match the current node:24-
 ```
 
 The display lines relate to webhook fields as follows.
-Package details appear below the “Rebuild” line.
 
 | Display or estimate | Field | Meaning |
 | --- | --- | --- |

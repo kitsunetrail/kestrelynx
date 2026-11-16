@@ -62,9 +62,6 @@ PRに含まれる更新と残る対応は、次のように区別します。
 また、項目全体がPR候補でも、すべてのパッケージが更新されたとは限りません。
 Goの更新は部分PRに分けません。
 
-pipの固定版更新では、依存元が更新を妨げているパッケージ（`dependents_hold_back`）を除き、残りを更新し直す場合があります。
-残りの更新が検査を通れば、残りだけのPRを作ります。
-
 成立条件は[部分PRの成立条件](remediation-package-logic.md#partial-pr-selection)・[Mavenで対象を外して残りを更新する条件](remediation-maven-logic.md#maven-update-exclusions)・[Gradleで対象を外して残りを更新する条件](remediation-gradle-logic.md#gradle-update-exclusions)を参照してください。
 PRの確認は[修正PRの内容とマージ前の確認](remediation-pr-results.md)、残る対象の確認は[更新を実行できない場合の確認](remediation-troubleshooting.md#check-update-failure)を参照してください。
 
@@ -86,7 +83,6 @@ project
     `-- minimist 1.2.0           # 通常の更新で修正版を選べる
 ```
 
-通常の更新だけでは、`mkdirp`経由の`minimist`を修正版に上げられません。
 更新後の依存関係は、次のとおりです。
 
 ```text
@@ -97,7 +93,6 @@ project
     `-- minimist 1.2.x           # 修正版を採用
 ```
 
-`mkdirp`を`0.5.6`に上げると、`minimist`も修正版を選べるようになります。
 プロジェクトの`mkdirp ^0.5.1`という指定は変えません。
 
 `minimist 1.2.8`を採用する場合、Slackには次のように表示します。
@@ -239,7 +234,6 @@ Slackとメールでは、突き合わせの結果に応じて次のように表
 ```
 
 表示行とWebhookのフィールドの関係は、次のとおりです。
-パッケージの詳細は「再ビルド」の行の下に表示します。
 
 | 表示・見込み | フィールド | 意味 |
 | --- | --- | --- |

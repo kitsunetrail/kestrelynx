@@ -7,14 +7,20 @@ title: Enabling remediation plans and pull requests on Docker
 Enable remediation plans and pull requests for Compose services and containers started with `docker run`.
 Complete the shared preparation in [Enabling remediation plans](remediation-setup.md#enable-fix-plans) first.
 
-If you only want to check candidates for published images without configuring mappings, set only `remediation.enabled: true` and `remediation.pull_requests.enabled: false` in the host's `config.yml`, then proceed to [Verifying remediation plans](#verify-fix-plans).
+If you only want to check candidates for published images without configuring mappings, merge the following minimal configuration into the host's `config.yml`.
+
+```yaml
+remediation:
+  enabled: true
+```
+
+Proceed to [Verifying remediation plans](#verify-fix-plans).
+
 If you configure mappings, use the section matching how the monitored containers are started, then [verify remediation plans](#verify-fix-plans) and [enable pull requests](#docker-enable-pull-requests).
-Choose the commands for applying the configuration based on how KestreLynx itself is started.
 
 Edit the host's `config.yml` in the KestreLynx deployment directory.
 The file created in [Prepare the configuration](getting-started.md#prepare-config) is mounted at `/etc/kestrelynx/config.yml` inside the container.
 
-Merge the examples into the existing configuration without adding a duplicate `remediation` section.
 See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Mapping Compose services {#compose-mappings}
@@ -40,13 +46,10 @@ Specify the file to update using the configuration keys selected in the shared [
 2. Merge the following configuration into `remediation` in the host's `config.yml`
 
     This example is for updating an image tag in a Compose file.
-    `path: compose.yml` refers to a file at the root of the GitHub repository `example/deployment`.
 
     ```yaml
     remediation:
       enabled: true
-      pull_requests:
-        enabled: false
       mappings:
         - workload: compose/example/web
           repository: example/deployment
@@ -62,8 +65,6 @@ Specify the file to update using the configuration keys selected in the shared [
     ```yaml
     remediation:
       enabled: true
-      pull_requests:
-        enabled: false
       mappings:
         - workload: compose/example/web
           repository: example/application
@@ -73,8 +74,6 @@ Specify the file to update using the configuration keys selected in the shared [
           dependencies:
             directory: .
     ```
-
-    `path: Dockerfile` and `directory: .` are relative to the root of the GitHub repository `example/application`.
 
 See [Compose settings](configuration.md#remediation-mappings-compose) for configuration keys and constraints on multiple mappings, and [basic settings](configuration.md#remediation-basics) for the enablement keys.
 
@@ -89,13 +88,10 @@ To update a Dockerfile or dependency files on GitHub, follow these steps.
 2. Replace the example values below with actual values and merge the configuration into `remediation` in the host's `config.yml`
 
     This example maps the Dockerfile and dependency directory for `example-api` in one entry.
-    Use `dockerfile` for base image updates and `dependencies` for language package updates.
 
     ```yaml
     remediation:
       enabled: true
-      pull_requests:
-        enabled: false
       mappings:
         - workload: container/example-api
           repository: example/application
@@ -105,8 +101,6 @@ To update a Dockerfile or dependency files on GitHub, follow these steps.
           dependencies:
             directory: .
     ```
-
-    Within the GitHub repository `example/application`, `path: Dockerfile` refers to the file at the root, and `directory: .` refers to the root directory.
 
     If the repositories or branches differ, use separate entries with the same `workload`.
     See the shared [source mapping instructions](remediation-setup.md#map-source) for preparing dependency directories and [docker run settings](configuration.md#remediation-mappings-docker-run) for name and configuration constraints.
@@ -151,7 +145,6 @@ The following commands use the configuration from the [setup guide](getting-star
 4. In the scan after startup or at the next scheduled time, check for `scanned image` for the target image and `fix plan built` for the remediation plan
 
     Zero values for the candidate counts `update_candidate`, `dependency_update_candidates`, and `dockerfile_update_candidates` do not mean that plans are disabled.
-    `fix plan enabled` and `fix plan built` confirm enablement and plan creation.
 
 5. When a notification arrives, check that the workload, source, and update target are as intended using the [displayed fields](remediation-results.md#slack-fields)
 

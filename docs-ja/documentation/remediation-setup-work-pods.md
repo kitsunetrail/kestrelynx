@@ -54,7 +54,12 @@ Mavenの更新はKestreLynxによる`pom.xml`の編集とTrivyの検査で行う
 
 表のファイル名は、すべて`deploy/kubernetes/work/`からの相対パスです。
 
-作業用namespaceの名前は、次のファイルの各キーでそろえます。
+配布マニフェストでは、作業用namespace・作業用ServiceAccount・PriorityClassの名前はいずれも`kestrelynx-work`です。
+
+`kestrelynx-work`のまま使う名前については、該当する表のキーを編集する必要はありません。
+名前を変える場合は、変更する名前の表にあるキーをすべて同じ新しい名前に書き換えます。
+
+作業用namespaceの名前を変える場合に書き換えるキーは、次のとおりです。
 
 | ファイル | キー |
 | --- | --- |
@@ -65,47 +70,76 @@ Mavenの更新はKestreLynxによる`pom.xml`の編集とTrivyの検査で行う
 | `51-validatingadmissionpolicybinding.yaml` | `spec.paramRef.namespace`、`spec.matchResources.namespaceSelector.matchLabels["kubernetes.io/metadata.name"]` |
 | `52-policy-params.yaml` | `metadata.namespace` |
 
-作業用ServiceAccountの名前は、次のファイルの各キーでそろえます。
+作業用ServiceAccountの名前を変える場合に書き換えるキーは、次のとおりです。
 
 | ファイル | キー |
 | --- | --- |
 | `00-namespace.yaml` | ServiceAccountの`metadata.name` |
 | `52-policy-params.yaml` | `data.serviceAccount` |
 
-PriorityClassの名前は、次のファイルの各キーでそろえます。
+PriorityClassの名前を変える場合に書き換えるキーは、次のとおりです。
 
 | ファイル | キー |
 | --- | --- |
 | `20-priorityclass.yaml` | `metadata.name` |
 | `52-policy-params.yaml` | `data.priorityClass` |
 
-KestreLynxのServiceAccount、イメージ、アーキテクチャ、通信先は、次のキーを編集します。
+名前を変える場合も、`50-validatingadmissionpolicy.yaml`と`51-validatingadmissionpolicybinding.yaml`の`metadata.name`は`kestrelynx-work`から変えないでください。
 
-| 合わせる値 | ファイル | キー |
+KestreLynxは作業用Podを作る前に、`kestrelynx-work`という名前のPod作成規則が有効かを確かめます。
+`metadata.name`を変えると、Pod作成規則が有効かを確かめられず、作業用Podを使う言語パッケージの更新が手動対応になります（`work_admission_unverified`）。
+
+`20-priorityclass.yaml`の`preemptionPolicy: Never`も変えないでください。
+`preemptionPolicy`を変えると、作業用Podを使う言語パッケージの更新が手動対応になります（`work_priority_class_missing`）。
+
+「配布時の値」の列がある3つの表では、配布時の値が配置先と異なる項目だけ、記載されたキーを書き換えます。
+
+`10-rbac.yaml`では、KestreLynxのServiceAccount名とnamespaceを配置先に合わせます。
+
+| 合わせる値 | キー | 配布時の値 |
 | --- | --- | --- |
-| KestreLynxのServiceAccount名とnamespace | `10-rbac.yaml` | RoleBindingの`subjects[0].name`と`subjects[0].namespace` |
-| 入力ファイル受信用のKestreLynxイメージのリポジトリ | `52-policy-params.yaml` | `data.receiverRepository` |
-| 更新実行用イメージのリポジトリ | `52-policy-params.yaml` | `data.workRepositories` |
-| KestreLynxのPodと実行ノードのアーキテクチャ | `52-policy-params.yaml` | `data.arch` |
-| NetworkPolicyのDNSの選択条件 | `40-networkpolicy.yaml` | `spec.egress[0].to[0].namespaceSelector.matchLabels`と`spec.egress[0].to[0].podSelector.matchLabels` |
-| TCP443の送信を許可するアドレス範囲 | `40-networkpolicy.yaml` | `spec.egress[1].to[0].ipBlock.cidr` |
-| TCP443の送信先から除外するアドレス範囲 | `40-networkpolicy.yaml` | `spec.egress[1].to[0].ipBlock.except` |
+| KestreLynxのServiceAccount名とnamespace | RoleBindingの`subjects[0].name`と`subjects[0].namespace` | 名前・namespaceともに`kestrelynx` |
 
-`receiverRepository`の既定値は`ghcr.io/kitsunetrail/kestrelynx`です。
-`workRepositories`の既定値は`docker.io/library/node,docker.io/library/python,docker.io/library/golang,docker.io/library/gradle`です。
+`52-policy-params.yaml`では、イメージのリポジトリとアーキテクチャを配置先に合わせます。
 
-`arch`の既定値は`amd64`です。
+| 合わせる値 | キー | 配布時の値 |
+| --- | --- | --- |
+| 入力ファイル受信用のKestreLynxイメージのリポジトリ | `data.receiverRepository` | `ghcr.io/kitsunetrail/kestrelynx` |
+| 更新実行用イメージのリポジトリ | `data.workRepositories` | `docker.io/library/`の`node`・`python`・`golang`・`gradle` |
+| KestreLynxのPodと実行ノードのアーキテクチャ | `data.arch` | `amd64` |
 
+`workRepositories`には、作業用Podに使ってよいイメージのリポジトリ名の一覧を、空白を入れずカンマで区切った1つの文字列として指定します。
 リポジトリ名にはレジストリのホスト名を含め、タグとdigestは含めません。
-`remediation.worker.registry`でミラーを設定している場合は、`workRepositories`の4つのリポジトリをすべて取得先に合わせます。
+
+更新しない言語のリポジトリは、`workRepositories`から外せます。
+更新する言語パッケージと必要なリポジトリの配布時の名前は、次のとおりです。
+
+| 更新する言語パッケージ | 必要なリポジトリ |
+| --- | --- |
+| npm・pnpm | `docker.io/library/node` |
+| pip・uv | `docker.io/library/python` |
+| Go | `docker.io/library/golang` |
+| Gradle | `docker.io/library/gradle` |
+
+`remediation.worker.registry`でミラーを設定している場合は、`workRepositories`に書くリポジトリをすべてミラーの取得先に合わせます。
+
+更新に使うイメージのリポジトリが`workRepositories`にない場合は、その更新が失敗します（`update_job_failed`）。
+失敗の詳細には、追加する必要があるリポジトリ名が表示されます。
+
+`workRepositories`のどのリポジトリもKestreLynxの作業用イメージと一致しない場合は、作業用Podを使う言語パッケージの更新がすべて手動対応になります（`work_admission_unverified`）。
+
+`40-networkpolicy.yaml`では、NetworkPolicyのDNSの選択条件とTCP443の送信先のアドレス範囲を配置先に合わせます。
+
+| 合わせる値 | キー | 配布時の値 |
+| --- | --- | --- |
+| NetworkPolicyのDNSの選択条件 | `spec.egress[0].to[0].namespaceSelector.matchLabels`と`spec.egress[0].to[0].podSelector.matchLabels` | `kubernetes.io/metadata.name: kube-system`、`k8s-app: kube-dns` |
+| TCP443の送信を許可するアドレス範囲 | `spec.egress[1].to[0].ipBlock.cidr` | `0.0.0.0/0` |
+| TCP443の送信先から除外するアドレス範囲 | `spec.egress[1].to[0].ipBlock.except` | `10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`、`169.254.0.0/16`、`100.64.0.0/10` |
 
 配布例は、`cidr: 0.0.0.0/0`から`except`の範囲を除いた宛先にTCP443の送信を許可します。
 クラスタのPod・Service・ノードのアドレス範囲を、除外する`except`に反映してください。
 
 イメージの取得先の設定は[作業用コンテナ](configuration.md#remediation-worker)、通信制限の範囲は[作業用コンテナのネットワーク](outbound-communication.md#worker-network)を参照してください。
-
-`50-validatingadmissionpolicy.yaml`と`51-validatingadmissionpolicybinding.yaml`の`metadata.name`は、確認処理が使う`kestrelynx-work`のままにします。
-`20-priorityclass.yaml`の`preemptionPolicy: Never`も維持します。
 
 ### マニフェストの適用 {#work-pod-apply}
 

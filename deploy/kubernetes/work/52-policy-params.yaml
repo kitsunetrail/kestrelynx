@@ -2,7 +2,8 @@
 # installation: receiverRepository is the repository of the KestreLynx image the
 # receiving container runs (without tag or digest), workRepositories the
 # repositories of the official Node.js, Python, Go and Gradle images, or of the mirror
-# configured in remediation.worker.registry, arch the architecture of the nodes
+# configured in remediation.worker.registry (the repository of a language that
+# is not updated may be left out), arch the architecture of the nodes
 # and of the KestreLynx Pod, and the max* values upper bounds on what a Pod may
 # ask for. serviceAccount and priorityClass name the objects in
 # 00-namespace.yaml and 20-priorityclass.yaml. Work Pods do not use a

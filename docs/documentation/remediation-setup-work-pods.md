@@ -54,7 +54,12 @@ Adjust the names, allowed images, and network destinations for work Pods in the 
 
 All filenames in the tables are relative to `deploy/kubernetes/work/`.
 
-Use the same work namespace name for these keys in each file.
+In the supplied manifests, the work namespace, work ServiceAccount, and PriorityClass are all named `kestrelynx-work`.
+
+For any name you keep as `kestrelynx-work`, you do not need to edit the keys in the table for that name.
+If you change a name, set all keys in the table for the name you are changing to the same new name.
+
+The following table lists the keys to change when renaming the work namespace.
 
 | File | Keys |
 | --- | --- |
@@ -65,47 +70,76 @@ Use the same work namespace name for these keys in each file.
 | `51-validatingadmissionpolicybinding.yaml` | `spec.paramRef.namespace`, `spec.matchResources.namespaceSelector.matchLabels["kubernetes.io/metadata.name"]` |
 | `52-policy-params.yaml` | `metadata.namespace` |
 
-Use the same work ServiceAccount name for these keys in each file.
+The following table lists the keys to change when renaming the work ServiceAccount.
 
 | File | Keys |
 | --- | --- |
 | `00-namespace.yaml` | ServiceAccount `metadata.name` |
 | `52-policy-params.yaml` | `data.serviceAccount` |
 
-Use the same PriorityClass name for these keys in each file.
+The following table lists the keys to change when renaming the PriorityClass.
 
 | File | Keys |
 | --- | --- |
 | `20-priorityclass.yaml` | `metadata.name` |
 | `52-policy-params.yaml` | `data.priorityClass` |
 
-Edit these keys for the KestreLynx ServiceAccount, images, architecture, and network destinations.
+Even when renaming resources, do not change `metadata.name` in `50-validatingadmissionpolicy.yaml` or `51-validatingadmissionpolicybinding.yaml` from `kestrelynx-work`.
 
-| Value to align | File | Keys |
+Before creating work Pods, KestreLynx checks that the Pod creation policy named `kestrelynx-work` is enforced.
+Changing `metadata.name` prevents KestreLynx from confirming that the Pod creation policy is enforced, so language-package updates that use work Pods require manual handling (`work_admission_unverified`).
+
+Do not change `preemptionPolicy: Never` in `20-priorityclass.yaml` either.
+Changing `preemptionPolicy` makes language-package updates that use work Pods require manual handling (`work_priority_class_missing`).
+
+In the three tables with a "Value in supplied manifests" column, edit the listed keys only for items whose values in the supplied manifests differ from your installation.
+
+In `10-rbac.yaml`, align the KestreLynx ServiceAccount name and namespace with your installation.
+
+| Value to align | Keys | Value in supplied manifests |
 | --- | --- | --- |
-| KestreLynx ServiceAccount name and namespace | `10-rbac.yaml` | RoleBinding `subjects[0].name` and `subjects[0].namespace` |
-| KestreLynx image repository for receiving input files | `52-policy-params.yaml` | `data.receiverRepository` |
-| Image repositories for running updates | `52-policy-params.yaml` | `data.workRepositories` |
-| Architecture of the KestreLynx Pod and execution nodes | `52-policy-params.yaml` | `data.arch` |
-| NetworkPolicy DNS selectors | `40-networkpolicy.yaml` | `spec.egress[0].to[0].namespaceSelector.matchLabels` and `spec.egress[0].to[0].podSelector.matchLabels` |
-| Address range allowed for outbound TCP 443 | `40-networkpolicy.yaml` | `spec.egress[1].to[0].ipBlock.cidr` |
-| Address ranges excluded from outbound TCP 443 | `40-networkpolicy.yaml` | `spec.egress[1].to[0].ipBlock.except` |
+| KestreLynx ServiceAccount name and namespace | RoleBinding `subjects[0].name` and `subjects[0].namespace` | Name and namespace: `kestrelynx` |
 
-The default for `receiverRepository` is `ghcr.io/kitsunetrail/kestrelynx`.
-The default for `workRepositories` is `docker.io/library/node,docker.io/library/python,docker.io/library/golang,docker.io/library/gradle`.
+In `52-policy-params.yaml`, align the image repositories and architecture with your installation.
 
-The default for `arch` is `amd64`.
+| Value to align | Keys | Value in supplied manifests |
+| --- | --- | --- |
+| KestreLynx image repository for receiving input files | `data.receiverRepository` | `ghcr.io/kitsunetrail/kestrelynx` |
+| Image repositories for running updates | `data.workRepositories` | `node`, `python`, `golang`, and `gradle` under `docker.io/library/` |
+| Architecture of the KestreLynx Pod and execution nodes | `data.arch` | `amd64` |
 
+Set `workRepositories` to a list of image repository names allowed for work Pods, specified as a single string separated by commas without spaces.
 Include the registry hostname in repository names, but omit tags and digests.
-If you configure a mirror with `remediation.worker.registry`, align all four repositories in `workRepositories` with their download locations.
+
+You can remove repositories for languages you do not update from `workRepositories`.
+The following table lists the language packages to update and the required repository names in the supplied manifests.
+
+| Language packages to update | Required repository |
+| --- | --- |
+| npm and pnpm | `docker.io/library/node` |
+| pip and uv | `docker.io/library/python` |
+| Go | `docker.io/library/golang` |
+| Gradle | `docker.io/library/gradle` |
+
+If you configure a mirror with `remediation.worker.registry`, align all repositories listed in `workRepositories` with their download locations in the mirror.
+
+If the image repository used for an update is absent from `workRepositories`, that update fails (`update_job_failed`).
+The failure details show the repository name that needs to be added.
+
+If none of the repositories in `workRepositories` match any of KestreLynx's work images, all language-package updates that use work Pods require manual handling (`work_admission_unverified`).
+
+In `40-networkpolicy.yaml`, align the NetworkPolicy DNS selectors and outbound TCP 443 address ranges with your installation.
+
+| Value to align | Keys | Value in supplied manifests |
+| --- | --- | --- |
+| NetworkPolicy DNS selectors | `spec.egress[0].to[0].namespaceSelector.matchLabels` and `spec.egress[0].to[0].podSelector.matchLabels` | `kubernetes.io/metadata.name: kube-system`, `k8s-app: kube-dns` |
+| Address range allowed for outbound TCP 443 | `spec.egress[1].to[0].ipBlock.cidr` | `0.0.0.0/0` |
+| Address ranges excluded from outbound TCP 443 | `spec.egress[1].to[0].ipBlock.except` | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `100.64.0.0/10` |
 
 The supplied example allows outbound TCP 443 to destinations in `cidr: 0.0.0.0/0`, excluding the ranges in `except`.
 Include the cluster's Pod, Service, and node address ranges in the exclusions in `except`.
 
 See [Work containers](configuration.md#remediation-worker) for image source settings and [Work container network](outbound-communication.md#worker-network) for the scope of network restrictions.
-
-Keep `metadata.name` in `50-validatingadmissionpolicy.yaml` and `51-validatingadmissionpolicybinding.yaml` set to `kestrelynx-work`, which the verification process uses.
-Also retain `preemptionPolicy: Never` in `20-priorityclass.yaml`.
 
 ### Applying the manifests {#work-pod-apply}
 

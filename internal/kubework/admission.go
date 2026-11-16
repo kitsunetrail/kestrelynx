@@ -207,18 +207,25 @@ func (r *Runner) probeAdmission(ctx context.Context) *workexec.Unavailable {
 	if major < 1 || (major == 1 && minor < MinMinorVersion) {
 		return unavailable(true, ReasonClusterTooOld, "the cluster is version %d.%d; the work Pod policy needs 1.%d or newer", major, minor, MinMinorVersion)
 	}
-	image := ""
-	for _, img := range r.cfg.Images {
-		image = img
-		break
+	// The right Pod is tried with one image of each repository in turn: the
+	// policy's parameters list the repositories it allows, and an
+	// installation may list only those of the languages it updates.
+	images := r.probeImages()
+	var good, got map[string]any
+	for _, image := range images {
+		params := r.params(workexec.JobSpec{JobID: "admission-check", Timeout: time.Minute, Resources: probeResources()}, image)
+		good = BuildPod(params)
+		got, err = r.cfg.API.CreatePod(ctx, good, true)
+		if !refusedByImageRule(err) {
+			break
+		}
 	}
-	params := r.params(workexec.JobSpec{JobID: "admission-check", Timeout: time.Minute, Resources: probeResources()}, image)
-	good := BuildPod(params)
-
-	got, err := r.cfg.API.CreatePod(ctx, good, true)
 	if err != nil {
 		var ae *APIError
 		switch {
+		case refusedByImageRule(err):
+			return unavailable(true, ReasonAdmissionUnverified, "the policy allows none of the work images: receiverRepository must be the repository of %s and workRepositories must list at least one of %s",
+				repositoryOf(r.cfg.ReceiverImage), strings.Join(repositoriesOf(images), ", "))
 		case errors.As(err, &ae) && ae.Code == 403 && strings.Contains(ae.Message, "exceeded quota"):
 			return unavailable(false, ReasonPodLimit, "the quota of the work namespace is used up: %s", clip(ae.Message, 200))
 		case errors.As(err, &ae) && strings.Contains(ae.Message, "no PriorityClass with name"):
@@ -265,6 +272,50 @@ func (r *Runner) probeAdmission(ctx context.Context) *workexec.Unavailable {
 		}
 	}
 	return nil
+}
+
+// probeImages are the images the right Pod of the check is tried with: one of
+// each repository the work images come from, in a fixed order.
+func (r *Runner) probeImages() []string {
+	all := make([]string, 0, len(r.cfg.Images)+len(r.cfg.ProbeImages))
+	for _, img := range r.cfg.Images {
+		all = append(all, img)
+	}
+	all = append(all, r.cfg.ProbeImages...)
+	sort.Strings(all)
+	seen := map[string]bool{}
+	var out []string
+	for _, img := range all {
+		if repo := repositoryOf(img); !seen[repo] {
+			seen[repo] = true
+			out = append(out, img)
+		}
+	}
+	if len(out) == 0 {
+		return []string{""}
+	}
+	return out
+}
+
+// repositoryOf is the part of an image reference before its digest.
+func repositoryOf(image string) string {
+	repo, _, _ := strings.Cut(image, "@")
+	return repo
+}
+
+func repositoriesOf(images []string) []string {
+	out := make([]string, len(images))
+	for i, img := range images {
+		out[i] = repositoryOf(img)
+	}
+	return out
+}
+
+// refusedByImageRule reports whether a creation was refused by the policy's
+// rule on the images of a Pod.
+func refusedByImageRule(err error) bool {
+	var ae *APIError
+	return errors.As(err, &ae) && strings.Contains(ae.Message, refusalPrefix()+RuleMessage("images"))
 }
 
 func probeResources() workexec.Resources {

@@ -53,6 +53,10 @@ type Config struct {
 	// Gradle version and a JDK) is not listed whole; the image of one is
 	// looked up when a job asks for it.
 	ImageFor func(runtime string) (string, bool)
+	// ProbeImages are work images of runtimes Images does not list. The
+	// admission check tries them too when it looks for an image the policy
+	// of the work namespace allows.
+	ProbeImages []string
 	// CoverFor gives the volume the work image of a runtime key declares, as
 	// Params.Cover; nil or "" means none.
 	CoverFor   func(runtime string) string
@@ -373,6 +377,9 @@ func (r *Runner) createFailed(ctx context.Context, p Params, err error) error {
 		if ae.Code == 409 {
 			r.removeIfOurs(p)
 			return unavailable(false, ReasonPodLimit, "a Pod of the same name existed and was removed; the job is tried again later")
+		}
+		if refusedByImageRule(err) {
+			return fmt.Errorf("create the Pod: the policy of the work namespace does not allow the work image: workRepositories of its parameters must list %s: %w", repositoryOf(p.WorkImage), err)
 		}
 		return fmt.Errorf("create the Pod: %w", err)
 	}

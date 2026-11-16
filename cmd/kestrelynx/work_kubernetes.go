@@ -120,21 +120,31 @@ func buildKubernetesLanguageConfig(cfg config.Config, log *slog.Logger) *runner.
 		}
 	}
 	limits := workTransferLimits()
+	// The Gradle runtimes are too many to list; the image of one is looked
+	// up when a job asks for it.
+	imageFor := func(key string) (string, bool) {
+		spec, err := onDemandRuntime(key, "linux/"+goarch)
+		if err != nil {
+			return "", false
+		}
+		if _, ok := kubernetesCover(spec); !ok {
+			return "", false
+		}
+		return kubernetesWorkImageRef(spec, rc.Worker.Registry), true
+	}
+	// One Gradle image stands for their repository in the admission check, so
+	// an installation that updates only Gradle may allow only that one.
+	var probeImages []string
+	for _, spec := range worker.Runtimes() {
+		if img, ok := imageFor(spec.ID); ok {
+			probeImages = append(probeImages, img)
+			break
+		}
+	}
 	rn, err := kubework.NewRunner(kubework.Config{
 		API: api, Namespace: k.Namespace, ServiceAccount: k.ServiceAccount, PriorityClass: k.PriorityClass,
 		Arch: goarch, ReceiverImage: receiver, Images: images,
-		// The Gradle runtimes are too many to list; the image of one is looked
-		// up when a job asks for it.
-		ImageFor: func(key string) (string, bool) {
-			spec, err := onDemandRuntime(key, "linux/"+goarch)
-			if err != nil {
-				return "", false
-			}
-			if _, ok := kubernetesCover(spec); !ok {
-				return "", false
-			}
-			return kubernetesWorkImageRef(spec, rc.Worker.Registry), true
-		},
+		ImageFor: imageFor, ProbeImages: probeImages,
 		CoverFor: func(key string) string {
 			spec, ok := worker.LookupRuntime(key)
 			if !ok {

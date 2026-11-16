@@ -10,7 +10,7 @@ See [Interpreting update results](remediation-update-results.md#interpreting-upd
 A proposed candidate or merged PR does not mean that vulnerabilities have been resolved in running containers.
 See [Fix pull request contents and pre-merge checks](remediation-pr-results.md) for PR bodies and [Overview of the hints](remediation-fix-hints.md#fix-hints) for explanations of blocked updates.
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Remediation plans in Slack {#reading-results-in-slack-and-webhooks}
 

@@ -7,7 +7,7 @@ title: Enabling remediation plans and pull requests on Kubernetes
 Use this procedure to check remediation plans and then enable remediation pull requests in KestreLynx running on Kubernetes.
 Complete the [shared preparation](remediation-setup.md#enable-fix-plans) first (GitHub access, source mappings, and private image authentication if needed), then configure plans, verify startup, configure pull requests, and [enable and apply PR creation](#kubernetes-enable-pr-creation).
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Configure remediation plans {#kubernetes-plans}
 

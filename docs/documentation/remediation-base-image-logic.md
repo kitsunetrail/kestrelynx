@@ -8,7 +8,7 @@ For pinned tags, KestreLynx selects candidates for PRs that change the tag in `F
 For floating tags, it provides rebuild guidance.
 
 This page explains how KestreLynx selects the `FROM` to update, matches base layers, and estimates the effect of rebuilding.
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Identifying the base image {#base-image-selection}
 

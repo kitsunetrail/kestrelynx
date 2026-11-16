@@ -10,7 +10,7 @@ title: 修正計画と修正PRの有効化の手順
 機能については[機能の概要](remediation.md#overview)、対象となる環境と入力は[対応範囲](remediation-reference.md#scope-and-requirements)で確認できます。
 必要な通信先は[通信先一覧](outbound-communication.md#outbound-communication)を参照してください。
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 修正計画の有効化 {#enable-fix-plans}
 

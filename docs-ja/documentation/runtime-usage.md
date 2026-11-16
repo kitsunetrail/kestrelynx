@@ -21,7 +21,7 @@ KestreLynxは観測結果をSlackとWebhookの通知に反映します。
 | `not_observed` | 観測期間に使用を確認できなかった状態です。使われていないことは意味しません。 |
 | `unavailable` | 証拠が足りず判定できない状態です。理由を付けて表示します。 |
 
-表のNode.js本体・Python本体は、KestreLynxがセキュリティ情報と照合するランタイム本体を指します（[Node.js本体の検出結果](scan-logic.md#node-runtime)・[Python本体の検出結果](scan-logic.md#python-runtime)）。
+表のNode.js本体・Python本体は、KestreLynxがセキュリティ情報と照合するランタイム本体を指します（[Node.js本体の所見](scan-logic.md#node-runtime)・[Python本体の所見](scan-logic.md#python-runtime)）。
 パッケージの種類ごとに、使用中とみなす条件を次に示します。
 
 | パッケージの種類 | 使用中とみなす条件 |

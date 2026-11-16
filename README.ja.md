@@ -32,7 +32,7 @@
 ### スキャンと通知
 
 - **イメージスキャン**：[Trivy](https://github.com/aquasecurity/trivy)のイメージスキャンで識別できるOSパッケージと言語パッケージのHIGH／CRITICALの検出（既定）
-- **Node.js・Python本体の照合**：Trivyが報告しない公式`node`・`python`イメージのランタイム本体を、各プロジェクトのセキュリティ情報と照合して検出結果に追加
+- **Node.js・Python本体の照合**：Trivyが報告しない公式`node`・`python`イメージのランタイム本体を、各プロジェクトのセキュリティ情報と照合して所見に追加
 - **重複スキャンの抑制**：同一と確認できたイメージの結果共有
 - **優先順位付け**：深刻度・CISA KEV・EPSSに基づく今すぐ対応／要監視／低優先度の分類
 - **稼働時の使用状況（実験的）**：Docker向けの任意のSensorで使用中のパッケージの所見に印を付け、優先度を変えずに同じ区分内で先に表示（[稼働時の使用状況](docs-ja/documentation/runtime-usage.md)）

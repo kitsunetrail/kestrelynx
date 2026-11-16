@@ -16,7 +16,7 @@ Use the following sections to find what you need.
 | File syntax | [Supported input formats](#supported-inputs) |
 | Runtime versions | [Supported runtimes](#supported-runtimes) |
 
-For the terms used on this page, see [Terms](remediation.md#terms).
+For the terms used on this page, see [Terms](index.md#terms).
 
 ## Scope and requirements {#scope-and-requirements}
 

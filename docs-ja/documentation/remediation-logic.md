@@ -27,7 +27,7 @@ Kubernetesでは、修正PRを有効にしてnpm・pnpm・pip・uv・Go・Gradle
 
 入力の対応範囲は[対応する入力](remediation-reference.md#supported-inputs)、判定に付くコードは[理由コード](remediation-reason-codes.md#reason-codes)を参照してください。
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 処理の流れ {#processing-flow}
 

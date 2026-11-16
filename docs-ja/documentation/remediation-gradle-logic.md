@@ -14,7 +14,7 @@ Gradleの更新は、次の流れで進みます。
 3. [Gradleの更新結果の検査](#gradle-update-validation)で、返されたファイル・lockfile・所見を確認する
 4. 更新できない対象があれば、[対象を外して残りを更新する条件](#gradle-update-exclusions)で更新を続けられるか判断する
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## Gradleの候補選定 {#gradle-package-selection}
 

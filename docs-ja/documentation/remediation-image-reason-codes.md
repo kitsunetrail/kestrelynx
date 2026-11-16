@@ -30,7 +30,7 @@ KEVは、悪用が確認された脆弱性を収録するCISAのKnown Exploited 
 
 Kustomize・Helmのvaluesでも使うファイル取得・イメージ名照合のコードは[Kubernetesマニフェスト](#source-kubernetes-reasons)、通常のinit containerの確認は[Kustomize](#source-kustomize-reasons)にも掲載しています。
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## イメージ候補の理由 {#image-reasons}
 

@@ -10,7 +10,7 @@ For Slack notifications, see [Remediation plans in Slack](remediation-results.md
 For every pull request, KestreLynx has not verified resolution in the completed image or in running containers after deployment.
 Dependency installation and application operation are also unverified; see [Resolved findings in comparisons](#verification-results) for details.
 
-For the terms used on this page, see [Terms](remediation.md#terms).
+For the terms used on this page, see [Terms](index.md#terms).
 
 ## Pull request contents and pre-merge checks {#pr-body-and-checks}
 

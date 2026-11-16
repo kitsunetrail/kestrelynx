@@ -11,7 +11,7 @@ title: 配布イメージの更新候補の選定
 候補の採用と、新しい系列で所見が解消するかの案内は、別の判断です。
 処理全体と検証の範囲は[計画とPRの実行範囲](remediation-logic.md#plan-and-pr-execution)と[対象別の検証範囲](remediation-logic.md#verification-scope)を参照してください。
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## イメージ候補の選定 {#image-selection}
 

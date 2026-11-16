@@ -17,7 +17,7 @@ title: 言語パッケージの更新の共通の規則
 | パッケージマネージャーを動かす環境 | [作業用コンテナの実行](remediation-worker-logic.md#worker-execution) |
 
 完成イメージのビルド・動作確認・配置に関する検証範囲は、[対象別の検証範囲](remediation-logic.md#verification-scope)を参照してください。
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 言語パッケージの候補選定 {#package-selection}
 

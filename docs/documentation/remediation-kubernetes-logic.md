@@ -7,7 +7,7 @@ title: Conditions for Kubernetes tag update pull requests
 This page explains when KestreLynx creates tag update PRs for Kubernetes manifests, Kustomize, and Helm values, and which PRs it skips when checks fail.
 For how candidate tags are chosen, see [Image candidate selection](remediation-image-logic.md#image-selection).
 
-For the terms used on this page, see [Terms](remediation.md#terms).
+For the terms used on this page, see [Terms](index.md#terms).
 
 ## Kubernetes image references and pulling images again {#kubernetes-image-references}
 

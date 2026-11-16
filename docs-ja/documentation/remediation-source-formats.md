@@ -17,7 +17,7 @@ Compose、Kubernetesマニフェスト、Kustomize、Helmのvalues、Dockerfile�
 | Dockerfile | [Dockerfileの形式](#dockerfile-formats) |
 
 理由コードの意味は[ソースの理由](remediation-image-reason-codes.md#source-reasons)、PRを見送る範囲は各節末尾の規則を参照してください。
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## Composeの形式 {#compose-formats}
 

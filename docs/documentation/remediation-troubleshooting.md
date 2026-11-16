@@ -6,7 +6,7 @@ Choose the section matching your situation, then compare your diagnostics with i
 For language packages, “Update candidate” alone does not distinguish an update execution problem from a PR creation problem.
 If you cannot tell, start with [Checking update failures](#check-update-failure).
 
-For terms used on this page, see [Terms](remediation.md#terms).
+For terms used on this page, see [Terms](index.md#terms).
 
 | Situation | Section |
 | --- | --- |

@@ -27,7 +27,7 @@ The following pages explain the rules for each target.
 
 See [Supported input formats](remediation-reference.md#supported-inputs) for accepted inputs and [Reason codes](remediation-reason-codes.md#reason-codes) for codes attached to decisions.
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Processing flow {#processing-flow}
 

@@ -8,7 +8,7 @@ title: 更新結果と再取得・再ビルドの案内の読み方
 「再pull」「再ビルド」の案内で分かることと、まだ確認できていないことも説明します。
 
 通知の各行の意味は[Slackの修正計画](remediation-results.md#reading-results-in-slack-and-webhooks)を参照してください。
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 更新結果の解釈 {#interpreting-updates}
 

@@ -10,7 +10,7 @@ Remediation plans propose image and dependency updates based on findings in runn
 Enabling fix pull requests also creates PRs for eligible updates to files in the GitHub repositories specified in your configuration.
 
 Proposals and PR states appear in the Slack “Fix plan” section.
-See [Terms](#terms) for the terminology used on this page.
+<span id="terms"></span>See [Terms](index.md#terms) for the terminology used on this page.
 
 When you run a ready-made image as provided, its published image tag is the update target.
 When you build from your own source, configure the Dockerfile base image and dependency files as update targets, whether or not you push the resulting image to a registry.
@@ -27,8 +27,8 @@ The table shows what each plan proposes and which files a fix PR can change when
 For containers started with `docker run`, fix PRs can update Dockerfiles and dependencies.
 They do not change the image tag used to start the container.
 
-The following excerpt shows a Slack notification after creating a dependency update PR.
-This fictional example shows the file to change, the PR number, and the versions before and after the update.
+The following example shows a Slack notification after creating a dependency update PR.
+It shows the file to change, the PR number, and the versions before and after the update.
 
 ```text
 🔧 Fix plan
@@ -57,38 +57,9 @@ GitHub is the only supported source host, and language packages must come from p
 
 See [Scope and requirements](remediation-reference.md#scope-and-requirements) for environment requirements and supported update targets.
 
-## Terms {#terms}
-
-This table defines the shared terminology referenced by the pages in this chapter.
-
-| Term | Meaning |
-| --- | --- |
-| Finding | A vulnerability detected by scanning |
-| Running image | An image used by a running container |
-| Published image | A ready-made image pulled from a registry and run as provided |
-| Base image | An image specified by `FROM` in a Dockerfile |
-| Pinned tag | A tag specifying a complete version, such as `1.27.0` |
-| Floating tag | A tag whose content can change, such as `latest` or `22-alpine` |
-| Series (image tags) | Versions whose image tags share the same major, minor, prefix, and suffix |
-| Mapping | An entry in `remediation.mappings` that links running containers to files in a GitHub repository |
-| Workload key | The value in a mapping’s `workload` that identifies a Compose service, Docker container, or Kubernetes container |
-| Fixed version | A version reported by vulnerability information to fix the vulnerability |
-| Running version | The version detected in the running image |
-| Update target | The minimum version used when selecting an update |
-| Adopted version | The version confirmed in the dependency files after an update |
-| Manual handling | An update left to your judgment without automatic changes by KestreLynx (value: `manual`; Slack: “Needs a decision”) |
-| Deferred | Processing postponed to a later cycle because of limits, waiting periods, or similar conditions (value: `deferred`; Slack: “Deferred”) |
-| Work container (work Pod) | A disposable container created by KestreLynx to run a package manager (a work Pod on Kubernetes) |
-| Cycle | One regularly scheduled run from scanning through notification |
-
 ## Page guide {#contents}
 
-This guide lists the pages to read when getting started and pages to consult by topic.
-When getting started, read in this order.
-
-1. Read the [Overview](#overview) to understand the proposals and your responsibilities
-2. Read [Common preparation](remediation-setup.md), then follow the [Docker](remediation-setup-docker.md) or [Kubernetes](remediation-setup-kubernetes.md) setup steps for the environment you monitor
-3. Read [Reading notifications](remediation-results.md) to check proposals and PR states
+This guide lists the pages to consult by topic.
 
 The following pages cover the overview and setup steps to read when getting started.
 

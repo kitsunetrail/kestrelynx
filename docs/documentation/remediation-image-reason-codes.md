@@ -30,7 +30,7 @@ Choose a subsection for the target or processing stage you want to check.
 
 File retrieval and image-reference matching codes shared with Kustomize and Helm values appear under [Kubernetes manifests](#source-kubernetes-reasons), and ordinary init-container checks appear under [Kustomize](#source-kustomize-reasons).
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Image candidate reasons {#image-reasons}
 

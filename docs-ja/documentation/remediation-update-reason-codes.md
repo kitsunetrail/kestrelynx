@@ -25,7 +25,7 @@ KEVは、悪用が確認された脆弱性を収録するCISAのKnown Exploited 
 | [PR処理の理由](#pr-reasons) |
 | [保存処理の理由](#storage-reasons) |
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 実行環境の理由 {#runtime-reasons}
 

@@ -15,7 +15,7 @@ Edit the host's `config.yml` in the KestreLynx deployment directory.
 The file created in [Prepare the configuration](getting-started.md#prepare-config) is mounted at `/etc/kestrelynx/config.yml` inside the container.
 
 Merge the examples into the existing configuration without adding a duplicate `remediation` section.
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Mapping Compose services {#compose-mappings}
 

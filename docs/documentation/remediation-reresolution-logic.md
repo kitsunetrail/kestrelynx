@@ -11,7 +11,7 @@ Re-resolution through dependent packages fixes vulnerabilities blocked by a depe
 Dependent packages move to newer versions within the ranges declared by the project.
 This mechanism applies to npm, pnpm, and uv; it is not used for pip, Go, Maven, or Gradle.
 
-For terminology used on this page, see [Terms](remediation.md#terms).
+For terminology used on this page, see [Terms](index.md#terms).
 
 ### mkdirp and minimist update example {#dependent-reresolution-example}
 

@@ -34,7 +34,7 @@ EPSSは、脆弱性について今後30日以内に悪用活動が観測され�
 | [作業用イメージの取得](#worker-image-downloads) | [修正計画と修正PRの両方](configuration.md#remediation-basics)が有効で依存更新を実行（各既定無効） | 作業用イメージの名前・digest |
 | [ツールの取得](#tool-downloads) | [修正計画と修正PRの両方](configuration.md#remediation-basics)が有効で依存更新を実行（各既定無効） | ツール名・版 |
 | [依存パッケージの取得](#dependency-downloads) | [修正計画と修正PRの両方](configuration.md#remediation-basics)が有効で依存更新を実行（各既定無効） | パッケージ名・版 |
-| [通知先への送信](#notification-delivery) | [通知先を設定](configuration.md#notify-destinations)し、送信条件を満たす（既定の通知先なし） | 脆弱性の検出結果、修正計画、PRの情報 |
+| [通知先への送信](#notification-delivery) | [通知先を設定](configuration.md#notify-destinations)し、送信条件を満たす（既定の通知先なし） | 脆弱性の所見、修正計画、PRの情報 |
 
 ### KEVの取得 {#kev-download}
 
@@ -67,7 +67,7 @@ Node.js本体の照合が有効で、データの取得・更新が必要な場�
 | KestreLynx | `nodejs.org` | リリース日を含む`dist/index.json`全件 |
 | KestreLynx | `raw.githubusercontent.com` | 系列ごとのサポート終了日を含む`nodejs/Release`の`schedule.json`全件 |
 
-索引の更新はリリースから数週間以上遅れることがあるため、[Node.js本体の検出結果](scan-logic.md#node-runtime)に記載した条件でセキュリティブログの記事を使って補います。
+索引の更新はリリースから数週間以上遅れることがあるため、[Node.js本体の所見](scan-logic.md#node-runtime)に記載した条件でセキュリティブログの記事を使って補います。
 
 公開データとの照合はローカルで行い、イメージの情報や検出したCVEは取得先へ送りません。
 有効・無効は[スキャンの設定](configuration.md#scan)、更新は[脅威情報の更新](scan-logic.md#intel-cache)、失敗時は[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。
@@ -87,14 +87,14 @@ Python本体の照合が有効な場合、Python Software Foundation（PSF）な
 公式レコードからは、PSFが記載したCPythonの版の範囲と対象OS、深刻度、`REJECTED`の状態を読み取ります。
 
 公開データは全件を取得してローカルで照合し、イメージの情報や検出したCVEは取得先へ送りません。
-CVEレコードの要求に含めるCVE IDはPSFの一覧で決まり、イメージの検出結果から選びません。
+CVEレコードの要求に含めるCVE IDはPSFの一覧で決まり、イメージの所見から選びません。
 
 有効・無効は[スキャンの設定](configuration.md#scan)、更新は[脅威情報の更新](scan-logic.md#intel-cache)、失敗時は[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。
 
 ### Hacker Newsの検索 {#hacker-news-search}
 
 Hacker Newsの検索では、KestreLynxが検出したCVE IDを`hn.algolia.com`へ検索クエリとして送り、議論のリンクを取得します。
-KEV・EPSSの一括取得とは異なり、検索クエリに検出結果の一部が入ります。
+KEV・EPSSの一括取得とは異なり、検索クエリに所見の一部が入ります。
 
 送るのは、対応の優先度が最も高いCVEのIDだけです。
 KEVで悪用が確認されたCVEや、EPSSで悪用の可能性が高いと判断されたCVEが該当します。
@@ -259,7 +259,7 @@ KestreLynxが`repo.maven.apache.org`へ取り次ぎ、要求の`User-Agent`に`k
 
 ### 通知先への送信 {#notification-delivery}
 
-各通知の送信条件を満たすと、KestreLynxは脆弱性の検出結果、修正計画、判断の理由、PRのリンクや操作結果を送ります。
+各通知の送信条件を満たすと、KestreLynxは脆弱性の所見、修正計画、判断の理由、PRのリンクや操作結果を送ります。
 接続先は、通知方式に応じて次のように決まります。
 
 | 通知方式 | 通信先 |

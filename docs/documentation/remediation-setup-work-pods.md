@@ -21,7 +21,7 @@ Prepare work Pods in this order.
 3. Run the commands in [Applying the manifests](#work-pod-apply)
 4. Follow [Configuration](#work-pod-config) to configure the work namespace and mappings, then return to the Kubernetes page
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ### Requirements {#work-pod-requirements}
 

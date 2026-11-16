@@ -18,7 +18,7 @@ An update proceeds through the following steps.
 5. Collect the result for validation before acceptance
 6. Attempt to delete the work container or Pod
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Work container execution {#worker-execution}
 

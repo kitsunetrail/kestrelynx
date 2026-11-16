@@ -25,7 +25,7 @@ Choose a subsection for the target or processing stage you want to check.
 | [PR processing reasons](#pr-reasons) |
 | [Storage reasons](#storage-reasons) |
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Runtime reasons {#runtime-reasons}
 

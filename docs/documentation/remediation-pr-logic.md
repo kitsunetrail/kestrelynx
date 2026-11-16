@@ -7,7 +7,7 @@ title: Fix pull request management and records
 This page explains how KestreLynx prevents duplicate fix PRs, handles closed PRs, and replaces older PRs.
 It also explains record files, recovery, and the conditions that stop writes to GitHub.
 
-For terms used on this page, see [Terms](remediation.md#terms).
+For terms used on this page, see [Terms](index.md#terms).
 
 ## PR management {#pr-management}
 

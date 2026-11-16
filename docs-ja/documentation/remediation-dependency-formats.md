@@ -37,7 +37,7 @@ Mavenでは、ルートの`pom.xml`から`modules`でたどる子モジュール
 ほかのパッケージでPRを作れる条件は[部分PRの成立条件](remediation-package-logic.md#partial-pr-selection)を参照してください。
 理由コードの意味は[ソースの理由](remediation-image-reason-codes.md#source-reasons)と[実行環境の理由](remediation-update-reason-codes.md#runtime-reasons)にまとめています。
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## npmの依存ファイル {#npm-inputs}
 

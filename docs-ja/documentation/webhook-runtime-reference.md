@@ -295,7 +295,7 @@ title: Webhookの稼働時のフィールド
     - `python-pkg`や`node-pkg`などのパッケージの種類
 - `instances[].target`・`instances[].pkg_path`
     - Trivyの値の先頭に`/`がある場合、その1文字を取り除いて出力
-    - KestreLynxが追加するNode.js・Python本体の検出結果では、KestreLynxが求めた本体の実行ファイルのパスを両方のフィールドに出力
+    - KestreLynxが追加するNode.js・Python本体の所見では、KestreLynxが求めた本体の実行ファイルのパスを両方のフィールドに出力
 
 次の例は、Pythonの言語パッケージを使用中と判定したコンテナ1つの情報です。
 

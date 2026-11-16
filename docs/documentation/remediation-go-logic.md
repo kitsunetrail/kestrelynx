@@ -16,7 +16,7 @@ Updates proceed in this order.
 5. Check file differences, hashes, dependency requirements, and scan results
 
 For details, see [Go candidate selection](#go-package-selection), [Go runtime selection](#go-runtime-selection), [Go execution settings](#go-worker-settings), and [Go update validation](#go-update-validation).
-For terms used on this page, see [Terms](remediation.md#terms).
+For terms used on this page, see [Terms](index.md#terms).
 
 ## Go candidate selection {#go-package-selection}
 

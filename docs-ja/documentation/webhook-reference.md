@@ -41,7 +41,7 @@ Slackと併用できますが、DiscordやTeams専用のメッセージ形式に
 
 ## ペイロードの全体像 {#payload-overview}
 
-ペイロードには、レポート全体の情報と、イメージごとの検出結果を入れます。
+ペイロードには、レポート全体の情報と、イメージごとの所見を入れます。
 省略されることがあるフィールドも含めて、主な入れ子の構造を次に示します。
 
 ```text
@@ -263,12 +263,12 @@ Slackと併用できますが、DiscordやTeams専用のメッセージ形式に
 
 ### トップレベル {#top-level}
 
-トップレベルには、レポート全体の情報、検出結果、スキャン失敗、差分などを入れます。
+トップレベルには、レポート全体の情報、所見、スキャン失敗、差分などを入れます。
 
 `actionable`・`watch`・`wont_fix`・`eol_packages`は、[修正状態](scan-logic.md#status)ごとの区分です。
 `watch`は修正状態を`affected`にまとめた結果の配列で、[優先度](#priority-values)の`watch`とは別です。
 
-`not_affected`の検出結果は、4つの配列のどれにも含めません。
+`not_affected`の所見は、4つの配列のどれにも含めません。
 
 トップレベルのフィールドは次のとおりです。
 
@@ -316,7 +316,7 @@ JSON全体の例は、[ペイロードの全体像](#payload-overview)を参照�
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
 | `images_total` | integer | スキャンした対象の数で、同じイメージ名でもdigestが違えば別に数え、スキャンに失敗した対象も含む | `0` |
-| `images_affected` | integer | 4つの検出結果の配列のどれかに含まれるか、ベースOSがEOLであるイメージ名の数 | `0` |
+| `images_affected` | integer | 4つの所見の配列のどれかに含まれるか、ベースOSがEOLであるイメージ名の数 | `0` |
 | `priority_counts` | object | [優先度](#priority-values)ごとの[パッケージグループ](scan-logic.md#package-grouping)件数 | トリアージが無効なら省略 |
 | `priority_counts.act_now` | integer | 優先度が`act_now`の件数 | `0` |
 | `priority_counts.watch` | integer | 優先度が`watch`の件数 | `0` |
@@ -562,7 +562,7 @@ digestを確認できなかった要素には、同じイメージ名でdigest�
 | Docker Compose | プロジェクト名 | サービス名 |
 | Kubernetes | 名前空間 | リソース名 |
 
-## 検出結果のフィールド {#findings}
+## 所見のフィールド {#findings}
 
 `findings[]`の1要素を「パッケージグループ」と呼びます。
 同じイメージの同じパッケージで見つかったCVEを、[修正状態](scan-logic.md#status)ごとにまとめたものです（[パッケージ単位の集約](scan-logic.md#package-grouping)）。
@@ -649,13 +649,13 @@ digestを確認できなかった要素には、同じイメージ名でdigest�
 次のフィールドには補足があります。
 
 - `class`
-    - KestreLynxが追加するNode.js・Python本体の検出結果は`lang`
+    - KestreLynxが追加するNode.js・Python本体の所見は`lang`
 - `ecosystem`
     - Trivyが報告するパッケージの種類で、`debian`、`alpine`、`python-pkg`、`node-pkg`など
-    - KestreLynxが追加する本体の検出結果には`node-runtime`と`python-runtime`を使う
+    - KestreLynxが追加する本体の所見には`node-runtime`と`python-runtime`を使う
     - 認識できない種類は`""`
 - `fixed`
-    - グループを作るときに最初に取り込んだ検出結果の修正版を出力
+    - グループを作るときに最初に取り込んだ所見の修正版を出力
     - CVEごとに修正版が違う場合は、そのうちの1つの版であり、`fixed`の版ですべてのCVEが直るとは限らない
 - `vuln_ids`
     - `vulns[].id`と同じ集合

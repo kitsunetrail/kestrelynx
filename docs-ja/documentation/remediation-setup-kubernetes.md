@@ -7,7 +7,7 @@ title: Kubernetesでの修正計画と修正PRの有効化
 Kubernetesで動かしているKestreLynxで、修正計画を確認してから修正PRを有効にする手順です。
 先に[共通の準備](remediation-setup.md#enable-fix-plans)（GitHubアクセスの準備、ソースの対応付け、必要なら非公開イメージの認証）を済ませ、修正計画の設定、起動確認、修正PRの設定、[PR作成の有効化と反映](#kubernetes-enable-pr-creation)の順に進めてください。
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 修正計画の設定 {#kubernetes-plans}
 

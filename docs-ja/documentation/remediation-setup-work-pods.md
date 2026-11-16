@@ -21,7 +21,7 @@ Mavenの更新はKestreLynxによる`pom.xml`の編集とTrivyの検査で行う
 3. [マニフェストの適用](#work-pod-apply)のコマンドを実行する
 4. [設定](#work-pod-config)に従って作業用namespaceと対応付けを設定し、Kubernetesのページへ戻る
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ### 導入条件 {#work-pod-requirements}
 

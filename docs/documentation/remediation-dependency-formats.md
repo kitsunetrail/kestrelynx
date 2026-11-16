@@ -37,7 +37,7 @@ Different dependency directories in the same repository are assessed separately.
 See [Conditions for partial PRs](remediation-package-logic.md#partial-pr-selection) for when a PR can update other packages.
 Reason codes are explained in [Source reasons](remediation-image-reason-codes.md#source-reasons) and [Runtime reasons](remediation-update-reason-codes.md#runtime-reasons).
 
-See [Terms](remediation.md#terms) for terminology used on this page.
+See [Terms](index.md#terms) for terminology used on this page.
 
 ## npm dependency files {#npm-inputs}
 

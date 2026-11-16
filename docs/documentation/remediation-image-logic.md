@@ -11,7 +11,7 @@ In `1.27.2-alpine`, the major is `1`, the minor is `27`, the patch is `2`, there
 Accepting an update candidate and reporting whether a newer series resolves findings are separate decisions.
 For the overall process and verification scope, see [Plan and PR execution scope](remediation-logic.md#plan-and-pr-execution) and [Verification scope by target](remediation-logic.md#verification-scope).
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Image candidate selection {#image-selection}
 

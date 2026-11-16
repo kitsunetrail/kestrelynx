@@ -15,7 +15,7 @@ Composeのサービスと、`docker run`で起動したコンテナを対象に�
 [設定ファイルの準備](getting-started.md#prepare-config)で作成したファイルは、コンテナ内の`/etc/kestrelynx/config.yml`にマウントされます。
 
 設定例は既存の設定に統合し、`remediation`を重複して追加しないでください。
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## Composeのサービスの対応付け {#compose-mappings}
 

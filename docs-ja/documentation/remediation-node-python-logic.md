@@ -13,7 +13,7 @@ KestreLynxがnpm・pnpm・uv・pipの依存ファイルをどう更新し、更�
 | uv | [直接依存の版指定](#direct-dependencies)、[推移的依存の更新範囲](#transitive-dependencies)、[uv用Pythonの選定](#uv-python-selection)、[ツールの版と取得](#node-python-tools)、[付随変更の検査](#change-validation) |
 | pip | [pipの検証環境](#pip-target-environment)、[pipの固定版の更新](#pip-pinned-updates) |
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 更新する範囲 {#node-python-update-scope}
 

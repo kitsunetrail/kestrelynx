@@ -69,7 +69,7 @@ title: Webhookの差分のフィールド
 
 ## 通常のパッケージの変化 {#new-fields}
 
-`diff.new[]`は、[通常の検出結果](scan-logic.md#eol-package)の変化を表します。
+`diff.new[]`は、[通常の所見](scan-logic.md#eol-package)の変化を表します。
 1要素はイメージ名とパッケージ名の組み合わせに対応し、該当する[パッケージグループ](scan-logic.md#package-grouping)が複数あればまとめます。
 
 `critical`から`unknown`までの件数は、最新のスキャンでのそのパッケージの件数で、まとめたパッケージグループの合計です。
@@ -138,8 +138,8 @@ title: Webhookの差分のフィールド
 
 ## パッケージの解消 {#resolved-fields}
 
-`diff.resolved[]`は、通常の検出結果がなくなり、解消と判定したイメージ名とパッケージ名の組み合わせを表します。
-通常の検出結果がEOLの検出結果へ移った場合は含めません。
+`diff.resolved[]`は、通常の所見がなくなり、解消と判定したイメージ名とパッケージ名の組み合わせを表します。
+通常の所見がEOLの所見へ移った場合は含めません。
 
 `diff.resolved[]`の各要素のフィールドは次のとおりです。
 
@@ -148,7 +148,7 @@ title: Webhookの差分のフィールド
 | `image` | string | イメージ名 | — |
 | `package` | string | 解消したパッケージ名 | — |
 
-通常の検出結果とEOLの検出結果の区別は、[パッケージのEOL](scan-logic.md#eol-package)を参照してください。
+通常の所見とEOLの所見の区別は、[パッケージのEOL](scan-logic.md#eol-package)を参照してください。
 解消の意味は、[解消の判定](diff-logic.md#resolved-findings)を参照してください。
 
 ## digestの変更 {#image-replacement-fields}
@@ -235,12 +235,12 @@ title: Webhookの差分のフィールド
 
 ## EOLパッケージの変化 {#eol-change-fields}
 
-`diff.new_eol_packages[]`は、[EOLの検出結果](scan-logic.md#eol-package)が新たに見つかったパッケージや、EOLの検出結果に変化があったパッケージの一覧です。
+`diff.new_eol_packages[]`は、[EOLの所見](scan-logic.md#eol-package)が新たに見つかったパッケージや、EOLの所見に変化があったパッケージの一覧です。
 1要素はイメージ名とパッケージ名の組み合わせに対応します。
 
 イメージのベースOSがEOLの場合、SlackはEOL区分でそのイメージのEOLパッケージを個別に表示しませんが、Webhookには含めます。
 
-`critical`から`unknown`までの件数は、最新のスキャンでのそのパッケージの[EOLの検出結果](scan-logic.md#eol-package)の件数です。
+`critical`から`unknown`までの件数は、最新のスキャンでのそのパッケージの[EOLの所見](scan-logic.md#eol-package)の件数です。
 該当するパッケージグループが複数あれば、件数を合計します。
 
 `diff.new_eol_packages[]`の各要素のフィールドは次のとおりです。
@@ -299,18 +299,18 @@ title: Webhookの差分のフィールド
 
 ## EOLパッケージの解除 {#eol-resolved-fields}
 
-`diff.resolved_eol_packages[]`は、[EOLの検出結果](scan-logic.md#eol-package)がなくなったイメージ名とパッケージ名の組み合わせを表します。
+`diff.resolved_eol_packages[]`は、[EOLの所見](scan-logic.md#eol-package)がなくなったイメージ名とパッケージ名の組み合わせを表します。
 各要素のフィールドは次のとおりです。
 
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
 | `image` | string | イメージ名 | — |
-| `package` | string | EOLの検出結果がなくなったパッケージ名 | — |
-| `still_open` | boolean | 通常の検出結果が残っているかどうか | `false` |
+| `package` | string | EOLの所見がなくなったパッケージ名 | — |
+| `still_open` | boolean | 通常の所見が残っているかどうか | `false` |
 
-`still_open`が`true`なら、同じイメージ名の同じパッケージに[通常の検出結果](scan-logic.md#eol-package)が残っています。
+`still_open`が`true`なら、同じイメージ名の同じパッケージに[通常の所見](scan-logic.md#eol-package)が残っています。
 
-次の例は、EOLの検出結果がなくなり、通常の検出結果が残っている場合です。
+次の例は、EOLの所見がなくなり、通常の所見が残っている場合です。
 
 ```json
 {
@@ -330,11 +330,11 @@ title: Webhookの差分のフィールド
 
 | 対象 | 条件 | 比べる日付 |
 | --- | --- | --- |
-| [通常の検出結果](scan-logic.md#eol-package) | `low`・[通知オフ](runtime-usage.md#muting-findings-without-a-fix)・[保持中の記録](diff-logic.md#retained-findings)も対象 | 通常の検出結果の初回検出日 |
+| [通常の所見](scan-logic.md#eol-package) | `low`・[通知オフ](runtime-usage.md#muting-findings-without-a-fix)・[保持中の記録](diff-logic.md#retained-findings)も対象 | 通常の所見の初回検出日 |
 | ベースOSのEOL | ベースOSがEOLとして記録されている | ベースOSの初回EOL検出日 |
-| [EOLの検出結果](scan-logic.md#eol-package) | イメージのベースOSがEOLでない場合 | パッケージの初回EOL検出日 |
-| EOLの検出結果 | イメージのベースOSがEOLで、パッケージの優先度が`act_now`の場合 | パッケージの初回EOL検出日 |
-| EOLの検出結果 | イメージのベースOSがEOLで、パッケージの優先度が`act_now`でない場合 | パッケージの初回EOL検出日は比べる対象に入れず、ベースOSの初回EOL検出日を使う |
+| [EOLの所見](scan-logic.md#eol-package) | イメージのベースOSがEOLでない場合 | パッケージの初回EOL検出日 |
+| EOLの所見 | イメージのベースOSがEOLで、パッケージの優先度が`act_now`の場合 | パッケージの初回EOL検出日 |
+| EOLの所見 | イメージのベースOSがEOLで、パッケージの優先度が`act_now`でない場合 | パッケージの初回EOL検出日は比べる対象に入れず、ベースOSの初回EOL検出日を使う |
 
 Slackのトリアージ有効時の経過日数とは対象が異なります。
 Slack側の定義は、[未解決の経過日数](slack-display.md#unresolved-age)を参照してください。

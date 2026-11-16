@@ -15,7 +15,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"variant_unsupported":  {"the image variant is not supported", "対応していない種類のイメージである"},
 	"packages_missing":     {"the scan result has no package list", "スキャン結果にパッケージ一覧がない"},
 	"packages_truncated":   {"the package list of the scan result is cut", "スキャン結果のパッケージ一覧が途中で切れている"},
-	"unknown_package_type": {"a finding names a package type this build does not know", "このビルドが知らない種類のパッケージの検出結果がある"},
+	"unknown_package_type": {"a finding names a package type this build does not know", "このビルドが知らない種類のパッケージの所見がある"},
 	"type_not_analysed":    {"the candidate scan did not analyse that kind of package", "候補のスキャンがその種類のパッケージを解析していない"},
 
 	// The outcome of looking for a candidate.

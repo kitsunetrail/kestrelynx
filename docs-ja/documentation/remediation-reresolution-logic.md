@@ -11,7 +11,7 @@ title: 依存元からの再解決
 依存元は、プロジェクトが指定している範囲内で新しい版に上げます。
 対象はnpm・pnpm・uvで、pip・Go・Maven・Gradleでは使いません。
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ### mkdirpとminimistの更新例 {#dependent-reresolution-example}
 

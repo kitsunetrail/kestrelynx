@@ -10,7 +10,7 @@ Use this page for preparation shared across environments, then follow the enviro
 See [Overview](remediation.md#overview) for an overview and [Scope and requirements](remediation-reference.md#scope-and-requirements) for supported environments and inputs.
 See [Communication destinations](outbound-communication.md#outbound-communication) for required destinations.
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Enabling remediation plans {#enable-fix-plans}
 

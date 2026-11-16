@@ -17,7 +17,7 @@ See the following pages for the complete process for each manager.
 | Environments for running package managers | [Work container execution](remediation-worker-logic.md#worker-execution) |
 
 For verification coverage concerning building the final image, application behavior, and deployment, see [Verification scope by target](remediation-logic.md#verification-scope).
-For the terms used on this page, see [Terms](remediation.md#terms).
+For the terms used on this page, see [Terms](index.md#terms).
 
 ## Language package selection {#package-selection}
 

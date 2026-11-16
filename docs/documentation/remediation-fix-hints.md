@@ -9,7 +9,7 @@ title: Hints when a package cannot reach its fix
 These hints identify the dependent package, required Go version, or pom that prevents a package from reaching a fixed version.
 When published releases can be checked, the hints also show whether those releases allow or specify a fixed version.
 
-See [Terms](remediation.md#terms) for the terms used on this page.
+See [Terms](index.md#terms) for the terms used on this page.
 
 The following diagram and table show a `fastapi` requirement excluding a fixed `starlette`.
 

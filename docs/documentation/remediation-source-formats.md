@@ -17,7 +17,7 @@ Choose the section for the file you want to check.
 | Dockerfile | [Dockerfile formats](#dockerfile-formats) |
 
 See [Source reasons](remediation-image-reason-codes.md#source-reasons) for reason codes and the rules linked at the end of each section for the scope of PRs that are withheld.
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Compose formats {#compose-formats}
 

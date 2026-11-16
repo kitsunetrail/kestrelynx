@@ -65,12 +65,12 @@ Trivyが使う環境変数と`token_hosts`の制限の例外、および送付�
 
 ランタイム本体の照合の判定規則と制約、セキュリティ情報の取得先は、次のページを参照してください。
 
-- Node.js：[Node.js本体の検出結果](scan-logic.md#node-runtime)、[Node.jsのセキュリティ情報の取得](outbound-communication.md#node-runtime-download)
-- Python：[Python本体の検出結果](scan-logic.md#python-runtime)、[Pythonのセキュリティ情報の取得](outbound-communication.md#python-runtime-download)
+- Node.js：[Node.js本体の所見](scan-logic.md#node-runtime)、[Node.jsのセキュリティ情報の取得](outbound-communication.md#node-runtime-download)
+- Python：[Python本体の所見](scan-logic.md#python-runtime)、[Pythonのセキュリティ情報の取得](outbound-communication.md#python-runtime-download)
 
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
-| `scan.severity` | `[HIGH, CRITICAL]` | Node.js・Python本体の検出結果を含め、分析と通知の対象にする深刻度です。`UNKNOWN`・`LOW`・`MEDIUM`・`HIGH`・`CRITICAL`を指定できます。 |
+| `scan.severity` | `[HIGH, CRITICAL]` | Node.js・Python本体の所見を含め、分析と通知の対象にする深刻度です。`UNKNOWN`・`LOW`・`MEDIUM`・`HIGH`・`CRITICAL`を指定できます。 |
 | `scan.node_runtime.enabled` | `true` | セキュリティ情報を取得し、`NODE_VERSION`に記録されたNode.jsの版と照合します。`false`では取得と照合の両方を停止します。 |
 | `scan.python_runtime.enabled` | `true` | セキュリティ情報を取得し、`PYTHON_VERSION`に記録されたCPythonの版と照合します。`false`では取得と照合の両方を停止します。 |
 

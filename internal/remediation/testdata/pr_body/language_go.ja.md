@@ -67,7 +67,7 @@ KestreLynx は、`example/app` の `svc/go.mod` にある 2 件のパッケー�
 
 - 更新前: `svc/go.mod sha256:aaaaaaaaaaaa`
 - 更新後: `svc/go.mod sha256:bbbbbbbbbbbb`
-- ファイルの全パッケージの検出結果 (更新したパッケージに限らない)
+- ファイルの全パッケージの所見 (更新したパッケージに限らない)
   - 解消: 2 件
   - 残存: 1 件
   - 新規: 0 件

@@ -14,7 +14,7 @@ Gradle updates follow these steps.
 3. Check returned files, the lockfile, and findings through [Gradle update validation](#gradle-update-validation)
 4. If a target cannot be updated, use [Conditions for excluding targets and updating the rest](#gradle-update-exclusions) to decide whether to continue
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Gradle package selection {#gradle-package-selection}
 

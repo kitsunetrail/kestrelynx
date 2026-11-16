@@ -16,7 +16,7 @@ title: 修正計画と修正PRの対応範囲
 | ファイルの書き方 | [対応する入力形式](#supported-inputs) |
 | 実行環境の版 | [対応する実行環境](#supported-runtimes) |
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 対応範囲 {#scope-and-requirements}
 

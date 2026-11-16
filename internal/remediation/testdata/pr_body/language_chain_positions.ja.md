@@ -87,7 +87,7 @@ KestreLynx は、`example/app` の `svc/package-lock.json` にある 2 件のパ
 
 - 更新前: `svc/pnpm-lock.yaml sha256:aaaaaaaaaaaa`
 - 更新後: `svc/pnpm-lock.yaml sha256:bbbbbbbbbbbb`
-- ファイルの全パッケージの検出結果 (更新したパッケージに限らない)
+- ファイルの全パッケージの所見 (更新したパッケージに限らない)
   - 解消: 2 件
   - 残存: 1 件
   - 新規: 0 件

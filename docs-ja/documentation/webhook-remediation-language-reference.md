@@ -441,7 +441,7 @@ Pythonのパッケージは、名前の表記が違っても、この値と版�
 | `vuln_id` | string | 検出した脆弱性のID | — |
 | `target` | string | スキャナーが報告した検査対象の名前やパス | 省略 |
 | `pkg_path` | string | スキャナーが報告したイメージ内のパッケージの所在 | 省略 |
-| `workload` | string | この検出結果に対応する[ワークロードキー](webhook-diff-reference.md#reference-change-fields) | — |
+| `workload` | string | この所見に対応する[ワークロードキー](webhook-diff-reference.md#reference-change-fields) | — |
 
 `entity`は、`config:sha256:…`のようなdigestの種類と値に、判明している場合は`@linux/amd64`のようなプラットフォームを付けた文字列です。
 有効なdigestを取得できない場合は`unconfirmed`になります。

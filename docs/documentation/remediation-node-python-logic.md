@@ -13,7 +13,7 @@ Use the following table to find the sections relevant to your package manager.
 | uv | [Direct dependency version declarations](#direct-dependencies), [Transitive dependency update scope](#transitive-dependencies), [Python selection for uv](#uv-python-selection), [Tool versions and retrieval](#node-python-tools), [Collateral change validation](#change-validation) |
 | pip | [Target environment for pip validation](#pip-target-environment), [Updating pinned versions with pip](#pip-pinned-updates) |
 
-For the terms used on this page, see [Terms](remediation.md#terms).
+For the terms used on this page, see [Terms](index.md#terms).
 
 ## Update scope {#node-python-update-scope}
 

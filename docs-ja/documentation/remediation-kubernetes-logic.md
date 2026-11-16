@@ -7,7 +7,7 @@ title: Kubernetesのタグ更新PRの条件
 Kubernetesのマニフェスト、Kustomize、Helmのvaluesについて、タグ更新PRを作る条件と見送る範囲を説明します。
 候補のタグの選び方は[イメージ候補の選定](remediation-image-logic.md#image-selection)を参照してください。
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## Kubernetesのイメージ名と再取得 {#kubernetes-image-references}
 

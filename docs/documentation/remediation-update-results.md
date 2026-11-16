@@ -8,7 +8,7 @@ This page explains target and adopted versions, partial PRs, and results of re-r
 It also explains what re-pull and rebuild guidance establishes and what remains unverified.
 
 See [Remediation plans in Slack](remediation-results.md#reading-results-in-slack-and-webhooks) for the meaning of each notification line.
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Interpreting update results {#interpreting-updates}
 

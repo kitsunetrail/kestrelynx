@@ -10,7 +10,7 @@ Slackの通知の読み方は[Slackの修正計画](remediation-results.md#readi
 どのPRでも、KestreLynxは完成イメージや配置後の稼働コンテナでの解消を確認していません。
 依存のインストールとアプリケーションの動作も未確認であり、詳細は[比較結果の解消](#verification-results)を参照してください。
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## PR本文の内容とマージ前の確認 {#pr-body-and-checks}
 

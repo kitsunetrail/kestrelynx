@@ -19,7 +19,7 @@ Webhookのフィールド経路は、以下では`remediation`の直下から記
 | PR処理の結果とPR自体の状態 | [PRの状態値](#pr-status-values) |
 | 候補の選定理由や処理を止めた理由 | [理由コード](#reason-codes) |
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 結果の値 {#result-values}
 

@@ -19,7 +19,7 @@ Choose a section according to the value you want to look up.
 | PR processing results and the state of a PR | [PR status values](#pr-status-values) |
 | Why a candidate was selected or processing stopped | [Reason codes](#reason-codes) |
 
-See [Terms](remediation.md#terms) for the terminology used on this page.
+See [Terms](index.md#terms) for the terminology used on this page.
 
 ## Result values {#result-values}
 

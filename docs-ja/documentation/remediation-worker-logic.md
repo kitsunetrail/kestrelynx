@@ -18,7 +18,7 @@ Mavenの処理は[Mavenの候補選定](remediation-maven-logic.md#maven-package
 5. 結果を回収し、採用前の検査へ進める
 6. 作業用コンテナまたはPodの削除を試みる
 
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## 作業用コンテナの実行 {#worker-execution}
 

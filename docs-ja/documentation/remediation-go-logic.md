@@ -16,7 +16,7 @@ KestreLynxは、稼働イメージのGoバイナリに組み込まれた依存�
 5. ファイルの差分、ハッシュ、依存の要求、スキャン結果を検査する
 
 詳しくは、[Goの候補選定](#go-package-selection)、[Goの選定](#go-runtime-selection)、[Goの実行設定](#go-worker-settings)、[Goの更新結果の検査](#go-update-validation)を参照してください。
-このページで使う用語は[用語](remediation.md#terms)を参照してください。
+このページで使う用語は[用語](index.md#terms)を参照してください。
 
 ## Goの候補選定 {#go-package-selection}
 

@@ -233,7 +233,55 @@ The following rules also apply when combining results from multiple running imag
 - `gone` includes a finding only when it disappears from every running image that has it
 - If the base version differs by platform, each version has a separate record
 
-See [Rebuild guidance](remediation-update-results.md#rebuild-guidance) for how to read floating tag guidance, notification branches, and limitations of the estimates.
+### Notification contents {#rebuild-check-notification}
+
+In Slack and email, the check status and findings expected to disappear determine whether floating tag rebuild guidance is shown.
+The following table shows when the rebuild line appears and which text is appended.
+
+| Check status | Rebuild line | Appended text |
+| --- | --- | --- |
+| `checked`, with findings expected to disappear | Shown | None |
+| `checked`, with no findings expected to disappear | Not shown | None |
+| `partial` | Shown | ` (some findings could not be confirmed)` |
+| `not_checked` | Shown | ` (which findings disappear could not be confirmed)` |
+| No check result was recorded | Shown | ` (which findings disappear could not be confirmed)` |
+
+Findings are expected to disappear when package results in `rebuild_check.gone` or runtime estimates in `rebuild_runtimes` include disappearing findings.
+Items with a rebuild line count toward “rebuild” in the opening summary.
+
+If the notification includes a PR number, the opening summary instead counts PRs by status and does not count rebuilds.
+Even when no rebuild line is shown, the webhook's `rebuild_check` records the matching results.
+
+A runtime estimate line appears only when the rebuild line is shown and the runtime has findings expected to disappear or remain.
+The Python runtime itself is displayed as `Python runtime`.
+
+Package lists use the following display rules.
+
+- Show package names and versions without CVE IDs
+- Group packages in global `node_modules` listed under “not in the current base” by their outer package
+- Show at most 10 entries per line after grouping, with a count for the rest
+
+The following example has `undici` inside a globally installed `npm`.
+
+```text
+/usr/local/lib/node_modules/
+`-- npm/
+    `-- node_modules/
+        `-- undici/package.json
+```
+
+When listed under “not in the current base”, `undici` contributes to the count of packages bundled with `npm` instead of appearing by name.
+
+### Limitations of the estimates {#rebuild-check-limits}
+
+Rebuild estimates have the following limitations because changes to the finished image caused by Dockerfile instructions are not checked.
+
+- The effects of Dockerfile `RUN` instructions are not evaluated, so commands such as `apk upgrade` may remove findings listed as “also in the current base”
+- If the Dockerfile reinstalls an older version at the location of the current base's package, findings listed as “gone if the current base's version carries over” may remain
+- “not in the current base” does not distinguish packages removed from the base from packages added by the Dockerfile
+- “new in the current base” includes findings that Dockerfile instructions remove from the finished image
+
+The webhook's `dockerfile_items[].final_image_verified` is `false`, indicating that the finished image after rebuilding has not been verified.
 
 ## When a merged PR has not been deployed {#base-update-not-deployed}
 
@@ -257,7 +305,16 @@ The item's category remains `not_comparable`, and each running image's result re
 
 ## Rebuild command guidance {#rebuild-commands}
 
-Rebuild guidance shows commands appropriate to how the image is built.
-When Compose's `build:` and a `container/<name>` mapping use the same Dockerfile, it shows both `docker compose build --pull` and `docker build --pull`.
+Rebuild guidance shows operations according to how the Dockerfile was located.
+The guidance for each source is listed below.
 
-Recreate the containers using their respective rebuilt images.
+| How the Dockerfile was located | Suggested operation |
+| --- | --- |
+| Compose `build` | Pull the current base and rebuild with `docker compose build --pull`, then recreate the containers |
+| Configuration mapping only | Pull the current base, rebuild with a command such as `docker build --pull`, and redeploy |
+| Compose `build` combined with a `container/<name>` mapping | Rebuild Compose services with `docker compose build --pull` and `docker run` containers with a command such as `docker build --pull`, then recreate each container |
+
+Guidance based on configuration mappings also applies to images built in CI or other build systems.
+`docker build --pull` illustrates the option for retrieving the base again and is not a complete command ready to run.
+
+The notification guidance alone does not determine the Dockerfile, build context, or name of the image to create.

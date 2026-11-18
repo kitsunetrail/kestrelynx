@@ -356,8 +356,17 @@ Pythonのパッケージは、名前の表記が違っても、この値と版�
 `cve_count`はパッケージ内で脆弱性IDを重複なく数え、`kev_count`も一覧の省略前に数えます。
 `origin_count`はイメージ、パッケージ、脆弱性、検出箇所、ワークロードを含む検出元の組み合わせを重複なく数えるため、同じ脆弱性IDでも複数件になる場合があります。
 
-`selection_lower_bound`と`adopted_version`の読み分けは[更新目標と採用版](remediation-update-results.md#target-and-adopted-version)を参照してください。
+`selection_lower_bound`と`adopted_version`の読み分けは、次の`category`ごとの対応表で示します。
 `action`が`update`でも、更新や検査を実行したとは限りません。
+
+Slackのパッケージ更新候補で、`→`の右に出る版とフィールドの対応は、`language_items[].category`によって次のように分かれます。
+
+| `category` | `→`の右に出る版 | `language_items[]`からの確認先 |
+| --- | --- | --- |
+| `dependency_update_candidate` | 更新目標 | `packages[].selection_lower_bound` |
+| `pr_candidate` | 採用版 | `packages[].adopted_version` |
+
+PRがある場合の「更新」は、PRに記録された採用版を表示します。
 
 `mkdirp`の更新で`minimist`を修正版に上げる例では、`minimist`の`through`は`["mkdirp"]`です。
 直接依存の版が変わらない場合は、途中で更新した依存元のうち、プロジェクトに最も近いものを載せます。

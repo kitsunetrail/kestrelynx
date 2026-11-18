@@ -356,8 +356,17 @@ The list count limits are listed below.
 `cve_count` counts unique vulnerability IDs within the package, and `kev_count` is also counted before list truncation.
 `origin_count` counts unique combinations of finding origins, including image, package, vulnerability, detection location, and workload, so the same vulnerability ID can contribute multiple entries.
 
-See [Update targets and adopted versions](remediation-update-results.md#target-and-adopted-version) for the distinction between `selection_lower_bound` and `adopted_version`.
+The following mapping table by `category` shows how to distinguish `selection_lower_bound` from `adopted_version`.
 An `action` of `update` does not necessarily mean that an update or checks ran.
+
+For package update candidates in Slack, the version to the right of `→` maps to a field according to `language_items[].category` as follows.
+
+| `category` | Version to the right of `→` | Field within `language_items[]` |
+| --- | --- | --- |
+| `dependency_update_candidate` | Update target version | `packages[].selection_lower_bound` |
+| `pr_candidate` | Adopted version | `packages[].adopted_version` |
+
+When a PR exists, “Update” shows the adopted versions recorded in the PR.
 
 In the example where updating `mkdirp` brings `minimist` to a fixed version, `through` for `minimist` is `["mkdirp"]`.
 If direct dependency versions stay unchanged, it lists the updated intermediate dependent package closest to the project.

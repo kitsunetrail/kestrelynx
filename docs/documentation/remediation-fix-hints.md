@@ -38,7 +38,7 @@ Use the notification wording or package manager to find the relevant section.
 | Go | [Go blockers](#fix-hints-go) |
 | Version sources in Maven and Gradle (parent pom or BOM) | [Version sources in Maven and Gradle](#fix-hints-version-source) |
 | Dependents in Maven and Gradle | [Dependent package blockers in Maven and Gradle](#fix-hints-held-by) |
-| “the cause could not be determined” | [Results of re-resolution through dependent packages](remediation-update-results.md#dependent-reresolution-results) |
+| “the cause could not be determined” | [Packages left out of a PR](remediation-update-results.md#partial-pull-requests) |
 
 ## Reading the notification {#fix-hints-reading}
 

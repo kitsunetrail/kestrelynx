@@ -38,7 +38,7 @@ flowchart LR
 | Go | [Goが原因の場合](#fix-hints-go) |
 | Maven・Gradleで版を決めるもの（親pom・BOM） | [Maven・Gradleで版を決めるものが原因の場合](#fix-hints-version-source) |
 | Maven・Gradleの依存元 | [Maven・Gradleで依存元が原因の場合](#fix-hints-held-by) |
-| 「原因は確かめられなかった」 | [依存元からの再解決の結果](remediation-update-results.md#dependent-reresolution-results) |
+| 「原因は確かめられなかった」 | [PRに入らなかったパッケージ](remediation-update-results.md#partial-pull-requests) |
 
 ## 通知の読み方 {#fix-hints-reading}
 

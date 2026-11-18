@@ -345,7 +345,7 @@ The values of `check` are as follows.
 | `split` | One package entry before the update splits into multiple vulnerable package entries after the update |
 
 Carried vulnerabilities do not establish that the checks pass; check `language_items[].source_check.passed` for the check result.
-Check `language_items[].update.chain.outcome` for re-resolution adoption status, and see [Results of re-resolution through dependent packages](remediation-update-results.md#dependent-reresolution-results) for the meanings of its values.
+Check `language_items[].update.chain.outcome` for re-resolution adoption status, and see [Results of re-resolution through dependent packages](webhook-remediation-update-reference.md#language-chain-fields) for the meanings of its values.
 
 `language_items[].source_check` is the record of one check retained in the processing result.
 The following fields have additional notes.

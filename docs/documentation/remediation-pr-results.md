@@ -35,6 +35,14 @@ For the following pull request types, also perform the additional checks in each
 
 For pull requests containing only some of the planned updates, see [Partial PRs](remediation-update-results.md#partial-pull-requests).
 
+For PRs that adopt re-resolution through dependent packages, “Packages updated along with the fix” lists direct dependencies whose versions changed, their versions before and after, and the requirements that blocked the update.
+The following example shows an entry for updating `mkdirp` to bring `minimist` to a fixed version.
+
+> - `mkdirp`: `0.5.1` to `0.5.6` (it required `minimist` `0.0.8`)
+
+When vulnerabilities are carried, the body includes their count and one example containing the CVE ID, package name, and versions before and after.
+See [Carried vulnerabilities](remediation-reresolution-logic.md#dependent-reresolution-carried-findings) for the conditions under which a vulnerability can be carried.
+
 ### Kubernetes pull requests {#kubernetes-pr-results}
 
 Kubernetes pull request bodies identify the changed files and containers, deployment implications of merging, and unverified assumptions.

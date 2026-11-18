@@ -79,6 +79,9 @@ A separate fix-plan item explains that rebuilding with the indicated Go version 
 The suggested Go version is the lowest version that fixes every CVE in the series used to build the binary (versions sharing a major and minor version, such as Go 1.26).
 If no version in that series qualifies, the guidance suggests a version in a newer series that fixes every CVE.
 
+The guidance omits the version if the Go version used to build the binary or a finding's fixed version cannot be parsed as a Go release, or if no version that fixes every CVE can be determined.
+When no fixed version is displayed, users select a Go version that fixes every CVE from the fixed versions listed for each CVE in the findings and rebuild with it.
+
 ## Go runtime selection {#go-runtime-selection}
 
 The Go runtime is selected to execute the dependency-file update.

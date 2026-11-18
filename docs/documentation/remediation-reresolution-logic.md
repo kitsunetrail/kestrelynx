@@ -335,4 +335,27 @@ A commit-only change or a tool update that leaves the input information unchange
 A stop record is removed during wait-record cleanup after its inputs have been absent from plans for more than 30 days.
 Once the record is removed, eligibility is evaluated again even for the same inputs.
 
-For result displays and webhook interpretation, see [Re-resolution results](remediation-update-results.md#dependent-reresolution-results).
+See [Results of updating dependent packages as well](remediation-update-results.md#dependent-reresolution-results) for reading Slack lines, and [Results of re-resolution through dependent packages](webhook-remediation-update-reference.md#language-chain-fields) for webhook fields.
+
+### Lines shown in notifications {#dependent-reresolution-notification}
+
+Notifications for re-resolution through dependent packages distinguish adopted updates, results that did not reach a fixed version, rejected updates, skipped attempts, and release waits.
+The following table shows the text for each result, with `…` standing for package names, versions, reasons, times, or other values.
+
+| Result | Display text |
+| --- | --- |
+| Adopted with dependent updates | `… … → … (with …)` |
+| Fixed version not reached, with recorded dependents for the target | `… … cannot be raised to the fixed … (the dependent … limits the version of …)` |
+| Fixed version not reached, without recorded dependent requirements for the target | `… … → …: re-resolving … within the project's ranges did not reach the fixed version this time` |
+| Rejected because of failed checks or another reason | `… … → … needs … updated as well, and that update was not adopted because …` |
+| Not attempted because of unsupported inputs, processing limits, or another reason | `… … → … is held back by …, and updating … was not tried because …` |
+| Waiting until 72 hours after publication | `… … → … needs … updated as well; a version it brings in is less than 72 hours old, so it is tried again after …` |
+
+The line describing a dependent's constraint appears for a result that did not reach a fixed version after updating dependents within the project's ranges (`not_fixed`), when dependents are recorded for the target package.
+For uv, resolution with the fixed version that finds no solution is also recorded with outcome `not_fixed` and reason `no_resolution`, and the constraint line appears when dependents are recorded for the target package.
+
+Even without recorded dependent requirements for the target package, the line containing “did not reach the fixed version this time” appears when the target version and either direct dependencies selected again or dependents examined during re-resolution are recorded.
+If the re-resolution record, target version, or displayable dependent information is missing, the notification shows the package's reason without a detailed re-resolution line.
+
+At most three dependents are listed with their names and recorded versions, followed by a count of the rest.
+A dependent updated along with the target is displayed as `… … → …` when its versions before and after are recorded.

@@ -454,7 +454,7 @@ The following fields have additional notes.
     - An ID in `remaining` in any grouped record is excluded from the item-wide `disappearing` list
 
 These results are estimates based on runtime versions, not verification of the final image.
-See [Base layer matching](remediation-base-image-logic.md#base-layer-matching) and [Rebuild guidance](remediation-update-results.md#rebuild-guidance) for conditions and limitations.
+See [Base layer matching](remediation-base-image-logic.md#base-layer-matching) and [Estimate limitations](remediation-base-image-logic.md#rebuild-check-limits) for conditions and limitations.
 
 ## Check against the current base {#dockerfile-rebuild-check}
 
@@ -586,4 +586,4 @@ The following notes also apply to item-wide aggregation.
 - When the item-wide result is `not_checked`, package lists from checked running images are retained in individual results but excluded from the item-wide result
 - When current base versions differ by platform, separate records are kept for each `base_version`
 
-See [Rebuild guidance](remediation-update-results.md#rebuild-guidance) for limitations of the estimates, including the effects of Dockerfile instructions.
+See [Estimate limitations](remediation-base-image-logic.md#rebuild-check-limits) for limitations of the estimates, including the effects of Dockerfile instructions.

@@ -454,7 +454,7 @@ PRを作成していない手動対応や保留などの処理結果も含みま
     - まとめた記録のいずれかで`remaining`にあるIDは、項目全体の`disappearing`に含めない
 
 この結果はランタイムの版から求めた見込みで、完成イメージの検証ではありません。
-条件と制約は[ベースレイヤーの照合](remediation-base-image-logic.md#base-layer-matching)と[再ビルドの案内](remediation-update-results.md#rebuild-guidance)を参照してください。
+条件と制約は[ベースレイヤーの照合](remediation-base-image-logic.md#base-layer-matching)と[見込みの制約](remediation-base-image-logic.md#rebuild-check-limits)を参照してください。
 
 ## 現在のベースとの突き合わせ {#dockerfile-rebuild-check}
 
@@ -586,4 +586,4 @@ CVEごとに結果が異なる場合は、同じパッケージが複数の配�
 - 項目全体が`not_checked`の場合は、確認できた稼働イメージのパッケージ一覧も項目全体には載せず、個別の結果に残す
 - プラットフォームによって現在のベースの版が違う場合は、`base_version`ごとに別の記録にする
 
-Dockerfileの手順の効果など、見込みの制約は[再ビルドの案内](remediation-update-results.md#rebuild-guidance)を参照してください。
+Dockerfileの手順の効果など、見込みの制約は[見込みの制約](remediation-base-image-logic.md#rebuild-check-limits)を参照してください。

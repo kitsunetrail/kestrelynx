@@ -35,6 +35,14 @@ npm・pnpm・uv・pipでは、PR本文の案内に従い、更新後の依存フ
 
 計画した更新の一部だけがPRに含まれる場合の読み方は[部分PR](remediation-update-results.md#partial-pull-requests)を参照してください。
 
+依存元からの再解決を採用したPRの「あわせて更新したパッケージ」には、版が変わった直接依存を、変更前後の版と更新を妨げていた指定とともに載せます。
+`mkdirp`の更新で`minimist`を修正版に上げる場合の記載例は、次のとおりです。
+
+> - `mkdirp`: `0.5.1` から `0.5.6` へ（`minimist` `0.0.8` を要求していた）
+
+持ち越した脆弱性がある場合は、件数と、CVE ID・パッケージ名・変更前後の版を含む例を1件載せます。
+持ち越しとして扱える条件は[脆弱性の持ち越し](remediation-reresolution-logic.md#dependent-reresolution-carried-findings)を参照してください。
+
 ### KubernetesのPR {#kubernetes-pr-results}
 
 Kubernetes向けのPR本文は、変更するファイルやコンテナに加え、マージによる配備への影響と未確認の前提を示します。

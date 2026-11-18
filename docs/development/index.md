@@ -9,6 +9,21 @@ For instructions on currently available features, see [Documentation](../documen
 
 <div class="kl-log__item" markdown>
 
+November 18, 2026
+{ .kl-log__date }
+
+[Development to separate the runtime table from the KestreLynx image](runtime-table-updates.md)
+{ .kl-log__title }
+
+Using new execution versions and series without fetching a new KestreLynx image
+
+**Status** Implemented; table publication and fetching, dependency updates, unused work image removal, and startup in deployed environments verified
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
 November 4, 2026
 { .kl-log__date }
 

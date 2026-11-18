@@ -8,6 +8,21 @@
 
 <div class="kl-log__item" markdown>
 
+2026年11月18日
+{ .kl-log__date }
+
+[実行環境の一覧を KestreLynx のイメージから切り離す開発](runtime-table-updates.md)
+{ .kl-log__title }
+
+KestreLynx のイメージを取り直さずに、新しい実行版と系列を使えるようにする
+
+**状態** 実装済み、一覧の公開と読み込み、依存パッケージの更新、使わなくなった作業用イメージの削除、稼働環境での起動を確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
 2026年11月4日
 { .kl-log__date }
 

@@ -85,7 +85,7 @@ These codes describe causes that stopped registry retrieval or candidate checks.
 | `platform_not_found` | The candidate has no image for the running image's platform | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 | `platform_ambiguous` | Multiple candidate images match the platform | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 | `platform_mismatch` | The candidate platform differs from the running image | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `registry_error` | The registry returned an error | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
+| `registry_error` | The registry returned an error | — |
 | `tag_listing_incomplete` | The tag list could not be read to the end | [Tag discovery](remediation-image-logic.md#tag-discovery) |
 | `newer_series_tag_list_incomplete` | The complete tag list needed to choose newer series could not be read to the end | [Newer series check](remediation-image-logic.md#newer-series-check) |
 | `newer_series_reserved` | Checking newer series stopped to leave time and registry requests for PR processing | [Newer series check](remediation-image-logic.md#newer-series-check) |
@@ -93,9 +93,9 @@ These codes describe causes that stopped registry retrieval or candidate checks.
 | `baseline_rescan_limit` | The limit on baseline image rescans was reached | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
 | `tag_page_limit` | The limit on tag-list requests was reached | [Tag discovery](remediation-image-logic.md#tag-discovery) |
 | `registry_budget_exhausted` | The registry request limit was reached | [Tag discovery](remediation-image-logic.md#tag-discovery) |
-| `rate_limited` | A rate limit was reached when accessing a registry or GitHub during planning | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
+| `rate_limited` | A rate limit was reached when accessing a registry or GitHub during planning | — |
 | `cycle_deadline` | The cycle's execution time limit was reached | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `registry_timeout` | A registry request timed out | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
+| `registry_timeout` | A registry request timed out | — |
 
 ### Image references {#image-reference-reasons}
 
@@ -134,7 +134,7 @@ When checking Kubernetes declarations, containers with the same running image re
 | `declared_ref_mismatch` | A checked container's Pod spec image reference differs from its running image reference, making the grouped item `not_comparable` | [Kubernetes image references and repulling](remediation-kubernetes-logic.md#kubernetes-image-references) |
 | `declared_ref_unavailable` | A checked container's Pod spec image reference cannot be read, making the grouped item `not_comparable` | [Kubernetes image references and repulling](remediation-kubernetes-logic.md#kubernetes-image-references) |
 | `dockerfile_set_not_adopted` | No candidate could be adopted in common by all workloads sharing the Dockerfile | [Base-image selection](remediation-base-image-logic.md#base-image-selection) |
-| `compose_set_not_adopted` | No candidate could be adopted in common by all services sharing the image | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
+| `compose_set_not_adopted` | No candidate could be adopted in common by all services sharing the image | — |
 | `instances_missing` | A mapped container has no running instance, an instance has no readable running image reference, or an instance has no plan item | [Kubernetes manifest PRs](remediation-kubernetes-logic.md#kubernetes-manifest-prs) |
 | `mixed_references` | Running instances disagree on the declared or running image reference | [Kubernetes manifest PRs](remediation-kubernetes-logic.md#kubernetes-manifest-prs) |
 | `kubernetes_set_not_adopted` | Containers whose shared image is updated in the same file have different adopted candidates | [Kubernetes manifest PRs](remediation-kubernetes-logic.md#kubernetes-manifest-prs) |
@@ -152,7 +152,7 @@ These codes describe reading a Dockerfile, identifying its base image, and deter
 | Code | Meaning | Details |
 | --- | --- | --- |
 | `dockerfile_file_not_found` | The Dockerfile is not at the configured path | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `dockerfile_file_unusable` | The Dockerfile is not a regular file, is a Git LFS pointer, or exceeds the size limit for reading during PR processing | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
+| `dockerfile_file_unusable` | The Dockerfile is not a regular file, is a Git LFS pointer, or exceeds the size limit for reading during PR processing | — |
 | `dockerfile_invalid` | The Dockerfile cannot be parsed, or edit verification failed | — |
 | `dockerfile_target_missing` | The specified build stage does not exist | [Base-image selection](remediation-base-image-logic.md#base-image-selection) |
 | `dockerfile_stage_cycle` | Following stage references never reaches an external image | [Base-image selection](remediation-base-image-logic.md#base-image-selection) |
@@ -194,7 +194,7 @@ These codes describe Compose build settings and conditions that prevent editing 
 | `compose_digest` | The `image` value includes a digest | — |
 | `compose_source_mismatch` | The file's `image` differs from the running image | [Source verification](remediation-logic.md#source-verification) |
 | `compose_file_not_found` | The Compose file is not at the configured path | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `compose_file_unusable` | The Compose file is not a regular file, is a Git LFS pointer, or exceeds the read-size limit | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
+| `compose_file_unusable` | The Compose file is not a regular file, is a Git LFS pointer, or exceeds the read-size limit | — |
 
 ### Kubernetes manifests {#source-kubernetes-reasons}
 
@@ -273,7 +273,7 @@ These codes describe whether dependency declaration files, such as `package.json
 | --- | --- | --- |
 | `dependency_files_not_found` | No dependency files were found | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
 | `ambiguous_dependency_files` | Multiple combinations of dependency files match, so one cannot be selected | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `dependency_file_unusable` | A dependency file is not a regular file, is a Git LFS pointer, or its contents cannot be read | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
+| `dependency_file_unusable` | A dependency file is not a regular file, is a Git LFS pointer, or its contents cannot be read | — |
 | `unsupported_lockfile` | The lockfile format is unsupported | — |
 | `go_replace_unsupported` | `go.mod` contains an unsupported `replace` directive | [Go dependency files](remediation-dependency-formats.md#go-inputs) |
 | `go_exclude_unsupported` | `go.mod` contains an unsupported `exclude` directive | [Go dependency files](remediation-dependency-formats.md#go-inputs) |
@@ -326,9 +326,9 @@ These codes describe causes that stopped repository or dependency-file retrieval
 | --- | --- | --- |
 | `source_not_found` | The source repository or branch was not found | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
 | `source_access_denied` | Access to the source repository was denied | [Prepare GitHub access](remediation-setup.md#prepare-github-access) |
-| `source_too_large` | The source is too large to read | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `file_too_large` | A dependency file is too large to read | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `byte_budget_exhausted` | The limit on bytes read from the source was reached | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
+| `source_too_large` | The source is too large to read | — |
+| `file_too_large` | A dependency file is too large to read | — |
+| `byte_budget_exhausted` | The limit on bytes read from the source was reached | — |
 | `source_error` | Reading the source failed | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `github_budget_exhausted` | The GitHub request limit was reached | [Missing plans](remediation-troubleshooting.md#check-missing-plan) |
-| `source_read_failed` | Retrieving dependency files again failed | [Update failures](remediation-troubleshooting.md#check-update-failure) |
+| `github_budget_exhausted` | The GitHub request limit was reached | — |
+| `source_read_failed` | Retrieving dependency files again failed | — |

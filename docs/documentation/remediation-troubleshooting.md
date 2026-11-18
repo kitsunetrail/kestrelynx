@@ -1,12 +1,21 @@
 # When no candidate or pull request appears
 
 Use notification text and reason codes to identify why a candidate or PR does not appear.
-Choose the section matching your situation, then compare your diagnostics with its checks.
+Choose the section matching your situation and follow the action in the row that matches the text in your notification or logs.
 
-For language packages, “Update candidate” alone does not distinguish an update execution problem from a PR creation problem.
-If you cannot tell, start with [Checking update failures](#check-update-failure).
+For the meaning of reason codes not listed in the tables, see [Reason codes](remediation-reason-codes.md#reason-codes).
+
+For language packages, Slack displays “Update candidate” in either of the following cases.
+
+- The dependency update has not yet run (the webhook `category` is `dependency_update_candidate`)
+- The dependency update passed its checks, but no PR exists yet (the webhook `category` is `pr_candidate`)
+
+The “Update candidate” label alone does not distinguish a problem at the dependency update stage from a problem at the PR creation stage.
+If you cannot distinguish the stages, start with [Checking update failures](#check-update-failure).
 
 For terms used on this page, see [Terms](index.md#terms).
+
+Choose a section from the following table for your situation.
 
 | Situation | Section |
 | --- | --- |
@@ -17,12 +26,12 @@ For terms used on this page, see [Terms](index.md#terms).
 
 ## Collecting diagnostics {#collect-diagnostics}
 
-Diagnostics use plans, notifications, and logs for the same target and run time.
+For diagnostics, gather and use the plans, notifications, and logs produced in one cycle for the workload and image you are investigating.
 Check them in the following order.
 
-1. Note the target workload, image, and scan time
+1. Note the workload and image you are investigating and the notification's date and time
 2. Check the category, reason, and details in the item's Slack line or its webhook `category`, `reason`, and `detail` fields
-3. For PR processing problems, check the notified PR status and operation results alongside the KestreLynx logs from the same run
+3. For PR processing problems, check the notified PR status and operation results alongside the KestreLynx logs from the cycle that produced that notification
 
 For the location of `plan.json`, which you can read without a notification, and `prs.json`, which records PR processing, see [Stored files](remediation-pr-logic.md#stored-records).
 See [Reason codes](remediation-reason-codes.md#reason-codes) for definitions and [Finding detailed results](remediation-results.md#detailed-results) for information omitted from notifications.
@@ -51,226 +60,145 @@ Planning selects update targets from findings in running images.
 Findings qualify when their severity is selected by `scan.severity`, their status is `fixed`, and fixed-version information is available.
 
 Check the status in `Results[].Vulnerabilities[].Status` in Trivy's scan results; `fixed` means vulnerability information reports that a fix exists.
-Check `FixedVersion` in the same finding for fixed-version information; it does not mean the fix has been applied to the running environment.
+Check `FixedVersion` in the same finding for fixed-version information.
 
 Use the following table when notifications do not arrive or a plan lacks an item or image candidate.
 
-| Symptom | What to check | Reference |
+| What you see | What to do | Reference |
 | --- | --- | --- |
-| Startup stops while loading configuration | Compare the logged error message with the relevant settings | [Remediation plans and pull requests](configuration.md#remediation) |
-| The plan has no item for the target | Check whether the running-image scan results meet the target selection conditions | [Image candidate selection](remediation-image-logic.md#image-selection), [Language package selection](remediation-package-logic.md#package-selection) |
-| No item appears for `container/<name>` | Check that the mapping's name matches `NAMES` in `docker ps` | [docker run containers](remediation-reference.md#docker-run-containers) |
-| `container/<name>` refers to a Compose container | Change the mapping to the `compose/<project>/<service>` shown in the warning | [Identifying the workload key](remediation-setup-docker.md#identify-workload) |
-| No item appears for an older container after rebuilding with the same tag | Check whether the old image has disappeared from the containerd image store | [docker run containers](remediation-reference.md#docker-run-containers) |
-| The scanned image's digest differs from the running image's digest | Check scan failures in the logs and the target image ID | [Source verification](remediation-logic.md#source-verification) |
-| `plan.json` contains a plan, but no notification arrives | Check notification destinations and delivery conditions | [Scan notification conditions](notification-conditions.md#notification-conditions), [Remediation plan redelivery](notification-conditions.md#remediation-redelivery) |
-| Source files cannot be retrieved, or a target file is missing | Check the mapping in the order given after the table | [Source mappings](configuration.md#remediation-mappings), [GitHub access](configuration.md#remediation-github) |
-| Owner-specific tokens cannot read a renamed or transferred repository | Update the mapping's `repository` to the current `owner/name` | [GitHub access](configuration.md#remediation-github) |
-| A private image cannot be accessed | Check the registry host and credentials | [Image registry authentication](configuration.md#registries) |
-| `no_newer_tag`: “no newer tag exists” | Check for a newer version among tags with the same major, minor, prefix, and suffix | [Image candidate reasons](remediation-image-reason-codes.md#image-reasons) |
-| `same_content`: “the newer tag has the same content” | Check whether the candidate and running image have the same digest | [Published image tags](remediation-image-logic.md#published-image-tags) |
-| `candidate_does_not_resolve_targets`: “the candidate does not resolve the target findings” | Check whether comparing the running image and candidate shows resolved target findings | [Verification scope by target](remediation-logic.md#verification-scope) |
-| `declared_ref_mismatch`: “the image the spec of the workload names is not the one the container runs” | Compare the Pod spec's `image` with the running image name for every container sharing that running image name | [Kubernetes image references and pulling images again](remediation-kubernetes-logic.md#kubernetes-image-references) |
-| `declared_ref_unavailable`: “the image the spec of the workload names could not be read” | Check whether `image` can be read from each container's Pod spec for containers sharing the running image name | [Kubernetes image references and pulling images again](remediation-kubernetes-logic.md#kubernetes-image-references) |
-| `tag_listing_incomplete`: “the tag list could not be read to the end” | Check retrieval failure logs and the limit shown in the notification | [Tag discovery](remediation-image-logic.md#tag-discovery), [Processing limits](configuration.md#remediation-limits) |
-| An image is treated as locally built | Compare Compose's `build` setting with the Dockerfile and dependency-file mappings | [Excluding local builds](remediation-image-logic.md#local-builds) |
-| The base image cannot be confirmed | Check the image named by `FROM` in the target Dockerfile stage and its matching results against the running image | [Matching base layers](remediation-base-image-logic.md#base-layer-matching), [Image candidate reasons](remediation-image-reason-codes.md#image-reasons) |
+| A `container/<name>` item is missing | Set the mapping's `workload` to `container/` followed by the `NAMES` value from `docker ps` | [Containers started with docker run](remediation-reference.md#docker-run-containers) |
+| A log warning contains `use the Compose key instead` (shown only once while the condition causing the warning persists) | Change the mapping's `workload` to the `compose/<project>/<service>` shown in the warning's `use` field | [Identifying workload keys](remediation-setup-docker.md#identify-workload) |
+| No item appears for an older container after rebuilding with the same tag | Recreate the container with the new image | [docker run containers](remediation-reference.md#docker-run-containers) |
+| `plan.json` contains a plan, but no notification arrives | Check KestreLynx logs for delivery failures and check notification delivery conditions | [Scan notification conditions](notification-conditions.md#notification-conditions), [Remediation plan redelivery](notification-conditions.md#remediation-redelivery) |
+| `source_not_found`: “the source repository or branch was not found” | Correct the mapping's `repository`, `base_branch`, and `dependencies.directory` to existing values | [Source mappings](configuration.md#remediation-mappings) |
+| `source_access_denied`: “access to the source repository was denied” | Use a GitHub token that can read Contents in the target repository | [GitHub access](configuration.md#remediation-github) |
+| `source_error` with `names no repository owner to choose a token for` in the details | Change the mapping's `repository` to its current `owner/name` | [GitHub access](configuration.md#remediation-github) |
+| `dockerfile_file_not_found`: “the Dockerfile is not at the configured path” (when the mapping specifies `dockerfile`) | Correct the mapping's `dockerfile.path` to the actual Dockerfile path | [Source mappings](configuration.md#remediation-mappings) |
+| `dockerfile_file_not_found` when the mapping omits `dockerfile` and derives the Dockerfile from Compose's `build` | Correct the mapping's `compose.path` and the selected Compose file's `build` to match the actual build | [Source mappings](configuration.md#remediation-mappings) |
+| `compose_file_not_found`: “the Compose file is not at the configured path” | Correct the mapping's `compose.path` to the actual Compose file path | [Source mappings](configuration.md#remediation-mappings) |
+| `manifest_file_not_found`: “the manifest is not at the configured path” | Correct whichever path the mapping sets: `manifest.path`, `kustomize.path`, or `helm_values.path` | [Source mappings](configuration.md#remediation-mappings) |
+| `dependency_files_not_found`: “no dependency files were found” | Correct `dependencies.directory` or add the missing dependency files identified in the details on the target branch | [Source mappings](configuration.md#remediation-mappings) |
+| `ambiguous_dependency_files`: “more than one set of dependency files matches” | Remove unused lockfiles from the directory named by `dependencies.directory` on the target branch | [Source mappings](configuration.md#remediation-mappings) |
+| `auth_required`: “the registry requires a login” | Correct `host`, `username`, `password`, and `token_hosts` under top-level `registries` for the registry being accessed | [Image registry authentication](configuration.md#registries) |
+| The webhook `reason` is `locally_built` and no image update candidate appears (this reason is not shown in Slack) | Set `dockerfile.path` or `dependencies.directory` in the mapping | [Source mappings](configuration.md#remediation-mappings) |
+| `base_update_not_deployed`: “PR &lt;PR&gt; (base image &lt;image&gt; &lt;old-tag&gt; → &lt;new-tag&gt;) is merged, but the running image is still built from &lt;old-tag&gt;” | Deploy an image rebuilt from the Dockerfile after the merge | [Base layer matching](remediation-base-image-logic.md#base-layer-matching) |
+| `base_layers_mismatch`: “the running image was not built from &lt;base-image&gt;, which the FROM names (the image was not rebuilt after the Dockerfile changed, or the tag was moved after the build)” | Match the mapping's `dockerfile.path` and `dockerfile.target` to the actual build, or deploy a rebuilt image if the settings already match | [Source mappings](configuration.md#remediation-mappings) |
 
-The following additional checks apply to specific symptoms.
+Work stopped by a limit is deferred to later cycles; if a limit is reached every cycle, increase the following setting as described under [Processing limits](configuration.md#remediation-limits).
 
-- `container/<name>` targets containers running when the list was retrieved, so check the next cycle's results after renaming or recreating a container
-- Check earlier logs for the Compose warning because it appears only once while the same condition persists
-- Recreate the container with the new image if the old image has disappeared from containerd
-- Check delivery failure logs when no notification arrives
-- Also check pull permissions and token service permissions for private images
-- For tag listing, check limits on tag requests, registry requests, and processing time
-
-If source files cannot be retrieved, check the following in order.
-
-1. Compare Compose labels, the docker run container name, or the Kubernetes workload key with `workload`
-2. Check that `repository` identifies the intended repository
-3. Check that `base_branch` identifies the intended branch
-4. Check that the target file exists at the configured path
-5. Check GitHub access and read permissions
-
-With owner-specific tokens, redirects to repository-ID URLs without an owner are rejected because a token cannot be selected.
+| What you see | Setting to increase |
+| --- | --- |
+| `candidate_scan_limit`: “the limit on candidate scans of a run was reached” | `remediation.limits.candidate_scans_per_cycle` |
+| `baseline_rescan_limit`: “the limit on rescans of running images was reached” | `remediation.limits.baseline_rescans_per_cycle` |
+| `registry_budget_exhausted`: “the registry request budget of a run is used up” | `remediation.limits.registry_requests_per_cycle` |
+| `tag_page_limit`: “the limit on tag list requests was reached” | `remediation.limits.tag_pages_per_repository` |
+| `cycle_deadline`: “the time limit of the run was reached” | `remediation.limits.cycle_timeout` |
 
 ## Checking update failures {#check-update-failure}
 
 Language-package updating applies candidate updates and checks the resulting dependency files.
 
-When candidates are not updated, use the following table to match notification reasons with checks.
+When candidates are not updated, follow the action in the row that matches the notification reason in the following table.
 
-| Symptom | What to check | Reference |
+| What you see | What to do | Reference |
 | --- | --- | --- |
-| Language packages remain candidates | Check whether PR creation is enabled and the reason attached to the item | [Basic settings](configuration.md#remediation-basics), [Plan and PR execution scope](remediation-logic.md#plan-and-pr-execution) |
-| An input format or package source is reported as unsupported | Check the dependency files or settings identified by the reason | [Supported input formats](remediation-reference.md#supported-inputs), [Source reasons](remediation-image-reason-codes.md#source-reasons) |
-| A runtime cannot be selected, or compatibility requirements are not met | Compare the project's version declarations with dependency requirements | [Runtime selection](remediation-package-logic.md#runtime-and-tool-versions), [Runtime reasons](remediation-update-reason-codes.md#runtime-reasons) |
-| `pip_target_undecidable`: “the environment the packages run in cannot be decided” | Check whether the verification environment can be determined from the running image | [Target environment for pip validation](remediation-node-python-logic.md#pip-target-environment) |
-| `pip_target_mismatch`: “the environment pip resolves for differs from the one the packages run in” | Check that verification environments derived from each target package's origins agree on Python version, implementation, platform tags, and ABI | [Target environment for pip validation](remediation-node-python-logic.md#pip-target-environment) |
-| `tool_too_new`: “the package manager release is too new to use” | Check the availability time shown in the details | [Work containers](configuration.md#remediation-worker), [Tool retrieval reasons](remediation-update-reason-codes.md#tool-reasons) |
-| `tool_fetch_failed`: “fetching the package manager failed” | Check connectivity to the download destination and notification details | [Tool downloads](outbound-communication.md#tool-downloads) |
-| `tool_fetch_budget`: “the limit on fetching package managers was reached” | Check the retrieval limit shown in the notification details | [Tool retrieval reasons](remediation-update-reason-codes.md#tool-reasons) |
-| `tool_hash_mismatch`: “the package manager archive does not match its checksum” | Check notification details to distinguish a mismatch with the registry's hash from a mismatch with the hash declared in npm or pnpm's `packageManager` | [Tool version declarations](remediation-dependency-formats.md#tool-declarations), [Tool retrieval and verification](remediation-node-python-logic.md#tool-verification) |
-| The tool cache cannot be used | Check storage write permissions and free space | [Work containers](configuration.md#remediation-worker), [Tool retrieval reasons](remediation-update-reason-codes.md#tool-reasons) |
-| A Docker work container cannot run | Check the Docker API and work environment validation logs | [Enabling remediation pull requests](remediation-setup.md#enable-pull-requests), [Work container execution](remediation-worker-logic.md#worker-execution) |
-| `work_program_mismatch`: “the program in the work container is not the one this build came with” | Check the distribution in use and the logs | [Work containers](configuration.md#remediation-worker) |
-| Processing stops at a limit or deadline | Compare the limit shown in the notification with the configured value | [Processing limits](configuration.md#remediation-limits), [Update result reasons](remediation-update-reason-codes.md#update-reasons) |
-| An update does not reach a fixed version, or only part appears in the PR | Check excluded packages and remaining versions | [Partial pull requests](remediation-update-results.md#partial-pull-requests), [Update result reasons](remediation-update-reason-codes.md#update-reasons) |
-| Checks of updated files or accompanying changes fail | Check notification details for the changes that failed validation | [Collateral change validation](remediation-node-python-logic.md#change-validation), [Update result reasons](remediation-update-reason-codes.md#update-reasons) |
-| Results before and after the update cannot be compared | Check scan logs and the comparison conditions before and after the update | [Scan comparison conditions](remediation-logic.md#comparison-conditions) |
-| `source_target_still_detected`: “the target vulnerability is still detected in the updated files” | Check the comparison results for target findings remaining after the update | [Resolved findings in comparisons](remediation-pr-results.md#verification-results) |
-| `source_introduced_findings`: “the update brings new findings into the dependency files” | Check the comparison results for findings absent before the update | [Resolved findings in comparisons](remediation-pr-results.md#verification-results) |
-
-For runtimes and inputs, also check the following information.
-
-- For unsupported inputs, check dependency files, workspaces, additional configuration, and package sources
-- For Node.js version declarations, check files such as `.nvmrc` and `.node-version`, and `engines.node` in the dependency declaration file `package.json`
-- For Python version declarations, check files such as `.python-version`, and `requires-python` in the dependency declaration file `pyproject.toml`
-- Check whether runtimes such as Node.js 22 or Python 3.13 are still supported under [Supported runtimes](remediation-reference.md#supported-runtimes)
-- For pip's verification environment, check the running image's Python version, OS, and platform
-
-For retrieval, execution, and validation, also check the following information.
-
-- For tool waiting periods, check publication times and `remediation.worker.tool_versions.min_release_age`, and for caching check `remediation.worker.tool_versions.cache_max_size`
-- For Docker, also check the work image download source
-- For custom builds, also check the location of the supplied program that executes updates inside the container (`remediation.worker.program_dir`)
-- If processing stops at a limit or deadline, also check the next scheduled run
-- If an update cannot reach a fixed version, also check the parent package's dependency range
-- For post-update checks, check changed files, lockfile formats, dependency ranges, and verification results against package distributions
+| A language package remains an “Update candidate” with webhook `category: dependency_update_candidate` | Set `remediation.pull_requests.enabled` to `true` | [Basic settings](configuration.md#remediation-basics) |
+| `tool_too_new` with `it can be used from` in the details | Wait until the time following `it can be used from` in the details | [Work containers](configuration.md#remediation-worker) |
+| `tool_fetch_failed` with `downloading` or `reading the registry's document` in the details, but no `answered` | Enable HTTPS connections to `registry.npmjs.org`, `pypi.org`, and `files.pythonhosted.org` | [Tool downloads](outbound-communication.md#tool-downloads) |
+| `tool_fetch_failed` with `the tool cache could not be written` in the details | Ensure `remediation.storage_dir` is writable and has free space | [Basic settings](configuration.md#remediation-basics) |
+| `tool_hash_mismatch` with `declared hash` in the details | Correct the hash in `packageManager` in the target branch's `package.json` | [Tool version declarations](remediation-dependency-formats.md#tool-declarations) |
+| `tool_cache_full`: “the cache of package managers is full” | Increase `remediation.worker.tool_versions.cache_max_size` | [Work containers](configuration.md#remediation-worker) |
+| `work_image_unavailable` with `the work image could not be made ready` or `work image unavailable` in the details | Enable work image retrieval from Docker Hub or the mirror set in `remediation.worker.registry` | [Work image downloads](outbound-communication.md#worker-image-downloads) |
+| `work_image_unavailable` with `the work program is missing or is not the one this build was released with` in the details | Use the program that runs updates from the running KestreLynx build in `remediation.worker.program_dir` | [Work containers](configuration.md#remediation-worker) |
+| `work_image_unavailable` with `the instance id of the work containers could not be read or created` in the details | Set `remediation.storage_dir` to a writable location | [Basic settings](configuration.md#remediation-basics) |
+| `work_image_not_configured`: “no work image is configured for updates” | For a custom build without the program that runs updates, set `remediation.worker.program_dir` to the directory containing the program | [Work containers](configuration.md#remediation-worker) |
+| `work_program_mismatch`: “the program in the work container is not the one this build came with” | Restart KestreLynx after replacing the program that runs updates in `remediation.worker.program_dir` | [Work containers](configuration.md#remediation-worker) |
+| `update_job_limit`: “the limit on update jobs of a run was reached” | Increase `remediation.limits.dependency_jobs_per_cycle` | [Processing limits](configuration.md#remediation-limits) |
+| `update_job_timed_out`: “the update job timed out” | Increase `remediation.limits.job_timeout` | [Processing limits](configuration.md#remediation-limits) |
 
 When Kubernetes language-package updates require manual action or are deferred, check the following items by reason.
 
-| Symptom | What to check | Reference |
+| What you see | What to do | Reference |
 | --- | --- | --- |
-| `work_namespace_not_configured`: “updates on Kubernetes need work Pods, and no work namespace is configured” | Check that `remediation.worker.kubernetes.namespace` is configured | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
-| `work_cluster_too_old`: “the cluster is older than the lowest Kubernetes version the work Pod policy needs” | Check that Kubernetes is version 1.30 or newer | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
-| `work_runtime_class_unsupported`: “a RuntimeClass is configured for work Pods, which is not supported yet” | Check that `remediation.worker.kubernetes.runtime_class` is empty | [Kubernetes work container settings](configuration.md#remediation-worker-kubernetes) |
-| `work_admission_unverified`: “the admission policy of the work namespace could not be confirmed to be in force, so no work Pod was started” | Check the admission validation failure identified in the details | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
-| `work_priority_class_missing`: “the PriorityClass configured for work Pods does not exist” | Check that the configured PriorityClass exists and has `preemptionPolicy: Never` | [Kubernetes work container settings](configuration.md#remediation-worker-kubernetes) |
-| `work_pod_limit`: “the work namespace is at its Pod or quota limit, so the update waits for the next cycle” | Check the work namespace's Pod count and available quota | [Kubernetes work container settings](configuration.md#remediation-worker-kubernetes) |
-| `work_pod_not_started`: “the work Pod did not start in time” | Check Pod events for the reason startup was blocked | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
-| `update_result_invalid`: Details indicate missing result logs | Check that the execution node's `containerLogMaxSize` is at least `144Mi` | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
+| `work_namespace_not_configured`: “updates on Kubernetes need work Pods, and no work namespace is configured” | Set `remediation.worker.kubernetes.namespace` to the work namespace | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
+| `work_cluster_too_old`: “the cluster is older than the lowest Kubernetes version the work Pod policy needs” | Upgrade Kubernetes to version 1.30 or newer | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
+| `work_runtime_class_unsupported`: “a RuntimeClass is configured for work Pods, which is not supported yet” | Clear `remediation.worker.kubernetes.runtime_class` | [Kubernetes work container settings](configuration.md#remediation-worker-kubernetes) |
+| `work_admission_unverified` with `the policy allows none of the work images` in the details | Set `data.receiverRepository` and `data.workRepositories` in `52-policy-params.yaml` to the actual repositories | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
+| `work_admission_unverified` with `the policy is not in force` in the details | Reapply `50-validatingadmissionpolicy.yaml` and `51-validatingadmissionpolicybinding.yaml` | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
+| `work_priority_class_missing` with `does not exist` in the details | Create a PriorityClass with the name set in `remediation.worker.kubernetes.priority_class` | [Kubernetes work container settings](configuration.md#remediation-worker-kubernetes) |
+| `work_priority_class_missing` with `is not one that never preempts, or is not the one the policy expects` in the details | Set the PriorityClass's `preemptionPolicy` to `Never` and match `data.priorityClass` in `52-policy-params.yaml` to the configured name | [Kubernetes work container settings](configuration.md#remediation-worker-kubernetes) |
+| `work_pod_limit`: “the work namespace is at its Pod or quota limit, so the update waits for the next cycle” | Free capacity under the work namespace's Pod and quota limits | [Kubernetes work container settings](configuration.md#remediation-worker-kubernetes) |
+| `work_pod_not_started`: “the work Pod did not start in time” | Resolve the startup blocker identified in Pod events | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
+| `update_result_invalid` with details indicating missing result logs | Set the execution node's `containerLogMaxSize` to at least `144Mi` | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
+| `update_job_failed` with `workRepositories of its parameters must list` in the details | Add the repository named in the details to `data.workRepositories` in `52-policy-params.yaml` | [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) |
 
-For `work_admission_unverified`, follow the details to check RBAC, Pod admission rules and parameters, and the result of retrieving the cluster version.
-For `update_result_invalid`, also check whether result logs were truncated or rotated.
+The files in the table are under `deploy/kubernetes/work/`; after editing `52-policy-params.yaml`, reapply it as described under [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates).
 
-For `work_pod_not_started`, find Pods labeled `io.kestrelynx.work=v1` in the work namespace and compare their creation times with the failed update's time.
-Check during update execution because work Pods are deleted when processing ends.
+Check the cause of `work_pod_not_started` during update execution using the following steps, because work Pods are deleted when processing ends.
 
-In this example, replace `WORK_NAMESPACE` with `remediation.worker.kubernetes.namespace` and `POD_NAME` with the Pod name to check.
+1. List Pods labeled `io.kestrelynx.work=v1` in the work namespace and select the Pod whose creation time matches the failed update's time
 
-```sh
-kubectl -n WORK_NAMESPACE get pods -l io.kestrelynx.work=v1 -o custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp
-kubectl -n WORK_NAMESPACE get events --field-selector involvedObject.name=POD_NAME
-```
+    ```sh
+    kubectl -n WORK_NAMESPACE get pods -l io.kestrelynx.work=v1 -o custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp
+    ```
 
-If the Pod is gone, check KestreLynx logs and the notification's `reason` and `detail` from the same run.
+2. Display events for the selected Pod
+
+    ```sh
+    kubectl -n WORK_NAMESPACE get events --field-selector involvedObject.name=POD_NAME
+    ```
+
+In the commands, replace `WORK_NAMESPACE` with the value of `remediation.worker.kubernetes.namespace` and `POD_NAME` with the selected Pod's name.
 
 ## Checking for a missing PR {#check-missing-pr}
 
 PR processing checks whether updates can be adopted and source files can be edited, then checks for existing PRs to prevent duplicates.
 Use the following table when an update candidate exists but no PR appears.
 
-| Symptom | What to check | Reference |
+| What you see | What to do | Reference |
 | --- | --- | --- |
-| A candidate exists, but no PR appears | Check whether PR creation is enabled and the target file is editable | [Basic settings](configuration.md#remediation-basics), [Supported input formats](remediation-reference.md#supported-inputs) |
-| `undeclared_affected_workload`: “a container that is not listed declares the image of the images entry and may be changed by it” | Check whether changing the tag affects the container identified in the details | [Kustomize PRs](remediation-kubernetes-logic.md#kustomize-prs), [Helm values PRs](remediation-kubernetes-logic.md#helm-values-prs) |
-| `init_container_unverified`: “a listed init container could not be shown to have run the image of the running containers” | Check the comparison conditions for containers in the same Pod described after the table | [Kustomize PRs](remediation-kubernetes-logic.md#kustomize-prs), [Helm values PRs](remediation-kubernetes-logic.md#helm-values-prs) |
-| Kustomize requires manual action with a `kustomize_*` reason | Check the target `images[].name` and a string `newTag` | [Kustomize formats](remediation-source-formats.md#kustomize-formats) |
-| `kustomize_image_automation`: “the newTag line carries a Flux image automation marker” | Check whether the `newTag` line has a comment containing `$imagepolicy` | [Kustomize formats](remediation-source-formats.md#kustomize-formats) |
-| Helm values require manual action with a `helm_*` reason | Check whether the image at the selected key has an explicit string tag | [Helm values formats](remediation-source-formats.md#helm-values-formats) |
-| `helm_image_automation`: “a line of the image carries a Flux image automation marker” | Check whether an image declaration line has a comment containing `$imagepolicy` | [Helm values formats](remediation-source-formats.md#helm-values-formats) |
-| A Helm values PR asks you to confirm the final value | Check whether any settings override the value at the selected key | [Configure Helm values PRs](remediation-setup-kubernetes.md#helm-values-pull-requests) |
-| `github_refused`: “GitHub refused the write” | Check the token's target repositories and write permissions | [GitHub access](configuration.md#remediation-github), [PR processing reasons](remediation-update-reason-codes.md#pr-reasons) |
-| `pr_limit`: “the limit on pull requests of a run was reached” | Compare the number of new PRs this cycle with `remediation.limits.new_prs_per_cycle` | [Processing limits](configuration.md#remediation-limits) |
-| `open_pr_limit`: “the limit on open pull requests of KestreLynx was reached” | Compare the current PR count with `remediation.limits.open_prs` | [Processing limits](configuration.md#remediation-limits) |
-| An update is matched to an existing PR | Check whether the existing PR shown in the notification proposes the same update | [Matching existing PRs](remediation-pr-logic.md#existing-pr-matching) |
-| No PR appears after the same update was closed without merging | Check the history that prevents duplicate creation | [Closed PRs](remediation-pr-logic.md#closed-prs) |
-| Source files change during PR preparation | Compare notification details with the current files or base branch | [PR processing reasons](remediation-update-reason-codes.md#pr-reasons) |
-| `candidate_changed`: “the candidate changed while the pull request was prepared” | Compare notification details with the current candidate | [PR processing reasons](remediation-update-reason-codes.md#pr-reasons) |
-| A GitHub operation fails | Check operation details for access or connectivity problems | [PR operation event fields](webhook-remediation-pr-reference.md#remediation-operation-fields), [PR processing reasons](remediation-update-reason-codes.md#pr-reasons) |
-| `write_outcome_unknown`: “the result of a write to GitHub is unknown” | Check the operation result reconciled in the next cycle | [Stopping writes](remediation-pr-logic.md#write-stops), [PR operation event fields](webhook-remediation-pr-reference.md#remediation-operation-fields) |
+| An image “Update candidate” has no PR or reason, and `remediation.pull_requests.enabled` is `false` | Set `remediation.pull_requests.enabled` to `true` | [Basic settings](configuration.md#remediation-basics) |
+| An image “Update candidate” has no PR or reason, and the Compose service's mapping has no `compose` | Configure `compose` in the mapping | [Source mappings](configuration.md#remediation-mappings) |
+| An image “Update candidate” has no PR or reason, and the Kubernetes workload's mapping has none of `manifest`, `kustomize`, or `helm_values` | Configure `manifest`, `kustomize`, or `helm_values` in the mapping | [Source mappings](configuration.md#remediation-mappings) |
+| An image “Update candidate” has no PR or reason, and the target is a container started with `docker run` (`container/<name>`) | KestreLynx does not create PRs that change image tags for containers started with `docker run` | [docker run containers](remediation-reference.md#docker-run-containers) |
+| `undeclared_affected_workload`: “a container that is not listed declares the image of the images entry and may be changed by it” (when the tag change should also include the container identified in the details) | Add the container identified in the details to the mapping's `affects` | [Configure Kustomize PRs](remediation-setup-kubernetes.md#kustomize-pull-requests), [Configure Helm values PRs](remediation-setup-kubernetes.md#helm-values-pull-requests) |
+| `undeclared_affected_workload` when the tag change should not include the container identified in the details | Change and deploy the manifests so that the container identified in the details no longer declares the same image reference as the mapped entry's value | [Kustomize and Helm values PRs](remediation-kubernetes-logic.md#kustomize-and-helm-prs) |
+| `init_container_unverified`: “a listed init container could not be shown to have run the image of the running containers” (the details contain `no running container of the set runs in the same Pod`) | Add the running container that uses the target image in the init container's Pod to the mapping's `affects` | [Source mappings](configuration.md#remediation-mappings) |
+| `init_container_unverified` with `it ran the same image entity as` in the details | Change the image reference in the init container's manifest to the running container's reference identified in the details and recreate the Pod | [Kustomize and Helm values PRs](remediation-kubernetes-logic.md#kustomize-and-helm-prs) |
+| `kustomize_image_missing`: “the kustomization has no images entry of the mapped name” | Set the mapping's `kustomize.path` and `kustomize.image` to the `images` entry to update | [Source mappings](configuration.md#remediation-mappings) |
+| `helm_key_missing`: “the values file has no value at the mapped key” | Set the mapping's `helm_values.path` and `helm_values.key` to the key that specifies the image | [Source mappings](configuration.md#remediation-mappings) |
+| `github_refused`: “GitHub refused the write” | Grant the token Read and write access to Contents and Pull requests | [GitHub access](configuration.md#remediation-github) |
+| `github_refused` with details indicating rejection by branch protection or a ruleset | Correct the repository rules | [GitHub access](configuration.md#remediation-github) |
+| `pr_limit`: “the limit on pull requests of a run was reached” | Increase `remediation.limits.new_prs_per_cycle` | [Processing limits](configuration.md#remediation-limits) |
+| `open_pr_limit`: “the limit on open pull requests of KestreLynx was reached” | Merge or close open KestreLynx PRs, or increase `remediation.limits.open_prs` | [Processing limits](configuration.md#remediation-limits) |
+| Slack shows “closed without merging” and the closed PR's update is not proposed again (webhook `status: pr_suppressed`) | Reopen the closed PR on GitHub to propose the update again | [Closed PRs](remediation-pr-logic.md#closed-prs) |
+| `write_outcome_unknown`: “the result of a write to GitHub is unknown” | Wait for the next cycle | [Stopping writes](remediation-pr-logic.md#write-stops), [PR operation event fields](webhook-remediation-pr-reference.md#remediation-operation-fields) |
 
-The following additional checks apply to specific symptoms.
+For `undeclared_affected_workload`, update `affects` across mappings as follows.
 
-- If a candidate exists without a PR, also check source mappings in the order given under [Checking for a missing plan](#check-missing-plan)
-- For Kustomize, also check unsupported syntax or features and interference from other `images` entries
-- For Helm, also check the image representation and YAML keys and syntax according to the reason code
-- For the final Helm value, check overrides from Flux HelmRelease `spec.values`, Argo CD `parameters`, `valuesObject`, and `valuesFrom`, CI `--set`, and other values files, along with the containers affected by changing the tag
-- If GitHub refuses a write, also check repository rules
-- If source files or candidates change during PR preparation, check the next cycle's results
-
-For `undeclared_affected_workload`, add the container to `affects` if the tag change affects it.
-Check mappings that target the same Kustomize entry or Helm key in the same repository, branch, and file.
-
-Each mapping must declare the same combined list of containers from `workload` and `affects`.
-The `workload` values themselves do not need to be identical.
-
-If the container should not be included in the update, change the scope affected by the Kustomize entry or Helm key.
-See the examples under [Configure Kustomize PRs](remediation-setup-kubernetes.md#kustomize-pull-requests) and [Configure Helm values PRs](remediation-setup-kubernetes.md#helm-values-pull-requests).
-
-For `init_container_unverified`, check each observed Pod belonging to workloads listed in `workload` and `affects`.
-Compare the ordinary init container with a running container listed in `workload` or `affects` in the same Pod using these conditions.
-
-| Comparison | Fields to check | Required match |
-| --- | --- | --- |
-| The init container's declared and executed image names | `spec.initContainers[].image` and `status.initContainerStatuses[].image` | The declared and executed references for the same container name match |
-| The init container's and running container's image names | Each container's `image` in Pod status | The references read from status match |
-| The init container's and running container's image content | Each container's `imageID` in Pod status and the node's platform | The parsed digests and platforms match |
-
-If `image` in status contains only an image ID, the image reference read from `imageID` is used for comparison.
-In addition to these comparisons, the matched running container's scan results must be included in the plan.
-
-An example Flux comment is `# {"$imagepolicy": "flux:nginx:tag"}`, which prevents automatic editing when present on a checked line.
-For Helm, checked lines contain `repository`, `registry`, `tag`, or a string image declaration.
-
-KestreLynx reconciles GitHub operations with unknown outcomes through reads in the next cycle.
-Find events with the same `id` as the operation with an unknown outcome in `operations[]` in the webhook or `prs.json`.
-
-Use the following fields to distinguish completed reconciliation from the operation's outcome.
-
-| Field and value | Meaning |
-| --- | --- |
-| `phase: settled` | Handling after reconciliation has been settled |
-| `result: ok` | The operation was confirmed successful |
-| `result: failed` | The operation failed or the intended change was confirmed absent |
-| `result: unknown` | The operation's outcome could not be determined |
-| `error` | An explanation of the error or what reconciliation confirmed |
-
-When retrying without reusing Git blobs, trees, or commits whose creation is uncertain, `result: unknown` remains even with `phase: settled`.
-If writes remain stopped, continue to [Checking record reconciliation failures](#check-record-failure).
+- Include all mappings that target the same Kustomize entry or Helm key in the same repository, branch, and file
+- Each mapping must declare the same combined list of containers from `workload` and `affects`
+- The `workload` values may differ between mappings
 
 ## Checking record reconciliation failures {#check-record-failure}
 
 Record reconciliation checks `prs.json` against PRs and operation results on GitHub to decide whether GitHub writes may proceed.
 Use the following table when “Pull request writes are stopped” or a record error appears.
 
-| Symptom | What to check | Reference |
+| What you see | What to do | Reference |
 | --- | --- | --- |
-| Plan or PR processing records cannot be saved | Check the storage location identified in the logs and its persistent volume mount | [Basic settings](configuration.md#remediation-basics), [Storage reasons](remediation-update-reason-codes.md#storage-reasons) |
-| `store_locked`: “the pull request records are locked by another process” | Check whether another KestreLynx instance is running with the same storage location | [Storage reasons](remediation-update-reason-codes.md#storage-reasons) |
-| `records_unverified`: “the records of existing pull requests could not be verified” | Check whether the identification marker remains in an HTML comment at the end of the PR body | [Record recovery](remediation-pr-logic.md#record-recovery) |
-| `reconciliation_failed`: “existing pull requests could not be reconciled” | Check GitHub access and notification details | [Record recovery](remediation-pr-logic.md#record-recovery), [PR processing reasons](remediation-update-reason-codes.md#pr-reasons) |
-| Reading records reports `parse plan` or `parse pull request records` | Compare the JSON syntax or type error at the end of the log message with the relevant part of the file | [Stopping writes](remediation-pr-logic.md#write-stops) |
-| `unsupported plan version` or `unsupported pull request record version` appears | Check that the file version shown by `has version` matches the supported version shown by `this build reads` | [Stopping writes](remediation-pr-logic.md#write-stops) |
-| `operation events are out of sequence` appears | Check `operations[]` in `prs.json` against the conditions below the table | [Stopping writes](remediation-pr-logic.md#write-stops) |
-| `storage_full`: “the pull request records are full” | Check operation history retained because it is undelivered or unsettled | [Stopping writes](remediation-pr-logic.md#write-stops), [Storage reasons](remediation-update-reason-codes.md#storage-reasons) |
-
-For `operation events are out of sequence`, check these conditions in `prs.json`.
-
-- Each `seq` in `operations[]` is positive and increases in array order
-- Every `seq` is less than `next_seq`
-- Every event has a nonempty `id`
-
-For save failures, also check storage permissions and free space.
-If existing PRs cannot be reconciled, also check the change history of PR bodies and repositories.
-
-The identification marker is an HTML comment beginning with `<!-- kestrelynx:` and ending with ` -->`, visible when editing the PR body.
-See [Record recovery](remediation-pr-logic.md#record-recovery) for the checks relevant to missing or modified markers.
-
-If you cannot identify the cause, retain the original `plan.json` and `prs.json`, the full error, and notifications and logs from the same run.
-Gather the information under [Collecting diagnostics](#collect-diagnostics) and compare it with the conditions under [Stopping writes](remediation-pr-logic.md#write-stops).
+| `storage_failed`: “the pull request records could not be saved”, or Slack shows “The fix plan could not be saved.” | Place `remediation.storage_dir` on a writable persistent volume with free space | [Basic settings](configuration.md#remediation-basics) |
+| `store_locked`: “the pull request records are locked by another process” | Stop any other KestreLynx instance using the same storage location | [Storage reasons](remediation-update-reason-codes.md#storage-reasons) |
+| `records_unverified`: “the records of existing pull requests could not be verified” with `kestrelynx marker`, `the marker is malformed`, or `the marker's keys do not recompute` in the details | If you edited the PR body, restore the HTML comment beginning with `<!-- kestrelynx:` to its content before the edit | [Record recovery](remediation-pr-logic.md#record-recovery) |
+| `records_unverified` with `github: authentication required` or `github: access forbidden` in the details | Use a valid token with Read and write access to Contents and Pull requests in the target repository | [GitHub access](configuration.md#remediation-github) |
+| `records_unverified` with `github: not found` in the details | Correct the mapping's `repository` to an existing `owner/name`, or grant the token access to the target repository if it already exists | [GitHub access](configuration.md#remediation-github) |
+| `records_unverified` with `github: rate limited` in the details | Wait for a cycle after GitHub's rate limit is lifted | [GitHub access](configuration.md#remediation-github) |
+| `records_unverified` with `GitHub names the repository` in the details | Change the mapping's `repository` to the name shown in the details | [Source mappings](configuration.md#remediation-mappings) |
+| The logs contain `parse plan`, `parse pull request records`, or `operation events are out of sequence` | If you manually edited `plan.json` or `prs.json`, undo the edit | [Stopping writes](remediation-pr-logic.md#write-stops) |
+| `unsupported plan version` or `unsupported pull request record version` appears, or the details contain `the marker has version` | Switch KestreLynx back to the version that created the file or PR | [Stopping writes](remediation-pr-logic.md#write-stops) |
+| `storage_full`: “the pull request records are full” | Wait for the next cycle | [Stopping writes](remediation-pr-logic.md#write-stops), [Storage reasons](remediation-update-reason-codes.md#storage-reasons) |
+| `storage_full` persists with a `send notification` error in the logs | Correct the failed destination's URL, credentials, or connection in the `notify` settings and wait for the next cycle | [Notification destinations](configuration.md#notify-destinations) |
+| `storage_full` persists even though notifications are being delivered | Follow the remedies for other reasons stopping PR creation or replacement in the notification that shows `storage_full` | [PR processing reasons](remediation-update-reason-codes.md#pr-reasons) |
 
 !!! warning "Preserve records"
 

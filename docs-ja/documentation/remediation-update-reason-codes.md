@@ -82,7 +82,7 @@ KEVは、悪用が確認された脆弱性を収録するCISAのKnown Exploited 
 
 | コード | 意味 | 詳しい説明 |
 | --- | --- | --- |
-| `tool_fetch_config_unsupported` | マネージャー自身によるツール取得や、未対応の依存解決設定が指定されている | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
+| `tool_fetch_config_unsupported` | マネージャー自身によるツール取得や、未対応の依存解決設定が指定されている | [pnpmの依存ファイル](remediation-dependency-formats.md#pnpm-inputs)・[uvの依存ファイル](remediation-dependency-formats.md#uv-inputs) |
 | `tool_version_unsupported` | パッケージマネージャーの版をサポートしていない | [ツール版の選定](remediation-node-python-logic.md#tool-version-selection) |
 | `tool_version_not_found` | 指定したパッケージマネージャーの版が見つからない | [ツールの取得と照合](remediation-node-python-logic.md#tool-verification) |
 | `tool_hash_mismatch` | ツールの配布物がチェックサムと一致しない | [ツールの取得と照合](remediation-node-python-logic.md#tool-verification) |
@@ -91,7 +91,7 @@ KEVは、悪用が確認された脆弱性を収録するCISAのKnown Exploited 
 | `tool_metadata_invalid` | ツールのリリース情報が不正である | [ツールの取得と照合](remediation-node-python-logic.md#tool-verification) |
 | `tool_too_new` | ツールの公開から72時間経っていない、または公開日時が不明で72時間の経過を確認できない | [ツール公開後の待機](remediation-node-python-logic.md#tool-release-age) |
 | `tool_fetch_failed` | ツールの取得に失敗した | [ツールの取得と照合](remediation-node-python-logic.md#tool-verification) |
-| `tool_fetch_budget` | ツールの取得回数の上限に達した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
+| `tool_fetch_budget` | ツールの取得回数の上限に達した | — |
 | `tool_cache_full` | ツールキャッシュに空きを確保できない | [ツールキャッシュの再利用](remediation-node-python-logic.md#tool-cache) |
 | `tool_file_mismatch` | キャッシュ内のツール配布物が記録と異なる | [ツールキャッシュの再利用](remediation-node-python-logic.md#tool-cache) |
 
@@ -120,7 +120,7 @@ KEVは、悪用が確認された脆弱性を収録するCISAのKnown Exploited 
 | `no_fixed_version_above_installed` | 稼働版より新しい修正版がない、または修正対象がない | [修正版の下限](remediation-package-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | 候補または更新後の版が依存の制約を満たさない | [直接依存の版指定](remediation-node-python-logic.md#direct-dependencies)・[推移的依存の更新範囲](remediation-node-python-logic.md#transitive-dependencies) |
 | `constraint_not_evaluable` | 版の制約を評価できない、または修正版がpipで選ばれないプレリリースである | [直接依存の版指定](remediation-node-python-logic.md#direct-dependencies) |
-| `packages_need_manual_update` | 自動更新できるパッケージがない | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
+| `packages_need_manual_update` | 自動更新できるパッケージがない | — |
 
 ### Go {#update-go-reasons}
 
@@ -183,8 +183,8 @@ Maven・Gradleの版の出所、更新先、lockfileの検査結果を示しま�
 | `no_reresolve_trigger` | pnpmに依存の版を選び直させるため、`pnpm-lock.yaml`の`importers['.']`から一時的に外せる直接依存がない | [マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods) |
 | `pnpm12_removal_unsupported` | 12.10.0より前のpnpm 12では、現在の更新方法を使えない | [マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods) |
 | `update_step_failed` | 更新中の処理に失敗した | [マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods) |
-| `registry_check_limit` | 更新時にnpm・PyPIなどのレジストリに問い合わせた回数が上限に達した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
-| `update_package_limit` | 更新するパッケージ数が上限を超えている | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
+| `registry_check_limit` | 更新時にnpm・PyPIなどのレジストリに問い合わせた回数が上限に達した | — |
+| `update_package_limit` | 更新するパッケージ数が上限を超えている | — |
 
 ### 更新後の検査 {#update-validation-reasons}
 
@@ -269,9 +269,9 @@ PR処理の理由は、PRを作成・照合・置換できるかと、GitHubへ�
 | --- | --- | --- |
 | `pr_limit` | 1サイクルで作成するPR数の上限（`new_prs_per_cycle`）に達した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `open_pr_limit` | 設定したリポジトリ全体で開いているKestreLynxのPR数の上限（`open_prs`）に達した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_changed` | PR準備時の候補の再確認、またはDockerfileの新しい系列の確認で、同じ候補タグが異なる内容を指した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr)・[新しい系列の確認](remediation-image-logic.md#newer-series-check) |
-| `base_moved` | PRの準備中にベースブランチが進んだ | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `github_rate_limited` | GitHubのレート制限に掛かった | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
+| `candidate_changed` | PR準備時の候補の再確認、またはDockerfileの新しい系列の確認で、同じ候補タグが異なる内容を指した | [新しい系列の確認](remediation-image-logic.md#newer-series-check) |
+| `base_moved` | PRの準備中にベースブランチが進んだ | — |
+| `github_rate_limited` | GitHubのレート制限に掛かった | — |
 | `write_outcome_unknown` | GitHubへの書き込み結果を確認できない | [書き込みの停止](remediation-pr-logic.md#write-stops) |
 | `reconciliation_failed` | 既存PRとの照合に失敗した | [既存PRとの照合](remediation-pr-logic.md#existing-pr-matching) |
 | `repository_mismatch` | リポジトリがPR処理の記録と異なる | [書き込みの停止](remediation-pr-logic.md#write-stops) |
@@ -279,13 +279,13 @@ PR処理の理由は、PRを作成・照合・置換できるかと、GitHubへ�
 | `branch_not_ours` | 同名のブランチが存在し、KestreLynxが作成したものではない | [書き込みの停止](remediation-pr-logic.md#write-stops) |
 | `pull_request_not_as_created` | PRが作成時の状態と異なることを表す定義済みコードで、現在のPR処理では設定されない | [書き込みの停止](remediation-pr-logic.md#write-stops) |
 | `github_refused` | GitHubが書き込みを拒否した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `github_error` | GitHubがエラーを返した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_recheck_failed` | PR作成前に候補を再確認できなかった | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `source_changed` | 計画の元にしたファイルが変更された | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `artifact_content_missing` | 更新したファイルの内容が保持されていない | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
-| `artifacts_unusable` | 更新したファイルをそのままPRへ書き込めない | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
+| `github_error` | GitHubがエラーを返した | — |
+| `candidate_recheck_failed` | PR作成前に候補を再確認できなかった | — |
+| `source_changed` | 計画の元にしたファイルが変更された | — |
+| `artifact_content_missing` | 更新したファイルの内容が保持されていない | — |
+| `artifacts_unusable` | 更新したファイルをそのままPRへ書き込めない | — |
 | `open_pr_not_inherited` | 同じファイルの既存PRが修正する所見の一部を、新しい更新提案が修正しない | [古いPRの置き換え](remediation-pr-logic.md#pr-replacement) |
-| `language_set_too_large` | 更新するパッケージが多すぎてPRの記録に収まらない | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
+| `language_set_too_large` | 更新するパッケージが多すぎてPRの記録に収まらない | — |
 | `update_already_proposed` | 対象の更新を提案するPRがすでにある | [既存PRとの照合](remediation-pr-logic.md#existing-pr-matching) |
 
 候補タグの内容が変わったかを確認する相手は、処理によって異なります。

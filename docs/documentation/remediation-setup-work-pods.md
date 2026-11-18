@@ -105,7 +105,7 @@ In `52-policy-params.yaml`, align the image repositories and architecture with y
 | Value to align | Keys | Value in supplied manifests |
 | --- | --- | --- |
 | KestreLynx image repository for receiving input files | `data.receiverRepository` | `ghcr.io/kitsunetrail/kestrelynx` |
-| Image repositories for running updates | `data.workRepositories` | `node`, `python`, `golang`, and `gradle` under `docker.io/library/` |
+| Work image repositories | `data.workRepositories` | `node`, `python`, `golang`, and `gradle` under `docker.io/library/` |
 | Architecture of the KestreLynx Pod and execution nodes | `data.arch` | `amd64` |
 
 Set `workRepositories` to a list of image repository names allowed for work Pods, specified as a single string separated by commas without spaces.

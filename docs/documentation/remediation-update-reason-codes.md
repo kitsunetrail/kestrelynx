@@ -82,7 +82,7 @@ The following codes cover retrieval settings, artifact verification, waiting per
 
 | Code | Meaning | Details |
 | --- | --- | --- |
-| `tool_fetch_config_unsupported` | Settings require the manager to fetch tools itself or use unsupported dependency-resolution settings | [Update failures](remediation-troubleshooting.md#check-update-failure) |
+| `tool_fetch_config_unsupported` | Settings require the manager to fetch tools itself or use unsupported dependency-resolution settings | [pnpm dependency files](remediation-dependency-formats.md#pnpm-inputs) · [uv dependency files](remediation-dependency-formats.md#uv-inputs) |
 | `tool_version_unsupported` | The package manager version is unsupported | [Tool version selection](remediation-node-python-logic.md#tool-version-selection) |
 | `tool_version_not_found` | The specified package manager version was not found | [Tool retrieval and verification](remediation-node-python-logic.md#tool-verification) |
 | `tool_hash_mismatch` | The tool artifact does not match its checksum | [Tool retrieval and verification](remediation-node-python-logic.md#tool-verification) |
@@ -91,7 +91,7 @@ The following codes cover retrieval settings, artifact verification, waiting per
 | `tool_metadata_invalid` | The tool release metadata is invalid | [Tool retrieval and verification](remediation-node-python-logic.md#tool-verification) |
 | `tool_too_new` | The tool was published less than 72 hours ago, or an unknown publication time prevents confirming that 72 hours have elapsed | [Tool release waiting period](remediation-node-python-logic.md#tool-release-age) |
 | `tool_fetch_failed` | Tool retrieval failed | [Tool retrieval and verification](remediation-node-python-logic.md#tool-verification) |
-| `tool_fetch_budget` | The tool retrieval limit was reached | [Update failures](remediation-troubleshooting.md#check-update-failure) |
+| `tool_fetch_budget` | The tool retrieval limit was reached | — |
 | `tool_cache_full` | Space cannot be made available in the tool cache | [Tool cache reuse](remediation-node-python-logic.md#tool-cache) |
 | `tool_file_mismatch` | A cached tool artifact differs from its record | [Tool cache reuse](remediation-node-python-logic.md#tool-cache) |
 
@@ -120,7 +120,7 @@ These codes describe whether a fixed version can be selected and whether depende
 | `no_fixed_version_above_installed` | No fixed version is newer than the installed version, or there is nothing to fix | [Fixed-version lower bound](remediation-package-logic.md#fix-lower-bound) |
 | `constraint_excludes_fix` | The candidate or updated version does not satisfy dependency constraints | [Direct dependency declarations](remediation-node-python-logic.md#direct-dependencies) · [Transitive dependency scope](remediation-node-python-logic.md#transitive-dependencies) |
 | `constraint_not_evaluable` | The version constraint cannot be evaluated, or the fixed version is a prerelease that pip does not select | [Direct dependency declarations](remediation-node-python-logic.md#direct-dependencies) |
-| `packages_need_manual_update` | No packages can be updated automatically | [Update failures](remediation-troubleshooting.md#check-update-failure) |
+| `packages_need_manual_update` | No packages can be updated automatically | — |
 
 ### Go {#update-go-reasons}
 
@@ -183,8 +183,8 @@ These codes describe starting and running dependency-file updates and collecting
 | `no_reresolve_trigger` | No direct dependency can be temporarily removed from `importers['.']` in `pnpm-lock.yaml` to make pnpm resolve dependency versions again | [Manager update methods](remediation-package-logic.md#manager-update-methods) |
 | `pnpm12_removal_unsupported` | pnpm 12 releases before 12.10.0 cannot use the current update method | [Manager update methods](remediation-package-logic.md#manager-update-methods) |
 | `update_step_failed` | A step during the update failed | [Manager update methods](remediation-package-logic.md#manager-update-methods) |
-| `registry_check_limit` | The update reached its limit on registry lookups such as npm or PyPI requests | [Update failures](remediation-troubleshooting.md#check-update-failure) |
-| `update_package_limit` | The number of packages to update exceeds the limit | [Update failures](remediation-troubleshooting.md#check-update-failure) |
+| `registry_check_limit` | The update reached its limit on registry lookups such as npm or PyPI requests | — |
+| `update_package_limit` | The number of packages to update exceeds the limit | — |
 
 ### Post-update validation {#update-validation-reasons}
 
@@ -269,9 +269,9 @@ The following codes distinguish processing limits, candidate or file changes, an
 | --- | --- | --- |
 | `pr_limit` | The limit on PRs created per cycle, `new_prs_per_cycle`, was reached | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `open_pr_limit` | The limit on open KestreLynx PRs across configured repositories, `open_prs`, was reached | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_changed` | The same candidate tag pointed to different content during a pre-PR recheck or a Dockerfile newer-series check | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) · [Newer series check](remediation-image-logic.md#newer-series-check) |
-| `base_moved` | The base branch advanced during PR preparation | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `github_rate_limited` | The GitHub rate limit was reached | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
+| `candidate_changed` | The same candidate tag pointed to different content during a pre-PR recheck or a Dockerfile newer-series check | [Newer series check](remediation-image-logic.md#newer-series-check) |
+| `base_moved` | The base branch advanced during PR preparation | — |
+| `github_rate_limited` | The GitHub rate limit was reached | — |
 | `write_outcome_unknown` | The result of a GitHub write cannot be confirmed | [Write stops](remediation-pr-logic.md#write-stops) |
 | `reconciliation_failed` | Reconciling existing PRs failed | [Existing PR matching](remediation-pr-logic.md#existing-pr-matching) |
 | `repository_mismatch` | The repository differs from the PR processing record | [Write stops](remediation-pr-logic.md#write-stops) |
@@ -279,13 +279,13 @@ The following codes distinguish processing limits, candidate or file changes, an
 | `branch_not_ours` | A branch with the same name exists and was not created by KestreLynx | [Write stops](remediation-pr-logic.md#write-stops) |
 | `pull_request_not_as_created` | A defined code for a PR differing from its creation state, which current PR processing does not set | [Write stops](remediation-pr-logic.md#write-stops) |
 | `github_refused` | GitHub refused the write | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `github_error` | GitHub returned an error | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `candidate_recheck_failed` | The candidate could not be rechecked before PR creation | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `source_changed` | A file used to create the plan changed | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `artifact_content_missing` | Updated file contents are no longer retained | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
-| `artifacts_unusable` | Updated files cannot be written to a PR as they are | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
+| `github_error` | GitHub returned an error | — |
+| `candidate_recheck_failed` | The candidate could not be rechecked before PR creation | — |
+| `source_changed` | A file used to create the plan changed | — |
+| `artifact_content_missing` | Updated file contents are no longer retained | — |
+| `artifacts_unusable` | Updated files cannot be written to a PR as they are | — |
 | `open_pr_not_inherited` | The new update proposal does not fix some findings fixed by an existing PR for the same file | [Replacing older PRs](remediation-pr-logic.md#pr-replacement) |
-| `language_set_too_large` | Too many packages are updated to fit in the PR record | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
+| `language_set_too_large` | Too many packages are updated to fit in the PR record | — |
 | `update_already_proposed` | A PR already proposes the target update | [Existing PR matching](remediation-pr-logic.md#existing-pr-matching) |
 
 The content compared when checking a candidate tag for changes depends on the processing stage.

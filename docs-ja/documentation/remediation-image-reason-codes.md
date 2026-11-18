@@ -85,7 +85,7 @@ Kustomize・Helmのvaluesでも使うファイル取得・イメージ名照合�
 | `platform_not_found` | 候補に稼働イメージと同じプラットフォームのイメージがない | [比較条件](remediation-logic.md#comparison-conditions) |
 | `platform_ambiguous` | 候補にプラットフォームが合うイメージが複数ある | [比較条件](remediation-logic.md#comparison-conditions) |
 | `platform_mismatch` | 候補のプラットフォームが稼働イメージと異なる | [比較条件](remediation-logic.md#comparison-conditions) |
-| `registry_error` | レジストリがエラーを返した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
+| `registry_error` | レジストリがエラーを返した | — |
 | `tag_listing_incomplete` | タグ一覧を最後まで取得できなかった | [タグ一覧の探索](remediation-image-logic.md#tag-discovery) |
 | `newer_series_tag_list_incomplete` | 新しい系列を選ぶためのタグ一覧全体を最後まで取得できなかった | [新しい系列の確認](remediation-image-logic.md#newer-series-check) |
 | `newer_series_reserved` | PR処理の時間とレジストリへの要求数を残すため、新しい系列の確認を止めた | [新しい系列の確認](remediation-image-logic.md#newer-series-check) |
@@ -93,9 +93,9 @@ Kustomize・Helmのvaluesでも使うファイル取得・イメージ名照合�
 | `baseline_rescan_limit` | 比較元イメージを再スキャンできる数の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
 | `tag_page_limit` | タグ一覧の取得回数の上限に達した | [タグ一覧の探索](remediation-image-logic.md#tag-discovery) |
 | `registry_budget_exhausted` | レジストリへの要求数の上限に達した | [タグ一覧の探索](remediation-image-logic.md#tag-discovery) |
-| `rate_limited` | レジストリ、または計画を作るときのGitHubへのアクセスで、レート制限に掛かった | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
+| `rate_limited` | レジストリ、または計画を作るときのGitHubへのアクセスで、レート制限に掛かった | — |
 | `cycle_deadline` | サイクルの実行時間の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `registry_timeout` | レジストリへの要求がタイムアウトした | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
+| `registry_timeout` | レジストリへの要求がタイムアウトした | — |
 
 ### イメージ名の指定 {#image-reference-reasons}
 
@@ -134,7 +134,7 @@ Kubernetesの宣言との照合では、稼働中のイメージ名が同じコ�
 | `declared_ref_mismatch` | 確認対象のいずれかでPodのspecのイメージ名と稼働中のイメージ名が一致せず、まとめた項目が`not_comparable`になる | [Kubernetesのイメージ名と再取得](remediation-kubernetes-logic.md#kubernetes-image-references) |
 | `declared_ref_unavailable` | 確認対象のいずれかでPodのspecのイメージ名を読み取れず、まとめた項目が`not_comparable`になる | [Kubernetesのイメージ名と再取得](remediation-kubernetes-logic.md#kubernetes-image-references) |
 | `dockerfile_set_not_adopted` | 同じDockerfileを使う全ワークロードで共通して採用できる候補がなかった | [ベースイメージの特定](remediation-base-image-logic.md#base-image-selection) |
-| `compose_set_not_adopted` | 同じイメージを使う全サービスで共通して採用できる候補がなかった | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
+| `compose_set_not_adopted` | 同じイメージを使う全サービスで共通して採用できる候補がなかった | — |
 | `instances_missing` | 対応付けたコンテナに、稼働インスタンスがない、稼働イメージ名を取得できない、または計画項目がないインスタンスがある | [KubernetesのマニフェストPR](remediation-kubernetes-logic.md#kubernetes-manifest-prs) |
 | `mixed_references` | 稼働インスタンスの間で、宣言したイメージ名または稼働中のイメージ名が一致しない | [KubernetesのマニフェストPR](remediation-kubernetes-logic.md#kubernetes-manifest-prs) |
 | `kubernetes_set_not_adopted` | 同じファイルで同じイメージを更新するコンテナの間で、採用した候補が一致しない | [KubernetesのマニフェストPR](remediation-kubernetes-logic.md#kubernetes-manifest-prs) |
@@ -152,7 +152,7 @@ Dockerfileの読み取り、ベースイメージの特定、編集の可否を�
 | コード | 意味 | 詳しい説明 |
 | --- | --- | --- |
 | `dockerfile_file_not_found` | 設定したパスにDockerfileがない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `dockerfile_file_unusable` | Dockerfileが通常のファイルではない、Git LFSポインターである、またはPR処理で読むサイズの上限を超えている | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
+| `dockerfile_file_unusable` | Dockerfileが通常のファイルではない、Git LFSポインターである、またはPR処理で読むサイズの上限を超えている | — |
 | `dockerfile_invalid` | Dockerfileを解釈できない、または編集の検証に失敗した | — |
 | `dockerfile_target_missing` | 指定したビルドステージがない | [ベースイメージの特定](remediation-base-image-logic.md#base-image-selection) |
 | `dockerfile_stage_cycle` | ステージの参照をたどっても外部イメージに行き着かない | [ベースイメージの特定](remediation-base-image-logic.md#base-image-selection) |
@@ -194,7 +194,7 @@ Composeのビルド設定と、`image`の編集を妨げる条件を示します
 | `compose_digest` | `image`の値にdigestが付いている | — |
 | `compose_source_mismatch` | ファイルの`image`が稼働イメージと異なる | [ソースの確認](remediation-logic.md#source-verification) |
 | `compose_file_not_found` | 設定したパスにComposeファイルがない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `compose_file_unusable` | Composeファイルが通常のファイルではない、Git LFSポインターである、または読み取りサイズの上限を超えている | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
+| `compose_file_unusable` | Composeファイルが通常のファイルではない、Git LFSポインターである、または読み取りサイズの上限を超えている | — |
 
 ### Kubernetesマニフェスト {#source-kubernetes-reasons}
 
@@ -273,7 +273,7 @@ valuesのイメージ指定を編集できるかと、変更の影響を受け�
 | --- | --- | --- |
 | `dependency_files_not_found` | 依存ファイルが見つからない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
 | `ambiguous_dependency_files` | 依存ファイルの組み合わせが複数あり、1つに決められない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `dependency_file_unusable` | 依存ファイルが通常のファイルではない、Git LFSポインターである、または内容を読み取れない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
+| `dependency_file_unusable` | 依存ファイルが通常のファイルではない、Git LFSポインターである、または内容を読み取れない | — |
 | `unsupported_lockfile` | lockfileの書き方をサポートしていない | — |
 | `go_replace_unsupported` | `go.mod`に未対応の`replace`がある | [Goの依存ファイル](remediation-dependency-formats.md#go-inputs) |
 | `go_exclude_unsupported` | `go.mod`に未対応の`exclude`がある | [Goの依存ファイル](remediation-dependency-formats.md#go-inputs) |
@@ -326,9 +326,9 @@ valuesのイメージ指定を編集できるかと、変更の影響を受け�
 | --- | --- | --- |
 | `source_not_found` | 取得元のリポジトリまたはブランチが見つからない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
 | `source_access_denied` | 取得元のリポジトリにアクセスできない | [GitHubアクセスの準備](remediation-setup.md#prepare-github-access) |
-| `source_too_large` | 取得元が大きすぎて読み込めない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `file_too_large` | 依存ファイルが大きすぎて読み込めない | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `byte_budget_exhausted` | 取得元から読み込める容量の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
+| `source_too_large` | 取得元が大きすぎて読み込めない | — |
+| `file_too_large` | 依存ファイルが大きすぎて読み込めない | — |
+| `byte_budget_exhausted` | 取得元から読み込める容量の上限に達した | — |
 | `source_error` | 取得元の読み込みに失敗した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `github_budget_exhausted` | GitHubへの要求数の上限に達した | [計画が出ない場合](remediation-troubleshooting.md#check-missing-plan) |
-| `source_read_failed` | 依存ファイルの再取得に失敗した | [更新を実行できない場合](remediation-troubleshooting.md#check-update-failure) |
+| `github_budget_exhausted` | GitHubへの要求数の上限に達した | — |
+| `source_read_failed` | 依存ファイルの再取得に失敗した | — |

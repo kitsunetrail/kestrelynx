@@ -77,12 +77,12 @@ nav:
               - Docker: documentation/remediation-setup-docker.md
               - Kubernetes: documentation/remediation-setup-kubernetes.md
               - Kubernetes work Pods: documentation/remediation-setup-work-pods.md
-          - When no candidate or pull request appears: documentation/remediation-troubleshooting.md
           - Reading the results:
               - Notifications: documentation/remediation-results.md
               - Update results and guidance: documentation/remediation-update-results.md
               - PR contents and pre-merge checks: documentation/remediation-pr-results.md
               - Hints when a package cannot reach its fix: documentation/remediation-fix-hints.md
+          - When no candidate or pull request appears: documentation/remediation-troubleshooting.md
           - How candidates and pull requests are decided:
               - Processing flow: documentation/remediation-logic.md
               - Published images: documentation/remediation-image-logic.md

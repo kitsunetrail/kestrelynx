@@ -105,7 +105,7 @@ KestreLynxは作業用Podを作る前に、`kestrelynx-work`という名前のPo
 | 合わせる値 | キー | 配布時の値 |
 | --- | --- | --- |
 | 入力ファイル受信用のKestreLynxイメージのリポジトリ | `data.receiverRepository` | `ghcr.io/kitsunetrail/kestrelynx` |
-| 更新実行用イメージのリポジトリ | `data.workRepositories` | `docker.io/library/`の`node`・`python`・`golang`・`gradle` |
+| 作業用イメージのリポジトリ | `data.workRepositories` | `docker.io/library/`の`node`・`python`・`golang`・`gradle` |
 | KestreLynxのPodと実行ノードのアーキテクチャ | `data.arch` | `amd64` |
 
 `workRepositories`には、作業用Podに使ってよいイメージのリポジトリ名の一覧を、空白を入れずカンマで区切った1つの文字列として指定します。

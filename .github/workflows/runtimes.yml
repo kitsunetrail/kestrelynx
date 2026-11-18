@@ -23,8 +23,9 @@ name: Runtime table
 #     both platforms, a row whose tag still has its digest is left as it is, and
 #     a pull limit of Docker Hub stops the run on the rows done so far; a row
 #     counts as tested only after the update test has run the image
-# A change to the table is normally taken in the monthly release; a serious
-# problem reachable from the update containers is released within a week.
+# After the pull request is merged, runtimes-publish.yml publishes the table to
+# GHCR and running instances fetch it; the container image carries it from its
+# next build on.
 on:
   schedule:
     - cron: "23 3 * * 1"

@@ -1,0 +1,111 @@
+name: Publish runtime table
+
+# Publishes internal/worker/runtimes.json (the pins of the official images the
+# update containers run in) to GHCR as a one-layer OCI artifact, so that running
+# instances take a new table without a new container image. It runs when the
+# table changes on main, which is when the pull request of runtimes.yml is
+# merged, and on request. Each check has its own purpose:
+#   - the table is tested the way the program reads it, both as the table
+#     compiled into the program and as a table fetched at run time, so a table
+#     that instances would refuse is never published
+#   - the table is compared with the one tag 1 holds: the same content is not
+#     published twice, and a table that differs must have a later `updated`,
+#     because instances keep the table with the latest `updated` they have seen
+#   - the artifact is pushed with the table as its only layer, byte for byte,
+#     under the moving tag 1 and a fixed tag 1-<updated> that is never moved
+#   - the artifact is fetched again without credentials, as a running instance
+#     does, and must hold the table as its one layer; this also fails when the
+#     package is not public yet
+# A correction is published as a new table with a later `updated`. Moving tag 1
+# back to an older table does not reach the instances that already took a newer
+# one.
+#
+# The very first publication has no table to compare with, and a registry may
+# answer for a package that does not exist yet in a way the comparison does not
+# take for "nothing published". A run started by hand with skip_compare
+# publishes without the comparison; it is meant for that one run.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "internal/worker/runtimes.json"
+  workflow_dispatch:
+    inputs:
+      skip_compare:
+        description: "Publish without comparing with the published table (first publication only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+# Two runs must not publish at once; a later run waits for the earlier one.
+concurrency:
+  group: publish-runtime-table
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-26.04
+    env:
+      REPOSITORY: ghcr.io/${{ github.repository_owner }}/kestrelynx-runtimes
+      MEDIA_TYPE: application/vnd.kestrelynx.runtimes.v1+json
+      ORAS_VERSION: "1.4.0"
+      ORAS_SHA256: "d8e1dce2fd8ce996f1d901845b688eb0cf505a6082897606f053825bb47935d1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check the scripts
+        run: python3 -m unittest publish_runtimes_test
+        working-directory: scripts
+
+      - name: Check the table as the program reads it
+        run: go test ./internal/worker/ -run 'TestRuntimeTablePublishable$' -count=1
+
+      - name: Install oras
+        run: |
+          set -eu
+          mkdir -p "$HOME/.local/bin"
+          archive="$RUNNER_TEMP/oras.tar.gz"
+          curl -fsSL -o "$archive" "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz"
+          echo "${ORAS_SHA256}  ${archive}" | sha256sum -c -
+          tar -xz -C "$HOME/.local/bin" -f "$archive" oras
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/oras" version
+
+      - name: Log in to ghcr.io
+        run: echo "$GITHUB_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Compare with the published table
+        id: compare
+        if: ${{ !inputs.skip_compare }}
+        run: python3 scripts/publish_runtimes.py compare --repository "$REPOSITORY"
+
+      - name: Publish the table
+        if: ${{ inputs.skip_compare || steps.compare.outputs.publish != 'false' }}
+        working-directory: internal/worker
+        run: |
+          set -eu
+          fixed=$(python3 ../../scripts/publish_runtimes.py fixed-tag --table runtimes.json)
+          updated=$(python3 -c 'import json; print(json.load(open("runtimes.json"))["updated"])')
+          oras push "${REPOSITORY}:1,${fixed}" \
+            --artifact-type "$MEDIA_TYPE" \
+            --annotation "org.opencontainers.image.created=${updated}" \
+            --annotation "org.opencontainers.image.revision=${{ github.sha }}" \
+            --annotation "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            "runtimes.json:${MEDIA_TYPE}"
+
+      # No credentials are used here: the check is what a running instance sees.
+      - name: Verify the published table without credentials
+        run: |
+          set -eu
+          oras logout ghcr.io
+          python3 scripts/publish_runtimes.py verify --repository "$REPOSITORY"

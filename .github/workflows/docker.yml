@@ -13,6 +13,8 @@ on:
       - "requirements-docs.txt"
       - ".github/workflows/docs.yml"
       - "README.md"
+      # The table reaches running instances through the artifact runtimes-publish.yml publishes; the image picks it up at its next build.
+      - "internal/worker/runtimes.json"
   workflow_dispatch:
 
 # GITHUB_TOKEN needs packages:write to push to ghcr; no PAT required.

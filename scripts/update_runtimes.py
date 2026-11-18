@@ -84,10 +84,53 @@ def load(path):
         return json.load(f)
 
 
+UPDATED_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def with_updated(table, updated):
+    """The table with its keys in the order schema, updated, runtimes (then any others)."""
+    out = {}
+    for k in ("schema", "updated", "runtimes"):
+        if k == "updated":
+            if updated is not None:
+                out[k] = updated
+        elif k in table:
+            out[k] = table[k]
+    out.update({k: v for k, v in table.items() if k not in ("schema", "updated", "runtimes")})
+    return out
+
+
+def dump(table):
+    return json.dumps(table, indent=2) + "\n"
+
+
+def next_updated(previous, now):
+    """The `updated` value for a table written at `now`; never earlier than the previous one."""
+    stamp = now.astimezone(datetime.timezone.utc).replace(microsecond=0)
+    if previous:
+        last = datetime.datetime.strptime(previous, UPDATED_FORMAT).replace(tzinfo=datetime.timezone.utc)
+        if stamp <= last:
+            stamp = last + datetime.timedelta(seconds=1)
+    return stamp.strftime(UPDATED_FORMAT)
+
+
 def save(path, table):
+    """Write the table; `updated` moves to the current time only when the content differs from the file."""
+    previous = None
+    try:
+        with open(path) as f:
+            on_disk = f.read()
+        previous = json.loads(on_disk).get("updated")
+    except FileNotFoundError:
+        on_disk = None
+    if previous is not None and not isinstance(previous, str):
+        raise Failure("%s: updated is not a string" % path)
+    if previous is not None and not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", previous):
+        raise Failure("%s: updated %r is not an RFC 3339 UTC time with seconds" % (path, previous))
+    if on_disk is not None and dump(with_updated(table, previous)) == on_disk:
+        return
     with open(path, "w") as f:
-        json.dump(table, f, indent=2)
-        f.write("\n")
+        f.write(dump(with_updated(table, next_updated(previous, now_utc()))))
 
 
 # ---- the image index ----

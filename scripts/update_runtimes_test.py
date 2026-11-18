@@ -126,9 +126,95 @@ class TableTest(unittest.TestCase):
             raw = f.read()
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "t.json")
+            with open(p, "w") as f:
+                f.write(raw)
             u.save(p, json.loads(raw))
             with open(p) as f:
                 self.assertEqual(f.read(), raw)
+
+
+class UpdatedTest(unittest.TestCase):
+    def at(self, stamp):
+        return lambda: datetime.datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+
+    def run_save(self, path, table, stamp):
+        saved = u.now_utc
+        u.now_utc = self.at(stamp)
+        try:
+            u.save(path, table)
+        finally:
+            u.now_utc = saved
+
+    def raw(self, path):
+        with open(path) as f:
+            return f.read()
+
+    def test_the_first_change_adds_updated(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            with open(p, "w") as f:
+                json.dump({"schema": 1, "runtimes": [{"id": "a", "checked": "2026-11-01"}]}, f, indent=2)
+                f.write("\n")
+            table = u.load(p)
+            table["runtimes"][0]["checked"] = "2026-11-02"
+            self.run_save(p, table, "2026-11-16T11:58:54Z")
+            self.assertEqual(u.load(p)["updated"], "2026-11-16T11:58:54Z")
+
+    def test_a_table_without_updated_that_does_not_change_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            raw = '{\n  "schema": 1,\n  "runtimes": []\n}\n'
+            with open(p, "w") as f:
+                f.write(raw)
+            self.run_save(p, u.load(p), "2026-11-16T11:58:54Z")
+            self.assertEqual(self.raw(p), raw)
+
+    def test_a_change_of_checked_alone_moves_updated(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            self.run_save(p, {"schema": 1, "runtimes": [{"id": "a", "checked": "2026-11-01"}]}, "2026-11-10T00:00:00Z")
+            table = u.load(p)
+            table["runtimes"][0]["checked"] = "2026-11-17"
+            self.run_save(p, table, "2026-11-17T03:23:00Z")
+            self.assertEqual(u.load(p)["updated"], "2026-11-17T03:23:00Z")
+
+    def test_nothing_changed_leaves_the_file_byte_identical(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            self.run_save(p, {"schema": 1, "runtimes": [{"id": "a"}]}, "2026-11-10T00:00:00Z")
+            before = self.raw(p)
+            self.run_save(p, u.load(p), "2026-12-01T00:00:00Z")
+            self.assertEqual(self.raw(p), before)
+            self.assertEqual(u.load(p)["updated"], "2026-11-10T00:00:00Z")
+
+    def test_updated_never_goes_backwards(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            self.run_save(p, {"schema": 1, "runtimes": [{"id": "a"}]}, "2026-11-10T00:00:00Z")
+            for stamp, want in (("2026-11-09T00:00:00Z", "2026-11-10T00:00:01Z"),
+                                ("2026-11-10T00:00:01Z", "2026-11-10T00:00:02Z")):
+                table = u.load(p)
+                table["runtimes"].append({"id": want})
+                self.run_save(p, table, stamp)
+                self.assertEqual(u.load(p)["updated"], want)
+
+    def test_key_order_is_schema_updated_runtimes(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            self.run_save(p, {"runtimes": [], "schema": 1}, "2026-11-10T00:00:00Z")
+            self.assertEqual(list(u.load(p)), ["schema", "updated", "runtimes"])
+            table = u.load(p)
+            table["runtimes"].append({"id": "a"})
+            self.run_save(p, table, "2026-11-11T00:00:00Z")
+            self.assertEqual(list(u.load(p)), ["schema", "updated", "runtimes"])
+
+    def test_a_malformed_updated_on_disk_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            with open(p, "w") as f:
+                f.write('{"schema": 1, "updated": "yesterday", "runtimes": []}\n')
+            with self.assertRaises(u.Failure):
+                u.save(p, {"schema": 1, "runtimes": [{"id": "a"}]})
 
 
 NODE_CYCLES = {

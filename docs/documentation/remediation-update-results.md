@@ -129,7 +129,7 @@ In this example, it shows the versions before and after the update and the requi
 Re-resolution can change another package's version while leaving the same vulnerability at the same position in the dependency structure.
 When the conditions are met, the vulnerability is treated as carried and is not fixed by this update.
 
-The following fictional example leaves the same `CVE-2` in `Y`, which `A` uses, even though its version changes.
+The following example leaves the same `CVE-2` in `Y`, which `A` uses, even though its version changes.
 
 | Stage | Dependencies | Remaining vulnerability |
 | --- | --- | --- |
@@ -224,7 +224,7 @@ Guidance based on a configured mapping also applies to images built in CI.
 `docker build --pull` identifies the option for retrieving the base again; it is not a complete command ready to run.
 
 The guidance alone does not determine which Dockerfile, build context, or output image name to use.
-The following fictional display uses illustrative package names and versions.
+The following display uses illustrative package names and versions.
 
 ```text
 Rebuild: the first layers of the running image do not match the current node:24-alpine; pull the base again, rebuild the image (for example with `docker build --pull`) and deploy it again

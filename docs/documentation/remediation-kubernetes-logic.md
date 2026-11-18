@@ -67,7 +67,7 @@ The check does not require application containers and sidecars with different na
 For example, the Pod spec, running image, and `apps/web.yaml` all name `nginx:1.27.2`.
 If `1.27.3` in the same series can be adopted, KestreLynx creates a PR that changes only the tag in the file.
 
-The following fictional example places three Deployments, `web`, `worker`, and `api`, in `apps/web.yaml` and maps each one's `app` container.
+The following example places three Deployments, `web`, `worker`, and `api`, in `apps/web.yaml` and maps each one's `app` container.
 It compares which containers are checked, which are updated, and which PRs are skipped if a check fails.
 
 | Container | Image used | Checks | Change | If a check fails |
@@ -91,7 +91,7 @@ The overlap check also runs before editing when workloads from different namespa
 KestreLynx selects targets for the same image update from containers mapped to that manifest.
 Unmapped containers are left unchanged even when they use the same image in the same Pod template.
 
-The following fictional example shows the update scope when `app` and `log` in the same Pod template use the same image.
+The following example shows the update scope when `app` and `log` in the same Pod template use the same image.
 If only `app` is mapped, only `app` is updated, and `log` is listed as unchanged in the PR body.
 
 See [Source mappings](configuration.md#remediation-mappings) for configuration and [Manifest formats](remediation-source-formats.md#manifest-formats) for file restrictions.
@@ -193,3 +193,16 @@ The PR body states the assumptions that the value is not overridden and that all
 It also states that KestreLynx has not verified the absence of tag management by other tools.
 
 Detectable Flux `$imagepolicy` comments and Argo CD Image Updater write-back files are checked as described in [Helm values formats](remediation-source-formats.md#helm-values-formats).
+
+## Management inference {#management-markers}
+
+KestreLynx uses labels and annotations on Kubernetes resources to infer management by Helm, Argo CD, or Flux.
+The inferred management relationships are displayed in Slack's `Managed by (from markers)` lines and in PR bodies.
+
+The information used to infer management relationships includes the following.
+
+- For Helm, the `app.kubernetes.io/managed-by: Helm` label and the `meta.helm.sh/release-name` and `meta.helm.sh/release-namespace` annotations
+- For Argo CD, an `argocd.argoproj.io/tracking-id` annotation that refers to the resource itself
+- For Flux, the `name` and `namespace` labels under `kustomize.toolkit.fluxcd.io/` or `helm.toolkit.fluxcd.io/`
+
+The displayed management relationships are inferred from labels and annotations, and KestreLynx does not verify the actual management relationships.

@@ -28,7 +28,7 @@ If a declaration in `package.json` or `pyproject.toml` excludes the update targe
 If the existing declaration allows the update target, KestreLynx preserves it.
 If an edit is needed but the notation or location is unsupported, KestreLynx uses manual handling (`manual`, shown as “Needs a decision” in Slack).
 
-The following hypothetical examples compare changes to the operator and version for a dependency in `package.json` with an update target of `1.2.6`.
+The following examples compare changes to the operator and version for a dependency in `package.json` with an update target of `1.2.6`.
 
 | Declaration before | Declaration after | Decision |
 | --- | --- | --- |
@@ -134,7 +134,7 @@ Updates run on the default Python in the supported-version list, while validatio
 A `requirements.txt` in the same repository, branch, and dependency directory may be shared by multiple running images.
 KestreLynx checks that Python X.Y, platform, and ABI agree across the images where the target packages were detected.
 
-In the following hypothetical example, a target package from the same `requirements.txt` is detected in two running images.
+In the following example, a target package from the same `requirements.txt` is detected in two running images.
 
 | Running image where detected | Python | Platform | ABI |
 | --- | --- | --- | --- |
@@ -287,7 +287,7 @@ It does not rely solely on the lockfile or dependency resolution results returne
 | Lockfile format changes or unexplained collateral changes | Reject and use manual handling |
 
 When aligning a non-target package’s dependency version, the dependent package’s own version and other contents must remain unchanged, and declared ranges and distribution information must remain consistent.
-In the following hypothetical example, focus on the versions of `shared` used by the update target `app` and the non-target package `browsers`.
+In the following example, focus on the versions of `shared` used by the update target `app` and the non-target package `browsers`.
 
 ```text
 Before                         After

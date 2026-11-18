@@ -11,7 +11,7 @@ Differences in digest, ecosystem, installed version, or fix status alone do not 
 CVEs with fix status `end_of_life` are treated as EOL findings, and CVEs with any other fix status are treated as ordinary findings (see [Package EOL](scan-logic.md#eol-package)).
 Ordinary findings and EOL findings are recorded separately, so both histories can exist for the same combination of image name and package name.
 
-The following diagram illustrates the history recorded for `openssl` in `web:1.0` (the CVE IDs are fictional examples).
+The following diagram illustrates the history recorded for `openssl` in `web:1.0` (the CVE IDs are examples).
 
 ```mermaid
 flowchart LR

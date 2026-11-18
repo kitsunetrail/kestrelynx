@@ -67,7 +67,7 @@ PR作成には、次の条件を満たす必要があります。
 Podのspec、稼働イメージ、`apps/web.yaml`がすべて`nginx:1.27.2`を指す場合を例にします。
 同じ系列の`1.27.3`を採用できれば、ファイルのタグだけを更新するPRを作ります。
 
-以下は、`apps/web.yaml`に`web`・`worker`・`api`の3つのDeploymentを置き、それぞれの`app`を対応付けた架空の例です。
+以下は、`apps/web.yaml`に`web`・`worker`・`api`の3つのDeploymentを置き、それぞれの`app`を対応付けた例です。
 稼働状態を確認する対象、更新する対象、確認に失敗した場合の見送り範囲を比べます。
 
 | コンテナ | 使用するイメージ | 確認する内容 | 更新内容 | 確認に失敗した場合 |
@@ -91,7 +91,7 @@ KestreLynxは手動対応（`manual`、Slackでは「要判断」）にします
 そのマニフェストへの対応付けがあるコンテナから、同じイメージを更新する対象を決めます。
 対応付けがないコンテナは、同じPodテンプレートで同じイメージを使っていても変更しません。
 
-同じPodテンプレートの`app`と`log`が同じイメージを使う架空の例で、更新する範囲を示します。
+同じPodテンプレートの`app`と`log`が同じイメージを使う例で、更新する範囲を示します。
 `app`だけを対応付けた場合は、`app`だけを更新し、`log`は変更なしとしてPR本文に載せます。
 
 設定は[ソースの対応付け](configuration.md#remediation-mappings)、ファイルの制約は[マニフェストの編集制約](remediation-source-formats.md#manifest-formats)を参照してください。
@@ -193,3 +193,16 @@ PR本文には、値の上書きがなく影響を受けるコンテナをすべ
 ほかのツールがタグを管理していないことは確認していない旨も載せます。
 
 検出できるFluxの`$imagepolicy`コメントとArgo CD Image Updaterの書き戻しファイルは、[Helmのvaluesの編集制約](remediation-source-formats.md#helm-values-formats)に従って確認します。
+
+## 管理元の推定 {#management-markers}
+
+KestreLynxは、Kubernetesリソースに付いたラベルやアノテーションから、そのリソースを管理しているHelm・Argo CD・Fluxを推定します。
+推定した管理関係は、Slackの`管理元(目印による推定)`の行とPR本文に表示します。
+
+管理元の推定に使う情報には、次のものがあります。
+
+- Helmでは、`app.kubernetes.io/managed-by: Helm`ラベルと、`meta.helm.sh/release-name`・`meta.helm.sh/release-namespace`アノテーション
+- Argo CDでは、そのリソース自身を指す`argocd.argoproj.io/tracking-id`アノテーション
+- Fluxでは、`kustomize.toolkit.fluxcd.io/`または`helm.toolkit.fluxcd.io/`の`name`・`namespace`ラベル
+
+管理元の表示はラベルやアノテーションからの推定であり、実際の管理関係は確認していません。

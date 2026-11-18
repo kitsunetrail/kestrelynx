@@ -183,7 +183,7 @@ Declaration changes are handled as follows.
 | A line's version changes while the Go version used to build the target binaries is unknown | Require manual handling with `go_line_raised_too_far` |
 | A change meets none of the rejection or manual-handling conditions | Accept if all other checks also pass |
 
-This hypothetical example compares the update runtime with the declaration limit when Go 1.26 is the lowest supported series.
+This example compares the update runtime with the declaration limit when Go 1.26 is the lowest supported series.
 
 | Value being compared | Version |
 | --- | --- |

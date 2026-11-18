@@ -22,7 +22,7 @@ Dockerfileの場所とステージの指定は、次の情報から確認しま�
 
 取得した`target`が指定するステージを使い、省略されている場合は最後のステージを使います。
 
-次の架空のDockerfileの抜粋では、`FROM build`による継承と`COPY --from=build`によるコピーの違いを示します。
+次のDockerfileの抜粋では、`FROM build`による継承と`COPY --from=build`によるコピーの違いを示します。
 
 ```dockerfile
 FROM golang:1.22.1 AS build

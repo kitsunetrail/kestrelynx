@@ -47,7 +47,7 @@ The lower bound combines the version selected for each vulnerability, separately
 | Each vulnerability | Select the lowest reported fixed version newer than the installed version |
 | Each installed version of the same package | Use the highest version selected across its vulnerabilities as the update target |
 
-The following fictional example has vulnerabilities A and B in one package installed at `1.2.0`.
+The following example has vulnerabilities A and B in one package installed at `1.2.0`.
 Compare the lowest fixed version selected for each vulnerability with the resulting update target.
 
 | Version role | Value | Meaning |
@@ -69,7 +69,7 @@ The following conditions also apply when determining the lower bound.
 - If a target vulnerability has no reported fixed version newer than the installed version, do not select the package as an update candidate
 - When combining multiple installed versions of the same package, verify that their calculated update targets are equal and that occurrences outside the update targets in the same dependency files are already at or above that target
 
-The following fictional example has `1.2.0` and `1.2.2` in the same dependency files, both selected for updates.
+The following example has `1.2.0` and `1.2.2` in the same dependency files, both selected for updates.
 It shows decisions based on update targets and versions outside the update targets, assuming other conditions such as version specifications are satisfied.
 
 | Case | Target for `1.2.0` | Target for `1.2.2` | Version outside the update targets | Decision |
@@ -88,7 +88,7 @@ For ordinary release versions, apply the following table from top to bottom, usi
 | No fixed version has the same major as the updated version | Must be at or above every reported fixed version |
 
 When the major version is `0` and no fixed version has the same major and minor, apply the third row of the table.
-The following fictional example reports fixes in `0.2.5`, `0.3.2`, and `1.0.1`, showing how comparison versions differ depending on whether a fix exists in the same minor.
+The following example reports fixes in `0.2.5`, `0.3.2`, and `1.0.1`, showing how comparison versions differ depending on whether a fix exists in the same minor.
 
 | Updated version | Fixed version used for comparison | Fixed-version condition |
 | --- | --- | --- |

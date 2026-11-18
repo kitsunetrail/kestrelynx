@@ -217,7 +217,7 @@ Mavenは実行せず、更新前後のすべての`pom.xml`を、対応付けた
 
 有効化の条件を持つprofileには、`activeByDefault`で有効になるprofileも含みます。
 
-次は、取得したPOMの`dependencyManagement`で、classifierの違いによって選ぶ版が異なる架空の例です。
+次は、取得したPOMの`dependencyManagement`で、classifierの違いによって選ぶ版が異なる例です。
 依存の宣言は`x:y`で、版・type・classifierを省略しているものとします。
 
 `dependencyManagement`には、次の順に指定があります。

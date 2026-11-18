@@ -122,7 +122,7 @@ digestを取得できない場合は、イメージ名でスキャンします�
 同じイメージ名とdigestのイメージで見つかった脆弱性を、パッケージと修正状態ごとにまとめます。
 
 次の図は、`web:1.0`の1つのdigestをスキャンした例です。
-`CVE-A`〜`CVE-D`は説明用の架空のCVE IDです。
+`CVE-A`〜`CVE-D`は説明用のCVE IDです。
 
 ```mermaid
 flowchart LR

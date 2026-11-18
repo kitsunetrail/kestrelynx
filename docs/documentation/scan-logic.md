@@ -122,7 +122,7 @@ See [Retained history](diff-logic.md#retained-findings) for its effect on diffs.
 Vulnerabilities found in an image with the same image name and digest are grouped by package and fix status.
 
 The following diagram shows an example scan of one digest of `web:1.0`.
-`CVE-A` through `CVE-D` are fictional CVE IDs used for illustration.
+`CVE-A` through `CVE-D` are CVE IDs used for illustration.
 
 ```mermaid
 flowchart LR

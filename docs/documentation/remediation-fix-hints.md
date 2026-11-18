@@ -230,13 +230,13 @@ KestreLynx does not adopt that change as an automatic update, and the notificati
 golang.org/x/net v0.20.0 cannot be raised to the fixed v0.60.0 without raising the go line of go.mod to 1.26.0 (the go.mod of golang.org/x/net v0.60.0 declares go 1.26.0; the running binaries were built with Go 1.22.12)
 ```
 
-The following fictional example shows a Go requirement beyond KestreLynx’s [Supported runtimes](remediation-reference.md#supported-runtimes).
+The following example shows a Go requirement beyond KestreLynx’s [Supported runtimes](remediation-reference.md#supported-runtimes).
 
 ```text
 example.com/old v1.4.0 needs Go 1.99 to be raised to the fixed v1.4.5 (the go.mod of example.com/old v1.4.5 declares it, and no supported Go is that new)
 ```
 
-The following fictional example shows a fix available only in another major version, with a different module path.
+The following example shows a fix available only in another major version, with a different module path.
 
 ```text
 example.com/old     v1.4.0  # Current module path and version
@@ -246,14 +246,14 @@ example.com/old/v2  v2.1.0  # Fixed module path and version
 ```
 
 In this example, raising the version under the same module path cannot reach the fix.
-The following fictional example shows the notification when a dependent uses the module.
+The following example shows the notification when a dependent uses the module.
 
 ```text
 example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (the dependent example.com/mid v1.0.0 uses it)
   • example.com/mid v1.3.0 (newest): does not use example.com/old directly
 ```
 
-The following fictional example shows a package required directly by the project.
+The following example shows a package required directly by the project.
 
 ```text
 example.com/old v1.4.0 has its fixes only in another major version (v2.1.0) (go.mod requires it directly, so the imports need rewriting)
@@ -299,7 +299,7 @@ For Maven and Gradle, when an external parent pom or BOM decides a package's ver
 
 <h3>Example</h3>
 
-The following fictional example shows an external parent pom or imported BOM deciding the target version.
+The following example shows an external parent pom or imported BOM deciding the target version.
 
 ```mermaid
 flowchart TD
@@ -314,7 +314,7 @@ flowchart TD
 In this example, declarations outside the project decide the target version, and KestreLynx cannot change those declarations through its automatic updates.
 This does not mean that users cannot change the referenced parent pom or BOM release.
 
-The following fictional example shows the notification for a parent pom.
+The following example shows the notification for a parent pom.
 
 ```text
 com.fasterxml.jackson.core:jackson-databind 2.13.0 cannot be raised to the fixed 2.13.4 (the version is decided by the parent pom com.example:parent 1.0.0)
@@ -344,7 +344,7 @@ For Gradle, the notification also shows the configuration where that version rem
 
 <h3>Example</h3>
 
-The following fictional example shows a dependent bringing in an older `jackson-databind`, with that version remaining in `annotationProcessor` for Gradle.
+The following example shows a dependent bringing in an older `jackson-databind`, with that version remaining in `annotationProcessor` for Gradle.
 
 ```mermaid
 flowchart LR
@@ -355,7 +355,7 @@ flowchart LR
     G -.->|"When declared directly with no dependent"| T
 ```
 
-The following fictional example shows the notification when a dependent is found.
+The following example shows the notification when a dependent is found.
 
 ```text
 com.fasterxml.jackson.core:jackson-databind 2.13.3 cannot be raised to the fixed 2.13.4 (the dependent com.example:lib 1.2.0 uses com.fasterxml.jackson.core:jackson-databind 2.13.3)
@@ -387,13 +387,13 @@ When a fixed release is identified in another major version, the notification al
 
 <h3>Example</h3>
 
-The following fictional example lists the releases checked for `com.example:parent 1.0.0`.
+The following example lists the releases checked for `com.example:parent 1.0.0`.
 
 | Current release | Newest in the same minor version | Newest overall |
 | --- | --- | --- |
 | `com.example:parent 1.0.0` | `com.example:parent 1.0.3` | `com.example:parent 2.0.0` |
 
-The following fictional example compares series for a vulnerability with reported fixes in `2.12.7` and `2.13.4`.
+The following example compares series for a vulnerability with reported fixes in `2.12.7` and `2.13.4`.
 
 | Version set | Fix in the same series | Result for this vulnerability |
 | --- | --- | --- |
@@ -402,14 +402,14 @@ The following fictional example compares series for a vulnerability with reporte
 
 Even though `2.13.2` is newer than `2.12.7` in another series, it does not fix this vulnerability because it is below `2.13.4` in its own series.
 
-The following fictional example shows how the `-android` and `-jre` variants affect which fixes are used in the comparison.
+The following example shows how the `-android` and `-jre` variants affect which fixes are used in the comparison.
 
 | Reported fix | Version set | Whether this fix is used in the comparison |
 | --- | --- | --- |
 | `33.7.2-android` | `33.8.0-jre` | No: the variants differ |
 | `33.7.2` | `33.7.2-jre` | Yes: the fix has no variant |
 
-The following fictional example shows a fix available only in another major version.
+The following example shows a fix available only in another major version.
 
 ```text
 org.example:lib 2.5.0 has its fixes only in another major version (3.0.1)
@@ -456,7 +456,7 @@ Read the following table from top to bottom and use the first matching row to se
 | None exist in the same major version | At or above the highest applicable fix |
 | No applicable fix exists | The vulnerability is not considered fixed |
 
-As a fictional example, consider version `2.8.0` for a vulnerability with reported fixes in `2.5.15`, `2.6.15`, `2.7.12`, and `3.0.7`.
+As an example, consider version `2.8.0` for a vulnerability with reported fixes in `2.5.15`, `2.6.15`, `2.7.12`, and `3.0.7`.
 There is no fix in the `2.8` series, so check against `2.7.12`, the highest fix in the same major version.
 
 Repeat this comparison for each target vulnerability; the conditions must hold for all of them.

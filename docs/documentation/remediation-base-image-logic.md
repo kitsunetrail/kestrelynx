@@ -22,7 +22,7 @@ It obtains the Dockerfile location and stage selection from the following inform
 
 KestreLynx uses the stage named by the resulting `target`, or the last stage when it is omitted.
 
-The following fictional Dockerfile excerpt shows the difference between inheritance through `FROM build` and copying through `COPY --from=build`.
+The following Dockerfile excerpt shows the difference between inheritance through `FROM build` and copying through `COPY --from=build`.
 
 ```dockerfile
 FROM golang:1.22.1 AS build

@@ -65,7 +65,7 @@ flowchart TD
 ```
 
 Re-resolution allows packages from the dependent whose requirement blocks the update up to the project's direct dependency to be selected again.
-The following fictional example has an older-version requirement from `middle` blocking the update of `t`.
+The following example has an older-version requirement from `middle` blocking the update of `t`.
 
 ~~~text
 project
@@ -126,7 +126,7 @@ The following table shows representative npm and pnpm requirements, together wit
 | A requirement for `minimist <1.0`, assuming fixed versions exist only at `1.2.6` or later | Yes | The upper bound excludes fixed versions |
 | `rc 1.2.8` → `minimist ^1.2.0` (`1.2.0` or later, below `2.0.0`) | No | A normal update can select a fixed version of `1.2.6` or later |
 | Direct `minimist 1.2.8` is fixed, but `0.0.8` under `mkdirp` is pinned | Yes | A dependent package's requirement blocks the update on that path |
-| `pyproject.toml` specifies `cryptography>=41`, and `pyopenssl` requires `cryptography<42`, assuming a fictional fixed version of `42.0.0` | Yes | The upper bound from `pyopenssl` excludes the assumed fixed version |
+| `pyproject.toml` specifies `cryptography>=41`, and `pyopenssl` requires `cryptography<42`, assuming a fixed version of `42.0.0` | Yes | The upper bound from `pyopenssl` excludes the assumed fixed version |
 | The directly used target package does not meet the version conditions in [Support and limits](#dependent-reresolution-limits) | No | There is no basis for rewriting the project's declaration |
 | A pip project | No | pip does not use re-resolution through dependent packages |
 
@@ -235,7 +235,7 @@ In webhooks, check both the per-package `packages[].reason` and `update.chain.re
 | Multiple paths merge so that a single old version of the vulnerable package cannot be determined | `source_introduced_findings` |
 | A KEV-listed vulnerability is introduced or involved in a rejected increase, split, merge, or similar change | `source_introduced_kev` |
 
-The following fictional package dependencies illustrate splitting and merging.
+The following package dependencies illustrate splitting and merging.
 First, two paths sharing `x 1` split to use different versions.
 
 ~~~text
@@ -263,7 +263,7 @@ Because the old version to use for comparison cannot be determined, the update r
 A vulnerability can be carried when an update changes another package's version but leaves the same vulnerability at the same dependency position.
 This is allowed only when conditions such as no increase in vulnerabilities or occurrences are met.
 
-The following fictional example leaves the same `CVE-2` in the `Y` used by `A`.
+The following example leaves the same `CVE-2` in the `Y` used by `A`.
 
 ~~~text
 Before: Project → A 1.0 → Y 1.0 (with CVE-2)

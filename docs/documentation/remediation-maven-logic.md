@@ -217,7 +217,7 @@ The following declarations prevent dependency resolution from being reproduced a
 
 Profiles with activation conditions include profiles enabled by `activeByDefault`.
 
-The following fictional example shows how a classifier difference in a retrieved POM's `dependencyManagement` causes different versions to be selected.
+The following example shows how a classifier difference in a retrieved POM's `dependencyManagement` causes different versions to be selected.
 The dependency declaration names `x:y` and omits its version, type, and classifier.
 
 The `dependencyManagement` entries appear in the following order.

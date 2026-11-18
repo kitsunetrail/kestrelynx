@@ -7,7 +7,6 @@ title: Reading remediation plan notifications
 This page explains the lines and counts in Slack remediation plans, including which updates a PR contains and which packages still need attention.
 See [Interpreting update results](remediation-update-results.md#interpreting-updates) for version interpretation and re-pull and rebuild guidance.
 
-A proposed candidate or merged PR does not mean that vulnerabilities have been resolved in running containers.
 See [Fix pull request contents and pre-merge checks](remediation-pr-results.md) for PR bodies and [Overview of the hints](remediation-fix-hints.md#fix-hints) for explanations of blocked updates.
 
 See [Terms](index.md#terms) for the terminology used on this page.
@@ -18,7 +17,7 @@ Slack remediation plans show proposed changes, PR states, and reasons processing
 
 ### Example {#slack-example}
 
-The following fictional example proposes a package update and a base image update.
+The following example proposes a package update and a base image update.
 In Slack, image names are bold and PR numbers are links.
 
 ```text
@@ -49,9 +48,11 @@ See [Overview of the hints](remediation-fix-hints.md#fix-hints) for how to inves
 
 ### Displayed fields {#slack-fields}
 
-The label on each line distinguishes the target, proposal, processing obstacle, or warning.
+Remediation plans use lines written as “label: content,” such as `Image:` or `Update:`, to show targets and update details.
 
-The following lines identify the target.
+Opening count lines such as `Pull requests: … created` are covered separately in [Reading counts](#reading-counts).
+
+The meanings of the `Image`, `Service`, `File to change`, and `Pull request` lines are as follows.
 
 | Display | Meaning |
 | --- | --- |
@@ -61,16 +62,14 @@ The following lines identify the target.
 | Pull request | A PR link and its status: opened now, open, merged, or closed without merging |
 
 The name displayed under “Service” depends on the environment.
-The following shows where names come from, with fictional display examples.
+The following shows where names come from, with display examples.
 
 | Environment | Source of the name | Example |
 | --- | --- | --- |
 | Compose | The `<service>` part of `compose/<project>/<service>` | `Service: web` |
 | Containers outside Compose | The `<name>` part of `container/<name>` | `Service: api` |
-| Kubernetes | The entire workload key | `Service: deployment/shop/web/app` |
 
-The Kubernetes example identifies a container in a Deployment, not a Kubernetes Service resource.
-Read proposal lines according to their relationship to a PR.
+Read the `Update`, `Update candidate`, `Newer series`, `Re-pull`, and `Rebuild` lines according to their relationship to a PR as follows.
 
 | Display | Meaning | Relationship to a PR |
 | --- | --- | --- |
@@ -80,10 +79,9 @@ Read proposal lines according to their relationship to a PR.
 | Re-pull | A comparison supports updating to new content under the same tag | Guidance that does not create a tag update PR |
 | Rebuild | Expected resolution based on dependency constraints, or guidance to pull the base again and build | Guidance rather than a PR that performs the rebuild |
 
-An update within the same series can move from `1.27.2-alpine` to `1.27.3-alpine`, while a newer-series update can move from `1.24.1` to `1.27.3`.
-See [Newer-series lines](#newer-series-lines) for how to read the notification.
+See [Newer-series lines](#newer-series-lines) for how to read the “Newer series” lines.
 
-For lines describing obstacles, check the reason following the label.
+For the `Needs a decision`, `Deferred`, `Not comparable`, and `Failed` lines, check the reason following the label.
 
 | Display | Meaning | First place to check |
 | --- | --- | --- |
@@ -97,35 +95,14 @@ For lines describing obstacles, check the reason following the label.
 CISA KEV is a catalog of vulnerabilities known to have been exploited.
 The total finding count does not show whether it includes exploited vulnerabilities, so KEV-listed findings are also checked separately.
 
-Warnings indicate the size of a version change or a stop on PR writes.
+Lines beginning with `⚠️` indicate the size of a version change or a stop on PR writes.
 
 | Display | Meaning |
 | --- | --- |
 | ⚠️ Major version change | An update changing the major version, or the minor version for a 0.x package |
 | ⚠️ Pull request writes are stopped | A stop on PR writes because of problems with records, GitHub state, or similar issues |
 
-Kubernetes notifications also show how to retrieve the image again and its inferred management.
-
-| Display | Meaning |
-| --- | --- |
-| Pull policy | The image pull policy and retrieval guidance for each workload affected by a re-pull |
-| `Managed by (from markers)` | Management relationships inferred from labels and annotations on Kubernetes resources |
-| File to change / Pull request | The target file and PR link for manifest, Kustomize, or Helm values tag updates |
-
-When management can be inferred, manifest, Kustomize, Helm values, and Dockerfile PR entries also show the management relationships.
-The information used for inference includes the following.
-
-- For Helm, the `app.kubernetes.io/managed-by: Helm` label and the `meta.helm.sh/release-name` and `meta.helm.sh/release-namespace` annotations
-- For Argo CD, an `argocd.argoproj.io/tracking-id` annotation that refers to the resource itself
-- For Flux, the `name` and `namespace` labels under `kustomize.toolkit.fluxcd.io/` or `helm.toolkit.fluxcd.io/`
-
-The following fictional example shows a relationship between a Deployment and an Argo CD app.
-
-```text
-Managed by (from markers): deployment shop/web → Argo CD app web-app
-```
-
-This is an inference from labels and annotations, not confirmation of the actual management relationship.
+See [Kubernetes display](#kubernetes-display) for how Kubernetes notifications differ from the common display.
 
 #### Newer-series lines {#newer-series-lines}
 
@@ -156,28 +133,71 @@ Needs a decision: nginx 1.24.1 → 2.0.1 in a newer series resolves 1 finding(s)
 A change to the newer-series line causes the remediation plan message to be sent as a change.
 See [Checking newer series](remediation-image-logic.md#newer-series-check) for scope and candidate selection, and [Newer series status values](remediation-reason-codes.md#newer-series-status-values) for value definitions.
 
+### Kubernetes display {#kubernetes-display}
+
+In addition to the common lines ([Displayed fields](#slack-fields)), Kubernetes notifications differ in the following ways.
+
+| Difference | Details |
+| --- | --- |
+| The name under “Service” | Displays the entire workload key (for example, `Service: deployment/shop/web/app`) |
+| The `Pull policy` line | Shows the image pull policy and retrieval guidance for each workload affected by a re-pull |
+| The `Managed by (from markers)` line | Shows management relationships inferred from labels and annotations on Kubernetes resources |
+
+The “Service” example identifies a container in a Deployment, not a Kubernetes Service resource.
+
+The following example shows a notification proposing an image tag update and a re-pull.
+
+```text
+🔧 Fix plan
+Pull requests: 1 created
+
+Image: docker.io/library/nginx:1.25.3
+File to change: apps/web.yaml in ex/deploy
+Pull request: #4 (opened now)
+Update: docker.io/library/nginx 1.25.3 → 1.25.5
+Managed by (from markers): deployment shop/web → Argo CD app web-app
+
+Image: ghcr.io/example/api:latest
+Re-pull: resolves 2 finding(s)
+Pull policy: Always: restarting the Pods pulls the new content (deployment/shop/api/app)
+Managed by (from markers): deployment shop/api → Helm release api (shop)
+```
+
+Read the retrieval guidance and management relationships as follows.
+
+| Line | What this example tells you |
+| --- | --- |
+| The `Pull policy: Always: …` line | The pull policy for `deployment/shop/api/app` is `Always`, so restarting the Pods pulls the new content |
+| The first `Managed by (from markers)` line | Deployment `shop/web` is inferred to be managed by the Argo CD app `web-app` |
+| The second `Managed by (from markers)` line | Deployment `shop/api` is inferred to be managed by the Helm release `api` in namespace `shop` |
+
+See [Kubernetes image references and pulling images again](remediation-kubernetes-logic.md#kubernetes-image-references) for retrieval guidance for each pull policy.
+See [Management inference](remediation-kubernetes-logic.md#management-markers) for the labels and annotations used to infer management relationships.
+
 ### Reading counts {#reading-counts}
 
-The opening counts summarize PR processing states if the notification contains a PR number, or proposal categories if it does not.
-Neither summary simply counts packages or files.
+The opening count line uses different counting rules depending on whether the notification contains a PR number.
 
-Summaries by proposal category count an “item” for each group of changes to a file or image to re-pull.
-PR processing summaries count changes intended for one PR as one entry, including changes without a PR according to their processing state.
+| Notification contents | Example opening line | Unit counted as one |
+| --- | --- | --- |
+| Contains a PR number | `Pull requests: 1 created · 1 open` | One update intended for a single PR, counted by processing state |
+| Contains no PR number | `1 update candidate(s) · 1 need a decision` | A group of changes to a file or image to re-pull (an item), counted once per result category |
 
-When several packages in the same dependency files are updated together, they are not counted separately.
-An update grouped into one PR does not gain extra counts merely because it affects several images.
+Keep the following points in mind when reading counts.
 
-Each summary counts a different kind of result.
+- Updating several packages together in one dependency file does not count each package separately
+- An update grouped into one PR does not gain extra counts merely because it affects several images
+- Notifications containing a PR number also count updates without a PR as “need a decision,” “deferred,” or “blocked or failed,” so the count does not necessarily match the number of existing PRs
+- In notifications containing a PR number, `Re-pull`, `Rebuild`, and `Newer series` guidance that does not create a PR is excluded from the opening counts
+- In notifications containing no PR number, an “Update candidate” line displayed alongside a reason under “Needs a decision,” “Deferred,” or “Failed” is not counted as a separate entry
 
-| Summary | What it counts |
+Read counts related to newer series and findings as follows.
+
+| Count display | What it counts |
 | --- | --- |
-| `Pull requests: … created · … open` and similar summaries | The processing state of each update intended for one PR |
-| `… update candidate(s) · … need a decision` and similar summaries | Display categories for each item |
 | `… resolved in a newer series` | Items with status `resolves` or `resolves_partially` |
 | `resolves … finding(s)` | Target findings no longer detected in the comparison |
 | `… KEV` | Counts related to CISA KEV-listed vulnerabilities included in the displayed results |
-
-The summary by PR processing state includes updates that “need a decision,” are “deferred,” or are “blocked or failed” without a PR, so it does not count only existing PRs.
 
 States without a PR appear in the body as follows.
 
@@ -190,7 +210,7 @@ States without a PR appear in the body as follows.
 The [example](#slack-example) counts PR #12 as one created PR and PR #13 as one open PR.
 The opening PR summary does not count `package-b`, which was left out of PR #12, as a separate entry.
 
-The following fictional example has an updatable `package-a` and a `package-b` requiring manual handling in the same file.
+The following example has an updatable `package-a` and a `package-b` requiring manual handling in the same file.
 It shows how counts change with PR availability in a notification containing no other items.
 
 | State | Opening summary | Treatment of `package-b` |
@@ -209,7 +229,7 @@ The following rules determine which packages appear under “Needs a decision.�
 - Packages left out of a PR still need attention, but their individual lines are omitted when another package's line explains the reason
 - Packages identified as requiring manual handling before an update is attempted show their reasons separately from candidates or PRs for the same file
 
-The following fictional example attempts to update `A` and `B` together, but failure to update `A` also leaves `B` out of the PR's updates.
+The following example attempts to update `A` and `B` together, but failure to update `A` also leaves `B` out of the PR's updates.
 If `B` has no blocker of its own, the notification groups the explanation as follows.
 
 | Package | Display in the notification |

@@ -27,7 +27,7 @@ The running image's tag type determines which candidate is compared and how an a
 | Pinned tag | Select the latest patch newer than the current version in the same series | If source editing conditions are also met, consider a PR that changes the tag in Compose, a Kubernetes manifest, Kustomize, or Helm values |
 | Floating tag | Select the content that the same tag currently points to in the registry | If an improvement is confirmed, recommend pulling the image again without creating a PR, because the image reference does not change |
 
-The following hypothetical example shows only tag classification when the current tag is `1.27.2-alpine`.
+The following example shows only tag classification when the current tag is `1.27.2-alpine`.
 
 | Tag being considered | Treatment as an update candidate in the same series |
 | --- | --- |
@@ -69,7 +69,7 @@ The search result determines candidate selection as follows.
 | Every tag in the series has been checked and no newer patch exists | Report no candidate |
 | Retrieval stopped partway through because of a limit, deadline, or similar condition | Defer without treating the highest retrieved version as the latest patch |
 
-The following hypothetical example uses a current tag of `8.19.1` and a listing containing `8.19.1`, `8.19.3`, and `9.0.0`.
+The following example uses a current tag of `8.19.1` and a listing containing `8.19.1`, `8.19.3`, and `9.0.0`.
 Even with reliable ordering and pagination, the decision depends on how much of the listing was retrieved.
 
 | Confirmed portion of the listing | Decision |

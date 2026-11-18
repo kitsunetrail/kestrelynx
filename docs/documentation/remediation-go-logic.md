@@ -96,8 +96,8 @@ The required Go version is the highest version specified by these declarations.
 | The target module version's `go.mod` | `go` |
 | The `go.mod` of a target module at the required version above its update target | `go` |
 
-A runtime meeting the required version is selected from KestreLynx's built-in list of supported versions.
-For the list, see [Supported runtimes](remediation-reference.md#supported-runtimes).
+A runtime meeting the required version is selected from the runtime table KestreLynx is using.
+For the table, see [Supported runtimes](remediation-reference.md#supported-runtimes).
 
 | Selection | Rule |
 | --- | --- |

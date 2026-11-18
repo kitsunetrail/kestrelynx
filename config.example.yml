@@ -572,6 +572,15 @@ runtime:
 #   #   registry: registry.example.com:5000/dockerhub
 #   #   # The mirror serves library/node and library/python under this path,
 #   #   # with the same digests; a mirror that changes an image is refused.
+#   #   runtime_table:
+#   #     # Fetch the published runtime table at startup and before each scan
+#   #     # cycle when remediation is enabled; default true.
+#   #     # False uses only the bundled table, ignoring any saved table.
+#   #     update: true
+#   #     # Runtime table repository; default shown, tag fixed at 1.
+#   #     # For a mirror, use lowercase host[:port]/path with no scheme,
+#   #     # tag, digest, // or ...
+#   #     repository: ghcr.io/kitsunetrail/kestrelynx-runtimes
 #   #   tool_versions:
 #   #     # Positive duration since publication before npm, pnpm or uv is
 #   #     # used; defaults to 72h, and zero or negative values are invalid.

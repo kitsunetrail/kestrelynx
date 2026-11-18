@@ -88,6 +88,10 @@ type LanguageUpdateConfig struct {
 	// client could not be set up). Those update candidates are then deferred
 	// with it, or made manual; nothing is run instead.
 	Unavailable *LanguageUnavailable
+	// BeforeCycle, when set, is called at the start of every cycle, after the
+	// Runner's own BeforeCycle functions: what the stage made from the runtime
+	// table is brought up to date with the table the cycle runs with.
+	BeforeCycle func(ctx context.Context)
 	// NewUpdater returns the stage for one cycle. An error (the work image
 	// cannot be made ready) defers the cycle's update candidates that need it.
 	NewUpdater func(ctx context.Context, in LanguageUpdateInput) (LanguageUpdater, error)

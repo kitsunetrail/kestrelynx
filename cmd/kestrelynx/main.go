@@ -146,6 +146,13 @@ func main() {
 		for _, w := range cfg.MappingsOutsideScope() {
 			log.Warn("a remediation mapping names a workload outside kubernetes.namespaces and has no effect", "workload", w)
 		}
+		// The runtime table of the work containers: the one of the build, or
+		// a newer one an earlier run fetched. The published table is looked
+		// up now, before anything is made from the table, and at the start of
+		// every cycle, before the plan reads the table.
+		tables := newRuntimeTables(cfg, log)
+		tables.Refresh(context.Background())
+		r.BeforeCycle = append(r.BeforeCycle, func(ctx context.Context) { tables.Refresh(ctx) })
 		r.Plan = buildPlanConfig(cfg)
 		r.Plan.Scanner = withRuntimes(r.Plan.Scanner.(scanner.Trivy), runtimeAdvisors)
 		r.Plan.RunningScanner = withRuntimes(r.Plan.RunningScanner.(scanner.Trivy), runtimeAdvisors)

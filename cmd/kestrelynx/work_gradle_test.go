@@ -47,7 +47,7 @@ func TestGradleImagesAreNamedLikeTheOthers(t *testing.T) {
 func TestNewDockerWorkClientForAGradleRow(t *testing.T) {
 	spec, _ := worker.LookupRuntime("gradle9.8.2-jdk21")
 	cfg := workTestConfig(t)
-	c, err := newDockerWorkClient(cfg, spec, "linux/amd64", "0123456789abcdef0123456789abcdef", quietLog())
+	c, err := newDockerWorkClient(cfg, spec, "linux/amd64", "0123456789abcdef0123456789abcdef", nil, quietLog())
 	if err != nil || c == nil {
 		t.Fatalf("%v %v", c, err)
 	}

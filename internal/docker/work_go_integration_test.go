@@ -36,7 +36,7 @@ func TestIntegrationGoGet(t *testing.T) {
 	goarch := runtime.GOARCH
 	dir := t.TempDir()
 	program := filepath.Join(dir, "kestrelynx-worker")
-	build := exec.Command("go", "build", "-trimpath", "-o", program, "./cmd/kestrelynx-worker")
+	build := exec.Command("go", "build", "-trimpath", "-tags", "kestrelynx_worker", "-o", program, "./cmd/kestrelynx-worker")
 	build.Dir = filepath.Join("..", "..")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+goarch)
 	if out, err := build.CombinedOutput(); err != nil {

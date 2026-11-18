@@ -40,8 +40,8 @@ func Argv(j Job, s Step) ([]string, error) {
 	if err := s.Validate(m); err != nil {
 		return nil, err
 	}
-	spec, ok := LookupRuntime(j.Runtime.ID)
-	if !ok || !spec.HasImage() || spec.Kind != KindFor(m) {
+	spec, ok := RuntimeFromID(j.Runtime.ID)
+	if !ok || spec.Kind != KindFor(m) {
 		return nil, fmt.Errorf("runtime %q does not fit %s", j.Runtime.ID, m)
 	}
 	var pnpmCfg []string

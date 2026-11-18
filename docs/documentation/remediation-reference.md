@@ -128,8 +128,11 @@ The table links each file type to the section describing supported syntax and up
 
 ## Supported runtimes {#supported-runtimes}
 
-This is the list of supported versions built into KestreLynx, showing supported release lines, execution versions, and end-of-support dates.
-The Node.js, Python, and Go runtimes used to update dependencies are selected from the supported release lines in this list.
+The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, and Gradle series used for language package updates.
+The table below shows the supported release lines, execution versions, and end-of-support dates in the runtime table as of this page's last update.
+
+The runtime table is supplied with KestreLynx and [replaced by newer published tables](remediation-worker-logic.md#runtime-table-updates).
+The Node.js, Python, and Go runtimes used to update dependencies are selected from the supported release lines in this table.
 
 | Release line | Execution version | End of support | platform |
 | --- | --- | --- | --- |
@@ -146,8 +149,8 @@ The Node.js, Python, and Go runtimes used to update dependencies are selected fr
 | Gradle 8 / JDK 21 | `8.14.6` | No end date configured | `linux/amd64` |
 | Gradle 9 / JDK 17 and 21 | `9.8.2` | No end date configured | `linux/amd64` |
 
-These versions and dates are information maintained by KestreLynx and change with KestreLynx updates.
-Gradle supports only `linux/amd64` with the execution versions and JDKs listed in the table.
+For the current values in the table, see [`internal/worker/runtimes.json`](https://github.com/kitsunetrail/kestrelynx/blob/main/internal/worker/runtimes.json) in the KestreLynx repository.
+Gradle uses only execution version and JDK combinations recorded in the table in use as having passed integration tests on the execution platform.
 
 Other Gradle versions, JDKs, or platforms require manual handling.
 The reason code is `gradle_version_unsupported` or `gradle_toolchain_unsupported`.
@@ -167,7 +170,7 @@ If it does not meet the package manager's compatibility requirements, other supp
 
 For detailed selection conditions, see [Node.js selection](remediation-node-python-logic.md#node-selection).
 
-The following release lines remain in the supported version list but have reached the end of support.
+The following release lines remain in the runtime table but have reached the end of support.
 
 | Release line past end of support | End of support |
 | --- | --- |

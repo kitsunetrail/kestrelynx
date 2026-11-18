@@ -242,7 +242,7 @@ func itProgram(t *testing.T, goarch string) func() ([]byte, error) {
 			return
 		}
 		b.path = filepath.Join(dir, "kestrelynx-worker")
-		cmd := exec.Command("go", "build", "-trimpath", "-o", b.path, "./cmd/kestrelynx-worker")
+		cmd := exec.Command("go", "build", "-trimpath", "-tags", "kestrelynx_worker", "-o", b.path, "./cmd/kestrelynx-worker")
 		cmd.Dir = filepath.Join("..", "..")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+goarch)
 		if out, err := cmd.CombinedOutput(); err != nil {

@@ -31,6 +31,7 @@ EPSSは、脆弱性について今後30日以内に悪用活動が観測され�
 | [Trivyの取得通信](#trivy-downloads) | [スキャンを実行するたび](configuration.md#schedule) | 取得するイメージの名前・タグ・digest |
 | [GitHubへの通信](#github-communication) | 読み取りは[修正計画](configuration.md#remediation-basics)が有効、書き込みは修正計画と修正PRの両方が有効（各既定無効） | リポジトリ・ソースの指定、PRの内容 |
 | [イメージ候補の取得](#candidate-registry-communication) | [修正計画](configuration.md#remediation-basics)が有効（既定無効） | イメージ名・タグ・digest |
+| [実行環境の一覧の取得](#runtime-table-download) | [修正計画](configuration.md#remediation-basics)（既定無効）と[一覧の取得](configuration.md#remediation-worker)（既定有効）が有効な場合の起動時と各スキャンサイクルの開始時 | なし |
 | [作業用イメージの取得](#worker-image-downloads) | [修正計画と修正PRの両方](configuration.md#remediation-basics)が有効で依存更新を実行（各既定無効） | 作業用イメージの名前・digest |
 | [ツールの取得](#tool-downloads) | [修正計画と修正PRの両方](configuration.md#remediation-basics)が有効で依存更新を実行（各既定無効） | ツール名・版 |
 | [依存パッケージの取得](#dependency-downloads) | [修正計画と修正PRの両方](configuration.md#remediation-basics)が有効で依存更新を実行（各既定無効） | パッケージ名・版 |
@@ -156,6 +157,26 @@ KestreLynxはイメージ名・タグ・digestを要求に指定し、タグ一�
 Docker Hubの場合は`registry-1.docker.io`へ接続します。
 
 認証は[イメージレジストリの認証](configuration.md#registries)、候補の探索は[イメージ候補の選定](remediation-image-logic.md#image-selection)を参照してください。
+
+### 実行環境の一覧の取得 {#runtime-table-download}
+
+実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradleの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
+修正計画と実行環境の一覧の取得が有効な場合、KestreLynxが起動時と各スキャンサイクルの開始時に一覧を取得します。
+
+| 通信するプログラム | 通信先 | 取得する情報 |
+| --- | --- | --- |
+| KestreLynx | `ghcr.io` | `kitsunetrail/kestrelynx-runtimes`のタグ`1`が指す一覧の取得に必要な情報 |
+| KestreLynx | `pkg-containers.githubusercontent.com` | 実行環境の一覧の本体 |
+
+一覧の本体は、`ghcr.io`からのリダイレクト先である`pkg-containers.githubusercontent.com`から取得します。
+ミラーを設定した場合は、指定したリポジトリへ接続します。
+
+取得要求に含まれるのはリポジトリ名・タグ・digestだけで、利用者の環境の情報は含まれません。
+
+既定の取得元には、`registries`に`ghcr.io`の認証情報があっても送りません。
+別のリポジトリを指定した場合は、そのホストの[`registries`の認証情報](configuration.md#registries)を使います。
+
+有効・無効と取得元は[作業用コンテナの設定](configuration.md#remediation-worker)、取得後の扱いと失敗時の動作は[実行環境の一覧の更新](remediation-worker-logic.md#runtime-table-updates)を参照してください。
 
 ### 作業用イメージの取得 {#worker-image-downloads}
 

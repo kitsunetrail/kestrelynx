@@ -79,6 +79,11 @@ func (u *LangUpdater) execute(ctx context.Context, job worker.Job, env *jobEnvir
 	if err := job.Validate(); err != nil {
 		return nil, manualFailure(ReasonUpdateInputInvalid, "the update job is not valid: %v", err)
 	}
+	// The program in the container reads what the runtime is from its id; that
+	// it is a row of the table this cycle runs with is checked here.
+	if err := worker.CheckJobRuntime(job); err != nil {
+		return nil, manualFailure(ReasonUpdateInputInvalid, "the update job is not valid: %v", err)
+	}
 	jobJSON, err := json.Marshal(job)
 	if err != nil {
 		return nil, failedFailure(ReasonUpdateInputInvalid, "encode the update job: %v", err)

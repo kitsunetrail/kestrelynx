@@ -84,10 +84,7 @@ func TestFindGradleRuntime(t *testing.T) {
 	tested := func(row string) string {
 		return strings.Replace(row, `"checked"`, `"tested":{"linux/amd64":"`+gradleDigestA+`"},"checked"`, 1)
 	}
-	old := runtimeSpecs
-	t.Cleanup(func() { runtimeSpecs = old })
-	var err error
-	runtimeSpecs, err = parseRuntimes(tableOf(
+	specs, err := parseRuntimes(tableOf(
 		tested(gradleRow("9.8.2", "21")), tested(gradleRow("9.8.2", "17")),
 		gradleRow("9.8.2", "25"), // not run by a test
 		strings.Replace(gradleRow("8.14.6", "17"), `"checked"`, `"tested":{"linux/amd64":"`+gradleDigestB+`"},"checked"`, 1), // a digest that is not the pinned one
@@ -97,6 +94,7 @@ func TestFindGradleRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(OverrideRuntimesForTest(specs))
 	const amd64, arm64 = "linux/amd64", "linux/arm64"
 	for _, c := range []struct {
 		version  string

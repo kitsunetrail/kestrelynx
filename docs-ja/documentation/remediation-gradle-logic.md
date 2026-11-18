@@ -127,7 +127,7 @@ Gradleの実行設定では、lockfileの更新に使うGradle・JDKと、作業
 | JDKの版 | `java.toolchain`の`languageVersion` |
 | toolchainの宣言がない場合のJDK | 21 |
 
-Gradleの版・JDK・platformは、[対応する実行環境](remediation-reference.md#supported-runtimes)にある、KestreLynxに組み込まれた対応版の一覧から選びます。
+Gradleの版・JDK・platformは、[実行環境の一覧](remediation-reference.md#supported-runtimes)から選びます。
 使えるGradleがなければ`gradle_version_unsupported`、指定のJDKを使えなければ`gradle_toolchain_unsupported`で手動対応にします。
 
 実行には公式イメージの`/opt/gradle/bin/gradle`を使い、`gradlew`・`gradle-wrapper.jar`は使いません。

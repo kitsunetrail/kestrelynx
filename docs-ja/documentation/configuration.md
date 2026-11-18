@@ -143,7 +143,7 @@ Slack Incoming WebhookとBot Tokenの組み合わせを同時には設定でき�
 | --- | --- | --- |
 | `remediation.enabled` | `false` | Docker・Kubernetesモードで読み取り専用の修正計画を有効にします。 |
 | `remediation.pull_requests.enabled` | `false` | 修正PRを有効にします。修正計画の有効化とGitHub tokenが必要です。 |
-| `remediation.storage_dir` | `/var/lib/kestrelynx/remediation` | 計画、配信記録、PR記録、ツールキャッシュを保存する絶対パスのディレクトリです。`state.path`を変えても、この保存先は変わりません。 |
+| `remediation.storage_dir` | `/var/lib/kestrelynx/remediation` | 計画、配信記録、PR記録、ツールキャッシュ、取得した実行環境の一覧、取得した作業用イメージの記録を保存する絶対パスのディレクトリで、`state.path`を変えても保存先は変わりません。 |
 
 ### GitHubアクセス {#remediation-github}
 
@@ -313,6 +313,7 @@ remediation:
 ### 作業用コンテナ {#remediation-worker}
 
 作業用コンテナは、修正PRで言語パッケージを更新する際に、npm・pnpm・pip・uv・Go・Gradleによる依存の更新（lockfileの更新など）をKestreLynx本体とは別に実行するための使い捨てのコンテナです。
+実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradleの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
 
 作業用イメージの固定と取得不能時の扱いは[公式イメージの固定](remediation-worker-logic.md#worker-images)、系列は[対応する実行環境](remediation-reference.md#supported-runtimes)、通信先は[作業用イメージの取得](outbound-communication.md#worker-image-downloads)を参照してください。
 
@@ -323,9 +324,17 @@ remediation:
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
 | `remediation.worker.registry` | 空 | Docker Hubミラーの`host[:port][/path]`を小文字で指定します。空の場合はDocker Hubを使います。scheme・タグ・digest・`//`・`..`を含めず、パスには小文字英数字と区切りの`.`・`_`・`-`を使います。ミラーには指定したホストとパスの下に、公式イメージと同じ内容の`library/node`・`library/python`・`library/golang`・`library/gradle`を配置します。 |
+| `remediation.worker.runtime_table.update` | `true` | [実行環境の一覧の更新](remediation-worker-logic.md#runtime-table-updates)を有効にし、`false`の場合は取得せず保存した一覧も使わずに同梱の一覧を使います。 |
+| `remediation.worker.runtime_table.repository` | `ghcr.io/kitsunetrail/kestrelynx-runtimes` | [実行環境の一覧の取得元](remediation-worker-logic.md#runtime-table-updates)をミラーへ変更するためのリポジトリを指定します。 |
 | `remediation.worker.tool_versions.min_release_age` | `72h` | npm・pnpm・uvの公開から使用までの最小待機時間で、`72h`や`30m`のような正の期間です。`0`や負の値は指定できません。 |
 | `remediation.worker.tool_versions.cache_max_size` | `1GiB` | npm・pnpm・uvのキャッシュ容量の上限です。整数のバイト数、または整数に`B`・`KiB`・`MiB`・`GiB`を付け、最低`128MiB`を指定します。 |
 | `remediation.worker.program_dir` | 空 | 空または絶対パスで、開発用の作業プログラムを置くディレクトリです。通常の配布版では指定不要です。 |
+
+`remediation.worker.runtime_table.repository`は、scheme・タグ・digest・`//`・`..`を含めず、小文字の`host[:port]/path`で指定します。
+読むタグは`1`で固定され、指定できません。
+
+既定の取得元には、`registries`に`ghcr.io`の認証情報があっても送りません。
+別のリポジトリを指定した場合は、そのホストの`registries`の認証情報を使います。
 
 #### Kubernetes {#remediation-worker-kubernetes}
 

@@ -428,7 +428,7 @@ See [Gradle package selection](remediation-gradle-logic.md#gradle-package-select
 KestreLynx reads version files and declarations in `package.json` to choose Node.js for npm and pnpm updates.
 Version files select only a major version series such as Node.js 22.
 
-The actual minor and patch version comes from the list built into KestreLynx in [Supported runtimes](remediation-reference.md#supported-runtimes).
+The actual minor and patch version comes from the [runtime table](remediation-reference.md#supported-runtimes).
 For example, `22.14.0` in a version file selects Node.js 22; it does not pin execution to `22.14.0`.
 
 Accepted declarations and unsupported values are listed below.

@@ -193,22 +193,21 @@ func TestArgvPnpmConfigFollowsToolVersion(t *testing.T) {
 func TestJobRuntimeAndToolValidation(t *testing.T) {
 	ok := func() *Job { return goodJob() }
 	mut := map[string]func(*Job){
-		"unknown runtime":     func(j *Job) { j.Runtime.ID = "node99" },
-		"end of life runtime": func(j *Job) { j.Runtime = Runtime{ID: "node20", Version: "20.20.2"} },
-		"python for npm":      func(j *Job) { j.Runtime = testRuntime(ManagerUv) },
-		"version off series":  func(j *Job) { j.Runtime.Version = "22.1.0" },
-		"pip on node":         func(j *Job) { j.Runtime.Pip = "26.2.1" },
-		"no tool":             func(j *Job) { j.Tool = nil },
-		"wrong tool":          func(j *Job) { j.Tool = testTool(ManagerPnpm, "11.28.5") },
-		"bad path":            func(j *Job) { j.Tool.Path = "tools/other.tgz" },
-		"bad format":          func(j *Job) { j.Tool.Format = FormatWheel },
-		"not run with node":   func(j *Job) { j.Tool.RunWithNode = false },
-		"no size":             func(j *Job) { j.Tool.Size = 0 },
-		"huge":                func(j *Job) { j.Tool.Size = MaxToolArchiveBytes + 1 },
-		"short sha512":        func(j *Job) { j.Tool.SHA512 = strings.Repeat("b", 64) },
-		"entry escapes":       func(j *Job) { j.Tool.Entry = "../x" },
-		"entry absolute":      func(j *Job) { j.Tool.Entry = "/bin/sh" },
-		"range version":       func(j *Job) { j.Tool.Version = "^11.0.0" },
+		"unknown runtime":    func(j *Job) { j.Runtime.ID = "node99" },
+		"python for npm":     func(j *Job) { j.Runtime = testRuntime(ManagerUv) },
+		"version off series": func(j *Job) { j.Runtime.Version = "22.1.0" },
+		"pip on node":        func(j *Job) { j.Runtime.Pip = "26.2.1" },
+		"no tool":            func(j *Job) { j.Tool = nil },
+		"wrong tool":         func(j *Job) { j.Tool = testTool(ManagerPnpm, "11.28.5") },
+		"bad path":           func(j *Job) { j.Tool.Path = "tools/other.tgz" },
+		"bad format":         func(j *Job) { j.Tool.Format = FormatWheel },
+		"not run with node":  func(j *Job) { j.Tool.RunWithNode = false },
+		"no size":            func(j *Job) { j.Tool.Size = 0 },
+		"huge":               func(j *Job) { j.Tool.Size = MaxToolArchiveBytes + 1 },
+		"short sha512":       func(j *Job) { j.Tool.SHA512 = strings.Repeat("b", 64) },
+		"entry escapes":      func(j *Job) { j.Tool.Entry = "../x" },
+		"entry absolute":     func(j *Job) { j.Tool.Entry = "/bin/sh" },
+		"range version":      func(j *Job) { j.Tool.Version = "^11.0.0" },
 	}
 	for name, f := range mut {
 		j := ok()

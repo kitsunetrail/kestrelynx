@@ -282,6 +282,9 @@ func (r *Runner) probeImages() []string {
 		all = append(all, img)
 	}
 	all = append(all, r.cfg.ProbeImages...)
+	if r.cfg.ProbeImagesFor != nil {
+		all = append(all, r.cfg.ProbeImagesFor()...)
+	}
 	sort.Strings(all)
 	seen := map[string]bool{}
 	var out []string

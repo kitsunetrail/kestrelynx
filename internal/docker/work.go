@@ -90,6 +90,19 @@ type WorkConfig struct {
 	Limits TransferLimits
 	// Log receives diagnostics; nil falls back to slog.Default.
 	Log *slog.Logger
+	// BeforePull, when set, is called with Image before this client pulls an
+	// image the daemon does not hold under that reference at all. An error
+	// keeps the image from being pulled: whoever keeps track of what this
+	// installation pulled must know of an image before it is on the host. It
+	// is not called when the daemon already holds the reference, for this
+	// platform or for another one; the reference was then somebody else's
+	// first.
+	BeforePull func(ref string) error
+	// AfterPull, when set, is called with Image right after a pull that
+	// BeforePull allowed has succeeded, before the image is checked: an image
+	// that was pulled and turns out not to be the pinned one is on the host
+	// all the same.
+	AfterPull func(ref string)
 
 	// Per-operation deadlines; zero values use the defaults below. Streaming
 	// calls (pull, wait) are bounded by the context, never by an HTTP client
@@ -205,12 +218,18 @@ func validateEnv(env, allowed []string) error {
 // NewWork returns a WorkClient that dials the Docker daemon over the given
 // unix socket.
 func NewWork(socketPath string, cfg WorkConfig) (*WorkClient, error) {
-	hc := &http.Client{Transport: &http.Transport{
+	return newWorkClient("http://docker", newUnixClient(socketPath), cfg)
+}
+
+// newUnixClient returns an HTTP client that reaches the Docker daemon over the
+// given unix socket. It has no overall timeout: callers bound each request
+// with a context.
+func newUnixClient(socketPath string) *http.Client {
+	return &http.Client{Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 		},
 	}}
-	return newWorkClient("http://docker", hc, cfg)
 }
 
 // newWorkClient is used by tests to point the client at an httptest server.
@@ -339,6 +358,15 @@ func deleteOp(id string) workOp {
 		query: url.Values{"force": {"true"}, "v": {"true"}}}
 }
 
+// imageDeleteOp removes an image by reference. It carries no query, in
+// particular no force: the daemon then refuses (409) to remove an image a
+// container uses.
+func imageDeleteOp(ref string) workOp {
+	// ref is validated against imageRefRE by the caller, so it is kept
+	// unescaped: the daemon routes "/images/{name:.*}" on the raw path.
+	return workOp{method: http.MethodDelete, path: "/images/" + ref}
+}
+
 func containerInspectOp(id string) workOp {
 	return workOp{method: http.MethodGet, path: containerPath(id, "/json")}
 }
@@ -358,7 +386,14 @@ func listWorkOp(instanceID string) workOp {
 // do sends op and returns the response; the caller closes the body. The
 // status is not interpreted here.
 func (c *WorkClient) do(ctx context.Context, op workOp) (*http.Response, error) {
-	u := c.baseURL + op.path
+	return sendOp(ctx, c.httpClient, c.baseURL, op)
+}
+
+// sendOp builds the request for op and sends it with hc. It is the single
+// place a workOp becomes an HTTP request, shared by every client that issues
+// ops.
+func sendOp(ctx context.Context, hc *http.Client, baseURL string, op workOp) (*http.Response, error) {
+	u := baseURL + op.path
 	if len(op.query) > 0 {
 		u += "?" + op.query.Encode()
 	}
@@ -373,7 +408,7 @@ func (c *WorkClient) do(ctx context.Context, op workOp) (*http.Response, error) 
 	if op.contentType != "" {
 		req.Header.Set("Content-Type", op.contentType)
 	}
-	resp, err := c.httpClient.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
@@ -528,6 +563,20 @@ func (c *WorkClient) checkImage(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// referenceHeld reports whether the daemon holds an image under the pinned
+// reference for any platform.
+func (c *WorkClient) referenceHeld(ctx context.Context) (bool, error) {
+	ctx, cancel := c.withTimeout(ctx, c.cfg.OpTimeout)
+	defer cancel()
+	if err := c.call(ctx, imageInspectOp(c.cfg.Image, ""), nil, http.StatusOK); err != nil {
+		if hasStatus(err, http.StatusNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("inspect work image: %w", err)
+	}
+	return true, nil
+}
+
 // checkAPI requires an Engine API of at least the version this client needs.
 // A version that is enough, or definitely too old, is remembered; a failure to
 // read it (the daemon did not answer, the deadline passed) is not, so the next
@@ -622,8 +671,24 @@ func (c *WorkClient) EnsureImage(ctx context.Context) error {
 	if ok {
 		return nil
 	}
+	announced := false
+	if c.cfg.BeforePull != nil {
+		held, err := c.referenceHeld(ctx)
+		if err != nil {
+			return err
+		}
+		if !held {
+			if err := c.cfg.BeforePull(c.cfg.Image); err != nil {
+				return fmt.Errorf("work image %s is not pulled: %w", c.cfg.Image, err)
+			}
+			announced = true
+		}
+	}
 	if err := c.pullImage(ctx); err != nil {
 		return err
+	}
+	if announced && c.cfg.AfterPull != nil {
+		c.cfg.AfterPull(c.cfg.Image)
 	}
 	ok, err = c.checkImage(ctx)
 	if err != nil {

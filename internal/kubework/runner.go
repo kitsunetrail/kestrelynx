@@ -57,6 +57,11 @@ type Config struct {
 	// admission check tries them too when it looks for an image the policy
 	// of the work namespace allows.
 	ProbeImages []string
+	// ProbeImagesFor, when set, gives more such images each time the
+	// admission check runs. With ImageFor it serves a runtime table that is
+	// replaced while the process runs: nothing of the table is fixed when the
+	// Runner is made.
+	ProbeImagesFor func() []string
 	// CoverFor gives the volume the work image of a runtime key declares, as
 	// Params.Cover; nil or "" means none.
 	CoverFor   func(runtime string) string
@@ -105,7 +110,7 @@ func NewRunner(cfg Config) (*Runner, error) {
 		return nil, errors.New("kubework: the limit of concurrent Pods must be positive")
 	case cfg.MaxResultTarBytes <= 0:
 		return nil, errors.New("kubework: the result limit must be positive")
-	case len(cfg.Images) == 0:
+	case len(cfg.Images) == 0 && cfg.ImageFor == nil:
 		return nil, errors.New("kubework: no work image")
 	}
 	base := Params{

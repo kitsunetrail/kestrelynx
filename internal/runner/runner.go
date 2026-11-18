@@ -139,6 +139,13 @@ type Runner struct {
 	// true for this deployment.
 	GenericWebhookConfigured bool
 
+	// BeforeCycle functions run, in order, at the start of every cycle before
+	// anything else of it: what must not change during a cycle (the runtime
+	// table of the work containers and what is made from it) is brought up to
+	// date here. They report nothing; a problem is logged by the function and
+	// the cycle goes on.
+	BeforeCycle []func(ctx context.Context)
+
 	// RuntimeRefreshers load, once per cycle before any image is scanned and
 	// in this order, the data the scanners use to check the language
 	// runtimes (Node.js, CPython). A failure is logged and the cycle goes
@@ -185,6 +192,12 @@ func (r Runner) source() scanner.ScanSource {
 // one bad image never sinks the run) and surfaced to the user.
 func (r Runner) RunOnce(ctx context.Context) error {
 	log := r.log()
+	for _, f := range r.BeforeCycle {
+		f(ctx)
+	}
+	if r.Plan != nil && r.Plan.Language != nil && r.Plan.Language.BeforeCycle != nil {
+		r.Plan.Language.BeforeCycle(ctx)
+	}
 	containers, bindings, err := r.listContainers(ctx)
 	if err != nil {
 		return fmt.Errorf("list running containers: %w", err)

@@ -276,12 +276,15 @@ func ToolPath(t Tool) string {
 	return ToolsDirName + "/" + string(t.Name) + "-" + t.Version + ext
 }
 
-// validateRuntime checks the runtime of the job against the table: it is a
-// runtime with an image, of the kind the manager needs, and the versions have
-// the form of versions.
+// validateRuntime checks the runtime of the job: its id is the id of a runtime
+// of the kind the manager needs, and the versions have the form of versions
+// and belong to what the id names. It reads the id alone, so the main process
+// and the program in the container check the same thing; that the runtime is
+// a row of the table in use, with an image, is for the main process to check
+// (CheckJobRuntime).
 func (j *Job) validateRuntime() error {
-	spec, ok := LookupRuntime(j.Runtime.ID)
-	if !ok || !spec.HasImage() {
+	spec, ok := RuntimeFromID(j.Runtime.ID)
+	if !ok {
 		return fmt.Errorf("unknown runtime %q", j.Runtime.ID)
 	}
 	if spec.Kind != KindFor(j.Manager) {

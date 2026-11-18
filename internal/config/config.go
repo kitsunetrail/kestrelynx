@@ -231,6 +231,9 @@ type RemediationWorkerConfig struct {
 	Registry string
 	// ToolVersions sets how package manager releases are chosen and kept.
 	ToolVersions RemediationToolVersions
+	// RuntimeTable sets how the table of the official images is kept up to
+	// date.
+	RuntimeTable RemediationRuntimeTable
 	// ProgramDir, when set, is the directory the work program files are read
 	// from instead of the build's own, which are checked against the hashes
 	// the build embeds. It is meant for developing the program.
@@ -238,6 +241,20 @@ type RemediationWorkerConfig struct {
 	// Kubernetes configures the work Pods that language package updates run
 	// in with Kubernetes. It is used only when Namespace is set.
 	Kubernetes RemediationWorkerKubernetes
+}
+
+// RemediationRuntimeTable sets how the runtime table (which official images
+// the work containers use, pinned by digest) is kept up to date between
+// builds.
+type RemediationRuntimeTable struct {
+	// Update turns on fetching the published table at the start of each
+	// cycle. Off, the table of the build is used, and a table an earlier run
+	// fetched is not.
+	Update bool
+	// Repository is the repository the table is fetched from, without a tag
+	// ("registry.example.com/mirror/kestrelynx-runtimes"). Empty means the
+	// repository the project publishes it in.
+	Repository string
 }
 
 // RemediationWorkerKubernetes locates and limits the work Pods.
@@ -552,6 +569,10 @@ type rawConfig struct {
 		Worker     struct {
 			Registry     string `yaml:"registry"`
 			ProgramDir   string `yaml:"program_dir"`
+			RuntimeTable struct {
+				Update     *bool  `yaml:"update"`
+				Repository string `yaml:"repository"`
+			} `yaml:"runtime_table"`
 			ToolVersions struct {
 				MinReleaseAge *time.Duration `yaml:"min_release_age"`
 				CacheMaxSize  *string        `yaml:"cache_max_size"`
@@ -718,6 +739,10 @@ func Parse(data []byte) (Config, error) {
 	rw := raw.Remediation.Worker
 	wk := RemediationWorkerConfig{
 		Registry: rw.Registry, ProgramDir: rw.ProgramDir,
+		RuntimeTable: RemediationRuntimeTable{
+			Update:     rw.RuntimeTable.Update == nil || *rw.RuntimeTable.Update,
+			Repository: rw.RuntimeTable.Repository,
+		},
 		ToolVersions: RemediationToolVersions{
 			MinReleaseAge: durationOr(rw.ToolVersions.MinReleaseAge, defaultToolMinReleaseAge),
 			CacheMaxSize:  defaultToolCacheMaxSize,
@@ -1199,6 +1224,11 @@ func validateWorker(w RemediationWorkerConfig, kubernetes bool) error {
 	if w.Registry != "" {
 		if !registryRE.MatchString(w.Registry) || strings.Contains(w.Registry, "//") || strings.Contains(w.Registry, "..") {
 			return fmt.Errorf("config: remediation.worker.registry must be a host and an optional path, for example registry.example.com:5000/dockerhub, with no scheme, tag or digest")
+		}
+	}
+	if r := w.RuntimeTable.Repository; r != "" {
+		if !registryRE.MatchString(r) || !strings.Contains(r, "/") || strings.Contains(r, "//") || strings.Contains(r, "..") {
+			return fmt.Errorf("config: remediation.worker.runtime_table.repository must be a host and a repository path, for example registry.example.com/mirror/kestrelynx-runtimes, with no scheme, tag or digest")
 		}
 	}
 	if w.ProgramDir != "" && !filepath.IsAbs(w.ProgramDir) {

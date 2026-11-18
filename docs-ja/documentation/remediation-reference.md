@@ -128,7 +128,10 @@ containerdのイメージストアで古いイメージが消えた場合は、�
 
 ## 対応する実行環境 {#supported-runtimes}
 
-KestreLynxに組み込まれた対応版の一覧として、サポート中の系列と実行版、サポート終了日を示します。
+実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradleの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
+この表は、ページを更新した時点の一覧にある、サポート中の系列と実行版、サポート終了日を示します。
+
+実行環境の一覧はKestreLynxに同梱され、[公開された新しい一覧で置き換わります](remediation-worker-logic.md#runtime-table-updates)。
 依存パッケージの更新処理に使うNode.js・Python・Goは、一覧にあるサポート中の系列から選びます。
 
 | 系列 | 実行版 | サポート終了日 | platform |
@@ -146,8 +149,8 @@ KestreLynxに組み込まれた対応版の一覧として、サポート中の�
 | Gradle 8 / JDK 21 | `8.14.6` | 終了日の設定なし | `linux/amd64` |
 | Gradle 9 / JDK 17・21 | `9.8.2` | 終了日の設定なし | `linux/amd64` |
 
-版と期限はKestreLynxが持つ情報であり、KestreLynxの更新に伴って変わります。
-Gradleは、表に記載した実行版とJDKを使う`linux/amd64`だけをサポートします。
+現在の一覧の値は、KestreLynxのリポジトリの[`internal/worker/runtimes.json`](https://github.com/kitsunetrail/kestrelynx/blob/main/internal/worker/runtimes.json)で確認できます。
+Gradleは、使用する一覧で実行するplatformの統合テストを通った実行版とJDKの組み合わせだけを使います。
 
 それ以外のGradleの版・JDK・platformでは、手動対応になります。
 理由コードは`gradle_version_unsupported`または`gradle_toolchain_unsupported`です。
@@ -167,7 +170,7 @@ Node.jsの宣言がない場合、2026-10-28にLTSに入ったNode.js 26が現�
 
 詳しい選定条件は[Node.jsの選定](remediation-node-python-logic.md#node-selection)を参照してください。
 
-対応版の一覧に残っている、サポートが終わった系列を示します。
+実行環境の一覧に残っている、サポートが終わった系列を示します。
 
 | サポートが終わった系列 | サポート終了日 |
 | --- | --- |

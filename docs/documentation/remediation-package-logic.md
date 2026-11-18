@@ -105,7 +105,7 @@ Reaching the lower bound alone is insufficient: the checks in [Accepting update 
 
 Runtime selection determines the version of Node.js, Python, Go, or Gradle and the JDK used to execute an update.
 
-Node.js, Python, and Go use supported series (groups of versions such as Node.js 22 or Python 3.13) from the supported-version list built into KestreLynx.
+Node.js, Python, and Go use supported series (groups of versions such as Node.js 22 or Python 3.13) from the runtime table KestreLynx is using.
 For supported series, execution versions, and support end dates, see [Supported runtimes](remediation-reference.md#supported-runtimes).
 
 The following sections describe selection for each manager.

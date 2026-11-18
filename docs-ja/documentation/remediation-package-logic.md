@@ -105,7 +105,7 @@ majorが`0`の場合は、同じmajor・minorの修正版がなければ、表�
 
 実行環境の選定では、更新を実行するNode.js・Python・Go、またはGradleとJDKの版を決めます。
 
-Node.js・Python・Goは、KestreLynxに組み込まれた対応版の一覧にある、サポート中の系列（Node.js 22やPython 3.13のような版のまとまり）を使います。
+Node.js・Python・Goは、KestreLynxが使用している実行環境の一覧にある、サポート中の系列（Node.js 22やPython 3.13のような版のまとまり）を使います。
 対応する系列、実行版、サポート期限は[対応する実行環境](remediation-reference.md#supported-runtimes)を参照してください。
 
 マネージャーごとの選び方は、次の節で説明します。

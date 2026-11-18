@@ -220,3 +220,35 @@ func TestParse_WorkerKubernetesNeedsTheKubernetesAdapter(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestParse_RuntimeTable(t *testing.T) {
+	c, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if rt := c.Remediation.Worker.RuntimeTable; !rt.Update || rt.Repository != "" {
+		t.Errorf("default = %+v, want fetching on from the default repository", rt)
+	}
+	c, err = Parse([]byte(minimal + `
+remediation:
+  worker:
+    runtime_table:
+      update: false
+      repository: registry.example.com:5000/mirror/kestrelynx-runtimes
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if rt := c.Remediation.Worker.RuntimeTable; rt.Update || rt.Repository != "registry.example.com:5000/mirror/kestrelynx-runtimes" {
+		t.Errorf("explicit = %+v", rt)
+	}
+	for _, bad := range []string{
+		"registry.example.com", "https://registry.example.com/x", "registry.example.com/x:1",
+		"registry.example.com/x@sha256:" + strings.Repeat("a", 64), "registry.example.com//x", "registry.example.com/../x", "Registry.Example.com/X",
+	} {
+		_, err := Parse([]byte(minimal + "\nremediation:\n  worker:\n    runtime_table:\n      repository: \"" + bad + "\"\n"))
+		if err == nil || !strings.Contains(err.Error(), "runtime_table.repository") {
+			t.Errorf("repository %q: err = %v", bad, err)
+		}
+	}
+}

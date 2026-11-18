@@ -62,15 +62,17 @@ npm・pnpm・uv・pipで依存ファイルの更新に使うNode.js・Pythonと�
 npm・pnpmでは、依存ファイルの更新を実行するためのNode.jsを、プロジェクトの版宣言とマネージャーの条件から選びます。
 アプリケーションが使うNode.jsの版を変更する処理ではありません。
 
-実行版は、KestreLynxに組み込まれた対応版の一覧から選びます。
-一覧はKestreLynxの更新に伴って変わり、[対応する実行環境](remediation-reference.md#supported-runtimes)で確認できます。
+実行版は、KestreLynxが使用している実行環境の一覧から選びます。
+実行版は[対応する実行環境](remediation-reference.md#supported-runtimes)で確認できます。
+
+同梱の一覧は公開された新しい一覧で置き換わり、取得と置き換えの条件については[実行環境の一覧の更新](remediation-worker-logic.md#runtime-table-updates)を参照してください。
 
 版ファイルは`.nvmrc`・`.node-version`、範囲指定は`package.json`の`engines.node`と、Node.jsを指定する`devEngines.runtime`・`engines.runtime`です。
 Node.jsの系列は`22`のようなmajor版の単位であり、宣言に応じて次の規則で選びます。
 
 | 宣言の状態 | 選定規則 |
 | --- | --- |
-| 版ファイルがある | 指定されたmajor系列を使い、minor・patch版は対応版の一覧から選ぶ |
+| 版ファイルがある | 指定されたmajor系列を使い、minor・patch版は実行環境の一覧から選ぶ |
 | 範囲指定だけがある | すべての範囲とマネージャーの条件を満たす、サポート中の最も古い系列を選ぶ |
 | 宣言がない | その時点でLTSに入っている最新系列を優先し、ほかの系列は新しい順に適合する組み合わせを調べる |
 | 版ファイルと範囲指定がある | 宣言同士の整合と、指定系列の実行版がすべての範囲を満たすことを確認する |
@@ -121,7 +123,7 @@ Pythonの系列は`3.13`のようなX.Yの単位であり、次の規則で選�
 実際に使う版には、次の条件があります。
 
 - 版ファイルのpatch版と作業用イメージのpatch版が異なることは許す
-- 対応版の一覧にある実際のPython版が、`requires-python`を満たす必要がある
+- 実行環境の一覧にある実際のPython版が、`requires-python`を満たす必要がある
 - 条件を満たすサポート中の系列がなくても、宣言を緩めて実行しない
 
 読み取る書き方は、[Pythonの版宣言](remediation-dependency-formats.md#python-declarations)を参照してください。
@@ -129,7 +131,7 @@ Pythonの系列は`3.13`のようなX.Yの単位であり、次の規則で選�
 ### pipの検証環境 {#pip-target-environment}
 
 pipを動かす作業用Pythonと、依存解決の検証対象は別に決めます。
-作業には対応版の一覧の既定のPythonを使い、検証対象には稼働イメージから判断したPython X.Y・platform・ABIを指定します。
+作業には実行環境の一覧の既定のPythonを使い、検証対象には稼働イメージから判断したPython X.Y・platform・ABIを指定します。
 
 同じリポジトリ・ブランチ・依存ディレクトリの`requirements.txt`は、複数の稼働イメージで共有される場合があります。
 KestreLynxは、更新対象パッケージを検出した各イメージのPython X.Y・platform・ABIが一致することを確認します。

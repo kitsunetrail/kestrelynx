@@ -62,15 +62,17 @@ KestreLynx selects Node.js and Python for updating dependency files with npm, pn
 For npm and pnpm, KestreLynx selects Node.js to run dependency file updates using the project’s version declarations and the manager’s requirements.
 This process does not change the application’s Node.js version.
 
-Runtime versions are selected from the list of supported versions built into KestreLynx.
-The list changes with KestreLynx updates and is documented in [Supported runtimes](remediation-reference.md#supported-runtimes).
+Runtime versions are selected from the runtime table KestreLynx is using.
+See [Supported runtimes](remediation-reference.md#supported-runtimes) for execution versions.
+
+The table supplied with KestreLynx is replaced by newer published tables; see [Updating the runtime table](remediation-worker-logic.md#runtime-table-updates) for the conditions for fetching and replacing it.
 
 Version files are `.nvmrc` and `.node-version`; ranges come from `engines.node` and Node.js entries in `devEngines.runtime` and `engines.runtime` in `package.json`.
 A Node.js series is a major version such as `22`, selected according to the declarations as follows.
 
 | Declarations | Selection rule |
 | --- | --- |
-| A version file exists | Use the declared major series and select the minor and patch version from the supported-version list |
+| A version file exists | Use the declared major series and select the minor and patch version from the runtime table |
 | Only ranges are declared | Select the oldest supported series satisfying all ranges and the manager’s requirements |
 | No declarations | Prefer the newest series currently in LTS, then check other series from newest to oldest for a compatible combination |
 | A version file and ranges exist | Check that declarations agree and that the runtime version in the declared series satisfies every range |
@@ -121,7 +123,7 @@ A Python series is an X.Y version such as `3.13`, selected as follows.
 The selected version must meet the following conditions.
 
 - The patch version in the version file may differ from the work image’s patch version
-- The actual Python version in the supported-version list must satisfy `requires-python`
+- The actual Python version in the runtime table must satisfy `requires-python`
 - Do not relax declarations to run an update if no supported series satisfies the requirements
 
 For recognized notation, see [Python version declarations](remediation-dependency-formats.md#python-declarations).
@@ -129,7 +131,7 @@ For recognized notation, see [Python version declarations](remediation-dependenc
 ### Target environment for pip validation {#pip-target-environment}
 
 The Python version that runs pip and the target environment for dependency resolution are selected separately.
-Updates run on the default Python in the supported-version list, while validation targets the Python X.Y, platform, and ABI inferred from the running image.
+Updates run on the default Python in the runtime table, while validation targets the Python X.Y, platform, and ABI inferred from the running image.
 
 A `requirements.txt` in the same repository, branch, and dependency directory may be shared by multiple running images.
 KestreLynx checks that Python X.Y, platform, and ABI agree across the images where the target packages were detected.

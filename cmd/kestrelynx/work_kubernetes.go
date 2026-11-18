@@ -95,15 +95,6 @@ func buildKubernetesLanguageConfig(cfg config.Config, log *slog.Logger) *runner.
 	if err != nil {
 		return unavailable("the session id of the work Pods could not be made", err)
 	}
-	images := map[string]string{}
-	for _, rid := range remediation.DefaultRuntimeIDs() {
-		spec, ok := worker.LookupRuntime(rid)
-		if !ok || !spec.HasImage() {
-			return unavailable("the runtime "+rid+" is not in the table of this build", nil)
-		}
-		images[rid] = kubernetesWorkImageRef(spec, rc.Worker.Registry)
-	}
-
 	kc := cfg.Kubernetes
 	api, err := kubework.New(kubework.Options{
 		APIServer: kc.APIServer, TokenFile: kc.TokenFile, CAFile: kc.CAFile, TLSServerName: kc.TLSServerName,
@@ -120,31 +111,15 @@ func buildKubernetesLanguageConfig(cfg config.Config, log *slog.Logger) *runner.
 		}
 	}
 	limits := workTransferLimits()
-	// The Gradle runtimes are too many to list; the image of one is looked
-	// up when a job asks for it.
-	imageFor := func(key string) (string, bool) {
-		spec, err := onDemandRuntime(key, "linux/"+goarch)
-		if err != nil {
-			return "", false
-		}
-		if _, ok := kubernetesCover(spec); !ok {
-			return "", false
-		}
-		return kubernetesWorkImageRef(spec, rc.Worker.Registry), true
-	}
-	// One Gradle image stands for their repository in the admission check, so
-	// an installation that updates only Gradle may allow only that one.
-	var probeImages []string
-	for _, spec := range worker.Runtimes() {
-		if img, ok := imageFor(spec.ID); ok {
-			probeImages = append(probeImages, img)
-			break
-		}
-	}
+	// Nothing of the runtime table is fixed here: the table in use is replaced
+	// between cycles, so the image of a runtime is looked up when a job asks
+	// for it, and the images the admission check tries when it runs.
+	platform := "linux/" + goarch
+	imageFor := kubernetesImageFor(rc.Worker.Registry, platform)
 	rn, err := kubework.NewRunner(kubework.Config{
 		API: api, Namespace: k.Namespace, ServiceAccount: k.ServiceAccount, PriorityClass: k.PriorityClass,
-		Arch: goarch, ReceiverImage: receiver, Images: images,
-		ImageFor: imageFor, ProbeImages: probeImages,
+		Arch: goarch, ReceiverImage: receiver,
+		ImageFor: imageFor, ProbeImagesFor: func() []string { return kubernetesProbeImages(imageFor) },
 		CoverFor: func(key string) string {
 			spec, ok := worker.LookupRuntime(key)
 			if !ok {
@@ -164,9 +139,8 @@ func buildKubernetesLanguageConfig(cfg config.Config, log *slog.Logger) *runner.
 	// regularly, whether or not any job runs.
 	go rn.RunCollector(context.Background(), 0)
 
-	platform := "linux/" + goarch
 	l := rc.Limits
-	log.Info("language package updates enabled on Kubernetes", "namespace", k.Namespace, "runtimes", len(images), "platform", platform,
+	log.Info("language package updates enabled on Kubernetes", "namespace", k.Namespace, "runtimes", len(remediation.DefaultRuntimeIDs()), "platform", platform,
 		"max_concurrent_pods", k.MaxConcurrentPods, "dependency_jobs_per_cycle", l.DependencyJobsPerCycle, "job_timeout", l.JobTimeout)
 	var _ remediation.WorkRunner = rn
 	return &runner.LanguageUpdateConfig{
@@ -179,6 +153,41 @@ func buildKubernetesLanguageConfig(cfg config.Config, log *slog.Logger) *runner.
 			return newLanguageUpdater(cfg, tools, rn, platform, program, in)
 		},
 	}
+}
+
+// kubernetesImageFor returns the lookup of the work image of a runtime key in
+// the table in use: the image of a row a work Pod can run on the platform,
+// named through the mirror when one is configured.
+func kubernetesImageFor(mirror, platform string) func(key string) (string, bool) {
+	return func(key string) (string, bool) {
+		spec, ok := workRuntime(key, platform)
+		if !ok {
+			return "", false
+		}
+		if _, ok := kubernetesCover(spec); !ok {
+			return "", false
+		}
+		return kubernetesWorkImageRef(spec, mirror), true
+	}
+}
+
+// kubernetesProbeImages are the images the admission check is tried with: one
+// of each kind of runtime of the table in use, which is one of each repository
+// the work images come from. An installation that updates one language may
+// allow only that repository.
+func kubernetesProbeImages(imageFor func(key string) (string, bool)) []string {
+	var out []string
+	seen := map[worker.RuntimeKind]bool{}
+	for _, spec := range worker.Runtimes() {
+		if seen[spec.Kind] {
+			continue
+		}
+		if img, ok := imageFor(spec.ID); ok {
+			seen[spec.Kind] = true
+			out = append(out, img)
+		}
+	}
+	return out
 }
 
 // kubernetesCover is the volume the image of a runtime declares, which its work

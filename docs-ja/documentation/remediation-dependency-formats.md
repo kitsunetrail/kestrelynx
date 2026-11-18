@@ -428,7 +428,7 @@ Gradleの更新には作業用コンテナ・Podを使い、ビルドスクリ�
 版ファイルと`package.json`の宣言を読み、npm・pnpmの更新に使うNode.jsを選びます。
 版ファイルは、Node.js 22のようなmajor版の系列だけを選びます。
 
-実際のminor・patch版には、KestreLynxに組み込まれた対応版の一覧である[対応する実行環境](remediation-reference.md#supported-runtimes)の版を使います。
+実際のminor・patch版には、[実行環境の一覧](remediation-reference.md#supported-runtimes)に記載された版を使います。
 たとえば、版ファイルの`22.14.0`はNode.js 22を選ぶ指定であり、実行版を`22.14.0`に固定する指定ではありません。
 
 読み取れる宣言と、未対応の指定は次のとおりです。

@@ -31,6 +31,7 @@ The table lists communication conditions based on enabled features and work need
 | [Trivy downloads](#trivy-downloads) | [Every time a scan runs](configuration.md#schedule) | Names, tags, and digests of requested images |
 | [GitHub communication](#github-communication) | Reads require [remediation planning](configuration.md#remediation-basics); writes require both planning and PRs (each disabled by default) | Repository and source identifiers, PR contents |
 | [Image candidate downloads](#candidate-registry-communication) | [Remediation planning](configuration.md#remediation-basics) is enabled (default: disabled) | Image names, tags, and digests |
+| [Runtime table downloads](#runtime-table-download) | At startup and at the start of each scan cycle when [remediation planning](configuration.md#remediation-basics) (disabled by default) and [table fetching](configuration.md#remediation-worker) (enabled by default) are enabled | None |
 | [Work image downloads](#worker-image-downloads) | Dependency updates run with [both remediation planning and PRs](configuration.md#remediation-basics) enabled (each disabled by default) | Work image names and digests |
 | [Tool downloads](#tool-downloads) | Dependency updates run with [both remediation planning and PRs](configuration.md#remediation-basics) enabled (each disabled by default) | Tool names and versions |
 | [Dependency downloads](#dependency-downloads) | Dependency updates run with [both remediation planning and PRs](configuration.md#remediation-basics) enabled (each disabled by default) | Package names and versions |
@@ -156,6 +157,26 @@ The destination is the public registry or registry with configured authenticatio
 For Docker Hub, KestreLynx connects to `registry-1.docker.io`.
 
 See [Image registry authentication](configuration.md#registries) for authentication and [Image candidate selection](remediation-image-logic.md#image-selection) for discovery.
+
+### Runtime table downloads {#runtime-table-download}
+
+The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, and Gradle series used for language package updates.
+When remediation planning and fetching the runtime table are enabled, KestreLynx fetches the table at startup and at the start of each scan cycle.
+
+| Program making the connection | Destination | Information retrieved |
+| --- | --- | --- |
+| KestreLynx | `ghcr.io` | Information needed to fetch the table referenced by tag `1` of `kitsunetrail/kestrelynx-runtimes` |
+| KestreLynx | `pkg-containers.githubusercontent.com` | Contents of the runtime table |
+
+The table contents are fetched from `pkg-containers.githubusercontent.com` through a redirect from `ghcr.io`.
+If a mirror is configured, KestreLynx connects to the specified repository.
+
+Fetch requests contain only the repository name, tag, and digest, with no information about your environment.
+
+Credentials are not sent to the default source, even if `registries` contains credentials for `ghcr.io`.
+When a different repository is specified, KestreLynx uses the [`registries` credentials](configuration.md#registries) for that host.
+
+See [Work container configuration](configuration.md#remediation-worker) to enable or disable fetching or change the source, and [Updating the runtime table](remediation-worker-logic.md#runtime-table-updates) for handling after fetching and on failure.
 
 ### Work image downloads {#worker-image-downloads}
 

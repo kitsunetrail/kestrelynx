@@ -201,35 +201,15 @@ func buildLanguageConfig(cfg config.Config, log *slog.Logger) *runner.LanguageUp
 		return unavailable(remediation.ReasonWorkImageUnavailable, "the instance id of the work containers could not be read or created", err)
 	}
 	platform := "linux/" + goarch
-	set := docker.NewWorkSet()
-	for _, rid := range remediation.DefaultRuntimeIDs() {
-		spec, ok := worker.LookupRuntime(rid)
-		if !ok || !spec.HasImage() {
-			return unavailable(remediation.ReasonWorkImageUnavailable, "the runtime "+rid+" is not in the table of this build", nil)
-		}
-		wc, err := newDockerWorkClient(cfg, spec, platform, id, log)
-		if err == nil {
-			err = set.Add(rid, wc)
-		}
-		if err != nil {
-			return unavailable(remediation.ReasonWorkImageUnavailable, "the work container client for "+rid+" could not be set up", err)
-		}
-	}
-	// A Gradle runtime is one row for each pair of a version of Gradle and a
-	// JDK. Its client is made, and its image pulled, when the first job for it
-	// arrives, so that the start sets up a client for the runtimes of the three
-	// other languages only.
-	set.SetFactory(func(key string) (*docker.WorkClient, error) {
-		spec, err := onDemandRuntime(key, platform)
-		if err != nil {
-			return nil, err
-		}
-		return newDockerWorkClient(cfg, spec, platform, id, log)
-	})
+	// A table the clients cannot be made from keeps the updates of a cycle
+	// from running (NewUpdater reports it) until a later table replaces it;
+	// it does not turn them off for the life of the process.
+	work := newDockerWork(cfg, platform, id, log)
+	_ = work.sync()
 	// Containers an earlier run left are removed once, before any client runs
 	// a job.
 	cctx, cancel := context.WithTimeout(context.Background(), workCleanupTimeout)
-	if n, err := set.CleanupStale(cctx); err != nil {
+	if n, err := work.cleanupStale(cctx); err != nil {
 		log.Warn("work containers left by an earlier run could not all be removed", "removed", n, "err", err)
 	} else if n > 0 {
 		log.Info("removed work containers left by an earlier run", "removed", n)
@@ -237,18 +217,39 @@ func buildLanguageConfig(cfg config.Config, log *slog.Logger) *runner.LanguageUp
 	cancel()
 
 	l := rc.Limits
-	log.Info("language package updates enabled", "runtimes", set.Keys(), "platform", platform, "registry", rc.Worker.Registry,
+	log.Info("language package updates enabled", "runtimes", remediation.DefaultRuntimeIDs(), "platform", platform, "registry", rc.Worker.Registry,
 		"dependency_jobs_per_cycle", l.DependencyJobsPerCycle, "job_timeout", l.JobTimeout)
 	return &runner.LanguageUpdateConfig{
+		// The runtime table may have been replaced since the last cycle; the
+		// clients follow it before anything of this cycle runs.
+		BeforeCycle: work.beforeCycle,
 		NewUpdater: func(ctx context.Context, in runner.LanguageUpdateInput) (runner.LanguageUpdater, error) {
-			return newLanguageUpdater(cfg, tools, set, platform, program, in)
+			if err := work.sync(); err != nil {
+				return nil, err
+			}
+			return newLanguageUpdater(cfg, tools, work, platform, program, in)
 		},
 	}
 }
 
-// onDemandRuntime is the row of a runtime whose work client or image is looked
-// up when a job asks for it: a Gradle row with an image that an integration
-// test has run on the platform the jobs run on.
+// workRuntime is the row of the table in use that jobs for the runtime key run
+// in on the platform: a row with an image, and for Gradle one an integration
+// test has run on that platform. The Gradle rows are one for each pair of a
+// version of Gradle and a JDK, and only the ones a test has run are trusted.
+func workRuntime(key, platform string) (worker.RuntimeSpec, bool) {
+	spec, ok := worker.LookupRuntime(key)
+	if !ok || !spec.HasImage() {
+		return worker.RuntimeSpec{}, false
+	}
+	if spec.Kind == worker.KindGradle && !spec.IsTestedOn(platform) {
+		return worker.RuntimeSpec{}, false
+	}
+	return spec, true
+}
+
+// onDemandRuntime is the row of a runtime whose work client is made when a job
+// asks for it: a Gradle row with an image that an integration test has run on
+// the platform the jobs run on.
 func onDemandRuntime(key, platform string) (worker.RuntimeSpec, error) {
 	spec, ok := worker.LookupRuntime(key)
 	if !ok || !spec.HasImage() || spec.Kind != worker.KindGradle {
@@ -262,18 +263,24 @@ func onDemandRuntime(key, platform string) (worker.RuntimeSpec, error) {
 
 // newDockerWorkClient is the client of the work containers of one runtime: the
 // pinned image of its row, checked for the version the row names, and for a
-// Gradle image the directories the container covers with a tmpfs.
-func newDockerWorkClient(cfg config.Config, spec worker.RuntimeSpec, platform, instance string, log *slog.Logger) (*docker.WorkClient, error) {
+// Gradle image the directories the container covers with a tmpfs. With pulls,
+// an image the client pulls is recorded there: reserved before the pull, which
+// is refused when it cannot be recorded, and confirmed after it.
+func newDockerWorkClient(cfg config.Config, spec worker.RuntimeSpec, platform, instance string, pulls *docker.ImagePruner, log *slog.Logger) (*docker.WorkClient, error) {
 	expect := map[string]string{spec.VersionEnv(): spec.Version}
 	if spec.Kind == worker.KindGradle {
 		expect["JAVA_HOME"] = worker.GradleJavaHome
 	}
-	return docker.NewWork(dockerSocket, docker.WorkConfig{
+	wc := docker.WorkConfig{
 		Image: workImageRef(spec, cfg.Remediation.Worker.Registry), Platform: platform,
 		ExpectEnv: expect, CoverPaths: dockerCoverPaths(spec),
 		Entrypoint: workEntrypoint, Env: workEnv, AllowedEnvKeys: workEnvKeys,
 		InstanceID: instance, Limits: workTransferLimits(), Log: log,
-	})
+	}
+	if pulls != nil {
+		wc.BeforePull, wc.AfterPull = pulls.Reserve, pulls.Confirm
+	}
+	return docker.NewWork(dockerSocket, wc)
 }
 
 // dockerCoverPaths are the covered paths of a row that the container does not

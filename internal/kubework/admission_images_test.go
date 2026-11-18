@@ -195,3 +195,48 @@ func TestRefusedByImageRule(t *testing.T) {
 		}
 	}
 }
+
+// A runtime table that is replaced while the process runs is served without a
+// list made at the start: the image of a runtime is looked up when a job asks
+// for it, and the images of the admission check when the check runs.
+func TestRunnerLooksImagesUpOnDemand(t *testing.T) {
+	base := Config{
+		API: newFake(), Namespace: "kestrelynx-work", ServiceAccount: "kestrelynx-work", PriorityClass: "kestrelynx-work", Arch: "amd64",
+		ReceiverImage: testRecvImg,
+		Entrypoint:    []string{"/work/bin/kestrelynx-worker", "run-kubernetes", "/work/job.json"},
+		Env:           []string{"PATH=/usr/bin", "HOME=/home/worker"},
+		InstanceID:    testInstance, SessionID: testSession, MaxConcurrent: 1,
+		Limits:            workexec.TransferLimits{MaxInputBytes: 1 << 20, MaxInputTarBytes: 4 << 20, MaxInputFiles: 12, MaxInputPathBytes: 256, MaxToolBytes: 1 << 20, MaxProgramBytes: 1 << 20},
+		MaxResultTarBytes: 1 << 20, Poll: time.Millisecond,
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	if _, err := NewRunner(base); err == nil {
+		t.Fatal("a runner without any way to find a work image was made")
+	}
+
+	table := map[string]string{"gradle9": testGradleImg}
+	cfg := base
+	cfg.ImageFor = func(key string) (string, bool) { img, ok := table[key]; return img, ok }
+	cfg.ProbeImagesFor = func() []string {
+		var out []string
+		for _, img := range table {
+			out = append(out, img)
+		}
+		return out
+	}
+	r, err := NewRunner(cfg)
+	if err != nil {
+		t.Fatalf("a runner that looks its images up on demand is refused: %v", err)
+	}
+	if got := r.probeImages(); !reflect.DeepEqual(got, []string{testGradleImg}) {
+		t.Fatalf("probe images %v", got)
+	}
+	// The table changes; the next check and the next job see it.
+	table = map[string]string{"node24": testNodeImg, "go126": testGoImg}
+	if got := r.probeImages(); !reflect.DeepEqual(got, []string{testGoImg, testNodeImg}) {
+		t.Fatalf("probe images after the change %v", got)
+	}
+	if _, err := r.RunJob(context.Background(), workexec.JobSpec{Runtime: "gradle9", JobID: "j", Timeout: time.Second}); err == nil || !strings.Contains(err.Error(), "no work image") {
+		t.Fatalf("a job for a runtime the table no longer has: %v", err)
+	}
+}

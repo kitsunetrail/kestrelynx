@@ -127,7 +127,7 @@ Gradle and JDK versions are selected from the project's declarations.
 | JDK version | `languageVersion` in `java.toolchain` |
 | JDK when no toolchain is declared | 21 |
 
-The Gradle version, JDK, and platform are selected from KestreLynx's built-in list of supported versions described in [Supported runtimes](remediation-reference.md#supported-runtimes).
+The Gradle version, JDK, and platform are selected from the [runtime table](remediation-reference.md#supported-runtimes).
 An unavailable Gradle version requires manual handling with `gradle_version_unsupported`; an unavailable requested JDK requires manual handling with `gradle_toolchain_unsupported`.
 
 Execution uses `/opt/gradle/bin/gradle` from the official image, not `gradlew` or `gradle-wrapper.jar`.

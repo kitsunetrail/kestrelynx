@@ -2,7 +2,9 @@
 # platform the main image is published for, cross-compiled once on the build
 # host. The main image carries both and places the one that matches its own
 # platform into each container; nothing else of the update containers is built
-# here (they use the official Node.js and Python images).
+# here (they use the official Node.js and Python images). The kestrelynx_worker
+# tag leaves the runtime table out of the program: it reads what a runtime is
+# from the id in its job, so a change to the table does not change it.
 FROM --platform=$BUILDPLATFORM golang:1.26 AS worker
 WORKDIR /src
 COPY go.mod ./
@@ -12,7 +14,7 @@ RUN set -eu; \
     mkdir -p /out/libexec; \
     for arch in amd64 arm64; do \
       CGO_ENABLED=0 GOOS=linux GOARCH=${arch} \
-        go build -trimpath -ldflags="-s -w" -o /out/libexec/kestrelynx-worker-${arch} ./cmd/kestrelynx-worker; \
+        go build -trimpath -tags kestrelynx_worker -ldflags="-s -w" -o /out/libexec/kestrelynx-worker-${arch} ./cmd/kestrelynx-worker; \
       sha256sum /out/libexec/kestrelynx-worker-${arch} | cut -d' ' -f1 > /out/kestrelynx-worker-${arch}.sha256; \
     done
 

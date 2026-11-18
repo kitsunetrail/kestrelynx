@@ -28,21 +28,95 @@ See [Work Pod execution](#kubernetes-work-pods) for the Kubernetes checks before
 ### Pinning official images {#worker-images}
 
 Work containers use the official Node.js, Python, Go (`golang`), and Gradle (`gradle`) images.
-Their contents are pinned by digest, a value identifying image contents, using the list built into KestreLynx under [Supported runtimes](remediation-reference.md#supported-runtimes).
+The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, and Gradle series used for language package updates.
+
+The image contents are pinned by digest (a value identifying image contents), as recorded in the runtime table.
 
 Changes to the contents of the same tag are not followed.
-The pinned contents and supported runtime versions change with KestreLynx updates.
+
+The runtime table is supplied with KestreLynx and replaced by newer published tables.
+See [Updating the runtime table](#runtime-table-updates) for the conditions for fetching and replacing it.
 
 The following conditions apply to fetching and using images.
 
 - Docker itself or software such as containerd on Kubernetes nodes fetches the required images
-- A mirror must provide the contents with the same digest as the list of supported versions
+- A mirror must provide the contents with the same digest as recorded in the runtime table
 - Gradle images are pinned by digest for each Gradle version and JDK combination, and only combinations that passed integration tests on the execution platform are used
 
 If an image cannot be fetched, the language package update is deferred (`deferred`) to a later cycle.
 A fetch failure does not cause the package manager to run inside KestreLynx's own container instead.
 
 See [Work container configuration](configuration.md#remediation-worker) to configure the image source.
+
+### Updating the runtime table {#runtime-table-updates}
+
+When remediation planning and fetching the runtime table are enabled, KestreLynx fetches the published table and replaces the table in use if the published one is newer.
+Fetching the table is enabled by default.
+
+1. At startup and at the start of each scan cycle, fetch the table from tag `1` of `ghcr.io/kitsunetrail/kestrelynx-runtimes`
+2. Check size and count limits, that images are the official Docker Hub `node`, `python`, `golang`, and `gradle` images, digest and version formats, consistency between series and versions, and the update time
+3. Save a table that passes the checks and has a newer update time than the table in use to `runtimes/table-1.json` under `remediation.storage_dir`
+4. Replace the entire table with the successfully saved table, without mixing it with the table supplied with KestreLynx
+
+A table with an update time 24 hours or more in the future is not used.
+Rows with runtime types that the KestreLynx in use does not recognize, or names it cannot interpret, are skipped; other rows are used.
+
+Work containers restrict writable locations to temporary storage with size limits.
+To do this, KestreLynx replaces locations in the image that anyone can write to, or that are declared as volumes (data storage areas), with temporary storage.
+
+The locations that can be replaced with temporary storage depend on the KestreLynx in use.
+If a row requests replacement of another location, that row is also skipped while other rows are used.
+
+If fetching, checking, or saving fails, KestreLynx continues using the current table and logs a warning.
+The cycle continues, and the table does not change during a cycle.
+
+Saved tables are also checked, and the table to use is selected as follows.
+
+| Situation | Table used |
+| --- | --- |
+| No saved table at startup | Table supplied with KestreLynx |
+| Saved table is newer than the supplied table at startup | Saved table that passes the checks |
+| Saved table is not newer than the supplied table at startup | Table supplied with KestreLynx |
+| Fetched table is newer than the current table and passes the checks | Fetched table, if saving succeeds |
+| Fetching or checking fails | Table currently in use |
+| Fetching is disabled | Table supplied with KestreLynx; saved tables are not used |
+
+At startup and when replacing the table, KestreLynx logs its source (supplied, saved, or fetched) and update time.
+When replacing it, KestreLynx logs each added row, removed row, and row with a changed version on a separate line.
+
+The following changes are delivered through table updates or require a KestreLynx update.
+
+| Change | Delivered by a table update | Requires a KestreLynx update |
+| --- | --- | --- |
+| Execution versions and pinned digests for existing series | Yes | No |
+| pip versions | Yes | No |
+| Dates such as end-of-support dates | Yes | No |
+| New Node.js, Python, and Go series whose version formats the KestreLynx in use supports | Yes | No |
+| New Gradle version and JDK combinations whose version formats the KestreLynx in use supports | Yes | No |
+| Row removal | Yes | No |
+| Support for additional Gradle plugins, such as Spring Boot | No | Yes |
+| Interpretation of `lts/<new-name>` in `.nvmrc` | No | Yes |
+| New language types | No | Yes |
+| Unsupported version formats, such as Python 4 | No | Yes |
+| Additional locations that can be replaced with temporary storage | No | Yes |
+
+Gradle uses only version and JDK combinations that passed integration tests on the execution platform.
+Being listed alone does not make a combination usable.
+
+See [Work container configuration](configuration.md#remediation-worker) to disable fetching or change the source, and [Runtime table downloads](outbound-communication.md#runtime-table-download) for destinations and credentials.
+
+### Removing unused work images {#worker-image-cleanup}
+
+On Docker, at the start of each cycle, KestreLynx removes work images it fetched itself that the current runtime table no longer uses.
+
+- Record images before fetching them in `runtimes/pulled-images.json` under `remediation.storage_dir`, and consider only successfully fetched images for removal
+- Do not remove an image that also has a tag, and exclude it from future removal
+- Exclude a reference that Docker already held for another platform before fetching
+- Keep images used by containers and retry in the next cycle
+- Do not force removal
+- If the record has reached 1,024 entries or cannot be written, do not fetch the work image and defer the language package update
+
+On Kubernetes, KestreLynx does not remove images and leaves their management to the node's container runtime.
 
 ### Container inputs {#worker-inputs}
 

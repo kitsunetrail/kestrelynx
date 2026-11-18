@@ -143,7 +143,7 @@ See [Plan and PR execution scope](remediation-logic.md#plan-and-pr-execution) fo
 | --- | --- | --- |
 | `remediation.enabled` | `false` | Enable read-only remediation plans in Docker or Kubernetes mode. |
 | `remediation.pull_requests.enabled` | `false` | Enable fix pull requests; requires remediation plans and a GitHub token. |
-| `remediation.storage_dir` | `/var/lib/kestrelynx/remediation` | Absolute directory for plans, delivery records, PR records, and the tool cache. Changing `state.path` does not change this location. |
+| `remediation.storage_dir` | `/var/lib/kestrelynx/remediation` | Absolute directory for plans, delivery records, PR records, the tool cache, the fetched runtime table, and records of fetched work images; changing `state.path` does not change this location. |
 
 ### GitHub access {#remediation-github}
 
@@ -313,6 +313,7 @@ The [Newer series check](remediation-image-logic.md#newer-series-check) shares t
 ### Work containers {#remediation-worker}
 
 Work containers are disposable containers used to run dependency updates (such as lockfile updates) with npm, pnpm, pip, uv, Go, or Gradle separately from KestreLynx itself when updating language packages for remediation PRs.
+The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, and Gradle series used for language package updates.
 
 See [Pinning official images](remediation-worker-logic.md#worker-images) for pinning and handling unavailable work images, [Supported runtimes](remediation-reference.md#supported-runtimes) for version series, and [Work image downloads](outbound-communication.md#worker-image-downloads) for network destinations.
 
@@ -323,9 +324,17 @@ See [Container inputs](remediation-worker-logic.md#worker-inputs) for checks whe
 | Option | Default | Description |
 | --- | --- | --- |
 | `remediation.worker.registry` | empty | Docker Hub mirror in lowercase `host[:port][/path]` form; empty uses Docker Hub. Do not include a scheme, tag, digest, `//`, or `..`; paths use lowercase letters, digits, and the separators `.`, `_`, and `-`. The mirror must serve `library/node`, `library/python`, `library/golang`, and `library/gradle` with the same contents as the official images under the specified host and path. |
+| `remediation.worker.runtime_table.update` | `true` | Enable [updates to the runtime table](remediation-worker-logic.md#runtime-table-updates); `false` uses only the table supplied with KestreLynx, without fetching or using a saved table. |
+| `remediation.worker.runtime_table.repository` | `ghcr.io/kitsunetrail/kestrelynx-runtimes` | Repository used to change the [source of the runtime table](remediation-worker-logic.md#runtime-table-updates) to a mirror. |
 | `remediation.worker.tool_versions.min_release_age` | `72h` | Minimum wait between publication and use of npm, pnpm, or uv; positive duration such as `72h` or `30m`, excluding `0` and negative values. |
 | `remediation.worker.tool_versions.cache_max_size` | `1GiB` | Maximum npm, pnpm, and uv cache size; integer bytes or an integer followed by `B`, `KiB`, `MiB`, or `GiB`, with a minimum of `128MiB`. |
 | `remediation.worker.program_dir` | empty | Empty or an absolute directory containing a worker program for development; not required for standard releases. |
+
+Specify `remediation.worker.runtime_table.repository` in lowercase `host[:port]/path` form without a scheme, tag, digest, `//`, or `..`.
+The tag is fixed at `1` and cannot be configured.
+
+Credentials are not sent to the default source, even if `registries` contains credentials for `ghcr.io`.
+When a different repository is specified, KestreLynx uses the `registries` credentials for that host.
 
 #### Kubernetes {#remediation-worker-kubernetes}
 

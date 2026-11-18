@@ -57,25 +57,29 @@ func DefaultEnvironment() *EnvironmentConfig {
 	return &EnvironmentConfig{
 		SelfCheck: SelfCheckConfig{
 			Root: "/", MountInfo: "/proc/self/mountinfo", UID: worker.UID,
-			Tmpfs: []TmpfsMount{
-				{Path: worker.TmpDir},
-				{Path: "/var/tmp"},
-				{Path: "/run/lock"},
-				{Path: "/go"},
-				// What the Gradle images need covered: the home of their user,
-				// the volume they declare below it and the directory of their
-				// service manager.
-				{Path: "/home/gradle"},
-				{Path: "/home/gradle/.gradle"},
-				{Path: "/var/lib/pebble/default"},
-				{Path: worker.HomeDir},
-				{Path: worker.ToolsRoot, Exec: true},
-			},
+			// What an official image may need covered (the places it leaves
+			// writable by everyone, the volume the Gradle images declare and
+			// the directory of their service manager), and the directories of
+			// this program.
+			Tmpfs: append(imageTmpfs(),
+				TmpfsMount{Path: worker.HomeDir},
+				TmpfsMount{Path: worker.ToolsRoot, Exec: true},
+			),
 			MaxEntries: selfCheckMaxEntries, MaxTime: selfCheckMaxTime,
 		},
 		ToolsRoot:      worker.ToolsRoot,
 		VersionTimeout: 30 * time.Second,
 	}
+}
+
+// imageTmpfs is a tmpfs at each path of an official image a work container may
+// cover.
+func imageTmpfs() []TmpfsMount {
+	var out []TmpfsMount
+	for _, p := range worker.ImageCoverPaths() {
+		out = append(out, TmpfsMount{Path: p})
+	}
+	return out
 }
 
 // KubernetesEnvironment is the layout inside a work Pod's work container: the
@@ -122,7 +126,7 @@ func (e *EnvironmentConfig) interpreter(spec worker.RuntimeSpec) string {
 // runtime is an environmentError; one of the tool is not.
 func (c *Config) prepareEnvironment(job *worker.Job) error {
 	env := c.Environment
-	spec, ok := worker.LookupRuntime(job.Runtime.ID)
+	spec, ok := worker.RuntimeFromID(job.Runtime.ID)
 	if !ok {
 		return &environmentError{fmt.Errorf("unknown runtime %q", job.Runtime.ID)}
 	}

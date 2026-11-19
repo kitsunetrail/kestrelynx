@@ -126,6 +126,9 @@ func (rd renderer) topLine(c pkgCard) string {
 	if !c.HasTop {
 		return ""
 	}
+	if c.TopMode == topList {
+		return rd.listLine(c)
+	}
 	t := c.Top
 	parts := []string{cardIDLink(t.ID)}
 	switch c.TopMode {
@@ -138,10 +141,8 @@ func (rd renderer) topLine(c pkgCard) string {
 		}
 	case topPlain:
 		parts = append(parts, escMrkdwn(t.Severity))
-	case topShort, topCompact:
+	case topShort:
 		switch {
-		case !t.Intel && c.TopMode == topCompact:
-			parts = append(parts, escMrkdwn(t.Severity))
 		case !t.Intel:
 			return ""
 		case t.KEV:
@@ -155,6 +156,36 @@ func (rd renderer) topLine(c pkgCard) string {
 	line := kv(rd.msg.LblTopCVE, strings.Join(parts, " · "))
 	if c.Hint && c.MoreCVEs > 0 {
 		line += fmt.Sprintf(rd.msg.EvidenceMoreCVEs, c.MoreCVEs)
+	}
+	return line
+}
+
+// listLine is the line that names every CVE of the card (topList), or ""
+// when there is none. Where the triage intel is trustworthy, a CVE with an
+// EPSS score shows it and one without is named alone; a CVE in CISA KEV makes
+// its package act now, which has the detail card and not this line. Without
+// that intel (triage off, or its data unusable) each CVE shows its severity
+// instead, which is then all there is to tell them apart. The ids past
+// listIDsMax are a count.
+func (rd renderer) listLine(c pkgCard) string {
+	if len(c.List) == 0 {
+		return ""
+	}
+	parts := make([]string, len(c.List))
+	for i, t := range c.List {
+		parts[i] = cardIDLink(t.ID)
+		switch {
+		case !t.Intel:
+			if t.Severity != "" {
+				parts[i] += " (" + escMrkdwn(t.Severity) + ")"
+			}
+		case t.EPSSKnown:
+			parts[i] += " (" + fmt.Sprintf(rd.msg.EvidenceEPSSPrefix, escMrkdwn(t.EPSS)) + ")"
+		}
+	}
+	line := kv(rd.msg.LblCVEs, strings.Join(parts, ", "))
+	if c.ListExtra > 0 {
+		line += fmt.Sprintf(rd.msg.MoreCount, c.ListExtra)
 	}
 	return line
 }

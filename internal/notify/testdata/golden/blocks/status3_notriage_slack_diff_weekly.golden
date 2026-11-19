@@ -11,7 +11,7 @@ TEXT: KestreLynx 2026-06-24 09:00 📋 Weekly full report — everything current
 *◆ openssl*
 Installed: 3.0.7 · Fixed in: 3.0.11 (🟢 distro security patch)
 Findings: CRITICAL 1 / HIGH 0
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> · CRITICAL
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> (CRITICAL)
 --- section ---
 *◆ openssl*
 Change: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002>
@@ -22,7 +22,7 @@ Findings: CRITICAL 0 / HIGH 1
 Change: fix now available
 Installed: 1.21.22 · Fixed in: 1.21.23 (🟢 distro security patch)
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> · HIGH
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> (HIGH)
 --- section ---
 *Image: api:2.0*
 *◆ libxml2*
@@ -33,7 +33,7 @@ Findings: CRITICAL 0 / HIGH 2
 *◆ zlib*
 Installed: 1.2.13 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> · HIGH
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> (HIGH)
 --- divider ---
 --- section ---
 *✅ Resolved since last scan (1)*

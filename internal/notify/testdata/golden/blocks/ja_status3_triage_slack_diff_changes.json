@@ -81,14 +81,14 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "*◆ openssl*\n変化: ⬆️ 今すぐ対応に優先度昇格\n現在: 3.0.7 · 修正版: なし\n検出件数: CRITICAL 0 / HIGH 1\n代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002\u003e · EPSS \u0026lt;0.1%"
+          "text": "*◆ openssl*\n変化: ⬆️ 今すぐ対応に優先度昇格\n現在: 3.0.7 · 修正版: なし\n検出件数: CRITICAL 0 / HIGH 1\nCVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002\u003e (EPSS \u0026lt;0.1%)"
         }
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "*◆ dpkg*\n変化: 修正版が利用可能\n現在: 1.21.22 · 修正版: 1.21.23 (🟢 ディストリのセキュリティパッチ)\n検出件数: CRITICAL 0 / HIGH 1\n代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004\u003e · EPSS \u0026lt;0.1%"
+          "text": "*◆ dpkg*\n変化: 修正版が利用可能\n現在: 1.21.22 · 修正版: 1.21.23 (🟢 ディストリのセキュリティパッチ)\n検出件数: CRITICAL 0 / HIGH 1\nCVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004\u003e (EPSS \u0026lt;0.1%)"
         }
       },
       {

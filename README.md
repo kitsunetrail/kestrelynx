@@ -133,7 +133,7 @@ Image: myapp:latest
 ◆ webpack [npm-pkg]
 Installed: 4.46.0 · Fixed in: 5.89.0 (🟠 major version bump — needs care)
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: CVE-2024-37890 · EPSS 0.1%
+CVEs: CVE-2024-37890 (EPSS 0.1%)
 ───
 ✅ Resolved since last scan (1)
 • myapp:latest: postcss

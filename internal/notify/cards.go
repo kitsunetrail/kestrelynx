@@ -26,9 +26,11 @@ const (
 	// topShort is the compact form: id plus KEV or EPSS (the watch rows).
 	// Nothing is shown when the intel behind it is degraded.
 	topShort
-	// topCompact is topShort, falling back to id plus severity when triage
-	// is off or its intel is degraded (the diff's one-line rows).
-	topCompact
+	// topList names every CVE of the package on one line, strongest first,
+	// each followed by its EPSS where triage has one (the diff's compact
+	// cards). No CVE is singled out: in a package that is not act now, the
+	// first one is often first by its id alone.
+	topList
 	// topFull is id, severity and the exploitation facts (act now, thread).
 	topFull
 	// topPlain is id plus severity only, for views with no intel to cite.
@@ -57,6 +59,7 @@ type cardCVE struct {
 	KEV           bool
 	Ransomware    bool
 	IntelDegraded bool
+	EPSSKnown     bool // false when EPSS is "n/a"
 	// Intel is true when triage is on and its KEV/EPSS data is trustworthy,
 	// i.e. when EPSS and KEV facts may be cited at all.
 	Intel bool
@@ -113,8 +116,12 @@ type pkgCard struct {
 
 	Others      []string // thread: further CVE ids, raw
 	OthersExtra int
-	Title       string
-	Refs        []cardRef
+	// List is every CVE of the package up to listIDsMax, in the order the
+	// representative is chosen by (topList); ListExtra counts the rest.
+	List      []cardCVE
+	ListExtra int
+	Title     string
+	Refs      []cardRef
 
 	RuntimeMode runtimeMode
 	Runtime     cardRuntime
@@ -141,6 +148,24 @@ type cardOpts struct {
 	refs   bool
 	change *state.Change
 	age    func(image, pkg string) (time.Time, bool)
+}
+
+// listIDsMax caps how many CVE ids a topList line names before falling back
+// to a count: as many as a thread card names with its representative.
+const listIDsMax = alsoIDsMax + 1
+
+// cardCVEOf collects the display values of one vulnerability of r.
+func cardCVEOf(r analyze.Report, v analyze.VulnRef) cardCVE {
+	return cardCVE{
+		ID:            v.ID,
+		Severity:      string(v.Severity),
+		EPSS:          epssString(v),
+		EPSSKnown:     v.EPSSKnown,
+		KEV:           v.KEV,
+		Ransomware:    v.Ransomware,
+		IntelDegraded: r.Intel.Degraded(),
+		Intel:         r.Triage && !r.Intel.Degraded(),
+	}
 }
 
 // cardRefsOf lists v's reference links in display order: the scanner's
@@ -227,14 +252,16 @@ func newPkgCard(r analyze.Report, image string, g analyze.PackageGroup, o cardOp
 
 	if top := g.TopVuln(); top.ID != "" && o.top != topNone {
 		c.HasTop = true
-		c.Top = cardCVE{
-			ID:            top.ID,
-			Severity:      string(top.Severity),
-			EPSS:          epssString(top),
-			KEV:           top.KEV,
-			Ransomware:    top.Ransomware,
-			IntelDegraded: r.Intel.Degraded(),
-			Intel:         r.Triage && !r.Intel.Degraded(),
+		c.Top = cardCVEOf(r, top)
+		if o.top == topList {
+			vulns := g.Vulns
+			if len(vulns) > listIDsMax {
+				c.ListExtra = len(vulns) - listIDsMax
+				vulns = vulns[:listIDsMax]
+			}
+			for _, v := range vulns {
+				c.List = append(c.List, cardCVEOf(r, v))
+			}
 		}
 		if rest := len(g.Vulns) - 1; rest > 0 {
 			c.MoreCVEs = rest

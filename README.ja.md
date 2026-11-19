@@ -133,7 +133,7 @@ PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ�
 ◆ webpack [npm-pkg]
 現在: 4.46.0 · 修正版: 5.89.0 (🟠 メジャーバージョン更新 — 要注意)
 検出件数: CRITICAL 0 / HIGH 1
-代表CVE: CVE-2024-37890 · EPSS 0.1%
+CVE: CVE-2024-37890 (EPSS 0.1%)
 ───
 ✅ 前回のスキャンからの解消 (1件)
 • myapp:latest: postcss

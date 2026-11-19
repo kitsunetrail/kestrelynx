@@ -265,20 +265,20 @@ func TestChannelDiff_AllResolvedCelebrates(t *testing.T) {
 	}
 }
 
-// A non-triage change line still names its headline CVE: plain "id severity"
-// (the non-triage form), since there is no KEV/EPSS evidence to
-// cite without triage enabled.
+// A non-triage change card names its CVEs with their severity (the
+// non-triage form), since there is no KEV/EPSS evidence to cite without
+// triage enabled.
 func TestChannelDiff_ChangeCompactEvidence(t *testing.T) {
 	r, d := diffFixture()
 	out := renderDiff(r, d, false, false)
-	if !strings.Contains(out, "*◆ libc-bin*\nInstalled: 2.28-10 · Fixed in: 2.28-10+deb10u2 (🟢 distro security patch)\nFindings: CRITICAL 1 / HIGH 0\nTop CVE: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> · CRITICAL") {
-		t.Errorf("expected a plain id+severity top-CVE line:\n%s", out)
+	if !strings.Contains(out, "*◆ libc-bin*\nInstalled: 2.28-10 · Fixed in: 2.28-10+deb10u2 (🟢 distro security patch)\nFindings: CRITICAL 1 / HIGH 0\nCVEs: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> (CRITICAL)") {
+		t.Errorf("expected the CVE line with id and severity:\n%s", out)
 	}
 }
 
 // A KindNewCVEs change line lists the new CVE ids themselves (linked), capped
 // at newIDsMax with a "(+N more)" overflow, instead of the old bare count —
-// and does not also carry a top-CVE line (the new-id list is
+// and does not also carry a line of the package's CVEs (the new-id list is
 // already the headline).
 func TestChannelDiff_NewCVEsSuffixLinksAndOverflows(t *testing.T) {
 	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{
@@ -293,13 +293,13 @@ func TestChannelDiff_NewCVEsSuffixLinksAndOverflows(t *testing.T) {
 	d, _ := state.Compute(st, r)
 
 	out := renderDiff(r, d, false, false)
-	// The new-id listing is the change line, with no top-CVE line after it.
+	// The new-id listing is the change line, with no CVE line after it.
 	want := "*◆ openssl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>, <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3>, <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> (+1 more)\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 5"
 	if !strings.Contains(out, want) {
 		t.Errorf("expected the linked new-CVE listing with overflow count:\n%s\nwant substring: %s", out, want)
 	}
-	if strings.Contains(out, "Top CVE") {
-		t.Errorf("a new-id change carries no top-CVE line:\n%s", out)
+	if strings.Contains(out, "Top CVE") || strings.Contains(out, "\nCVEs: ") {
+		t.Errorf("a new-id change carries no CVE line:\n%s", out)
 	}
 }
 
@@ -323,7 +323,7 @@ func TestChannelDiff_NewCVEsSuffixPerGroup(t *testing.T) {
 
 	out := renderDiff(r, d, false, false)
 	for _, want := range []string{
-		"*◆ openssl*\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> · HIGH",
+		"*◆ openssl*\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 1\nCVEs: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> (HIGH)",
 		"*◆ openssl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>\nInstalled: 1.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1",
 	} {
 		if !strings.Contains(out, want) {

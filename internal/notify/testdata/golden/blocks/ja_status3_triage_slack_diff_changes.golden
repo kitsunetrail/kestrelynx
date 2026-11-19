@@ -46,13 +46,13 @@ _前回のスキャンからの変化_
 変化: ⬆️ 今すぐ対応に優先度昇格
 現在: 3.0.7 · 修正版: なし
 検出件数: CRITICAL 0 / HIGH 1
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> · EPSS &lt;0.1%
+CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> (EPSS &lt;0.1%)
 --- section ---
 *◆ dpkg*
 変化: 修正版が利用可能
 現在: 1.21.22 · 修正版: 1.21.23 (🟢 ディストリのセキュリティパッチ)
 検出件数: CRITICAL 0 / HIGH 1
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> · EPSS &lt;0.1%
+CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> (EPSS &lt;0.1%)
 --- divider ---
 --- section ---
 *✅ 前回のスキャンからの解消 (1件)*

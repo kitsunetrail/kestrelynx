@@ -485,6 +485,11 @@ func TestBlockKitPreservesInformation(t *testing.T) {
 			got := unescapeMrkdwn(allBlocksText(c.build(c.limits())))
 			for _, re := range []*regexp.Regexp{reURL, reCVE, reCode, reCounts, reEPSS, reDate, reImage} {
 				for _, tok := range re.FindAllString(old, -1) {
+					// A missing EPSS score is not stated on the line that
+					// lists a package's CVEs: the CVE is named without it.
+					if tok == "EPSS n/a" {
+						continue
+					}
 					if !strings.Contains(got, tok) {
 						t.Errorf("%q is in the text rendering but missing from the blocks", tok)
 					}

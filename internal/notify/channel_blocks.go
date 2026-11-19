@@ -781,7 +781,7 @@ func (v *chView) changeCard(image string, c state.Change, g analyze.PackageGroup
 		return v.detail(v.newChangeCard(image, g, o))
 	}
 	if len(groupNewIDs(c, g)) == 0 {
-		o.top = topCompact
+		o.top = topList
 	}
 	if runtime {
 		o.runtime = rtShort

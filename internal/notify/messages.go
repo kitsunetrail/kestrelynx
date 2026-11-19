@@ -296,6 +296,7 @@ type messages struct {
 	LblSummary      string // "Summary"
 	LblReferences   string // "References"
 	LblOtherCVEs    string // "Other CVEs"
+	LblCVEs         string // "CVEs": every CVE of the package on one line
 	LblRuntime      string // "Runtime"
 	LblEvidence     string // "Evidence"
 	LblExposure     string // "Exposure"
@@ -755,6 +756,7 @@ var enMessages = messages{
 	LblSummary:      "Summary",
 	LblReferences:   "References",
 	LblOtherCVEs:    "Other CVEs",
+	LblCVEs:         "CVEs",
 	LblRuntime:      "Runtime",
 	LblEvidence:     "Evidence",
 	LblExposure:     "Exposure",
@@ -1196,6 +1198,7 @@ var jaMessages = messages{
 	LblSummary:      "説明",
 	LblReferences:   "参照",
 	LblOtherCVEs:    "ほかのCVE",
+	LblCVEs:         "CVE",
 	LblRuntime:      "使用状況",
 	LblEvidence:     "観測根拠",
 	LblExposure:     "公開状態",

@@ -27,26 +27,26 @@ Exposure: published on all interfaces · runs with elevated privilege · last co
 *◆ setuptools* [python-pkg]
 Installed: 53.0.0 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · EPSS 2%
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> (EPSS 2%)
 Runtime: ▶ in use (running)
 --- section ---
 *Image: web:1.0*
 *◆ curl*
 Installed: 8.0.0 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · EPSS 2%
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> (EPSS 2%)
 --- section ---
 *Image: api:2.0*
 *◆ leftpad* [node-pkg]
 Installed: 1.0.0 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-LEFTPAD|CVE-LEFTPAD> · EPSS 0.1%
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-LEFTPAD|CVE-LEFTPAD> (EPSS 0.1%)
 --- section ---
 *Image: web:1.0*
 *◆ libfoo*
 Installed: 1.0.0 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-LIBFOO|CVE-LIBFOO> · EPSS 0.1%
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-LIBFOO|CVE-LIBFOO> (EPSS 0.1%)
 --- divider ---
 --- section ---
 📌 *Open now:* 🚨 1 act-now / 👀 2 watch / 🔕 2 low

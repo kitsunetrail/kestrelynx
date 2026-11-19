@@ -45,13 +45,13 @@ References: <https://avd.example/CVE-2031-0001|advisory> · <https://vendor.exam
 Change: ⬆️ escalated to ACT NOW
 Installed: 3.0.7 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> · EPSS &lt;0.1%
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> (EPSS &lt;0.1%)
 --- section ---
 *◆ dpkg*
 Change: fix now available
 Installed: 1.21.22 · Fixed in: 1.21.23 (🟢 distro security patch)
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> · EPSS &lt;0.1%
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> (EPSS &lt;0.1%)
 --- divider ---
 --- section ---
 *✅ Resolved since last scan (1)*

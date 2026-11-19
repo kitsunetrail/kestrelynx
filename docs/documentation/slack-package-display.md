@@ -61,7 +61,7 @@ This comparison applies to both channel and thread cards.
 | Upgrade risk | `Upgrade risk:` line | In parentheses after the fixed version |
 | Finding counts | CVE counts by severity | CVE counts by severity |
 | Action | [Resolution through image updates and waiting for newer versions](#base-image-wait) | [Resolution through image updates and waiting for newer versions](#base-image-wait) |
-| CVEs | Top CVE, exploitation information, and references | Short top CVE display |
+| CVEs | Top CVE, exploitation information, and references | Short top CVE display (the package's CVE IDs on one line in the new-findings section) |
 | Runtime usage | Display including observation evidence | Short in-use display |
 
 `Findings:` counts distinct CVE IDs included in that card.
@@ -111,7 +111,20 @@ The following rules apply to top CVE displays on compact cards.
 
 - Compact Watch and EOL cards in full reports show the top CVE when triage is enabled and KEV or EPSS is available
 - Compact cards in full reports omit the top CVE when triage is disabled or both KEV and EPSS are unavailable
-- Compact diff cards omit the top CVE when newly added CVE IDs are displayed, and show it otherwise
+- Compact cards in the new-findings section list the package's CVE IDs on the `CVEs:` line instead of a `Top CVE:` line
+- However, cards for previously detected packages with added CVEs show the added CVE IDs on the `Change:` line and omit the `CVEs:` line
+
+CVE IDs on the `CVEs:` line are sorted using criteria 1–4 in the numbered list above.
+The top CVE comes first, and the remaining CVEs follow the same criteria.
+
+Up to nine CVE IDs are shown, with the remaining count displayed as `(+N more)`.
+
+For CVEs with an EPSS score, the score appears after the ID in the form `(EPSS 3%)`.
+When triage is disabled or both KEV and EPSS are unavailable, each CVE's severity appears instead of the score, in the form `(HIGH)`.
+
+```text
+CVEs: CVE-2031-0007 (EPSS 0.4%), CVE-2031-0008, CVE-2031-0009
+```
 
 Other CVEs are displayed as follows, depending on location.
 
@@ -269,7 +282,7 @@ The following table lists the link displays and destinations.
 | `vendor advisory` | Vendor or CISA information from KEV notes |
 | `💬 HN (N pts)` | Related Hacker News discussion (N is its points) |
 
-CVE IDs on the `Top CVE:`, `Other CVEs:`, and `Change:` lines link to NVD.
+CVE IDs on the `Top CVE:`, `Other CVEs:`, `Change:`, and `CVEs:` lines link to NVD.
 Non-CVE identifiers such as GHSA and DLA IDs appear as plain text.
 
 ## Change labels {#change-labels}
@@ -328,7 +341,7 @@ The following example is a diff card for a package whose fix became available.
 Change: fix now available
 Installed: 1.21.22 · Fixed in: 1.21.23 (🟢 distro security patch)
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: CVE-2031-0004 · EPSS <0.1%
+CVEs: CVE-2031-0004 (EPSS <0.1%)
 ```
 
 Section headings group the following content.

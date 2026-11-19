@@ -34,14 +34,14 @@ Findings: CRITICAL 0 / HIGH 2
 *◆ zlib*
 Installed: 1.2.13 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> · HIGH
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> (HIGH)
 --- section ---
 *Image: web:1.0*
 *◆ dpkg*
 Change: fix now available
 Installed: 1.21.22 · Fixed in: 1.21.23 (🟢 distro security patch)
 Findings: CRITICAL 0 / HIGH 1
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> · HIGH
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004> (HIGH)
 --- divider ---
 --- section ---
 *✅ Resolved since last scan (1)*

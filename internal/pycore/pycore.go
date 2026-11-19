@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/kitsunetrail/kestrelynx/internal/cverecord"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
@@ -24,7 +25,7 @@ import (
 // Default dataset URLs.
 const (
 	DefaultAdvisoryDBURL    = "https://codeload.github.com/psf/advisory-database/tar.gz/refs/heads/main"
-	DefaultCVERecordBaseURL = "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/"
+	DefaultCVERecordBaseURL = cverecord.DefaultBaseURL
 	DefaultReleasesURL      = "https://www.python.org/api/v2/downloads/release/?is_published=true"
 	DefaultReleaseCycleURL  = "https://peps.python.org/api/release-cycle.json"
 )

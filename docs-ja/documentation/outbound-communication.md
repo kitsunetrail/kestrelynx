@@ -27,6 +27,7 @@ EPSSは、脆弱性について今後30日以内に悪用活動が観測され�
 | [EPSSの取得](#epss-download) | [`triage.enabled`](configuration.md#triage)が有効（既定有効） | なし |
 | [Node.jsのセキュリティ情報](#node-runtime-download) | [`scan.node_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
 | [Pythonのセキュリティ情報](#python-runtime-download) | [`scan.python_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
+| [CVEレコードの取得](#cve-record-download) | [`scan.cve_record_severity.enabled`](configuration.md#scan)が有効（既定有効）で、Trivyがスキャンで深刻度`UNKNOWN`のCVEを報告した場合のみ | 深刻度がUNKNOWNのCVE ID |
 | [Hacker Newsの検索](#hacker-news-search) | [`triage.enabled`・`triage.discussion_links`](configuration.md#triage)が有効（各既定有効） | 検索対象のCVE ID |
 | [Trivyの取得通信](#trivy-downloads) | [スキャンを実行するたび](configuration.md#schedule) | 取得するイメージの名前・タグ・digest |
 | [GitHubへの通信](#github-communication) | 読み取りは[修正計画](configuration.md#remediation-basics)が有効、書き込みは修正計画と修正PRの両方が有効（各既定無効） | リポジトリ・ソースの指定、PRの内容 |
@@ -92,6 +93,18 @@ CVEレコードの要求に含めるCVE IDはPSFの一覧で決まり、イメ�
 
 有効・無効は[スキャンの設定](configuration.md#scan)、更新は[脅威情報の更新](scan-logic.md#intel-cache)、失敗時は[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。
 
+### CVEレコードの取得 {#cve-record-download}
+
+`scan.cve_record_severity.enabled`が有効（既定は`true`）な場合、そのスキャンサイクルのスキャンでTrivyが深刻度を`UNKNOWN`と報告したCVEだけを取得対象にします。
+対象のCVEのレコードが未取得か、前回の取得から20時間以上たっている場合だけ通信します。
+
+KestreLynxは、対象のCVEレコードを`raw.githubusercontent.com`の`CVEProject/cvelistV5`から1件ずつ取得します。
+要求のURLにCVE IDが入るため、所見の一部が取得先に伝わります。
+
+`scan.cve_record_severity.enabled`を`false`にすると、取得も深刻度の差し替えも行いません。
+
+採点と取得失敗時の扱いは[深刻度](scan-logic.md#severity)、更新は[脅威情報の更新](scan-logic.md#intel-cache)を参照してください。
+
 ### Hacker Newsの検索 {#hacker-news-search}
 
 Hacker Newsの検索では、KestreLynxが検出したCVE IDを`hn.algolia.com`へ検索クエリとして送り、議論のリンクを取得します。
@@ -110,7 +123,7 @@ Trivyは、通常のスキャンや、修正計画で更新前後を比べるス
 
 | 取得する情報 | 通信先 | 通信が起きる条件 |
 | --- | --- | --- |
-| 脆弱性データベースなど | Trivyのデータベース取得先 | スキャン用データベースの準備が必要 |
+| [脆弱性データベース](scan-logic.md#vulnerability-db-refresh) | Trivyのデータベース取得先 | 各スキャンサイクルの開始時（直前1時間以内に取得済みなら省略） |
 | スキャン対象・比較用のイメージ | イメージ名で決まるレジストリと、レイヤーなどの配信先 | 必要なイメージをレジストリから取得する場合 |
 
 データベースの取得先は、Trivyの`db.repository`・`db.java-repository`で決まります。

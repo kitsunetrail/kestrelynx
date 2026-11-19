@@ -6,9 +6,10 @@ On each scan, KestreLynx checks running containers and updates findings and prio
 
 1. Discover target containers on the Docker host or Kubernetes cluster
 2. Combine scan targets by image name and digest
-3. Scan each target with Trivy and verify that the result matches the requested digest
-4. Group findings by package and fix status
-5. If triage is enabled, assign priorities using exploitation intelligence and severity
+3. Replace Trivy's vulnerability database with the latest version
+4. Scan each target with Trivy and verify that the result matches the requested digest
+5. Group findings by package and fix status
+6. If triage is enabled, assign priorities using exploitation intelligence and severity
 
 These results are used for [change and history decisions](diff-logic.md#comparison-baseline) and [notification decisions](notification-conditions.md#notification-conditions).
 For processing when remediation planning is enabled, see [Remediation processing flow](remediation-logic.md#processing-flow).
@@ -65,6 +66,20 @@ The digests are shortened example values.
 
 However, when the digest is unknown, KestreLynx cannot determine whether the contents are the same, so it scans once per image name.
 This occurs on Kubernetes when the node does not report a registry digest (for example, for images loaded directly onto the node), or when the running node's OS or architecture is unknown.
+
+## Vulnerability database updates {#vulnerability-db-refresh}
+
+At the start of each scan cycle, KestreLynx downloads the latest published Trivy vulnerability database and replaces the local database before scanning.
+
+Trivy on its own does not download the database again until 24 hours have passed since the local database was built.
+As a result, Trivy on its own can scan without using a newer published database, such as after a restart.
+
+| Item | Handling |
+| --- | --- |
+| Skipped download | Skip downloading if a database was downloaded within the last hour. |
+| Failed download | Continue scanning with the local database and log a warning. |
+| Replacement | Download into a separate directory and replace the database after the download completes. |
+| Free space | Temporarily use free space equivalent to one database (about 2 GB). |
 
 ## Scan result verification {#scan-verification}
 
@@ -170,7 +185,20 @@ Severity, fix status, EOL, and priority describe different aspects of a finding.
 ### Severity {#severity}
 
 For findings reported by Trivy, KestreLynx uses Trivy's severity.
-See [Configuration](configuration.md) for selecting severity levels and their defaults.
+
+For CVEs that Trivy reports as `UNKNOWN`, KestreLynx uses scoring in the CVE record to determine severity.
+
+Scoring is read from the single retrieved CVE record in the following order.
+
+1. Use scoring written in the record by the organization that assigned the CVE ID (CNA).
+2. Only if the CNA provides no scoring, use scoring added to the same record by an organization such as CISA, if available.
+
+When the same organization's scoring includes multiple CVSS versions, use 4.0, then 3.1, then 3.0.
+
+CVEs without scoring in their records remain `UNKNOWN`.
+If a CVE record cannot be retrieved, previously read scoring is used if available; otherwise, the severity remains `UNKNOWN`.
+
+See [Configuration](configuration.md#scan) for enabling or disabling this behavior, selecting severity levels, and their defaults.
 
 Severity and priority do not necessarily match.
 Priority follows the [Priority rules](#cve-priority-rules).
@@ -404,6 +432,12 @@ Python advisory data uses the following refresh and cache rules.
 | Official CVE records | Revalidate every 20 hours using ETags. |
 | Failed retrieval | Use a usable cache no older than 7 days. |
 | Storage | `python/` in the same directory as the state file. |
+
+| CVE record scoring cache | Handling |
+| --- | --- |
+| Revalidation | Revalidate using ETags after 20 hours have passed since retrieval. |
+| Failed retrieval | Use previously read scoring without an age limit. |
+| Storage | `cve-records/` in the same directory as the state file. |
 
 ### Unavailable threat intelligence {#degraded-triage}
 

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/kitsunetrail/kestrelynx/internal/cverecord"
 )
 
 const (
@@ -60,15 +62,7 @@ type rawVersion struct {
 	Changes         json.RawMessage `json:"changes"`
 }
 
-type rawMetric struct {
-	V4  *rawScore `json:"cvssV4_0"`
-	V31 *rawScore `json:"cvssV3_1"`
-	V30 *rawScore `json:"cvssV3_0"`
-}
-
-type rawScore struct {
-	BaseSeverity string `json:"baseSeverity"`
-}
+type rawMetric = cverecord.Metric
 
 // checkCVERecord is the download-time validation of a record: it must be a
 // complete CVE record for the CVE that was asked for. A published record
@@ -227,40 +221,14 @@ func parseItem(a rawAffected) (item rangeItem, ranged bool, err error) {
 // severityOf is the CNA's CVSS severity (4.0, then 3.1, then 3.0), else the
 // first ADP metric that has one, else UNKNOWN.
 func severityOf(raw rawCVE) string {
-	if s := firstSeverity(raw.Containers.CNA.Metrics); s != "" {
+	adp := make([][]rawMetric, 0, len(raw.Containers.ADP))
+	for _, a := range raw.Containers.ADP {
+		adp = append(adp, a.Metrics)
+	}
+	if s := cverecord.SeverityOf(raw.Containers.CNA.Metrics, adp...); s != "" {
 		return s
 	}
-	for _, adp := range raw.Containers.ADP {
-		if s := firstSeverity(adp.Metrics); s != "" {
-			return s
-		}
-	}
 	return "UNKNOWN"
-}
-
-// firstSeverity is the severity of the first metric that carries one,
-// preferring CVSS 4.0, then 3.1, then 3.0 across the list.
-func firstSeverity(metrics []rawMetric) string {
-	pick := func(get func(rawMetric) *rawScore) string {
-		for _, m := range metrics {
-			if sc := get(m); sc != nil {
-				if s := strings.ToUpper(strings.TrimSpace(sc.BaseSeverity)); s != "" {
-					return s
-				}
-			}
-		}
-		return ""
-	}
-	for _, get := range []func(rawMetric) *rawScore{
-		func(m rawMetric) *rawScore { return m.V4 },
-		func(m rawMetric) *rawScore { return m.V31 },
-		func(m rawMetric) *rawScore { return m.V30 },
-	} {
-		if s := pick(get); s != "" {
-			return s
-		}
-	}
-	return ""
 }
 
 // knownOtherOS are the platform names that are not Linux.

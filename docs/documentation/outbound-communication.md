@@ -27,6 +27,7 @@ The table lists communication conditions based on enabled features and work need
 | [EPSS downloads](#epss-download) | [`triage.enabled`](configuration.md#triage) is enabled (default: enabled) | None |
 | [Node.js advisories](#node-runtime-download) | [`scan.node_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
 | [Python advisories](#python-runtime-download) | [`scan.python_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
+| [CVE record downloads](#cve-record-download) | Only when [`scan.cve_record_severity.enabled`](configuration.md#scan) is enabled (default: enabled) and Trivy reports CVEs with `UNKNOWN` severity during a scan | CVE IDs with UNKNOWN severity |
 | [Hacker News searches](#hacker-news-search) | [`triage.enabled` and `triage.discussion_links`](configuration.md#triage) are enabled (each enabled by default) | CVE IDs being searched |
 | [Trivy downloads](#trivy-downloads) | [Every time a scan runs](configuration.md#schedule) | Names, tags, and digests of requested images |
 | [GitHub communication](#github-communication) | Reads require [remediation planning](configuration.md#remediation-basics); writes require both planning and PRs (each disabled by default) | Repository and source identifiers, PR contents |
@@ -92,6 +93,18 @@ CVE IDs in record requests come from the PSF list, rather than being selected fr
 
 See [Scanning settings](configuration.md#scan) to enable or disable checks, [Threat intelligence updates](scan-logic.md#intel-cache) for refresh rules, and [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable) for failure handling.
 
+### CVE record downloads {#cve-record-download}
+
+When `scan.cve_record_severity.enabled` is enabled (default: `true`), only CVEs that Trivy reports with `UNKNOWN` severity in scans during that scan cycle are eligible for retrieval.
+Connections occur only if an eligible CVE's record has not been retrieved or at least 20 hours have passed since its last retrieval.
+
+KestreLynx retrieves the eligible CVE records one at a time from `CVEProject/cvelistV5` on `raw.githubusercontent.com`.
+The request URL includes the CVE ID, so part of the scan findings is sent to the source.
+
+Setting `scan.cve_record_severity.enabled` to `false` disables retrieval and severity replacement.
+
+See [Severity](scan-logic.md#severity) for scoring rules and retrieval failure handling, and [Threat intelligence updates](scan-logic.md#intel-cache) for refresh rules.
+
 ### Hacker News searches {#hacker-news-search}
 
 For Hacker News searches, KestreLynx sends detected CVE IDs as search queries to `hn.algolia.com` and retrieves discussion links.
@@ -110,7 +123,7 @@ Comparison scans recheck updated images or dependency files.
 
 | Information retrieved | Destination | When communication occurs |
 | --- | --- | --- |
-| Vulnerability databases and related data | Trivy's database download sources | Scan databases need preparing |
+| [Vulnerability database](scan-logic.md#vulnerability-db-refresh) | Trivy's database download sources | At the start of each scan cycle (skipped if downloaded within the last hour) |
 | Images for scanning or comparison | Registry determined by the image name and destinations serving layers and other image content | Required images must be downloaded from a registry |
 
 Trivy's `db.repository` and `db.java-repository` settings determine the database sources.

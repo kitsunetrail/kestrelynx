@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/config"
+	"github.com/kitsunetrail/kestrelynx/internal/cverecord"
 	"github.com/kitsunetrail/kestrelynx/internal/docker"
 	"github.com/kitsunetrail/kestrelynx/internal/evidence"
 	"github.com/kitsunetrail/kestrelynx/internal/github"
@@ -127,6 +128,14 @@ func main() {
 	runtimeAdvisors, runtimeRefreshers := buildRuntimes(cfg, log)
 	r.RuntimeRefreshers = runtimeRefreshers
 	r.Scanner = withRuntimes(r.Scanner.(scanner.Trivy), runtimeAdvisors)
+	// One source of CVE record severities serves every scan of the cycle,
+	// image and fs alike, and answers the same for all of them: the cycle
+	// starts by making it forget the answers of the one before.
+	unscored := buildCVERecordSeverity(cfg, log)
+	if unscored != nil {
+		r.BeforeCycle = append(r.BeforeCycle, func(context.Context) { unscored.BeginCycle() })
+	}
+	r.Scanner = withUnscored(r.Scanner.(scanner.Trivy), unscored)
 	if cfg.Runtime.Enabled {
 		r.Evidence = evidence.NewFileProvider(cfg.Runtime.EvidenceDir)
 		r.MuteUnfixableNotInUse = cfg.Runtime.MuteUnfixableNotInUse
@@ -154,8 +163,11 @@ func main() {
 		tables.Refresh(context.Background())
 		r.BeforeCycle = append(r.BeforeCycle, func(ctx context.Context) { tables.Refresh(ctx) })
 		r.Plan = buildPlanConfig(cfg)
-		r.Plan.Scanner = withRuntimes(r.Plan.Scanner.(scanner.Trivy), runtimeAdvisors)
-		r.Plan.RunningScanner = withRuntimes(r.Plan.RunningScanner.(scanner.Trivy), runtimeAdvisors)
+		r.Plan.Scanner = withUnscored(withRuntimes(r.Plan.Scanner.(scanner.Trivy), runtimeAdvisors), unscored)
+		r.Plan.RunningScanner = withUnscored(withRuntimes(r.Plan.RunningScanner.(scanner.Trivy), runtimeAdvisors), unscored)
+		if unscored != nil {
+			r.Plan.Unscored = unscored
+		}
 		r.Plan.Runtimes = runtimeAdvisors
 		if cfg.Remediation.PullRequests.Enabled && len(r.Plan.Dependencies) > 0 {
 			if cfg.Kubernetes.Enabled {
@@ -190,6 +202,7 @@ func main() {
 		"daily_at", cfg.Schedule.DailyAt,
 		"run_on_start", cfg.Schedule.RunOnStart,
 		"severity", cfg.Scan.Severity,
+		"cve_record_severity", cfg.Scan.CVERecordSeverity.Enabled,
 		"mode", cfg.Notify.Mode,
 		"full_report_day", cfg.Notify.FullReportDay,
 		"triage", cfg.Triage.Enabled,
@@ -437,6 +450,29 @@ func buildRuntimes(cfg config.Config, log *slog.Logger) ([]scanner.RuntimeAdviso
 		refreshers = append(refreshers, refresher)
 	}
 	return advisors, refreshers
+}
+
+// buildCVERecordSeverity builds the source of the severities CVE records state,
+// for the vulnerabilities Trivy reports without one, or nil when the config
+// turns it off. Its answers are cached in a cve-records directory next to the
+// diff state, like the other advisory data.
+func buildCVERecordSeverity(cfg config.Config, log *slog.Logger) *cverecord.Source {
+	if !cfg.Scan.CVERecordSeverity.Enabled {
+		return nil
+	}
+	return &cverecord.Source{
+		CacheDir: filepath.Join(filepath.Dir(cfg.State.Path), "cve-records"),
+		Log:      log,
+	}
+}
+
+// withUnscored returns tr filling in severities from src; a nil src leaves tr
+// as it is.
+func withUnscored(tr scanner.Trivy, src *cverecord.Source) scanner.Trivy {
+	if src != nil {
+		tr.Unscored = src
+	}
+	return tr
 }
 
 // withRuntimes returns tr with the advisors appended to its runtime checks.

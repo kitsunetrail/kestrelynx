@@ -70,9 +70,17 @@ func (s ScheduleConfig) DailyTime() (hour, min int, ok bool) {
 }
 
 type ScanConfig struct {
-	Severity      []string // Trivy severities to report, e.g. HIGH, CRITICAL
-	NodeRuntime   NodeRuntimeConfig
-	PythonRuntime PythonRuntimeConfig
+	Severity          []string // Trivy severities to report, e.g. HIGH, CRITICAL
+	NodeRuntime       NodeRuntimeConfig
+	PythonRuntime     PythonRuntimeConfig
+	CVERecordSeverity CVERecordSeverityConfig
+}
+
+// CVERecordSeverityConfig controls the lookup of a severity in the CVE record
+// for the vulnerabilities Trivy reports as UNKNOWN: a CVE that its publisher
+// has scored and the sources Trivy reads have not yet.
+type CVERecordSeverityConfig struct {
+	Enabled bool
 }
 
 // NodeRuntimeConfig controls the check of the Node.js binary of official node
@@ -504,6 +512,9 @@ type rawConfig struct {
 		PythonRuntime struct {
 			Enabled *bool `yaml:"enabled"`
 		} `yaml:"python_runtime"`
+		CVERecordSeverity struct {
+			Enabled *bool `yaml:"enabled"`
+		} `yaml:"cve_record_severity"`
 	} `yaml:"scan"`
 	Notify struct {
 		SlackWebhookURL   string `yaml:"slack_webhook_url"`
@@ -797,6 +808,9 @@ func Parse(data []byte) (Config, error) {
 			},
 			PythonRuntime: PythonRuntimeConfig{
 				Enabled: boolOr(raw.Scan.PythonRuntime.Enabled, true),
+			},
+			CVERecordSeverity: CVERecordSeverityConfig{
+				Enabled: boolOr(raw.Scan.CVERecordSeverity.Enabled, true),
 			},
 		},
 		Notify: NotifyConfig{

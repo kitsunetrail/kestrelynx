@@ -25,6 +25,13 @@ scan:
   # version ranges. Set enabled: false to opt out.
   python_runtime:
     enabled: true
+  # Use the severity the CVE record states for vulnerabilities Trivy reports
+  # as UNKNOWN: a CVE whose publisher has scored it and the sources Trivy
+  # reads have not yet. Requests the records of those CVEs from
+  # raw.githubusercontent.com, which tells that site their CVE IDs and
+  # nothing else about your images. Set enabled: false to opt out.
+  cve_record_severity:
+    enabled: true
 
 notify:
   # Slack Incoming Webhook (sends a preformatted message).

@@ -1193,3 +1193,35 @@ scan:
 		t.Error("disabling python_runtime must not disable node_runtime")
 	}
 }
+
+func TestParse_CVERecordSeverity(t *testing.T) {
+	c, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !c.Scan.CVERecordSeverity.Enabled {
+		t.Error("cve_record_severity must be on by default")
+	}
+
+	c, err = Parse([]byte(`
+notify:
+  slack_webhook_url: "https://x.test"
+scan:
+  cve_record_severity:
+    enabled: false
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if c.Scan.CVERecordSeverity.Enabled {
+		t.Error("cve_record_severity.enabled: false was not honoured")
+	}
+	if !c.Scan.NodeRuntime.Enabled || !c.Scan.PythonRuntime.Enabled {
+		t.Error("disabling cve_record_severity must not disable the runtime checks")
+	}
+
+	// The records come from the CVE list repository alone.
+	if _, err := Parse([]byte("notify:\n  slack_webhook_url: \"https://x.test\"\nscan:\n  cve_record_severity:\n    base_url: \"https://mirror.test/x\"\n")); err == nil {
+		t.Error("Parse accepted a source address for the CVE records")
+	}
+}

@@ -326,7 +326,7 @@ func newLanguageUpdater(cfg config.Config, tools toolSupply, work remediation.Wo
 	l := cfg.Remediation.Limits
 	return remediation.NewLangUpdater(remediation.LangUpdateConfig{
 		Work:     work,
-		Scanner:  scanner.Trivy{Severity: cfg.Scan.Severity, SkipDBUpdate: true},
+		Scanner:  scanner.Trivy{Severity: cfg.Scan.Severity, SkipDBUpdate: true, Unscored: in.Unscored},
 		PyPI:     &remediation.PyPIClient{},
 		Npm:      &remediation.NpmClient{},
 		Go:       &remediation.GoClient{},

@@ -178,10 +178,10 @@ func (t Trivy) ScanFSWith(ctx context.Context, files map[string][]byte, prepared
 	now.Severities = normalizeSeverities(strings.Split(rt.severity(), ","))
 	// The prepared conditions come from image scans in comparison mode; the
 	// filesystem settings are the only field allowed to differ from them.
-	if prepared.AnalysisSettings != analysisBase+";env=sanitized;workdir=isolated" {
+	if prepared.AnalysisSettings != analysisBase+";env=sanitized;workdir=isolated"+rt.settingsSuffix() {
 		return FSScan{}, fmt.Errorf("%w: the prepared analysis settings are not those of a comparison-mode scan", ErrConditionsDiffer)
 	}
-	now.AnalysisSettings = fsAnalysisBase + ";env=sanitized;workdir=isolated"
+	now.AnalysisSettings = fsAnalysisBase + ";env=sanitized;workdir=isolated" + rt.settingsSuffix()
 	if opts.MavenMirror != "" {
 		now.AnalysisSettings += ";maven=relay"
 	}
@@ -222,7 +222,7 @@ func (t Trivy) ScanFSWith(ctx context.Context, files map[string][]byte, prepared
 
 	args := []string{
 		"fs", "--quiet", "--format", "json",
-		"--severity", rt.severity(),
+		"--severity", rt.scanSeverity(),
 		"--scanners", "vuln",
 		"--list-all-pkgs", "--include-dev-deps",
 		"--skip-db-update", "--skip-java-db-update", "--skip-vex-repo-update",
@@ -266,6 +266,7 @@ func (t Trivy) ScanFSWith(ctx context.Context, files map[string][]byte, prepared
 	if report.TrivyVersion != now.TrivyVersion {
 		return FSScan{}, fmt.Errorf("%w: the report names Trivy %q, not %q", ErrConditionsDiffer, report.TrivyVersion, now.TrivyVersion)
 	}
+	report.Findings = rt.fillUnscored(ctx, report.Findings)
 	return FSScan{Conditions: now, Report: report}, nil
 }
 

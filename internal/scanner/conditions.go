@@ -268,10 +268,11 @@ func hashFile(ctx context.Context, path string) (string, error) {
 // When SkipDBUpdate is set scans run in an empty private directory with every
 // TRIVY_* variable removed from the environment, so no config, ignore or VEX
 // setting from outside can apply; otherwise the TRIVY_* environment and the
-// config files in the current directory are hashed.
+// config files in the current directory are hashed. A Trivy that fills in
+// the severity of UNKNOWN findings says so at the end.
 func (t Trivy) analysisID() (string, error) {
 	if t.SkipDBUpdate {
-		return analysisBase + ";env=sanitized;workdir=isolated", nil
+		return analysisBase + ";env=sanitized;workdir=isolated" + t.settingsSuffix(), nil
 	}
 	var env []string
 	for _, e := range os.Environ() {
@@ -295,7 +296,7 @@ func (t Trivy) analysisID() (string, error) {
 			parts = append(parts, name+"="+hex.EncodeToString(sum[:]))
 		}
 	}
-	return fmt.Sprintf("%s;env=%s;workdir=cwd:%s", analysisBase, hex.EncodeToString(envSum[:]), strings.Join(parts, ",")), nil
+	return fmt.Sprintf("%s;env=%s;workdir=cwd:%s%s", analysisBase, hex.EncodeToString(envSum[:]), strings.Join(parts, ","), t.settingsSuffix()), nil
 }
 
 // fillIdentity completes c with the content identities and analysis settings

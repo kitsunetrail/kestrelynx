@@ -55,6 +55,7 @@ const (
 type Severity string
 
 const (
+	SeverityUnknown  Severity = "UNKNOWN"
 	SeverityMedium   Severity = "MEDIUM"
 	SeverityLow      Severity = "LOW"
 	SeverityHigh     Severity = "HIGH"

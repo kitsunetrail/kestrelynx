@@ -77,6 +77,10 @@ type LanguageUpdateInput struct {
 	// GitHub rereads the files a dependency unit was planned from.
 	GitHub remediation.GitHubReader
 	Intel  remediation.IntelFunc
+	// Unscored is PlanConfig.Unscored: the stage's scans fill in severities
+	// from the same source as the cycle's image scans, which the prepared
+	// conditions require of them.
+	Unscored scanner.SeveritySource
 }
 
 // LanguageUpdateConfig turns on the dependency update stage that runs
@@ -142,6 +146,10 @@ type PlanConfig struct {
 	// RunningScanner scans the cycle's running images when the databases were
 	// prepared, on the same databases as Scanner. Nil means Scanner.
 	RunningScanner ImageScanner
+	// Unscored is the severity source Scanner and RunningScanner were given
+	// (scanner.Trivy.Unscored), nil when they have none. It is handed to the
+	// dependency update stage, whose scanner is built per cycle.
+	Unscored scanner.SeveritySource
 	// NewRegistry returns the registry client for one cycle, built with the
 	// budget the runner creates.
 	NewRegistry func(*registry.Budget) remediation.Registry
@@ -398,6 +406,7 @@ func (r Runner) buildPlan(ctx context.Context, cyc planCycle, report analyze.Rep
 		}
 		r.runLanguageUpdates(ctx, pc.Language, &plan, store, LanguageUpdateInput{
 			Prepared: cyc.prepared, Images: remediation.ImageEnvs(inputs), GitHub: gh, Intel: r.planIntel(ctx, report),
+			Unscored: pc.Unscored,
 		})
 	}
 

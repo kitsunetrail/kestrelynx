@@ -47,6 +47,14 @@ type Trivy struct {
 	// a cycle must see the same advisory data, so the same advisors are
 	// shared by the cycle's scanners.
 	Runtimes []RuntimeAdvisor
+	// Unscored states the severity of the vulnerabilities Trivy reports as
+	// UNKNOWN, which is how a CVE looks until the sources Trivy reads have
+	// scored it. With it, Trivy is asked for UNKNOWN findings on top of
+	// Severity, each of them gets the severity Unscored states for its ID,
+	// and those that are then outside Severity are left out, in image and fs
+	// scans alike. Every scan of a cycle must see the same answers, so the
+	// cycle's scanners share one source. nil leaves the scans unchanged.
+	Unscored SeveritySource
 }
 
 // New returns a Trivy with KestreLynx defaults (HIGH/CRITICAL, trivy on PATH).
@@ -116,7 +124,7 @@ func (t Trivy) trivyArgs(target ScanTarget) []string {
 		"image",
 		"--quiet",
 		"--format", "json",
-		"--severity", t.severity(),
+		"--severity", t.scanSeverity(),
 	}
 	if t.SkipDBUpdate {
 		args = append(args, "--skip-db-update", "--skip-java-db-update")
@@ -356,6 +364,7 @@ func (t Trivy) Scan(ctx context.Context, target ScanTarget) (result ImageScan) {
 			Err:     fmt.Errorf("trivy scan %s: %w", scanArg, err),
 		}
 	}
+	scan.Findings = t.fillUnscored(ctx, scan.Findings)
 	return t.augment(reconcileTarget(scan, target))
 }
 

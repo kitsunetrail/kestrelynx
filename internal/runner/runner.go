@@ -41,6 +41,13 @@ type ImageScanner interface {
 	Scan(ctx context.Context, target scanner.ScanTarget) scanner.ImageScan
 }
 
+// DBRefresher is implemented by a scanner that can replace its vulnerability
+// database with the newest published one (scanner.Trivy). RunOnce asks for
+// it at the start of every cycle, before the fix plan fixes the databases.
+type DBRefresher interface {
+	RefreshDB(ctx context.Context) (scanner.DBRefresh, error)
+}
+
 // Inspector reads one container's current identity and exposure by ID
 // (implemented by docker.Client.Inspect). Only ever consulted when Evidence
 // is set (runtime.enabled) — it is what lets AttachRuntime confirm a Sensor
@@ -209,6 +216,18 @@ func (r Runner) RunOnce(ctx context.Context) error {
 	for _, rf := range r.RuntimeRefreshers {
 		if err := rf.Refresh(ctx); err != nil {
 			log.Warn("language runtime advisory data unavailable; that runtime of images is not checked this cycle", "refresher", fmt.Sprintf("%T", rf), "err", err)
+		}
+	}
+
+	// Every cycle scans with the newest vulnerability database. Left to
+	// itself Trivy keeps the cached one until it is a day old, which after a
+	// restart makes the next scheduled scan run on yesterday's.
+	if rf, ok := r.Scanner.(DBRefresher); ok {
+		switch res, err := rf.RefreshDB(ctx); {
+		case err != nil:
+			log.Warn("the newest vulnerability database could not be fetched; the scans use the one in the cache", "err", err)
+		case res.Fetched:
+			log.Info("vulnerability database fetched", "built", res.UpdatedAt.UTC().Format(time.RFC3339))
 		}
 	}
 

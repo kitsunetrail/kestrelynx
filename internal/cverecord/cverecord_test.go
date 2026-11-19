@@ -620,3 +620,60 @@ func TestLoadIgnoresABadCache(t *testing.T) {
 		t.Fatalf("with an unreadable cache Severities = %v", got)
 	}
 }
+
+// levelCounter is a slog handler that counts records by level.
+type levelCounter struct {
+	mu     sync.Mutex
+	counts map[slog.Level]int
+}
+
+func (h *levelCounter) Enabled(context.Context, slog.Level) bool { return true }
+func (h *levelCounter) WithAttrs([]slog.Attr) slog.Handler       { return h }
+func (h *levelCounter) WithGroup(string) slog.Handler            { return h }
+func (h *levelCounter) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.counts == nil {
+		h.counts = map[slog.Level]int{}
+	}
+	h.counts[r.Level]++
+	return nil
+}
+
+func (h *levelCounter) warnings() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.counts[slog.LevelWarn]
+}
+
+func TestAMissingRecordIsNotAWarning(t *testing.T) {
+	ls := newListServer(t)
+	ls.set("CVE-2026-123007", "PUBLISHED", "CRITICAL")
+	s, c := newSource(t, ls)
+	logs := &levelCounter{}
+	s.Log = slog.New(logs)
+	ctx := context.Background()
+
+	// CVE-2026-80256 has no record: the scanner's database names IDs the
+	// list never published. That is the same every cycle and nothing to
+	// warn about.
+	ids := []string{"CVE-2026-123007", "CVE-2026-80256"}
+	for day := 0; day < 3; day++ {
+		got := s.Severities(ctx, ids)
+		if len(got) != 1 || got["CVE-2026-123007"] != "CRITICAL" {
+			t.Fatalf("day %d: Severities = %v", day, got)
+		}
+		c.t = c.t.Add(24 * time.Hour)
+		s.BeginCycle()
+	}
+	if n := logs.warnings(); n != 0 {
+		t.Fatalf("%d warnings for an ID without a record, want none", n)
+	}
+
+	// A record that exists and cannot be read is still warned about.
+	ls.fail("CVE-2026-9000", http.StatusInternalServerError)
+	s.Severities(ctx, []string{"CVE-2026-9000"})
+	if n := logs.warnings(); n != 1 {
+		t.Fatalf("%d warnings for an unreadable record, want 1", n)
+	}
+}

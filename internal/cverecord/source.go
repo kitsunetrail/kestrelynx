@@ -241,6 +241,11 @@ func (s *Source) resolve(ctx context.Context, need []string) {
 				changed = true
 			case ok:
 				log.Debug("the CVE record could not be read again; the answer read earlier stands", "cve", id, "fetched_at", e.Fetched, "err", err)
+			case errors.Is(err, errNotFound):
+				// An ID the list has no record for (reserved, or not a CVE
+				// that was ever published) is not a failure to report: there
+				// is nothing to read, today or tomorrow.
+				log.Debug("no CVE record exists for this ID; its severity stays UNKNOWN", "cve", id)
 			default:
 				failed++
 				if firstErr == nil {

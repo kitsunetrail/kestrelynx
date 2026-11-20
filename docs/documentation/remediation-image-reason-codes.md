@@ -315,7 +315,8 @@ Packages in global `node_modules` are displayed differently by notification dest
 | Destination | Display |
 | --- | --- |
 | Webhook | Includes the package and reason code |
-| Slack and email | Omits the package from "Manual" and omits the item if no other packages can be shown |
+| Vulnerability notifications in Slack and email | Shows that dependency-file updates will not fix the package on the [card action line](slack-package-display.md#action-global-node-modules) |
+| Remediation plans in Slack and email | Omits the package from "Manual" and omits the item if no other packages can be shown |
 | End-of-support guidance in Slack and email | Keeps a `runtime_eol` item even when no other packages can be shown |
 
 ### Source retrieval {#source-retrieval-reasons}

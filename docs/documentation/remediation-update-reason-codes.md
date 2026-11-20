@@ -267,6 +267,9 @@ The following codes distinguish processing limits, candidate or file changes, an
 
 | Code | Meaning | Details |
 | --- | --- | --- |
+| `source_mapping_missing` | No source mapping edits the image tag for the target workload | [PR processing results by item](webhook-remediation-pr-reference.md#pr-item-fields) |
+| `container_image_tag_unsupported` | The container was started with `docker run`, and no repository file declares its image tag | [PR processing results by item](webhook-remediation-pr-reference.md#pr-item-fields) |
+| `pr_unit_unavailable` | A mapping exists, but the plan item is not included in a PR update target | [PR processing results by item](webhook-remediation-pr-reference.md#pr-item-fields) |
 | `pr_limit` | The limit on PRs created per cycle, `new_prs_per_cycle`, was reached | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `open_pr_limit` | The limit on open KestreLynx PRs across configured repositories, `open_prs`, was reached | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `candidate_changed` | The same candidate tag pointed to different content during a pre-PR recheck or a Dockerfile newer-series check | [Newer series check](remediation-image-logic.md#newer-series-check) |

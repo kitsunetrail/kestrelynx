@@ -79,6 +79,8 @@ Read the `Update`, `Update candidate`, `Newer series`, `Re-pull`, and `Rebuild` 
 | Re-pull | A comparison supports updating to new content under the same tag | Guidance that does not create a tag update PR |
 | Rebuild | Expected resolution based on dependency constraints, or guidance to pull the base again and build | Guidance rather than a PR that performs the rebuild |
 
+You can check why an image “Update candidate” has no PR on the [card action line](slack-package-display.md#action-same-series) in the vulnerability notification.
+
 See [Newer-series lines](#newer-series-lines) for how to read the “Newer series” lines.
 
 For the `Needs a decision`, `Deferred`, `Not comparable`, and `Failed` lines, check the reason following the label.
@@ -282,7 +284,9 @@ Read `plan.json` and `prs.json` in that directory with the following recording s
 2. Record PR processing, reconciliation, and operation results in `prs.json`
 3. Send the remediation plan results after PR processing
 
-`plan.json` is not saved again with post-PR-processing results.
+`plan.json` saves `pull_requests_enabled`, which records whether PR creation was enabled for that run.
+It does not save the post-processing `pr_items` or `pull_requests`, and is not saved again with post-PR-processing results.
+
 Use notifications for the latest plan's PR processing results and `prs.json` for ongoing PR information.
 
 See [Stored files](remediation-pr-logic.md#stored-records) for contents and recording times, and [Collecting diagnostics](remediation-troubleshooting.md#collect-diagnostics) for information to gather during investigation.

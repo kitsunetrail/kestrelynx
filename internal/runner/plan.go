@@ -443,6 +443,8 @@ func (r Runner) buildPlan(ctx context.Context, cyc planCycle, report analyze.Rep
 			"registry_requests", rb.RegistryRequests)
 	}
 
+	enabled := pc.PullRequests != nil
+	plan.PullRequestsEnabled = &enabled
 	info := &notify.PlanInfo{Plan: &plan}
 	if pc.Plans != nil {
 		if err := pc.Plans.Save(plan); err != nil {
@@ -595,6 +597,7 @@ func (r Runner) runPullRequests(ctx context.Context, cfg *PullRequestConfig, res
 			Code: remediation.PRProblemStorageFailed, Reason: remediation.ReasonStorageFailed,
 			Detail: "the fix plan could not be saved, so no pull request was processed",
 		}}
+		plan.PRItems = remediation.NotProcessedPRItems(*plan, remediation.ReasonStorageFailed)
 		return
 	}
 	stage, err := cfg.NewStage(resolver)
@@ -604,6 +607,7 @@ func (r Runner) runPullRequests(ctx context.Context, cfg *PullRequestConfig, res
 			Code: remediation.PRProblemWriteBlocked, Reason: remediation.ReasonGitHubError,
 			Detail: "the pull request stage could not be set up",
 		}}
+		plan.PRItems = remediation.NotProcessedPRItems(*plan, remediation.ReasonGitHubError)
 		return
 	}
 	res := stage.Run(ctx, remediation.PRStageInput{Plan: *plan, Containers: containers, Mappings: cfg.Mappings, Kubernetes: cfg.Kubernetes, Kustomize: cfg.Kustomize, HelmValues: cfg.HelmValues, Management: observedManagement(containers, bindings), Repositories: cfg.Repositories})

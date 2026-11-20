@@ -7,6 +7,9 @@ title: Webhookの修正計画のPR処理のフィールド
 このページでは、Webhookの修正計画に含まれるPR処理の結果、言語パッケージの更新内容、PR操作イベント、書き込みを停止する問題を説明します。
 修正計画全体の構造は[修正計画の全体像](webhook-remediation-reference.md#remediation-overview)を参照してください。
 
+修正計画を作った回は、PR作成の有効・無効を`pull_requests_enabled`に出力します。
+PR作成が有効なら、`pr_candidate`のイメージ項目と、そのイメージを使うワークロードごとの結果を`pr_items`に出力します。
+
 PR作成が有効で修正計画がある場合、処理対象があれば`pull_request_summary`と`pull_requests`、未配信の操作イベントがあれば`operations`、書き込みを停止する問題があれば`problems`を出力します。
 `operations`と`problems`は、`pull_requests`がない場合にも出力されます。
 
@@ -19,6 +22,8 @@ PR作成が有効で修正計画がある場合、処理対象があれば`pull_
 
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
+| `pull_requests_enabled` | boolean | その回にPR作成が有効だったか | 計画がない場合は省略 |
+| `pr_items` | objectの配列 | [項目ごとのPR処理結果](#pr-item-fields) | 空なら省略 |
 | `pull_request_summary` | object | [状態別のPR処理の項目数](webhook-remediation-reference.md#remediation-summary-keys) | 処理対象がなければ省略 |
 | `pull_requests` | objectの配列 | 更新対象ごとのPR処理結果 | 処理対象がなければ省略 |
 | `operations` | objectの配列 | 未配信の[PR操作イベント](#remediation-operation-fields) | 省略 |
@@ -26,7 +31,61 @@ PR作成が有効で修正計画がある場合、処理対象があれば`pull_
 
 `pull_request_summary`のキーと件数の読み方、0件の扱いは、[件数の集計](webhook-remediation-reference.md#remediation-summary-keys)を参照してください。
 
-状態値の定義は、[PRの状態値](remediation-reason-codes.md#pr-status-values)を参照してください。
+`pull_request_summary`は`pull_requests[]`の更新対象だけを数え、`pr_items[]`の対象外・未処理の件数は加えません。
+`pull_requests[].status`の定義は、[PRの状態値](remediation-reason-codes.md#pr-status-values)を参照してください。
+
+### 項目ごとのPR処理結果 {#pr-item-fields}
+
+`pr_items[]`は、分類が`pr_candidate`の`items[]`とワークロードの組ごとに1件です。
+現在の`kind`は`image`だけで、Dockerfileや言語パッケージの項目は含みません。
+
+`pr_items[]`の1要素のフィールドは次のとおりです。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `kind` | string | 項目の種類で、現在は`image` | — |
+| `item_key` | string | 対応する`items[].key` | — |
+| `workload` | string | 対象のワークロードキー | キーのないサービスでは省略 |
+| `status` | string | 項目がPRの更新対象に入ったかを示す状態 | — |
+| `unit_keys` | stringの配列 | 対応する`pull_requests[].key` | `assigned`以外は省略 |
+| `reason` | string | 更新対象がない理由 | `assigned`では省略 |
+
+`pr_items[].status`の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `assigned` | 1つ以上の更新対象に入り、`unit_keys`で参照できる |
+| `not_applicable` | 更新対象を作らず、`reason`で理由を示す |
+| `not_processed` | PR処理が始まらなかったか、対応付けはあるが更新対象に入っていない |
+
+`assigned`はPR作成済みを意味せず、PRの結果は`unit_keys`が指す`pull_requests[]`で確認します。
+
+`pr_items[].reason`の値は次のとおりです。
+
+| 値 | 意味 |
+| --- | --- |
+| `source_mapping_missing` | 対象ワークロードのイメージタグを編集するソースの対応付けがない |
+| `container_image_tag_unsupported` | `docker run`のコンテナ（`container/<名前>`）で、イメージタグを書いたファイルがリポジトリにない |
+| `pr_unit_unavailable` | 対応付けはあるが、項目が更新対象に入っていない |
+| `storage_failed` | 計画を保存できず、PR処理を始めなかった |
+| `github_error` | PR処理を準備できなかった |
+
+次は、ソースの対応付けがないイメージ項目について、`remediation`から関連フィールドを抜粋した例です。
+
+```json
+{
+  "pull_requests_enabled": true,
+  "pr_items": [
+    {
+      "kind": "image",
+      "item_key": "nginx:1.27.2|example-entity",
+      "workload": "compose/shop/web",
+      "status": "not_applicable",
+      "reason": "source_mapping_missing"
+    }
+  ]
+}
+```
 
 ### 更新対象とPRの対応 {#pr-unit-fields}
 

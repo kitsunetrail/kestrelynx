@@ -300,10 +300,10 @@ func baseNameTag(s remediation.ImageState) (name, tag string) {
 	return path.Base(strings.TrimSuffix(ref.Repository, "/")), tag
 }
 
-// lookup returns the action line of group g of the scanned entity img. A
-// line from a Dockerfile's base and one from the image's own tag that differ
-// give none. It matches only when all of these hold, so that in doubt the
-// card stays as it is:
+// base returns the wait of group g of the scanned entity img from the base
+// image of a Dockerfile, own the one from the running image's own tag. A
+// wait matches only when all of these hold, so that in doubt the card stays
+// as it is:
 //   - the entity is confirmed and is the one the plan judged (same reference
 //     and entity key);
 //   - the group has at least one fixed finding, and every fixed finding of it
@@ -312,26 +312,22 @@ func baseNameTag(s remediation.ImageState) (name, tag string) {
 //     attributed to is a base layer those targets were reported in, so a copy
 //     of the package in a later layer, or one with no layer attribution,
 //     never qualifies.
-func (x *baseWaitIndex) lookup(img analyze.ImageFindings, g analyze.PackageGroup) (baseWait, bool) {
-	if x == nil || img.Image == "" || !img.Subject.Resolved {
+//
+// The caller has confirmed the entity (see cardActionIndex.lookup) and asks
+// the base first: what the Dockerfile builds from says more about a finding
+// in its layers than the tag of the image built from it.
+func (x *baseWaitIndex) base(img analyze.ImageFindings, entity string, g analyze.PackageGroup) (baseWait, bool) {
+	if x == nil {
 		return baseWait{}, false
 	}
-	entity := remediation.EntityKeyString(img.Subject.Key)
-	if entity == remediation.Unconfirmed {
+	return x.match(x.bases, img, entity, g, true)
+}
+
+func (x *baseWaitIndex) own(img analyze.ImageFindings, entity string, g analyze.PackageGroup) (baseWait, bool) {
+	if x == nil {
 		return baseWait{}, false
 	}
-	base, okBase := x.match(x.bases, img, entity, g, true)
-	own, okOwn := x.match(x.images, img, entity, g, false)
-	switch {
-	case okBase && okOwn:
-		if base != own {
-			return baseWait{}, false
-		}
-		return base, true
-	case okBase:
-		return base, true
-	}
-	return own, okOwn
+	return x.match(x.images, img, entity, g, false)
 }
 
 func (x *baseWaitIndex) match(m map[baseWaitKey][]*baseWaitEntry, img analyze.ImageFindings, entity string, g analyze.PackageGroup, layered bool) (baseWait, bool) {

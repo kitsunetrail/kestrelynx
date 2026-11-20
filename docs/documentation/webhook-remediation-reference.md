@@ -19,7 +19,7 @@ See [Webhook base fields](webhook-reference.md#top-level) for the overall report
 | Language package items (`language_summary`, `language_items`) | [Webhook remediation language package fields](webhook-remediation-language-reference.md) |
 | Language package update records (`language_items[].update`) | [Webhook remediation update record fields](webhook-remediation-update-reference.md) |
 | Checks before and after language package updates (`language_items[].source_check`, `artifacts`) | [Webhook remediation update check fields](webhook-remediation-check-reference.md) |
-| PR processing (`pull_request_summary`, `pull_requests`, `operations`, `problems`) | [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) |
+| PR processing (`pull_requests_enabled`, `pr_items`, `pull_request_summary`, `pull_requests`, `operations`, `problems`) | [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) |
 
 ## Remediation plan overview {#remediation-overview}
 
@@ -42,6 +42,8 @@ remediation
 ├── dockerfile_items[]            Array of base image items
 ├── language_summary              Language package count summary
 ├── language_items[]              Array of language package items
+├── pull_requests_enabled         Whether PR creation was enabled
+├── pr_items[]                    Image items and their update targets
 ├── pull_request_summary          PR processing count summary
 ├── pull_requests[]               Array of PR processing items
 ├── operations[]                  PR operation records
@@ -94,7 +96,8 @@ Even with no remediation targets, the plan generation time, work limits and coun
       "pr_candidate": 0,
       "pull_again": 0
     },
-    "items": []
+    "items": [],
+    "pull_requests_enabled": false
   }
 }
 ```
@@ -135,10 +138,15 @@ See [Plan category values](remediation-reason-codes.md#category-values) for each
 | `language_items` | array of objects | Language package items, described in [Webhook remediation language package fields](webhook-remediation-language-reference.md) | omitted when empty |
 | `dockerfile_summary` | object | Base image item counts by category, described in [Webhook remediation base image fields](webhook-remediation-dockerfile-reference.md) | omitted when there are no corresponding items |
 | `dockerfile_items` | array of objects | Base image items, described in [Webhook remediation base image fields](webhook-remediation-dockerfile-reference.md) | omitted when empty |
+| `pull_requests_enabled` | boolean | Whether PR creation was enabled for the run | omitted when there is no plan |
+| `pr_items` | array of objects | [PR processing results by item](webhook-remediation-pr-reference.md#pr-item-fields) | omitted when empty |
 | `pull_request_summary` | object | PR processing item counts by status, described in [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) | omitted when there are no corresponding items |
 | `pull_requests` | array of objects | PR processing items, described in [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) | omitted when empty |
 | `operations` | array of objects | PR operation records, described in [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) | omitted when empty |
 | `problems` | array of objects | Problems that stop PR writes, described in [Webhook remediation PR processing fields](webhook-remediation-pr-reference.md) | omitted when empty |
+
+Whenever a plan is generated, `pull_requests_enabled` is emitted even when `false`.
+Changes to `pull_requests_enabled` and `pr_items` count as remediation plan changes for webhook delivery.
 
 The values of `status` are as follows.
 

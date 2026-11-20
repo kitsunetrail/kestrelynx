@@ -153,14 +153,17 @@ Kubernetesで言語パッケージ更新が手動対応または保留になっ�
 ## PRを作れない場合の確認 {#check-missing-pr}
 
 PR処理は、採用できる更新とソースの編集条件を確認し、既存PRとの重複を判定します。
+
+イメージの「更新候補」にPRが無い理由は、脆弱性の通知のカードの[`対応:`行](slack-package-display.md#action-same-series)で確認できます。
+
 更新候補があるのにPRがない場合は、次の表を確認してください。
 
 | 表示または症状 | 対処 | 参照先 |
 | --- | --- | --- |
-| イメージの「更新候補」にPRも理由もなく、`remediation.pull_requests.enabled`が`false` | `remediation.pull_requests.enabled`を`true`にする | [基本設定](configuration.md#remediation-basics) |
-| イメージの「更新候補」にPRも理由もなく、Composeのサービスの対応付けに`compose`がない | 対応付けに`compose`を設定する | [ソースの対応付け](configuration.md#remediation-mappings) |
-| イメージの「更新候補」にPRも理由もなく、Kubernetesのワークロードの対応付けに`manifest`・`kustomize`・`helm_values`のいずれもない | 対応付けに`manifest`・`kustomize`・`helm_values`のいずれかを設定する | [ソースの対応付け](configuration.md#remediation-mappings) |
-| イメージの「更新候補」にPRも理由もなく、対象が`docker run`で起動したコンテナ（`container/<名前>`） | KestreLynxは`docker run`で起動したコンテナにはイメージタグを変更するPRを作らない | [docker runのコンテナ](remediation-reference.md#docker-run-containers) |
+| 修正計画のイメージの「更新候補」にPRも理由もなく、`remediation.pull_requests.enabled`が`false` | `remediation.pull_requests.enabled`を`true`にする | [基本設定](configuration.md#remediation-basics) |
+| 修正計画のイメージの「更新候補」にPRも理由もなく、Composeのサービスの対応付けに`compose`がない | 対応付けに`compose`を設定する | [ソースの対応付け](configuration.md#remediation-mappings) |
+| 修正計画のイメージの「更新候補」にPRも理由もなく、Kubernetesのワークロードの対応付けに`manifest`・`kustomize`・`helm_values`のいずれもない | 対応付けに`manifest`・`kustomize`・`helm_values`のいずれかを設定する | [ソースの対応付け](configuration.md#remediation-mappings) |
+| 修正計画のイメージの「更新候補」にPRも理由もなく、対象が`docker run`で起動したコンテナ（`container/<名前>`） | KestreLynxは`docker run`で起動したコンテナにはイメージタグを変更するPRを作らない | [docker runのコンテナ](remediation-reference.md#docker-run-containers) |
 | `undeclared_affected_workload`：「列挙されていないコンテナが images の項目の値を宣言しており、編集の影響を受けうる」（詳細に示されたコンテナもタグの変更の対象にする場合） | 対応付けの`affects`に詳細に示されたコンテナを足す | [KustomizeのPR設定](remediation-setup-kubernetes.md#kustomize-pull-requests)・[HelmのvaluesのPR設定](remediation-setup-kubernetes.md#helm-values-pull-requests) |
 | `undeclared_affected_workload`で、詳細に示されたコンテナをタグの変更の対象にしない場合 | 詳細に示されたコンテナが、対応付けた項目の値と同じイメージ参照を宣言しないようにマニフェストを変えて配置する | [KustomizeとHelmのvaluesのPR](remediation-kubernetes-logic.md#kustomize-and-helm-prs) |
 | `init_container_unverified`：「列挙した init container が、稼働コンテナと同じイメージを動かしたことを確認できない」（詳細に`no running container of the set runs in the same Pod`がある） | init containerと同じPodで対象イメージを使う稼働コンテナを、対応付けの`affects`に追加する | [ソースの対応付け](configuration.md#remediation-mappings) |

@@ -149,12 +149,14 @@ func TestNewerSeriesCardLinesOfABase(t *testing.T) {
 		t.Errorf("the plain line is gone:\n%s", out)
 	}
 	// The running image's own tag says something else about the same
-	// findings: no line.
+	// findings: the base, which the findings are in the layers of, is the one
+	// the line is about.
 	both := dfNewerPlan(t, newerOf(remediation.NewerSeriesResolves, "9.1.0", itemCand), newerOf(remediation.NewerSeriesResolves, "9.1.0", cand))
 	own := imageNewerPlan(t, remediation.ReasonNoNewerTag, newerOf(remediation.NewerSeriesNone, ""))
 	both.Plan.Items = own.Plan.Items
-	if out := renderChannelWithPlan(r, both, LanguageEN); strings.Contains(out, "Action: ") {
-		t.Errorf("a line is shown although the base and the image's own tag disagree:\n%s", out)
+	want := "Action: base image elasticsearch 8.19.23 → 9.1.0 resolves it (major update, no newer tag in the same series, base images compared)"
+	if out := renderChannelWithPlan(r, both, LanguageEN); strings.Count(out, want) != 1 || countAction(out) != 1 {
+		t.Errorf("want the line of the base, once, when the image's own tag disagrees:\n%s", out)
 	}
 }
 

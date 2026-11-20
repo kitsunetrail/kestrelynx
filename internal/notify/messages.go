@@ -353,9 +353,33 @@ type messages struct {
 	CardClauseWrap         string // " (%s)"
 	CardClauseJoin         string // ", "
 	CardTagJoin            string // " and "
-	CardAgeLine            string // "⏱ open %[1]d day(s) · first seen %[2]s" (days, formatted date)
-	CardAgeToday           string // "⏱ first seen today"
-	ChannelContinued       string // " _(cont. %[1]d/%[2]d)_" (message number, total) appended to the channel header of a continuation message
+	// The action line of a card whose image has a candidate tag in its own
+	// series. %[1]s is CardSubjectImage, %[2]s the image name, %[3]s its tag,
+	// %[4]s the candidate tag; the clause takes the candidate tag.
+	CardNewerUnknown       string
+	CardSameSeriesNotFixed string
+	// The pull request clause of an action line. %[1]s names the pull
+	// requests, or is the reason of a clause that names none; %[2]s of
+	// CardPRReplaced is the pull request that replaced them.
+	CardPR              string
+	CardPRMergedRunning string
+	CardPRClosed        string
+	CardPRReplaced      string
+	CardPRModified      string
+	CardPRNotCreated    string
+	CardPRWontCreate    string
+	CardPRUnconfirmed   string
+	// The action line of a package of a global node_modules. The owner is the
+	// package installed there, the directory is the node_modules, the file is
+	// the dependency file that does not install it (CardDependencyFiles when
+	// the item names none).
+	CardGlobalBundledVersion string // %[1]s owner, %[2]s its version, %[3]s directory, %[4]s file
+	CardGlobalBundled        string // %[1]s owner, %[2]s directory, %[3]s file
+	CardGlobalSelf           string // %[1]s directory, %[2]s owner, %[3]s file
+	CardDependencyFiles      string
+	CardAgeLine              string // "⏱ open %[1]d day(s) · first seen %[2]s" (days, formatted date)
+	CardAgeToday             string // "⏱ first seen today"
+	ChannelContinued         string // " _(cont. %[1]d/%[2]d)_" (message number, total) appended to the channel header of a continuation message
 
 	// Fallback text (the notification preview / screen-reader text).
 	FbFull               string // "KestreLynx %[1]s %[2]s — %[3]s" (generated-at, role, joined segments)
@@ -807,9 +831,25 @@ var enMessages = messages{
 	CardClauseWrap:         " (%s)",
 	CardClauseJoin:         ", ",
 	CardTagJoin:            " and ",
-	CardAgeLine:            "⏱ open %[1]d day(s) · first seen %[2]s",
-	CardAgeToday:           "⏱ first seen today",
-	ChannelContinued:       " _(cont. %[1]d/%[2]d)_",
+	CardNewerUnknown:       "whether %[1]s %[2]s %[3]s → %[4]s resolves it could not be confirmed",
+	CardSameSeriesNotFixed: "not resolved in %s of the same series",
+
+	CardPR:              "Pull Request %s",
+	CardPRMergedRunning: "Pull Request %s is merged; the running image has not been updated",
+	CardPRClosed:        "Pull Request %s was closed without merging",
+	CardPRReplaced:      "Pull Request %[1]s was closed without merging and replaced by %[2]s",
+	CardPRModified:      "Pull Request %s differs from its original content",
+	CardPRNotCreated:    "Pull Request not created: %s",
+	CardPRWontCreate:    "Pull Request will not be created: %s",
+	CardPRUnconfirmed:   "Pull Request creation is unconfirmed: %s",
+
+	CardGlobalBundledVersion: "bundled with %[1]s %[2]s (%[3]s); updating %[4]s will not fix it",
+	CardGlobalBundled:        "bundled with %[1]s (%[2]s); updating %[3]s will not fix it",
+	CardGlobalSelf:           "%[2]s itself in %[1]s; updating %[3]s will not fix it",
+	CardDependencyFiles:      "the dependency files",
+	CardAgeLine:              "⏱ open %[1]d day(s) · first seen %[2]s",
+	CardAgeToday:             "⏱ first seen today",
+	ChannelContinued:         " _(cont. %[1]d/%[2]d)_",
 
 	FbFull:               "KestreLynx %[1]s %[2]s — %[3]s",
 	FbPlain:              "KestreLynx %[1]s %[2]s",
@@ -1249,9 +1289,25 @@ var jaMessages = messages{
 	CardClauseWrap:         "（%s）",
 	CardClauseJoin:         "、",
 	CardTagJoin:            " と ",
-	CardAgeLine:            "⏱ 未解決%[1]d日 · 初回検出%[2]s",
-	CardAgeToday:           "⏱ 本日初検出",
-	ChannelContinued:       " _(続き %[1]d/%[2]d)_",
+	CardNewerUnknown:       "%[1]s %[2]s %[3]s → %[4]s で解消するか確認できない",
+	CardSameSeriesNotFixed: "同じ系列の %s では未解消",
+
+	CardPR:              "Pull Request %s",
+	CardPRMergedRunning: "Pull Request %s はマージ済み、稼働中のイメージは未更新",
+	CardPRClosed:        "Pull Request %s は未マージでクローズ",
+	CardPRReplaced:      "Pull Request %[1]s は未マージでクローズ、%[2]s に置き換え",
+	CardPRModified:      "Pull Request %s の内容は作成時と異なる",
+	CardPRNotCreated:    "Pull Request は未作成: %s",
+	CardPRWontCreate:    "Pull Request は作成しない: %s",
+	CardPRUnconfirmed:   "Pull Request の作成結果は未確認: %s",
+
+	CardGlobalBundledVersion: "%[1]s %[2]s の同梱物（%[3]s）で、%[4]s の更新では直らない",
+	CardGlobalBundled:        "%[1]s の同梱物（%[2]s）で、%[3]s の更新では直らない",
+	CardGlobalSelf:           "%[1]s に入っている %[2]s 本体で、%[3]s の更新では直らない",
+	CardDependencyFiles:      "依存ファイル",
+	CardAgeLine:              "⏱ 未解決%[1]d日 · 初回検出%[2]s",
+	CardAgeToday:             "⏱ 本日初検出",
+	ChannelContinued:         " _(続き %[1]d/%[2]d)_",
 
 	FbFull:               "KestreLynx %[1]s %[2]s — %[3]s",
 	FbPlain:              "KestreLynx %[1]s %[2]s",

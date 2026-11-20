@@ -465,6 +465,7 @@ func (s *PRStage) Run(ctx context.Context, in PRStageInput) PRStageResult {
 		}
 	}
 
+	items := buildPRItems(in, units)
 	unlock, err := s.cfg.Store.Lock()
 	if err != nil {
 		reason := ReasonStoreLocked
@@ -473,14 +474,14 @@ func (s *PRStage) Run(ctx context.Context, in PRStageInput) PRStageResult {
 		}
 		r.stop = &stopInfo{PRStatusWriteBlocked, reason, err.Error()}
 		r.problem(PRStageProblem{Code: PRProblemWriteBlocked, Reason: reason, Detail: err.Error()})
-		return r.result(units)
+		return r.result(units, items)
 	}
 	defer unlock()
 
 	file, found, err := s.cfg.Store.Load()
 	if err != nil {
 		r.storageFailed(err)
-		return r.result(units)
+		return r.result(units, items)
 	}
 	if !found {
 		file = PRStoreFile{Version: PRStoreVersion, NextSeq: 1}
@@ -504,6 +505,7 @@ func (s *PRStage) Run(ctx context.Context, in PRStageInput) PRStageResult {
 	}
 	r.resumeReplacements()
 	res := r.finish(units, views)
+	res.Items = items
 	confirmed := map[string]int64{}
 	for _, rs := range r.repos {
 		if rs.ok {
@@ -517,8 +519,8 @@ func (s *PRStage) Run(ctx context.Context, in PRStageInput) PRStageResult {
 }
 
 // result builds the outcome of a run that could not use the records.
-func (r *prRun) result(units []*composeUnit) PRStageResult {
-	out := PRStageResult{Problems: r.problems}
+func (r *prRun) result(units []*composeUnit, items []PRItemResult) PRStageResult {
+	out := PRStageResult{Problems: r.problems, Items: items}
 	for _, u := range units {
 		v := unitView(u)
 		if u.manual {

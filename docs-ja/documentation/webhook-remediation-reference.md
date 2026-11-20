@@ -19,7 +19,7 @@ title: Webhookの修正計画の全体と共通のオブジェクト
 | 言語パッケージの項目（`language_summary`・`language_items`） | [Webhookの修正計画の言語パッケージのフィールド](webhook-remediation-language-reference.md) |
 | 言語パッケージの更新の記録（`language_items[].update`） | [Webhookの修正計画の更新の記録のフィールド](webhook-remediation-update-reference.md) |
 | 言語パッケージの更新前後の検査（`language_items[].source_check`・`artifacts`） | [Webhookの修正計画の更新前後の検査のフィールド](webhook-remediation-check-reference.md) |
-| PR処理（`pull_request_summary`・`pull_requests`・`operations`・`problems`） | [Webhookの修正計画のPR処理のフィールド](webhook-remediation-pr-reference.md) |
+| PR処理（`pull_requests_enabled`・`pr_items`・`pull_request_summary`・`pull_requests`・`operations`・`problems`） | [Webhookの修正計画のPR処理のフィールド](webhook-remediation-pr-reference.md) |
 
 ## 修正計画の全体像 {#remediation-overview}
 
@@ -42,6 +42,8 @@ remediation
 ├── dockerfile_items[]            ベースイメージの項目の配列
 ├── language_summary              言語パッケージの件数の集計
 ├── language_items[]              言語パッケージの項目の配列
+├── pull_requests_enabled         PR作成が有効だったか
+├── pr_items[]                    イメージ項目と更新対象の対応
 ├── pull_request_summary          PR処理の件数の集計
 ├── pull_requests[]               PR処理の項目の配列
 ├── operations[]                  PR操作の記録
@@ -94,7 +96,8 @@ remediation
       "pr_candidate": 0,
       "pull_again": 0
     },
-    "items": []
+    "items": [],
+    "pull_requests_enabled": false
   }
 }
 ```
@@ -135,10 +138,15 @@ remediation
 | `language_items` | objectの配列 | [言語パッケージの項目](webhook-remediation-language-reference.md) | 空なら省略 |
 | `dockerfile_summary` | object | [ベースイメージ](webhook-remediation-dockerfile-reference.md)の分類別の項目数 | 対応する項目がなければ省略 |
 | `dockerfile_items` | objectの配列 | [ベースイメージの項目](webhook-remediation-dockerfile-reference.md) | 空なら省略 |
+| `pull_requests_enabled` | boolean | その回にPR作成が有効だったか | 計画がない場合は省略 |
+| `pr_items` | objectの配列 | [項目ごとのPR処理結果](webhook-remediation-pr-reference.md#pr-item-fields) | 空なら省略 |
 | `pull_request_summary` | object | [PR処理](webhook-remediation-pr-reference.md)の状態別の項目数 | 対応する項目がなければ省略 |
 | `pull_requests` | objectの配列 | [PR処理の項目](webhook-remediation-pr-reference.md) | 空なら省略 |
 | `operations` | objectの配列 | [PR操作の記録](webhook-remediation-pr-reference.md) | 空なら省略 |
 | `problems` | objectの配列 | [PRの書き込みを止める問題](webhook-remediation-pr-reference.md) | 空なら省略 |
+
+計画を作った回は、`pull_requests_enabled`を`false`でも出力します。
+`pull_requests_enabled`と`pr_items`の変化は、Webhookを送信するための修正計画の変化に含まれます。
 
 `status`の値は次のとおりです。
 

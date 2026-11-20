@@ -7,6 +7,9 @@ title: Webhook remediation PR processing fields
 This page describes PR processing results, language package update details, PR operation events, and problems that stop writes in webhook remediation plans.
 See [Remediation plan overview](webhook-remediation-reference.md#remediation-overview) for the overall structure.
 
+Whenever a remediation plan is generated, `pull_requests_enabled` records whether PR creation was enabled.
+When enabled, `pr_items` contains results for each `pr_candidate` image item and each workload using that image.
+
 When PR creation is enabled and a remediation plan exists, `pull_request_summary` and `pull_requests` are emitted if there are processing targets, `operations` if there are undelivered operation events, and `problems` if there are problems that stop writes.
 `operations` and `problems` can also be emitted when `pull_requests` is absent.
 
@@ -19,6 +22,8 @@ The notation in “When there is no value” follows [Report fields](webhook-ref
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
+| `pull_requests_enabled` | boolean | Whether PR creation was enabled for the run | omitted when there is no plan |
+| `pr_items` | array of objects | [PR processing results by item](#pr-item-fields) | omitted when empty |
 | `pull_request_summary` | object | [PR processing item counts by status](webhook-remediation-reference.md#remediation-summary-keys) | omitted when there are no processing targets |
 | `pull_requests` | array of objects | PR processing results for each update target | omitted when there are no processing targets |
 | `operations` | array of objects | Undelivered PR operation events described in [PR operation event fields](#remediation-operation-fields) | omitted |
@@ -26,7 +31,61 @@ The notation in “When there is no value” follows [Report fields](webhook-ref
 
 See [Item counts](webhook-remediation-reference.md#remediation-summary-keys) for how to read the keys and counts in `pull_request_summary` and how zero counts are handled.
 
-See [PR status values](remediation-reason-codes.md#pr-status-values) for status definitions.
+`pull_request_summary` counts only update targets in `pull_requests[]`; excluded or unprocessed entries in `pr_items[]` do not add to it.
+See [PR status values](remediation-reason-codes.md#pr-status-values) for `pull_requests[].status` definitions.
+
+### PR processing results by item {#pr-item-fields}
+
+`pr_items[]` contains one entry for each pair of an `items[]` entry categorized as `pr_candidate` and a workload.
+Currently, `kind` is only `image`; Dockerfile and language package items are not included.
+
+Each element of `pr_items[]` has the following fields.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `kind` | string | Item kind, currently `image` | — |
+| `item_key` | string | The corresponding `items[].key` | — |
+| `workload` | string | The target workload key | omitted for services without a key |
+| `status` | string | Whether the item was included in a PR update target | — |
+| `unit_keys` | array of strings | Corresponding `pull_requests[].key` values | omitted unless `assigned` |
+| `reason` | string | Why there is no update target | omitted when `assigned` |
+
+The values of `pr_items[].status` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `assigned` | Included in at least one update target referenced by `unit_keys` |
+| `not_applicable` | No update target is created, with the reason in `reason` |
+| `not_processed` | PR processing did not start, or a mapping exists but the item was not included in an update target |
+
+`assigned` does not mean a PR has been created; check the `pull_requests[]` entries referenced by `unit_keys` for PR results.
+
+The values of `pr_items[].reason` are as follows.
+
+| Value | Meaning |
+| --- | --- |
+| `source_mapping_missing` | No source mapping edits the image tag for the target workload |
+| `container_image_tag_unsupported` | The container was started with `docker run` (`container/<name>`), and no repository file declares its image tag |
+| `pr_unit_unavailable` | A mapping exists, but the item is not included in an update target |
+| `storage_failed` | The plan could not be saved, so PR processing did not start |
+| `github_error` | PR processing could not be prepared |
+
+The following excerpt from `remediation` shows the relevant fields for an image item without a source mapping.
+
+```json
+{
+  "pull_requests_enabled": true,
+  "pr_items": [
+    {
+      "kind": "image",
+      "item_key": "nginx:1.27.2|example-entity",
+      "workload": "compose/shop/web",
+      "status": "not_applicable",
+      "reason": "source_mapping_missing"
+    }
+  ]
+}
+```
 
 ### Matching update targets to PRs {#pr-unit-fields}
 

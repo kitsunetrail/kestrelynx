@@ -35,7 +35,7 @@ const deliveredVersion = 1
 // tag, status, reason, content, counts and per-target outcomes. A plan with
 // nothing in it has the empty fingerprint, the same as nothing delivered.
 func Fingerprint(p Plan) string {
-	if len(p.Items) == 0 && len(p.LanguageItems) == 0 && len(p.DockerfileItems) == 0 && len(p.PullRequests) == 0 && len(p.PRProblems) == 0 {
+	if len(p.Items) == 0 && len(p.LanguageItems) == 0 && len(p.DockerfileItems) == 0 && len(p.PullRequests) == 0 && len(p.PRProblems) == 0 && len(p.PRItems) == 0 {
 		return ""
 	}
 	type image struct {
@@ -128,6 +128,14 @@ func Fingerprint(p Plan) string {
 		Target string        `json:"target,omitempty"`
 		Reason Reason        `json:"reason,omitempty"`
 	}
+	type prItem struct {
+		Kind     string       `json:"kind"`
+		ItemKey  string       `json:"item_key"`
+		Workload string       `json:"workload,omitempty"`
+		UnitKeys []string     `json:"unit_keys,omitempty"`
+		Status   PRItemStatus `json:"status"`
+		Reason   Reason       `json:"reason,omitempty"`
+	}
 	out := struct {
 		Counts       map[Category]int `json:"counts"`
 		Items        []item           `json:"items"`
@@ -135,7 +143,26 @@ func Fingerprint(p Plan) string {
 		Dockerfile   []dfItem         `json:"dockerfile,omitempty"`
 		PullRequests []prUnit         `json:"pull_requests,omitempty"`
 		PRProblems   []prProblem      `json:"pr_problems,omitempty"`
-	}{Counts: map[Category]int{}}
+		PREnabled    *bool            `json:"pull_requests_enabled,omitempty"`
+		PRItems      []prItem         `json:"pr_items,omitempty"`
+	}{Counts: map[Category]int{}, PREnabled: p.PullRequestsEnabled}
+	for _, pi := range p.PRItems {
+		keys := dedupeSorted(pi.UnitKeys)
+		if len(keys) == 0 {
+			keys = nil
+		}
+		out.PRItems = append(out.PRItems, prItem{Kind: pi.Kind, ItemKey: pi.ItemKey, Workload: pi.Workload, UnitKeys: keys, Status: pi.Status, Reason: pi.Reason})
+	}
+	sort.Slice(out.PRItems, func(i, j int) bool {
+		a, b := out.PRItems[i], out.PRItems[j]
+		if a.Kind != b.Kind {
+			return a.Kind < b.Kind
+		}
+		if a.ItemKey != b.ItemKey {
+			return a.ItemKey < b.ItemKey
+		}
+		return a.Workload < b.Workload
+	})
 	for _, u := range p.PullRequests {
 		pu := prUnit{Key: u.Key, UpdateKey: u.UpdateKey, Status: u.Status, Reason: u.Reason, Number: u.Number, State: u.State,
 			UserModified: u.UserModified, ReplacedBy: u.ReplacedBy, Replaced: append([]int(nil), u.Replaced...)}

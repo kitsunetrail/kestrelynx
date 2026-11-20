@@ -251,6 +251,13 @@ type Plan struct {
 	PROperations []OperationEvent `json:"pr_operations,omitempty"`
 	// PRProblems are the conditions that stop pull request writes.
 	PRProblems []PRStageProblem `json:"pr_problems,omitempty"`
+	// PullRequestsEnabled says whether pull requests were enabled for the
+	// cycle; nil in a plan that does not record it.
+	PullRequestsEnabled *bool `json:"pull_requests_enabled,omitempty"`
+	// PRItems say, for the pr_candidate items of Items and each workload
+	// running their image, which update units they are part of or why they
+	// have none.
+	PRItems []PRItemResult `json:"pr_items,omitempty"`
 }
 
 // Count returns how many items are in category c.

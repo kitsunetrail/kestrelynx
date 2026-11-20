@@ -21,8 +21,8 @@ func buildThreadBlockMessages(r analyze.Report, ages Ages, msg messages, lim Ren
 }
 
 // buildThreadBlockMessagesWithPlan is buildThreadBlockMessages with the
-// cycle's fix plan, which adds the base-image wait line to the cards it
-// applies to. A nil plan renders the cards without it.
+// cycle's fix plan, which adds the action line to the cards it applies
+// to. A nil plan renders the cards without it.
 func buildThreadBlockMessagesWithPlan(r analyze.Report, ages Ages, plan *PlanInfo, msg messages, lim RenderLimits) []SlackMessage {
 	if !r.HasFindings() {
 		return nil
@@ -34,7 +34,7 @@ func buildThreadBlockMessagesWithPlan(r analyze.Report, ages Ages, plan *PlanInf
 		rd:    renderer{msg: msg, lim: lim},
 		byRef: imagesByRef(r),
 		ages:  ages,
-		waits: newBaseWaitIndex(plan),
+		acts:  newCardActionIndex(plan),
 	}
 	v.buildThread()
 

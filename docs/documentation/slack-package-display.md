@@ -60,7 +60,7 @@ This comparison applies to both channel and thread cards.
 | Installed and fixed versions | Separate lines | Same line |
 | Upgrade risk | `Upgrade risk:` line | In parentheses after the fixed version |
 | Finding counts | CVE counts by severity | CVE counts by severity |
-| Action | [Resolution through image updates and waiting for newer versions](#base-image-wait) | [Resolution through image updates and waiting for newer versions](#base-image-wait) |
+| Action | [Card action line](#base-image-wait) | [Card action line](#base-image-wait) |
 | CVEs | Top CVE, exploitation information, and references | Short top CVE display (the package's CVE IDs on one line in the new-findings section) |
 | Runtime usage | Display including observation evidence | Short in-use display |
 
@@ -163,12 +163,14 @@ Descriptions come from the following sources.
 
 See [Vulnerability fields](webhook-reference.md#vulnerability-fields) for complete CVE data without omissions.
 
-### Resolution through image updates and waiting for newer versions {#base-image-wait}
+### Card action line {#base-image-wait}
 
-The card's `Action:` line reports whether updating the image or its base image to a newer version removes that package's vulnerabilities.
-It appears after `Findings:` in detailed and compact channel cards, thread cards, and diff cards.
+The card's `Action:` line shows expected resolution through image updates, PR status, or packages that dependency-file updates cannot fix.
+It appears after `Findings:` in detailed and compact channel cards, thread cards, and diff cards, and also appears on cards included in email.
 
 A series groups versions by their first two numbers, so 3.11 and 3.13 are different series.
+
+#### Resolution in a newer series and waiting for a version
 
 When updating the base image to a newer series resolves the vulnerabilities, the line looks like this.
 
@@ -210,6 +212,70 @@ The following examples show the line for each result.
 
 The `Action:` line may be omitted for cards containing findings whose resolution cannot be determined, among other cases.
 However, when the base image is known to have no newer version in the same series, the line may show only that information.
+
+#### Update candidates in the same series {#action-same-series}
+
+When a published image has an update candidate in the same series and its remediation category is `pr_candidate`, the line shows comparison results for findings with an available fix on that card.
+
+The following examples show each result.
+
+| Result | Example |
+| --- | --- |
+| All resolved | `Action: image nginx 1.27.2 → 1.27.3 resolves it` |
+| Partly resolved | `Action: image nginx 1.27.2 → 1.27.3 resolves part of it (1 of 2)` |
+| All remain | `Action: waiting for a newer image of nginx 1.27.2 (not resolved in 1.27.3 of the same series)` |
+| Includes findings that cannot be assessed | `Action: whether image nginx 1.27.2 → 1.27.3 resolves it could not be confirmed` |
+
+When PR creation is enabled, the PR status is added in parentheses at the end of resolved and partly resolved lines.
+It is omitted when all findings remain, resolution cannot be assessed, or PR creation is disabled.
+
+| Result | Example |
+| --- | --- |
+| All resolved | `Action: image nginx 1.27.2 → 1.27.3 resolves it (Pull Request #12)` |
+| Partly resolved | `Action: image nginx 1.27.2 → 1.27.3 resolves part of it (1 of 2, Pull Request #12)` |
+
+The following table shows display examples for each PR status.
+
+| Status | PR status display example |
+| --- | --- |
+| Created or open | `Pull Request #12` |
+| Merged | `Pull Request #12 is merged; the running image has not been updated` |
+| Closed without merging | `Pull Request #12 was closed without merging` |
+| Replaced by another PR | `Pull Request #12 was closed without merging and replaced by #13` |
+| Content changed by a user | `Pull Request #12 differs from its original content` |
+| Not created or processing not started | `Pull Request not created: the pull request records could not be saved` |
+| Write outcome unknown | `Pull Request creation is unconfirmed: the result of a write to GitHub is unknown` |
+| No mapping | `Pull Request will not be created: no source mapping is configured` |
+| Container started with `docker run` | `Pull Request will not be created: image tags of containers started with docker run are not supported by pull requests` |
+
+PR numbers link to their PRs, and multiple open PRs appear as `Pull Request #12, #14`.
+For a PR changed by a user, the content-change message takes precedence even after merging.
+
+The reason appears after `Pull Request not created:`, `Pull Request creation is unconfirmed:`, or `Pull Request will not be created:`.
+See [PR processing reasons](remediation-update-reason-codes.md#pr-reasons) for the list of reasons.
+
+#### Global node_modules {#action-global-node-modules}
+
+Packages whose remediation reason is `global_node_modules` show that dependency-file updates will not fix them.
+The owner is a package such as npm or pnpm installed directly under global `node_modules`.
+
+The following examples distinguish the relationship between the package and its owner.
+
+| Relationship | Example |
+| --- | --- |
+| Bundled, with a known owner version | `Action: bundled with pnpm 10.34.4 (/usr/local/lib/node_modules); updating pnpm-lock.yaml will not fix it` |
+| Bundled, with an unknown owner version | `Action: bundled with npm (/usr/local/lib/node_modules); updating pnpm-lock.yaml will not fix it` |
+| The globally installed package itself | `Action: pnpm itself in /usr/local/lib/node_modules; updating pnpm-lock.yaml will not fix it` |
+
+The examples above use a pnpm dependency-file mapping.
+For npm, the filename is `package-lock.json`.
+
+Packages showing this line cannot be fixed by updating dependency files; update the owner (npm or pnpm) to a newer version to fix them.
+
+- If the owner is installed in the Dockerfile, change its version there
+- If the owner is included in the base image, update the base image
+
+The line does not show which owner version fixes the package.
 
 A change to the card's `Action:` line alone does not resend the full report in the thread.
 See [Slack thread delivery conditions](notification-conditions.md#slack-thread-delivery) for when another report is posted.

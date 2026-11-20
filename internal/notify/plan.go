@@ -199,6 +199,13 @@ type remediationPayload struct {
 	DockerfileSummary map[string]int          `json:"dockerfile_summary,omitempty"`
 	DockerfileItems   []dockerfileItemPayload `json:"dockerfile_items,omitempty"`
 
+	// PullRequestsEnabled says whether pull requests were enabled for the
+	// cycle; absent in a plan that does not record it. PRItems say, for each
+	// pr_candidate item and workload running its image, which pull request
+	// units it is part of or why it has none.
+	PullRequestsEnabled *bool                      `json:"pull_requests_enabled,omitempty"`
+	PRItems             []remediation.PRItemResult `json:"pr_items,omitempty"`
+
 	// PullRequestSummary counts the pull request units by status. The units
 	// are in PullRequests, the operation events not yet delivered in
 	// Operations and the conditions that stop writes in Problems; all
@@ -414,6 +421,8 @@ func remediationPayloadOf(p *PlanInfo) *remediationPayload {
 	for _, ev := range plan.PROperations {
 		out.Operations = append(out.Operations, prOperationPayloadOf(ev))
 	}
+	out.PullRequestsEnabled = plan.PullRequestsEnabled
+	out.PRItems = plan.PRItems
 	for _, pp := range plan.PRProblems {
 		out.Problems = append(out.Problems, prProblemPayload{Code: string(pp.Code), Repo: pp.Repo, Target: pp.Target, Reason: string(pp.Reason), Detail: pp.Detail})
 	}

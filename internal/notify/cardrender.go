@@ -114,6 +114,97 @@ func (rd renderer) baseWaitLine(c pkgCard) string {
 	return kv(msg.LblAction, head+fmt.Sprintf(msg.CardClauseWrap, strings.Join(clauses, msg.CardClauseJoin)))
 }
 
+// actionLine is the action line of a card: the wait of baseWaitLine, or what
+// the plan says else about how the card's findings get fixed; "" when the
+// card has neither.
+func (rd renderer) actionLine(c pkgCard) string {
+	if l := rd.baseWaitLine(c); l != "" {
+		return l
+	}
+	a := c.Action
+	if a == nil {
+		return ""
+	}
+	msg := rd.msg
+	wrap := func(head string, clauses ...string) string {
+		var kept []string
+		for _, cl := range clauses {
+			if cl != "" {
+				kept = append(kept, cl)
+			}
+		}
+		if len(kept) == 0 {
+			return kv(msg.LblAction, head)
+		}
+		return kv(msg.LblAction, head+fmt.Sprintf(msg.CardClauseWrap, strings.Join(kept, msg.CardClauseJoin)))
+	}
+	name, tag, to := litMrkdwn(a.Name), litMrkdwn(a.Tag), litMrkdwn(a.To)
+	file := msg.CardDependencyFiles
+	if a.File != "" {
+		file = litMrkdwn(a.File)
+	}
+	switch a.Kind {
+	case actImageResolved:
+		return wrap(fmt.Sprintf(msg.CardNewerResolved, msg.CardSubjectImage, name, tag, to), rd.prClause(a.PR))
+	case actImagePartial:
+		return wrap(fmt.Sprintf(msg.CardNewerPartial, msg.CardSubjectImage, name, tag, to),
+			fmt.Sprintf(msg.CardPartialClause, a.Resolved, a.Total), rd.prClause(a.PR))
+	case actImageRemains:
+		return wrap(fmt.Sprintf(msg.CardNewerWait, msg.CardSubjectImage, name, tag), fmt.Sprintf(msg.CardSameSeriesNotFixed, to))
+	case actImageUnknown:
+		return wrap(fmt.Sprintf(msg.CardNewerUnknown, msg.CardSubjectImage, name, tag, to))
+	case actGlobalSelf:
+		return wrap(fmt.Sprintf(msg.CardGlobalSelf, litMrkdwn(a.Dir), litMrkdwn(a.Owner), file))
+	case actGlobalBundled:
+		if a.OwnerVersion == "" {
+			return wrap(fmt.Sprintf(msg.CardGlobalBundled, litMrkdwn(a.Owner), litMrkdwn(a.Dir), file))
+		}
+		return wrap(fmt.Sprintf(msg.CardGlobalBundledVersion, litMrkdwn(a.Owner), litMrkdwn(a.OwnerVersion), litMrkdwn(a.Dir), file))
+	}
+	return ""
+}
+
+// prClause puts the pull request part of an action line into words; "" when
+// it says nothing.
+func (rd renderer) prClause(p prClause) string {
+	msg := rd.msg
+	ref := func(r prRef) string {
+		label := fmt.Sprintf("#%d", r.Number)
+		if r.URL == "" {
+			return label
+		}
+		return mrkdwnLink(r.URL, label)
+	}
+	refs := make([]string, len(p.PRs))
+	for i, r := range p.PRs {
+		refs[i] = ref(r)
+	}
+	prs := strings.Join(refs, msg.CardClauseJoin)
+	why := planReasonText(msg.Lang, string(p.Reason))
+	if p.Reason == "" {
+		why = litMrkdwn(p.Status)
+	}
+	switch p.Kind {
+	case prExists:
+		return fmt.Sprintf(msg.CardPR, prs)
+	case prMergedRunning:
+		return fmt.Sprintf(msg.CardPRMergedRunning, prs)
+	case prClosed:
+		return fmt.Sprintf(msg.CardPRClosed, prs)
+	case prReplaced:
+		return fmt.Sprintf(msg.CardPRReplaced, prs, ref(p.Replaced))
+	case prModified:
+		return fmt.Sprintf(msg.CardPRModified, prs)
+	case prNotCreated:
+		return fmt.Sprintf(msg.CardPRNotCreated, why)
+	case prWontCreate:
+		return fmt.Sprintf(msg.CardPRWontCreate, why)
+	case prUnconfirmed:
+		return fmt.Sprintf(msg.CardPRUnconfirmed, why)
+	}
+	return ""
+}
+
 func (rd renderer) changeLine(c pkgCard) string {
 	if len(c.Changes) == 0 {
 		return ""
@@ -330,7 +421,7 @@ func (rd renderer) detailHeadLines(c pkgCard) []string {
 		lines = append(lines, kv(rd.msg.LblUpgradeRisk, v))
 	}
 	lines = append(lines, kv(rd.msg.LblFindings, rd.countsValue(c)))
-	if l := rd.baseWaitLine(c); l != "" {
+	if l := rd.actionLine(c); l != "" {
 		lines = append(lines, l)
 	}
 	return lines
@@ -411,7 +502,7 @@ func (rd renderer) compactLines(c pkgCard) []string {
 	lines = append(lines,
 		kv(rd.msg.LblInstalled, escMrkdwn(c.Installed))+" · "+kv(rd.msg.LblFixed, fixed),
 		kv(rd.msg.LblFindings, rd.countsValue(c)))
-	if l := rd.baseWaitLine(c); l != "" {
+	if l := rd.actionLine(c); l != "" {
 		lines = append(lines, l)
 	}
 	if l := rd.topLine(c); l != "" {

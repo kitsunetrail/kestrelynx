@@ -267,6 +267,9 @@ PR処理の理由は、PRを作成・照合・置換できるかと、GitHubへ�
 
 | コード | 意味 | 詳しい説明 |
 | --- | --- | --- |
+| `source_mapping_missing` | 対象ワークロードのイメージタグを編集するソースの対応付けがない | [項目ごとのPR処理結果](webhook-remediation-pr-reference.md#pr-item-fields) |
+| `container_image_tag_unsupported` | `docker run`のコンテナで、イメージタグを書いたファイルがリポジトリにない | [項目ごとのPR処理結果](webhook-remediation-pr-reference.md#pr-item-fields) |
+| `pr_unit_unavailable` | 対応付けはあるが、計画の項目がPRの更新対象に入っていない | [項目ごとのPR処理結果](webhook-remediation-pr-reference.md#pr-item-fields) |
 | `pr_limit` | 1サイクルで作成するPR数の上限（`new_prs_per_cycle`）に達した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `open_pr_limit` | 設定したリポジトリ全体で開いているKestreLynxのPR数の上限（`open_prs`）に達した | [PRを作れない場合](remediation-troubleshooting.md#check-missing-pr) |
 | `candidate_changed` | PR準備時の候補の再確認、またはDockerfileの新しい系列の確認で、同じ候補タグが異なる内容を指した | [新しい系列の確認](remediation-image-logic.md#newer-series-check) |

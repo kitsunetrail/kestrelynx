@@ -137,6 +137,11 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"compose_file_not_found":     {"the Compose file is not at the configured path", "設定したパスに Compose ファイルがない"},
 	"compose_file_unusable":      {"the Compose file is not a file that can be edited", "Compose ファイルが編集できる形のファイルではない"},
 
+	// Plan items that have no pull request update unit.
+	"source_mapping_missing":          {"no source mapping is configured", "ソースの対応付けがない"},
+	"container_image_tag_unsupported": {"image tags of containers started with docker run are not supported by pull requests", "docker run のコンテナのイメージタグは Pull Request の対象外である"},
+	"pr_unit_unavailable":             {"the plan item could not be matched to a pull request update unit", "計画の項目を Pull Request の変更単位に対応付けられなかった"},
+
 	// Kubernetes manifests.
 	"manifest_invalid":              {"the manifest cannot be read, repeats a key, or the edit failed its check", "マニフェストを解釈できない、キーが重複している、または編集の検証に失敗した"},
 	"manifest_anchor_or_alias":      {"the container is under a YAML anchor or alias", "コンテナが YAML のアンカーまたはエイリアスに関わっている"},

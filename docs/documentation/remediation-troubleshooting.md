@@ -153,14 +153,17 @@ In the commands, replace `WORK_NAMESPACE` with the value of `remediation.worker.
 ## Checking for a missing PR {#check-missing-pr}
 
 PR processing checks whether updates can be adopted and source files can be edited, then checks for existing PRs to prevent duplicates.
+
+You can check why an image “Update candidate” has no PR on the [card action line](slack-package-display.md#action-same-series) in the vulnerability notification.
+
 Use the following table when an update candidate exists but no PR appears.
 
 | What you see | What to do | Reference |
 | --- | --- | --- |
-| An image “Update candidate” has no PR or reason, and `remediation.pull_requests.enabled` is `false` | Set `remediation.pull_requests.enabled` to `true` | [Basic settings](configuration.md#remediation-basics) |
-| An image “Update candidate” has no PR or reason, and the Compose service's mapping has no `compose` | Configure `compose` in the mapping | [Source mappings](configuration.md#remediation-mappings) |
-| An image “Update candidate” has no PR or reason, and the Kubernetes workload's mapping has none of `manifest`, `kustomize`, or `helm_values` | Configure `manifest`, `kustomize`, or `helm_values` in the mapping | [Source mappings](configuration.md#remediation-mappings) |
-| An image “Update candidate” has no PR or reason, and the target is a container started with `docker run` (`container/<name>`) | KestreLynx does not create PRs that change image tags for containers started with `docker run` | [docker run containers](remediation-reference.md#docker-run-containers) |
+| An image “Update candidate” in the remediation plan has no PR or reason, and `remediation.pull_requests.enabled` is `false` | Set `remediation.pull_requests.enabled` to `true` | [Basic settings](configuration.md#remediation-basics) |
+| An image “Update candidate” in the remediation plan has no PR or reason, and the Compose service's mapping has no `compose` | Configure `compose` in the mapping | [Source mappings](configuration.md#remediation-mappings) |
+| An image “Update candidate” in the remediation plan has no PR or reason, and the Kubernetes workload's mapping has none of `manifest`, `kustomize`, or `helm_values` | Configure `manifest`, `kustomize`, or `helm_values` in the mapping | [Source mappings](configuration.md#remediation-mappings) |
+| An image “Update candidate” in the remediation plan has no PR or reason, and the target is a container started with `docker run` (`container/<name>`) | KestreLynx does not create PRs that change image tags for containers started with `docker run` | [docker run containers](remediation-reference.md#docker-run-containers) |
 | `undeclared_affected_workload`: “a container that is not listed declares the image of the images entry and may be changed by it” (when the tag change should also include the container identified in the details) | Add the container identified in the details to the mapping's `affects` | [Configure Kustomize PRs](remediation-setup-kubernetes.md#kustomize-pull-requests), [Configure Helm values PRs](remediation-setup-kubernetes.md#helm-values-pull-requests) |
 | `undeclared_affected_workload` when the tag change should not include the container identified in the details | Change and deploy the manifests so that the container identified in the details no longer declares the same image reference as the mapped entry's value | [Kustomize and Helm values PRs](remediation-kubernetes-logic.md#kustomize-and-helm-prs) |
 | `init_container_unverified`: “a listed init container could not be shown to have run the image of the running containers” (the details contain `no running container of the set runs in the same Pod`) | Add the running container that uses the target image in the init container's Pod to the mapping's `affects` | [Source mappings](configuration.md#remediation-mappings) |

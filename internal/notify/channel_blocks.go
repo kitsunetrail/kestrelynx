@@ -48,7 +48,7 @@ func buildChannelMessages(m Message, footer ChannelFooter, msg messages, lim Ren
 		msg:     msg,
 		rd:      renderer{msg: msg, lim: lim},
 		byRef:   imagesByRef(m.Report),
-		waits:   newBaseWaitIndex(m.Plan),
+		acts:    newCardActionIndex(m.Plan),
 	}
 	if m.Diff != nil {
 		d := *m.Diff
@@ -122,8 +122,8 @@ type chView struct {
 	msg     messages
 	rd      renderer
 	byRef   map[string]analyze.ImageObservation
-	ages    Ages           // thread view only
-	waits   *baseWaitIndex // nil without a plan; see card_basewait.go
+	ages    Ages             // thread view only
+	acts    *cardActionIndex // nil without a plan; see card_action.go
 	l       layout
 
 	role string   // the role phrase, for the fallback text
@@ -338,23 +338,21 @@ func (v *chView) imageOf(img analyze.ImageFindings, counts bool) imageView {
 	return iv
 }
 
-// newCard is newPkgCard plus the base-image wait of the group, when this
-// cycle's plan has one for it. img is the report entry the group belongs to.
+// newCard is newPkgCard plus the action of the group, when this cycle's plan
+// has one for it. img is the report entry the group belongs to.
 func (v *chView) newCard(img analyze.ImageFindings, g analyze.PackageGroup, o cardOpts) pkgCard {
 	c := newPkgCard(v.r, img.Image, g, o, v.msg)
-	if w, ok := v.waits.lookup(img, g); ok {
-		c.BaseWait = &w
-	}
+	c.BaseWait, c.Action = v.acts.lookup(img, g)
 	return c
 }
 
 // newChangeCard is newCard for a group of a diff change, which no longer
 // knows which running entity it came from. The group is found again in the
 // report by image and package identity; with none or more than one such
-// entry the card gets no wait.
+// entry the card gets no action.
 func (v *chView) newChangeCard(image string, g analyze.PackageGroup, o cardOpts) pkgCard {
 	c := newPkgCard(v.r, image, g, o, v.msg)
-	if v.waits == nil {
+	if v.acts == nil {
 		return c
 	}
 	var hitImg analyze.ImageFindings
@@ -374,9 +372,7 @@ func (v *chView) newChangeCard(image string, g analyze.PackageGroup, o cardOpts)
 		}
 	}
 	if n == 1 {
-		if w, ok := v.waits.lookup(hitImg, hitGroup); ok {
-			c.BaseWait = &w
-		}
+		c.BaseWait, c.Action = v.acts.lookup(hitImg, hitGroup)
 	}
 	return c
 }

@@ -599,6 +599,9 @@ type PRStageResult struct {
 	// Undeployed are the merged base updates of Dockerfile items whose running
 	// images were not rebuilt since, by item key.
 	Undeployed map[string]BaseUpdateMerged `json:"undeployed,omitempty"`
+	// Items say, for each pr_candidate item and workload running its image,
+	// which units the item is part of or why it has none.
+	Items []PRItemResult `json:"items,omitempty"`
 }
 
 // Attach copies the stage result into the plan.
@@ -606,5 +609,6 @@ func (r PRStageResult) Attach(p *Plan) {
 	p.PullRequests = r.Units
 	p.PROperations = r.Operations
 	p.PRProblems = r.Problems
+	p.PRItems = r.Items
 	markUndeployed(p, r.Undeployed)
 }

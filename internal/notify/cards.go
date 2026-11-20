@@ -134,6 +134,10 @@ type pkgCard struct {
 	// Dockerfile-built image, or in a pinned running image, whose tag's own
 	// series the plan found no fix in; it says what a newer series showed.
 	BaseWait *baseWait
+	// Action is set when the plan says something else about how the card's
+	// findings get fixed (see card_action.go). A card has BaseWait or Action,
+	// never both.
+	Action *cardAction
 }
 
 // cardOpts selects which values newPkgCard collects.

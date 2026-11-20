@@ -295,7 +295,7 @@ func TestBaseWait_ChangeCardNeedsAUniqueEntity(t *testing.T) {
 		return analyze.PackageGroup{}
 	}
 	newView := func(r analyze.Report) *chView {
-		return &chView{r: r, msg: enMessages, waits: newBaseWaitIndex(baseWaitNoNewer(t))}
+		return &chView{r: r, msg: enMessages, acts: newCardActionIndex(baseWaitNoNewer(t))}
 	}
 	one := baseWaitReport(t)
 	if c := newView(one).newChangeCard(baseWaitImage, g(one), cardOpts{}); c.BaseWait == nil {
@@ -322,7 +322,7 @@ func TestBaseWait_ChangeCardWithFixedAndAffectedGroupsOfOnePackage(t *testing.T)
 	if g.Package == "" || len(r.Watch) == 0 {
 		t.Fatalf("fixture lacks a fixed and an affected jsoup group: %+v", r)
 	}
-	v := &chView{r: r, msg: enMessages, waits: newBaseWaitIndex(baseWaitNoNewer(t))}
+	v := &chView{r: r, msg: enMessages, acts: newCardActionIndex(baseWaitNoNewer(t))}
 	if c := v.newChangeCard(baseWaitImage, g, cardOpts{}); c.BaseWait == nil {
 		t.Error("the fixed group's diff card lost the wait because an affected group exists")
 	}

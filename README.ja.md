@@ -11,8 +11,9 @@
 [設定リファレンス](docs-ja/documentation/configuration.md) ·
 [動作報告](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx)
 
-> KestreLynxは、更新候補を同じ条件で再スキャンして比べ、利用中のComposeファイル・Kubernetesマニフェスト・Kustomizeの設定ファイル・Helmのvaluesファイル・Dockerfile・依存ファイルを更新する修正PRをGitHubに作るOSSです。利用者がマージ・デプロイした後、次のスキャンで履歴を引き継いで所見の解消を確かめます。
-> 稼働イメージのTrivyによるスキャン、深刻度・CISA KEV・EPSSに基づく優先度、Slack・メール・Webhookへの通知が、修正の入口と結果を確かめる手段になります。
+> KestreLynxは、Docker・Kubernetesの稼働中のコンテナが使うイメージをTrivyでスキャンし、深刻度・CISA KEV・EPSSに基づいて脆弱性に優先度を付け、新たな脆弱性の検出や修正版の公開などの変化をSlack・メール・Webhookで自動通知するOSSです。
+> 更新候補を同じ条件で再スキャンして比較し、利用中のイメージタグと依存ファイルを更新する修正PRをGitHubに作成できます。
+> 利用者がマージ・デプロイした後、次のスキャンで保存済みの履歴と比較し、検出されなくなった脆弱性を確かめます。
 
 [他のツールとの比較](docs-ja/documentation/comparison.md)では、稼働中のnginxコンテナを例に、更新PRの作成・イメージへのパッチ適用と、更新前後の脆弱性の確認を比較します。
 

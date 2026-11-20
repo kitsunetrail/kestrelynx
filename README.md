@@ -11,8 +11,9 @@
 [Configuration reference](docs/documentation/configuration.md) ·
 [Trial reports](https://github.com/kitsunetrail/kestrelynx/discussions/categories/trying-kestrelynx)
 
-> KestreLynx is open-source software that rescans update candidates under the same conditions for comparison and creates remediation pull requests on GitHub to update the Compose files, Kubernetes manifests, Kustomize configuration files, Helm values files, Dockerfiles, and dependency files you already use. After you merge and deploy the changes, the next scan carries history forward to check for resolved findings.
-> Scanning running images with Trivy, prioritizing findings by severity, CISA KEV, and EPSS, and notifying Slack, email, or webhooks provide the starting point for remediation and a way to check the results.
+> KestreLynx is open-source software that scans images used by running containers on Docker and Kubernetes with Trivy, prioritizes vulnerabilities by severity, CISA KEV, and EPSS, and automatically sends notifications about new vulnerabilities, newly available fixes, and other changes via Slack, email, or webhook.
+> It compares update candidates by rescanning under the same conditions and can create remediation pull requests on GitHub to update image tags and dependency files already in use.
+> After users merge and deploy, the next scan checks against saved history for vulnerabilities no longer detected.
 
 [Comparison with other tools](docs/documentation/comparison.md) uses a running nginx container to compare update pull requests, image patching, and vulnerability checks before and after updates.
 

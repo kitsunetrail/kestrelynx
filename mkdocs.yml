@@ -1,10 +1,9 @@
 site_name: KestreLynx
 site_url: https://kestrelynx.dev/
 site_description: >-
-  Official documentation and technical articles for KestreLynx, open-source
-  software supporting remediation plans and GitHub remediation pull requests
-  for Docker, Compose, and Kubernetes, with resolution checks after merge and
-  deployment.
+  Official documentation and technical articles for KestreLynx: scans of
+  running images, vulnerability priorities, change notifications, update
+  comparisons, remediation PRs and resolution checks after deployment.
 repo_name: kitsunetrail/kestrelynx
 repo_url: https://github.com/kitsunetrail/kestrelynx
 edit_uri: edit/main/docs/

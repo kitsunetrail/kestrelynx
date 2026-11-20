@@ -3,9 +3,7 @@ INHERIT: mkdocs.yml
 site_name: KestreLynx
 site_url: https://kestrelynx.dev/ja/
 site_description: >-
-  Docker・Compose・Kubernetesの修正計画とGitHubへの修正PR、
-  マージ・デプロイ後の解消確認を支援するOSS、
-  KestreLynxの公式ドキュメントと技術記事。
+  稼働イメージのスキャン、脆弱性の優先度、変化の通知、更新候補の比較、修正PR、デプロイ後の解消確認を扱うKestreLynxの公式ドキュメントと技術記事。
 docs_dir: docs-ja
 site_dir: site/ja
 edit_uri: edit/main/docs-ja/

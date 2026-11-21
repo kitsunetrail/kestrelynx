@@ -300,12 +300,15 @@ flowchart TD
     W -->|"No"| H["Omit the line"]
 ```
 
-When no newer-series tag meets the conditions, a waiting-for-a-newer-version line is shown on cards where no newer patch exists in the same series either.
+When no newer-series tag meets the conditions, the line depends on the same-series result and the comparison target as follows.
 
-The line is also omitted in the following cases.
+| Same-series result | Published image card | Dockerfile base-image card |
+| --- | --- | --- |
+| Confirmed that no newer patch exists | Show a waiting-for-a-newer-version line | Show a waiting-for-a-newer-version line |
+| The newer patch does not resolve the target findings | Show a waiting-for-a-newer-version line with `not resolved by the newer tag of the same series` | Omit the line |
+| The newer patch points to the current content | Show a waiting-for-a-newer-version line with `the newer tag of the same series has the same content` | Omit the line |
 
-- A newer patch in the same series does not resolve the findings and no matching newer series exists
-- The Dockerfile base image and the published image produce different lines for the same finding
+The line is omitted when the Dockerfile base image and the published image produce different lines for the same finding.
 
 See [Resolution through image updates and waiting for newer versions](slack-package-display.md#base-image-wait) for display examples and the meaning of each part.
 

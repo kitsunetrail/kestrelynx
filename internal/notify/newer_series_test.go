@@ -109,9 +109,8 @@ func TestNewerSeriesCardLines(t *testing.T) {
 	}
 	// Outcomes that say nothing: no line, and never "no fix".
 	for name, p := range map[string]*PlanInfo{
-		"not checked": imageNewerPlan(t, remediation.ReasonNoNewerTag, &remediation.NewerSeries{Status: remediation.NewerSeriesNotChecked, Reason: remediation.ReasonCandidateScanLimit}),
-		"no newer series after the own series' newer tag": imageNewerPlan(t, remediation.ReasonSameContent, newerOf(remediation.NewerSeriesNone, "")),
-		"a finding not judged":                            imageNewerPlan(t, remediation.ReasonNoNewerTag, newerOf(remediation.NewerSeriesResolves, "2.0.1", major(remediation.NewerSeriesResolves, resolved()))),
+		"not checked":          imageNewerPlan(t, remediation.ReasonNoNewerTag, &remediation.NewerSeries{Status: remediation.NewerSeriesNotChecked, Reason: remediation.ReasonCandidateScanLimit}),
+		"a finding not judged": imageNewerPlan(t, remediation.ReasonNoNewerTag, newerOf(remediation.NewerSeriesResolves, "2.0.1", major(remediation.NewerSeriesResolves, resolved()))),
 	} {
 		if out := renderChannelWithPlan(r, p, LanguageEN); strings.Contains(out, "Action: ") {
 			t.Errorf("%s: a line is shown:\n%s", name, out)

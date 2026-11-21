@@ -165,7 +165,7 @@ See [Vulnerability fields](webhook-reference.md#vulnerability-fields) for comple
 
 ### Card action line {#base-image-wait}
 
-The card's `Action:` line shows expected resolution through image updates, PR status, or packages that dependency-file updates cannot fix.
+The card's `Action:` line shows expected resolution through image updates or repulling, reasons a decision is needed or a newer version cannot be checked, PR status, or packages that dependency-file updates cannot fix.
 It appears after `Findings:` in detailed and compact channel cards, thread cards, and diff cards, and also appears on cards included in email.
 
 A series groups versions by their first two numbers, so 3.11 and 3.13 are different series.
@@ -195,6 +195,7 @@ Vulnerabilities in this table mean the findings with an available fix on that ca
 | `major update` | An update that increases the first version number |
 | `no newer tag in the same series` | No newer version exists in the current series |
 | `not resolved by the newer tag of the same series` | The newer version in the current series does not resolve the target vulnerabilities |
+| `the newer tag of the same series has the same content` | The newer tag in the current series points to the same content as the running image |
 | `base images compared` | The current and candidate base images were compared; the rebuilt final image has not been checked |
 | `with new findings` | Updating to the candidate also brings new findings |
 | `not resolved in the checked tag(s) 1.27.3 and 2.0.1 either` | The target vulnerabilities remain in the named candidates; resolution in other versions has not been checked |
@@ -207,6 +208,7 @@ The following examples show the line for each result.
 | Partly resolved in an image | `Action: image nginx 1.24.1 → 1.27.3 resolves part of it (1 of 2, minor update, no newer tag in the same series)` |
 | Still unresolved in the newer series checked | `Action: waiting for a newer image of nginx 1.24.1 (not resolved in the checked tag(s) 1.27.3 and 2.0.1 either)` |
 | Unresolved in the same and newer series | `Action: waiting for a newer image of nginx (not resolved by the newer tag of the same series or the checked tag(s) 2.0.1)` |
+| Unresolved in the same series, no matching newer series | `Action: waiting for a newer image of nginx (not resolved by the newer tag of the same series)` |
 | No matching newer version | `Action: waiting for a newer base image of python 3.11.9 (no newer tag in the same series or in a newer series of the same form)` |
 | No newer version in the same series | `Action: waiting for a newer base image of python 3.11.9 (no newer tag in the same series)` |
 
@@ -253,6 +255,48 @@ For a PR changed by a user, the content-change message takes precedence even aft
 
 The reason appears after `Pull Request not created:`, `Pull Request creation is unconfirmed:`, or `Pull Request will not be created:`.
 See [PR processing reasons](remediation-update-reason-codes.md#pr-reasons) for the list of reasons.
+
+#### Pulling the same tag again {#action-pull-again}
+
+For an image with a tag that does not pin a version, such as `latest`, the line shows whether pulling the same tag again resolves the findings.
+
+| Result | Example |
+| --- | --- |
+| All resolved | `Action: pulling image nginx latest again resolves it` |
+| Partly resolved | `Action: pulling image nginx latest again resolves part of it (1 of 2)` |
+| All remain | `Action: waiting for new content of image nginx latest (pulling again does not resolve it)` |
+| The tag has the same content as the running image | `Action: waiting for new content of image nginx latest (the tag has the same content as the running image)` |
+| Includes findings that cannot be assessed | `Action: whether pulling image nginx latest again resolves it could not be confirmed` |
+
+- For lines showing `pulling image nginx latest again resolves it` or `pulling image nginx latest again resolves part of it`, pull the image again and recreate the container
+- For lines showing `waiting for new content`, wait for the publisher to update the tag's content
+
+#### Updates needing a decision {#action-decision}
+
+When a version to update to or new content for the same tag has been found, the line includes `decision needed:` if switching would cause another problem or KestreLynx cannot confirm whether it is OK to switch.
+The reason that follows describes the problem or what cannot be confirmed.
+
+| Case | Example |
+| --- | --- |
+| The candidate resolves it | `Action: image nginx 1.27.2 → 1.27.3 resolves it (decision needed: the candidate brings new findings)` |
+| The candidate resolves part of it | `Action: image nginx 1.27.2 → 1.27.3 resolves part of it (1 of 2, decision needed: the candidate brings new findings)` |
+| Pulling again resolves it | `Action: pulling image nginx latest again resolves it (decision needed: the candidate brings new findings)` |
+| Resolution is unknown | `Action: updating image nginx needs a decision (how the service is built cannot be determined)` |
+
+No PR is created for the update shown on this line, so review the reason and decide whether to update.
+See [Tags and candidate decisions](remediation-image-reason-codes.md#image-candidate-reasons) and [Compose](remediation-image-reason-codes.md#source-compose-reasons) for the list of reasons.
+
+#### When a newer version cannot be checked {#action-not-checked}
+
+When a newer image version has not been checked or could not be checked, the line shows the reason.
+
+| Example | Meaning | What to do |
+| --- | --- | --- |
+| `Action: a newer image has not been checked (the reference has a digest and no tag)` | The image reference format is outside the scope of newer-version checks | Review the reason in parentheses |
+| `Action: a newer image could not be checked (the registry requires a login)` | Retrieving or comparing a newer version failed | Address the cause given in parentheses |
+| `Action: a newer image will be checked in a later run (the time limit of the run was reached)` | A limit or timeout prevented the check in this run | Wait for the next scan |
+
+See [Image and source reason codes](remediation-image-reason-codes.md) for the list of reasons shown in parentheses.
 
 #### Global node_modules {#action-global-node-modules}
 

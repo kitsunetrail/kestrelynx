@@ -250,11 +250,260 @@ func TestCardAction_CandidateNeedsEveryFixedFindingAndTheSameEntity(t *testing.T
 	if got := actionLineOf(t, r, p, LanguageEN); got != "" {
 		t.Errorf("an item of another entity gives the line %q", got)
 	}
-	// An item that is not a candidate says nothing here.
-	p = candidatePlan(t, resolved(), resolved())
-	p.Plan.Items[0].Category = remediation.CategoryManual
+}
+
+// itemPlan is candidatePlan with the item's kind, category and reason set;
+// an item without a candidate has no comparison either.
+func itemPlan(t *testing.T, kind remediation.TagKind, cat remediation.Category, reason remediation.Reason, candidate bool, outs ...remediation.Outcome) *PlanInfo {
+	p := candidatePlan(t, outs...)
+	it := &p.Plan.Items[0]
+	it.Kind, it.Category, it.Reason = kind, cat, reason
+	if !candidate {
+		it.Candidate, it.Comparison = nil, nil
+	}
+	return p
+}
+
+func TestCardAction_OtherStatesOfTheImage(t *testing.T) {
+	r := baseWaitReport(t)
+	pinned, floating := remediation.TagPinned, remediation.TagFloating
+	both := []remediation.Outcome{resolved(), resolved()}
+	part := []remediation.Outcome{resolved(), remaining()}
+	none := []remediation.Outcome{remaining(), remaining()}
+	unknown := []remediation.Outcome{resolved(), remediation.OutcomeUnknown}
+	cases := []struct {
+		name      string
+		kind      remediation.TagKind
+		cat       remediation.Category
+		reason    remediation.Reason
+		candidate bool
+		outs      []remediation.Outcome
+		ja, en    string
+	}{
+		{"pull again resolves", floating, remediation.CategoryPullAgain, remediation.ReasonAdopted, true, both,
+			"イメージ shop-es 1 の再pullで解消",
+			"pulling image shop-es 1 again resolves it"},
+		{"pull again resolves part", floating, remediation.CategoryPullAgain, remediation.ReasonAdopted, true, part,
+			"イメージ shop-es 1 の再pullで一部解消（2件中1件）",
+			"pulling image shop-es 1 again resolves part of it (1 of 2)"},
+		{"pull again leaves the card's findings", floating, remediation.CategoryPullAgain, remediation.ReasonAdopted, true, none,
+			"イメージ shop-es 1 の新しい内容待ち（再pullでも未解消）",
+			"waiting for new content of image shop-es 1 (pulling again does not resolve it)"},
+		{"pull again not judged", floating, remediation.CategoryPullAgain, remediation.ReasonAdopted, true, unknown,
+			"イメージ shop-es 1 の再pullで解消するか確認できない",
+			"whether pulling image shop-es 1 again resolves it could not be confirmed"},
+
+		{"pinned decision resolves", pinned, remediation.CategoryManual, remediation.ReasonIntroducedFindings, true, both,
+			"イメージ shop-es 1 → 1.0.1 で解消（要判断: 候補で新たな所見が入る）",
+			"image shop-es 1 → 1.0.1 resolves it (decision needed: the candidate brings new findings)"},
+		{"pinned decision resolves part", pinned, remediation.CategoryManual, remediation.ReasonIntroducedFindings, true, part,
+			"イメージ shop-es 1 → 1.0.1 で一部解消（2件中1件、要判断: 候補で新たな所見が入る）",
+			"image shop-es 1 → 1.0.1 resolves part of it (1 of 2, decision needed: the candidate brings new findings)"},
+		{"pinned decision remains", pinned, remediation.CategoryManual, remediation.ReasonIntroducedKEV, true, none,
+			"イメージ shop-es 1 の新しい版待ち（同じ系列の 1.0.1 では未解消、要判断: 候補でKEV掲載の脆弱性が新たに入る）",
+			"waiting for a newer image of shop-es 1 (not resolved in 1.0.1 of the same series, decision needed: the candidate brings a vulnerability on the KEV list)"},
+		{"pinned decision not judged", pinned, remediation.CategoryManual, remediation.ReasonIntroducedFindings, true, unknown,
+			"イメージ shop-es の更新は要判断（候補で新たな所見が入る）",
+			"updating image shop-es needs a decision (the candidate brings new findings)"},
+		{"pinned decision without a comparison", pinned, remediation.CategoryManual, remediation.ReasonComposeBuildUndetermined, false, nil,
+			"イメージ shop-es の更新は要判断（サービスのビルド方法を判断できない）",
+			"updating image shop-es needs a decision (how the service is built cannot be determined)"},
+
+		{"floating decision resolves", floating, remediation.CategoryManual, remediation.ReasonIntroducedFindings, true, both,
+			"イメージ shop-es 1 の再pullで解消（要判断: 候補で新たな所見が入る）",
+			"pulling image shop-es 1 again resolves it (decision needed: the candidate brings new findings)"},
+		{"floating decision resolves part", floating, remediation.CategoryManual, remediation.ReasonIntroducedFindings, true, part,
+			"イメージ shop-es 1 の再pullで一部解消（2件中1件、要判断: 候補で新たな所見が入る）",
+			"pulling image shop-es 1 again resolves part of it (1 of 2, decision needed: the candidate brings new findings)"},
+		{"floating decision remains", floating, remediation.CategoryManual, remediation.ReasonIntroducedFindings, true, none,
+			"イメージ shop-es 1 の新しい内容待ち（再pullでも未解消、要判断: 候補で新たな所見が入る）",
+			"waiting for new content of image shop-es 1 (pulling again does not resolve it, decision needed: the candidate brings new findings)"},
+		{"floating decision without a comparison", floating, remediation.CategoryManual, remediation.ReasonComposeBuildUndetermined, false, nil,
+			"イメージ shop-es 1 の再pullは要判断（サービスのビルド方法を判断できない）",
+			"pulling image shop-es 1 again needs a decision (how the service is built cannot be determined)"},
+
+		{"floating tag unchanged", floating, remediation.CategoryNoCandidate, remediation.ReasonSameContent, false, nil,
+			"イメージ shop-es 1 の新しい内容待ち（タグの内容は稼働中と同じ）",
+			"waiting for new content of image shop-es 1 (the tag has the same content as the running image)"},
+		{"floating tag does not resolve", floating, remediation.CategoryNoCandidate, remediation.ReasonCandidateNotFixing, true, none,
+			"イメージ shop-es 1 の新しい内容待ち（再pullでも未解消）",
+			"waiting for new content of image shop-es 1 (pulling again does not resolve it)"},
+		{"pinned series has no newer tag", pinned, remediation.CategoryNoCandidate, remediation.ReasonNoNewerTag, false, nil,
+			"イメージ shop-es 1 の新しい版待ち（同じ系列に新しい版なし）",
+			"waiting for a newer image of shop-es 1 (no newer tag in the same series)"},
+		{"pinned newer tag is the same content", pinned, remediation.CategoryNoCandidate, remediation.ReasonSameContent, false, nil,
+			"イメージ shop-es 1 の新しい版待ち（同じ系列の新しいタグも内容は同じ）",
+			"waiting for a newer image of shop-es 1 (the newer tag of the same series has the same content)"},
+		{"pinned newer tag does not resolve", pinned, remediation.CategoryNoCandidate, remediation.ReasonCandidateNotFixing, true, none,
+			"イメージ shop-es の新しい版待ち（同じ系列の新しい版では未解消）",
+			"waiting for a newer image of shop-es (not resolved by the newer tag of the same series)"},
+
+		{"excluded", remediation.TagExcluded, remediation.CategoryExcluded, remediation.Reason(remediation.ExcludePrerelease), false, nil,
+			"イメージの新しい版は確認していない（タグがプレリリース版に見える）",
+			"a newer image has not been checked (the tag looks like a prerelease)"},
+		{"built on the host", floating, remediation.CategoryExcluded, remediation.ReasonLocallyBuilt, false, nil,
+			"イメージの新しい版は確認していない（ホストでビルドしたイメージで、レジストリに実体がない）",
+			"a newer image has not been checked (the image was built on its host and has no copy in a registry)"},
+		{"not comparable", pinned, remediation.CategoryNotComparable, remediation.ReasonAuthRequired, false, nil,
+			"イメージの新しい版を確認できなかった（レジストリへのログインが必要である）",
+			"a newer image could not be checked (the registry requires a login)"},
+		{"failed", pinned, remediation.CategoryFailed, remediation.ReasonScanFailed, true, nil,
+			"イメージの新しい版を確認できなかった（スキャンに失敗した）",
+			"a newer image could not be checked (a scan failed)"},
+		{"deferred", pinned, remediation.CategoryDeferred, remediation.ReasonCycleDeadline, false, nil,
+			"イメージの新しい版は次回以降に確認（実行時間の上限に達した）",
+			"a newer image will be checked in a later run (the time limit of the run was reached)"},
+
+		{"floating tag with a finding not judged", floating, remediation.CategoryNoCandidate, remediation.ReasonCandidateNotFixing, true, []remediation.Outcome{remaining()}, "", ""},
+		{"pinned newer tag with a finding not judged", pinned, remediation.CategoryNoCandidate, remediation.ReasonCandidateNotFixing, true, []remediation.Outcome{remaining()}, "", ""},
+		{"pinned newer tag without a comparison", pinned, remediation.CategoryNoCandidate, remediation.ReasonCandidateNotFixing, false, nil, "", ""},
+		{"a decision without a reason", pinned, remediation.CategoryManual, "", true, both, "", ""},
+		{"a failure without a reason", pinned, remediation.CategoryFailed, "", false, nil, "", ""},
+		{"no candidate for another reason", pinned, remediation.CategoryNoCandidate, remediation.ReasonRegistryError, false, nil, "", ""},
+		{"a floating series", floating, remediation.CategoryNoCandidate, remediation.ReasonNoNewerTag, false, nil, "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := actionLineOf(t, r, itemPlan(t, c.kind, c.cat, c.reason, c.candidate, c.outs...), LanguageJA); got != c.ja {
+				t.Errorf("ja: got %q, want %q", got, c.ja)
+			}
+			if got := actionLineOf(t, r, itemPlan(t, c.kind, c.cat, c.reason, c.candidate, c.outs...), LanguageEN); got != c.en {
+				t.Errorf("en: got %q, want %q", got, c.en)
+			}
+		})
+	}
+}
+
+// A pinned image whose newer series were checked keeps the line of that
+// check, and stays without a line where the check gives none.
+func TestCardAction_NewerSeriesResultComesFirst(t *testing.T) {
+	r := baseWaitReport(t)
+	p := imageNewerPlan(t, remediation.ReasonNoNewerTag, newerOf(remediation.NewerSeriesNone, ""))
+	want := "waiting for a newer image of shop-es 1 (no newer tag in the same series or in a newer series of the same form)"
+	if got := actionLineOf(t, r, p, LanguageEN); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	// The line of the check does not depend on what the dependency files
+	// hold, as before.
+	f := baseWaitFindings()[0]
+	ref := f.PackageRef()
+	p.Plan.LanguageItems = []remediation.LanguageItem{{Key: "deps:ex/es@main:.#maven", Packages: []remediation.LanguagePackage{{
+		Name: f.Package, Installed: f.InstalledVer, Action: remediation.ActionUpdate,
+		Origins: []remediation.FindingOrigin{{Entity: remediation.EntityKeyString(baseWaitKeyOf(t, "a")), Ecosystem: string(ref.Ecosystem),
+			Class: string(ref.Class), Name: f.Package, Version: f.InstalledVer, VulnID: f.VulnID, PkgPath: f.PkgPath}},
+	}}}}
+	if got := actionLineOf(t, r, p, LanguageEN); got != want {
+		t.Errorf("with a dependency file's finding: got %q, want %q", got, want)
+	}
+}
+
+// No newer series after the own series had a newer tag: the check adds
+// nothing to say, and the card states what the newer tag of the own series
+// showed.
+func TestCardAction_NoNewerSeriesAfterANewerTagOfTheOwnSeries(t *testing.T) {
+	r := baseWaitReport(t)
+	plan := func(reason remediation.Reason, candidate bool, outs ...remediation.Outcome) *PlanInfo {
+		p := itemPlan(t, remediation.TagPinned, remediation.CategoryNoCandidate, reason, candidate, outs...)
+		p.Plan.Items[0].NewerSeries = newerOf(remediation.NewerSeriesNone, "")
+		return p
+	}
+	cases := []struct {
+		name   string
+		p      *PlanInfo
+		ja, en string
+	}{
+		{"the newer tag resolves none", plan(remediation.ReasonCandidateNotFixing, true, remaining(), remaining()),
+			"イメージ shop-es の新しい版待ち（同じ系列の新しい版では未解消）",
+			"waiting for a newer image of shop-es (not resolved by the newer tag of the same series)"},
+		{"the newer tag has the same content", plan(remediation.ReasonSameContent, false),
+			"イメージ shop-es 1 の新しい版待ち（同じ系列の新しいタグも内容は同じ）",
+			"waiting for a newer image of shop-es 1 (the newer tag of the same series has the same content)"},
+		{"a finding not judged", plan(remediation.ReasonCandidateNotFixing, true, remaining(), remediation.OutcomeUnknown), "", ""},
+		{"no comparison", plan(remediation.ReasonCandidateNotFixing, false), "", ""},
+		{"no reason", plan("", false), "", ""},
+		{"a reason with no line", plan(remediation.ReasonAdopted, false), "", ""},
+	}
+	for _, c := range cases {
+		for _, l := range []struct {
+			lang Language
+			want string
+		}{{LanguageJA, c.ja}, {LanguageEN, c.en}} {
+			if got := actionLineOf(t, r, c.p, l.lang); got != l.want {
+				t.Errorf("%s (%s): got %q, want %q", c.name, l.lang, got, l.want)
+			}
+		}
+	}
+	// A check that found a newer series, or one not finished, stays the
+	// waits' to state.
+	for _, s := range []remediation.NewerSeriesStatus{remediation.NewerSeriesNotChecked, remediation.NewerSeriesNotResolving} {
+		p := plan(remediation.ReasonCandidateNotFixing, true, remaining(), remaining())
+		p.Plan.Items[0].NewerSeries = newerOf(s, "")
+		if got := actionLineOf(t, r, p, LanguageEN); got != "" {
+			t.Errorf("status %s: the card has the line %q", s, got)
+		}
+	}
+}
+
+// A finding the dependency files or the Dockerfile's base hold is theirs to
+// answer: the image's tag says nothing of a card with one, a candidate of
+// its own series aside.
+func TestCardAction_ImageStatesYieldToMoreSpecificSources(t *testing.T) {
+	r := baseWaitReport(t)
+	same := func() *PlanInfo {
+		return itemPlan(t, remediation.TagFloating, remediation.CategoryNoCandidate, remediation.ReasonSameContent, false)
+	}
+	// The base of the Dockerfile targets the card's findings and has no line
+	// for them.
+	p := same()
+	p.Plan.DockerfileItems = baseWaitPlan(t, remediation.CategoryManual, remediation.ReasonIntroducedFindings).Plan.DockerfileItems
 	if got := actionLineOf(t, r, p, LanguageEN); got != "" {
-		t.Errorf("a manual item gives the line %q", got)
+		t.Errorf("a card of the base's findings has the image's line %q", got)
+	}
+	// The dependency files hold one of the card's findings.
+	f := baseWaitFindings()[0]
+	ref := f.PackageRef()
+	p = same()
+	p.Plan.LanguageItems = []remediation.LanguageItem{{Key: "deps:ex/es@main:.#maven", Packages: []remediation.LanguagePackage{{
+		Name: f.Package, Installed: f.InstalledVer, Action: remediation.ActionUpdate,
+		Origins: []remediation.FindingOrigin{{Entity: remediation.EntityKeyString(baseWaitKeyOf(t, "a")), Ecosystem: string(ref.Ecosystem),
+			Class: string(ref.Class), Name: f.Package, Version: f.InstalledVer, VulnID: f.VulnID, PkgPath: f.PkgPath}},
+	}}}}
+	if got := actionLineOf(t, r, p, LanguageEN); got != "" {
+		t.Errorf("a card of a dependency file's finding has the image's line %q", got)
+	}
+	// One of the card's findings is not a target of the item.
+	p = same()
+	p.Plan.Items[0].Targets = p.Plan.Items[0].Targets[:1]
+	if got := actionLineOf(t, r, p, LanguageEN); got != "" {
+		t.Errorf("a card with a finding the item does not target has the line %q", got)
+	}
+	// A mapped Dockerfile builds the image: nobody else publishes a newer
+	// version of it to wait for or to look up, though a comparison made
+	// with what its tag holds now is still told.
+	built := baseWaitPlan(t, remediation.CategoryNoCandidate, remediation.ReasonBaseUnchanged).Plan.DockerfileItems
+	built[0].Entities[0].Targets = nil
+	for _, c := range []struct {
+		cat    remediation.Category
+		reason remediation.Reason
+	}{
+		{remediation.CategoryNoCandidate, remediation.ReasonSameContent},
+		{remediation.CategoryExcluded, remediation.ReasonLocallyBuilt},
+	} {
+		p = itemPlan(t, remediation.TagFloating, c.cat, c.reason, false)
+		p.Plan.DockerfileItems = built
+		if got := actionLineOf(t, r, p, LanguageEN); got != "" {
+			t.Errorf("%s of an image built from a mapped Dockerfile has the line %q", c.cat, got)
+		}
+	}
+	p = itemPlan(t, remediation.TagFloating, remediation.CategoryPullAgain, remediation.ReasonAdopted, true, resolved(), resolved())
+	p.Plan.DockerfileItems = built
+	if got, want := actionLineOf(t, r, p, LanguageEN), "pulling image shop-es 1 again resolves it"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	// Without any of them the image answers.
+	want := "waiting for new content of image shop-es 1 (the tag has the same content as the running image)"
+	if got := actionLineOf(t, r, same(), LanguageEN); got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 

@@ -358,6 +358,26 @@ type messages struct {
 	// %[4]s the candidate tag; the clause takes the candidate tag.
 	CardNewerUnknown       string
 	CardSameSeriesNotFixed string
+	// The action lines of an image whose plan item is not a candidate of its
+	// own series. %[1]s is the subject (CardSubjectImage), %[2]s the image
+	// name and %[3]s its tag where they are named; CardImageDecision takes
+	// the name and CardPullDecision the name and the tag. The clauses stand
+	// in the parentheses after a line; CardDecisionClause takes the reason.
+	CardPullResolved       string
+	CardPullPartial        string
+	CardPullUnknown        string
+	CardContentWait        string
+	CardPullNotFixed       string
+	CardSameContentRunning string
+	CardOwnSameContent     string
+	CardDecisionClause     string
+	CardImageDecision      string
+	CardPullDecision       string
+	// The action lines that only give the reason a newer version of the
+	// subject (%[1]s) was not looked at; the reason follows in parentheses.
+	CardNotChecked  string
+	CardCheckFailed string
+	CardCheckLater  string
 	// The pull request clause of an action line. %[1]s names the pull
 	// requests, or is the reason of a clause that names none; %[2]s of
 	// CardPRReplaced is the pull request that replaced them.
@@ -834,6 +854,20 @@ var enMessages = messages{
 	CardNewerUnknown:       "whether %[1]s %[2]s %[3]s → %[4]s resolves it could not be confirmed",
 	CardSameSeriesNotFixed: "not resolved in %s of the same series",
 
+	CardPullResolved:       "pulling %[1]s %[2]s %[3]s again resolves it",
+	CardPullPartial:        "pulling %[1]s %[2]s %[3]s again resolves part of it",
+	CardPullUnknown:        "whether pulling %[1]s %[2]s %[3]s again resolves it could not be confirmed",
+	CardContentWait:        "waiting for new content of %[1]s %[2]s %[3]s",
+	CardPullNotFixed:       "pulling again does not resolve it",
+	CardSameContentRunning: "the tag has the same content as the running image",
+	CardOwnSameContent:     "the newer tag of the same series has the same content",
+	CardDecisionClause:     "decision needed: %s",
+	CardImageDecision:      "updating image %s needs a decision",
+	CardPullDecision:       "pulling image %[1]s %[2]s again needs a decision",
+	CardNotChecked:         "a newer %s has not been checked",
+	CardCheckFailed:        "a newer %s could not be checked",
+	CardCheckLater:         "a newer %s will be checked in a later run",
+
 	CardPR:              "Pull Request %s",
 	CardPRMergedRunning: "Pull Request %s is merged; the running image has not been updated",
 	CardPRClosed:        "Pull Request %s was closed without merging",
@@ -1291,6 +1325,20 @@ var jaMessages = messages{
 	CardTagJoin:            " と ",
 	CardNewerUnknown:       "%[1]s %[2]s %[3]s → %[4]s で解消するか確認できない",
 	CardSameSeriesNotFixed: "同じ系列の %s では未解消",
+
+	CardPullResolved:       "%[1]s %[2]s %[3]s の再pullで解消",
+	CardPullPartial:        "%[1]s %[2]s %[3]s の再pullで一部解消",
+	CardPullUnknown:        "%[1]s %[2]s %[3]s の再pullで解消するか確認できない",
+	CardContentWait:        "%[1]s %[2]s %[3]s の新しい内容待ち",
+	CardPullNotFixed:       "再pullでも未解消",
+	CardSameContentRunning: "タグの内容は稼働中と同じ",
+	CardOwnSameContent:     "同じ系列の新しいタグも内容は同じ",
+	CardDecisionClause:     "要判断: %s",
+	CardImageDecision:      "イメージ %s の更新は要判断",
+	CardPullDecision:       "イメージ %[1]s %[2]s の再pullは要判断",
+	CardNotChecked:         "%sの新しい版は確認していない",
+	CardCheckFailed:        "%sの新しい版を確認できなかった",
+	CardCheckLater:         "%sの新しい版は次回以降に確認",
 
 	CardPR:              "Pull Request %s",
 	CardPRMergedRunning: "Pull Request %s はマージ済み、稼働中のイメージは未更新",

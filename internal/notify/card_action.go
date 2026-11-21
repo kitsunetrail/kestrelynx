@@ -23,6 +23,37 @@ const (
 	actImageRemains
 	// actImageUnknown: the comparison could not judge one of them.
 	actImageUnknown
+	// actPullResolved: pulling the floating tag again, whose content is no
+	// longer what runs, resolves every fixed finding of the card.
+	actPullResolved
+	// actPullPartial: it resolves some of them and the others remain.
+	actPullPartial
+	// actPullRemains: they all remain in the tag's content.
+	actPullRemains
+	// actPullUnknown: the comparison could not judge one of them.
+	actPullUnknown
+	// actImageDecision: a newer tag of the series is a person's to decide
+	// on, and the plan does not say what it does to the card's findings.
+	actImageDecision
+	// actPullDecision: the same for pulling a floating tag again.
+	actPullDecision
+	// actContentSame: the floating tag still has the content that runs.
+	actContentSame
+	// actTagWaitNoNewer: the pinned tag's series has no newer tag, and newer
+	// series were not looked at.
+	actTagWaitNoNewer
+	// actTagWaitSameContent: the newer tag of the series has the content
+	// that runs.
+	actTagWaitSameContent
+	// actTagWaitNotFixed: the newer tag of the series resolves none of the
+	// image's targets.
+	actTagWaitNotFixed
+	// actNotChecked: no newer version is looked up for the reference.
+	actNotChecked
+	// actCheckFailed: looking for one, or comparing it, did not work.
+	actCheckFailed
+	// actCheckLater: the look-up was left to a later run.
+	actCheckLater
 	// actGlobalBundled: the package is bundled with a package installed in a
 	// global node_modules, which the dependency files do not install.
 	actGlobalBundled
@@ -95,6 +126,9 @@ type cardAction struct {
 	Name, Tag, To   string
 	Resolved, Total int
 	PR              prClause
+	// Why is the reason a person decides on the update named, or the reason
+	// of a line that says nothing else.
+	Why remediation.Reason
 
 	// The global kinds: the package installed in the global node_modules
 	// (Owner; its version when the plan knows it), that directory, and the
@@ -123,7 +157,9 @@ type globalEntry struct {
 	file  string
 }
 
-// imageEntry is what a pr_candidate item says about one of its targets.
+// imageEntry is what the item of a running image says about one of its
+// targets: the outcome is the target's in the item's comparison, "" without
+// one.
 type imageEntry struct {
 	item    *remediation.Item
 	outcome remediation.Outcome
@@ -147,6 +183,12 @@ type cardActionIndex struct {
 	ownerVersions map[[4]string][]string
 
 	images map[baseWaitKey][]imageEntry
+	// baseTargets are the findings the Dockerfile part holds as targets of a
+	// base image, whatever it found for them.
+	baseTargets map[baseWaitKey]bool
+	// built are the running images a mapped Dockerfile builds, by reference
+	// and entity.
+	built map[[2]string]bool
 }
 
 // newCardActionIndex indexes the plan of the cycle. It returns nil when there
@@ -162,6 +204,8 @@ func newCardActionIndex(info *PlanInfo) *cardActionIndex {
 		others:        map[actionKey]bool{},
 		ownerVersions: map[[4]string][]string{},
 		images:        map[baseWaitKey][]imageEntry{},
+		baseTargets:   map[baseWaitKey]bool{},
+		built:         map[[2]string]bool{},
 	}
 	for _, li := range x.plan.LanguageItems {
 		file := li.Manager.LockfileName()
@@ -184,15 +228,20 @@ func newCardActionIndex(info *PlanInfo) *cardActionIndex {
 			}
 		}
 	}
+	for _, it := range x.plan.DockerfileItems {
+		for _, e := range it.Entities {
+			if e.Running.Ref == "" || e.Running.Entity == "" || e.Running.Entity == remediation.Unconfirmed {
+				continue
+			}
+			x.built[[2]string{e.Running.Ref, e.Running.Entity}] = true
+			for _, t := range e.Targets {
+				x.baseTargets[baseWaitKey{image: e.Running.Ref, entity: e.Running.Entity, vuln: t.VulnID, coord: t.Package}] = true
+			}
+		}
+	}
 	for i := range x.plan.Items {
 		it := &x.plan.Items[i]
-		if it.Category != remediation.CategoryPRCandidate || it.Candidate == nil || it.Candidate.Tag == "" {
-			continue
-		}
 		if it.Current.Ref == "" || it.Current.Entity == "" || it.Current.Entity == remediation.Unconfirmed {
-			continue
-		}
-		if name, tag := baseNameTag(it.Current); name == "" || tag == "" {
 			continue
 		}
 		for _, t := range it.Targets {
@@ -205,10 +254,21 @@ func newCardActionIndex(info *PlanInfo) *cardActionIndex {
 				}
 			}
 			k := baseWaitKey{image: it.Current.Ref, entity: it.Current.Entity, vuln: t.VulnID, coord: t.Package}
-			x.images[k] = append(x.images[k], imageEntry{item: it, outcome: outcome})
+			if e := (imageEntry{item: it, outcome: outcome}); !containsImage(x.images[k], e) {
+				x.images[k] = append(x.images[k], e)
+			}
 		}
 	}
 	return x
+}
+
+func containsImage(list []imageEntry, e imageEntry) bool {
+	for _, have := range list {
+		if have == e {
+			return true
+		}
+	}
+	return false
 }
 
 func containsGlobal(list []globalEntry, e globalEntry) bool {
@@ -321,9 +381,10 @@ func (x *cardActionIndex) global(entity string, g analyze.PackageGroup) (a *card
 	return a, true
 }
 
-// image is the action of a group whose fixed findings are all targets of one
-// pr_candidate item of the running image. decided is false when none of them
-// is, so that the waits of the image's own tag are asked.
+// image is the action of a group whose fixed findings are all targets of the
+// item of the running image. decided is false when none of them is, or when
+// the item's check of newer series is the waits' to state, so that the waits
+// of the image's own tag are asked.
 func (x *cardActionIndex) image(img analyze.ImageFindings, entity string, g analyze.PackageGroup) (a *cardAction, decided bool) {
 	coord := remediation.PackageCoord{Ecosystem: g.Ecosystem, Class: g.Class, Name: g.Package}
 	vulns := fixedVulns(g)
@@ -346,32 +407,150 @@ func (x *cardActionIndex) image(img analyze.ImageFindings, entity string, g anal
 			remaining++
 		}
 	}
-	if found == 0 {
+	if found == 0 || waitsStateNewerSeries(item) {
 		return nil, false
 	}
 	if found != len(vulns) {
 		return nil, true
 	}
 	name, tag := baseNameTag(item.Current)
-	a = &cardAction{Name: name, Tag: tag, To: item.Candidate.Tag, Resolved: resolved, Total: len(vulns)}
-	switch {
-	case resolved+remaining != len(vulns):
-		a.Kind = actImageUnknown
-		return a, true
-	case resolved == 0:
-		a.Kind = actImageRemains
-		return a, true
-	case remaining == 0:
-		a.Kind = actImageResolved
-	default:
-		a.Kind = actImagePartial
+	a = &cardAction{Name: name, Tag: tag, Resolved: resolved, Total: len(vulns)}
+	if item.Candidate != nil {
+		a.To = item.Candidate.Tag
 	}
-	pr, ok := prClauseOfItem(x.plan, item.Key)
-	if !ok {
+	// judged says the item's comparison gives every finding of the card an
+	// outcome the line can state.
+	judged := item.Comparison != nil && resolved+remaining == len(vulns)
+	if item.Category == remediation.CategoryPRCandidate {
+		if name == "" || tag == "" || a.To == "" {
+			return nil, true
+		}
+		switch {
+		case !judged:
+			a.Kind = actImageUnknown
+			return a, true
+		case resolved == 0:
+			a.Kind = actImageRemains
+			return a, true
+		case remaining == 0:
+			a.Kind = actImageResolved
+		default:
+			a.Kind = actImagePartial
+		}
+		pr, ok := prClauseOfItem(x.plan, item.Key)
+		if !ok {
+			return nil, true
+		}
+		a.PR = pr
+		return a, true
+	}
+	// What follows says less than a source that holds the finding itself
+	// would: the dependency files that install the package, or the base
+	// image of the Dockerfile. A card with such a finding gets no line from
+	// the image's tag, whether or not that source has one for it.
+	for _, id := range vulns {
+		if x.others[actionKey{entity: entity, ecosystem: string(g.Ecosystem), class: string(g.Class), name: g.Package, version: g.InstalledVer, vuln: id}] ||
+			x.baseTargets[baseWaitKey{image: img.Image, entity: entity, vuln: id, coord: coord}] {
+			return nil, true
+		}
+	}
+	// An image a mapped Dockerfile builds gets a newer version when its
+	// owner builds one: there is none to wait for, and none to look up.
+	if x.built[[2]string{img.Image, entity}] && (item.Category == remediation.CategoryNoCandidate || item.Category == remediation.CategoryExcluded) {
 		return nil, true
 	}
-	a.PR = pr
+	floating := item.Kind == remediation.TagFloating
+	if !floating && item.Kind != remediation.TagPinned {
+		// A reference no newer version is looked up for has no tag to name.
+		name, tag = "", ""
+	}
+	named := name != "" && tag != ""
+	// outcome picks the kind for what the comparison says of the card.
+	outcome := func(allResolved, partial, allRemain cardActionKind) cardActionKind {
+		switch {
+		case resolved == 0:
+			return allRemain
+		case remaining == 0:
+			return allResolved
+		}
+		return partial
+	}
+	switch item.Category {
+	case remediation.CategoryPullAgain:
+		if !floating || !named {
+			return nil, true
+		}
+		a.Kind = actPullUnknown
+		if judged {
+			a.Kind = outcome(actPullResolved, actPullPartial, actPullRemains)
+		}
+	case remediation.CategoryManual:
+		if item.Reason == "" || !named {
+			return nil, true
+		}
+		a.Why = item.Reason
+		switch {
+		case floating && judged:
+			a.Kind = outcome(actPullResolved, actPullPartial, actPullRemains)
+		case floating:
+			a.Kind = actPullDecision
+		case judged && a.To != "":
+			a.Kind = outcome(actImageResolved, actImagePartial, actImageRemains)
+		default:
+			a.Kind = actImageDecision
+		}
+	case remediation.CategoryNoCandidate:
+		if !named {
+			return nil, true
+		}
+		// The item's candidate resolves none of its targets, yet one the
+		// comparison did not judge is not known to remain: the card needs
+		// the outcome of each of its findings.
+		if item.Reason == remediation.ReasonCandidateNotFixing && (!judged || resolved != 0) {
+			return nil, true
+		}
+		switch {
+		case floating && item.Reason == remediation.ReasonSameContent:
+			a.Kind = actContentSame
+		case floating && item.Reason == remediation.ReasonCandidateNotFixing:
+			a.Kind = actPullRemains
+		case !floating && item.Reason == remediation.ReasonNoNewerTag:
+			a.Kind = actTagWaitNoNewer
+		case !floating && item.Reason == remediation.ReasonSameContent:
+			a.Kind = actTagWaitSameContent
+		case !floating && item.Reason == remediation.ReasonCandidateNotFixing:
+			a.Kind = actTagWaitNotFixed
+		default:
+			return nil, true
+		}
+	case remediation.CategoryExcluded, remediation.CategoryNotComparable, remediation.CategoryFailed, remediation.CategoryDeferred:
+		if item.Reason == "" {
+			return nil, true
+		}
+		a.Why = item.Reason
+		switch item.Category {
+		case remediation.CategoryExcluded:
+			a.Kind = actNotChecked
+		case remediation.CategoryDeferred:
+			a.Kind = actCheckLater
+		default:
+			a.Kind = actCheckFailed
+		}
+	default:
+		return nil, true
+	}
 	return a, true
+}
+
+// waitsStateNewerSeries reports whether the waits of the image's own tag
+// state what the item's check of newer series found. They state every result
+// but one: no newer series after the own series had a newer tag, where what
+// that tag showed is all there is to say.
+func waitsStateNewerSeries(it *remediation.Item) bool {
+	if it.NewerSeries == nil {
+		return false
+	}
+	return it.NewerSeries.Status != remediation.NewerSeriesNone || it.Reason == remediation.ReasonNoNewerTag
 }
 
 // prClauseOfItem is the pull request clause of an image item: from the units

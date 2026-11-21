@@ -143,16 +143,50 @@ func (rd renderer) actionLine(c pkgCard) string {
 	if a.File != "" {
 		file = litMrkdwn(a.File)
 	}
+	subject := msg.CardSubjectImage
+	partial := fmt.Sprintf(msg.CardPartialClause, a.Resolved, a.Total)
+	// why is the reason of a line that only gives one; decision is the
+	// clause of an update a person decides on, "" for any other.
+	why := planReasonText(msg.Lang, string(a.Why))
+	decision := ""
+	if a.Why != "" {
+		decision = fmt.Sprintf(msg.CardDecisionClause, why)
+	}
 	switch a.Kind {
 	case actImageResolved:
-		return wrap(fmt.Sprintf(msg.CardNewerResolved, msg.CardSubjectImage, name, tag, to), rd.prClause(a.PR))
+		return wrap(fmt.Sprintf(msg.CardNewerResolved, subject, name, tag, to), rd.prClause(a.PR), decision)
 	case actImagePartial:
-		return wrap(fmt.Sprintf(msg.CardNewerPartial, msg.CardSubjectImage, name, tag, to),
-			fmt.Sprintf(msg.CardPartialClause, a.Resolved, a.Total), rd.prClause(a.PR))
+		return wrap(fmt.Sprintf(msg.CardNewerPartial, subject, name, tag, to), partial, rd.prClause(a.PR), decision)
 	case actImageRemains:
-		return wrap(fmt.Sprintf(msg.CardNewerWait, msg.CardSubjectImage, name, tag), fmt.Sprintf(msg.CardSameSeriesNotFixed, to))
+		return wrap(fmt.Sprintf(msg.CardNewerWait, subject, name, tag), fmt.Sprintf(msg.CardSameSeriesNotFixed, to), decision)
 	case actImageUnknown:
-		return wrap(fmt.Sprintf(msg.CardNewerUnknown, msg.CardSubjectImage, name, tag, to))
+		return wrap(fmt.Sprintf(msg.CardNewerUnknown, subject, name, tag, to))
+	case actPullResolved:
+		return wrap(fmt.Sprintf(msg.CardPullResolved, subject, name, tag), decision)
+	case actPullPartial:
+		return wrap(fmt.Sprintf(msg.CardPullPartial, subject, name, tag), partial, decision)
+	case actPullRemains:
+		return wrap(fmt.Sprintf(msg.CardContentWait, subject, name, tag), msg.CardPullNotFixed, decision)
+	case actPullUnknown:
+		return wrap(fmt.Sprintf(msg.CardPullUnknown, subject, name, tag))
+	case actImageDecision:
+		return wrap(fmt.Sprintf(msg.CardImageDecision, name), why)
+	case actPullDecision:
+		return wrap(fmt.Sprintf(msg.CardPullDecision, name, tag), why)
+	case actContentSame:
+		return wrap(fmt.Sprintf(msg.CardContentWait, subject, name, tag), msg.CardSameContentRunning)
+	case actTagWaitNoNewer:
+		return wrap(fmt.Sprintf(msg.CardNewerWait, subject, name, tag), msg.CardOwnNoNewer)
+	case actTagWaitSameContent:
+		return wrap(fmt.Sprintf(msg.CardNewerWait, subject, name, tag), msg.CardOwnSameContent)
+	case actTagWaitNotFixed:
+		return wrap(fmt.Sprintf(msg.CardNewerWaitUntagged, subject, name), msg.CardOwnNotFixed)
+	case actNotChecked:
+		return wrap(fmt.Sprintf(msg.CardNotChecked, subject), why)
+	case actCheckFailed:
+		return wrap(fmt.Sprintf(msg.CardCheckFailed, subject), why)
+	case actCheckLater:
+		return wrap(fmt.Sprintf(msg.CardCheckLater, subject), why)
 	case actGlobalSelf:
 		return wrap(fmt.Sprintf(msg.CardGlobalSelf, litMrkdwn(a.Dir), litMrkdwn(a.Owner), file))
 	case actGlobalBundled:

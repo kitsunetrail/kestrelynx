@@ -69,7 +69,12 @@ type RebuildPackage struct {
 	Name    string             `json:"name"`
 	Version string             `json:"version"`
 	Class   inventory.PkgClass `json:"class"`
-	Path    string             `json:"path,omitempty"`
+	// Ecosystem is the ecosystem of the package's identity and Type the
+	// scanner's result type it was reported under, which tell packages of
+	// one name apart.
+	Ecosystem inventory.Ecosystem `json:"ecosystem,omitempty"`
+	Type      string              `json:"type,omitempty"`
+	Path      string              `json:"path,omitempty"`
 	// Owner is the package of a global node_modules this one is found under:
 	// npm for usr/local/lib/node_modules/npm/node_modules/undici/package.json.
 	Owner string `json:"owner,omitempty"`
@@ -161,17 +166,24 @@ func pathsKnown(typ string, class inventory.PkgClass) bool {
 }
 
 type rebuildPackageKey struct {
+	typ           string
 	class         inventory.PkgClass
 	name, version string
 	path          string
 	baseVersion   string
 }
 
+// keyOf is the key of a package with its findings of one outcome; base is the
+// version in the current base, "" where the outcome has none.
+func keyOf(p RebuildPackage, base string) rebuildPackageKey {
+	return rebuildPackageKey{p.Type, p.Class, p.Name, p.Version, p.Path, base}
+}
+
 // rebuildBucket gathers findings by package version and place.
 type rebuildBucket map[rebuildPackageKey]*RebuildPackage
 
 func (b rebuildBucket) add(pkg RebuildPackage, vulns ...string) {
-	k := rebuildPackageKey{pkg.Class, pkg.Name, pkg.Version, pkg.Path, pkg.BaseVersion}
+	k := keyOf(pkg, pkg.BaseVersion)
 	e := b[k]
 	if e == nil {
 		cp := pkg
@@ -206,13 +218,16 @@ func (b rebuildBucket) list() []RebuildPackage {
 		if a.Path != c.Path {
 			return a.Path < c.Path
 		}
-		return a.BaseVersion < c.BaseVersion
+		if a.BaseVersion != c.BaseVersion {
+			return a.BaseVersion < c.BaseVersion
+		}
+		return a.Type < c.Type
 	})
 	return out
 }
 
 func rebuildPackageOf(f scanner.Finding) RebuildPackage {
-	p := RebuildPackage{Name: f.Package, Version: f.InstalledVer, Class: f.Class}
+	p := RebuildPackage{Name: f.Package, Version: f.InstalledVer, Class: f.Class, Ecosystem: f.PackageRef().Ecosystem, Type: f.Type}
 	if f.Class == inventory.ClassOS {
 		return p
 	}
@@ -339,7 +354,7 @@ func classifyRebuild(running, base scanner.ImageScan, severities []string, runti
 		case f.Class == inventory.ClassOS || pkg.Owner != "":
 			notInBase.add(pkg, f.VulnID)
 		default:
-			other[rebuildPackageKey{pkg.Class, pkg.Name, pkg.Version, pkg.Path, ""}] = true
+			other[keyOf(pkg, "")] = true
 			unsettled.add(pkg, f.VulnID)
 		}
 	}
@@ -373,7 +388,7 @@ func mergeRebuildChecks(ents []DockerfileEntity) *RebuildCheck {
 	held := map[rebuildPackageKey]map[string]bool{}
 	hold := func(ps []RebuildPackage) {
 		for _, p := range ps {
-			k := rebuildPackageKey{p.Class, p.Name, p.Version, p.Path, ""}
+			k := keyOf(p, "")
 			if held[k] == nil {
 				held[k] = map[string]bool{}
 			}
@@ -413,7 +428,7 @@ func mergeRebuildChecks(ents []DockerfileEntity) *RebuildCheck {
 		}
 	}
 	for k, g := range gone {
-		h := held[rebuildPackageKey{k.class, k.name, k.version, k.path, ""}]
+		h := held[rebuildPackageKey{k.typ, k.class, k.name, k.version, k.path, ""}]
 		var kept []string
 		for _, v := range g.VulnIDs {
 			if !h[v] {

@@ -1,6 +1,9 @@
 package remediation
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 const (
 	esRepoID = 1141727046
@@ -30,16 +33,25 @@ func mergedBaseUpdate(number int) PRRecord {
 		Repo: "YYAC-project/regfis-infra", RepoID: esRepoID, Kind: prKindDockerfile, Number: number, URL: "https://github.com/YYAC-project/regfis-infra/pull/2",
 		BaseBranch: "main", Path: "elasticsearch/Dockerfile", Locations: []string{"stages[0]"}, State: PRStateMerged,
 		CurrentRef: esImage + ":8.19.23", CandidateTag: "8.19.24",
-		Evidence: &VerificationSummary{Items: []ItemEvidence{{Current: ImageState{Entity: "config:sha256:fd26"}}}},
+		FixTargets: esFixTargets(),
+		Evidence:   &VerificationSummary{Items: []ItemEvidence{{Current: ImageState{Entity: "config:sha256:fd26"}}}},
 	}
+}
+
+// esFixTargets is what the pull request was made to resolve.
+func esFixTargets() []FixTarget {
+	return []FixTarget{{
+		Location: "stages[0]", VulnID: "CVE-2026-1", Package: PackageCoord{Ecosystem: "jar", Class: "lang-pkgs", Name: "org.jsoup:jsoup"},
+		Layers: []string{"sha256:l1"}, Entities: []string{"regfis-infra-elasticsearch|config:sha256:fd26"},
+	}}
 }
 
 func TestUndeployedBaseUpdates(t *testing.T) {
 	plan := Plan{DockerfileItems: []DockerfileItem{mismatchItem()}}
 	confirmed := map[string]int64{"yyac-project/regfis-infra": esRepoID}
 	got := undeployedBaseUpdates(plan, []PRRecord{mergedBaseUpdate(1), mergedBaseUpdate(2)}, confirmed)
-	want := BaseUpdateMerged{Number: 2, URL: "https://github.com/YYAC-project/regfis-infra/pull/2", From: esImage + ":8.19.23", To: "8.19.24"}
-	if len(got) != 1 || got[esKey] != want {
+	want := BaseUpdateMerged{Number: 2, URL: "https://github.com/YYAC-project/regfis-infra/pull/2", From: esImage + ":8.19.23", To: "8.19.24", FixTargets: esFixTargets()}
+	if len(got) != 1 || !reflect.DeepEqual(got[esKey], want) {
 		t.Fatalf("found = %+v, want the newest merged pull request %+v", got, want)
 	}
 
@@ -91,11 +103,11 @@ func TestAttachMarksUndeployedBaseUpdates(t *testing.T) {
 	other := mismatchItem()
 	other.Key = "dockerfile:ex/app@main:Dockerfile#stages[0]"
 	plan := Plan{DockerfileItems: []DockerfileItem{mismatchItem(), other}}
-	m := BaseUpdateMerged{Number: 2, From: esImage + ":8.19.23", To: "8.19.24"}
+	m := BaseUpdateMerged{Number: 2, From: esImage + ":8.19.23", To: "8.19.24", FixTargets: esFixTargets()}
 	PRStageResult{Undeployed: map[string]BaseUpdateMerged{esKey: m}}.Attach(&plan)
 
 	it := plan.DockerfileItems[0]
-	if it.Category != CategoryNotComparable || it.Reason != ReasonBaseUpdateNotDeployed || it.AwaitingDeploy == nil || *it.AwaitingDeploy != m {
+	if it.Category != CategoryNotComparable || it.Reason != ReasonBaseUpdateNotDeployed || it.AwaitingDeploy == nil || !reflect.DeepEqual(*it.AwaitingDeploy, m) {
 		t.Errorf("item = %s %s %+v", it.Category, it.Reason, it.AwaitingDeploy)
 	}
 	if it.Entities[0].Reason != ReasonBaseLayersMismatch {

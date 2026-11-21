@@ -407,6 +407,25 @@ func TestDockerfileFloatingBase(t *testing.T) {
 		if len(plan.Scans) != 0 || e.reg.listCalls != 0 {
 			t.Error("a floating base is neither listed nor scanned")
 		}
+		// The fixed findings in the base's layers are kept as the targets
+		// new content of the tag can resolve, each with its layers.
+		ent := it.Entities[0]
+		if ent.Category != CategoryNoCandidate || ent.Reason != ReasonBaseUnchanged {
+			t.Errorf("entity = %s/%s", ent.Category, ent.Reason)
+		}
+		if ent.Findings != (LayerCounts{Base: 2, Upper: 1, Unknown: 1}) {
+			t.Errorf("findings by layer = %+v", ent.Findings)
+		}
+		var got []string
+		for _, tg := range ent.Targets {
+			got = append(got, tg.VulnID+" "+strings.Join(tg.Layers, ","))
+		}
+		if want := []string{"CVE-A " + diffID('b'), "CVE-B " + diffID('a')}; !sameStrings(got, want) {
+			t.Errorf("targets = %v, want %v", got, want)
+		}
+		if it.Counts != (DockerfileCounts{Targets: 2}) {
+			t.Errorf("counts = %+v", it.Counts)
+		}
 	})
 	t.Run("the tag moved on", func(t *testing.T) {
 		e := newDFEnv()

@@ -305,8 +305,8 @@ When no newer-series tag meets the conditions, the line depends on the same-seri
 | Same-series result | Published image card | Dockerfile base-image card |
 | --- | --- | --- |
 | Confirmed that no newer patch exists | Show a waiting-for-a-newer-version line | Show a waiting-for-a-newer-version line |
-| The newer patch does not resolve the target findings | Show a waiting-for-a-newer-version line with `not resolved by the newer tag of the same series` | Omit the line |
-| The newer patch points to the current content | Show a waiting-for-a-newer-version line with `the newer tag of the same series has the same content` | Omit the line |
+| The newer patch does not resolve the target findings | Show a waiting-for-a-newer-version line with `not resolved by the newer tag of the same series` | Show a waiting-for-a-newer-version line with `not resolved by the newer tag of the same series` and `base images compared` |
+| The newer patch points to the current content | Show a waiting-for-a-newer-version line with `the newer tag of the same series has the same content` | Show a waiting-for-a-newer-version line with `the newer tag of the same series has the same content` |
 
 The line is omitted when the Dockerfile base image and the published image produce different lines for the same finding.
 

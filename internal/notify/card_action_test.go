@@ -453,9 +453,9 @@ func TestCardAction_ImageStatesYieldToMoreSpecificSources(t *testing.T) {
 		return itemPlan(t, remediation.TagFloating, remediation.CategoryNoCandidate, remediation.ReasonSameContent, false)
 	}
 	// The base of the Dockerfile targets the card's findings and has no line
-	// for them.
+	// for them: the item is adopted, yet this image has no candidate base.
 	p := same()
-	p.Plan.DockerfileItems = baseWaitPlan(t, remediation.CategoryManual, remediation.ReasonIntroducedFindings).Plan.DockerfileItems
+	p.Plan.DockerfileItems = baseWaitPlan(t, remediation.CategoryPRCandidate, remediation.ReasonAdopted).Plan.DockerfileItems
 	if got := actionLineOf(t, r, p, LanguageEN); got != "" {
 		t.Errorf("a card of the base's findings has the image's line %q", got)
 	}

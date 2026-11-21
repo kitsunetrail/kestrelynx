@@ -132,7 +132,6 @@ func TestBaseWait_UnchangedWhenNotApplicable(t *testing.T) {
 			"empty plan":        {Plan: &remediation.Plan{}},
 			"pr candidate":      baseWaitPlan(t, remediation.CategoryPRCandidate, remediation.ReasonAdopted),
 			"base unchanged":    baseWaitPlan(t, remediation.CategoryNoCandidate, remediation.ReasonBaseUnchanged),
-			"not comparable":    baseWaitPlan(t, remediation.CategoryNotComparable, remediation.ReasonBaseLayersMismatch),
 			"other image":       renamedRunning(baseWaitNoNewer(t), "other:1"),
 			"no current base":   noCurrentBase(baseWaitNoNewer(t)),
 			"entity differs":    entityReason(baseWaitNoNewer(t), remediation.ReasonBaseUnchanged),

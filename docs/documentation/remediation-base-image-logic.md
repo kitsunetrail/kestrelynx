@@ -68,7 +68,7 @@ The matching result determines what happens next.
 | Match with a pinned tag | Proceed to selecting base fix targets and comparing candidates |
 | Mismatch | Do not treat a comparison of that base as representative of the running image |
 | Empty or unusable layer information | Treat as “Not comparable” |
-| Match with a floating tag | Determine that no update is visible from the base currently referenced by the tag |
+| Match with a floating tag | Determine that no update is visible from the base currently referenced by the tag and record fix targets in the base layers without comparing candidates |
 
 A mismatch with a floating tag also does not qualify as a candidate with confirmed improvements.
 See [Rebuild estimates for floating tags](#rebuild-check) for estimates included in rebuild guidance.

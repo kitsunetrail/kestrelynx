@@ -33,18 +33,25 @@ func forEachPRCandidateWorkload(plan Plan, fn func(it *Item, workload string)) {
 }
 
 // NotProcessedPRItems is the result for a stage that did not run: every
-// pr_candidate item and workload is not processed, for reason.
+// pr_candidate item and workload, and every pr_candidate Dockerfile item, is
+// not processed, for reason.
 func NotProcessedPRItems(plan Plan, reason Reason) []PRItemResult {
 	var out []PRItemResult
 	forEachPRCandidateWorkload(plan, func(it *Item, workload string) {
 		out = append(out, PRItemResult{Kind: PRItemKindImage, ItemKey: it.Key, Workload: workload, Status: PRItemNotProcessed, Reason: reason})
 	})
+	for _, it := range plan.DockerfileItems {
+		if it.Category == CategoryPRCandidate {
+			out = append(out, PRItemResult{Kind: PRItemKindDockerfile, ItemKey: it.Key, Status: PRItemNotProcessed, Reason: reason})
+		}
+	}
 	return out
 }
 
 // buildPRItems relates the pr_candidate items of the plan to the units made
-// for them. Dockerfile and language units are not about the image tag of a
-// workload and take no part.
+// for them: an image item to the units that edit the tag of each of its
+// workloads, a Dockerfile item to the unit of its FROM. Language units take
+// no part.
 func buildPRItems(in PRStageInput, units []*composeUnit) []PRItemResult {
 	type pair struct{ item, workload string }
 	unitKeys := map[pair][]string{}
@@ -94,5 +101,21 @@ func buildPRItems(in PRStageInput, units []*composeUnit) []PRItemResult {
 		}
 		out = append(out, res)
 	})
+	dfUnits := map[string]bool{}
+	for _, u := range units {
+		if u.df != nil {
+			dfUnits[u.key] = true
+		}
+	}
+	for _, it := range in.Plan.DockerfileItems {
+		if it.Category != CategoryPRCandidate {
+			continue
+		}
+		res := PRItemResult{Kind: PRItemKindDockerfile, ItemKey: it.Key, Status: PRItemNotProcessed, Reason: ReasonPRUnitUnavailable}
+		if key, ok := DockerfileUnitKey(it); ok && dfUnits[key] {
+			res.Status, res.Reason, res.UnitKeys = PRItemAssigned, "", []string{key}
+		}
+		out = append(out, res)
+	}
 	return out
 }

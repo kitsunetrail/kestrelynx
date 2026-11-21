@@ -165,7 +165,7 @@ See [Vulnerability fields](webhook-reference.md#vulnerability-fields) for comple
 
 ### Card action line {#base-image-wait}
 
-The card's `Action:` line shows expected resolution through image updates or repulling, reasons a decision is needed or a newer version cannot be checked, PR status, or packages that dependency-file updates cannot fix.
+The card's `Action:` line shows expected resolution through image or base image updates, repulling, or rebuilding, reasons a decision is needed or a newer version cannot be checked, PR status, or packages that dependency-file updates cannot fix.
 It appears after `Findings:` in detailed and compact channel cards, thread cards, and diff cards, and also appears on cards included in email.
 
 A series groups versions by their first two numbers, so 3.11 and 3.13 are different series.
@@ -208,9 +208,11 @@ The following examples show the line for each result.
 | Partly resolved in an image | `Action: image nginx 1.24.1 → 1.27.3 resolves part of it (1 of 2, minor update, no newer tag in the same series)` |
 | Still unresolved in the newer series checked | `Action: waiting for a newer image of nginx 1.24.1 (not resolved in the checked tag(s) 1.27.3 and 2.0.1 either)` |
 | Unresolved in the same and newer series | `Action: waiting for a newer image of nginx (not resolved by the newer tag of the same series or the checked tag(s) 2.0.1)` |
-| Unresolved in the same series, no matching newer series | `Action: waiting for a newer image of nginx (not resolved by the newer tag of the same series)` |
+| Still unresolved in the newer version of the same series, no matching newer series | `Action: waiting for a newer image of nginx (not resolved by the newer tag of the same series)` |
 | No matching newer version | `Action: waiting for a newer base image of python 3.11.9 (no newer tag in the same series or in a newer series of the same form)` |
 | No newer version in the same series | `Action: waiting for a newer base image of python 3.11.9 (no newer tag in the same series)` |
+| Newer tag in the same series, same content as the current tag | `Action: waiting for a newer base image of python 3.11.9 (the newer tag of the same series has the same content)` |
+| Base image: still unresolved in the newer version of the same series, no matching newer series | `Action: waiting for a newer base image of python (not resolved by the newer tag of the same series, base images compared)` |
 
 The `Action:` line may be omitted for cards containing findings whose resolution cannot be determined, among other cases.
 However, when the base image is known to have no newer version in the same series, the line may show only that information.
@@ -256,6 +258,22 @@ For a PR changed by a user, the content-change message takes precedence even aft
 The reason appears after `Pull Request not created:`, `Pull Request creation is unconfirmed:`, or `Pull Request will not be created:`.
 See [PR processing reasons](remediation-update-reason-codes.md#pr-reasons) for the list of reasons.
 
+#### Base image update candidates in the same series {#action-base-candidate}
+
+The following examples apply to images with a Dockerfile mapping when the findings are in the layers of a base image with a pinned tag.
+
+| Result | Example |
+| --- | --- |
+| All resolved | `Action: base image python 3.11.9 → 3.11.10 resolves it (base images compared)` |
+| Partly resolved | `Action: base image python 3.11.9 → 3.11.10 resolves part of it (1 of 2, base images compared)` |
+| All remain | `Action: waiting for a newer base image of python 3.11.9 (not resolved in 3.11.10 of the same series, base images compared)` |
+| Includes findings that cannot be assessed | `Action: whether base image python 3.11.9 → 3.11.10 resolves it could not be confirmed (base images compared)` |
+| All resolved, with a PR created | `Action: base image python 3.11.9 → 3.11.10 resolves it (Pull Request #12, base images compared)` |
+| PR merged, waiting for the image to be rebuilt | `Action: Pull Request #13 is merged; waiting for the image to be rebuilt` |
+
+When PR creation is enabled, resolved and partly resolved lines include the PR status under the same rules as [Update candidates in the same series](#action-same-series).
+For a merged base image PR, the PR status shows `Pull Request #12 is merged; waiting for the image to be rebuilt`.
+
 #### Pulling the same tag again {#action-pull-again}
 
 For an image with a tag that does not pin a version, such as `latest`, the line shows whether pulling the same tag again resolves the findings.
@@ -268,8 +286,20 @@ For an image with a tag that does not pin a version, such as `latest`, the line 
 | The tag has the same content as the running image | `Action: waiting for new content of image nginx latest (the tag has the same content as the running image)` |
 | Includes findings that cannot be assessed | `Action: whether pulling image nginx latest again resolves it could not be confirmed` |
 
-- For lines showing `pulling image nginx latest again resolves it` or `pulling image nginx latest again resolves part of it`, pull the image again and recreate the container
-- For lines showing `waiting for new content`, wait for the publisher to update the tag's content
+#### Rebuilding with the same base image tag {#action-base-floating}
+
+For images with a Dockerfile mapping whose base image uses a tag that does not pin a version, such as `node:24-alpine`, the following lines describe findings in the base image's layers.
+
+| Example | Meaning | What to do |
+| --- | --- | --- |
+| `Action: waiting for new content of base image node 24-alpine (the tag's content has not changed since the image was built)` | The content referenced by the tag has not changed since the image was built | Wait for the publisher to update the tag's content |
+| `Action: a rebuild is expected to resolve it (fixed in the current base image node 24-alpine)` | The tag's content has been updated, and the findings are fixed in its current content | Rebuild and deploy the image |
+| `Action: a rebuild is expected to resolve part of it (1 of 2, compared with the current base image node 24-alpine)` | Only some findings are fixed in the current content | Rebuild and deploy the image, then wait for the publisher to fix the remaining findings |
+| `Action: waiting for new content of base image node 24-alpine (still present in its current content)` | The tag's content has been updated, but the findings remain in its current content | Wait for the publisher to release an update |
+| `Action: whether a rebuild resolves it could not be confirmed (the current base image has no package at the same location)` | The current base image has no package at the same location | Check whether the package is installed by Dockerfile instructions |
+
+The estimate compares scan results for the running image and the current base image; the image after rebuilding has not been checked.
+See [Estimate limitations](remediation-base-image-logic.md#rebuild-check-limits) for details.
 
 #### Updates needing a decision {#action-decision}
 
@@ -282,6 +312,8 @@ The reason that follows describes the problem or what cannot be confirmed.
 | The candidate resolves part of it | `Action: image nginx 1.27.2 → 1.27.3 resolves part of it (1 of 2, decision needed: the candidate brings new findings)` |
 | Pulling again resolves it | `Action: pulling image nginx latest again resolves it (decision needed: the candidate brings new findings)` |
 | Resolution is unknown | `Action: updating image nginx needs a decision (how the service is built cannot be determined)` |
+| The base image candidate resolves it | `Action: base image python 3.11.9 → 3.11.10 resolves it (decision needed: the candidate brings new findings, base images compared)` |
+| Resolution through a base image update is unknown | `Action: updating the base image needs a decision (the workloads sharing the Dockerfile do not agree on one candidate)` |
 
 No PR is created for the update shown on this line, so review the reason and decide whether to update.
 See [Tags and candidate decisions](remediation-image-reason-codes.md#image-candidate-reasons) and [Compose](remediation-image-reason-codes.md#source-compose-reasons) for the list of reasons.
@@ -295,6 +327,8 @@ When a newer image version has not been checked or could not be checked, the lin
 | `Action: a newer image has not been checked (the reference has a digest and no tag)` | The image reference format is outside the scope of newer-version checks | Review the reason in parentheses |
 | `Action: a newer image could not be checked (the registry requires a login)` | Retrieving or comparing a newer version failed | Address the cause given in parentheses |
 | `Action: a newer image will be checked in a later run (the time limit of the run was reached)` | A limit or timeout prevented the check in this run | Wait for the next scan |
+| `Action: a newer base image could not be checked (the analysis of the image was incomplete)` | Incomplete image analysis prevented checking a newer version | Address the cause given in parentheses |
+| `Action: a newer base image will be checked in a later run (the limit on candidate scans of a run was reached)` | The candidate scan limit prevented the check in this run | Wait for the next scan |
 
 See [Image and source reason codes](remediation-image-reason-codes.md) for the list of reasons shown in parentheses.
 

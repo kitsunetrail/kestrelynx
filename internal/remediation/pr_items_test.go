@@ -224,3 +224,47 @@ func TestFingerprint_PRItems(t *testing.T) {
 		t.Error("fingerprint ignores PullRequestsEnabled")
 	}
 }
+
+func TestPRItems_DockerfileAssigned(t *testing.T) {
+	h := newDFPRHarness(t)
+	it := dfPlanItem("3.12.5-slim", 'x', []string{"CVE-1"}, nil)
+	res := h.run(dfPlan(it))
+	u := onlyUnit(t, res)
+	key, ok := DockerfileUnitKey(it)
+	if !ok || key != u.Key {
+		t.Fatalf("DockerfileUnitKey = %q %v, want the unit's key %q", key, ok, u.Key)
+	}
+	want := []PRItemResult{{Kind: PRItemKindDockerfile, ItemKey: it.Key, UnitKeys: []string{u.Key}, Status: PRItemAssigned}}
+	if !reflect.DeepEqual(res.Items, want) {
+		t.Errorf("items = %+v, want %+v", res.Items, want)
+	}
+}
+
+func TestPRItems_DockerfileWithoutUnit(t *testing.T) {
+	h := newDFPRHarness(t)
+	// An adopted item that lacks the edited FROM gets no unit.
+	it := dfPlanItem("3.12.5-slim", 'x', []string{"CVE-1"}, nil)
+	it.Source.Stage = nil
+	other := dfPlanItem("3.12.5-slim", 'x', []string{"CVE-1"}, nil)
+	other.Key, other.Category, other.Reason = other.Key+"-other", CategoryManual, ReasonIntroducedFindings
+	res := h.run(dfPlan(it, other))
+	if _, ok := DockerfileUnitKey(it); ok || len(res.Units) != 0 {
+		t.Fatalf("units = %+v", res.Units)
+	}
+	// An item that is not adopted has no result.
+	want := []PRItemResult{{Kind: PRItemKindDockerfile, ItemKey: it.Key, Status: PRItemNotProcessed, Reason: ReasonPRUnitUnavailable}}
+	if !reflect.DeepEqual(res.Items, want) {
+		t.Errorf("items = %+v, want %+v", res.Items, want)
+	}
+}
+
+func TestNotProcessedPRItems_Dockerfile(t *testing.T) {
+	adopted := dfPlanItem("3.12.5-slim", 'x', []string{"CVE-1"}, nil)
+	manual := dfPlanItem("3.12.5-slim", 'x', []string{"CVE-1"}, nil)
+	manual.Key, manual.Category = manual.Key+"-other", CategoryManual
+	got := NotProcessedPRItems(dfPlan(adopted, manual), ReasonStorageFailed)
+	want := []PRItemResult{{Kind: PRItemKindDockerfile, ItemKey: adopted.Key, Status: PRItemNotProcessed, Reason: ReasonStorageFailed}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("items = %+v, want %+v", got, want)
+	}
+}

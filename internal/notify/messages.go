@@ -378,11 +378,27 @@ type messages struct {
 	CardNotChecked  string
 	CardCheckFailed string
 	CardCheckLater  string
+	// The action lines about the base image of a Dockerfile beyond those
+	// shared with the image's own tag. CardBaseContentUnchanged is the
+	// clause of a floating base whose tag did not move. The rebuild lines
+	// say what building again on the tag's current content does; the clauses
+	// CardRebuildFixedInBase and CardRebuildComparedBase take the base's
+	// name (%[1]s) and tag (%[2]s).
+	CardBaseDecision         string
+	CardBaseContentUnchanged string
+	CardRebuildResolved      string
+	CardRebuildFixedInBase   string
+	CardRebuildPartial       string
+	CardRebuildComparedBase  string
+	CardRebuildStillPresent  string
+	CardRebuildUnknown       string
+	CardRebuildNotInBase     string
 	// The pull request clause of an action line. %[1]s names the pull
 	// requests, or is the reason of a clause that names none; %[2]s of
 	// CardPRReplaced is the pull request that replaced them.
 	CardPR              string
 	CardPRMergedRunning string
+	CardPRMergedRebuild string
 	CardPRClosed        string
 	CardPRReplaced      string
 	CardPRModified      string
@@ -868,8 +884,19 @@ var enMessages = messages{
 	CardCheckFailed:        "a newer %s could not be checked",
 	CardCheckLater:         "a newer %s will be checked in a later run",
 
+	CardBaseDecision:         "updating the base image needs a decision",
+	CardBaseContentUnchanged: "the tag's content has not changed since the image was built",
+	CardRebuildResolved:      "a rebuild is expected to resolve it",
+	CardRebuildFixedInBase:   "fixed in the current base image %[1]s %[2]s",
+	CardRebuildPartial:       "a rebuild is expected to resolve part of it",
+	CardRebuildComparedBase:  "compared with the current base image %[1]s %[2]s",
+	CardRebuildStillPresent:  "still present in its current content",
+	CardRebuildUnknown:       "whether a rebuild resolves it could not be confirmed",
+	CardRebuildNotInBase:     "the current base image has no package at the same location",
+
 	CardPR:              "Pull Request %s",
 	CardPRMergedRunning: "Pull Request %s is merged; the running image has not been updated",
+	CardPRMergedRebuild: "Pull Request %s is merged; waiting for the image to be rebuilt",
 	CardPRClosed:        "Pull Request %s was closed without merging",
 	CardPRReplaced:      "Pull Request %[1]s was closed without merging and replaced by %[2]s",
 	CardPRModified:      "Pull Request %s differs from its original content",
@@ -1340,8 +1367,19 @@ var jaMessages = messages{
 	CardCheckFailed:        "%sの新しい版を確認できなかった",
 	CardCheckLater:         "%sの新しい版は次回以降に確認",
 
+	CardBaseDecision:         "元イメージの更新は要判断",
+	CardBaseContentUnchanged: "タグの内容は作成時から変わっていない",
+	CardRebuildResolved:      "再ビルドで解消する見込み",
+	CardRebuildFixedInBase:   "現在の元イメージ %[1]s %[2]s では修正済み",
+	CardRebuildPartial:       "再ビルドで一部解消する見込み",
+	CardRebuildComparedBase:  "現在の元イメージ %[1]s %[2]s との比較",
+	CardRebuildStillPresent:  "現在の内容にも残る",
+	CardRebuildUnknown:       "再ビルドで解消するか確認できない",
+	CardRebuildNotInBase:     "現在の元イメージに同じ場所のパッケージがない",
+
 	CardPR:              "Pull Request %s",
 	CardPRMergedRunning: "Pull Request %s はマージ済み、稼働中のイメージは未更新",
+	CardPRMergedRebuild: "Pull Request %s はマージ済み、イメージの再ビルド待ち",
 	CardPRClosed:        "Pull Request %s は未マージでクローズ",
 	CardPRReplaced:      "Pull Request %[1]s は未マージでクローズ、%[2]s に置き換え",
 	CardPRModified:      "Pull Request %s の内容は作成時と異なる",

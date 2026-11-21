@@ -664,16 +664,18 @@ func (r *run) dockerfileEntity(in ImageInput, base DockerfileBase, sel *dfSelect
 		return outcome(CategoryNotComparable, ReasonBaseLayersMismatch,
 			"the layers of "+cur.Ref+" are not the start of the running image's ("+bl.Detail+"): the tag changed after the build or the image was built another way, so no comparison is claimed")
 	}
-	if !pinned {
-		return outcome(CategoryNoCandidate, ReasonBaseUnchanged,
-			"the base the tag points at now is the one the running image already uses; no base update is visible")
-	}
-
 	cl := ClassifyFindingsByLayer(in.Scan.DiffIDs, bl.Count, in.Scan.Findings)
 	moveRuntimeFindings(&cl, in.Scan.ConfigEnv, curRes.Env)
 	ent.Findings = LayerCounts{Base: len(cl.Base), Upper: len(cl.Upper), Unknown: len(cl.Unknown)}
 	targets := SelectTargets(cl.Base, r.p.cfg.Intel)
 	attachLayers(targets, cl.Base)
+	if !pinned {
+		// The findings of the base's layers are kept as targets: they are
+		// the ones new content of the tag can resolve.
+		ent.Targets = targets
+		return outcome(CategoryNoCandidate, ReasonBaseUnchanged,
+			"the base the tag points at now is the one the running image already uses; no base update is visible")
+	}
 	if len(targets) == 0 {
 		return outcome(CategoryNoCandidate, ReasonNoBaseFindings,
 			fmt.Sprintf("no fixed finding is in a layer of the base image (%d in later layers, %d without a layer)", len(cl.Upper), len(cl.Unknown)))

@@ -60,6 +60,26 @@ const (
 	// actGlobalSelf: the package is itself installed in a global
 	// node_modules.
 	actGlobalSelf
+	// actBaseDecision: updating the base image of the Dockerfile is a
+	// person's to decide on, and the plan does not say what it does to the
+	// card's findings.
+	actBaseDecision
+	// actBaseUnchanged: the floating tag of the base still has the content
+	// the image was built from.
+	actBaseUnchanged
+	// actRebuildResolved: the floating tag of the base moved, and its
+	// current content has none of the card's fixed findings where the image
+	// has them.
+	actRebuildResolved
+	// actRebuildPartial: it has some of them and not the others.
+	actRebuildPartial
+	// actRebuildRemains: it still has all of them.
+	actRebuildRemains
+	// actRebuildNotInBase: it has no package where the image has them.
+	actRebuildNotInBase
+	// actBaseMergedWait: a merged pull request set the base to one that
+	// resolves the card's fixed findings, and the image was not rebuilt.
+	actBaseMergedWait
 )
 
 // prClauseKind is what a card's action line says about the pull request of
@@ -73,6 +93,9 @@ const (
 	prExists
 	// prMergedRunning: merged, while the image the card is about still runs.
 	prMergedRunning
+	// prMergedRebuild: merged, while the image built from the Dockerfile it
+	// changed was not rebuilt.
+	prMergedRebuild
 	prClosed   // closed without merging
 	prReplaced // closed without merging in favour of another
 	prModified // its content is not what was created
@@ -121,8 +144,12 @@ func (c prClause) same(o prClause) bool {
 type cardAction struct {
 	Kind cardActionKind
 
-	// The image kinds: the short name and tag of the running image, the
-	// candidate tag, and how many of the card's fixed findings it resolves.
+	// Base says the line is about the base image of the Dockerfile that
+	// builds the running image rather than about the running image's tag.
+	Base bool
+	// The image kinds: the short name and tag of the running image (or of
+	// the base), the candidate tag, and how many of the card's fixed
+	// findings it resolves.
 	Name, Tag, To   string
 	Resolved, Total int
 	PR              prClause
@@ -183,12 +210,12 @@ type cardActionIndex struct {
 	ownerVersions map[[4]string][]string
 
 	images map[baseWaitKey][]imageEntry
-	// baseTargets are the findings the Dockerfile part holds as targets of a
-	// base image, whatever it found for them.
-	baseTargets map[baseWaitKey]bool
-	// built are the running images a mapped Dockerfile builds, by reference
-	// and entity.
-	built map[[2]string]bool
+	// bases are the findings the Dockerfile part holds as targets of a base
+	// image, with what it found for them.
+	bases map[baseWaitKey][]baseEntry
+	// builds are the running images a mapped Dockerfile builds, by reference
+	// and entity, with the item and the running image's part of it.
+	builds map[[2]string][]buildEntry
 }
 
 // newCardActionIndex indexes the plan of the cycle. It returns nil when there
@@ -204,8 +231,8 @@ func newCardActionIndex(info *PlanInfo) *cardActionIndex {
 		others:        map[actionKey]bool{},
 		ownerVersions: map[[4]string][]string{},
 		images:        map[baseWaitKey][]imageEntry{},
-		baseTargets:   map[baseWaitKey]bool{},
-		built:         map[[2]string]bool{},
+		bases:         map[baseWaitKey][]baseEntry{},
+		builds:        map[[2]string][]buildEntry{},
 	}
 	for _, li := range x.plan.LanguageItems {
 		file := li.Manager.LockfileName()
@@ -228,17 +255,7 @@ func newCardActionIndex(info *PlanInfo) *cardActionIndex {
 			}
 		}
 	}
-	for _, it := range x.plan.DockerfileItems {
-		for _, e := range it.Entities {
-			if e.Running.Ref == "" || e.Running.Entity == "" || e.Running.Entity == remediation.Unconfirmed {
-				continue
-			}
-			x.built[[2]string{e.Running.Ref, e.Running.Entity}] = true
-			for _, t := range e.Targets {
-				x.baseTargets[baseWaitKey{image: e.Running.Ref, entity: e.Running.Entity, vuln: t.VulnID, coord: t.Package}] = true
-			}
-		}
-	}
+	x.indexBases()
 	for i := range x.plan.Items {
 		it := &x.plan.Items[i]
 		if it.Current.Ref == "" || it.Current.Entity == "" || it.Current.Entity == remediation.Unconfirmed {
@@ -300,10 +317,12 @@ func globalPlace(pkgPath string) (owner, dir string, self, ok bool) {
 }
 
 // lookup returns the action of group g of the scanned entity img: a wait of
-// card_basewait.go, an action of this file, or neither. The sources are
-// tried in order, and a source that knows the card's findings without being
-// able to give one line for them ends the search: a less specific source
-// does not answer in its place.
+// card_basewait.go, an action of this file or of card_base.go, or neither.
+// The sources are tried in order. The dependency files and the image's own
+// tag end the search when they know the card's findings without being able
+// to give one line for them; the base image of the Dockerfile passes a card
+// it has no line for on to the image's own tag, which leaves out what the
+// base's findings make it unable to say.
 func (x *cardActionIndex) lookup(img analyze.ImageFindings, g analyze.PackageGroup) (*baseWait, *cardAction) {
 	if x == nil || img.Image == "" || !img.Subject.Resolved {
 		return nil, nil
@@ -317,6 +336,9 @@ func (x *cardActionIndex) lookup(img analyze.ImageFindings, g analyze.PackageGro
 	}
 	if w, ok := x.waits.base(img, entity, g); ok {
 		return &w, nil
+	}
+	if a := x.base(img, entity, g); a != nil {
+		return nil, a
 	}
 	if a, decided := x.image(img, entity, g); decided {
 		return nil, a
@@ -437,7 +459,7 @@ func (x *cardActionIndex) image(img analyze.ImageFindings, entity string, g anal
 		default:
 			a.Kind = actImagePartial
 		}
-		pr, ok := prClauseOfItem(x.plan, item.Key)
+		pr, ok := prClauseOfItem(x.plan, remediation.PRItemKindImage, item.Key)
 		if !ok {
 			return nil, true
 		}
@@ -448,15 +470,17 @@ func (x *cardActionIndex) image(img analyze.ImageFindings, entity string, g anal
 	// would: the dependency files that install the package, or the base
 	// image of the Dockerfile. A card with such a finding gets no line from
 	// the image's tag, whether or not that source has one for it.
+	if x.inFiles(entity, g, vulns) {
+		return nil, true
+	}
 	for _, id := range vulns {
-		if x.others[actionKey{entity: entity, ecosystem: string(g.Ecosystem), class: string(g.Class), name: g.Package, version: g.InstalledVer, vuln: id}] ||
-			x.baseTargets[baseWaitKey{image: img.Image, entity: entity, vuln: id, coord: coord}] {
+		if len(x.bases[baseWaitKey{image: img.Image, entity: entity, vuln: id, coord: coord}]) > 0 {
 			return nil, true
 		}
 	}
 	// An image a mapped Dockerfile builds gets a newer version when its
 	// owner builds one: there is none to wait for, and none to look up.
-	if x.built[[2]string{img.Image, entity}] && (item.Category == remediation.CategoryNoCandidate || item.Category == remediation.CategoryExcluded) {
+	if len(x.builds[[2]string{img.Image, entity}]) > 0 && (item.Category == remediation.CategoryNoCandidate || item.Category == remediation.CategoryExcluded) {
 		return nil, true
 	}
 	floating := item.Kind == remediation.TagFloating
@@ -553,19 +577,31 @@ func waitsStateNewerSeries(it *remediation.Item) bool {
 	return it.NewerSeries.Status != remediation.NewerSeriesNone || it.Reason == remediation.ReasonNoNewerTag
 }
 
-// prClauseOfItem is the pull request clause of an image item: from the units
-// the item is part of when it has any, else from why it has none. Nothing is
-// said when pull requests are not enabled or the plan does not record what
-// the stage did with the item. ok is false when the units, or the workloads
-// without one, do not say the same thing.
-func prClauseOfItem(plan *remediation.Plan, itemKey string) (prClause, bool) {
+// inFiles reports whether the dependency files hold one of the fixed
+// findings vulns of group g as a package they are matched against.
+func (x *cardActionIndex) inFiles(entity string, g analyze.PackageGroup, vulns []string) bool {
+	for _, id := range vulns {
+		if x.others[actionKey{entity: entity, ecosystem: string(g.Ecosystem), class: string(g.Class), name: g.Package, version: g.InstalledVer, vuln: id}] {
+			return true
+		}
+	}
+	return false
+}
+
+// prClauseOfItem is the pull request clause of a plan item of kind (an
+// image item or a Dockerfile item): from the units the item is part of when
+// it has any, else from why it has none. Nothing is said when pull requests
+// are not enabled or the plan does not record what the stage did with the
+// item. ok is false when the units, or the workloads without one, do not say
+// the same thing.
+func prClauseOfItem(plan *remediation.Plan, kind, itemKey string) (prClause, bool) {
 	if plan.PullRequestsEnabled == nil || !*plan.PullRequestsEnabled {
 		return prClause{}, true
 	}
 	var unitKeys []string
 	var rest []remediation.PRItemResult
 	for _, r := range plan.PRItems {
-		if r.Kind != remediation.PRItemKindImage || r.ItemKey != itemKey {
+		if r.Kind != kind || r.ItemKey != itemKey {
 			continue
 		}
 		if r.Status == remediation.PRItemAssigned {
@@ -584,6 +620,9 @@ func prClauseOfItem(plan *remediation.Plan, itemKey string) (prClause, bool) {
 				return prClause{}, false
 			}
 			c := prClauseOfUnit(*u)
+			if c.Kind == prMergedRunning && kind == remediation.PRItemKindDockerfile {
+				c.Kind = prMergedRebuild
+			}
 			dup := false
 			for _, have := range clauses {
 				dup = dup || have.same(c)
@@ -634,9 +673,9 @@ func unitByKey(units []remediation.PRUnit, key string) *remediation.PRUnit {
 	return nil
 }
 
-// prClauseOfUnit is the pull request clause of one update unit of an image
-// tag. A merged pull request is one whose image still runs: the card is
-// about the image the unit updates from.
+// prClauseOfUnit is the pull request clause of one update unit. A merged
+// pull request is one whose image still runs: the card is about the image
+// the unit updates from.
 func prClauseOfUnit(u remediation.PRUnit) prClause {
 	if u.Status == remediation.PRStatusWriteDisabled {
 		return prClause{}

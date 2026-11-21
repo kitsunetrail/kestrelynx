@@ -95,6 +95,12 @@ func TestClassifyRebuild_Outcomes(t *testing.T) {
 		if len(c.Gone) != 1 || c.Gone[0].BaseVersion != "6.29.1" || !reflect.DeepEqual(c.Gone[0].VulnIDs, []string{"CVE-1"}) {
 			t.Errorf("gone %+v", c.Gone)
 		}
+		// Each package carries what tells it from another of its name.
+		for _, p := range append(append([]RebuildPackage(nil), c.Gone...), c.Remaining...) {
+			if p.Type != typeNodePkg || p.Ecosystem != inventory.ParseEcosystem(typeNodePkg) {
+				t.Errorf("%s: type %q, ecosystem %q", p.Name, p.Type, p.Ecosystem)
+			}
+		}
 		if len(c.Remaining) != 1 || !reflect.DeepEqual(c.Remaining[0].VulnIDs, []string{"CVE-2"}) {
 			t.Errorf("remaining %+v", c.Remaining)
 		}
@@ -322,7 +328,7 @@ func TestClassifyRebuild_Undetermined(t *testing.T) {
 
 func TestMergeRebuildChecks(t *testing.T) {
 	pkg := func(name string, vulns ...string) RebuildPackage {
-		return RebuildPackage{Name: name, Version: "1", Class: inventory.ClassLang, Path: name, BaseVersion: "", VulnIDs: vulns}
+		return RebuildPackage{Name: name, Version: "1", Class: inventory.ClassLang, Type: typeJar, Path: name, BaseVersion: "", VulnIDs: vulns}
 	}
 	ents := func(cs ...*RebuildCheck) []DockerfileEntity {
 		var out []DockerfileEntity

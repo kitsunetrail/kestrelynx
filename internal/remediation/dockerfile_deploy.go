@@ -21,6 +21,11 @@ type BaseUpdateMerged struct {
 	// running images were built from; To is the tag it set.
 	From string `json:"from"`
 	To   string `json:"to"`
+	// FixTargets are the findings the pull request was made to resolve, each
+	// with the running images it was resolved for. They tie a finding of a
+	// running image to the pull request and are not part of what is
+	// delivered: the pull request's own entry lists them.
+	FixTargets []FixTarget `json:"-"`
 }
 
 // undeployedBaseUpdates finds, among the Dockerfile items whose running
@@ -66,7 +71,8 @@ func undeployedBaseUpdates(plan Plan, recs []PRRecord, repoIDs map[string]int64)
 			}
 		}
 		if best != nil {
-			out[it.Key] = BaseUpdateMerged{Number: best.Number, URL: best.URL, From: best.CurrentRef, To: best.CandidateTag}
+			out[it.Key] = BaseUpdateMerged{Number: best.Number, URL: best.URL, From: best.CurrentRef, To: best.CandidateTag,
+				FixTargets: append([]FixTarget(nil), best.FixTargets...)}
 		}
 	}
 	return out

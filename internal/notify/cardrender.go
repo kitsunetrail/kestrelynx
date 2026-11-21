@@ -143,7 +143,12 @@ func (rd renderer) actionLine(c pkgCard) string {
 	if a.File != "" {
 		file = litMrkdwn(a.File)
 	}
-	subject := msg.CardSubjectImage
+	// A line about the base image of a Dockerfile names it as its subject
+	// and says that the bases were compared, not the image built from them.
+	subject, compared := msg.CardSubjectImage, ""
+	if a.Base {
+		subject, compared = msg.CardSubjectBase, msg.CardBaseCompared
+	}
 	partial := fmt.Sprintf(msg.CardPartialClause, a.Resolved, a.Total)
 	// why is the reason of a line that only gives one; decision is the
 	// clause of an update a person decides on, "" for any other.
@@ -154,13 +159,13 @@ func (rd renderer) actionLine(c pkgCard) string {
 	}
 	switch a.Kind {
 	case actImageResolved:
-		return wrap(fmt.Sprintf(msg.CardNewerResolved, subject, name, tag, to), rd.prClause(a.PR), decision)
+		return wrap(fmt.Sprintf(msg.CardNewerResolved, subject, name, tag, to), rd.prClause(a.PR), decision, compared)
 	case actImagePartial:
-		return wrap(fmt.Sprintf(msg.CardNewerPartial, subject, name, tag, to), partial, rd.prClause(a.PR), decision)
+		return wrap(fmt.Sprintf(msg.CardNewerPartial, subject, name, tag, to), partial, rd.prClause(a.PR), decision, compared)
 	case actImageRemains:
-		return wrap(fmt.Sprintf(msg.CardNewerWait, subject, name, tag), fmt.Sprintf(msg.CardSameSeriesNotFixed, to), decision)
+		return wrap(fmt.Sprintf(msg.CardNewerWait, subject, name, tag), fmt.Sprintf(msg.CardSameSeriesNotFixed, to), decision, compared)
 	case actImageUnknown:
-		return wrap(fmt.Sprintf(msg.CardNewerUnknown, subject, name, tag, to))
+		return wrap(fmt.Sprintf(msg.CardNewerUnknown, subject, name, tag, to), compared)
 	case actPullResolved:
 		return wrap(fmt.Sprintf(msg.CardPullResolved, subject, name, tag), decision)
 	case actPullPartial:
@@ -180,7 +185,21 @@ func (rd renderer) actionLine(c pkgCard) string {
 	case actTagWaitSameContent:
 		return wrap(fmt.Sprintf(msg.CardNewerWait, subject, name, tag), msg.CardOwnSameContent)
 	case actTagWaitNotFixed:
-		return wrap(fmt.Sprintf(msg.CardNewerWaitUntagged, subject, name), msg.CardOwnNotFixed)
+		return wrap(fmt.Sprintf(msg.CardNewerWaitUntagged, subject, name), msg.CardOwnNotFixed, compared)
+	case actBaseDecision:
+		return wrap(msg.CardBaseDecision, why)
+	case actBaseUnchanged:
+		return wrap(fmt.Sprintf(msg.CardContentWait, subject, name, tag), msg.CardBaseContentUnchanged)
+	case actRebuildResolved:
+		return wrap(msg.CardRebuildResolved, fmt.Sprintf(msg.CardRebuildFixedInBase, name, tag))
+	case actRebuildPartial:
+		return wrap(msg.CardRebuildPartial, partial, fmt.Sprintf(msg.CardRebuildComparedBase, name, tag))
+	case actRebuildRemains:
+		return wrap(fmt.Sprintf(msg.CardContentWait, subject, name, tag), msg.CardRebuildStillPresent)
+	case actRebuildNotInBase:
+		return wrap(msg.CardRebuildUnknown, msg.CardRebuildNotInBase)
+	case actBaseMergedWait:
+		return wrap(rd.prClause(a.PR))
 	case actNotChecked:
 		return wrap(fmt.Sprintf(msg.CardNotChecked, subject), why)
 	case actCheckFailed:
@@ -223,6 +242,8 @@ func (rd renderer) prClause(p prClause) string {
 		return fmt.Sprintf(msg.CardPR, prs)
 	case prMergedRunning:
 		return fmt.Sprintf(msg.CardPRMergedRunning, prs)
+	case prMergedRebuild:
+		return fmt.Sprintf(msg.CardPRMergedRebuild, prs)
 	case prClosed:
 		return fmt.Sprintf(msg.CardPRClosed, prs)
 	case prReplaced:

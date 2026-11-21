@@ -33,12 +33,13 @@ func buildDockerfileUnits(plan Plan) []*composeUnit {
 	var out []*composeUnit
 	for i := range plan.DockerfileItems {
 		it := &plan.DockerfileItems[i]
-		if it.Category != CategoryPRCandidate || it.Candidate == nil || it.Source.Stage == nil || len(it.Entities) == 0 {
+		key, ok := DockerfileUnitKey(*it)
+		if !ok {
 			continue
 		}
 		loc := dockerfileStageLocation(*it.Source.Stage, it.Source.StageName)
 		u := &composeUnit{
-			key:        strings.Join([]string{prKindDockerfile, strings.ToLower(it.Source.Repository), it.Source.BaseBranch, it.Source.Path, loc}, "|"),
+			key:        key,
 			repo:       it.Source.Repository,
 			baseBranch: it.Source.BaseBranch,
 			path:       it.Source.Path,
@@ -69,6 +70,18 @@ func buildDockerfileUnits(plan Plan) []*composeUnit {
 		out = append(out, u)
 	}
 	return out
+}
+
+// DockerfileUnitKey is the key (PRUnit.Key) of the update unit made for a
+// Dockerfile item; ok is false for an item no unit is made for: one that is
+// not adopted, or that lacks the candidate, the edited FROM or a running
+// image.
+func DockerfileUnitKey(it DockerfileItem) (key string, ok bool) {
+	if it.Category != CategoryPRCandidate || it.Candidate == nil || it.Source.Stage == nil || len(it.Entities) == 0 {
+		return "", false
+	}
+	loc := dockerfileStageLocation(*it.Source.Stage, it.Source.StageName)
+	return strings.Join([]string{prKindDockerfile, strings.ToLower(it.Source.Repository), it.Source.BaseBranch, it.Source.Path, loc}, "|"), true
 }
 
 // workloadService is the service part of a compose/<project>/<service> key,

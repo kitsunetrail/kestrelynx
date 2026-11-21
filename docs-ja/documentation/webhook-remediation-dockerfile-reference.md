@@ -532,6 +532,8 @@ CVEごとに結果が異なる場合は、同じパッケージが複数の配�
 | `name` | string | パッケージ名 | — |
 | `version` | string | 記録の対象となるパッケージの版 | `""` |
 | `class` | string | パッケージの分類 | — |
+| `ecosystem` | string | パッケージの種類（値は[パッケージの種類](webhook-reference.md#package-fields)と同じ） | 省略 |
+| `type` | string | スキャン結果での検出元の種類（例: `alpine`、`node-pkg`、`jar`） | 省略 |
 | `path` | string | スキャン結果にあるパッケージの場所を示す文字列 | 省略 |
 | `owner` | string | グローバルな`node_modules`で、このパッケージを配下に持つパッケージ名 | 省略 |
 | `base_version` | string | `gone`の記録に対応する現在のベースの同じ場所にある版 | 省略 |
@@ -577,7 +579,7 @@ CVEごとに結果が異なる場合は、同じパッケージが複数の配�
 | フィールド | まとめ方 |
 | --- | --- |
 | `gone` | その所見を持つすべての稼働イメージで消えるものだけを含める |
-| `gone`・`remaining`・`not_in_base`・`only_in_base` | パッケージの分類・名前・版・パス・`base_version`が同じ記録を1つにまとめ、CVE IDの重複を除く |
+| `gone`・`remaining`・`not_in_base`・`only_in_base` | 検出元の種類（`type`）・パッケージの分類・名前・版・パス・`base_version`が同じ記録を1つにまとめ、CVE IDの重複を除く |
 | `undetermined` | 稼働イメージごとの件数の合計 |
 | `other_not_in_base` | 稼働イメージごとの件数の最大値 |
 

@@ -532,6 +532,8 @@ Each element of `dockerfile_items[].rebuild_check.gone[]` has the following fiel
 | `name` | string | Package name | — |
 | `version` | string | Package version covered by the record | `""` |
 | `class` | string | Package class | — |
+| `ecosystem` | string | Package kind, with the same values as [Package kinds](webhook-reference.md#package-fields) | omitted |
+| `type` | string | Detection source type in the scan result, such as `alpine`, `node-pkg`, or `jar` | omitted |
 | `path` | string | String identifying the package location in the scan result | omitted |
 | `owner` | string | Name of the package under which this package is located in a global `node_modules` | omitted |
 | `base_version` | string | Version at the same location in the current base corresponding to the `gone` record | omitted |
@@ -577,7 +579,7 @@ The aggregation rules for each field are as follows.
 | Field | Aggregation |
 | --- | --- |
 | `gone` | Includes a finding only if it disappears in every running image that has it |
-| `gone`, `remaining`, `not_in_base`, and `only_in_base` | Records with the same package class, name, version, path, and `base_version` are grouped into one record, with CVE IDs deduplicated |
+| `gone`, `remaining`, `not_in_base`, and `only_in_base` | Records with the same detection source type (`type`), package class, name, version, path, and `base_version` are grouped into one record, with CVE IDs deduplicated |
 | `undetermined` | Sum of the counts for each running image |
 | `other_not_in_base` | Maximum of the counts for each running image |
 

@@ -17,7 +17,7 @@ Remove credentials and other sensitive data.
 
 ## Supported versions
 
-Images are published at `ghcr.io/kitsunetrail/kestrelynx` with `X.Y.Z`, `X.Y`, `latest`, and `sha-<short-commit>` tags. Each `X.Y.Z` tag stays fixed to that release; each `X.Y` tag tracks the latest release in the `X.Y.x` series.
+Images are published at `ghcr.io/kitsunetrail/kestrelynx` with `X.Y.Z`, `X.Y`, `latest`, `edge`, and `sha-<short-commit>` tags. Each `X.Y.Z` tag stays fixed to that release; each `X.Y` tag tracks the latest release in the `X.Y.x` series. The `latest` tag points to the latest release image; the `edge` tag points to the latest image built from the main branch.
 
 Security fixes are provided through new releases and the `latest` image. Older releases do not receive backports; deployments pinned to a release tag or SHA tag must move to a release containing the fix.
 

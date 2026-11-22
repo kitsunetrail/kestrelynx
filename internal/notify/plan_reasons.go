@@ -271,7 +271,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"input_modified":                    {"a step changed a settings file it only reads", "読むだけのはずの設定ファイルが更新の途中で変更された"},
 	"requires_python_unsupported":       {"the Python version requirements do not match, or one is missing or cannot be read", "Python の版の指定が合わないか、指定が無いか読み取れない"},
 	"lockfile_inconsistent":             {"the lockfile is not consistent with the project", "lockfile がプロジェクトと整合していない"},
-	"no_wheel_for_version":              {"the version has no wheel for the platform", "その版にプラットフォーム向けの wheel がない"},
+	"no_wheel_for_version":              {"the version has no wheel the target environment can use", "その版に、対象の環境で使える wheel がない"},
 	"release_yanked":                    {"the release was yanked", "そのリリースは取り下げられている"},
 	"pip_target_undecidable":            {"the environment the packages run in cannot be decided", "パッケージが動く環境を判断できない"},
 	"pip_target_mismatch":               {"the environment pip resolves for differs from the one the packages run in", "pip が解決する環境がパッケージの動く環境と異なる"},

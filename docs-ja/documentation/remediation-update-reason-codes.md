@@ -175,7 +175,7 @@ Maven・Gradleの版の出所、更新先、lockfileの検査結果を示しま�
 | `manifest_edit_required` | `package.json`や`pyproject.toml`の依存宣言に、自動では書き換えられない版指定などの変更が必要である | [直接依存の版指定](remediation-node-python-logic.md#direct-dependencies) |
 | `input_modified` | 読み取り専用のはずの設定ファイルが変更された | [付随変更の検査](remediation-node-python-logic.md#change-validation) |
 | `lockfile_inconsistent` | lockfileがプロジェクトと整合していない | [マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods) |
-| `no_wheel_for_version` | 対象の版に必要なプラットフォーム向けのwheelがない | [マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods) |
+| `no_wheel_for_version` | その版に、対象の環境で使えるwheelがない | [マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods) |
 | `release_yanked` | 対象のリリースが取り下げられている | [付随変更の検査](remediation-node-python-logic.md#change-validation) |
 | `requirements_rewrite_unsupported` | 修正計画で使う更新方法ではrequirementsを書き換えられない | [マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods) |
 | `update_set_not_applied` | 同時に更新する別のパッケージを更新できなかった | [部分PRの成立条件](remediation-package-logic.md#partial-pr-selection) |

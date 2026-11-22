@@ -749,7 +749,20 @@ func (r *updateRun) checkDistributions(ctx context.Context, g *depGraph, touched
 			case !mayInstall[k]:
 				// not installed in the image's environment
 			case fitting == 0:
-				return mismatch(n, "%s records no wheel that fits the image's environment (Python %s; %s); a source distribution alone has to be built", k, tgt.PythonVersion, strings.Join(tgt.Platforms[:min(3, len(tgt.Platforms))], ", "))
+				env := fmt.Sprintf("Python %s; %s", tgt.PythonVersion, strings.Join(tgt.Platforms[:min(3, len(tgt.Platforms))], ", "))
+				for _, pub := range rel.Files {
+					if pub.Wheel && !pub.Yanked && wheelFitsTarget(pub.Filename, tgt) {
+						// The entry leaves out a wheel PyPI publishes.
+						return mismatch(n, "%s records no wheel that fits the image's environment (%s), while PyPI publishes %q; a source distribution alone has to be built", k, env, clip(pub.Filename, 200))
+					}
+				}
+				// PyPI publishes none either: the version has nothing the
+				// image's environment installs.
+				f := manualFailure(ReasonNoWheelForVersion, "%s %s: %s records no wheel that fits the image's environment (%s), and PyPI publishes none; a source distribution alone has to be built", n.name, n.version, k, env)
+				if targets[n.name] {
+					f.pkgs = map[string]updateFailureDetail{n.name: {ReasonNoWheelForVersion, f.detail}}
+				}
+				return f
 			case pythonOK == 0:
 				f := pkgFailure(n.name, ReasonRequiresPythonUnsupported, "%s %s has no wheel for the image's environment whose requires-python admits Python %s", n.name, n.version, tgt.PythonVersion)
 				return f

@@ -37,7 +37,10 @@ func parseUv(pyproject, lock []byte) (*lockfile, error) {
 	// its build backend, which the plan does not do.
 	if dyn, present := project["dynamic"]; present {
 		list, isList := dyn.([]any)
-		if !isList || len(list) > 0 {
+		if !isList {
+			return nil, unsupported(ReasonUnparsableSource, "the dynamic field of pyproject.toml is not a list")
+		}
+		if len(list) > 0 {
 			return nil, unsupported(ReasonDynamicMetadata, "pyproject.toml declares dynamic project fields")
 		}
 	}

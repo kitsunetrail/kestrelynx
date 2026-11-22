@@ -175,7 +175,7 @@ These codes describe starting and running dependency-file updates and collecting
 | `manifest_edit_required` | Dependency declarations in `package.json` or `pyproject.toml` require changes, such as version specifications that cannot be edited automatically | [Direct dependency declarations](remediation-node-python-logic.md#direct-dependencies) |
 | `input_modified` | A settings file that should only be read was modified | [Collateral change validation](remediation-node-python-logic.md#change-validation) |
 | `lockfile_inconsistent` | The lockfile is inconsistent with the project | [Manager update methods](remediation-package-logic.md#manager-update-methods) |
-| `no_wheel_for_version` | The target version has no wheel for the required platform | [Manager update methods](remediation-package-logic.md#manager-update-methods) |
+| `no_wheel_for_version` | The version has no wheel the target environment can use | [Manager update methods](remediation-package-logic.md#manager-update-methods) |
 | `release_yanked` | The target release was yanked | [Collateral change validation](remediation-node-python-logic.md#change-validation) |
 | `requirements_rewrite_unsupported` | The remediation update method cannot rewrite the requirements | [Manager update methods](remediation-package-logic.md#manager-update-methods) |
 | `update_set_not_applied` | Another package being updated together with the target could not be updated | [Partial PR conditions](remediation-package-logic.md#partial-pr-selection) |

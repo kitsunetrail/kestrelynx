@@ -689,19 +689,19 @@ func TestUvEntryForAnotherPlatformNeedsNoWheelForTheImage(t *testing.T) {
 		h := setup(t, `, marker = "platform_release >= '5.0'"`)
 		h.pypi.requires = map[string][]string{"urllib3==1.26.17": {"winonly; platform_release >= '5.0'"}}
 		it, _ := h.run()
-		wantCategory(t, it, CategoryManual, ReasonDistributionMismatch)
+		wantCategory(t, it, CategoryManual, ReasonNoWheelForVersion)
 	})
 	t.Run("the same dependency without a marker still needs a wheel", func(t *testing.T) {
 		h := setup(t, "")
 		h.pypi.requires = map[string][]string{"urllib3==1.26.17": {"winonly"}}
 		it, _ := h.run()
-		wantCategory(t, it, CategoryManual, ReasonDistributionMismatch)
+		wantCategory(t, it, CategoryManual, ReasonNoWheelForVersion)
 	})
 	t.Run("a marker true here still needs a wheel", func(t *testing.T) {
 		h := setup(t, `, marker = "sys_platform == 'linux'"`)
 		h.pypi.requires = map[string][]string{"urllib3==1.26.17": {"winonly; sys_platform == 'linux'"}}
 		it, _ := h.run()
-		wantCategory(t, it, CategoryManual, ReasonDistributionMismatch)
+		wantCategory(t, it, CategoryManual, ReasonNoWheelForVersion)
 	})
 }
 

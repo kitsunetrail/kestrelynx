@@ -156,7 +156,7 @@ func TestParseUvRevisionDynamicAndTypes(t *testing.T) {
 		{"revision is a string", uvPyproject, strings.Replace(uvLock, "revision = 5", `revision = "5"`, 1), ReasonUnsupportedLockfile},
 		{"dynamic version", strings.Replace(uvPyproject, `version = "0.1.0"`, `dynamic = ["version"]`, 1), uvLock, ReasonDynamicMetadata},
 		{"dynamic anything", strings.Replace(uvPyproject, `version = "0.1.0"`, `dynamic = ["readme"]`, 1), uvLock, ReasonDynamicMetadata},
-		{"dynamic is not a list", strings.Replace(uvPyproject, `version = "0.1.0"`, `dynamic = "version"`, 1), uvLock, ReasonDynamicMetadata},
+		{"dynamic is not a list", strings.Replace(uvPyproject, `version = "0.1.0"`, `dynamic = "version"`, 1), uvLock, ReasonUnparsableSource},
 		{"package name is a number", uvPyproject, strings.Replace(uvLock, `name = "certifi"`, `name = 5`, 1), ReasonUnparsableSource},
 		{"version is a number", uvPyproject, strings.Replace(uvLock, `version = "2024.2.2"`, `version = 2024`, 1), ReasonUnparsableSource},
 		{"wheels is a string", uvPyproject, strings.Replace(uvLock, "wheels = [\n    { url = \"https://files.pythonhosted.org/certifi.whl\", hash = \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", size = 2 },\n]", `wheels = "none"`, 1), ReasonUnparsableSource},

@@ -18,9 +18,8 @@ Installed: 3.0.7
 Fixed in: 3.0.11
 Upgrade risk: 🟢 distro security patch
 Findings: CRITICAL 1 / HIGH 0
-Top CVE: CVE-2031-0001 · CRITICAL · EPSS 94%
-Exploitation: CISA KEV (exploited in the wild) · 🧨 ransomware campaign
-References: advisory · vendor advisory
+CVEs:
+• CVE-2031-0001 · CRITICAL · EPSS 94% · CISA KEV (exploited in the wild) · 🧨 ransomware campaign · openssl: buffer overread · vendor advisory
 ```
 
 Watch findings in the channel use compact cards like this.
@@ -29,7 +28,7 @@ Watch findings in the channel use compact cards like this.
 ◆ e2fsprogs
 Installed: 1.47.0-2 · Fixed in: none
 Findings: CRITICAL 1 / HIGH 0
-Top CVE: CVE-2031-0003 · EPSS 3%
+CVEs: CVE-2031-0003 (EPSS 3%)
 ```
 
 The following table shows which card format is used.
@@ -61,11 +60,11 @@ This comparison applies to both channel and thread cards.
 | Upgrade risk | `Upgrade risk:` line | In parentheses after the fixed version |
 | Finding counts | CVE counts by severity | CVE counts by severity |
 | Action | [Card action line](#base-image-wait) | [Card action line](#base-image-wait) |
-| CVEs | Top CVE, exploitation information, and references | Short top CVE display (the package's CVE IDs on one line in the new-findings section) |
+| CVEs | One line per CVE | CVE IDs on one line |
 | Runtime usage | Display including observation evidence | Short in-use display |
 
 `Findings:` counts distinct CVE IDs included in that card.
-See [Priority line counts](slack-display.md#priority-counts) for how findings are separated into cards and [CVE details](#cve-details) for when the top CVE appears.
+See [Priority line counts](slack-display.md#priority-counts) for how findings are separated into cards and [CVE details](#cve-details) for CVE content and ordering.
 
 Channel cards show observed use, while detailed thread cards also show when use was not observed or could not be determined.
 See [Usage labels](slack-runtime-display.md#usage-labels) for details.
@@ -92,14 +91,48 @@ The OS and CPU architecture are also included when needed.
 
 ### CVE details {#cve-details}
 
-`Top CVE:` identifies one CVE from the card, selected using priority and EPSS.
-The following detailed-card example has one additional CVE besides the top CVE.
+Cards list their CVEs under `CVEs:`, with one CVE per line on detailed cards and all IDs on one line on compact cards.
+Detailed cards list CVEs below the `CVEs:` line as follows.
 
 ```text
-Top CVE: CVE-2031-0006 · HIGH · EPSS 20% (+1 more CVE(s) in this package)
+CVEs:
+• CVE-2031-0001 · CRITICAL · EPSS 94% · CISA KEV (exploited in the wild) · 🧨 ransomware campaign · openssl: buffer overread · vendor advisory
+• CVE-2031-0006 · HIGH · EPSS 20% · libxml2: use-after-free
 ```
 
-The top CVE is selected using the following comparison order.
+The following table lists each line's items from left to right.
+Items without information are omitted.
+
+| Item | Display example | Meaning |
+| --- | --- | --- |
+| CVE ID | `CVE-2031-0001` | Vulnerability ID; see the final table in this section for link destinations |
+| Severity | `CRITICAL` | Severity of the CVE |
+| EPSS | `EPSS 94%` | Score indicating the likelihood of exploitation |
+| KEV | `CISA KEV (exploited in the wild)` | Listed in CISA KEV as exploited in actual attacks |
+| Ransomware | `🧨 ransomware campaign` | Information indicates use in ransomware attacks |
+| Description | `openssl: buffer overread` | Trivy findings use Trivy's description; Node.js and Python runtime findings use the runtime's vulnerability information |
+| Vendor information | `vendor advisory` | Link to vendor or CISA information from KEV notes |
+
+`EPSS n/a` on a detailed card means no score is available; very small values appear as `<0.1%`, and very large values as `>99%`.
+
+EPSS, KEV, and ransomware information appears when triage is enabled and KEV or EPSS is available.
+When triage is enabled and neither KEV nor EPSS is available, the `CVEs:` line indicates this.
+
+```text
+CVEs: severity only (intel unavailable)
+• CVE-2031-0003 · CRITICAL · e2fsprogs: out-of-bounds write
+```
+
+Compact cards list CVE IDs on one line as follows.
+
+```text
+CVEs: CVE-2031-0007 (EPSS 0.4%), CVE-2031-0008, CVE-2031-0009
+```
+
+- CVEs with an EPSS score show the score after the ID in the form `(EPSS 3%)`
+- When triage is disabled or neither KEV nor EPSS is available, severity appears instead of the score in the form `(HIGH)`
+
+All cards list CVEs in the following order.
 Each criterion is used only when the preceding criteria do not distinguish the CVEs.
 
 1. Priority in the order Act now → Watch → Low
@@ -107,59 +140,21 @@ Each criterion is used only when the preceding criteria do not distinguish the C
 3. Higher EPSS scores first
 4. CVE IDs in ascending string order
 
-The following rules apply to top CVE displays on compact cards.
+Up to 20 CVEs are listed, with the remaining CVEs shown as a count.
 
-- Compact Watch and EOL cards in full reports show the top CVE when triage is enabled and KEV or EPSS is available
-- Compact cards in full reports omit the top CVE when triage is disabled or both KEV and EPSS are unavailable
-- Compact cards in the new-findings section list the package's CVE IDs on the `CVEs:` line instead of a `Top CVE:` line
-- However, cards for previously detected packages with added CVEs show the added CVE IDs on the `Change:` line and omit the `CVEs:` line
+- Compact cards show `(+N more)` at the end of the line
+- Detailed cards show `• +N more` on the last line
 
-CVE IDs on the `CVEs:` line are sorted using criteria 1–4 in the numbered list above.
-The top CVE comes first, and the remaining CVEs follow the same criteria.
+Cards for previously detected packages with added CVEs show the added CVE IDs on the `Change:` line and include them in the `CVEs:` list.
+Only cards showing `Details: 🚨 see Act now` omit CVEs.
 
-Up to nine CVE IDs are shown, with the remaining count displayed as `(+N more)`.
+CVE IDs under `CVEs:` and `Change:` use the following link destinations.
 
-For CVEs with an EPSS score, the score appears after the ID in the form `(EPSS 3%)`.
-When triage is disabled or both KEV and EPSS are unavailable, each CVE's severity appears instead of the score, in the form `(HIGH)`.
-
-```text
-CVEs: CVE-2031-0007 (EPSS 0.4%), CVE-2031-0008, CVE-2031-0009
-```
-
-Other CVEs are displayed as follows, depending on location.
-
-| Location | Other CVEs |
+| Condition | Link destination |
 | --- | --- |
-| Detailed channel card | Adds `(+N more CVE(s) in this package)` to `Top CVE:` |
-| Detailed thread card | Lists IDs under `Other CVEs:` and shows omitted IDs as `(+N more)` |
-| Channel diff card | Shows newly added CVE IDs under `Change:` |
-
-Other-CVE counts cover the CVEs included in that card.
-`EPSS n/a` on a detailed card means no score is available; very small values appear as `<0.1%`, and very large values as `>99%`.
-
-`Exploitation:` shows available exploitation information for the top CVE.
-The following example has information about exploitation in actual attacks and ransomware campaigns.
-
-```text
-Exploitation: CISA KEV (exploited in the wild) · 🧨 ransomware campaign
-```
-
-The exploitation labels have the following meanings.
-
-| Display | Meaning |
-| --- | --- |
-| `CISA KEV (exploited in the wild)` | The top CVE is listed in CISA KEV as exploited in actual attacks |
-| `🧨 ransomware campaign` | Information indicates use of the top CVE in ransomware attacks |
-
-See [Exploitation-based priority](scan-logic.md#triage) for priority decisions.
-
-`Summary:` in the thread shows the description of the top CVE.
-Descriptions come from the following sources.
-
-| Finding | Description source |
-| --- | --- |
-| Trivy finding | Trivy's description |
-| Node.js or Python runtime finding | The runtime's vulnerability information |
+| Trivy or the runtime's vulnerability information provides an advisory URL | That advisory |
+| No URL is available and the ID has the CVE format | NVD |
+| No URL is available and the ID is not a CVE ID, such as GHSA or DLA | Plain text without a link |
 
 See [Vulnerability fields](webhook-reference.md#vulnerability-fields) for complete CVE data without omissions.
 
@@ -433,25 +428,6 @@ Node.js and Python runtime findings come from each runtime's vulnerability infor
 
 Labels for the Node.js and Python runtimes identify the package type and do not mean that use was observed in a running container.
 See [Usage labels](slack-runtime-display.md#usage-labels) for observed usage.
-
-### Reference links {#reference-links}
-
-`References:` shows links related to the top CVE.
-The following example provides links to a vulnerability advisory and vendor information.
-
-```text
-References: advisory · vendor advisory
-```
-
-The following table lists the link displays and destinations.
-
-| Display | Destination |
-| --- | --- |
-| `advisory` | Primary advisory from Trivy or the runtime's vulnerability information |
-| `vendor advisory` | Vendor or CISA information from KEV notes |
-
-CVE IDs on the `Top CVE:`, `Other CVEs:`, `Change:`, and `CVEs:` lines link to NVD.
-Non-CVE identifiers such as GHSA and DLA IDs appear as plain text.
 
 ## Change labels {#change-labels}
 

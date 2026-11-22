@@ -12,10 +12,8 @@ TEXT: 未解決の所見の全体 — 🚨 今すぐ対応 · web:1.0 ほか1イ
 更新の注意度: 🟢 ディストリのセキュリティパッチ
 検出件数: CRITICAL 1 / HIGH 0
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> · CRITICAL · EPSS 94%
-悪用情報: CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃
-説明: openssl: buffer overread
-参照: <https://avd.example/CVE-2031-0001|アドバイザリ> · <https://vendor.example/advisory/1|ベンダーのアドバイザリ>
+CVE:
+• <https://avd.example/CVE-2031-0001|CVE-2031-0001> · CRITICAL · EPSS 94% · CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃 · openssl: buffer overread · <https://vendor.example/advisory/1|ベンダーのアドバイザリ>
 --- context ---
 ⏱ 未解決20日 · 初回検出2026-06-04
 --- divider ---
@@ -27,10 +25,9 @@ TEXT: 未解決の所見の全体 — 🚨 今すぐ対応 · web:1.0 ほか1イ
 修正版: なし — 緩和策を検討
 検出件数: CRITICAL 0 / HIGH 2
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0006|CVE-2031-0006> · HIGH · EPSS 20%
-説明: libxml2: use-after-free
-参照: <https://avd.example/CVE-2031-0006|アドバイザリ>
-ほかのCVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
+CVE:
+• <https://avd.example/CVE-2031-0006|CVE-2031-0006> · HIGH · EPSS 20% · libxml2: use-after-free
+• <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007> · HIGH · EPSS 5%
 --- context ---
 ⏱ 未解決20日 · 初回検出2026-06-04
 --- divider ---
@@ -40,8 +37,8 @@ TEXT: 未解決の所見の全体 — 🚨 今すぐ対応 · web:1.0 ほか1イ
 修正版: なし — このOSリリースでは修正予定なし、置き換えを検討
 検出件数: CRITICAL 0 / HIGH 1
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> · HIGH · EPSS 50%
-悪用情報: CISA KEV (実際の攻撃で悪用あり)
+CVE:
+• <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> · HIGH · EPSS 50% · CISA KEV (実際の攻撃で悪用あり)
 --- context ---
 ⏱ 本日初検出
 --- divider ---
@@ -54,8 +51,8 @@ TEXT: 未解決の所見の全体 — 🚨 今すぐ対応 · web:1.0 ほか1イ
 修正版: なし — 緩和策を検討
 検出件数: CRITICAL 1 / HIGH 0
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> · CRITICAL · EPSS 3%
-説明: e2fsprogs: out-of-bounds write
+CVE:
+• <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> · CRITICAL · EPSS 3% · e2fsprogs: out-of-bounds write
 --- context ---
 ⏱ 未解決20日 · 初回検出2026-06-04
 --- divider ---

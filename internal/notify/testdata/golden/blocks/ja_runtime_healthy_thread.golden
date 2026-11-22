@@ -11,9 +11,8 @@ TEXT: 未解決の所見の全体 — 🚨 今すぐ対応 · web:1.0 ほか1イ
 修正版: なし — 緩和策を検討
 検出件数: CRITICAL 1 / HIGH 0
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> · CRITICAL · EPSS n/a
-悪用情報: CISA KEV (実際の攻撃で悪用あり)
-参照: <https://avd.example/CVE-OPENSSL|アドバイザリ>
+CVE:
+• <https://avd.example/CVE-OPENSSL|CVE-OPENSSL> · CRITICAL · EPSS n/a · CISA KEV (実際の攻撃で悪用あり)
 --- section ---
 使用状況: ▶ 使用中
 観測根拠: 実行中 `/usr/sbin/nginx`
@@ -28,7 +27,8 @@ TEXT: 未解決の所見の全体 — 🚨 今すぐ対応 · web:1.0 ほか1イ
 修正版: なし — 緩和策を検討
 検出件数: CRITICAL 0 / HIGH 1
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · HIGH · EPSS 2%
+CVE:
+• <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> · HIGH · EPSS 2%
 --- section ---
 使用状況: ▶ 使用中
 観測根拠: 稼働中の実行環境 `/usr/bin/python3.11`
@@ -42,7 +42,8 @@ TEXT: 未解決の所見の全体 — 🚨 今すぐ対応 · web:1.0 ほか1イ
 修正版: なし — 緩和策を検討
 検出件数: CRITICAL 0 / HIGH 1
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · HIGH · EPSS 2%
+CVE:
+• <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> · HIGH · EPSS 2%
 --- section ---
 使用状況: ▷ 使用が確認されない
 --- divider ---

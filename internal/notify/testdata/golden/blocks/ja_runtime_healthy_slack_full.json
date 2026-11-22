@@ -41,7 +41,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL\u003e · CRITICAL · EPSS n/a\n悪用情報: CISA KEV (実際の攻撃で悪用あり)\n参照: \u003chttps://avd.example/CVE-OPENSSL|アドバイザリ\u003e"
+          "text": "CVE:\n• \u003chttps://avd.example/CVE-OPENSSL|CVE-OPENSSL\u003e · CRITICAL · EPSS n/a · CISA KEV (実際の攻撃で悪用あり)"
         },
         "expand": true
       },
@@ -68,7 +68,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "*イメージ: api:2.0*\n*◆ setuptools* [python-pkg]\n現在: 53.0.0 · 修正版: なし\n検出件数: CRITICAL 0 / HIGH 1\n代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP\u003e · EPSS 2%\n使用状況: ▶ 使用中 (実行中)"
+          "text": "*イメージ: api:2.0*\n*◆ setuptools* [python-pkg]\n現在: 53.0.0 · 修正版: なし\n検出件数: CRITICAL 0 / HIGH 1\nCVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP\u003e (EPSS 2%)\n使用状況: ▶ 使用中 (実行中)"
         },
         "expand": true
       },
@@ -76,7 +76,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "*イメージ: web:1.0*\n*◆ curl*\n現在: 8.0.0 · 修正版: なし\n検出件数: CRITICAL 0 / HIGH 1\n代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL\u003e · EPSS 2%"
+          "text": "*イメージ: web:1.0*\n*◆ curl*\n現在: 8.0.0 · 修正版: なし\n検出件数: CRITICAL 0 / HIGH 1\nCVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL\u003e (EPSS 2%)"
         },
         "expand": true
       },

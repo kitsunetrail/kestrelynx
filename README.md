@@ -124,11 +124,10 @@ Image: nginx:1.25.3
 Installed: 1.52.0-1
 Fixed in: 1.52.0-1+deb12u1
 Upgrade risk: 🟢 distro security patch
-Findings: CRITICAL 0 / HIGH 2
+Findings: CRITICAL 0 / HIGH 1
 
-Top CVE: CVE-2023-44487 · HIGH · EPSS >99% (+1 more CVE(s) in this package)
-Exploitation: CISA KEV (exploited in the wild)
-References: advisory · vendor advisory
+CVEs:
+• CVE-2023-44487 · HIGH · EPSS >99% · CISA KEV (exploited in the wild) · HTTP/2: Multiple HTTP/2 enabled web servers are vulnerable to a DDoS attack (Rapid Reset Attack) · vendor advisory
 ───
 Image: myapp:latest
 ◆ webpack [npm-pkg]

@@ -305,59 +305,20 @@ func (rd renderer) changeLine(c pkgCard) string {
 	return kv(rd.msg.LblChange, strings.Join(c.Changes, " · "))
 }
 
-// topLine is the representative-CVE line, or "" when the card shows none.
-func (rd renderer) topLine(c pkgCard) string {
-	if !c.HasTop {
+// cveLine names the vulnerabilities of the card on one line (a compact
+// card), or "" when the card has none. Where the triage intel is trustworthy,
+// a CVE with an EPSS score shows it and one without is named alone; a CVE in
+// CISA KEV makes its package act now, which has the detail card and not this
+// line. Without that intel (triage off, or its data unusable) each CVE shows
+// its severity instead, which is then all there is to tell them apart. The
+// ones past cveListMax are a count.
+func (rd renderer) cveLine(c pkgCard) string {
+	if len(c.CVEs) == 0 {
 		return ""
 	}
-	if c.TopMode == topList {
-		return rd.listLine(c)
-	}
-	t := c.Top
-	parts := []string{cardIDLink(t.ID)}
-	switch c.TopMode {
-	case topFull:
-		parts = append(parts, escMrkdwn(t.Severity))
-		if t.IntelDegraded {
-			parts = append(parts, rd.msg.EvidenceSeverityOnly)
-		} else {
-			parts = append(parts, fmt.Sprintf(rd.msg.EvidenceEPSSPrefix, escMrkdwn(t.EPSS)))
-		}
-	case topPlain:
-		parts = append(parts, escMrkdwn(t.Severity))
-	case topShort:
-		switch {
-		case !t.Intel:
-			return ""
-		case t.KEV:
-			parts = append(parts, rd.msg.CardKEVShort)
-		default:
-			parts = append(parts, fmt.Sprintf(rd.msg.EvidenceEPSSPrefix, escMrkdwn(t.EPSS)))
-		}
-	default:
-		return ""
-	}
-	line := kv(rd.msg.LblTopCVE, strings.Join(parts, " · "))
-	if c.Hint && c.MoreCVEs > 0 {
-		line += fmt.Sprintf(rd.msg.EvidenceMoreCVEs, c.MoreCVEs)
-	}
-	return line
-}
-
-// listLine is the line that names every CVE of the card (topList), or ""
-// when there is none. Where the triage intel is trustworthy, a CVE with an
-// EPSS score shows it and one without is named alone; a CVE in CISA KEV makes
-// its package act now, which has the detail card and not this line. Without
-// that intel (triage off, or its data unusable) each CVE shows its severity
-// instead, which is then all there is to tell them apart. The ids past
-// listIDsMax are a count.
-func (rd renderer) listLine(c pkgCard) string {
-	if len(c.List) == 0 {
-		return ""
-	}
-	parts := make([]string, len(c.List))
-	for i, t := range c.List {
-		parts[i] = cardIDLink(t.ID)
+	parts := make([]string, len(c.CVEs))
+	for i, t := range c.CVEs {
+		parts[i] = cveLink(t.ID, t.URL)
 		switch {
 		case !t.Intel:
 			if t.Severity != "" {
@@ -368,66 +329,52 @@ func (rd renderer) listLine(c pkgCard) string {
 		}
 	}
 	line := kv(rd.msg.LblCVEs, strings.Join(parts, ", "))
-	if c.ListExtra > 0 {
-		line += fmt.Sprintf(rd.msg.MoreCount, c.ListExtra)
+	if c.CVEExtra > 0 {
+		line += fmt.Sprintf(rd.msg.MoreCount, c.CVEExtra)
 	}
 	return line
 }
 
-// exploitLine is the exploitation-facts line (CISA KEV, ransomware), shown
-// only where the intel behind it is trustworthy.
-func (rd renderer) exploitLine(c pkgCard) string {
-	if !c.HasTop || c.TopMode != topFull || c.Top.IntelDegraded {
-		return ""
+// cveLines give each vulnerability of the card a line of its own (a detail
+// card), under the label the compact line has: the id, the severity, the EPSS
+// score and the exploitation facts where the intel behind them is
+// trustworthy, the scanner's summary, and the vendor advisory. With the intel
+// unusable the label line says once that only the severity is shown. The
+// vulnerabilities past cveListMax are a count on a last line.
+func (rd renderer) cveLines(c pkgCard) []string {
+	if len(c.CVEs) == 0 {
+		return nil
 	}
-	var parts []string
-	if c.Top.KEV {
-		parts = append(parts, rd.msg.EvidenceKEV)
+	msg := rd.msg
+	head := msg.LblCVEs + ":"
+	if c.CVEs[0].IntelDegraded {
+		head = kv(msg.LblCVEs, msg.EvidenceSeverityOnly)
 	}
-	if c.Top.Ransomware {
-		parts = append(parts, rd.msg.EvidenceRansomware)
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return kv(rd.msg.LblExploitation, strings.Join(parts, " · "))
-}
-
-func (rd renderer) refsLine(c pkgCard) string {
-	links := refLinksSafe(c.Refs, rd.msg)
-	if len(links) == 0 {
-		return ""
-	}
-	return kv(rd.msg.LblReferences, strings.Join(links, " · "))
-}
-
-// evidenceLines are the lines of a card's evidence section: the
-// representative CVE, its exploitation facts, and — where the view collected
-// them — its title, the reference links and the other CVE ids.
-func (rd renderer) evidenceLines(c pkgCard) []string {
-	var lines []string
-	if l := rd.topLine(c); l != "" {
-		lines = append(lines, l)
-	}
-	if l := rd.exploitLine(c); l != "" {
-		lines = append(lines, l)
-	}
-	if c.Title != "" {
-		lines = append(lines, kv(rd.msg.LblSummary, escMrkdwn(c.Title)))
-	}
-	if l := rd.refsLine(c); l != "" {
-		lines = append(lines, l)
-	}
-	if len(c.Others) > 0 {
-		links := make([]string, len(c.Others))
-		for i, id := range c.Others {
-			links[i] = cardIDLink(id)
+	lines := []string{head}
+	for _, t := range c.CVEs {
+		parts := []string{cveLink(t.ID, t.URL)}
+		if t.Severity != "" {
+			parts = append(parts, escMrkdwn(t.Severity))
 		}
-		l := kv(rd.msg.LblOtherCVEs, strings.Join(links, ", "))
-		if c.OthersExtra > 0 {
-			l += fmt.Sprintf(rd.msg.MoreCount, c.OthersExtra)
+		if t.Intel {
+			parts = append(parts, fmt.Sprintf(msg.EvidenceEPSSPrefix, escMrkdwn(t.EPSS)))
+			if t.KEV {
+				parts = append(parts, msg.EvidenceKEV)
+			}
+			if t.Ransomware {
+				parts = append(parts, msg.EvidenceRansomware)
+			}
 		}
-		lines = append(lines, l)
+		// The summary is an external text on a line of its own CVE: it is
+		// shown as the literal one line it is.
+		if t.Title != "" {
+			parts = append(parts, litMrkdwn(t.Title))
+		}
+		parts = append(parts, refLinksSafe(t.Refs, msg)...)
+		lines = append(lines, "• "+strings.Join(parts, " · "))
+	}
+	if c.CVEExtra > 0 {
+		lines = append(lines, "• "+fmt.Sprintf(msg.CardCVEsMore, c.CVEExtra))
 	}
 	return lines
 }
@@ -520,17 +467,18 @@ func (rd renderer) detailHeadLines(c pkgCard) []string {
 	return lines
 }
 
-// detailCard is the channel's detail card: a head section, an evidence
-// section and a runtime section, each present only when it has content.
+// detailCard is the channel's detail card: a head section, a section with
+// the vulnerabilities and a runtime section, each present only when it has
+// content.
 func (rd renderer) detailCard(c pkgCard) []Block {
 	blocks := sectionBlocks(rd.detailHeadLines(c), rd.lim.MaxTextUnits)
-	blocks = append(blocks, sectionBlocks(rd.evidenceLines(c), rd.lim.MaxTextUnits)...)
+	blocks = append(blocks, sectionBlocks(rd.cveLines(c), rd.lim.MaxTextUnits)...)
 	blocks = append(blocks, sectionBlocks(rd.runtimeLines(c), rd.lim.MaxTextUnits)...)
 	return blocks
 }
 
-// threadCard is the thread's card: the head, evidence and runtime sections,
-// then the age as context. A section with no values is not built. The view
+// threadCard is the thread's card: the detail card, then the age as
+// context. A section with no values is not built. The view
 // puts the divider in front.
 func (rd renderer) threadCard(c pkgCard) []Block {
 	blocks := rd.detailCard(c)
@@ -581,8 +529,8 @@ func (rd renderer) imageHeadingCapped(label string) string {
 
 // compactLines are the lines of a card shown as one section: name, change,
 // installed and fixed versions on one line (the upgrade risk in parentheses
-// after the fixed version), counts, the representative CVE and the short
-// runtime state.
+// after the fixed version), counts, the vulnerabilities and the short runtime
+// state.
 func (rd renderer) compactLines(c pkgCard) []string {
 	lines := []string{c.titleLine()}
 	if l := rd.changeLine(c); l != "" {
@@ -598,7 +546,7 @@ func (rd renderer) compactLines(c pkgCard) []string {
 	if l := rd.actionLine(c); l != "" {
 		lines = append(lines, l)
 	}
-	if l := rd.topLine(c); l != "" {
+	if l := rd.cveLine(c); l != "" {
 		lines = append(lines, l)
 	}
 	if c.SeeActNow {

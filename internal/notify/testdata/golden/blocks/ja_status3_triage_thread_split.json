@@ -22,7 +22,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001\u003e · CRITICAL · EPSS 94%\n悪用情報: CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃\n説明: openssl: buffer overread\n参照: \u003chttps://avd.example/CVE-2031-0001|アドバイザリ\u003e · \u003chttps://vendor.example/advisory/1|ベンダーのアドバイザリ\u003e"
+          "text": "CVE:\n• \u003chttps://avd.example/CVE-2031-0001|CVE-2031-0001\u003e · CRITICAL · EPSS 94% · CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃 · openssl: buffer overread · \u003chttps://vendor.example/advisory/1|ベンダーのアドバイザリ\u003e"
         },
         "expand": true
       },
@@ -58,7 +58,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0006|CVE-2031-0006\u003e · HIGH · EPSS 20%\n説明: libxml2: use-after-free\n参照: \u003chttps://avd.example/CVE-2031-0006|アドバイザリ\u003e\nほかのCVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007\u003e"
+          "text": "CVE:\n• \u003chttps://avd.example/CVE-2031-0006|CVE-2031-0006\u003e · HIGH · EPSS 20% · libxml2: use-after-free\n• \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007\u003e · HIGH · EPSS 5%"
         },
         "expand": true
       },
@@ -96,7 +96,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009\u003e · HIGH · EPSS 50%\n悪用情報: CISA KEV (実際の攻撃で悪用あり)"
+          "text": "CVE:\n• \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009\u003e · HIGH · EPSS 50% · CISA KEV (実際の攻撃で悪用あり)"
         },
         "expand": true
       },
@@ -132,7 +132,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003\u003e · CRITICAL · EPSS 3%\n説明: e2fsprogs: out-of-bounds write"
+          "text": "CVE:\n• \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003\u003e · CRITICAL · EPSS 3% · e2fsprogs: out-of-bounds write"
         },
         "expand": true
       },

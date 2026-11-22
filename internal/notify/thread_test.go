@@ -31,7 +31,7 @@ func TestThread_TriageLayout(t *testing.T) {
 		"*🚨 ACT NOW (1) — exploited or likely to be*",
 		"*Image: web:1.0*",
 		"*◆ openssl*\nInstalled: 3.0.7\nFixed in: 3.0.11",
-		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> · CRITICAL · EPSS 94%\nExploitation: CISA KEV (exploited in the wild)",
+		"CVEs:\n• <https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> · CRITICAL · EPSS 94% · CISA KEV (exploited in the wild)",
 		"⏱ open 3 day(s) · first seen 2026-06-21",
 		"*👀 WATCH (1) — not urgent, keep an eye on*",
 		"*◆ e2fsprogs*\nInstalled: 1.44\nFixed in: none — consider mitigation",
@@ -76,9 +76,9 @@ func findPkgGroup(t *testing.T, section []analyze.ImageFindings, image, pkg stri
 	return analyze.PackageGroup{}
 }
 
-// The thread card shows the headline CVE's Trivy title as its own labelled
-// line, but only for the headline CVE (not the other ids folded behind it).
-func TestThread_TitleLine(t *testing.T) {
+// The thread card gives every CVE a line of its own, each with its own Trivy
+// title.
+func TestThread_TitleOnEachCVELine(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "app:1",
 		Findings: []scanner.Finding{
@@ -89,17 +89,15 @@ func TestThread_TitleLine(t *testing.T) {
 	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
 	out := renderThread(r, Ages{})
 
-	if !strings.Contains(out, "\nSummary: libx: headline vulnerability title\n") {
-		t.Errorf("expected the headline CVE's title on its own line:\n%s", out)
-	}
-	if strings.Contains(out, "secondary vulnerability title") {
-		t.Errorf("the other-CVEs line must not expand the secondary CVE's title:\n%s", out)
+	want := "CVEs:\n• <https://nvd.nist.gov/vuln/detail/CVE-A|CVE-A> · CRITICAL · EPSS n/a · CISA KEV (exploited in the wild) · libx: headline vulnerability title\n• <https://nvd.nist.gov/vuln/detail/CVE-B|CVE-B> · HIGH · EPSS n/a · libx: secondary vulnerability title"
+	if !strings.Contains(out, want) {
+		t.Errorf("expected each CVE on its own line with its title:\n%s", out)
 	}
 }
 
-// No Summary line at all when the headline CVE has no Title (e.g. Trivy didn't
-// supply one for this CVE).
-func TestThread_NoTitleLineWhenEmpty(t *testing.T) {
+// A CVE with no Title (e.g. Trivy didn't supply one for it) is a line that
+// ends after its facts.
+func TestThread_NoTitleWhenEmpty(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "app:1",
 		Findings: []scanner.Finding{
@@ -109,12 +107,9 @@ func TestThread_NoTitleLineWhenEmpty(t *testing.T) {
 	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
 	out := renderThread(r, Ages{})
 
-	if strings.Contains(out, "Summary:") {
-		t.Errorf("no summary line expected without a title:\n%s", out)
-	}
-	want := "Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-A|CVE-A> · CRITICAL · EPSS n/a\nExploitation: CISA KEV (exploited in the wild)"
-	if !strings.Contains(out, want) {
-		t.Errorf("expected the evidence lines:\n%s", out)
+	want := "CVEs:\n• <https://nvd.nist.gov/vuln/detail/CVE-A|CVE-A> · CRITICAL · EPSS n/a · CISA KEV (exploited in the wild)"
+	if !strings.Contains(out+"\n", want+"\n") {
+		t.Errorf("expected the CVE line to end after its facts:\n%s", out)
 	}
 }
 
@@ -142,7 +137,7 @@ func TestThread_NothingOpen(t *testing.T) {
 	}
 }
 
-func TestThread_AlsoIDs(t *testing.T) {
+func TestThread_EveryCVEListed(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "app:1",
 		Findings: []scanner.Finding{
@@ -153,8 +148,9 @@ func TestThread_AlsoIDs(t *testing.T) {
 	}}
 	r := analyze.Build(scans, nil, triageRules(map[string]analyze.Enrichment{"CVE-A": {KEV: true}}), genTime)
 	out := renderThread(r, Ages{})
-	if !strings.Contains(out, "Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-B|CVE-B>, <https://nvd.nist.gov/vuln/detail/CVE-C|CVE-C>") {
-		t.Errorf("secondary CVE ids must be listed:\n%s", out)
+	want := "CVEs:\n• <https://nvd.nist.gov/vuln/detail/CVE-A|CVE-A> · CRITICAL · EPSS n/a · CISA KEV (exploited in the wild)\n• <https://nvd.nist.gov/vuln/detail/CVE-B|CVE-B> · HIGH · EPSS n/a\n• <https://nvd.nist.gov/vuln/detail/CVE-C|CVE-C> · HIGH · EPSS n/a"
+	if !strings.Contains(out, want) {
+		t.Errorf("every CVE must be listed on its own line:\n%s", out)
 	}
 }
 

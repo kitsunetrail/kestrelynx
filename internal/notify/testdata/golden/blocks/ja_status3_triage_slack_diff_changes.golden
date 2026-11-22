@@ -15,8 +15,9 @@ _前回のスキャンからの変化_
 修正版: なし — 緩和策を検討
 検出件数: CRITICAL 0 / HIGH 2
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0006|CVE-2031-0006> · HIGH · EPSS 20% (このパッケージにほか +1件のCVE)
-参照: <https://avd.example/CVE-2031-0006|アドバイザリ>
+CVE:
+• <https://avd.example/CVE-2031-0006|CVE-2031-0006> · HIGH · EPSS 20% · libxml2: use-after-free
+• <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007> · HIGH · EPSS 5%
 --- divider ---
 --- section ---
 *◆ zlib*
@@ -24,8 +25,8 @@ _前回のスキャンからの変化_
 修正版: なし — このOSリリースでは修正予定なし、置き換えを検討
 検出件数: CRITICAL 0 / HIGH 1
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> · HIGH · EPSS 50%
-悪用情報: CISA KEV (実際の攻撃で悪用あり)
+CVE:
+• <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> · HIGH · EPSS 50% · CISA KEV (実際の攻撃で悪用あり)
 --- divider ---
 --- section ---
 *イメージ: web:1.0*
@@ -37,9 +38,8 @@ _前回のスキャンからの変化_
 更新の注意度: 🟢 ディストリのセキュリティパッチ
 検出件数: CRITICAL 1 / HIGH 0
 --- section ---
-代表CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> · CRITICAL · EPSS 94%
-悪用情報: CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃
-参照: <https://avd.example/CVE-2031-0001|アドバイザリ> · <https://vendor.example/advisory/1|ベンダーのアドバイザリ>
+CVE:
+• <https://avd.example/CVE-2031-0001|CVE-2031-0001> · CRITICAL · EPSS 94% · CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃 · openssl: buffer overread · <https://vendor.example/advisory/1|ベンダーのアドバイザリ>
 --- divider ---
 --- section ---
 *◆ openssl*

@@ -149,10 +149,10 @@ func TestChannel_EOLActNowInBothSections(t *testing.T) {
 		"*Image: legacy:1*\nStatus: base OS is EOL (no more security updates coming)\nincludes 2 end-of-life package(s)",
 		"*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*",
 		"*◆ libxml2*\nInstalled: 2.9.7-16 · Fixed in: none — end-of-life: no fix planned for this release\nFindings: CRITICAL 0 / HIGH 1\nDetails: 🚨 see Act now",
-		"*◆ qt5-qtbase*\nInstalled: 5.15.3-1 · Fixed in: none — end-of-life: no fix planned for this release\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> · EPSS &lt;0.1%",
+		"*◆ qt5-qtbase*\nInstalled: 5.15.3-1 · Fixed in: none — end-of-life: no fix planned for this release\nFindings: CRITICAL 0 / HIGH 1\nCVEs: <https://avd.example/CVE-2033-0002|CVE-2033-0002> (EPSS &lt;0.1%)",
 		"*🚨 Act now (2) — exploited or likely to be*",
 		"*◆ zlib*\nInstalled: 1.2.11\nFixed in: none — end-of-life: no fix planned for this release, consider a supported version\nFindings: CRITICAL 1 / HIGH 1",
-		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL · EPSS 30% (+1 more CVE(s) in this package)\nExploitation: CISA KEV (exploited in the wild)",
+		"CVEs:\n• <https://avd.example/CVE-2033-0005|CVE-2033-0005> · CRITICAL · EPSS 30% · CISA KEV (exploited in the wild)\n• <https://avd.example/CVE-2033-0007|CVE-2033-0007> · HIGH · EPSS &lt;0.1%",
 	)
 	eolSec := strings.Index(out, "*⛔ Package end-of-life")
 	actNow := strings.Index(out, "*🚨 Act now")
@@ -194,12 +194,12 @@ func TestChannel_EOLChanges(t *testing.T) {
 		"*Image: old:3*\nStatus: base OS is EOL (no more security updates coming)\nincludes 1 newly end-of-life package(s)",
 		"*⛔ New: package end-of-life (5) — vendor reports these CVEs as out of support for this release*",
 		"*◆ libxml2*\nChange: ⬆️ escalated to ACT NOW\nInstalled: 2.9.7-16\nFixed in: none — end-of-life: no fix planned for this release, consider a supported version\nFindings: CRITICAL 0 / HIGH 1",
-		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0003|CVE-2033-0003> · HIGH · EPSS 12%\nExploitation: CISA KEV (exploited in the wild)",
-		"*◆ zlib*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0007|CVE-2033-0007>\nInstalled: 1.2.11",
-		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL",
+		"CVEs:\n• <https://avd.example/CVE-2033-0003|CVE-2033-0003> · HIGH · EPSS 12% · CISA KEV (exploited in the wild)",
+		"*◆ zlib*\nChange: new CVEs: <https://avd.example/CVE-2033-0007|CVE-2033-0007>\nInstalled: 1.2.11",
+		"CVEs:\n• <https://avd.example/CVE-2033-0005|CVE-2033-0005> · CRITICAL · EPSS 30% · CISA KEV (exploited in the wild)\n• <https://avd.example/CVE-2033-0007|CVE-2033-0007> · HIGH · EPSS &lt;0.1%",
 		"*Image: legacy:1*\n1 package(s) newly end-of-life (base OS already EOL)",
 		"*🆕 New since last scan (1)*",
-		"*◆ curl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0012|CVE-2033-0012>\nInstalled: 7.61.1-34 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 2",
+		"*◆ curl*\nChange: new CVEs: <https://avd.example/CVE-2033-0012|CVE-2033-0012>\nInstalled: 7.61.1-34 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 2\nCVEs: <https://avd.example/CVE-2033-0011|CVE-2033-0011> (EPSS 2%), <https://avd.example/CVE-2033-0012|CVE-2033-0012>",
 		"• app:2.1: old-eol, tar",
 		"• app:2.1: sqlite-libs — no longer end-of-life",
 		"*✅ Resolved since last scan (3)*",
@@ -264,8 +264,8 @@ func TestChannel_EOLFoldWordings(t *testing.T) {
 	}
 }
 
-// An act_now end-of-life package gaining a CVE in the diff: evidence line
-// with the end-of-life mark, no pointer to Act now.
+// An act_now end-of-life package gaining a CVE in the diff: every CVE on a
+// line of its own with the end-of-life mark, no pointer to Act now.
 func TestChannel_EOLActNowNewCVEs(t *testing.T) {
 	enrich := map[string]analyze.Enrichment{"CVE-K": {KEV: true}}
 	scan1 := pinned(scanner.ImageScan{Image: "app:1", Findings: []scanner.Finding{
@@ -279,8 +279,8 @@ func TestChannel_EOLActNowNewCVEs(t *testing.T) {
 	out := renderDiff(r, d, false, false)
 	mustContainAll(t, out,
 		"*⛔ New: package end-of-life (1) — vendor reports these CVEs as out of support for this release*\n*Image: app:1*",
-		"*◆ qt*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-L|CVE-L>\nInstalled: 5.15\nFixed in: none — end-of-life: no fix planned for this release, consider a supported version\nFindings: CRITICAL 0 / HIGH 2",
-		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-K|CVE-K> · HIGH · EPSS n/a (+1 more CVE(s) in this package)\nExploitation: CISA KEV (exploited in the wild)",
+		"*◆ qt*\nChange: new CVEs: <https://avd.example/CVE-L|CVE-L>\nInstalled: 5.15\nFixed in: none — end-of-life: no fix planned for this release, consider a supported version\nFindings: CRITICAL 0 / HIGH 2",
+		"CVEs:\n• <https://avd.example/CVE-K|CVE-K> · HIGH · EPSS n/a · CISA KEV (exploited in the wild)\n• <https://avd.example/CVE-L|CVE-L> · HIGH · EPSS n/a",
 	)
 	if strings.Contains(out, "see Act now") || strings.Contains(out, "🆕") {
 		t.Errorf("unexpected pointer or 🆕 section:\n%s", out)

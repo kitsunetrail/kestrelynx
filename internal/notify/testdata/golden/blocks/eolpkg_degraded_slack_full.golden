@@ -32,14 +32,17 @@ Details: 🚨 see Act now
 *◆ curl*
 Installed: 7.61.1-34 · Fixed in: none — end-of-life: no fix planned for this release
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://avd.example/CVE-2033-0004|CVE-2033-0004> (HIGH)
 --- section ---
 *◆ libxml2*
 Installed: 2.9.7-16 · Fixed in: none — end-of-life: no fix planned for this release
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://avd.example/CVE-2033-0003|CVE-2033-0003> (HIGH)
 --- section ---
 *◆ qt5-qtbase*
 Installed: 5.15.3-1 · Fixed in: none — end-of-life: no fix planned for this release
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://avd.example/CVE-2033-0002|CVE-2033-0002> (HIGH)
 --- divider ---
 --- section ---
 *🚨 Act now (2) — exploited or likely to be*
@@ -50,8 +53,9 @@ Installed: 1.2.11
 Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
 Findings: CRITICAL 1 / HIGH 1
 --- section ---
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL · severity only (intel unavailable) (+1 more CVE(s) in this package)
-References: <https://avd.example/CVE-2033-0005|advisory>
+CVEs: severity only (intel unavailable)
+• <https://avd.example/CVE-2033-0005|CVE-2033-0005> · CRITICAL
+• <https://avd.example/CVE-2033-0007|CVE-2033-0007> · HIGH
 --- divider ---
 --- section ---
 *Image: app:2.1*
@@ -61,8 +65,8 @@ Installed: 2.38.5-1
 Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
 Findings: CRITICAL 1 / HIGH 0
 --- section ---
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0001|CVE-2033-0001> · CRITICAL · severity only (intel unavailable)
-References: <https://avd.example/CVE-2033-0001|advisory>
+CVEs: severity only (intel unavailable)
+• <https://avd.example/CVE-2033-0001|CVE-2033-0001> · CRITICAL
 --- divider ---
 --- section ---
 *👀 Watch (2) — not urgent, keep an eye on*
@@ -71,10 +75,12 @@ References: <https://avd.example/CVE-2033-0001|advisory>
 *◆ curl*
 Installed: 7.61.1-34 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 2
+CVEs: <https://avd.example/CVE-2033-0011|CVE-2033-0011> (HIGH), <https://avd.example/CVE-2033-0012|CVE-2033-0012> (HIGH)
 --- section ---
 *◆ sqlite-libs*
 Installed: 3.26.0-19 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://avd.example/CVE-2033-0008|CVE-2033-0008> (HIGH)
 --- divider ---
 --- context ---
 📊 Everything open now is in this message's thread ↓

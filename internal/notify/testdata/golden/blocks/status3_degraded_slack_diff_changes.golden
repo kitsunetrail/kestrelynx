@@ -17,20 +17,22 @@ Fixed in: 3.0.11
 Upgrade risk: 🟢 distro security patch
 Findings: CRITICAL 1 / HIGH 0
 --- section ---
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001> · CRITICAL · severity only (intel unavailable)
-References: <https://avd.example/CVE-2031-0001|advisory> · <https://vendor.example/advisory/1|vendor advisory>
+CVEs: severity only (intel unavailable)
+• <https://avd.example/CVE-2031-0001|CVE-2031-0001> · CRITICAL · openssl: buffer overread · <https://vendor.example/advisory/1|vendor advisory>
 --- divider ---
 --- section ---
 *◆ openssl*
 Change: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002>
 Installed: 3.0.7 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> (HIGH)
 --- section ---
 *Image: api:2.0*
 *◆ libxml2*
 Change: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007>
 Installed: 2.9.14 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 2
+CVEs: <https://avd.example/CVE-2031-0006|CVE-2031-0006> (HIGH), <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007> (HIGH)
 --- section ---
 *◆ zlib*
 Installed: 1.2.13 · Fixed in: none

@@ -418,14 +418,10 @@ func (v *chView) eolPackagesCategory() {
 	for _, img := range imgs {
 		iv := v.imageOf(img, !v.r.Triage)
 		for _, g := range img.Packages {
-			o := cardOpts{}
 			// With triage on, an act_now group only points at Act now,
 			// which shows it in full.
 			see := v.r.Triage && g.Priority == analyze.PriorityActNow
-			if v.r.Triage && !see {
-				o.top = topShort
-			}
-			c := v.newCard(img, g, o)
+			c := v.newCard(img, g, cardOpts{noCVEs: see})
 			c.SeeActNow = see
 			cv := v.compact(c)
 			if see {
@@ -446,7 +442,7 @@ func (v *chView) actNowCategory(imgs []analyze.ImageFindings) {
 	for _, img := range imgs {
 		iv := v.imageOf(img, false)
 		for _, g := range img.Packages {
-			c := v.newCard(img, g, cardOpts{top: topFull, hint: true, notes: true, refs: true, runtime: rtInUse})
+			c := v.newCard(img, g, cardOpts{notes: true, runtime: rtInUse})
 			iv.cards = append(iv.cards, v.detail(c))
 		}
 		views = append(views, iv)
@@ -463,7 +459,7 @@ func (v *chView) watchCategory(imgs []analyze.ImageFindings) {
 	for _, img := range imgs {
 		iv := v.imageOf(img, false)
 		for _, g := range img.Packages {
-			c := v.newCard(img, g, cardOpts{top: topShort, runtime: rtShort})
+			c := v.newCard(img, g, cardOpts{runtime: rtShort})
 			iv.cards = append(iv.cards, v.compact(c))
 		}
 		views = append(views, iv)
@@ -765,19 +761,17 @@ func (v *chView) eolChangesCategory(eol eolChangeView) int {
 }
 
 // changeCard is the card of one package group of a change: a detail card for
-// an act_now group (its evidence is the point), a compact one otherwise.
+// an act_now group (what its vulnerabilities are is the point), a compact one
+// otherwise.
 // runtime says whether the runtime state is shown.
 func (v *chView) changeCard(image string, c state.Change, g analyze.PackageGroup, runtime bool) cardView {
 	o := cardOpts{change: &c}
 	if v.r.Triage && g.Priority == analyze.PriorityActNow {
-		o.top, o.hint, o.notes, o.refs = topFull, true, true, true
+		o.notes = true
 		if runtime {
 			o.runtime = rtInUse
 		}
 		return v.detail(v.newChangeCard(image, g, o))
-	}
-	if len(groupNewIDs(c, g)) == 0 {
-		o.top = topList
 	}
 	if runtime {
 		o.runtime = rtShort

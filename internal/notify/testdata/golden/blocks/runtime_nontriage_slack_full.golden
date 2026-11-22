@@ -15,6 +15,7 @@ _Everything currently open._
 *◆ openssl*
 Installed: 3.0.7 · Fixed in: 3.0.11 (🟢 distro security patch)
 Findings: CRITICAL 1 / HIGH 0
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL> (CRITICAL)
 Runtime: ▶ in use (running)
 --- divider ---
 --- section ---
@@ -25,6 +26,7 @@ Runtime: ▶ in use (running)
 *◆ setuptools* [python-pkg]
 Installed: 53.0.0 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP> (HIGH)
 Runtime: ▶ in use (running)
 --- section ---
 *Image: web:1.0*
@@ -32,6 +34,7 @@ Runtime: ▶ in use (running)
 *◆ curl*
 Installed: 8.0.0 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL> (HIGH)
 --- divider ---
 --- section ---
 *🔕 No fix planned for this OS release (will_not_fix)*
@@ -41,6 +44,7 @@ Findings: CRITICAL 0 / HIGH 1
 *◆ leftpad* [node-pkg]
 Installed: 1.0.0 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-LEFTPAD|CVE-LEFTPAD> (HIGH)
 --- divider ---
 --- section ---
 🔎 *Runtime:* ▶ 2 in use · 2 not observed · 0 unavailable

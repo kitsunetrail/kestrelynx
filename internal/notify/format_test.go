@@ -277,9 +277,8 @@ func TestChannelDiff_ChangeCompactEvidence(t *testing.T) {
 }
 
 // A KindNewCVEs change line lists the new CVE ids themselves (linked), capped
-// at newIDsMax with a "(+N more)" overflow, instead of the old bare count —
-// and does not also carry a line of the package's CVEs (the new-id list is
-// already the headline).
+// at newIDsMax with a "(+N more)" overflow, instead of the old bare count.
+// The card also has the line of the package's CVEs every card has.
 func TestChannelDiff_NewCVEsSuffixLinksAndOverflows(t *testing.T) {
 	_, st := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{
 		{Image: "web:1", Findings: []scanner.Finding{opensslFinding("CVE-1")}},
@@ -293,13 +292,11 @@ func TestChannelDiff_NewCVEsSuffixLinksAndOverflows(t *testing.T) {
 	d, _ := state.Compute(st, r)
 
 	out := renderDiff(r, d, false, false)
-	// The new-id listing is the change line, with no CVE line after it.
-	want := "*◆ openssl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>, <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3>, <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> (+1 more)\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 5"
+	// The change line names the new ids; the CVE line names every CVE of
+	// the package, as on any other card.
+	want := "*◆ openssl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>, <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3>, <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> (+1 more)\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 5\nCVEs: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> (HIGH), <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2> (HIGH), <https://nvd.nist.gov/vuln/detail/CVE-3|CVE-3> (HIGH), <https://nvd.nist.gov/vuln/detail/CVE-4|CVE-4> (HIGH), <https://nvd.nist.gov/vuln/detail/CVE-5|CVE-5> (HIGH)"
 	if !strings.Contains(out, want) {
 		t.Errorf("expected the linked new-CVE listing with overflow count:\n%s\nwant substring: %s", out, want)
-	}
-	if strings.Contains(out, "Top CVE") || strings.Contains(out, "\nCVEs: ") {
-		t.Errorf("a new-id change carries no CVE line:\n%s", out)
 	}
 }
 
@@ -324,7 +321,7 @@ func TestChannelDiff_NewCVEsSuffixPerGroup(t *testing.T) {
 	out := renderDiff(r, d, false, false)
 	for _, want := range []string{
 		"*◆ openssl*\nInstalled: 1.0 · Fixed in: 1.1 (🟢 distro security patch)\nFindings: CRITICAL 0 / HIGH 1\nCVEs: <https://nvd.nist.gov/vuln/detail/CVE-1|CVE-1> (HIGH)",
-		"*◆ openssl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>\nInstalled: 1.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1",
+		"*◆ openssl*\nChange: new CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2>\nInstalled: 1.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1\nCVEs: <https://nvd.nist.gov/vuln/detail/CVE-2|CVE-2> (HIGH)",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing card:\n%s\nin output:\n%s", want, out)

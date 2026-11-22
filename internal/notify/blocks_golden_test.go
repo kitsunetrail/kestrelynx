@@ -490,6 +490,11 @@ func TestBlockKitPreservesInformation(t *testing.T) {
 					if tok == "EPSS n/a" {
 						continue
 					}
+					// An id links to the scanner's advisory where it gave
+					// one, and to its NVD page only where it gave none.
+					if strings.HasPrefix(tok, "https://nvd.nist.gov/vuln/detail/") {
+						continue
+					}
 					if !strings.Contains(got, tok) {
 						t.Errorf("%q is in the text rendering but missing from the blocks", tok)
 					}

@@ -56,10 +56,10 @@ func TestChannel_TriageLayout(t *testing.T) {
 		"*🚨 Act now (1) — exploited or likely to be*",
 		"*Image: web:1.0", // image lines carry no severity emoji in triage mode
 		"*◆ openssl*\nInstalled: 3.0.7\nFixed in: 3.0.11",
-		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> · CRITICAL · EPSS 94%\nExploitation: CISA KEV (exploited in the wild) · 🧨 ransomware campaign",
+		"CVEs:\n• <https://nvd.nist.gov/vuln/detail/CVE-KEV|CVE-KEV> · CRITICAL · EPSS 94% · CISA KEV (exploited in the wild) · 🧨 ransomware campaign",
 		"*👀 Watch (1) — not urgent, keep an eye on*",
 		"*◆ e2fsprogs*\nInstalled: 1.44 · Fixed in: none",
-		"Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-WAIT|CVE-WAIT> · EPSS 3%",
+		"CVEs: <https://nvd.nist.gov/vuln/detail/CVE-WAIT|CVE-WAIT> (EPSS 3%)",
 		"*🔕 Low priority (1)*",
 		"end-of-life", // EOSL warning stays top-priority
 		"broken:1",    // scan errors always shown
@@ -143,7 +143,7 @@ func TestChannelDiff_TriageEscalation(t *testing.T) {
 		t.Errorf("escalation must be called out:\n%s", out)
 	}
 	if !strings.Contains(out, "CISA KEV (exploited in the wild)") {
-		t.Errorf("escalated act-now change needs its evidence line:\n%s", out)
+		t.Errorf("escalated act-now change needs the KEV fact on its CVE line:\n%s", out)
 	}
 	if !strings.Contains(out, "🚨 1 act-now") {
 		t.Errorf("heartbeat should break down by priority:\n%s", out)
@@ -208,12 +208,12 @@ func nginxFinding(id string) scanner.Finding {
 	return scanner.Finding{Image: "nginx:1.30-alpine", Class: scanner.ClassOS, Package: "nginx", InstalledVer: "1.30.6-r1", FixedVer: "1.30.7-r0", Status: scanner.StatusFixed, Severity: scanner.SeverityHigh, VulnID: id}
 }
 
-func cveLink(id string) string { return "<https://nvd.nist.gov/vuln/detail/" + id + "|" + id + ">" }
+func nvdLink(id string) string { return "<https://nvd.nist.gov/vuln/detail/" + id + "|" + id + ">" }
 
 // A newly detected package that is not act now names every one of its CVEs on
-// one line, in the order the representative is chosen by, so a CVE can be
-// found by its number on the day it is detected. No CVE is set apart as the
-// representative, and one without a score is named without "EPSS n/a".
+// one line, strongest first, so a CVE can be found by its number on the day
+// it is detected. No CVE is set apart from the others, and one without a
+// score is named without "EPSS n/a".
 func TestChannelDiff_NewPackageListsItsCVEs(t *testing.T) {
 	ids := []string{"CVE-2026-113425", "CVE-2026-121810", "CVE-2026-123007", "CVE-2026-123633", "CVE-2026-123634"}
 	var findings []scanner.Finding
@@ -228,7 +228,7 @@ func TestChannelDiff_NewPackageListsItsCVEs(t *testing.T) {
 		out := renderDiff(r, d, false, false)
 		var links []string
 		for _, id := range ids {
-			links = append(links, cveLink(id))
+			links = append(links, nvdLink(id))
 		}
 		want := "Findings: CRITICAL 0 / HIGH 5\nCVEs: " + strings.Join(links, ", ") + "\n"
 		if !strings.Contains(out+"\n", want) {
@@ -250,8 +250,8 @@ func TestChannelDiff_NewPackageListsItsCVEs(t *testing.T) {
 		}), genTime)
 		d, _ := state.Compute(state.State{}, r)
 		out := renderDiff(r, d, false, false)
-		want := "CVEs: " + cveLink("CVE-2026-123633") + " (EPSS 0.4%), " + cveLink("CVE-2026-123007") + " (EPSS 0.2%), " +
-			cveLink("CVE-2026-113425") + ", " + cveLink("CVE-2026-121810") + ", " + cveLink("CVE-2026-123634")
+		want := "CVEs: " + nvdLink("CVE-2026-123633") + " (EPSS 0.4%), " + nvdLink("CVE-2026-123007") + " (EPSS 0.2%), " +
+			nvdLink("CVE-2026-113425") + ", " + nvdLink("CVE-2026-121810") + ", " + nvdLink("CVE-2026-123634")
 		if !strings.Contains(out, want) {
 			t.Errorf("want the line\n%s\nin:\n%s", want, out)
 		}
@@ -261,14 +261,13 @@ func TestChannelDiff_NewPackageListsItsCVEs(t *testing.T) {
 		r := analyze.Build([]scanner.ImageScan{scan}, nil, triageRules(nil), genTime)
 		d, _ := state.Compute(state.State{}, r)
 		out := renderDiff(r, d, false, false, LanguageJA)
-		if !strings.Contains(out, "\nCVE: "+cveLink("CVE-2026-113425")+", ") || strings.Contains(out, "代表CVE") {
+		if !strings.Contains(out, "\nCVE: "+nvdLink("CVE-2026-113425")+", ") || strings.Contains(out, "代表CVE") {
 			t.Errorf("want a CVE: line and no 代表CVE line:\n%s", out)
 		}
 	})
 }
 
-// The order of the line is the order the representative is chosen by:
-// priority comes before EPSS. A CRITICAL CVE without a score is watch, a HIGH
+// The order of the line puts priority before EPSS. A CRITICAL CVE without a score is watch, a HIGH
 // one with a score under the watch threshold is low, so the unscored one
 // leads although only the other has an EPSS.
 func TestChannelDiff_CVEListOrdersByPriorityBeforeEPSS(t *testing.T) {
@@ -280,7 +279,7 @@ func TestChannelDiff_CVEListOrdersByPriorityBeforeEPSS(t *testing.T) {
 	}), genTime)
 	d, _ := state.Compute(state.State{}, r)
 	out := renderDiff(r, d, false, false)
-	want := "Findings: CRITICAL 1 / HIGH 1\nCVEs: " + cveLink("CVE-2026-20002") + ", " + cveLink("CVE-2026-20001") + " (EPSS 0.4%)"
+	want := "Findings: CRITICAL 1 / HIGH 1\nCVEs: " + nvdLink("CVE-2026-20002") + ", " + nvdLink("CVE-2026-20001") + " (EPSS 0.4%)"
 	if !strings.Contains(out, want) {
 		t.Errorf("want the line\n%s\nin:\n%s", want, out)
 	}
@@ -288,7 +287,7 @@ func TestChannelDiff_CVEListOrdersByPriorityBeforeEPSS(t *testing.T) {
 
 // The line itself, for each kind of entry: a score, none, and the severity
 // that stands in when the triage intel cannot be used.
-func TestListLine(t *testing.T) {
+func TestCVELine(t *testing.T) {
 	en := renderer{msg: messagesFor(LanguageEN)}
 	ja := renderer{msg: messagesFor(LanguageJA)}
 	scored := cardCVE{ID: "CVE-2026-1", Severity: "HIGH", EPSS: "3%", EPSSKnown: true, Intel: true}
@@ -305,54 +304,155 @@ func TestListLine(t *testing.T) {
 		card pkgCard
 		want string
 	}{
-		{"scores and none", en, pkgCard{TopMode: topList, List: []cardCVE{kev, scored, unscored, other}},
-			"CVEs: " + cveLink("CVE-2026-3") + " (EPSS 83%), " + cveLink("CVE-2026-1") + " (EPSS 3%), " + cveLink("CVE-2026-2") + ", GHSA-aaaa-bbbb-cccc"},
-		{"severity without intel", en, pkgCard{TopMode: topList, List: []cardCVE{noIntel}},
-			"CVEs: " + cveLink("CVE-2026-4") + " (CRITICAL)"},
-		{"overflow", en, pkgCard{TopMode: topList, List: []cardCVE{unscored}, ListExtra: 5},
-			"CVEs: " + cveLink("CVE-2026-2") + " (+5 more)"},
-		{"japanese", ja, pkgCard{TopMode: topList, List: []cardCVE{scored, unscored}, ListExtra: 2},
-			"CVE: " + cveLink("CVE-2026-1") + " (EPSS 3%), " + cveLink("CVE-2026-2") + " (ほか +2件)"},
-		{"nothing to list", en, pkgCard{TopMode: topList}, ""},
+		{"scores and none", en, pkgCard{CVEs: []cardCVE{kev, scored, unscored, other}},
+			"CVEs: " + nvdLink("CVE-2026-3") + " (EPSS 83%), " + nvdLink("CVE-2026-1") + " (EPSS 3%), " + nvdLink("CVE-2026-2") + ", GHSA-aaaa-bbbb-cccc"},
+		{"severity without intel", en, pkgCard{CVEs: []cardCVE{noIntel}},
+			"CVEs: " + nvdLink("CVE-2026-4") + " (CRITICAL)"},
+		{"overflow", en, pkgCard{CVEs: []cardCVE{unscored}, CVEExtra: 5},
+			"CVEs: " + nvdLink("CVE-2026-2") + " (+5 more)"},
+		{"japanese", ja, pkgCard{CVEs: []cardCVE{scored, unscored}, CVEExtra: 2},
+			"CVE: " + nvdLink("CVE-2026-1") + " (EPSS 3%), " + nvdLink("CVE-2026-2") + " (ほか +2件)"},
+		{"nothing to list", en, pkgCard{}, ""},
 	}
 	for _, tc := range cases {
-		tc.card.HasTop = len(tc.card.List) > 0
-		if got := tc.rd.topLine(tc.card); got != tc.want {
+		if got := tc.rd.cveLine(tc.card); got != tc.want {
 			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
 		}
 	}
 }
 
-// Past listIDsMax the rest of a package's CVEs are a count.
+// Past cveListMax the rest of a package's CVEs are a count.
 func TestChannelDiff_NewPackageCVEListOverflows(t *testing.T) {
 	var findings []scanner.Finding
-	for i := 1; i <= 14; i++ {
+	const total = cveListMax + 5
+	for i := 1; i <= total; i++ {
 		findings = append(findings, nginxFinding(fmt.Sprintf("CVE-2026-%05d", 10000+i)))
 	}
 	r := analyze.Build([]scanner.ImageScan{{Image: "nginx:1.30-alpine", Findings: findings}}, nil, triageRules(nil), genTime)
 	d, _ := state.Compute(state.State{}, r)
 	out := renderDiff(r, d, false, false)
 	var links []string
-	for i := 1; i <= listIDsMax; i++ {
-		links = append(links, cveLink(fmt.Sprintf("CVE-2026-%05d", 10000+i)))
+	for i := 1; i <= cveListMax; i++ {
+		links = append(links, nvdLink(fmt.Sprintf("CVE-2026-%05d", 10000+i)))
 	}
-	want := "Findings: CRITICAL 0 / HIGH 14\nCVEs: " + strings.Join(links, ", ") + " (+5 more)"
+	want := fmt.Sprintf("Findings: CRITICAL 0 / HIGH %d\nCVEs: ", total) + strings.Join(links, ", ") + " (+5 more)"
 	if !strings.Contains(out, want) {
 		t.Errorf("want the line\n%s\nin:\n%s", want, out)
 	}
-	if strings.Contains(out, "CVE-2026-10010") {
+	if strings.Contains(out, fmt.Sprintf("CVE-2026-%05d", 10000+cveListMax+1)) {
 		t.Errorf("an id past the limit is named:\n%s", out)
 	}
 }
 
-// Vulnerability ids in Slack output link to their NVD record; ids from other
-// schemes (GHSA-, DLA-, ...) have no NVD page and stay plain (escaped) text.
+// Without an advisory from the scanner, vulnerability ids in Slack output
+// link to their NVD record; ids from other schemes (GHSA-, DLA-, ...) have no
+// NVD page and stay plain (escaped) text.
 func TestCardIDLink(t *testing.T) {
 	if got, want := cardIDLink("CVE-2026-1234"), "<https://nvd.nist.gov/vuln/detail/CVE-2026-1234|CVE-2026-1234>"; got != want {
 		t.Errorf("cardIDLink(CVE) = %q, want %q", got, want)
 	}
 	if got := cardIDLink("GHSA-xxxx-yyyy-zzzz"); got != "GHSA-xxxx-yyyy-zzzz" {
 		t.Errorf("non-CVE id must stay plain, got %q", got)
+	}
+}
+
+// An id links to the scanner's advisory for it, whatever its scheme; a URL
+// that cannot be a link target is not used.
+func TestCVELink(t *testing.T) {
+	cases := []struct{ id, advisory, want string }{
+		{"CVE-2026-1", "https://avd.aquasec.com/nvd/cve-2026-1", "<https://avd.aquasec.com/nvd/cve-2026-1|CVE-2026-1>"},
+		{"GHSA-aaaa-bbbb-cccc", "https://github.com/advisories/GHSA-aaaa-bbbb-cccc", "<https://github.com/advisories/GHSA-aaaa-bbbb-cccc|GHSA-aaaa-bbbb-cccc>"},
+		{"CVE-2026-1", "", nvdLink("CVE-2026-1")},
+		{"CVE-2026-1", "javascript:alert(1)", nvdLink("CVE-2026-1")},
+		{"CVE-2026-1", "https://example.com/a|b", nvdLink("CVE-2026-1")},
+		{"GHSA-aaaa-bbbb-cccc", "", "GHSA-aaaa-bbbb-cccc"},
+		{"GHSA-<x>", "https://example.com/x", "<https://example.com/x|GHSA-&lt;x&gt;>"},
+	}
+	for _, tc := range cases {
+		if got := cveLink(tc.id, tc.advisory); got != tc.want {
+			t.Errorf("cveLink(%q, %q) = %q, want %q", tc.id, tc.advisory, got, tc.want)
+		}
+	}
+}
+
+// The lines of a detail card, for each kind of entry: the facts the intel
+// gives, the severity alone without it, and the count past the limit.
+func TestCVELines(t *testing.T) {
+	en := renderer{msg: messagesFor(LanguageEN)}
+	ja := renderer{msg: messagesFor(LanguageJA)}
+	kev := cardCVE{ID: "CVE-2026-3", Severity: "CRITICAL", EPSS: "83%", EPSSKnown: true, KEV: true, Ransomware: true, Intel: true,
+		URL: "https://avd.example/CVE-2026-3", Title: "pkg: <title> & more",
+		Refs: []cardRef{{Kind: "vendor", Label: "vendor advisory", URL: "https://vendor.example/a"}}}
+	unscored := cardCVE{ID: "CVE-2026-2", Severity: "HIGH", EPSS: "n/a", Intel: true}
+	degraded := cardCVE{ID: "CVE-2026-4", Severity: "CRITICAL", EPSS: "n/a", KEV: true, IntelDegraded: true, Title: "pkg: title"}
+	triageOff := cardCVE{ID: "CVE-2026-5", Severity: "HIGH", EPSS: "n/a", Title: "pkg: title"}
+
+	cases := []struct {
+		name string
+		rd   renderer
+		card pkgCard
+		want []string
+	}{
+		{"facts, title and vendor advisory", en, pkgCard{CVEs: []cardCVE{kev, unscored}}, []string{
+			"CVEs:",
+			"• <https://avd.example/CVE-2026-3|CVE-2026-3> · CRITICAL · EPSS 83% · CISA KEV (exploited in the wild) · 🧨 ransomware campaign · pkg: &lt;title&gt; &amp; more · <https://vendor.example/a|vendor advisory>",
+			"• " + nvdLink("CVE-2026-2") + " · HIGH · EPSS n/a",
+		}},
+		{"intel unusable", en, pkgCard{CVEs: []cardCVE{degraded}}, []string{
+			"CVEs: severity only (intel unavailable)",
+			"• " + nvdLink("CVE-2026-4") + " · CRITICAL · pkg: title",
+		}},
+		{"triage off", en, pkgCard{CVEs: []cardCVE{triageOff}}, []string{
+			"CVEs:",
+			"• " + nvdLink("CVE-2026-5") + " · HIGH · pkg: title",
+		}},
+		{"overflow", en, pkgCard{CVEs: []cardCVE{unscored}, CVEExtra: 5}, []string{
+			"CVEs:",
+			"• " + nvdLink("CVE-2026-2") + " · HIGH · EPSS n/a",
+			"• +5 more",
+		}},
+		{"japanese", ja, pkgCard{CVEs: []cardCVE{kev}, CVEExtra: 2}, []string{
+			"CVE:",
+			"• <https://avd.example/CVE-2026-3|CVE-2026-3> · CRITICAL · EPSS 83% · CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃 · pkg: &lt;title&gt; &amp; more · <https://vendor.example/a|ベンダーのアドバイザリ>",
+			"• ほか +2件",
+		}},
+		// A summary cannot start a line of its own or format the text
+		// around it.
+		{"summary with a newline and formatting", en, pkgCard{CVEs: []cardCVE{{ID: "CVE-2026-6", Severity: "HIGH", Title: "pkg: flaw\n*◆ fake*\r\nFixed in: `none`"}}}, []string{
+			"CVEs:",
+			"• " + nvdLink("CVE-2026-6") + " · HIGH · `pkg: flaw *◆ fake*  Fixed in: 'none'`",
+		}},
+		{"nothing to list", en, pkgCard{}, nil},
+	}
+	for _, tc := range cases {
+		if got := tc.rd.cveLines(tc.card); !slices.Equal(got, tc.want) {
+			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// A card that only points at Act now names no CVE, and every other card of a
+// package names all of them, up to the limit, whichever view it is in.
+func TestCardsListCVEsUpToTheLimit(t *testing.T) {
+	// 23 CVEs and one finding without an id, which takes none of the 20
+	// places and is not counted among the rest.
+	findings := []scanner.Finding{nginxFinding("")}
+	for i := 1; i <= 23; i++ {
+		findings = append(findings, nginxFinding(fmt.Sprintf("CVE-2026-%05d", 30000+i)))
+	}
+	r := analyze.Build([]scanner.ImageScan{{Image: "nginx:1.30-alpine", Findings: findings}}, nil,
+		triageRules(map[string]analyze.Enrichment{"CVE-2026-30001": {KEV: true}}), genTime)
+	last, past := "CVE-2026-30020", "CVE-2026-30021"
+	for name, out := range map[string]string{"channel": renderFull(r), "thread": renderThread(r, Ages{})} {
+		if !strings.Contains(out, "CVEs:\n• "+nvdLink("CVE-2026-30001")+" · HIGH · EPSS n/a · CISA KEV (exploited in the wild)\n") {
+			t.Errorf("%s: the KEV CVE must lead the lines:\n%s", name, out)
+		}
+		if !strings.Contains(out, "• "+nvdLink(last)+" · HIGH · EPSS n/a\n• +3 more") {
+			t.Errorf("%s: the lines must end at the limit with a count:\n%s", name, out)
+		}
+		if strings.Contains(out, past) {
+			t.Errorf("%s: an id past the limit is named:\n%s", name, out)
+		}
 	}
 }
 
@@ -478,7 +578,9 @@ func TestBuildWebhookPayload_NoTriageOmitsTriageFields(t *testing.T) {
 	}
 }
 
-func TestChannel_TriageRefsLine(t *testing.T) {
+// The id links to the scanner's advisory, and the vendor advisory from the
+// KEV notes ends the line of the CVE it belongs to.
+func TestChannel_TriageCVELinks(t *testing.T) {
 	scans := []scanner.ImageScan{{
 		Image: "nginx:1",
 		Findings: []scanner.Finding{
@@ -492,9 +594,9 @@ func TestChannel_TriageRefsLine(t *testing.T) {
 	})
 	out := renderFull(analyze.Build(scans, nil, rules, genTime))
 
-	want := "References: <https://avd.aquasec.com/nvd/cve-kev|advisory> · <https://vendor.test/advisory|vendor advisory>"
+	want := "• <https://avd.aquasec.com/nvd/cve-kev|CVE-KEV> · HIGH · EPSS n/a · CISA KEV (exploited in the wild) · <https://vendor.test/advisory|vendor advisory>"
 	if !slices.Contains(strings.Split(out, "\n"), want) {
-		t.Errorf("expected the refs line with Slack link syntax:\n%s", out)
+		t.Errorf("expected the CVE line with Slack link syntax:\n%s", out)
 	}
 }
 

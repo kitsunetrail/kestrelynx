@@ -115,14 +115,21 @@ func cardIDLink(id string) string {
 	return escMrkdwn(id)
 }
 
+// cveLink is the id of a vulnerability as a link to the scanner's advisory
+// for it. Without a usable advisory URL it is cardIDLink.
+func cveLink(id, advisory string) string {
+	if !validLinkURL(advisory) {
+		return cardIDLink(id)
+	}
+	return mrkdwnLink(advisory, id)
+}
+
 // refLinksSafe renders refs as Slack links with escaped labels and validated
 // URLs.
 func refLinksSafe(refs []cardRef, msg messages) []string {
 	parts := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		switch ref.Kind {
-		case "advisory":
-			parts = append(parts, mrkdwnLink(ref.URL, msg.AdvisoryLinkLabel))
 		case "vendor":
 			parts = append(parts, mrkdwnLink(ref.URL, msg.VendorAdvisoryLinkLabel))
 		default:

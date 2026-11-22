@@ -151,11 +151,7 @@ func (v *chView) buildThread() {
 
 // threadCardOpts are the values a thread card collects for g.
 func (v *chView) threadCardOpts(g analyze.PackageGroup) cardOpts {
-	o := cardOpts{top: topPlain, notes: true, runtime: rtAll, thread: true, age: v.ages.forGroup(g)}
-	if v.r.Triage {
-		o.top = topFull
-	}
-	return o
+	return cardOpts{notes: true, runtime: rtAll, age: v.ages.forGroup(g)}
 }
 
 func (v *chView) threadCard(img analyze.ImageFindings, g analyze.PackageGroup) cardView {
@@ -172,7 +168,7 @@ func (v *chView) threadEOLPackages(imgs []analyze.ImageFindings) {
 		iv := v.imageOf(img, !v.r.Triage)
 		for _, g := range img.Packages {
 			if g.Priority == analyze.PriorityActNow {
-				c := v.newCard(img, g, cardOpts{})
+				c := v.newCard(img, g, cardOpts{noCVEs: true})
 				c.SeeActNow = true
 				cv := v.compact(c)
 				cv.pkgs = 0 // a pointer card is not a package shown here

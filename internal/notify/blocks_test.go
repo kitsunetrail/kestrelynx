@@ -267,11 +267,11 @@ func TestLongTitleIsSplitAcrossSectionsOfOneCard(t *testing.T) {
 
 func TestLongReferenceListKeepsLinksIntact(t *testing.T) {
 	rd := renderer{msg: enMessages, lim: defaultRenderLimits}
-	c := pkgCard{Name: "p", Installed: "1", Critical: 1, HasTop: true, TopMode: topFull,
-		Top: cardCVE{ID: "CVE-2040-0001", Severity: "HIGH", EPSS: "1%", Intel: true}}
+	cve := cardCVE{ID: "CVE-2040-0001", Severity: "HIGH", EPSS: "1%", Intel: true}
 	for i := 0; i < 120; i++ {
-		c.Refs = append(c.Refs, cardRef{Kind: "other", Label: strings.Repeat("l", 30), URL: fmt.Sprintf("https://example.com/%d", i)})
+		cve.Refs = append(cve.Refs, cardRef{Kind: "other", Label: strings.Repeat("l", 30), URL: fmt.Sprintf("https://example.com/%d", i)})
 	}
+	c := pkgCard{Name: "p", Installed: "1", Critical: 1, CVEs: []cardCVE{cve}}
 	blocks := rd.detailCard(c)
 	n := 0
 	for _, b := range blocks {
@@ -473,9 +473,12 @@ func TestEscaping_GeneratedLiteralsAndLinks(t *testing.T) {
 	}
 	// EPSS text with '<' is escaped where it is rendered.
 	rd := renderer{msg: enMessages, lim: defaultRenderLimits}
-	c := pkgCard{HasTop: true, TopMode: topShort, Top: cardCVE{ID: "CVE-2026-1", EPSS: "<0.1%", Intel: true}}
-	if line := rd.topLine(c); !strings.Contains(line, "EPSS &lt;0.1%") {
-		t.Errorf("topLine = %q", line)
+	c := pkgCard{CVEs: []cardCVE{{ID: "CVE-2026-1", EPSS: "<0.1%", EPSSKnown: true, Intel: true}}}
+	if line := rd.cveLine(c); !strings.Contains(line, "EPSS &lt;0.1%") {
+		t.Errorf("cveLine = %q", line)
+	}
+	if lines := rd.cveLines(c); len(lines) != 2 || !strings.Contains(lines[1], "EPSS &lt;0.1%") {
+		t.Errorf("cveLines = %q", lines)
 	}
 }
 
@@ -630,7 +633,7 @@ func TestThreadEOSLUsesTheThreadLayout(t *testing.T) {
 // --- many messages ---
 
 func TestContinuationNumberingBeyondNinetyNine(t *testing.T) {
-	r := bigReport(240, "")
+	r := bigReport(330, "")
 	lim := RenderLimits{MaxBlocks: 6, MaxTextUnits: 3000, MaxMessageUnits: 600, MaxFallbackUnits: 4000}
 	msgs := buildChannelMessages(Message{Report: r}, ChannelFooter{Kind: FooterThreadNotice}, enMessages, lim)
 	if len(msgs) < 101 {

@@ -64,7 +64,7 @@ type messages struct {
 
 	// --- new/changed findings ---
 	NewSinceLastScanHeading string // "\n*🆕 New since last scan (%d)*\n"
-	MoreCount               string // " (+%d more)" — shared by the new-CVE-id list, the collapsed lower-risk list, the runtime process list and the thread's "also:" list
+	MoreCount               string // " (+%d more)" — shared by the new-CVE-id list, the collapsed lower-risk list, the runtime process list and the CVE line of a compact card
 	EscalatedTo             string // "⬆️ escalated to %s" (priority label: ACT NOW/WATCH/LOW)
 	FixNowAvailable         string // "fix now available"
 	Unmuted                 string // "↩️ Unmuted (%s)" (unmutedReason text)
@@ -142,8 +142,6 @@ type messages struct {
 	TriageLowInUseCount string // " · ▶ %d in use"
 
 	// --- evidence lines ---
-	EvidenceMoreCVEs  string // " (+%d more CVE(s) in this package)"
-	AdvisoryLinkLabel string // "advisory" (Slack link label text)
 	// VendorAdvisoryLinkLabel replaces analyze.Ref.Label as the Slack link
 	// text for a "vendor" reference (the KEV note's advisory link) — display
 	// only: analyze.Ref.Label itself and the webhook payload's ref label
@@ -284,27 +282,23 @@ type messages struct {
 	// --- Block Kit cards ---
 	// Labels are bare words: the renderer adds the ": " separator and the
 	// surrounding mrkdwn.
-	LblImage        string // "Image"
-	LblInstalled    string // "Installed"
-	LblFixed        string // "Fixed in"
-	LblFixedNone    string // "none" (value of the fixed-in line when no fix exists)
-	LblUpgradeRisk  string // "Upgrade risk"
-	LblFindings     string // "Findings"
-	LblTopCVE       string // "Top CVE"
-	LblExploitation string // "Exploitation"
-	LblSummary      string // "Summary"
-	LblReferences   string // "References"
-	LblOtherCVEs    string // "Other CVEs"
-	LblCVEs         string // "CVEs": every CVE of the package on one line
-	LblRuntime      string // "Runtime"
-	LblEvidence     string // "Evidence"
-	LblExposure     string // "Exposure"
-	LblPrivilege    string // "Privilege"
-	LblLastSeen     string // "Last seen"
-	LblChange       string // "Change"
-	LblDetails      string // "Details"
-	LblStatus       string // "Status"
-	LblAction       string // "Action"
+	LblImage       string // "Image"
+	LblInstalled   string // "Installed"
+	LblFixed       string // "Fixed in"
+	LblFixedNone   string // "none" (value of the fixed-in line when no fix exists)
+	LblUpgradeRisk string // "Upgrade risk"
+	LblFindings    string // "Findings"
+	LblCVEs        string // "CVEs": the vulnerabilities of the package
+	CardCVEsMore   string // "+%d more": the vulnerabilities a detail card does not name
+	LblRuntime     string // "Runtime"
+	LblEvidence    string // "Evidence"
+	LblExposure    string // "Exposure"
+	LblPrivilege   string // "Privilege"
+	LblLastSeen    string // "Last seen"
+	LblChange      string // "Change"
+	LblDetails     string // "Details"
+	LblStatus      string // "Status"
+	LblAction      string // "Action"
 
 	// Upgrade-risk values, without the leading "upgrade:" the RiskXxx labels carry.
 	RiskValueDistroUpdate string // "🟢 distro security patch"
@@ -319,7 +313,6 @@ type messages struct {
 	FixNoteEOLRuntime string // the same as EOLRuntimeText, for a language runtime itself
 
 	CardNewCVEs     string // "new CVEs: %s" (linked CVE ids)
-	CardKEVShort    string // "CISA KEV"
 	CardSeeActNow   string // "🚨 see Act now"
 	CardEOSLStatus  string // "base OS is EOL (no more security updates coming)"
 	CardFoldedEOL   string // "includes %d end-of-life package(s)"
@@ -704,8 +697,6 @@ var enMessages = messages{
 	LowHeading:          "\n*🔕 Low priority (%[1]d)* — %[2]d finding(s) across %[3]d image(s), no exploitation signal (not in KEV, EPSS below threshold).",
 	TriageLowInUseCount: " · ▶ %d in use",
 
-	EvidenceMoreCVEs:        " (+%d more CVE(s) in this package)",
-	AdvisoryLinkLabel:       "advisory",
 	VendorAdvisoryLinkLabel: "vendor advisory",
 	EvidenceSeverityOnly:    "severity only (intel unavailable)",
 	EvidenceKEV:             "CISA KEV (exploited in the wild)",
@@ -822,27 +813,23 @@ var enMessages = messages{
 	ThreadPostedNotice: "\n_📊 Everything open now is in this message's thread ↓_\n",
 	LastReportLink:     "\n🔗 Everything open as of the last report → <%s|thread>\n",
 
-	LblImage:        "Image",
-	LblInstalled:    "Installed",
-	LblFixed:        "Fixed in",
-	LblFixedNone:    "none",
-	LblUpgradeRisk:  "Upgrade risk",
-	LblFindings:     "Findings",
-	LblTopCVE:       "Top CVE",
-	LblExploitation: "Exploitation",
-	LblSummary:      "Summary",
-	LblReferences:   "References",
-	LblOtherCVEs:    "Other CVEs",
-	LblCVEs:         "CVEs",
-	LblRuntime:      "Runtime",
-	LblEvidence:     "Evidence",
-	LblExposure:     "Exposure",
-	LblPrivilege:    "Privilege",
-	LblLastSeen:     "Last seen",
-	LblChange:       "Change",
-	LblDetails:      "Details",
-	LblStatus:       "Status",
-	LblAction:       "Action",
+	LblImage:       "Image",
+	LblInstalled:   "Installed",
+	LblFixed:       "Fixed in",
+	LblFixedNone:   "none",
+	LblUpgradeRisk: "Upgrade risk",
+	LblFindings:    "Findings",
+	LblCVEs:        "CVEs",
+	CardCVEsMore:   "+%d more",
+	LblRuntime:     "Runtime",
+	LblEvidence:    "Evidence",
+	LblExposure:    "Exposure",
+	LblPrivilege:   "Privilege",
+	LblLastSeen:    "Last seen",
+	LblChange:      "Change",
+	LblDetails:     "Details",
+	LblStatus:      "Status",
+	LblAction:      "Action",
 
 	RiskValueDistroUpdate: "🟢 distro security patch",
 	RiskValueSafe:         "🟢 low-risk",
@@ -855,7 +842,6 @@ var enMessages = messages{
 	FixNoteEOLRuntime: "end-of-life: no fix will be released for this series, so the series has to be upgraded (manual)",
 
 	CardNewCVEs:     "new CVEs: %s",
-	CardKEVShort:    "CISA KEV",
 	CardSeeActNow:   "🚨 see Act now",
 	CardEOSLStatus:  "base OS is EOL (no more security updates coming)",
 	CardFoldedEOL:   "includes %d end-of-life package(s)",
@@ -1199,8 +1185,6 @@ var jaMessages = messages{
 	LowHeading:          "\n*🔕 低優先度 (%[1]d件)* — イメージ%[3]d件で所見%[2]d件、悪用の兆候なし (KEV未掲載、EPSSはしきい値未満)",
 	TriageLowInUseCount: " · ▶ 使用中%d件",
 
-	EvidenceMoreCVEs:     " (このパッケージにほか +%d件のCVE)",
-	AdvisoryLinkLabel:    "アドバイザリ",
 	EvidenceSeverityOnly: "深刻度のみ (脅威情報が利用できない)",
 	EvidenceKEV:          "CISA KEV (実際の攻撃で悪用あり)",
 	EvidenceEPSSPrefix:   "EPSS %s",
@@ -1318,27 +1302,23 @@ var jaMessages = messages{
 	ThreadPostedNotice: "\n_📊 未解決の所見の全体はこのメッセージのスレッド ↓_\n",
 	LastReportLink:     "\n🔗 前回のレポート時点の未解決の所見の全体 → <%s|スレッド>\n",
 
-	LblImage:        "イメージ",
-	LblInstalled:    "現在",
-	LblFixed:        "修正版",
-	LblFixedNone:    "なし",
-	LblUpgradeRisk:  "更新の注意度",
-	LblFindings:     "検出件数",
-	LblTopCVE:       "代表CVE",
-	LblExploitation: "悪用情報",
-	LblSummary:      "説明",
-	LblReferences:   "参照",
-	LblOtherCVEs:    "ほかのCVE",
-	LblCVEs:         "CVE",
-	LblRuntime:      "使用状況",
-	LblEvidence:     "観測根拠",
-	LblExposure:     "公開状態",
-	LblPrivilege:    "権限",
-	LblLastSeen:     "最終確認",
-	LblChange:       "変化",
-	LblDetails:      "詳細",
-	LblStatus:       "状態",
-	LblAction:       "対応",
+	LblImage:       "イメージ",
+	LblInstalled:   "現在",
+	LblFixed:       "修正版",
+	LblFixedNone:   "なし",
+	LblUpgradeRisk: "更新の注意度",
+	LblFindings:    "検出件数",
+	LblCVEs:        "CVE",
+	CardCVEsMore:   "ほか +%d件",
+	LblRuntime:     "使用状況",
+	LblEvidence:    "観測根拠",
+	LblExposure:    "公開状態",
+	LblPrivilege:   "権限",
+	LblLastSeen:    "最終確認",
+	LblChange:      "変化",
+	LblDetails:     "詳細",
+	LblStatus:      "状態",
+	LblAction:      "対応",
 
 	RiskValueDistroUpdate: "🟢 ディストリのセキュリティパッチ",
 	RiskValueSafe:         "🟢 低リスク",
@@ -1351,7 +1331,6 @@ var jaMessages = messages{
 	FixNoteEOLRuntime: "サポート終了(EOL): この系列には修正版が出ないため、系列を上げる必要がある(手動)",
 
 	CardNewCVEs:     "新しいCVE %s",
-	CardKEVShort:    "CISA KEV",
 	CardSeeActNow:   "🚨 今すぐ対応を参照",
 	CardEOSLStatus:  "ベースOSがEOL (今後のセキュリティ更新なし)",
 	CardFoldedEOL:   "サポート終了(EOL)のパッケージ%d件を含む",

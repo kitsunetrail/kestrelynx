@@ -22,8 +22,8 @@ Installed: 2.38.5-1
 Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
 Findings: CRITICAL 1 / HIGH 0
 --- section ---
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0001|CVE-2033-0001> · CRITICAL · EPSS 0.4%
-References: <https://avd.example/CVE-2033-0001|advisory>
+CVEs:
+• <https://avd.example/CVE-2033-0001|CVE-2033-0001> · CRITICAL · EPSS 0.4%
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
 --- divider ---
@@ -33,8 +33,8 @@ Installed: 7.61.1-34
 Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
 Findings: CRITICAL 0 / HIGH 1
 --- section ---
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0004|CVE-2033-0004> · HIGH · EPSS &lt;0.1%
-References: <https://avd.example/CVE-2033-0004|advisory>
+CVEs:
+• <https://avd.example/CVE-2033-0004|CVE-2033-0004> · HIGH · EPSS &lt;0.1%
 --- context ---
 ⏱ first seen today
 --- divider ---
@@ -50,8 +50,8 @@ Installed: 5.15.3-1
 Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
 Findings: CRITICAL 0 / HIGH 1
 --- section ---
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> · HIGH · EPSS &lt;0.1%
-References: <https://avd.example/CVE-2033-0002|advisory>
+CVEs:
+• <https://avd.example/CVE-2033-0002|CVE-2033-0002> · HIGH · EPSS &lt;0.1%
 --- context ---
 ⏱ first seen today
 --- divider ---
@@ -64,10 +64,9 @@ Installed: 1.2.11
 Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
 Findings: CRITICAL 1 / HIGH 1
 --- section ---
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0005|CVE-2033-0005> · CRITICAL · EPSS 30%
-Exploitation: CISA KEV (exploited in the wild)
-References: <https://avd.example/CVE-2033-0005|advisory>
-Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0007|CVE-2033-0007>
+CVEs:
+• <https://avd.example/CVE-2033-0005|CVE-2033-0005> · CRITICAL · EPSS 30% · CISA KEV (exploited in the wild)
+• <https://avd.example/CVE-2033-0007|CVE-2033-0007> · HIGH · EPSS &lt;0.1%
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
 --- divider ---
@@ -79,9 +78,8 @@ Installed: 2.9.7-16
 Fixed in: none — end-of-life: no fix planned for this release, consider a supported version
 Findings: CRITICAL 0 / HIGH 1
 --- section ---
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0003|CVE-2033-0003> · HIGH · EPSS 12%
-Exploitation: CISA KEV (exploited in the wild)
-References: <https://avd.example/CVE-2033-0003|advisory>
+CVEs:
+• <https://avd.example/CVE-2033-0003|CVE-2033-0003> · HIGH · EPSS 12% · CISA KEV (exploited in the wild)
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
 --- divider ---
@@ -94,9 +92,9 @@ Installed: 7.61.1-34
 Fixed in: none — consider mitigation
 Findings: CRITICAL 0 / HIGH 2
 --- section ---
-Top CVE: <https://nvd.nist.gov/vuln/detail/CVE-2033-0011|CVE-2033-0011> · HIGH · EPSS 2%
-References: <https://avd.example/CVE-2033-0011|advisory>
-Other CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2033-0012|CVE-2033-0012>
+CVEs:
+• <https://avd.example/CVE-2033-0011|CVE-2033-0011> · HIGH · EPSS 2%
+• <https://avd.example/CVE-2033-0012|CVE-2033-0012> · HIGH · EPSS n/a
 --- context ---
 ⏱ open 20 day(s) · first seen 2026-06-04
 --- divider ---

@@ -21,6 +21,7 @@ Status: base OS is EOL (no more security updates coming)
 *◆ openssl*
 Installed: 3.0.7 · Fixed in: 3.0.11 (🟢 distro security patch)
 Findings: CRITICAL 1 / HIGH 0
+CVEs: <https://avd.example/CVE-2031-0001|CVE-2031-0001> (CRITICAL)
 --- section ---
 +1 lower-risk fixes (HIGH 1): dpkg
 --- section ---
@@ -29,6 +30,7 @@ Findings: CRITICAL 1 / HIGH 0
 *◆ setuptools* [python-pkg]
 Installed: 53.0.0 · Fixed in: 78.1.1 (🟠 major version bump — needs care)
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0008|CVE-2031-0008> (HIGH)
 --- divider ---
 --- section ---
 *ℹ️ No fix yet (affected / waiting on upstream)*
@@ -38,16 +40,19 @@ Findings: CRITICAL 0 / HIGH 1
 *◆ e2fsprogs*
 Installed: 1.47.0-2 · Fixed in: none
 Findings: CRITICAL 1 / HIGH 0
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0003|CVE-2031-0003> (CRITICAL)
 --- section ---
 *◆ openssl*
 Installed: 3.0.7 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002> (HIGH)
 --- section ---
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 2
 *◆ libxml2*
 Installed: 2.9.14 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 2
+CVEs: <https://avd.example/CVE-2031-0006|CVE-2031-0006> (HIGH), <https://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007> (HIGH)
 --- divider ---
 --- section ---
 *🔕 No fix planned for this OS release (will_not_fix)*
@@ -57,12 +62,14 @@ Findings: CRITICAL 0 / HIGH 2
 *◆ gcc-12-base*
 Installed: 12.2.0-14 · Fixed in: none
 Findings: CRITICAL 1 / HIGH 0
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0005|CVE-2031-0005> (CRITICAL)
 --- section ---
 *Image: api:2.0*
 🟠 CRITICAL 0 / HIGH 1
 *◆ zlib*
 Installed: 1.2.13 · Fixed in: none
 Findings: CRITICAL 0 / HIGH 1
+CVEs: <https://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009> (HIGH)
 --- divider ---
 --- section ---
 *⚠️ 1 image(s) could not be scanned (vulnerabilities not checked)*

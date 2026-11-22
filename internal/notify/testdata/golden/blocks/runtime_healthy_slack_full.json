@@ -41,7 +41,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "Top CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL\u003e · CRITICAL · EPSS n/a\nExploitation: CISA KEV (exploited in the wild)\nReferences: \u003chttps://avd.example/CVE-OPENSSL|advisory\u003e"
+          "text": "CVEs:\n• \u003chttps://avd.example/CVE-OPENSSL|CVE-OPENSSL\u003e · CRITICAL · EPSS n/a · CISA KEV (exploited in the wild)"
         },
         "expand": true
       },
@@ -68,7 +68,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "*Image: api:2.0*\n*◆ setuptools* [python-pkg]\nInstalled: 53.0.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP\u003e · EPSS 2%\nRuntime: ▶ in use (running)"
+          "text": "*Image: api:2.0*\n*◆ setuptools* [python-pkg]\nInstalled: 53.0.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1\nCVEs: \u003chttps://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP\u003e (EPSS 2%)\nRuntime: ▶ in use (running)"
         },
         "expand": true
       },
@@ -76,7 +76,7 @@
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": "*Image: web:1.0*\n*◆ curl*\nInstalled: 8.0.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL\u003e · EPSS 2%"
+          "text": "*Image: web:1.0*\n*◆ curl*\nInstalled: 8.0.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1\nCVEs: \u003chttps://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL\u003e (EPSS 2%)"
         },
         "expand": true
       },

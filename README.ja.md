@@ -124,11 +124,10 @@ PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ�
 現在: 1.52.0-1
 修正版: 1.52.0-1+deb12u1
 更新の注意度: 🟢 ディストリのセキュリティパッチ
-検出件数: CRITICAL 0 / HIGH 2
+検出件数: CRITICAL 0 / HIGH 1
 
-代表CVE: CVE-2023-44487 · HIGH · EPSS >99% (このパッケージにほか +1件のCVE)
-悪用情報: CISA KEV (実際の攻撃で悪用あり)
-参照: アドバイザリ · ベンダーのアドバイザリ
+CVE:
+• CVE-2023-44487 · HIGH · EPSS >99% · CISA KEV (実際の攻撃で悪用あり) · HTTP/2: Multiple HTTP/2 enabled web servers are vulnerable to a DDoS attack (Rapid Reset Attack) · ベンダーのアドバイザリ
 ───
 イメージ: myapp:latest
 ◆ webpack [npm-pkg]

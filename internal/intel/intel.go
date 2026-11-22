@@ -69,13 +69,12 @@ func (f Freshness) Degraded() bool { return !f.KEVOK && !f.EPSSOK }
 // Source fetches and caches the datasets and answers lookups. The zero fields
 // fall back to defaults; only CacheDir is required.
 type Source struct {
-	CacheDir    string
-	KEVURL      string // empty = DefaultKEVURL
-	EPSSURL     string // empty = DefaultEPSSURL
-	HNSearchURL string // empty = DefaultHNSearchURL (see refs.go)
-	Client      *http.Client
-	Now         func() time.Time
-	Log         *slog.Logger
+	CacheDir string
+	KEVURL   string // empty = DefaultKEVURL
+	EPSSURL  string // empty = DefaultEPSSURL
+	Client   *http.Client
+	Now      func() time.Time
+	Log      *slog.Logger
 }
 
 // cache file names under CacheDir.

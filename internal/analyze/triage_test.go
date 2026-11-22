@@ -254,22 +254,16 @@ func TestBuild_AttachesRefs(t *testing.T) {
 	rules := tr(map[string]Enrichment{
 		"CVE-KEV": {KEV: true, KEVNoteURL: "https://vendor.test/advisory"},
 	})
-	rules.Refs = map[string][]Ref{
-		"CVE-KEV": {{Kind: "discussion", Label: "HN (166 pts)", URL: "https://news.ycombinator.com/item?id=1"}},
-	}
 	r := Build(scans, nil, rules, fixedTime)
 	top := pkgGroup(t, r.Actionable, "nginx:1", "libh2").TopVuln()
 
 	if top.URL != "https://avd.aquasec.com/nvd/cve-kev" {
 		t.Errorf("URL = %q, want the scanner's advisory link", top.URL)
 	}
-	if len(top.Refs) != 2 {
-		t.Fatalf("Refs = %+v, want vendor + discussion", top.Refs)
+	if len(top.Refs) != 1 {
+		t.Fatalf("Refs = %+v, want the vendor advisory alone", top.Refs)
 	}
 	if top.Refs[0].Kind != "vendor" || top.Refs[0].URL != "https://vendor.test/advisory" {
-		t.Errorf("Refs[0] = %+v, want the KEV vendor advisory first", top.Refs[0])
-	}
-	if top.Refs[1].Kind != "discussion" {
-		t.Errorf("Refs[1] = %+v, want the discussion", top.Refs[1])
+		t.Errorf("Refs[0] = %+v, want the KEV vendor advisory", top.Refs[0])
 	}
 }

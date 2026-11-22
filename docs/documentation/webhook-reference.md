@@ -741,7 +741,6 @@ The values of `kind` are listed below.
 | Value | Meaning |
 | --- | --- |
 | `vendor` | Vendor advisory listed in KEV. |
-| `discussion` | Hacker News discussion. |
 
 An example of `label` is `vendor advisory`.
 

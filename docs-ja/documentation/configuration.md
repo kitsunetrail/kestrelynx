@@ -87,7 +87,6 @@ Trivyが使う環境変数と`token_hosts`の制限の例外、および送付�
 | `triage.watch_epss` | `0.01` | CVEを少なくともwatchに分類するEPSS確率の下限です。`0`より大きく、`triage.act_now_epss`以下にします。 |
 | `triage.kev_url` | 空 | CISA KEVフィードのURLを、ローカルミラーなどへ変更します。 |
 | `triage.epss_url` | 空 | EPSSフィードのURLを、ローカルミラーなどへ変更します。 |
-| `triage.discussion_links` | `true` | act-now CVEに関するHacker Newsの議論を検索します。 |
 
 ## 通知 {#notifications}
 

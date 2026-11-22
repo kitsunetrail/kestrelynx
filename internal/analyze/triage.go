@@ -52,8 +52,8 @@ type Enrichment struct {
 // Ref is a reference link attached to a vulnerability (Phase 1.5,
 // docs/TRIAGE_SPEC.md §8): a verifiable URL, never a generated summary.
 type Ref struct {
-	Kind  string // "vendor" (KEV notes) | "discussion" (HN)
-	Label string // short human label, e.g. "vendor advisory", "HN (166 pts)"
+	Kind  string // "vendor" (KEV notes)
+	Label string // short human label, e.g. "vendor advisory"
 	URL   string
 }
 
@@ -77,14 +77,11 @@ type Triage struct {
 	ActNowEPSS float64 // EPSS at or above this is act_now (default 0.10)
 	WatchEPSS  float64 // EPSS at or above this is at least watch (default 0.01)
 	Enrich     map[string]Enrichment
-	Refs       map[string][]Ref // extra links per vulnerability ID (discussions)
 	Intel      IntelStatus
 }
 
 // SignalsActNow reports whether the intel alone makes an ID act_now (KEV or
-// EPSS at threshold). It is the shared predicate between priority assignment
-// and the runner's "which CVEs deserve a discussion lookup" filter, so the two
-// can never drift apart.
+// EPSS at threshold).
 func (tr Triage) SignalsActNow(e Enrichment) bool {
 	return e.KEV || (e.EPSSKnown && e.EPSS >= tr.ActNowEPSS)
 }
@@ -102,7 +99,7 @@ type VulnRef struct {
 	EPSS       float64
 	EPSSKnown  bool
 	Priority   Priority
-	Refs       []Ref // vendor advisory (KEV notes), discussion links
+	Refs       []Ref // vendor advisory (KEV notes)
 }
 
 // priorityOf applies the rule table from docs/TRIAGE_SPEC.md §4: exploitation
@@ -136,14 +133,12 @@ func (tr Triage) priorityOf(sev scanner.Severity, e Enrichment, status scanner.S
 }
 
 // buildRefs assembles a vulnerability's reference links: the vendor advisory
-// from the KEV notes first (the "how to respond" link), then whatever extra
-// links the runner collected (discussions).
-func buildRefs(e Enrichment, extra []Ref) []Ref {
-	var refs []Ref
-	if e.KEVNoteURL != "" {
-		refs = append(refs, Ref{Kind: "vendor", Label: "vendor advisory", URL: e.KEVNoteURL})
+// from the KEV notes (the "how to respond" link).
+func buildRefs(e Enrichment) []Ref {
+	if e.KEVNoteURL == "" {
+		return nil
 	}
-	return append(refs, extra...)
+	return []Ref{{Kind: "vendor", Label: "vendor advisory", URL: e.KEVNoteURL}}
 }
 
 // sortVulns orders a group's vulnerabilities by verdict strength: priority

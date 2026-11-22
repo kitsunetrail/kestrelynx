@@ -87,7 +87,6 @@ See [Outbound communication](outbound-communication.md#outbound-communication) f
 | `triage.watch_epss` | `0.01` | EPSS probability at or above which a CVE is at least watch. Must be greater than `0` and at most `triage.act_now_epss`. |
 | `triage.kev_url` | empty | Override the CISA KEV feed URL, for example with a local mirror. |
 | `triage.epss_url` | empty | Override the EPSS feed URL, for example with a local mirror. |
-| `triage.discussion_links` | `true` | Look up Hacker News discussions for act-now CVEs. |
 
 ## Notifications {#notifications}
 

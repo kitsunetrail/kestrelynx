@@ -483,7 +483,7 @@ The JSON field is described in [Webhook report fields](webhook-reference.md#top-
 ### Decisions with triage disabled {#triage-disabled}
 
 When triage is disabled, CVEs and package groups receive no priority.
-KEV and EPSS downloads and Hacker News discussion-link searches also stop.
+KEV and EPSS downloads also stop.
 
 Scanning and fix-status classification continue.
 See [Configuration](configuration.md) for enabling or disabling triage and [Section order with triage disabled](slack-display.md#triage-disabled-display) for the display.

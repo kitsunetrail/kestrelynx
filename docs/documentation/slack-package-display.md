@@ -449,7 +449,6 @@ The following table lists the link displays and destinations.
 | --- | --- |
 | `advisory` | Primary advisory from Trivy or the runtime's vulnerability information |
 | `vendor advisory` | Vendor or CISA information from KEV notes |
-| `💬 HN (N pts)` | Related Hacker News discussion (N is its points) |
 
 CVE IDs on the `Top CVE:`, `Other CVEs:`, `Change:`, and `CVEs:` lines link to NVD.
 Non-CVE identifiers such as GHSA and DLA IDs appear as plain text.

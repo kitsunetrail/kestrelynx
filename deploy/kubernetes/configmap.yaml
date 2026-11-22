@@ -52,4 +52,3 @@ data:
       enabled: true
       act_now_epss: 0.10
       watch_epss: 0.01
-      discussion_links: true

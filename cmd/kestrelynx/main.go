@@ -68,6 +68,9 @@ func main() {
 		log.Error("load config", "err", err)
 		os.Exit(1)
 	}
+	for _, key := range cfg.Unused {
+		log.Warn("config key no longer does anything and can be removed", "key", key)
+	}
 	if os.Getenv("DOCKER_CONFIG") != "" {
 		log.Warn("DOCKER_CONFIG is set, but image scans do not read registry logins from it; list them under registries")
 	}
@@ -119,7 +122,6 @@ func main() {
 		}
 		r.ActNowEPSS = cfg.Triage.ActNowEPSS
 		r.WatchEPSS = cfg.Triage.WatchEPSS
-		r.DiscussionLinks = cfg.Triage.DiscussionLinks
 	}
 	// One advisor per language runtime serves every image scan of the cycle
 	// (the normal scanner and, below, the fix plan's comparison scanner), so

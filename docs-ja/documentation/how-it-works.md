@@ -25,7 +25,7 @@ Docker・Compose・Kubernetesでは、所見を直すための修正計画を通
 | スキャン対象・結果の集約と悪用情報による優先度 | <span id="cve"></span><span id="cve-priority-rules"></span>[スキャンと優先度の判定](scan-logic.md) |
 | パッケージ・イメージの変化と履歴の引き継ぎ | [差分と履歴の判定](diff-logic.md) |
 | スキャン通知・修正計画の送信条件と再送 | <span id="notification-conditions"></span><span id="remediation-slack-delivery"></span><span id="remediation-webhook-delivery"></span><span id="remediation-redelivery"></span>[通知の送信条件](notification-conditions.md) |
-| 通信先・送信情報・認証情報の送付範囲 | <span id="outbound-communication"></span><span id="kev-download"></span><span id="epss-download"></span><span id="hacker-news-search"></span><span id="trivy-downloads"></span><span id="github-communication"></span><span id="candidate-registry-communication"></span><span id="worker-image-downloads"></span><span id="tool-downloads"></span><span id="dependency-downloads"></span><span id="notification-delivery"></span><span id="credential-destinations"></span><span id="worker-network"></span>[外向きの通信](outbound-communication.md) |
+| 通信先・送信情報・認証情報の送付範囲 | <span id="outbound-communication"></span><span id="kev-download"></span><span id="epss-download"></span><span id="trivy-downloads"></span><span id="github-communication"></span><span id="candidate-registry-communication"></span><span id="worker-image-downloads"></span><span id="tool-downloads"></span><span id="dependency-downloads"></span><span id="notification-delivery"></span><span id="credential-destinations"></span><span id="worker-network"></span>[外向きの通信](outbound-communication.md) |
 
 Slackの表示と件数の読み方は、次のページで確認できます。
 

@@ -66,9 +66,9 @@ type cardCVE struct {
 }
 
 // cardRef is one reference link of a vulnerability: the scanner's advisory
-// (Kind "advisory"), the vendor advisory from the KEV notes ("vendor"), or a
-// discussion thread ("discussion"). Label is the analyzer's own label, which
-// only the discussion kind displays.
+// (Kind "advisory") or the vendor advisory from the KEV notes ("vendor").
+// Label is the analyzer's own label, shown only for a kind the messages have
+// no label for.
 type cardRef struct {
 	Kind  string
 	Label string

@@ -125,8 +125,6 @@ func refLinksSafe(refs []cardRef, msg messages) []string {
 			parts = append(parts, mrkdwnLink(ref.URL, msg.AdvisoryLinkLabel))
 		case "vendor":
 			parts = append(parts, mrkdwnLink(ref.URL, msg.VendorAdvisoryLinkLabel))
-		case "discussion":
-			parts = append(parts, mrkdwnLink(ref.URL, "💬 "+ref.Label))
 		default:
 			parts = append(parts, mrkdwnLink(ref.URL, ref.Label))
 		}

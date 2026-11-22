@@ -41,6 +41,9 @@ type Config struct {
 	// apply to every image fetched from a registry, whether or not the fix plan
 	// is on. An image from a host that is not listed is reached anonymously.
 	Registries []RegistryLogin
+	// Unused names the keys the file sets that no longer do anything. They
+	// are still accepted, so a file written for an earlier version loads.
+	Unused []string
 }
 
 // EnvironmentConfig names the environment this instance is watching
@@ -174,10 +177,6 @@ type TriageConfig struct {
 	WatchEPSS  float64 // EPSS probability at or above which a CVE is at least watch
 	KEVURL     string  // override for air-gapped mirrors; empty = CISA
 	EPSSURL    string  // override for air-gapped mirrors; empty = FIRST/Empirical Security
-	// DiscussionLinks looks up the HN discussion for act-now CVEs. Unlike the
-	// bulk feeds this sends those CVE IDs (only) as search queries; off = zero
-	// CVE egress (docs/TRIAGE_SPEC.md §8).
-	DiscussionLinks bool
 }
 
 // RuntimeConfig controls the optional runtime-usage overlay: an opt-in
@@ -547,12 +546,14 @@ type rawConfig struct {
 		Path string `yaml:"path"`
 	} `yaml:"state"`
 	Triage struct {
-		Enabled         *bool    `yaml:"enabled"`
-		ActNowEPSS      *float64 `yaml:"act_now_epss"`
-		WatchEPSS       *float64 `yaml:"watch_epss"`
-		KEVURL          string   `yaml:"kev_url"`
-		EPSSURL         string   `yaml:"epss_url"`
-		DiscussionLinks *bool    `yaml:"discussion_links"`
+		Enabled    *bool    `yaml:"enabled"`
+		ActNowEPSS *float64 `yaml:"act_now_epss"`
+		WatchEPSS  *float64 `yaml:"watch_epss"`
+		KEVURL     string   `yaml:"kev_url"`
+		EPSSURL    string   `yaml:"epss_url"`
+		// DiscussionLinks is read only so that a file that still has the
+		// key loads; nothing uses its value.
+		DiscussionLinks *bool `yaml:"discussion_links"`
 	} `yaml:"triage"`
 	Environment struct {
 		Name string `yaml:"name"`
@@ -795,8 +796,14 @@ func Parse(data []byte) (Config, error) {
 		From: raw.Notify.Email.From, To: raw.Notify.Email.To,
 	}
 
+	var unused []string
+	if raw.Triage.DiscussionLinks != nil {
+		unused = append(unused, "triage.discussion_links")
+	}
+
 	c := Config{
 		Registries: registries,
+		Unused:     unused,
 		Schedule: ScheduleConfig{
 			DailyAt:    raw.Schedule.DailyAt,
 			RunOnStart: boolOr(raw.Schedule.RunOnStart, true),
@@ -834,12 +841,11 @@ func Parse(data []byte) (Config, error) {
 		},
 		State: StateConfig{Path: raw.State.Path},
 		Triage: TriageConfig{
-			Enabled:         boolOr(raw.Triage.Enabled, true),
-			ActNowEPSS:      floatOr(raw.Triage.ActNowEPSS, defaultActNowEPSS),
-			WatchEPSS:       floatOr(raw.Triage.WatchEPSS, defaultWatchEPSS),
-			KEVURL:          raw.Triage.KEVURL,
-			EPSSURL:         raw.Triage.EPSSURL,
-			DiscussionLinks: boolOr(raw.Triage.DiscussionLinks, true),
+			Enabled:    boolOr(raw.Triage.Enabled, true),
+			ActNowEPSS: floatOr(raw.Triage.ActNowEPSS, defaultActNowEPSS),
+			WatchEPSS:  floatOr(raw.Triage.WatchEPSS, defaultWatchEPSS),
+			KEVURL:     raw.Triage.KEVURL,
+			EPSSURL:    raw.Triage.EPSSURL,
 		},
 		Environment: EnvironmentConfig{Name: raw.Environment.Name},
 		Runtime: RuntimeConfig{

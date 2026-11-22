@@ -128,7 +128,7 @@ Findings: CRITICAL 0 / HIGH 2
 
 Top CVE: CVE-2023-44487 · HIGH · EPSS >99% (+1 more CVE(s) in this package)
 Exploitation: CISA KEV (exploited in the wild)
-References: advisory · vendor advisory · 💬 HN (166 pts)
+References: advisory · vendor advisory
 ───
 Image: myapp:latest
 ◆ webpack [npm-pkg]
@@ -149,7 +149,7 @@ Long notifications continue in additional messages with repeated section and ima
 - **Open findings, no changes**: short summary
 - **No issues or changes**: no notification by default (configurable with `notify.notify_on_clean`)
 - **Weekly report**: full report on Mondays by default, with day selection and disabling options
-- **Reference links**: advisories, vendor guidance from KEV, and relevant Hacker News discussions
+- **Reference links**: advisories and vendor guidance from KEV
 
 ### Choosing a notification target
 
@@ -274,7 +274,6 @@ See [config.example.yml](config.example.yml) for all configuration options and t
 | `state.path` | History file (default: `/var/lib/kestrelynx/state.json`) |
 | `triage.enabled` | `true`: KEV/EPSS prioritization (default); `false`: severity-based notifications |
 | `triage.act_now_epss` / `triage.watch_epss` | EPSS thresholds (defaults: `0.10` / `0.01`) |
-| `triage.discussion_links` | Hacker News discussion lookup (default: `true`) |
 
 - **Environment-name characters**: lowercase alphanumerics and hyphens, with alphanumeric first and last characters
 - **Environment-name length**: 1–63 characters, or empty

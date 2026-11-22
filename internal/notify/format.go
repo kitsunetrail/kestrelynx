@@ -803,11 +803,11 @@ type vulnPayload struct {
 	Ransomware bool         `json:"ransomware,omitempty"`
 	EPSS       *float64     `json:"epss"`
 	Priority   string       `json:"priority,omitempty"`
-	Refs       []refPayload `json:"refs,omitempty"` // vendor advisory, discussions
+	Refs       []refPayload `json:"refs,omitempty"` // vendor advisory
 }
 
 type refPayload struct {
-	Kind  string `json:"kind"` // vendor | discussion
+	Kind  string `json:"kind"` // vendor
 	Label string `json:"label"`
 	URL   string `json:"url"`
 }

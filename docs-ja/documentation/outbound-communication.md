@@ -28,7 +28,6 @@ EPSSは、脆弱性について今後30日以内に悪用活動が観測され�
 | [Node.jsのセキュリティ情報](#node-runtime-download) | [`scan.node_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
 | [Pythonのセキュリティ情報](#python-runtime-download) | [`scan.python_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
 | [CVEレコードの取得](#cve-record-download) | [`scan.cve_record_severity.enabled`](configuration.md#scan)が有効（既定有効）で、Trivyがスキャンで深刻度`UNKNOWN`のCVEを報告した場合のみ | 深刻度がUNKNOWNのCVE ID |
-| [Hacker Newsの検索](#hacker-news-search) | [`triage.enabled`・`triage.discussion_links`](configuration.md#triage)が有効（各既定有効） | 検索対象のCVE ID |
 | [Trivyの取得通信](#trivy-downloads) | [スキャンを実行するたび](configuration.md#schedule) | 取得するイメージの名前・タグ・digest |
 | [GitHubへの通信](#github-communication) | 読み取りは[修正計画](configuration.md#remediation-basics)が有効、書き込みは修正計画と修正PRの両方が有効（各既定無効） | リポジトリ・ソースの指定、PRの内容 |
 | [イメージ候補の取得](#candidate-registry-communication) | [修正計画](configuration.md#remediation-basics)が有効（既定無効） | イメージ名・タグ・digest |
@@ -104,17 +103,6 @@ KestreLynxは、対象のCVEレコードを`raw.githubusercontent.com`の`CVEPro
 `scan.cve_record_severity.enabled`を`false`にすると、取得も深刻度の差し替えも行いません。
 
 採点と取得失敗時の扱いは[深刻度](scan-logic.md#severity)、更新は[脅威情報の更新](scan-logic.md#intel-cache)を参照してください。
-
-### Hacker Newsの検索 {#hacker-news-search}
-
-Hacker Newsの検索では、KestreLynxが検出したCVE IDを`hn.algolia.com`へ検索クエリとして送り、議論のリンクを取得します。
-KEV・EPSSの一括取得とは異なり、検索クエリに所見の一部が入ります。
-
-送るのは、対応の優先度が最も高いCVEのIDだけです。
-KEVで悪用が確認されたCVEや、EPSSで悪用の可能性が高いと判断されたCVEが該当します。
-
-検索に成功したCVEは、検索から24時間が経過するまで検索し直しません。
-[優先順位付けの設定](configuration.md#triage)で`triage.discussion_links`または`triage.enabled`を`false`にすると、検索しません。
 
 ### Trivyの取得通信 {#trivy-downloads}
 

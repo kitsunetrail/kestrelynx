@@ -794,7 +794,7 @@ func finalize(acc *pkgAcc, tr Triage) PackageGroup {
 			EPSS:       e.EPSS,
 			EPSSKnown:  e.EPSSKnown,
 			Priority:   tr.priorityOf(info.sev, e, g.Status),
-			Refs:       buildRefs(e, tr.Refs[id]),
+			Refs:       buildRefs(e),
 		}
 		g.Vulns = append(g.Vulns, v)
 		if v.Priority.Rank() > g.Priority.Rank() {

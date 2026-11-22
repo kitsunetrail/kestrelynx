@@ -28,7 +28,6 @@ The table lists communication conditions based on enabled features and work need
 | [Node.js advisories](#node-runtime-download) | [`scan.node_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
 | [Python advisories](#python-runtime-download) | [`scan.python_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
 | [CVE record downloads](#cve-record-download) | Only when [`scan.cve_record_severity.enabled`](configuration.md#scan) is enabled (default: enabled) and Trivy reports CVEs with `UNKNOWN` severity during a scan | CVE IDs with UNKNOWN severity |
-| [Hacker News searches](#hacker-news-search) | [`triage.enabled` and `triage.discussion_links`](configuration.md#triage) are enabled (each enabled by default) | CVE IDs being searched |
 | [Trivy downloads](#trivy-downloads) | [Every time a scan runs](configuration.md#schedule) | Names, tags, and digests of requested images |
 | [GitHub communication](#github-communication) | Reads require [remediation planning](configuration.md#remediation-basics); writes require both planning and PRs (each disabled by default) | Repository and source identifiers, PR contents |
 | [Image candidate downloads](#candidate-registry-communication) | [Remediation planning](configuration.md#remediation-basics) is enabled (default: disabled) | Image names, tags, and digests |
@@ -104,17 +103,6 @@ The request URL includes the CVE ID, so part of the scan findings is sent to the
 Setting `scan.cve_record_severity.enabled` to `false` disables retrieval and severity replacement.
 
 See [Severity](scan-logic.md#severity) for scoring rules and retrieval failure handling, and [Threat intelligence updates](scan-logic.md#intel-cache) for refresh rules.
-
-### Hacker News searches {#hacker-news-search}
-
-For Hacker News searches, KestreLynx sends detected CVE IDs as search queries to `hn.algolia.com` and retrieves discussion links.
-Unlike bulk KEV and EPSS downloads, search queries contain part of the scan findings.
-
-Only IDs of CVEs with the highest response priority are sent.
-These are CVEs with confirmed exploitation listed in KEV or a high estimated probability of exploitation based on EPSS.
-
-After a successful search for a CVE, it is not searched again for 24 hours.
-Setting either `triage.discussion_links` or `triage.enabled` to `false` in [Triage settings](configuration.md#triage) disables searches.
 
 ### Trivy downloads {#trivy-downloads}
 

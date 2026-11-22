@@ -7,14 +7,16 @@
         "text": {
           "type": "mrkdwn",
           "text": "🛡️ *KestreLynx* — scan results for 2026-06-24 09:00\n2 images scanned, 2 affected\n_Everything currently open._"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "*Priority:* 🚨 1 act now · 👀 2 watch · 🔕 2 low"
-        }
+        },
+        "expand": true
       },
       {
         "type": "divider"
@@ -24,28 +26,32 @@
         "text": {
           "type": "mrkdwn",
           "text": "*🚨 Act now (1) — exploited or likely to be*\n*Image: web:1.0*"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "*◆ openssl*\nInstalled: 3.0.7\nFixed in: none — consider mitigation\nFindings: CRITICAL 1 / HIGH 0"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "Top CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-OPENSSL|CVE-OPENSSL\u003e · CRITICAL · EPSS n/a\nExploitation: CISA KEV (exploited in the wild)\nReferences: \u003chttps://avd.example/CVE-OPENSSL|advisory\u003e"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "Runtime: ▶ in use\nEvidence: running as `/usr/sbin/nginx`\nExposure: published on all interfaces · runs with elevated privilege · last confirmed 06-24 09:00"
-        }
+        },
+        "expand": true
       },
       {
         "type": "divider"
@@ -55,21 +61,24 @@
         "text": {
           "type": "mrkdwn",
           "text": "*👀 Watch (2) — not urgent, keep an eye on*"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "*Image: api:2.0*\n*◆ setuptools* [python-pkg]\nInstalled: 53.0.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-SETUP|CVE-SETUP\u003e · EPSS 2%\nRuntime: ▶ in use (running)"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "*Image: web:1.0*\n*◆ curl*\nInstalled: 8.0.0 · Fixed in: none\nFindings: CRITICAL 0 / HIGH 1\nTop CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-CURL|CVE-CURL\u003e · EPSS 2%"
-        }
+        },
+        "expand": true
       },
       {
         "type": "divider"
@@ -79,14 +88,16 @@
         "text": {
           "type": "mrkdwn",
           "text": "*🔕 Low priority (2)* — 2 finding(s) across 2 image(s), no exploitation signal (not in KEV, EPSS below threshold)."
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "🔎 *Runtime:* ▶ 2 in use · 2 not observed · 1 unavailable"
-        }
+        },
+        "expand": true
       },
       {
         "type": "context",

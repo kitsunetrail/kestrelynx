@@ -56,7 +56,7 @@ func TestBlockKitJSONShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	var want map[string]any
-	if err := json.Unmarshal([]byte(`{"text":"t","blocks":[{"type":"section","text":{"type":"mrkdwn","text":"a <b|c>"}},{"type":"divider"},{"type":"context","elements":[{"type":"mrkdwn","text":"d"}]}]}`), &want); err != nil {
+	if err := json.Unmarshal([]byte(`{"text":"t","blocks":[{"type":"section","text":{"type":"mrkdwn","text":"a <b|c>"},"expand":true},{"type":"divider"},{"type":"context","elements":[{"type":"mrkdwn","text":"d"}]}]}`), &want); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(v, want) {
@@ -270,7 +270,7 @@ func TestLongReferenceListKeepsLinksIntact(t *testing.T) {
 	c := pkgCard{Name: "p", Installed: "1", Critical: 1, HasTop: true, TopMode: topFull,
 		Top: cardCVE{ID: "CVE-2040-0001", Severity: "HIGH", EPSS: "1%", Intel: true}}
 	for i := 0; i < 120; i++ {
-		c.Refs = append(c.Refs, cardRef{Kind: "discussion", Label: strings.Repeat("l", 30), URL: fmt.Sprintf("https://example.com/%d", i)})
+		c.Refs = append(c.Refs, cardRef{Kind: "other", Label: strings.Repeat("l", 30), URL: fmt.Sprintf("https://example.com/%d", i)})
 	}
 	blocks := rd.detailCard(c)
 	n := 0

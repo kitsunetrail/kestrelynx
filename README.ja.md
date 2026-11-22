@@ -128,7 +128,7 @@ PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ�
 
 代表CVE: CVE-2023-44487 · HIGH · EPSS >99% (このパッケージにほか +1件のCVE)
 悪用情報: CISA KEV (実際の攻撃で悪用あり)
-参照: アドバイザリ · ベンダーのアドバイザリ · 💬 HN (166 pts)
+参照: アドバイザリ · ベンダーのアドバイザリ
 ───
 イメージ: myapp:latest
 ◆ webpack [npm-pkg]
@@ -149,7 +149,7 @@ CVE: CVE-2024-37890 (EPSS 0.1%)
 - **未解決項目あり・変更なし**：短い概要
 - **問題なし・変更なし**：既定では通知なし（`notify.notify_on_clean`で変更可能）
 - **週次レポート**：全体レポート（既定：月曜日、曜日変更・無効化も可能）
-- **参考リンク**：アドバイザリ・KEVのベンダーガイダンス・関連するHacker Newsの議論
+- **参考リンク**：アドバイザリ・KEVのベンダーガイダンス
 
 ### 通知先の選択
 
@@ -274,7 +274,6 @@ kubectl logs -n kestrelynx deployment/kestrelynx -f
 | `state.path` | 履歴ファイル（既定：`/var/lib/kestrelynx/state.json`） |
 | `triage.enabled` | `true`：KEV／EPSSによる優先順位付け（既定）、`false`：深刻度に基づく通知 |
 | `triage.act_now_epss` / `triage.watch_epss` | EPSSの判定しきい値（既定：`0.10`／`0.01`） |
-| `triage.discussion_links` | Hacker Newsの議論リンク検索（既定：`true`） |
 
 - **環境名の文字種**：小文字英数字・ハイフン、先頭と末尾は英数字
 - **環境名の長さ**：1〜63文字、未設定も可

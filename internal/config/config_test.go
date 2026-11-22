@@ -1225,3 +1225,23 @@ scan:
 		t.Error("Parse accepted a source address for the CVE records")
 	}
 }
+
+func TestParse_DiscussionLinksAcceptedAndUnused(t *testing.T) {
+	base := "notify:\n  slack_webhook_url: https://hooks.slack.com/services/x\n"
+	for _, v := range []string{"true", "false"} {
+		c, err := Parse([]byte(base + "triage:\n  discussion_links: " + v + "\n"))
+		if err != nil {
+			t.Fatalf("discussion_links: %s must still load: %v", v, err)
+		}
+		if len(c.Unused) != 1 || c.Unused[0] != "triage.discussion_links" {
+			t.Errorf("discussion_links: %s: Unused = %v, want triage.discussion_links", v, c.Unused)
+		}
+	}
+	c, err := Parse([]byte(base))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Unused) != 0 {
+		t.Errorf("Unused = %v, want none when the key is absent", c.Unused)
+	}
+}

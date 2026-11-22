@@ -483,7 +483,7 @@ JSONのフィールドは、[Webhookのレポートフィールド](webhook-refe
 ### トリアージ無効時の判定 {#triage-disabled}
 
 トリアージを無効にすると、CVEやパッケージグループに優先度を付けません。
-KEV・EPSSの取得と、Hacker Newsの議論リンクの検索も停止します。
+KEV・EPSSの取得も停止します。
 
 スキャンと修正状態の分類は継続します。
 有効・無効の設定は[設定](configuration.md)、表示は[トリアージ無効時の並び順](slack-display.md#triage-disabled-display)を参照してください。

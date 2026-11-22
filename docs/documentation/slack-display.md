@@ -82,7 +82,7 @@ See [Slack thread delivery conditions](notification-conditions.md#slack-thread-d
 Slack's standard text uses the configured notification language.
 See [Configuration](configuration.md) for language settings and their scope.
 
-When notifications are set to Japanese, severities (such as `CRITICAL` and `HIGH`), vulnerability descriptions, and discussion link labels remain in their original English.
+When notifications are set to Japanese, severities (such as `CRITICAL` and `HIGH`) and vulnerability descriptions remain in their original English.
 
 ## Section order {#section-order}
 

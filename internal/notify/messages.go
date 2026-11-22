@@ -148,8 +148,7 @@ type messages struct {
 	// text for a "vendor" reference (the KEV note's advisory link) — display
 	// only: analyze.Ref.Label itself and the webhook payload's ref label
 	// always stay the English "vendor advisory" (analyze/triage.go,
-	// format.go's refPayload). A "discussion" reference (the HN link) is
-	// unaffected and keeps using ref.Label as-is.
+	// format.go's refPayload).
 	VendorAdvisoryLinkLabel string // "vendor advisory"
 	EvidenceSeverityOnly    string // "severity only (intel unavailable)"
 	EvidenceKEV             string // "CISA KEV (exploited in the wild)"

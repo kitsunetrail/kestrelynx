@@ -114,7 +114,7 @@ triage:
   # Rank findings by real-world exploitation signals instead of severity alone:
   # CISA KEV (confirmed exploitation) and EPSS (predicted probability) are
   # downloaded in bulk once a day and joined locally by CVE id without sending
-  # your CVE list. Separately, discussion_links sends CVE IDs (see below).
+  # your CVE list.
   # Notifications become three buckets: act now / watch / low.
   # Adds outbound HTTPS to www.cisa.gov and epss.empiricalsecurity.com;
   # set enabled: false to opt out (severity-only notifications, no extra egress).
@@ -126,12 +126,6 @@ triage:
   # Mirror URLs for air-gapped environments. Empty = the official feeds.
   kev_url: ""
   epss_url: ""
-  # Attach the Hacker News discussion link to "act now" findings. Unlike the
-  # bulk feeds above, this sends those CVE IDs (only — a handful of well-known,
-  # actively exploited CVEs) as search queries to hn.algolia.com. Set to false
-  # to stop these searches. Notification delivery is unaffected; advisory links
-  # from the KEV notes still work (they come from the bulk feed).
-  discussion_links: true
 
 runtime:
   # Show which packages an optional, experimental, separately-privileged Sensor companion

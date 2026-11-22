@@ -7,7 +7,8 @@
         "text": {
           "type": "mrkdwn",
           "text": "🛡️ *KestreLynx* — 2026-06-24 09:00のスキャン結果\nイメージ3件をスキャン、2件に影響あり\n_前回のスキャンからの変化_"
-        }
+        },
+        "expand": true
       },
       {
         "type": "divider"
@@ -17,21 +18,24 @@
         "text": {
           "type": "mrkdwn",
           "text": "*🆕 前回のスキャンからの新規検出 (4件)*\n*イメージ: api:2.0*"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "*◆ libxml2*\n変化: 新しいCVE \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0007|CVE-2031-0007\u003e\n現在: 2.9.14\n修正版: なし — 緩和策を検討\n検出件数: CRITICAL 0 / HIGH 2"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0006|CVE-2031-0006\u003e · HIGH · EPSS 20% (このパッケージにほか +1件のCVE)\n参照: \u003chttps://avd.example/CVE-2031-0006|アドバイザリ\u003e"
-        }
+        },
+        "expand": true
       },
       {
         "type": "divider"
@@ -41,14 +45,16 @@
         "text": {
           "type": "mrkdwn",
           "text": "*◆ zlib*\n現在: 1.2.13\n修正版: なし — このOSリリースでは修正予定なし、置き換えを検討\n検出件数: CRITICAL 0 / HIGH 1"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0009|CVE-2031-0009\u003e · HIGH · EPSS 50%\n悪用情報: CISA KEV (実際の攻撃で悪用あり)"
-        }
+        },
+        "expand": true
       },
       {
         "type": "divider"
@@ -58,21 +64,24 @@
         "text": {
           "type": "mrkdwn",
           "text": "*イメージ: web:1.0*"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "*◆ openssl*\n変化: ⬆️ 今すぐ対応に優先度昇格\n現在: 3.0.7\n修正版: 3.0.11\n更新の注意度: 🟢 ディストリのセキュリティパッチ\n検出件数: CRITICAL 1 / HIGH 0"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "代表CVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0001|CVE-2031-0001\u003e · CRITICAL · EPSS 94%\n悪用情報: CISA KEV (実際の攻撃で悪用あり) · 🧨 ランサムウェア攻撃\n参照: \u003chttps://avd.example/CVE-2031-0001|アドバイザリ\u003e · \u003chttps://vendor.example/advisory/1|ベンダーのアドバイザリ\u003e"
-        }
+        },
+        "expand": true
       },
       {
         "type": "divider"
@@ -82,14 +91,16 @@
         "text": {
           "type": "mrkdwn",
           "text": "*◆ openssl*\n変化: ⬆️ 今すぐ対応に優先度昇格\n現在: 3.0.7 · 修正版: なし\n検出件数: CRITICAL 0 / HIGH 1\nCVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0002|CVE-2031-0002\u003e (EPSS \u0026lt;0.1%)"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "*◆ dpkg*\n変化: 修正版が利用可能\n現在: 1.21.22 · 修正版: 1.21.23 (🟢 ディストリのセキュリティパッチ)\n検出件数: CRITICAL 0 / HIGH 1\nCVE: \u003chttps://nvd.nist.gov/vuln/detail/CVE-2031-0004|CVE-2031-0004\u003e (EPSS \u0026lt;0.1%)"
-        }
+        },
+        "expand": true
       },
       {
         "type": "divider"
@@ -99,14 +110,16 @@
         "text": {
           "type": "mrkdwn",
           "text": "*✅ 前回のスキャンからの解消 (1件)*\n• web:1.0: old-pkg"
-        }
+        },
+        "expand": true
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
           "text": "*⚠️ スキャンできなかったイメージ 1件（脆弱性は確認できていない）*\n• 原因を分類できなかった（詳細はログ）\n  • broken:1"
-        }
+        },
+        "expand": true
       },
       {
         "type": "divider"
@@ -116,7 +129,8 @@
         "text": {
           "type": "mrkdwn",
           "text": "📌 *現在の未解決:* 🚨 今すぐ対応3件 / 👀 要監視1件 / 🔕 低優先度3件\n⏰ 今すぐ対応/要監視の未解決の最長期間20日"
-        }
+        },
+        "expand": true
       },
       {
         "type": "context",

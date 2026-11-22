@@ -741,7 +741,6 @@ digestを確認できなかった要素には、同じイメージ名でdigest�
 | 値 | 意味 |
 | --- | --- |
 | `vendor` | KEVに載っているベンダーのアドバイザリー |
-| `discussion` | Hacker Newsの議論 |
 
 `label`には、例えば`vendor advisory`が入ります。
 

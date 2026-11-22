@@ -3,6 +3,7 @@ package notify
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -489,12 +490,10 @@ func TestChannel_TriageRefsLine(t *testing.T) {
 	rules := triageRules(map[string]analyze.Enrichment{
 		"CVE-KEV": {KEV: true, KEVNoteURL: "https://vendor.test/advisory"},
 	})
-	rules.Refs = map[string][]analyze.Ref{
-		"CVE-KEV": {{Kind: "discussion", Label: "HN (166 pts)", URL: "https://news.ycombinator.com/item?id=1"}},
-	}
 	out := renderFull(analyze.Build(scans, nil, rules, genTime))
 
-	if !strings.Contains(out, "References: <https://avd.aquasec.com/nvd/cve-kev|advisory> · <https://vendor.test/advisory|vendor advisory> · <https://news.ycombinator.com/item?id=1|💬 HN (166 pts)>") {
+	want := "References: <https://avd.aquasec.com/nvd/cve-kev|advisory> · <https://vendor.test/advisory|vendor advisory>"
+	if !slices.Contains(strings.Split(out, "\n"), want) {
 		t.Errorf("expected the refs line with Slack link syntax:\n%s", out)
 	}
 }

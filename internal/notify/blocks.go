@@ -2,9 +2,10 @@
 // into before it is sent. A message is a short fallback text (the
 // notification preview and screen-reader text) plus the visible body, a list
 // of section / divider / context blocks. Only those three block kinds are
-// used, and sections carry a single mrkdwn text (no fields, no header block,
-// no expand), so a message stays within what an Incoming Webhook and a bot
-// token both accept.
+// used, and sections carry a single mrkdwn text (no fields, no header block),
+// so a message stays within what an Incoming Webhook and a bot token both
+// accept. Every section sets expand, so Slack shows its whole text instead of
+// folding a long one behind "See more".
 package notify
 
 import (
@@ -59,18 +60,20 @@ type mrkdwnText struct {
 type blockJSON struct {
 	Type     string       `json:"type"`
 	Text     *mrkdwnText  `json:"text,omitempty"`
+	Expand   bool         `json:"expand,omitempty"`
 	Elements []mrkdwnText `json:"elements,omitempty"`
 }
 
 // MarshalJSON renders the block in Slack's wire format: a section as
-// {"type":"section","text":{"type":"mrkdwn","text":...}}, a context as
-// {"type":"context","elements":[{"type":"mrkdwn","text":...}]}, a divider as
-// {"type":"divider"}.
+// {"type":"section","text":{"type":"mrkdwn","text":...},"expand":true}, a
+// context as {"type":"context","elements":[{"type":"mrkdwn","text":...}]}, a
+// divider as {"type":"divider"}.
 func (b Block) MarshalJSON() ([]byte, error) {
 	out := blockJSON{Type: b.Kind.String()}
 	switch b.Kind {
 	case BlockSection:
 		out.Text = &mrkdwnText{Type: "mrkdwn", Text: b.Text}
+		out.Expand = true
 	case BlockContext:
 		out.Elements = []mrkdwnText{{Type: "mrkdwn", Text: b.Text}}
 	}

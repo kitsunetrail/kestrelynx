@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sort"
 	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
@@ -69,11 +68,9 @@ type StateStore interface {
 }
 
 // IntelSource supplies exploitation intel for the triage layer (implemented by
-// intel.Source). Discussions is only consulted for act-now CVEs and only when
-// discussion links are enabled.
+// intel.Source).
 type IntelSource interface {
 	Lookup(ctx context.Context, ids []string) (map[string]intel.Enrichment, intel.Freshness, error)
-	Discussions(ctx context.Context, ids []string) map[string]intel.Discussion
 }
 
 // RuntimeRefresher loads the advisory data the image scanners use to check
@@ -85,16 +82,15 @@ type RuntimeRefresher interface {
 
 // Runner holds the collaborators for one scan cycle.
 type Runner struct {
-	Lister          ContainerLister
-	Scanner         ImageScanner
-	Notifier        Notifier
-	NotifyOnClean   bool
-	Store           StateStore   // nil = full mode (re-send everything each cycle)
-	FullReportDay   time.Weekday // diff mode: weekday of the full digest; NoFullReport disables
-	Intel           IntelSource  // nil = triage off (Phase 1 severity-only output)
-	ActNowEPSS      float64      // triage thresholds (config.Triage)
-	WatchEPSS       float64
-	DiscussionLinks bool // look up HN discussions for act-now CVEs
+	Lister        ContainerLister
+	Scanner       ImageScanner
+	Notifier      Notifier
+	NotifyOnClean bool
+	Store         StateStore   // nil = full mode (re-send everything each cycle)
+	FullReportDay time.Weekday // diff mode: weekday of the full digest; NoFullReport disables
+	Intel         IntelSource  // nil = triage off (Phase 1 severity-only output)
+	ActNowEPSS    float64      // triage thresholds (config.Triage)
+	WatchEPSS     float64
 	// Environment identifies the runtime instance this Runner scans. It is
 	// stamped onto every Report (RunOnce) and, via cmd/kestrelynx wiring,
 	// shares its Name with the StateStore so state and notifications agree
@@ -395,46 +391,13 @@ func (r Runner) triage(ctx context.Context, scans []scanner.ImageScan) analyze.T
 	for id, e := range enrich {
 		converted[id] = analyze.Enrichment(e)
 	}
-	tr := analyze.Triage{
+	return analyze.Triage{
 		Enabled:    true,
 		ActNowEPSS: r.ActNowEPSS,
 		WatchEPSS:  r.WatchEPSS,
 		Enrich:     converted,
 		Intel:      analyze.IntelStatus{KEVOK: fresh.KEVOK, EPSSOK: fresh.EPSSOK, StaleDays: fresh.StaleDays},
 	}
-	tr.Refs = r.discussionRefs(ctx, tr)
-	return tr
-}
-
-// discussionRefs collects HN discussion links for the CVEs whose intel already
-// signals act_now. Only those IDs are ever sent as search queries (the
-// documented exception to "nothing leaves the host" — a handful of world-famous
-// CVEs, and only with DiscussionLinks on). Degraded intel means no act-now
-// signals to trust, so nothing is queried.
-func (r Runner) discussionRefs(ctx context.Context, tr analyze.Triage) map[string][]analyze.Ref {
-	if !r.DiscussionLinks || tr.Intel.Degraded() {
-		return nil
-	}
-	var ids []string
-	for id, e := range tr.Enrich {
-		if tr.SignalsActNow(e) {
-			ids = append(ids, id)
-		}
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	sort.Strings(ids) // deterministic query order
-
-	refs := map[string][]analyze.Ref{}
-	for id, d := range r.Intel.Discussions(ctx, ids) {
-		refs[id] = []analyze.Ref{{
-			Kind:  "discussion",
-			Label: fmt.Sprintf("HN (%d pts)", d.Points),
-			URL:   d.URL,
-		}}
-	}
-	return refs
 }
 
 // attachRuntime reads this cycle's runtime evidence and inspects every

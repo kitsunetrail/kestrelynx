@@ -43,7 +43,7 @@ remediation
 ├── language_summary              Language package count summary
 ├── language_items[]              Array of language package items
 ├── pull_requests_enabled         Whether PR creation was enabled
-├── pr_items[]                    Image and Dockerfile items and their update targets
+├── pr_items[]                    Image, Dockerfile, and language package items and their update targets
 ├── pull_request_summary          PR processing count summary
 ├── pull_requests[]               Array of PR processing items
 ├── operations[]                  PR operation records

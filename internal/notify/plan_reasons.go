@@ -206,6 +206,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"unsupported_requirements":         {"the requirements file is written in a form that is not supported", "requirements が対応していない書き方である"},
 	"unparsable_source":                {"a dependency file cannot be parsed", "依存関係ファイルを解析できない"},
 	"unsupported_source_settings":      {"the project sets a package source that is not supported", "対応していないパッケージ取得元の設定がある"},
+	"dependency_update_not_verified":   {"the dependency-file update has not been verified", "依存ファイルの更新結果は未確認"},
 	"scan_not_pinned":                  {"the scan is not tied to one image", "スキャンが特定のイメージに結び付いていない"},
 	"not_found_in_source":              {"the dependency files do not list the package at the running version", "依存関係ファイルに稼働中の版のパッケージが載っていない"},
 	"global_node_modules":              {"the package is in a global node_modules, which the dependency files do not install", "パッケージがグローバルな node_modules にあり、依存関係ファイルで入れたものではない"},

@@ -268,3 +268,31 @@ func TestNotProcessedPRItems_Dockerfile(t *testing.T) {
 		t.Errorf("items = %+v, want %+v", got, want)
 	}
 }
+
+func TestPRItems_LanguageAssigned(t *testing.T) {
+	fx := langFixtures()["npm"]
+	h := langHarness(t, fx)
+	it := h.langItem(fx)
+	// An item that is not adopted has no result.
+	other := h.langItem(fx)
+	other.Key, other.Category, other.Reason = other.Key+"-other", CategoryManual, ReasonPackagesManual
+	res := h.run(prLangPlan(it, other))
+	u := onlyUnit(t, res)
+	want := []PRItemResult{{Kind: PRItemKindLanguage, ItemKey: it.Key, UnitKeys: []string{u.Key}, Status: PRItemAssigned}}
+	if !reflect.DeepEqual(res.Items, want) {
+		t.Errorf("items = %+v, want %+v", res.Items, want)
+	}
+}
+
+func TestNotProcessedPRItems_Language(t *testing.T) {
+	fx := langFixtures()["npm"]
+	h := langHarness(t, fx)
+	adopted := h.langItem(fx)
+	manual := h.langItem(fx)
+	manual.Key, manual.Category = manual.Key+"-other", CategoryManual
+	got := NotProcessedPRItems(prLangPlan(adopted, manual), ReasonGitHubError)
+	want := []PRItemResult{{Kind: PRItemKindLanguage, ItemKey: adopted.Key, Status: PRItemNotProcessed, Reason: ReasonGitHubError}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("items = %+v, want %+v", got, want)
+	}
+}

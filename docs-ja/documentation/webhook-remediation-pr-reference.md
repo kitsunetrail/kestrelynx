@@ -8,7 +8,7 @@ title: Webhookの修正計画のPR処理のフィールド
 修正計画全体の構造は[修正計画の全体像](webhook-remediation-reference.md#remediation-overview)を参照してください。
 
 修正計画を作った回は、PR作成の有効・無効を`pull_requests_enabled`に出力します。
-PR作成が有効なら、分類が`pr_candidate`のイメージ項目とワークロードの組ごとの結果、および分類が`pr_candidate`のDockerfile項目ごとの結果を`pr_items`に出力します。
+PR作成が有効なら、分類が`pr_candidate`のイメージ項目とワークロードの組ごとの結果、および分類が`pr_candidate`のDockerfile項目・言語パッケージ項目ごとの結果を`pr_items`に出力します。
 
 PR作成が有効で修正計画がある場合、処理対象があれば`pull_request_summary`と`pull_requests`、未配信の操作イベントがあれば`operations`、書き込みを停止する問題があれば`problems`を出力します。
 `operations`と`problems`は、`pull_requests`がない場合にも出力されます。
@@ -36,24 +36,25 @@ PR作成が有効で修正計画がある場合、処理対象があれば`pull_
 
 ### 項目ごとのPR処理結果 {#pr-item-fields}
 
-`pr_items[]`は、分類が`pr_candidate`の`items[]`とワークロードの組ごとに1件、および分類が`pr_candidate`の`dockerfile_items[]`ごとに1件です。
-`kind`は`image`または`dockerfile`で、言語パッケージの項目は含みません。
+`pr_items[]`は、分類が`pr_candidate`の`items[]`とワークロードの組ごとに1件、および分類が`pr_candidate`の`dockerfile_items[]`・`language_items[]`の各項目につき1件です。
+`kind`は`image`・`dockerfile`・`language`のいずれかです。
 
 Dockerfileの更新対象は、そのDockerfileを使うワークロード全体で1つです。
+言語パッケージの更新対象は、その依存ファイルを使うワークロード全体で1つです。
 
 `pr_items[]`の1要素のフィールドは次のとおりです。
 
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
-| `kind` | string | `image`（イメージ項目）または`dockerfile`（Dockerfile項目） | — |
-| `item_key` | string | `kind`が`image`なら`items[].key`、`dockerfile`なら`dockerfile_items[].key` | — |
-| `workload` | string | 対象のワークロードキー | `dockerfile`またはキーのないサービスでは省略 |
+| `kind` | string | `image`（イメージ項目）・`dockerfile`（Dockerfile項目）・`language`（言語パッケージ項目）のいずれか | — |
+| `item_key` | string | `kind`が`image`なら`items[].key`、`dockerfile`なら`dockerfile_items[].key`、`language`なら`language_items[].key` | — |
+| `workload` | string | 対象のワークロードキー | `dockerfile`・`language`またはキーのないサービスでは省略 |
 | `status` | string | 項目がPRの更新対象に入ったかを示す状態 | — |
-| `unit_keys` | stringの配列 | 対応する`pull_requests[].key`（`dockerfile`では1件） | `assigned`以外は省略 |
+| `unit_keys` | stringの配列 | 対応する`pull_requests[].key`（`dockerfile`・`language`では1件） | `assigned`以外は省略 |
 | `reason` | string | 更新対象がない理由 | `assigned`では省略 |
 
 `pr_items[].status`の値は次のとおりです。
-`kind`が`dockerfile`の場合は`assigned`または`not_processed`で、`not_applicable`にはなりません。
+`kind`が`dockerfile`または`language`の場合は`assigned`または`not_processed`で、`not_applicable`にはなりません。
 
 | 値 | 意味 |
 | --- | --- |
@@ -64,7 +65,7 @@ Dockerfileの更新対象は、そのDockerfileを使うワークロード全体
 `assigned`はPR作成済みを意味せず、PRの結果は`unit_keys`が指す`pull_requests[]`で確認します。
 
 `pr_items[].reason`の値は次のとおりです。
-`kind`が`dockerfile`の場合は、`pr_unit_unavailable`・`storage_failed`・`github_error`のいずれかです。
+`kind`が`dockerfile`または`language`の場合は、`pr_unit_unavailable`・`storage_failed`・`github_error`のいずれかです。
 
 | 値 | 意味 |
 | --- | --- |

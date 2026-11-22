@@ -165,7 +165,7 @@ See [Vulnerability fields](webhook-reference.md#vulnerability-fields) for comple
 
 ### Card action line {#base-image-wait}
 
-The card's `Action:` line shows expected resolution through image or base image updates, repulling, or rebuilding, reasons a decision is needed or a newer version cannot be checked, PR status, or packages that dependency-file updates cannot fix.
+The card's `Action:` line shows image or dependency-file updates, expected resolution through repulling or rebuilding, PR status, and reasons a decision is needed or an update or check cannot be completed.
 It appears after `Findings:` in detailed and compact channel cards, thread cards, and diff cards, and also appears on cards included in email.
 
 A series groups versions by their first two numbers, so 3.11 and 3.13 are different series.
@@ -331,6 +331,29 @@ When a newer image version has not been checked or could not be checked, the lin
 | `Action: a newer base image will be checked in a later run (the limit on candidate scans of a run was reached)` | The candidate scan limit prevented the check in this run | Wait for the next scan |
 
 See [Image and source reason codes](remediation-image-reason-codes.md) for the list of reasons shown in parentheses.
+
+#### Language package updates through dependency files {#action-dependency-files}
+
+For images with a dependency-file mapping, the following lines describe language packages matched against the dependency files.
+
+| Example | Meaning | What to do |
+| --- | --- | --- |
+| `Action: updated to 2.0.4 in Pull Request #12` | A PR updates the dependency files to raise this package to 2.0.4 | Merge the PR, then rebuild and deploy the image |
+| `Action: updated to 2.0.4 in Pull Request #12; merged, deployment to the running image is unconfirmed` | The PR is merged, but the running image still contains the older version | Rebuild and deploy the image |
+| `Action: the update to 2.0.4 in Pull Request #12 was closed without merging` | The PR was closed without merging | Decide whether to update the package yourself |
+| `Action: the update to 2.0.4 in Pull Request #12 was closed without merging and replaced by #13` | #12 was closed, and the new PR #13 carries the same fix | Review #13 |
+| `Action: candidate to update to 2.0.4 through pnpm-lock.yaml (Pull Request not created: the files of the update cannot be written as they are)` | Updating the dependency files confirmed that the package reaches 2.0.4, but no PR has been created | Review the reason in parentheses |
+| `Action: candidate to update to 2.0.3 or later through pnpm-lock.yaml (Pull Request not created: the dependency-file update has not been verified)` | The dependency files list this package and the minimum fixed version is known to be 2.0.3, but the update has not been run | Update the dependency files yourself or enable language package updates |
+| `Action: a rebuild is expected to install 2.0.3 or later` | The dependency files specify a version range that includes a fixed version | Rebuild and deploy the image |
+| `Action: it could not be fixed automatically through pnpm-lock.yaml (the candidate or the updated version does not satisfy the dependency constraints)` | This package could not be updated automatically | Review the reason in parentheses and decide whether to fix the dependency files yourself |
+| `Action: pnpm-lock.yaml could not be updated (the update job failed)` | The dependency-file update as a whole did not succeed | Address the cause given in parentheses |
+| `Action: updating pnpm-lock.yaml is deferred to a later run (the time limit of the run was reached)` | A limit or timeout prevented the update in this run | Wait for the next scan |
+| `Action: the update to pnpm-lock.yaml could not be confirmed (the pull request is not as it was created)` | A PR exists, but whether its contents update this package cannot be confirmed | Review the PR contents |
+| `Action: updating pnpm-lock.yaml cannot fix it (the dependency files do not list the package at the running version)` | Updating the dependency files does not reach this package | Review the reason in parentheses |
+
+- When PR creation is disabled, the parenthetical text is omitted from candidate lines
+- The filename in the line is `package-lock.json`, `pnpm-lock.yaml`, `uv.lock`, `requirements.txt`, `go.mod`, `pom.xml`, or `gradle.lockfile`, depending on the mapped package manager
+- See [Update and PR processing reason codes](remediation-update-reason-codes.md) for the list of reasons shown in parentheses
 
 #### Global node_modules {#action-global-node-modules}
 

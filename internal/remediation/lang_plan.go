@@ -27,6 +27,10 @@ const (
 	// Reasons for a candidate or an expectation.
 	ReasonUpdateCandidateInSource Reason = "update_candidate_in_source"
 	ReasonRangeAllowsFix          Reason = "range_allows_fix"
+	// ReasonDependencyUpdateNotVerified says why a candidate has no pull
+	// request: the update of the dependency files was not run and checked,
+	// so there is no change to propose yet.
+	ReasonDependencyUpdateNotVerified Reason = "dependency_update_not_verified"
 
 	// Reasons for the dependency files of a unit.
 	ReasonDependencyFilesNotFound Reason = "dependency_files_not_found"

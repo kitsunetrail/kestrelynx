@@ -43,7 +43,7 @@ remediation
 ├── language_summary              言語パッケージの件数の集計
 ├── language_items[]              言語パッケージの項目の配列
 ├── pull_requests_enabled         PR作成が有効だったか
-├── pr_items[]                    イメージ・Dockerfile項目と更新対象の対応
+├── pr_items[]                    イメージ・Dockerfile・言語パッケージ項目と更新対象の対応
 ├── pull_request_summary          PR処理の件数の集計
 ├── pull_requests[]               PR処理の項目の配列
 ├── operations[]                  PR操作の記録

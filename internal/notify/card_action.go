@@ -80,6 +80,31 @@ const (
 	// actBaseMergedWait: a merged pull request set the base to one that
 	// resolves the card's fixed findings, and the image was not rebuilt.
 	actBaseMergedWait
+	// actLangInPR: a pull request of the dependency files updates the
+	// package; its state is in PR.
+	actLangInPR
+	// actLangCandidate: an update of the dependency files that was run and
+	// checked takes the package to a version, and has no pull request.
+	actLangCandidate
+	// actLangCandidateAtLeast: the dependency files hold the package and a
+	// version to update it to was chosen; no update was run.
+	actLangCandidateAtLeast
+	// actLangRebuild: the dependency files allow a fixed version, so a
+	// rebuild is expected to install it.
+	actLangRebuild
+	// actLangOutOfReach: no change of the dependency files reaches the
+	// package.
+	actLangOutOfReach
+	// actLangNotAutomatic: the package could not be updated automatically.
+	actLangNotAutomatic
+	// actLangItemFailed: the dependency files as a whole could not be
+	// updated.
+	actLangItemFailed
+	// actLangItemLater: their update was left to a later run.
+	actLangItemLater
+	// actLangUnconfirmed: what the pull request of the dependency files
+	// holds for the package is not known.
+	actLangUnconfirmed
 )
 
 // prClauseKind is what a card's action line says about the pull request of
@@ -202,14 +227,18 @@ type cardActionIndex struct {
 	waits *baseWaitIndex
 
 	// globals are the findings of packages in a global node_modules; others
-	// are those of the packages the dependency files are matched against.
+	// are those of every other package of a language item. langs gives the
+	// item and package of each of the others, and owned are those among them
+	// the dependency files can reach.
 	globals map[actionKey][]globalEntry
 	others  map[actionKey]bool
+	langs   map[actionKey][]langEntry
+	owned   map[actionKey]bool
 	// ownerVersions are the versions of the packages installed in a global
 	// node_modules, by language item, entity, directory and owner.
 	ownerVersions map[[4]string][]string
 
-	images map[baseWaitKey][]imageEntry
+	items map[baseWaitKey][]imageEntry
 	// bases are the findings the Dockerfile part holds as targets of a base
 	// image, with what it found for them.
 	bases map[baseWaitKey][]baseEntry
@@ -229,19 +258,29 @@ func newCardActionIndex(info *PlanInfo) *cardActionIndex {
 		waits:         newBaseWaitIndex(info),
 		globals:       map[actionKey][]globalEntry{},
 		others:        map[actionKey]bool{},
+		langs:         map[actionKey][]langEntry{},
+		owned:         map[actionKey]bool{},
 		ownerVersions: map[[4]string][]string{},
-		images:        map[baseWaitKey][]imageEntry{},
+		items:         map[baseWaitKey][]imageEntry{},
 		bases:         map[baseWaitKey][]baseEntry{},
 		builds:        map[[2]string][]buildEntry{},
 	}
-	for _, li := range x.plan.LanguageItems {
+	for i := range x.plan.LanguageItems {
+		li := &x.plan.LanguageItems[i]
 		file := li.Manager.LockfileName()
-		for _, p := range li.Packages {
+		for j := range li.Packages {
+			p := &li.Packages[j]
 			for _, o := range p.Origins {
 				k := actionKey{entity: o.Entity, ecosystem: o.Ecosystem, class: o.Class, name: o.Name, version: o.Version, vuln: o.VulnID}
 				owner, dir, self, ok := globalPlace(o.PkgPath)
 				if p.Reason != remediation.ReasonGlobalNodeModules || !ok {
 					x.others[k] = true
+					if !outOfReach(p) {
+						x.owned[k] = true
+					}
+					if e := (langEntry{item: li, pkg: p}); !containsLang(x.langs[k], e) {
+						x.langs[k] = append(x.langs[k], e)
+					}
 					continue
 				}
 				e := globalEntry{item: li.Key, owner: owner, self: self, dir: dir, file: file}
@@ -271,8 +310,8 @@ func newCardActionIndex(info *PlanInfo) *cardActionIndex {
 				}
 			}
 			k := baseWaitKey{image: it.Current.Ref, entity: it.Current.Entity, vuln: t.VulnID, coord: t.Package}
-			if e := (imageEntry{item: it, outcome: outcome}); !containsImage(x.images[k], e) {
-				x.images[k] = append(x.images[k], e)
+			if e := (imageEntry{item: it, outcome: outcome}); !containsImage(x.items[k], e) {
+				x.items[k] = append(x.items[k], e)
 			}
 		}
 	}
@@ -280,6 +319,15 @@ func newCardActionIndex(info *PlanInfo) *cardActionIndex {
 }
 
 func containsImage(list []imageEntry, e imageEntry) bool {
+	for _, have := range list {
+		if have == e {
+			return true
+		}
+	}
+	return false
+}
+
+func containsLang(list []langEntry, e langEntry) bool {
 	for _, have := range list {
 		if have == e {
 			return true
@@ -317,12 +365,14 @@ func globalPlace(pkgPath string) (owner, dir string, self, ok bool) {
 }
 
 // lookup returns the action of group g of the scanned entity img: a wait of
-// card_basewait.go, an action of this file or of card_base.go, or neither.
-// The sources are tried in order. The dependency files and the image's own
-// tag end the search when they know the card's findings without being able
-// to give one line for them; the base image of the Dockerfile passes a card
-// it has no line for on to the image's own tag, which leaves out what the
-// base's findings make it unable to say.
+// card_basewait.go, an action of this file, of card_lang.go or of
+// card_base.go, or neither. The sources are tried in order: the dependency
+// files, the base image of the Dockerfile, the image's own tag. A global
+// node_modules and the image's own tag end the search when they know the
+// card's findings without being able to give one line for them. The
+// dependency files and the base image pass a card they have no line for on;
+// the sources after them leave out what the findings those hold make them
+// unable to say.
 func (x *cardActionIndex) lookup(img analyze.ImageFindings, g analyze.PackageGroup) (*baseWait, *cardAction) {
 	if x == nil || img.Image == "" || !img.Subject.Resolved {
 		return nil, nil
@@ -334,6 +384,21 @@ func (x *cardActionIndex) lookup(img analyze.ImageFindings, g analyze.PackageGro
 	if a, decided := x.global(entity, g); decided {
 		return nil, a
 	}
+	files, last := x.lang(entity, g)
+	if files != nil && !last {
+		return nil, files
+	}
+	w, a := x.images(img, entity, g)
+	if w == nil && a == nil {
+		// What the dependency files say of a package they cannot reach.
+		a = files
+	}
+	return w, a
+}
+
+// images is the action of group g from the images: the base image of the
+// Dockerfile, then the running image's own tag.
+func (x *cardActionIndex) images(img analyze.ImageFindings, entity string, g analyze.PackageGroup) (*baseWait, *cardAction) {
 	if w, ok := x.waits.base(img, entity, g); ok {
 		return &w, nil
 	}
@@ -413,7 +478,7 @@ func (x *cardActionIndex) image(img analyze.ImageFindings, entity string, g anal
 	var item *remediation.Item
 	found, resolved, remaining := 0, 0, 0
 	for _, id := range vulns {
-		es := x.images[baseWaitKey{image: img.Image, entity: entity, vuln: id, coord: coord}]
+		es := x.items[baseWaitKey{image: img.Image, entity: entity, vuln: id, coord: coord}]
 		if len(es) == 0 {
 			continue
 		}
@@ -577,11 +642,11 @@ func waitsStateNewerSeries(it *remediation.Item) bool {
 	return it.NewerSeries.Status != remediation.NewerSeriesNone || it.Reason == remediation.ReasonNoNewerTag
 }
 
-// inFiles reports whether the dependency files hold one of the fixed
-// findings vulns of group g as a package they are matched against.
+// inFiles reports whether one of the fixed findings vulns of group g came
+// from a package of the dependency files that a change of them can reach.
 func (x *cardActionIndex) inFiles(entity string, g analyze.PackageGroup, vulns []string) bool {
 	for _, id := range vulns {
-		if x.others[actionKey{entity: entity, ecosystem: string(g.Ecosystem), class: string(g.Class), name: g.Package, version: g.InstalledVer, vuln: id}] {
+		if x.owned[actionKey{entity: entity, ecosystem: string(g.Ecosystem), class: string(g.Class), name: g.Package, version: g.InstalledVer, vuln: id}] {
 			return true
 		}
 	}

@@ -8,7 +8,7 @@ This page describes PR processing results, language package update details, PR o
 See [Remediation plan overview](webhook-remediation-reference.md#remediation-overview) for the overall structure.
 
 Whenever a remediation plan is generated, `pull_requests_enabled` records whether PR creation was enabled.
-When enabled, `pr_items` contains results for each pair of an image item categorized as `pr_candidate` and a workload, and for each Dockerfile item categorized as `pr_candidate`.
+When enabled, `pr_items` contains results for each pair of an image item categorized as `pr_candidate` and a workload, and for each Dockerfile or language package item categorized as `pr_candidate`.
 
 When PR creation is enabled and a remediation plan exists, `pull_request_summary` and `pull_requests` are emitted if there are processing targets, `operations` if there are undelivered operation events, and `problems` if there are problems that stop writes.
 `operations` and `problems` can also be emitted when `pull_requests` is absent.
@@ -36,24 +36,25 @@ See [PR status values](remediation-reason-codes.md#pr-status-values) for `pull_r
 
 ### PR processing results by item {#pr-item-fields}
 
-`pr_items[]` contains one entry for each pair of an `items[]` entry categorized as `pr_candidate` and a workload, and one entry for each `dockerfile_items[]` entry categorized as `pr_candidate`.
-`kind` is `image` or `dockerfile`; language package items are not included.
+`pr_items[]` contains one entry for each pair of an `items[]` entry categorized as `pr_candidate` and a workload, and one entry for each `dockerfile_items[]` or `language_items[]` entry categorized as `pr_candidate`.
+`kind` is `image`, `dockerfile`, or `language`.
 
 A Dockerfile has one update target shared by all workloads using that Dockerfile.
+A language package update has one update target shared by all workloads using those dependency files.
 
 Each element of `pr_items[]` has the following fields.
 
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
-| `kind` | string | `image` for an image item or `dockerfile` for a Dockerfile item | — |
-| `item_key` | string | `items[].key` when `kind` is `image`, or `dockerfile_items[].key` when it is `dockerfile` | — |
-| `workload` | string | The target workload key | omitted for `dockerfile` or services without a key |
+| `kind` | string | `image` for an image item, `dockerfile` for a Dockerfile item, or `language` for a language package item | — |
+| `item_key` | string | `items[].key` when `kind` is `image`, `dockerfile_items[].key` when it is `dockerfile`, or `language_items[].key` when it is `language` | — |
+| `workload` | string | The target workload key | omitted for `dockerfile`, `language`, or services without a key |
 | `status` | string | Whether the item was included in a PR update target | — |
-| `unit_keys` | array of strings | Corresponding `pull_requests[].key` values (one for `dockerfile`) | omitted unless `assigned` |
+| `unit_keys` | array of strings | Corresponding `pull_requests[].key` values (one for `dockerfile` or `language`) | omitted unless `assigned` |
 | `reason` | string | Why there is no update target | omitted when `assigned` |
 
 The values of `pr_items[].status` are as follows.
-When `kind` is `dockerfile`, the status is `assigned` or `not_processed`, never `not_applicable`.
+When `kind` is `dockerfile` or `language`, the status is `assigned` or `not_processed`, never `not_applicable`.
 
 | Value | Meaning |
 | --- | --- |
@@ -64,7 +65,7 @@ When `kind` is `dockerfile`, the status is `assigned` or `not_processed`, never 
 `assigned` does not mean a PR has been created; check the `pull_requests[]` entries referenced by `unit_keys` for PR results.
 
 The values of `pr_items[].reason` are as follows.
-When `kind` is `dockerfile`, the reason is `pr_unit_unavailable`, `storage_failed`, or `github_error`.
+When `kind` is `dockerfile` or `language`, the reason is `pr_unit_unavailable`, `storage_failed`, or `github_error`.
 
 | Value | Meaning |
 | --- | --- |

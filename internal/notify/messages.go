@@ -393,6 +393,24 @@ type messages struct {
 	CardRebuildStillPresent  string
 	CardRebuildUnknown       string
 	CardRebuildNotInBase     string
+	// The action lines about the dependency files that install a language
+	// package. In the pull request lines %[1]s names the pull request and
+	// %[2]s the version it updates the package to; %[3]s of
+	// CardLangPRReplaced is the pull request that replaced it. The candidate
+	// lines take the file (%[1]s) and a version (%[2]s), CardLangRebuild the
+	// version, and the others the file.
+	CardLangPR               string
+	CardLangPRMerged         string
+	CardLangPRClosed         string
+	CardLangPRReplaced       string
+	CardLangCandidate        string
+	CardLangCandidateAtLeast string
+	CardLangRebuild          string
+	CardLangOutOfReach       string
+	CardLangNotAutomatic     string
+	CardLangItemFailed       string
+	CardLangItemLater        string
+	CardLangUnconfirmed      string
 	// The pull request clause of an action line. %[1]s names the pull
 	// requests, or is the reason of a clause that names none; %[2]s of
 	// CardPRReplaced is the pull request that replaced them.
@@ -894,6 +912,19 @@ var enMessages = messages{
 	CardRebuildUnknown:       "whether a rebuild resolves it could not be confirmed",
 	CardRebuildNotInBase:     "the current base image has no package at the same location",
 
+	CardLangPR:               "updated to %[2]s in Pull Request %[1]s",
+	CardLangPRMerged:         "updated to %[2]s in Pull Request %[1]s; merged, deployment to the running image is unconfirmed",
+	CardLangPRClosed:         "the update to %[2]s in Pull Request %[1]s was closed without merging",
+	CardLangPRReplaced:       "the update to %[2]s in Pull Request %[1]s was closed without merging and replaced by %[3]s",
+	CardLangCandidate:        "candidate to update to %[2]s through %[1]s",
+	CardLangCandidateAtLeast: "candidate to update to %[2]s or later through %[1]s",
+	CardLangRebuild:          "a rebuild is expected to install %s or later",
+	CardLangOutOfReach:       "updating %s cannot fix it",
+	CardLangNotAutomatic:     "it could not be fixed automatically through %s",
+	CardLangItemFailed:       "%s could not be updated",
+	CardLangItemLater:        "updating %s is deferred to a later run",
+	CardLangUnconfirmed:      "the update to %s could not be confirmed",
+
 	CardPR:              "Pull Request %s",
 	CardPRMergedRunning: "Pull Request %s is merged; the running image has not been updated",
 	CardPRMergedRebuild: "Pull Request %s is merged; waiting for the image to be rebuilt",
@@ -1376,6 +1407,19 @@ var jaMessages = messages{
 	CardRebuildStillPresent:  "現在の内容にも残る",
 	CardRebuildUnknown:       "再ビルドで解消するか確認できない",
 	CardRebuildNotInBase:     "現在の元イメージに同じ場所のパッケージがない",
+
+	CardLangPR:               "Pull Request %[1]s で %[2]s に更新",
+	CardLangPRMerged:         "Pull Request %[1]s で %[2]s に更新、マージ済み、稼働中のイメージへの反映は未確認",
+	CardLangPRClosed:         "Pull Request %[1]s で %[2]s に更新する変更は未マージでクローズ",
+	CardLangPRReplaced:       "Pull Request %[1]s で %[2]s に更新する変更は未マージでクローズ、%[3]s に置き換え",
+	CardLangCandidate:        "%[1]s の更新で %[2]s に上げる候補",
+	CardLangCandidateAtLeast: "%[1]s の更新で %[2]s 以上に上げる候補",
+	CardLangRebuild:          "再ビルドで %s 以上が入る見込み",
+	CardLangOutOfReach:       "%s の更新では直せない",
+	CardLangNotAutomatic:     "%s では自動修正できない",
+	CardLangItemFailed:       "%s を更新できない",
+	CardLangItemLater:        "%s の更新は次回以降",
+	CardLangUnconfirmed:      "%s の更新内容を確認できない",
 
 	CardPR:              "Pull Request %s",
 	CardPRMergedRunning: "Pull Request %s はマージ済み、稼働中のイメージは未更新",

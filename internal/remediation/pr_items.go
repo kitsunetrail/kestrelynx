@@ -17,11 +17,13 @@ const (
 	PRItemNotProcessed PRItemStatus = "not_processed"
 )
 
-// PRItemKindImage is the kind of a result for an item of Plan.Items, and
-// PRItemKindDockerfile for one of Plan.DockerfileItems.
+// PRItemKindImage is the kind of a result for an item of Plan.Items,
+// PRItemKindDockerfile for one of Plan.DockerfileItems and PRItemKindLanguage
+// for one of Plan.LanguageItems.
 const (
 	PRItemKindImage      = "image"
 	PRItemKindDockerfile = "dockerfile"
+	PRItemKindLanguage   = "language"
 )
 
 // Reasons of an item that has no update unit.
@@ -39,13 +41,13 @@ const (
 
 // PRItemResult ties one plan item, for one workload running its image, to the
 // update units of the pull request stage, or says why it has none. A
-// Dockerfile item has one result for all its workloads: its unit never covers
-// part of them.
+// Dockerfile item and a language item have one result for all their
+// workloads: their unit never covers part of them.
 type PRItemResult struct {
 	Kind    string `json:"kind"`
 	ItemKey string `json:"item_key"`
 	// Workload is the workload key the result is for; empty when the item
-	// names a service that has none, and for a Dockerfile item.
+	// names a service that has none, and for a Dockerfile or language item.
 	Workload string `json:"workload,omitempty"`
 	// UnitKeys are the keys of the units (PRUnit.Key) the item is part of for
 	// the workload, sorted; set with PRItemAssigned only.

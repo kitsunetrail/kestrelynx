@@ -200,6 +200,36 @@ func (rd renderer) actionLine(c pkgCard) string {
 		return wrap(msg.CardRebuildUnknown, msg.CardRebuildNotInBase)
 	case actBaseMergedWait:
 		return wrap(rd.prClause(a.PR))
+	case actLangInPR:
+		prs := rd.prNumbers(a.PR)
+		switch a.PR.Kind {
+		case prMergedRunning:
+			return wrap(fmt.Sprintf(msg.CardLangPRMerged, prs, to))
+		case prClosed:
+			return wrap(fmt.Sprintf(msg.CardLangPRClosed, prs, to))
+		case prReplaced:
+			return wrap(fmt.Sprintf(msg.CardLangPRReplaced, prs, to, rd.prNumber(a.PR.Replaced)))
+		}
+		return wrap(fmt.Sprintf(msg.CardLangPR, prs, to))
+	case actLangCandidate:
+		return wrap(fmt.Sprintf(msg.CardLangCandidate, file, to), rd.prClause(a.PR))
+	case actLangCandidateAtLeast:
+		return wrap(fmt.Sprintf(msg.CardLangCandidateAtLeast, file, to), rd.prClause(a.PR))
+	case actLangRebuild:
+		return wrap(fmt.Sprintf(msg.CardLangRebuild, to))
+	case actLangOutOfReach:
+		return wrap(fmt.Sprintf(msg.CardLangOutOfReach, file), why)
+	case actLangNotAutomatic:
+		return wrap(fmt.Sprintf(msg.CardLangNotAutomatic, file), why)
+	case actLangItemFailed:
+		return wrap(fmt.Sprintf(msg.CardLangItemFailed, file), why)
+	case actLangItemLater:
+		return wrap(fmt.Sprintf(msg.CardLangItemLater, file), why)
+	case actLangUnconfirmed:
+		if a.Why == "" {
+			return wrap(fmt.Sprintf(msg.CardLangUnconfirmed, file))
+		}
+		return wrap(fmt.Sprintf(msg.CardLangUnconfirmed, file), why)
 	case actNotChecked:
 		return wrap(fmt.Sprintf(msg.CardNotChecked, subject), why)
 	case actCheckFailed:
@@ -217,22 +247,30 @@ func (rd renderer) actionLine(c pkgCard) string {
 	return ""
 }
 
+// prNumber names one pull request: its number, linked when its URL is known.
+func (rd renderer) prNumber(r prRef) string {
+	label := fmt.Sprintf("#%d", r.Number)
+	if r.URL == "" {
+		return label
+	}
+	return mrkdwnLink(r.URL, label)
+}
+
+// prNumbers names the pull requests of a clause.
+func (rd renderer) prNumbers(p prClause) string {
+	refs := make([]string, len(p.PRs))
+	for i, r := range p.PRs {
+		refs[i] = rd.prNumber(r)
+	}
+	return strings.Join(refs, rd.msg.CardClauseJoin)
+}
+
 // prClause puts the pull request part of an action line into words; "" when
 // it says nothing.
 func (rd renderer) prClause(p prClause) string {
 	msg := rd.msg
-	ref := func(r prRef) string {
-		label := fmt.Sprintf("#%d", r.Number)
-		if r.URL == "" {
-			return label
-		}
-		return mrkdwnLink(r.URL, label)
-	}
-	refs := make([]string, len(p.PRs))
-	for i, r := range p.PRs {
-		refs[i] = ref(r)
-	}
-	prs := strings.Join(refs, msg.CardClauseJoin)
+	ref := rd.prNumber
+	prs := rd.prNumbers(p)
 	why := planReasonText(msg.Lang, string(p.Reason))
 	if p.Reason == "" {
 		why = litMrkdwn(p.Status)

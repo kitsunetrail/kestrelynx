@@ -48,11 +48,11 @@ The following codes distinguish version-declaration and execution-environment re
 | `work_environment_rejected` | The work container does not meet the program's execution requirements | [Execution restrictions](remediation-worker-logic.md#worker-restrictions) |
 | `go_version_too_old` | `go.mod` has no `go` version declaration, or it is older than 1.21 | [Go dependency files](remediation-dependency-formats.md#go-inputs) |
 | `go_toolchain_unsupported` | The `toolchain` line in `go.mod` is not a released Go version | [Go dependency files](remediation-dependency-formats.md#go-inputs) |
-| `go_runtime_unavailable` | No supported Go release is new enough for the update | [Go runtime selection](remediation-go-logic.md#go-runtime-selection) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
+| `go_runtime_unavailable` | The Go version required for the update cannot be read, or no supported Go release is new enough | [Go runtime selection](remediation-go-logic.md#go-runtime-selection) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
 | `gradle_version_unsupported` | The build uses an unsupported Gradle version | [Gradle dependency files](remediation-dependency-formats.md#gradle-inputs) |
 | `gradle_toolchain_unsupported` | The build requests an unsupported Java toolchain | [Gradle worker settings](remediation-gradle-logic.md#gradle-worker-settings) |
 | `runtime_eol` | The runtime selected for updates from project declarations or other inputs, or the running image's Python checked by pip, is past end of support | [Runtime selection](remediation-package-logic.md#runtime-and-tool-versions) |
-| `runtime_engines_mismatch` | An updated dependency does not support the minimum Node.js version declared by the project | [Node.js compatibility](remediation-node-python-logic.md#node-compatibility) |
+| `runtime_engines_mismatch` | An updated dependency does not support the minimum Node.js version declared by the project, or its support cannot be read | [Node.js compatibility](remediation-node-python-logic.md#node-compatibility) |
 | `requires_python_unsupported` | Required Python version conditions cannot be met, are missing, or cannot be parsed | [Python selection for uv](remediation-node-python-logic.md#uv-python-selection) |
 | `pip_target_undecidable` | Running-image scan information and package discovery paths do not establish a validation target with a known Python version and OS/CPU platform | [pip target environment](remediation-node-python-logic.md#pip-target-environment) |
 | `pip_target_mismatch` | Validation environments derived from package origins disagree on the Python version, implementation, platform tags, or ABI | [pip target environment](remediation-node-python-logic.md#pip-target-environment) |
@@ -131,7 +131,7 @@ These codes describe Go module updates and checks on the Go version required aft
 | `go_stdlib_needs_newer_go` | The Go standard-library vulnerability is fixed by rebuilding with a newer Go, not by updating `go.mod` | [Go package selection](remediation-go-logic.md#go-package-selection) |
 | `fix_in_other_major_version` | The fix is in another major version, which Go identifies by a different module path | [Go package selection](remediation-go-logic.md#go-package-selection) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
 | `go_release_retracted` | The target version is retracted with no alternative fixed version available, or dependency requirements selected a retracted target-package version above the target | [Go package selection](remediation-go-logic.md#go-package-selection) · [Go update validation](remediation-go-logic.md#go-update-validation) |
-| `go_line_raised_too_far` | Changes to the `go` or `toolchain` lines in `go.mod` violate the limit imposed by the Go versions used to build the target module's running binaries | [Go update validation](remediation-go-logic.md#go-update-validation) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
+| `go_line_raised_too_far` | The update raises the `go` or `toolchain` version in `go.mod` above the lowest Go version used to build the target module's running binaries, or changes it while the build version is unknown | [Go update validation](remediation-go-logic.md#go-update-validation) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
 | `go_dependencies_uncheckable` | Too many module versions must be traversed to verify updated dependency requirements | [Go update validation](remediation-go-logic.md#go-update-validation) |
 
 The line-change check uses running binaries built from the target `go.mod` module, whether or not they have findings.
@@ -149,11 +149,11 @@ These codes describe Maven and Gradle version sources, update targets, and lockf
 | Code | Meaning | Details |
 | --- | --- | --- |
 | `maven_fix_in_other_major` | The fix is available only in another major version | [Maven package selection](remediation-maven-logic.md#maven-package-selection) · [Gradle target versions](remediation-gradle-logic.md#gradle-target-versions) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
-| `maven_version_source_unsupported` | The version is determined in a way that edits to the project's pom files cannot change | [Version sources and edits](remediation-maven-logic.md#maven-version-sources) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
+| `maven_version_source_unsupported` | The place in the project's pom files that determines the version cannot be rewritten automatically | [Version sources and edits](remediation-maven-logic.md#maven-version-sources) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
 | `maven_release_not_found` | Maven Central has no release usable for the update | [Target versions and Maven Central releases](remediation-maven-logic.md#maven-target-versions) · [Gradle target versions](remediation-gradle-logic.md#gradle-target-versions) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
 | `maven_bom_series_unreached` | No qualifying version is found after checking up to 20 newer stable releases within the imported BOM's current major and minor version | [Version sources and edits](remediation-maven-logic.md#maven-version-sources) · [Gradle version declarations and edits](remediation-gradle-logic.md#gradle-version-sources) |
-| `maven_dependency_held_back` | After updating, a dependency required by the new release remains below its declared version | [Maven update validation](remediation-maven-logic.md#maven-update-validation) |
-| `gradle_version_source_unsupported` | The version is determined in a way that edits to the project's files cannot change | [Version declarations and edits](remediation-gradle-logic.md#gradle-version-sources) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
+| `maven_dependency_held_back` | After updating, a dependency required by the new release remains below the version the release declares, or the declared version cannot be read | [Maven update validation](remediation-maven-logic.md#maven-update-validation) |
+| `gradle_version_source_unsupported` | The place in the project's files that determines the version cannot be rewritten automatically | [Version declarations and edits](remediation-gradle-logic.md#gradle-version-sources) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
 | `gradle_lock_entry_removed` | The update removed an entry from `gradle.lockfile` | [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) |
 | `gradle_lock_configurations_changed` | The update changed the configurations locked by `gradle.lockfile` | [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) |
 | `gradle_lock_version_unsupported` | The updated `gradle.lockfile` contains a snapshot version | [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) |
@@ -202,7 +202,7 @@ These codes describe whether output files and dependency changes stay within the
 | `target_removed` | The target package disappeared after updating or became unreachable through dependencies | [Partial PR conditions](remediation-package-logic.md#partial-pr-selection) |
 | `fix_condition_not_met` | The updated version does not satisfy the vulnerability's fix conditions | [Partial PR conditions](remediation-package-logic.md#partial-pr-selection) |
 | `unexplained_dependency_diff` | A dependency change cannot be explained by the update, or a raised Go `go` line does not match updated module requirements | [Collateral change validation](remediation-node-python-logic.md#change-validation) · [Go update validation](remediation-go-logic.md#go-update-validation) |
-| `distribution_mismatch` | A package differs from registry contents or pip resolution results | [Collateral change validation](remediation-node-python-logic.md#change-validation) |
+| `distribution_mismatch` | A package differs from registry contents or pip resolution results, or the match cannot be confirmed | [Collateral change validation](remediation-node-python-logic.md#change-validation) |
 | `resolved_source_changed` | A package's source changed | [Collateral change validation](remediation-node-python-logic.md#change-validation) |
 | `post_update_lockfile_unstable` | Regenerating the lockfile changes its contents again | [Manager update methods](remediation-package-logic.md#manager-update-methods) |
 | `drop_side_effect` | A dependency temporarily removed for re-resolution did not return to its original state | [Manager update methods](remediation-package-logic.md#manager-update-methods) |
@@ -265,11 +265,14 @@ Failures during re-resolution execution or retrieval can also use failure codes 
 PR processing reasons describe whether PRs can be created, reconciled, or replaced and why GitHub writes stopped.
 The following codes distinguish processing limits, candidate or file changes, and relationships to existing PRs.
 
+`dependency_update_not_verified` is used only on the card's `Action:` line and does not appear in webhook `pr_items[]`.
+
 | Code | Meaning | Details |
 | --- | --- | --- |
 | `source_mapping_missing` | No source mapping edits the image tag for the target workload | [PR processing results by item](webhook-remediation-pr-reference.md#pr-item-fields) |
 | `container_image_tag_unsupported` | The container was started with `docker run`, and no repository file declares its image tag | [PR processing results by item](webhook-remediation-pr-reference.md#pr-item-fields) |
 | `pr_unit_unavailable` | A mapping exists, but the plan item is not included in a PR update target | [PR processing results by item](webhook-remediation-pr-reference.md#pr-item-fields) |
+| `dependency_update_not_verified` | The dependency-file update has not yet been run, so its result has not been verified | [Language package updates through dependency files](slack-package-display.md#action-dependency-files) |
 | `pr_limit` | The limit on PRs created per cycle, `new_prs_per_cycle`, was reached | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `open_pr_limit` | The limit on open KestreLynx PRs across configured repositories, `open_prs`, was reached | [Missing PRs](remediation-troubleshooting.md#check-missing-pr) |
 | `candidate_changed` | The same candidate tag pointed to different content during a pre-PR recheck or a Dockerfile newer-series check | [Newer series check](remediation-image-logic.md#newer-series-check) |

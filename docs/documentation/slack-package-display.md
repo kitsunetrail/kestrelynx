@@ -339,7 +339,7 @@ For images with a dependency-file mapping, the following lines describe language
 | Example | Meaning | What to do |
 | --- | --- | --- |
 | `Action: updated to 2.0.4 in Pull Request #12` | A PR updates the dependency files to raise this package to 2.0.4 | Merge the PR, then rebuild and deploy the image |
-| `Action: updated to 2.0.4 in Pull Request #12; merged, deployment to the running image is unconfirmed` | The PR is merged, but the running image still contains the older version | Rebuild and deploy the image |
+| `Action: updated to 2.0.4 in Pull Request #12; merged, but not yet in the running image` | The PR is merged, but the running image still contains the older version | Rebuild and deploy the image |
 | `Action: the update to 2.0.4 in Pull Request #12 was closed without merging` | The PR was closed without merging | Decide whether to update the package yourself |
 | `Action: the update to 2.0.4 in Pull Request #12 was closed without merging and replaced by #13` | #12 was closed, and the new PR #13 carries the same fix | Review #13 |
 | `Action: candidate to update to 2.0.4 through pnpm-lock.yaml (Pull Request not created: the files of the update cannot be written as they are)` | Updating the dependency files confirmed that the package reaches 2.0.4, but no PR has been created | Review the reason in parentheses |
@@ -381,7 +381,9 @@ The line does not show which owner version fixes the package.
 A change to the card's `Action:` line alone does not resend the full report in the thread.
 See [Slack thread delivery conditions](notification-conditions.md#slack-thread-delivery) for when another report is posted.
 
-See [Lines shown on Slack cards](remediation-image-logic.md#newer-series-slack-cards) for detailed display conditions and [Versions checked](remediation-image-logic.md#newer-series-versions) for candidate selection.
+See [Lines shown on Slack cards](remediation-image-logic.md#newer-series-slack-cards) for detailed image display conditions and [Versions checked](remediation-image-logic.md#newer-series-versions) for candidate selection.
+See [Card action line](remediation-package-logic.md#card-action-line) for how language package lines are determined.
+
 See [Displayed fields](remediation-results.md#slack-fields) for reading remediation plan messages.
 
 ### Upgrade risk {#upgrade-risk}

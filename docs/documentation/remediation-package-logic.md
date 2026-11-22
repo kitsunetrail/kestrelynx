@@ -192,3 +192,36 @@ The following requirements still apply after excluding targets.
 - Record excluded packages and their reasons, and carry them forward into a cycle that links the update to an existing PR
 
 For how to read the display, see [Partial PRs](remediation-update-results.md#partial-pull-requests).
+
+## Card action line {#card-action-line}
+
+The `Action:` line on a language package card uses the package's plan result when every finding with an available fix on the card matches one package in one dependency file.
+If any finding does not match, no line is produced from the dependency files.
+
+When multiple lines can be shown on one card, one is selected in the following order (F is the dependency filename).
+
+```mermaid
+flowchart TD
+    A["Is there a global node_modules line?"] -->|"Yes"| G["Show the global node_modules line"]
+    A -->|"No"| B["Is there a dependency-file line, excluding packages the update cannot reach?"]
+    B -->|"Yes"| L["Show the dependency-file line"]
+    B -->|"No"| C["Is there a Dockerfile base image line?"]
+    C -->|"Yes"| P["Show the base image line"]
+    C -->|"No"| D["Is there a line for the image itself?"]
+    D -->|"Yes"| I["Show the line for the image itself"]
+    D -->|"No"| E["Is the package beyond the reach of dependency-file updates?"]
+    E -->|"Yes"| U["Show the “updating F cannot fix it” line"]
+    E -->|"No"| N["Omit the line"]
+```
+
+The following reason codes identify packages that dependency-file updates cannot reach.
+
+| Reason code | Meaning |
+| --- | --- |
+| `not_found_in_source` | The dependency files do not list the package at the running version |
+| `jar_bundled_copy` | A copy of the package is bundled inside another archive, which no change of the pom files reaches |
+| `go_stdlib_needs_newer_go` | The Go standard library is fixed by building with a newer Go, not by go.mod |
+
+For `jar_bundled_copy`, the line is omitted if any finding lacks the containing archive's file location.
+
+See [Language package updates through dependency files](slack-package-display.md#action-dependency-files) for display examples.

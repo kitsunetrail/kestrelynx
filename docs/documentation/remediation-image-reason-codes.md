@@ -288,7 +288,7 @@ These codes describe whether dependency declaration files, such as `package.json
 | `gradle_plugin_unsupported` | The build uses a plugin or version that is not allowed | [Allowed plugins](remediation-dependency-formats.md#gradle-plugins) |
 | `workspace_unsupported` | The project has an unsupported npm, pnpm, or uv workspace layout, or Go `go.work` or `vendor` | [npm dependency files](remediation-dependency-formats.md#npm-inputs) · [pnpm dependency files](remediation-dependency-formats.md#pnpm-inputs) · [uv dependency files](remediation-dependency-formats.md#uv-inputs) · [Go dependency files](remediation-dependency-formats.md#go-inputs) |
 | `workspace_settings_unsupported` | The workspace settings file contains unsupported settings | — |
-| `dynamic_metadata` | Project metadata is determined dynamically | — |
+| `dynamic_metadata` | `pyproject.toml` has no `[project]` table, or project metadata is determined dynamically | — |
 | `unsupported_requirements` | The requirements syntax is unsupported | — |
 | `unparsable_source` | A dependency file cannot be parsed | — |
 | `unsupported_source_settings` | An unsupported package source setting is present | — |
@@ -302,7 +302,7 @@ These codes describe matching installed versions against dependency files and ch
 | `scan_not_pinned` | The scan result is not tied to a specific image | [Source verification](remediation-logic.md#source-verification) |
 | `not_found_in_source` | The dependency files do not list the package at its installed version | [Source verification](remediation-logic.md#source-verification) |
 | `global_node_modules` | The package is in global `node_modules` and cannot be fixed by updating dependency files | [Source verification](remediation-logic.md#source-verification) |
-| `non_registry_source` | The package comes from somewhere other than a supported public registry | — |
+| `non_registry_source` | The package is installed under an alias, or it cannot be confirmed to come from the default registry | — |
 | `sdist_only` | The package has only a source distribution | — |
 | `forced_by_override` | An override pins the package version | — |
 | `marker_not_evaluated` | The dependency's environment marker has not been evaluated | — |

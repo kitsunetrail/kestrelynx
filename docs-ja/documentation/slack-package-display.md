@@ -339,7 +339,7 @@ Dockerfileの対応付けがあるイメージで、元イメージに`node:24-a
 | 表示例 | 意味 | 利用者がすること |
 | --- | --- | --- |
 | `対応: Pull Request #12 で 2.0.4 に更新` | 依存ファイルを更新するPRがあり、このパッケージを2.0.4に上げる | PRをマージし、イメージをビルドし直してデプロイする |
-| `対応: Pull Request #12 で 2.0.4 に更新、マージ済み、稼働中のイメージへの反映は未確認` | PRはマージ済みだが、稼働中のイメージにはまだ古い版が入っている | イメージをビルドし直してデプロイする |
+| `対応: Pull Request #12 で 2.0.4 に更新、マージ済み、稼働中のイメージには未反映` | PRはマージ済みだが、稼働中のイメージにはまだ古い版が入っている | イメージをビルドし直してデプロイする |
 | `対応: Pull Request #12 で 2.0.4 に更新する変更は未マージでクローズ` | PRがマージされずに閉じられた | 自分で更新するかを決める |
 | `対応: Pull Request #12 で 2.0.4 に更新する変更は未マージでクローズ、#13 に置き換え` | #12 は閉じられ、新しいPRの #13 が同じ修正を引き継いだ | #13 を確認する |
 | `対応: pnpm-lock.yaml の更新で 2.0.4 に上げる候補（Pull Request は未作成: 更新したファイルをそのまま書き込めない）` | 依存ファイルを更新して2.0.4に上がることを確かめたが、PRは作られていない | かっこ内の理由を確認する |
@@ -381,7 +381,9 @@ npmの場合は、ファイル名が`package-lock.json`になります。
 カードの`対応:`行だけが変わっても、スレッドの全体レポートは送り直しません。
 再投稿の条件は[Slackスレッドの投稿条件](notification-conditions.md#slack-thread-delivery)を参照してください。
 
-細かな表示条件は[Slackのカードに出す行](remediation-image-logic.md#newer-series-slack-cards)、候補の選び方は[調べる版](remediation-image-logic.md#newer-series-versions)を参照してください。
+イメージの細かな表示条件は[Slackのカードに出す行](remediation-image-logic.md#newer-series-slack-cards)、候補の選び方は[調べる版](remediation-image-logic.md#newer-series-versions)を参照してください。
+言語パッケージの行の決め方は[カードの対応行](remediation-package-logic.md#card-action-line)を参照してください。
+
 修正計画メッセージの読み方は[表示項目](remediation-results.md#slack-fields)で確認できます。
 
 ### 更新の注意度 {#upgrade-risk}

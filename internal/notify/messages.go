@@ -913,7 +913,7 @@ var enMessages = messages{
 	CardRebuildNotInBase:     "the current base image has no package at the same location",
 
 	CardLangPR:               "updated to %[2]s in Pull Request %[1]s",
-	CardLangPRMerged:         "updated to %[2]s in Pull Request %[1]s; merged, deployment to the running image is unconfirmed",
+	CardLangPRMerged:         "updated to %[2]s in Pull Request %[1]s; merged, but not yet in the running image",
 	CardLangPRClosed:         "the update to %[2]s in Pull Request %[1]s was closed without merging",
 	CardLangPRReplaced:       "the update to %[2]s in Pull Request %[1]s was closed without merging and replaced by %[3]s",
 	CardLangCandidate:        "candidate to update to %[2]s through %[1]s",
@@ -1409,7 +1409,7 @@ var jaMessages = messages{
 	CardRebuildNotInBase:     "現在の元イメージに同じ場所のパッケージがない",
 
 	CardLangPR:               "Pull Request %[1]s で %[2]s に更新",
-	CardLangPRMerged:         "Pull Request %[1]s で %[2]s に更新、マージ済み、稼働中のイメージへの反映は未確認",
+	CardLangPRMerged:         "Pull Request %[1]s で %[2]s に更新、マージ済み、稼働中のイメージには未反映",
 	CardLangPRClosed:         "Pull Request %[1]s で %[2]s に更新する変更は未マージでクローズ",
 	CardLangPRReplaced:       "Pull Request %[1]s で %[2]s に更新する変更は未マージでクローズ、%[3]s に置き換え",
 	CardLangCandidate:        "%[1]s の更新で %[2]s に上げる候補",

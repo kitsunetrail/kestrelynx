@@ -79,7 +79,7 @@ Read the `Update`, `Update candidate`, `Newer series`, `Re-pull`, and `Rebuild` 
 | Re-pull | A comparison supports updating to new content under the same tag | Guidance that does not create a tag update PR |
 | Rebuild | Expected resolution based on dependency constraints, or guidance to pull the base again and build | Guidance rather than a PR that performs the rebuild |
 
-You can check why an image “Update candidate” has no PR on the [card action line](slack-package-display.md#action-same-series) in the vulnerability notification.
+You can check why there is no PR despite an available fix on the card's [`Action:` line](slack-package-display.md#base-image-wait) in the vulnerability notification.
 
 See [Newer-series lines](#newer-series-lines) for how to read the “Newer series” lines.
 

@@ -551,10 +551,10 @@ The `reason` values eligible for `fix_hint` are listed below.
 | --- | --- |
 | `dependents_hold_back` | A package that depends on it limits its version |
 | `go_line_raised_too_far` | The `go` or `toolchain` version exceeds the lowest Go version used to build the running binaries, or changes while the build version is unknown |
-| `go_runtime_unavailable` | No supported Go is as new as the update needs |
+| `go_runtime_unavailable` | The Go version required for the update cannot be read, or no supported Go is as new as it |
 | `fix_in_other_major_version` | The fix is in another major version, which Go names as another module path |
-| `maven_version_source_unsupported` | Editing the project's POM files cannot change the target's version |
-| `gradle_version_source_unsupported` | Editing the project's files cannot change the target's version |
+| `maven_version_source_unsupported` | The place in the project's POM files that determines the version cannot be rewritten automatically |
+| `gradle_version_source_unsupported` | The place in the project's files that determines the version cannot be rewritten automatically |
 | `maven_release_not_found` | Maven Central has no release the update can use |
 | `maven_fix_in_other_major` | The fix is only in another major version |
 | `target_not_updated` | The package did not reach the target version after the update |

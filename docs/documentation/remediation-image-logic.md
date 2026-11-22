@@ -310,7 +310,7 @@ When no newer-series tag meets the conditions, the line depends on the same-seri
 
 The line is omitted when the Dockerfile base image and the published image produce different lines for the same finding.
 
-See [Resolution through image updates and waiting for newer versions](slack-package-display.md#base-image-wait) for display examples and the meaning of each part.
+See [Card action line](slack-package-display.md#base-image-wait) for display examples and the meaning of each part.
 
 ### Limits and reserving capacity for PR processing {#newer-series-limits}
 

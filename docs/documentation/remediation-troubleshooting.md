@@ -154,7 +154,7 @@ In the commands, replace `WORK_NAMESPACE` with the value of `remediation.worker.
 
 PR processing checks whether updates can be adopted and source files can be edited, then checks for existing PRs to prevent duplicates.
 
-You can check why an image “Update candidate” has no PR on the [card action line](slack-package-display.md#action-same-series) in the vulnerability notification.
+You can check why there is no PR despite an available fix on the card's [`Action:` line](slack-package-display.md#base-image-wait) in the vulnerability notification.
 
 Use the following table when an update candidate exists but no PR appears.
 

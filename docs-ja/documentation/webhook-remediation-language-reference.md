@@ -551,10 +551,10 @@ Pythonでは、`name`に正規化前の表記を保持するため、同じパ�
 | --- | --- |
 | `dependents_hold_back` | 依存元がこのパッケージの版を制限している |
 | `go_line_raised_too_far` | `go`・`toolchain`の版が稼働バイナリのビルド時のGoの最も低い版を超えるか、ビルド時の版が不明なまま変わる |
-| `go_runtime_unavailable` | 更新に必要な版以上の、サポート中のGoを選べない |
+| `go_runtime_unavailable` | 更新に必要なGo版を読み取れないか、その版以上のサポート中のGoがない |
 | `fix_in_other_major_version` | 修正版が別のメジャー版にあり、Goでは別のモジュールパスになる |
-| `maven_version_source_unsupported` | プロジェクトのPOMファイルの変更では対象の版を変えられない |
-| `gradle_version_source_unsupported` | プロジェクトのファイルの変更では対象の版を変えられない |
+| `maven_version_source_unsupported` | プロジェクトのPOMファイルで版を決めている箇所を、自動では書き換えられない |
+| `gradle_version_source_unsupported` | プロジェクトのファイルで版を決めている箇所を、自動では書き換えられない |
 | `maven_release_not_found` | 更新に使える版がMaven Centralにない |
 | `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない |
 | `target_not_updated` | 更新しても目標の版に上がらなかった |

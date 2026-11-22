@@ -288,7 +288,7 @@ valuesのイメージ指定を編集できるかと、変更の影響を受け�
 | `gradle_plugin_unsupported` | 許可していないプラグインか版を使っている | [プラグインの許可](remediation-dependency-formats.md#gradle-plugins) |
 | `workspace_unsupported` | npm・pnpm・uvの未対応のworkspace構成、またはGoの`go.work`・`vendor`がある | [npmの依存ファイル](remediation-dependency-formats.md#npm-inputs)・[pnpmの依存ファイル](remediation-dependency-formats.md#pnpm-inputs)・[uvの依存ファイル](remediation-dependency-formats.md#uv-inputs)・[Goの依存ファイル](remediation-dependency-formats.md#go-inputs) |
 | `workspace_settings_unsupported` | workspace設定ファイルの内容をサポートしていない | — |
-| `dynamic_metadata` | プロジェクトのメタデータが動的に決まる | — |
+| `dynamic_metadata` | `pyproject.toml`に`[project]`がないか、プロジェクトのメタデータが動的に決まる | — |
 | `unsupported_requirements` | requirementsの書き方をサポートしていない | — |
 | `unparsable_source` | 依存ファイルを解析できない | — |
 | `unsupported_source_settings` | サポートしていないパッケージ取得元の設定がある | — |
@@ -302,7 +302,7 @@ valuesのイメージ指定を編集できるかと、変更の影響を受け�
 | `scan_not_pinned` | スキャン結果が特定のイメージに結び付いていない | [ソースの確認](remediation-logic.md#source-verification) |
 | `not_found_in_source` | 依存ファイルに稼働版のパッケージが載っていない | [ソースの確認](remediation-logic.md#source-verification) |
 | `global_node_modules` | パッケージがグローバルな`node_modules`にあり、依存ファイルの更新では修正できない | [ソースの確認](remediation-logic.md#source-verification) |
-| `non_registry_source` | サポートする公開レジストリ以外から取得されるパッケージである | — |
+| `non_registry_source` | パッケージが別名でインストールされているか、既定のレジストリからの取得と確かめられない | — |
 | `sdist_only` | パッケージにソース配布物しかない | — |
 | `forced_by_override` | パッケージの版がoverrideで固定されている | — |
 | `marker_not_evaluated` | 依存指定の環境マーカーを評価していない | — |

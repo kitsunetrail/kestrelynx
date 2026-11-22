@@ -250,8 +250,8 @@ func TestPlanMessage_MavenBOMRaise(t *testing.T) {
 		return &PlanInfo{Plan: &p, Changed: true, SlackChanged: true}
 	}
 	for lang, want := range map[Language]string{
-		LanguageJA: "com.fasterxml.jackson.core:jackson-databind 2.13.3 → 2.18.6 は取り込んでいる BOM と同じマイナー版では修正版に届かない (jackson-bom.version を 2.18.6 に上げれば届く)",
-		LanguageEN: "com.fasterxml.jackson.core:jackson-databind 2.13.3 → 2.18.6: no release of the BOM in the minor version the project imports reaches the fixed version (raising jackson-bom.version to 2.18.6 reaches it)",
+		LanguageJA: "com.fasterxml.jackson.core:jackson-databind 2.13.3 → 2.18.6 は取り込んでいる BOM と同じマイナー版に、修正版に届く版が見つからない (jackson-bom.version を 2.18.6 に上げれば届く)",
+		LanguageEN: "com.fasterxml.jackson.core:jackson-databind 2.13.3 → 2.18.6: no release of the BOM that reaches the fixed version was found in the minor version the project imports (raising jackson-bom.version to 2.18.6 reaches it)",
 	} {
 		got := dumpMessages(buildPlanMessages(Message{Report: r, Plan: info()}, messagesFor(lang), defaultRenderLimits))
 		if !strings.Contains(got, want) {

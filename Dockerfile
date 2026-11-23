@@ -65,7 +65,12 @@ COPY --from=build /out/kestrelynx /usr/local/bin/kestrelynx-sensor
 # +p only, whichever of these the bounding set actually grants become
 # permitted-but-not-effective after exec; the observer raises them itself
 # (sandbox.RaiseEffective) and reports any that did not make it.
-RUN apk add --no-cache libcap && \
+#
+# apk upgrade comes first: the base image keeps the Alpine packages of the day
+# Trivy was released, and the fixes Alpine has published since then are taken
+# when this image is built.
+RUN apk upgrade --no-cache && \
+    apk add --no-cache libcap && \
     setcap cap_sys_ptrace,cap_dac_read_search,cap_bpf,cap_perfmon+p /usr/local/bin/kestrelynx-sensor && \
     apk del libcap
 # Pre-create the Sensor's default --evidence-dir, owned by the UID/GID the

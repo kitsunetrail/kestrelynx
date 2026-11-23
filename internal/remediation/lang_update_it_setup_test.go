@@ -198,9 +198,16 @@ func (f fetchCycle) Provide(ctx context.Context, req ToolRequest) (ToolArtifact,
 }
 
 // config completes a configuration of the update stage with the clients, the
-// package manager provider and the work program of the environment.
+// package manager provider and the work program of the environment. A chain
+// update may bring in a version of any age: the public registries decide what
+// the newest one is, and a release of the last days would turn an update the
+// test expects into a wait. The wait itself is tested with a fixed clock and
+// fixed publication times.
 func (e *itEnv) config(cfg LangUpdateConfig) LangUpdateConfig {
 	cfg.Work, cfg.Scanner, cfg.Prepared = e.work, e.trivy, e.prepared
+	if cfg.chainMinReleaseAge == 0 {
+		cfg.chainMinReleaseAge = time.Nanosecond
+	}
 	if e.dumpDir != "" {
 		cfg.Work = &dumpingWork{inner: e.work, dir: e.dumpDir}
 	}

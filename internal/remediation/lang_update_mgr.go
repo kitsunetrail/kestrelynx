@@ -1006,6 +1006,15 @@ func (r *updateRun) verifyLock(ctx context.Context, newLock []byte) *updateFailu
 // a chain update to bring it in.
 const chainMinReleaseAge = 72 * time.Hour
 
+// minReleaseAge is chainMinReleaseAge, or the age the configuration sets in
+// its place.
+func (u *LangUpdater) minReleaseAge() time.Duration {
+	if u.cfg.chainMinReleaseAge > 0 {
+		return u.cfg.chainMinReleaseAge
+	}
+	return chainMinReleaseAge
+}
+
 // checkReleaseAge requires every version the chain update brings in (an entry
 // added or changed whose package and version are in no entry of the original
 // file) to have been published at least chainMinReleaseAge ago. When some were
@@ -1030,7 +1039,7 @@ func (r *updateRun) checkReleaseAge(ctx context.Context, gb, ga *depGraph, touch
 		fresh = append(fresh, id)
 	}
 	sort.Strings(fresh)
-	now := r.u.now()
+	now, minAge := r.u.now(), r.u.minReleaseAge()
 	var retry time.Time
 	var young []string
 	for _, id := range fresh {
@@ -1038,7 +1047,7 @@ func (r *updateRun) checkReleaseAge(ctx context.Context, gb, ga *depGraph, touch
 		if fail != nil {
 			return fail
 		}
-		if due := published.Add(chainMinReleaseAge); now.Before(due) {
+		if due := published.Add(minAge); now.Before(due) {
 			young = append(young, id)
 			if due.After(retry) {
 				retry = due
@@ -1049,7 +1058,7 @@ func (r *updateRun) checkReleaseAge(ctx context.Context, gb, ga *depGraph, touch
 		return nil
 	}
 	return &updateFailure{category: CategoryDeferred, reason: ReasonReleaseTooNew,
-		detail: fmt.Sprintf("%s was published less than %d hours ago", strings.Join(young, ", "), int(chainMinReleaseAge.Hours())),
+		detail: fmt.Sprintf("%s was published less than %d hours ago", strings.Join(young, ", "), int(minAge.Hours())),
 		wait:   &langWaitIntent{Kind: releaseAgeWait, RetryAfter: retry}}
 }
 

@@ -71,6 +71,11 @@ type LangUpdateConfig struct {
 	// Now is the clock the end of a runtime's support is judged by; nil means
 	// time.Now.
 	Now func() time.Time
+	// chainMinReleaseAge replaces the age a version must have for a chain
+	// update to bring it in; zero means chainMinReleaseAge. Only the tests
+	// that run against the public registries set it, where a release of the
+	// last days would otherwise decide their outcome.
+	chainMinReleaseAge time.Duration
 }
 
 // DefaultUpdateJobTimeout is the time one update container gets.

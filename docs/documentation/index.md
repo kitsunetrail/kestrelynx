@@ -41,6 +41,7 @@ The following terms help you read the configuration, processing, and results of 
 | Published image | A ready-made image pulled from a registry and run as provided |
 | Pinned tag | A tag specifying a complete version, such as `1.27.0` |
 | Floating tag | A tag whose content can change, such as `latest` or `22-alpine` |
+| Commit tag | A tag named after a commit hash, such as `sha-5cf2d7b` |
 | Mapping | An entry in `remediation.mappings` that links running containers to files in a GitHub repository |
 | Workload key | The value in a mapping’s `workload` that identifies a Compose service, Docker container, or Kubernetes container |
 | Running version | The version detected in the running image |

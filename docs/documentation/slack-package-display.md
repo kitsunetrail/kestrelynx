@@ -279,7 +279,10 @@ For an image with a tag that does not pin a version, such as `latest`, the line 
 | Partly resolved | `Action: pulling image nginx latest again resolves part of it (1 of 2)` |
 | All remain | `Action: waiting for new content of image nginx latest (pulling again does not resolve it)` |
 | The tag has the same content as the running image | `Action: waiting for new content of image nginx latest (the tag has the same content as the running image)` |
+| A commit tag with the same content as the running image | `Action: image app sha-5cf2d7b needs to be changed to a newer tag (the tag names one commit, so no newer tag can be chosen automatically)` |
 | Includes findings that cannot be assessed | `Action: whether pulling image nginx latest again resolves it could not be confirmed` |
+
+When a [commit tag](remediation-image-logic.md#published-image-tags) is shown as needing a change to a newer tag, change the tag in the image reference in Compose or the manifest to a newer tag.
 
 #### Rebuilding with the same base image tag {#action-base-floating}
 
@@ -288,6 +291,7 @@ For images with a Dockerfile mapping whose base image uses a tag that does not p
 | Example | Meaning | What to do |
 | --- | --- | --- |
 | `Action: waiting for new content of base image node 24-alpine (the tag's content has not changed since the image was built)` | The content referenced by the tag has not changed since the image was built | Wait for the publisher to update the tag's content |
+| `Action: base image app sha-5cf2d7b needs to be changed to a newer tag (the tag names one commit, so no newer tag can be chosen automatically)` | The tag is a commit tag, and its content has not changed since the image was built | Change the tag in `FROM` to a newer tag and rebuild the image |
 | `Action: a rebuild is expected to resolve it (fixed in the current base image node 24-alpine)` | The tag's content has been updated, and the findings are fixed in its current content | Rebuild and deploy the image |
 | `Action: a rebuild is expected to resolve part of it (1 of 2, compared with the current base image node 24-alpine)` | Only some findings are fixed in the current content | Rebuild and deploy the image, then wait for the publisher to fix the remaining findings |
 | `Action: waiting for new content of base image node 24-alpine (still present in its current content)` | The tag's content has been updated, but the findings remain in its current content | Wait for the publisher to release an update |

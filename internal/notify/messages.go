@@ -362,9 +362,14 @@ type messages struct {
 	CardPullNotFixed       string
 	CardSameContentRunning string
 	CardOwnSameContent     string
-	CardDecisionClause     string
-	CardImageDecision      string
-	CardPullDecision       string
+	// CardCommitTag is the line of a tag that names a commit and has no
+	// newer content, for an image and for the base image of a Dockerfile;
+	// CardCommitTagNoNewer is its clause.
+	CardCommitTag        string
+	CardCommitTagNoNewer string
+	CardDecisionClause   string
+	CardImageDecision    string
+	CardPullDecision     string
 	// The action lines that only give the reason a newer version of the
 	// subject (%[1]s) was not looked at; the reason follows in parentheses.
 	CardNotChecked  string
@@ -880,6 +885,8 @@ var enMessages = messages{
 	CardPullNotFixed:       "pulling again does not resolve it",
 	CardSameContentRunning: "the tag has the same content as the running image",
 	CardOwnSameContent:     "the newer tag of the same series has the same content",
+	CardCommitTag:          "%[1]s %[2]s %[3]s needs to be changed to a newer tag",
+	CardCommitTagNoNewer:   "the tag names one commit, so no newer tag can be chosen automatically",
 	CardDecisionClause:     "decision needed: %s",
 	CardImageDecision:      "updating image %s needs a decision",
 	CardPullDecision:       "pulling image %[1]s %[2]s again needs a decision",
@@ -1369,6 +1376,8 @@ var jaMessages = messages{
 	CardPullNotFixed:       "再pullでも未解消",
 	CardSameContentRunning: "タグの内容は稼働中と同じ",
 	CardOwnSameContent:     "同じ系列の新しいタグも内容は同じ",
+	CardCommitTag:          "%[1]s %[2]s %[3]s は新しいタグへの変更が必要",
+	CardCommitTagNoNewer:   "コミットごとのタグで、新しいタグを自動で選べない",
 	CardDecisionClause:     "要判断: %s",
 	CardImageDecision:      "イメージ %s の更新は要判断",
 	CardPullDecision:       "イメージ %[1]s %[2]s の再pullは要判断",

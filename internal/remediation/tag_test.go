@@ -53,6 +53,10 @@ func TestParseImageRef(t *testing.T) {
 		{"app:dev", TagExcluded, ExcludePrerelease, "app", "dev", false},
 		{"app:canary", TagExcluded, ExcludePrerelease, "app", "canary", false},
 		{"app:1.2.3-alpine", TagPinned, "", "app", "1.2.3-alpine", false}, // "alpine" is not "alpha"
+		{"app:sha-5cf2d7b", TagFloating, "", "app", "sha-5cf2d7b", false},
+		{"app:sha-3a1b2c4", TagFloating, "", "app", "sha-3a1b2c4", false}, // "3a1" is not a prerelease marker in a commit id
+		{"app:3a1b2c4", TagFloating, "", "app", "3a1b2c4", false},
+		{"app:sha-3a1b2c", TagExcluded, ExcludePrerelease, "app", "sha-3a1b2c", false}, // six digits are not a commit id
 		{d, TagExcluded, ExcludeBareDigest, "", "", false},
 		{"", TagExcluded, ExcludeUnparsable, "", "", false},
 		{"Not A Ref", TagExcluded, ExcludeUnparsable, "", "", false},
@@ -119,6 +123,34 @@ func TestClassifyTagLeadingDot(t *testing.T) {
 	for _, tag := range []string{".1", ".", "..2"} {
 		if kind, _, why := classifyTag(tag); kind != TagExcluded || why != ExcludeUnsupportedTag {
 			t.Errorf("classifyTag(%q) = %q/%q", tag, kind, why)
+		}
+	}
+}
+
+func TestIsCommitTag(t *testing.T) {
+	for tag, want := range map[string]bool{
+		"sha-5cf2d7b":            true,
+		"sha-1234567":            true,
+		"5cf2d7b":                true,
+		"abcdefa":                true,
+		"sha-" + hex64('a')[:40]: true,
+		hex64('a')[:40]:          true,
+		"sha-5cf2d7":             false, // six digits
+		"5cf2d7":                 false,
+		"sha-" + hex64('a')[:41]: false, // longer than a commit id
+		"1234567":                false, // a number
+		"20260115":               false,
+		"sha-5CF2D7B":            false,
+		"sha-5cf2d7g":            false,
+		"sha-5cf2d7b-alpine":     false,
+		"main-5cf2d7b":           false,
+		"latest":                 false,
+		"1.25.3":                 false,
+		"22-alpine":              false,
+		"":                       false,
+	} {
+		if got := IsCommitTag(tag); got != want {
+			t.Errorf("IsCommitTag(%q) = %v, want %v", tag, got, want)
 		}
 	}
 }

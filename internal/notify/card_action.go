@@ -39,6 +39,10 @@ const (
 	actPullDecision
 	// actContentSame: the floating tag still has the content that runs.
 	actContentSame
+	// actCommitTag: the tag names a commit and still has the content that
+	// runs (or, for a base, the content the image was built from). No newer
+	// content is to come under it, and no newer tag can be chosen by name.
+	actCommitTag
 	// actTagWaitNoNewer: the pinned tag's series has no newer tag, and newer
 	// series were not looked at.
 	actTagWaitNoNewer
@@ -599,6 +603,8 @@ func (x *cardActionIndex) image(img analyze.ImageFindings, entity string, g anal
 			return nil, true
 		}
 		switch {
+		case floating && item.Reason == remediation.ReasonSameContent && remediation.IsCommitTag(tag):
+			a.Kind = actCommitTag
 		case floating && item.Reason == remediation.ReasonSameContent:
 			a.Kind = actContentSame
 		case floating && item.Reason == remediation.ReasonCandidateNotFixing:

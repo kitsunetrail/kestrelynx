@@ -54,6 +54,7 @@ COPY --from=build /out /out
 同じ系列の候補で解消しない場合は、[新しい系列の確認](remediation-image-logic.md#newer-series-check)へ進めるかも調べます。
 
 浮動タグでは、タグ更新PRや更新前後の脆弱性件数の比較は行いません。
+`FROM`のコミットごとのタグも浮動タグとして扱い、内容がイメージの作成時から変わっていない場合は、[カードの対応の行](slack-package-display.md#action-base-floating)で新しいタグへの変更を案内します。
 変更先を特定できる入力の条件は、[Dockerfileの入力条件](remediation-source-formats.md#dockerfile-formats)を参照してください。
 
 ## ベースレイヤーの照合 {#base-layer-matching}

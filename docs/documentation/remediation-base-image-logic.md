@@ -54,6 +54,7 @@ See [Verification scope by target](remediation-logic.md#verification-scope) for 
 If the candidate in the same series does not resolve the findings, KestreLynx also checks whether it can proceed to [Checking newer series](remediation-image-logic.md#newer-series-check).
 
 For floating tags, KestreLynx does not create tag update PRs or compare vulnerability counts before and after an update.
+A commit tag in `FROM` is also treated as a floating tag, and if its content has not changed since the image was built, the [card action line](slack-package-display.md#action-base-floating) advises changing to a newer tag.
 See [Dockerfile input requirements](remediation-source-formats.md#dockerfile-formats) for inputs that allow KestreLynx to locate the change.
 
 ## Matching base layers {#base-layer-matching}

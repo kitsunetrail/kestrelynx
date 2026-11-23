@@ -176,6 +176,8 @@ func (x *cardActionIndex) base(img analyze.ImageFindings, entity string, g analy
 	switch e.Category {
 	case remediation.CategoryNoCandidate:
 		switch {
+		case floating && e.Reason == remediation.ReasonBaseUnchanged && remediation.IsCommitTag(tag):
+			a.Kind = actCommitTag
 		case floating && e.Reason == remediation.ReasonBaseUnchanged:
 			a.Kind = actBaseUnchanged
 		case !pinned:

@@ -20,7 +20,8 @@ const (
 	// same series.
 	TagPinned TagKind = "pinned"
 	// TagFloating is any other tag ("16", "1.25", "latest", "16-alpine"). Its
-	// candidate is whatever the same tag points at now.
+	// candidate is whatever the same tag points at now. A tag that names a
+	// commit (IsCommitTag) is floating too.
 	TagFloating TagKind = "floating"
 	// TagExcluded is a reference no candidate is looked up for; see
 	// ExcludeReason.
@@ -85,6 +86,9 @@ var (
 	attachedPreRE = regexp.MustCompile(`[0-9][ab][0-9]+`)
 	tokenRE       = regexp.MustCompile(`[a-z]+|[0-9]+`)
 	bareDigestRE  = regexp.MustCompile(`^sha256:[0-9A-Za-z]*$`)
+	// commitTagRE matches a tag that is a commit id: 7 to 40 lowercase
+	// hexadecimal digits, alone or after "sha-".
+	commitTagRE = regexp.MustCompile(`^(sha-)?([0-9a-f]{7,40})$`)
 )
 
 // maxVersionDigits keeps every version number well inside an int.
@@ -102,6 +106,19 @@ func IsPrerelease(tag string) bool {
 		}
 	}
 	return attachedPreRE.MatchString(lower)
+}
+
+// IsCommitTag reports whether tag names one commit of the image's source
+// ("sha-5cf2d7b", "5cf2d7b", a full commit id). Such a tag is made once for
+// its commit, and its name does not say which of two is the newer. Without
+// the "sha-" prefix the digits must hold a letter, so that a number ("1234567",
+// "20260115") is not taken for a commit id.
+func IsCommitTag(tag string) bool {
+	m := commitTagRE.FindStringSubmatch(tag)
+	if m == nil {
+		return false
+	}
+	return m[1] != "" || strings.ContainsAny(m[2], "abcdef")
 }
 
 func canonicalNumber(s string) (int, bool) {
@@ -185,7 +202,9 @@ func ParseImageRef(ref string) ImageRef {
 		tag, out.ImplicitTag = "latest", true
 	}
 	out.Tag = tag
-	if IsPrerelease(tag) {
+	// A commit id is not read for prerelease markers: its digits can spell
+	// one by chance ("sha-3a1b2c4").
+	if !IsCommitTag(tag) && IsPrerelease(tag) {
 		out.Exclude = ExcludePrerelease
 		return out
 	}

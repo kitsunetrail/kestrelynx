@@ -180,6 +180,8 @@ func (rd renderer) actionLine(c pkgCard) string {
 		return wrap(fmt.Sprintf(msg.CardPullDecision, name, tag), why)
 	case actContentSame:
 		return wrap(fmt.Sprintf(msg.CardContentWait, subject, name, tag), msg.CardSameContentRunning)
+	case actCommitTag:
+		return wrap(fmt.Sprintf(msg.CardCommitTag, subject, name, tag), msg.CardCommitTagNoNewer)
 	case actTagWaitNoNewer:
 		return wrap(fmt.Sprintf(msg.CardNewerWait, subject, name, tag), msg.CardOwnNoNewer)
 	case actTagWaitSameContent:

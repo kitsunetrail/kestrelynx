@@ -26,6 +26,7 @@ The running image's tag type determines which candidate is compared and how an a
 | --- | --- | --- |
 | Pinned tag | Select the latest patch newer than the current version in the same series | If source editing conditions are also met, consider a PR that changes the tag in Compose, a Kubernetes manifest, Kustomize, or Helm values |
 | Floating tag | Select the content that the same tag currently points to in the registry | If an improvement is confirmed, recommend pulling the image again without creating a PR, because the image reference does not change |
+| Commit tag | As with a floating tag, check only the content that the same tag currently points to in the registry | Do not search for newer tags or create tag update PRs because the tag names do not indicate which is newer |
 
 The following example shows only tag classification when the current tag is `1.27.2-alpine`.
 
@@ -37,6 +38,16 @@ The following example shows only tag classification when the current tag is `1.2
 | `v1.27.3-alpine` | Does not qualify because the prefix differs |
 | `1.27.3-bookworm` | Does not qualify because the suffix differs |
 | `1.27` / `22-alpine` / `latest` | Does not qualify as the latest patch for a pinned tag because it is a floating tag |
+
+Tags in either of the following forms are treated as commit tags.
+
+- A tag consisting of `sha-` followed by 7–40 lowercase hexadecimal digits, such as `sha-5cf2d7b`
+- A tag consisting only of 7–40 lowercase hexadecimal digits and containing at least one letter from `a` to `f`, such as `5cf2d7b`
+
+The content of a commit tag determines the card action line as follows.
+
+- If the content is the same as the running image, show that a change to a newer tag is needed in the [card action line](slack-package-display.md#action-pull-again)
+- If the same tag is pushed again and its content changes, show the same line as for other floating tags
 
 Pinned tags whose own series does not resolve the findings are eligible for [Checking newer series](#newer-series-check).
 The candidate's content and the running image's content are checked by digest.

@@ -78,7 +78,7 @@ Pull Request: #12 (今回作成)
 | --- | --- |
 | Slackの表示と詳細な結果の確認先 | [通知の読み方](remediation-results.md) |
 | 更新結果と「再pull」「再ビルド」などの案内 | [更新結果と案内の読み方](remediation-update-results.md) |
-| PR本文とマージ前に行う検証 | [PRの内容とマージ前の確認](remediation-pr-results.md) |
+| PR本文 | [PRの内容](remediation-pr-results.md) |
 | 脆弱性情報が修正済みと報告する版へ更新できない理由 | [修正版に上げられないときの案内](remediation-fix-hints.md) |
 | 診断情報の取得と、計画・更新・PR・記録の問題の確認 | [候補やPRが出ない場合](remediation-troubleshooting.md) |
 

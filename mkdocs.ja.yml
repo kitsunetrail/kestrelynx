@@ -54,7 +54,7 @@ nav:
           - 結果の読み方:
               - 通知の読み方: documentation/remediation-results.md
               - 更新結果と案内の読み方: documentation/remediation-update-results.md
-              - PRの内容とマージ前の確認: documentation/remediation-pr-results.md
+              - PRの内容: documentation/remediation-pr-results.md
               - 修正版に上げられないときの案内: documentation/remediation-fix-hints.md
           - 候補やPRが出ない場合: documentation/remediation-troubleshooting.md
           - 候補選定とPR処理の仕組み:

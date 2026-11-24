@@ -78,7 +78,7 @@ The following pages also cover update results, PR checks, and troubleshooting.
 | --- | --- |
 | Slack fields and where to find detailed results | [Reading notifications](remediation-results.md) |
 | Update results and guidance such as “Re-pull” and “Rebuild” | [Reading update results and guidance](remediation-update-results.md) |
-| PR descriptions and checks before merging | [PR contents and checks before merging](remediation-pr-results.md) |
+| PR descriptions | [PR contents](remediation-pr-results.md) |
 | Why an update cannot reach a version reported to fix a vulnerability | [Guidance when a fixed version cannot be reached](remediation-fix-hints.md) |
 | Collecting diagnostics and checking plan, update, PR, or record problems | [When no candidate or PR appears](remediation-troubleshooting.md) |
 

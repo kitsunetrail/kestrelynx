@@ -189,7 +189,7 @@ Findings outside the configured severity range are excluded from evaluations of 
 The objects compared and the conditions for accepting an update depend on the target.
 Target findings are selected from findings whose scan status is `fixed` and that include fixed-version information.
 
-Findings not selected as targets and findings newly detected after the update are handled separately from resolved or remaining target findings ([Resolution in comparison results](remediation-pr-results.md#verification-results)).
+Findings not selected as targets and findings newly detected after the update are handled separately from resolved or remaining target findings ([Resolved, remaining, and introduced findings](remediation-pr-results.md#verification-results)).
 The following table separates the findings targeted for remediation from the scope checked for new findings.
 
 | Target | Objects compared | Findings targeted for remediation | Scope checked for new findings |
@@ -211,4 +211,4 @@ The following rules also apply when deciding whether to accept an update.
 - Separately record findings newly detected after the update if they are listed in CISA's Known Exploited Vulnerabilities (KEV) catalog
 - Verify that a shared Dockerfile change can be accepted for all running images that use it
 
-See [Checked scope](#checked-scope) for the distinction from validating the final image or application, and [Resolution in comparison results](remediation-pr-results.md#verification-results) for interpreting comparisons.
+See [Checked scope](#checked-scope) for the distinction from validating the final image or application, and [Resolved, remaining, and introduced findings](remediation-pr-results.md#verification-results) for interpreting comparisons.

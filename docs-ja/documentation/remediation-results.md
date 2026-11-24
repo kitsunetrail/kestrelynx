@@ -7,7 +7,7 @@ title: 修正計画の通知の読み方
 このページでは、Slackに届いた修正計画の各行と件数、PRに含まれる更新と対応が残るパッケージを読み分けます。
 版の読み分けや「再pull」「再ビルド」の案内は[更新結果の解釈](remediation-update-results.md#interpreting-updates)を参照してください。
 
-PR本文は[修正PRの内容とマージ前の確認](remediation-pr-results.md)、更新できない理由の案内は[案内の概要](remediation-fix-hints.md#fix-hints)を参照してください。
+PR本文は[修正PRの内容](remediation-pr-results.md)、更新できない理由の案内は[案内の概要](remediation-fix-hints.md#fix-hints)を参照してください。
 
 このページで使う用語は[用語](index.md#terms)を参照してください。
 

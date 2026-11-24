@@ -88,7 +88,7 @@ After PR #1 was merged and the running `proxy` container was replaced with nginx
 | Find the page for your task | [Page guide](docs/documentation/remediation.md#contents) |
 | Enable remediation plans and fix pull requests | [Enabling remediation](docs/documentation/remediation-setup.md) |
 | Diagnose missing candidates or PRs | [When no candidate or pull request appears](docs/documentation/remediation-troubleshooting.md) |
-| Read Slack and PR contents | [Notifications](docs/documentation/remediation-results.md) and [PR contents and pre-merge checks](docs/documentation/remediation-pr-results.md) |
+| Read Slack and PR contents | [Notifications](docs/documentation/remediation-results.md) and [PR contents](docs/documentation/remediation-pr-results.md) |
 | Understand candidate selection and PR processing | [Processing flow](docs/documentation/remediation-logic.md) |
 | Look up supported inputs and reason codes | [Support scope](docs/documentation/remediation-reference.md) and [Result values and reason codes](docs/documentation/remediation-reason-codes.md) |
 | Look up settings and required permissions | [Configuration reference](docs/documentation/configuration.md) |

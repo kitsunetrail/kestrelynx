@@ -227,7 +227,7 @@ lockfileの読み取りには、次の制約があります。
 - 単独のCRや8192バイトを超える行を受け付けない
 - 行長はLFを除き、CRLFのCRを含めて数える
 
-PR本文の記載内容とマージ前の確認は[GradleのPRとCIでの確認](remediation-pr-results.md#gradle-pull-requests)を参照してください。
+PR本文の記載内容は[GradleのPR](remediation-pr-results.md#gradle-pull-requests)を参照してください。
 
 ### 対象を外して残りを更新する条件 {#gradle-update-exclusions}
 

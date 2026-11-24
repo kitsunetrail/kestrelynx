@@ -7,7 +7,7 @@ title: Reading remediation plan notifications
 This page explains the lines and counts in Slack remediation plans, including which updates a PR contains and which packages still need attention.
 See [Interpreting update results](remediation-update-results.md#interpreting-updates) for version interpretation and re-pull and rebuild guidance.
 
-See [Fix pull request contents and pre-merge checks](remediation-pr-results.md) for PR bodies and [Overview of the hints](remediation-fix-hints.md#fix-hints) for explanations of blocked updates.
+See [Fix pull request contents](remediation-pr-results.md) for PR bodies and [Overview of the hints](remediation-fix-hints.md#fix-hints) for explanations of blocked updates.
 
 See [Terms](index.md#terms) for the terminology used on this page.
 

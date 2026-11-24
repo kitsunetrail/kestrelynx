@@ -364,7 +364,7 @@ remediation
 ### 比較結果 {#remediation-comparison}
 
 比較結果は、`items[].comparison`、`dockerfile_items[].entities[].comparison`と、各稼働イメージの`newer_series.candidates[].comparison`で使います。
-比較条件は[スキャンの比較条件](remediation-logic.md#comparison-conditions)、結果の解釈は[比較結果の解消](remediation-pr-results.md#verification-results)を参照してください。
+比較条件は[スキャンの比較条件](remediation-logic.md#comparison-conditions)、結果の解釈は[解消・残存・新規](remediation-pr-results.md#verification-results)を参照してください。
 
 次は、対象の所見1件を解消した比較結果から、主要なフィールドを抜粋した例です。
 

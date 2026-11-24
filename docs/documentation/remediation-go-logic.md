@@ -207,7 +207,7 @@ If multiple modules declare the highest required Go version, the first in module
 `packages[].fix_hint.go_line` records the selected module and its version, the required Go version, the known build version, and the target version requested by the update.
 
 If only the `toolchain` line caused the refusal, `fix_hint.go_line` is not recorded.
-For guidance display, see [guidance when a fixed version cannot be reached](remediation-fix-hints.md#fix-hints); for PR text accompanying a `go` line increase, see [Go PRs and CI checks](remediation-pr-results.md#go-pull-requests).
+For guidance display, see [guidance when a fixed version cannot be reached](remediation-fix-hints.md#fix-hints); for PR text accompanying a `go` line increase, see [Go pull requests](remediation-pr-results.md#go-pull-requests).
 
 ### go.sum verification and completion {#go-sum-validation}
 
@@ -219,7 +219,7 @@ Hashes in `go.sum` are checked against `sum.golang.org` records, and missing req
 - Reject removal of original lines or changes to their hashes
 - Reject conflicting values for the same module, version, and hash type
 
-For how added lines are included in the PR body, see [Go PRs and CI checks](remediation-pr-results.md#go-pull-requests).
+For how added lines are included in the PR body, see [Go pull requests](remediation-pr-results.md#go-pull-requests).
 
 ### Collateral module updates {#go-collateral-validation}
 
@@ -248,4 +248,4 @@ KestreLynx checks that the target CVEs are gone and that no module, including mo
 The scan covers versions written in `go.mod`, and assumes that user builds use Go's default `-mod=readonly`.
 With `-mod=readonly`, builds use only the written versions and stop if a required module is missing or its version is too low.
 
-For CI examples to run before merging and the contents of the PR body, see [Go PRs and CI checks](remediation-pr-results.md#go-pull-requests).
+For the contents of the PR body, see [Go pull requests](remediation-pr-results.md#go-pull-requests).

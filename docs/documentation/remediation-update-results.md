@@ -34,7 +34,7 @@ The relationship between the display and PR, version meanings, and actions to ta
 
 | Display | PR | Version to the right of `→` | What to do |
 | --- | --- | --- | --- |
-| `Update` | Created | Adopted version (the version confirmed in the dependency files after an update) | [Review and merge the PR](remediation-pr-results.md#pr-body-and-checks) |
+| `Update` | Created | Adopted version (the version confirmed in the dependency files after an update) | Review and merge the PR ([Pull request contents](remediation-pr-results.md#pr-body-and-checks)) |
 | `Update candidate` (`remediation.pull_requests.enabled` is `false`) | Not created by configuration | Update target (the minimum version used when selecting an update), with the update not yet run | Change `remediation.pull_requests.enabled` to `true` to enable PR creation |
 | `Update candidate` (`remediation.pull_requests.enabled` is `true`) | Creation not confirmed | Adopted version (the version confirmed in the dependency files after an update) | [Address](remediation-troubleshooting.md#check-missing-pr) the reason shown immediately below or in a notification warning |
 
@@ -59,7 +59,7 @@ Updates included in the PR and packages left out are handled as follows.
 
 | Display | Meaning | What to do |
 | --- | --- | --- |
-| `Update` | An update included in the PR | [Review and merge the PR](remediation-pr-results.md#pr-body-and-checks) |
+| `Update` | An update included in the PR | Review and merge the PR ([Pull request contents](remediation-pr-results.md#pr-body-and-checks)) |
 | `Needs a decision: … left out because …` | A package left out of the PR's updates | Take the [action for the displayed reason](remediation-troubleshooting.md#check-update-failure) |
 | `Needs a decision: … cannot be raised to the fixed … (the dependent … limits the version of …)` or another cause in parentheses | A package with an identified cause for not reaching a fixed version | Follow [Guidance when a package cannot reach a fixed version](remediation-fix-hints.md#fix-hints) |
 | `Needs a decision: … cannot be raised to the fixed … (the cause could not be determined)` | A package that did not reach a fixed version for a reason KestreLynx could not identify | — |
@@ -93,7 +93,7 @@ Dependent update results and actions to take are as follows.
 See [Supported scope and limits](remediation-reresolution-logic.md#dependent-reresolution-limits) for reasons an update was skipped.
 
 See [Re-resolution through dependent packages](remediation-reresolution-logic.md#dependent-reresolution) for the logic, and [Notification lines](remediation-reresolution-logic.md#dependent-reresolution-notification) for display conditions.
-See [PR body contents and pre-merge checks](remediation-pr-results.md#pr-body-and-checks) for the PR body.
+See [Pull request contents](remediation-pr-results.md#pr-body-and-checks) for the PR body.
 
 ### Re-pull guidance {#repull-guidance}
 

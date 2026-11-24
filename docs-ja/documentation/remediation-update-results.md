@@ -34,7 +34,7 @@ Pull Request: #12 (今回作成)
 
 | 表示 | PR | `→`の右の版 | すること |
 | --- | --- | --- | --- |
-| `更新` | 作成済み | 採用版（更新後の依存ファイルで確認した版） | [PRを確認してマージする](remediation-pr-results.md#pr-body-and-checks) |
+| `更新` | 作成済み | 採用版（更新後の依存ファイルで確認した版） | PRを確認してマージする（[PR本文の内容](remediation-pr-results.md#pr-body-and-checks)） |
 | `更新候補`（`remediation.pull_requests.enabled`が`false`） | 作成しない | 更新目標（更新先を選ぶときの下限の版）で、更新はまだ実行していない | PRを作成させるには`remediation.pull_requests.enabled`を`true`に変える |
 | `更新候補`（`remediation.pull_requests.enabled`が`true`） | 作成を確認できていない | 採用版（更新後の依存ファイルで確認した版） | すぐ下の行、または通知の警告に示された理由に[対処する](remediation-troubleshooting.md#check-missing-pr) |
 
@@ -59,7 +59,7 @@ PRに含まれる更新と、含まれないパッケージの扱いは、次の
 
 | 表示 | 意味 | すること |
 | --- | --- | --- |
-| `更新` | PRに含まれる更新 | [PRを確認してマージする](remediation-pr-results.md#pr-body-and-checks) |
+| `更新` | PRに含まれる更新 | PRを確認してマージする（[PR本文の内容](remediation-pr-results.md#pr-body-and-checks)） |
 | `要判断: … は…ため除外` | PRの更新から外したパッケージ | [表示された理由に合う対処](remediation-troubleshooting.md#check-update-failure)を行う |
 | `要判断: … に上げられない（依存元の … が … の版を制限）`など、括弧内に原因を示す行 | 修正版に上がらなかった原因が分かっているパッケージ | [修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)に従う |
 | `要判断: … に上げられない（原因は確かめられなかった）` | 修正版に上がらず、KestreLynxが原因を特定できなかったパッケージ | — |
@@ -93,7 +93,7 @@ PRをマージしても、「要判断」のパッケージの所見は残りま
 見送りの理由は[対応範囲と上限](remediation-reresolution-logic.md#dependent-reresolution-limits)を参照してください。
 
 仕組みは[依存元からの再解決](remediation-reresolution-logic.md#dependent-reresolution)、行を出す条件は[通知に出す行](remediation-reresolution-logic.md#dependent-reresolution-notification)を参照してください。
-PR本文の記載は[PR本文の内容とマージ前の確認](remediation-pr-results.md#pr-body-and-checks)を参照してください。
+PR本文の記載は[PR本文の内容](remediation-pr-results.md#pr-body-and-checks)を参照してください。
 
 ### 再pullの案内 {#repull-guidance}
 

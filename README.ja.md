@@ -88,7 +88,7 @@ PR #1をマージして稼働中の`proxy`コンテナをnginx 1.27.5に入れ�
 | 目的に合うページを探す | [ページの案内](docs-ja/documentation/remediation.md#contents) |
 | 修正計画と修正PRを有効にする | [有効化の手順](docs-ja/documentation/remediation-setup.md) |
 | 候補やPRが出ない原因を切り分ける | [候補やPRが出ない場合](docs-ja/documentation/remediation-troubleshooting.md) |
-| SlackやPRの内容を読む | [通知の読み方](docs-ja/documentation/remediation-results.md)・[PRの内容とマージ前の確認](docs-ja/documentation/remediation-pr-results.md) |
+| SlackやPRの内容を読む | [通知の読み方](docs-ja/documentation/remediation-results.md)・[PRの内容](docs-ja/documentation/remediation-pr-results.md) |
 | 候補の選定とPRの処理を確認する | [処理の流れ](docs-ja/documentation/remediation-logic.md) |
 | 対応する入力と理由コードを調べる | [対応範囲](docs-ja/documentation/remediation-reference.md)・[結果の値と理由コード](docs-ja/documentation/remediation-reason-codes.md) |
 | 設定値と必要な権限を調べる | [設定リファレンス](docs-ja/documentation/configuration.md) |

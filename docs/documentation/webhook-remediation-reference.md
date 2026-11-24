@@ -364,7 +364,7 @@ The following is information about the current base image.
 ### Comparison results {#remediation-comparison}
 
 Comparison results are used in `items[].comparison`, `dockerfile_items[].entities[].comparison`, and each running image's `newer_series.candidates[].comparison`.
-See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for comparison conditions and [Resolved findings in comparisons](remediation-pr-results.md#verification-results) for interpreting results.
+See [Scan comparison conditions](remediation-logic.md#comparison-conditions) for comparison conditions and [Resolved, remaining, and introduced findings](remediation-pr-results.md#verification-results) for interpreting results.
 
 The following example extracts the main fields from a comparison result that resolves one target finding.
 

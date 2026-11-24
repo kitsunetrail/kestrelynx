@@ -227,7 +227,7 @@ Lockfile reading has the following restrictions.
 - Reject lone CR characters and lines longer than 8,192 bytes
 - Count line length without LF but including the CR in CRLF
 
-See [Gradle PRs and CI checks](remediation-pr-results.md#gradle-pull-requests) for PR body contents and checks before merging.
+See [Gradle pull requests](remediation-pr-results.md#gradle-pull-requests) for PR body contents.
 
 ### Conditions for excluding targets and updating the rest {#gradle-update-exclusions}
 

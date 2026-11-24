@@ -260,7 +260,7 @@ For guidance, KestreLynx uses dependency paths (`DependsOn`) in Trivy's POM anal
 The project's own modules are excluded from these dependency parent records.
 See [Guidance when a fixed version cannot be reached](remediation-fix-hints.md#fix-hints) for how the recorded information is used.
 
-See [Maven PRs and CI checks](remediation-pr-results.md#maven-pull-requests) for PR body contents and checks before merging.
+See [Maven pull requests](remediation-pr-results.md#maven-pull-requests) for PR body contents.
 
 ### Conditions for excluding targets and updating the rest {#maven-update-exclusions}
 

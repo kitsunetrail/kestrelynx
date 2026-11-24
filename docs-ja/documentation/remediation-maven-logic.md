@@ -260,7 +260,7 @@ optionalでないcompile・runtimeの依存について、要求版と解決さ�
 依存元の記録に、プロジェクト自身のモジュールは含めません。
 記録した情報の使い方は[修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)を参照してください。
 
-PR本文の記載内容とマージ前の確認は[MavenのPRとCIでの確認](remediation-pr-results.md#maven-pull-requests)を参照してください。
+PR本文の記載内容は[MavenのPR](remediation-pr-results.md#maven-pull-requests)を参照してください。
 
 ### 対象を外して残りを更新する条件 {#maven-update-exclusions}
 

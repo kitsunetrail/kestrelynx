@@ -1,228 +1,237 @@
 ---
-title: 修正PRの内容とマージ前の確認
+title: 修正PRの内容
 ---
 
-# 修正PRの内容とマージ前の確認
+# 修正PRの内容
 
-KestreLynxが作成したPRについて、本文の読み方と、利用者がマージ前に行う確認を説明します。
-Slackの通知の読み方は[Slackの修正計画](remediation-results.md#reading-results-in-slack-and-webhooks)を参照してください。
+KestreLynxが作成したPRの本文に何が書いてあるかを説明します。
+Slackの通知の読み方は[Slackの修正計画](remediation-results.md#reading-results-in-slack-and-webhooks)、用語は[用語](index.md#terms)を参照してください。
 
-どのPRでも、KestreLynxは完成イメージや配置後の稼働コンテナでの解消を確認していません。
-依存のインストールとアプリケーションの動作も未確認であり、詳細は[比較結果の解消](#verification-results)を参照してください。
+## PR本文の内容 {#pr-body-and-checks}
 
-このページで使う用語は[用語](index.md#terms)を参照してください。
+PR本文には「概要」「変更内容」「確認したこと」の3つの節があります。
+Kubernetes向けのPRには、[KubernetesのPR](#kubernetes-pr-results)で説明する「この変更の前提」と「マージ後」の節が加わります（Dockerfileは「マージ後」のみ）。
 
-## PR本文の内容とマージ前の確認 {#pr-body-and-checks}
+次は、ComposeのPR本文の例です。
 
-PR本文には、提案する変更、KestreLynxが確認した結果、利用者の確認が必要な前提を載せます。
-マージ前の確認は、利用者が自分のプロジェクトで行ってください。
+> **概要**
+>
+> KestreLynx は、`example/app` の `compose.yml` にある 2 件の Compose サービスについて、新しいイメージタグを提案します。
+>
+> - 稼働中のイメージ: `nginx:1.25.3`
+> - 編集したサービス: `web`、`worker`
+> - これらを実行しているワークロード: `compose/app/web`、`compose/app/worker`
+> - 同じイメージを実行していますが編集していないもの (Compose の対応付けなし): `app/extra (app-extra-1)`、`loose`
+>
+> **変更内容**
+>
+> - `services.web.image`: `nginx:1.25.3` から `nginx:1.25.4` へ
+> - `services.worker.image`: `nginx:1.25.3` から `nginx:1.25.4` へ
+>
+> **確認したこと**
+>
+> - 稼働中: `nginx:1.25.3`
+>     - config digest: `sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
+>     - プラットフォーム: `linux/amd64`
+>     - 稼働中の digest はコンテナランタイムから得たもので、イメージの config digest か、index または manifest の digest かは確認していません。
+> - 候補: `nginx:1.25.4`
+>     - タグの digest: `sha256:1111111111111111111111111111111111111111111111111111111111111111`
+>     - プラットフォームの manifest: `sha256:2222222222222222222222222222222222222222222222222222222222222222`
+>     - config digest: `sha256:3333333333333333333333333333333333333333333333333333333333333333`
+>     - プラットフォーム: `linux/amd64`
+> - 場所: `services.web.image`、`services.worker.image`
+> - 確認の記録
+>     - 計画の生成時刻: 2026-10-09T04:00:00Z
+>     - 変更前のスキャン: `scan-base-1`
+>     - 候補のスキャン: `scan-cand-1`
+> - この更新が対象とする所見 (稼働中のイメージの修正可能な所見)
+>     - 解消: 2 件
+>     - 残存: 1 件
+> - 稼働中のイメージのその他の所見 (この更新の対象外。修正版の報告がないものなど)
+>     - 候補のイメージで検出されなくなるもの: 1 件
+>     - 候補のイメージに残るもの: 1 件
+> - 候補のイメージで新たに入る所見: 0 件
+>
+> **解消 (2)**
+>
+> - `libc6` の `CVE-2026-0001` (`debian`、`os`)、重大度 `CRITICAL`、CISA KEV カタログに掲載、優先度 `act_now`
+> - `openssl` の `CVE-2026-0002` (`debian`、`os`)、重大度 `HIGH`
+>
+> **対象の所見のうち残存 (1)**
+>
+> - `zlib1g` の `CVE-2026-0003` (`debian`、`os`)、重大度 `HIGH`
+>
+> **候補のイメージで検出されなくなるその他の所見 (1)**
+>
+> - `libheif1` の `CVE-2026-0005` (`debian`、`os`)、重大度 `HIGH`
+>
+> **候補のイメージに残るその他の所見 (1)**
+>
+> - `tar` の `CVE-2026-0004` (`debian`、`os`)
+>
+> **新規 (0)**
+>
+> - なし
+>
+> 両方のイメージを次の条件でスキャンしました。
+>
+> - Trivy: `0.71.2`
+> - 脆弱性データベースの作成時刻: 2026-10-09T01:02:03Z
+> - 重大度の範囲: `CRITICAL`、`HIGH`
+> - 対象範囲: `os packages`
 
-Compose・Dockerfile・言語パッケージのPRを含め、すべてのPRで次の点を確認してください。
+各節には、次の情報が載ります。
 
-- PRの変更内容と、本文に記載された検査結果・未確認の前提
-- [比較結果の解消](#verification-results)に示す比較対象と、検査で確かめていないこと
-- PR本文にCIでの確認事項がある場合、その実行結果
-
-npm・pnpm・uv・pipでは、PR本文の案内に従い、更新後の依存ファイルを使うインストールをプロジェクトのCIで確認してください。
-次の種類のPRでは、各節の追加確認も行ってください。
-
-| PRの種類 | 確認する節 |
+| 節 | 書いてあること |
 | --- | --- |
-| Kubernetes向けのPR | [KubernetesのPR](#kubernetes-pr-results) |
-| Goの依存更新 | [GoのPRとCIでの確認](#go-pull-requests) |
-| Mavenの依存更新 | [MavenのPRとCIでの確認](#maven-pull-requests) |
-| Gradleの依存更新 | [GradleのPRとCIでの確認](#gradle-pull-requests) |
+| 概要 | 変更するファイル、稼働中またはベースのイメージ、編集対象、ワークロード |
+| 変更内容 | イメージタグやパッケージの変更前後の版、変更箇所 |
+| 確認したこと | 比較したイメージや依存ファイル、スキャン結果、言語パッケージでマージ前にCIで実行するコマンドの案内 |
+
+言語パッケージのメジャーバージョン変更（0.xではマイナーバージョン変更）は、「概要」に太字の警告で示します。
+許可するメジャーバージョンを切り替える版指定の編集も、太字の警告で示します。
 
 計画した更新の一部だけがPRに含まれる場合の読み方は[部分PR](remediation-update-results.md#partial-pull-requests)を参照してください。
 
-依存元からの再解決を採用したPRの「あわせて更新したパッケージ」には、版が変わった直接依存を、変更前後の版と更新を妨げていた指定とともに載せます。
-`mkdirp`の更新で`minimist`を修正版に上げる場合の記載例は、次のとおりです。
+依存元も更新したPRの「あわせて更新したパッケージ」には、版が変わった直接依存と変更前後の版、更新を妨げていた指定が載ります。
+例えば、`mkdirp`の更新で`minimist`を修正版に上げる場合の記載は「`mkdirp`: `0.5.1` から `0.5.6` へ（`minimist` `0.0.8` を要求していた）」です。
 
-> - `mkdirp`: `0.5.1` から `0.5.6` へ（`minimist` `0.0.8` を要求していた）
-
-持ち越した脆弱性がある場合は、件数と、CVE ID・パッケージ名・変更前後の版を含む例を1件載せます。
-持ち越しとして扱える条件は[脆弱性の持ち越し](remediation-reresolution-logic.md#dependent-reresolution-carried-findings)を参照してください。
+更新後も持ち越す脆弱性がある場合は、件数と例が1件載ります（[脆弱性の持ち越し](remediation-reresolution-logic.md#dependent-reresolution-carried-findings)）。
 
 ### KubernetesのPR {#kubernetes-pr-results}
 
-Kubernetes向けのPR本文は、変更するファイルやコンテナに加え、マージによる配備への影響と未確認の前提を示します。
+Kubernetes向けのPRは、リポジトリのファイルを変えるだけで、クラスターへの反映はしません。
+本文の「この変更の前提」と「マージ後」に、KestreLynxが確かめていない点が載ります。
 
-KustomizeとHelmのvaluesでは、`remediation.mappings`の`workload`に、対応付けるコンテナのワークロードキーを指定します。
-同じ変更が効くほかのコンテナは、`kustomize.affects`または`helm_values.affects`に列挙します。
+PRの種類ごとに、次の内容が載ります。
 
-PR本文のコンテナ一覧は、`workload`と`affects`に指定したコンテナを合わせたものです。
-マニフェスト・Kustomize・Helmのvalues・DockerfileのPRについて、種類ごとの記載内容を示します。
+| PRの種類 | 本文に書いてあること |
+| --- | --- |
+| すべて（Dockerfileを含む） | マージすると、自動同期やCIによって変更がそのまま配備される場合がある |
+| マニフェスト・Kustomize・Helmのvalues | 変更するファイルが配備に使われているかは確かめていない |
+| マニフェスト・Kustomize・Helmのvalues（CronJob・Jobを含む場合） | すでにあるJobには変更が反映されない |
+| マニフェスト | 対象と同じイメージを使っているが変更しないワークロードとコンテナ |
+| Kustomize | kustomizationを描画しておらず、一覧のコンテナ以外への影響は確かめていない |
+| Helmのvalues | チャートを描画しておらず、変更するキーが最終的な値になるかは確かめていない |
+| Helmのvalues（二重引用符を足す場合） | 新しいタグを文字列として読ませるため、二重引用符で囲んで書くこと |
 
-- Kubernetes向けPRに共通（マニフェスト・Kustomize・Helmのvalues・Dockerfile）
-    - 管理元の検出有無にかかわらず、マージ後に外部の自動同期やCIで変更が反映されうる注意
-    - ラベルやアノテーションが示すArgo CD・Flux・Helmなどの管理元と、実際の管理関係は未確認である旨
-- マニフェスト・Kustomize・HelmのvaluesのPR
-    - CronJob・Jobを含む場合、既存のJobには変更が反映されない注意
-- マニフェストのPR
-    - 同じイメージで稼働していてマニフェストの対応付けがないワークロードと、同じPodテンプレート内で変更しないコンテナ
-- Kustomize・HelmのvaluesのPR
-    - `workload`と`affects`に挙げたコンテナの一覧と、そのうち通常のinit containerとして確認したものの一覧
-    - ファイルと稼働イメージを照合し、コンテナの列挙漏れを調べた範囲
-- KustomizeのPR
-    - Kustomizeを展開しておらず、列挙したコンテナ以外に変更が効かないことは未確認である旨
-- HelmのvaluesのPR
-    - Helmを描画しておらず、指定したキーが最終的な値であることと、コンテナ一覧に漏れがないことは未確認である旨
-    - ほかのvaluesファイル・CIの`--set`・Argo CDの`parameters`・`valuesObject`・`valuesFrom`による上書きと、ほかのツールによるタグの管理は未確認である旨
-    - Flux HelmReleaseを示すラベルを検出したワークロードと、読み取っていないHelmReleaseの`spec.values`がvaluesファイルより優先されうる注意
-    - HelmリリースもFlux HelmReleaseも検出できない場合、valuesファイルが配備に使われるか分からない旨
-    - 新しいタグに二重引用符を追加する場合、Helmに文字列として読ませるために必要である旨
+管理ツール（Argo CD・Flux・Helm）の表示は、ラベルやアノテーションによる[管理元の推定](remediation-kubernetes-logic.md#management-markers)です。
 
-KustomizeとHelmのvaluesでは、対応付けを設定した時点で、`workload`と`affects`が変更の効く全コンテナを挙げていることを利用者が確認した前提で扱います。
+KustomizeとHelmのvaluesのPR本文のコンテナ一覧は、設定の`workload`と`affects`に書いたコンテナです。
 
-マージ前にも、実際の配備で使うKustomizeの設定やHelmのチャート・valuesで変更が効くコンテナを確認し、PR本文の一覧にすべて含まれることを照合してください。
-確認範囲の詳細は[KustomizeのPR](remediation-kubernetes-logic.md#kustomize-prs)と[HelmのvaluesのPR](remediation-kubernetes-logic.md#helm-values-prs)を参照してください。
+PRで変更するコンテナは、KestreLynxの設定で変えられます。
 
-HelmのvaluesのPRでは、配備に使われる値を次の順に確認してください。
+- マニフェストのPRで変更しないと記載された通常のコンテナ・ネイティブsidecarもKestreLynxに更新させるには、そのコンテナの[対応付け](remediation-setup-kubernetes.md#kubernetes-pull-requests)を足す
+- マニフェストのPRでは、通常のinit containerは、対応付けを足してもKestreLynxは編集しない（[マニフェストの形式](remediation-source-formats.md#manifest-formats)）
+- [Kustomize](remediation-setup-kubernetes.md#kustomize-pull-requests)・[Helmのvalues](remediation-setup-kubernetes.md#helm-values-pull-requests)で一覧にないコンテナにも変更が効く場合は、`affects`に足す
 
-1. 変更するvaluesファイルが実際の配備に使われることを確認する
-2. ほかのvaluesファイル、CIの`--set`、Argo CDの`parameters`・`valuesObject`・`valuesFrom`、Flux HelmReleaseの`spec.values`による上書きを確認する
-3. PRで変更するキーが、配備に使われるイメージの最終的な値であることを確認する
+確認範囲の仕組みは[KustomizeのPR](remediation-kubernetes-logic.md#kustomize-prs)と[HelmのvaluesのPR](remediation-kubernetes-logic.md#helm-values-prs)を参照してください。
 
-### GoのPRとCIでの確認 {#go-pull-requests}
+### GoのPR {#go-pull-requests}
 
 GoのPRは、`go.mod`と`go.sum`の更新を提案します。
-PR本文には、次の情報を載せます。
+「確認したこと」には、次の情報が載ります。
 
-- 公開レジストリのGo module proxy（`proxy.golang.org`）での版の確認と、`sum.golang.org`によるハッシュの照合
-- 更新対象の新しい版が要求するために、あわせて版が上がったモジュールや追加されたモジュール
-- `go`・`toolchain`の行の変更と、`go`の行が上がることで言語の機能や`GODEBUG`の既定値が変わりうること
-- KestreLynxが`sum.golang.org`の記録から補った`go.sum`の行
+- 「Go モジュールの更新」
+    - `proxy.golang.org`での版の確認と、`sum.golang.org`とのハッシュの照合
+    - `go`・`toolchain`の変更と、言語の機能や`GODEBUG`の既定値が変わる可能性
+- 「対象の新しい版が要求するため、あわせて上がったモジュール」
+    - 付随して版が上がった、または追加されたモジュール（ある場合だけ載る）
+- 「更新後の版について checksum database から補った go.sum の行」
+    - `sum.golang.org`の記録から補った行（ある場合だけ載る）
+- 「マージ前に、CI で go.mod をそのまま使うビルドとテストを実行してください」
+    - `go build -mod=readonly ./... && go test -mod=readonly ./...`というコマンドの例
+    - ビルドとテストの前に`go get`・`go mod tidy`・`-mod=mod`のビルドを実行しない案内
+    - 必要なモジュールが`go.mod`に足りなければビルドが止まる、Goコマンドの既定の動きに基づく確認
 
-マージ前に、利用者がプロジェクトのCIで、更新後の`go.mod`をそのまま使ってビルドとテストを実行してください。
-実行するコマンドは次のとおりです。
+KestreLynxは`go.mod`に書かれた版の所見を比べますが、アプリケーションのビルド・テスト・動作は確かめていません。
+採用条件は[Goの更新結果の検査](remediation-go-logic.md#go-update-validation)を参照してください。
 
-```sh
-go build -mod=readonly ./... && go test -mod=readonly ./...
-```
-
-検査した`go.mod`が書き換わる可能性があるため、上の確認より先に`go get`・`go mod tidy`・`-mod=mod`のビルドを実行しないでください。
-`-mod=readonly`では、必要なモジュールが足りない場合や版が低い場合にビルドが止まるため、CIの結果を確認してからマージしてください。
-
-KestreLynxの検査は、`go.mod`に書かれた版を対象とします。
-採用条件は[Goの更新結果の検査](remediation-go-logic.md#go-update-validation)、ビルドや動作を含む未確認事項は[比較結果の解消](#verification-results)を参照してください。
-
-### MavenのPRとCIでの確認 {#maven-pull-requests}
+### MavenのPR {#maven-pull-requests}
 
 MavenのPRは、`pom.xml`の更新を提案します。
-PR本文には、次の情報を載せます。
+「確認したこと」には、次の情報が載ります。
 
-- 変更したファイルと、版の直書き・プロパティ・親のプロパティの上書き・`dependencyManagement`での固定の内容
-- Maven Centralでの版の確認と、Trivyによる更新前後の依存の解決・スキャンの結果
-- 対象以外に解決後の版が変わったパッケージと、追加・削除されたパッケージ
-- Mavenを実行せず、KestreLynxがPOMを書き換えたこと
+- 「Maven の更新」
+    - Mavenの実行なしでの版・プロパティの編集や上書き、`dependencyManagement`の固定
+    - Maven Centralでの版の確認と、Trivyによる依存の解決・スキャン
+    - 親を修正版を含む版へ更新するときに、プロパティの上書きと`dependencyManagement`の固定を外す案内
+- 「あわせて解決後の版が変わったパッケージ」
+    - 対象以外で版が変わった、または追加・削除されたパッケージ（ある場合だけ載る）
+- 「マージ前に、Maven が解決する依存を確かめ、ビルドを実行してください」
+    - `mvn -B dependency:tree && mvn -B verify`というコマンドの例
+    - KestreLynxの確認で使ったのは、MavenではなくTrivyによるPOMファイルの依存の解決であること
 
-マージ前に、利用者がプロジェクトのCIで、Mavenが解決する依存を確認し、ビルドと検証を実行してください。
-マルチモジュールでは、ルートの`pom.xml`があるディレクトリで次のコマンドを実行してください。
+KestreLynxはTrivyがPOMから解決した依存と所見を確かめますが、Mavenによるビルド・検証やアプリケーションの動作は確かめていません。
+採用条件は[Mavenの更新結果の検査](remediation-maven-logic.md#maven-update-validation)を参照してください。
 
-```sh
-mvn -B dependency:tree
-mvn -B verify
-```
-
-依存一覧を、PR本文の更新対象のパッケージ名と採用版（更新後の依存ファイルで確認した版）に照らして確認してください。
-更新対象が修正版へ解決されていることを確認してください。
-
-親のプロパティの上書きと`dependencyManagement`の固定は、消すまで残ります。
-親のPOMを、対象パッケージの修正版を指定する版へ更新するときに、今回追加した上書きや固定を外してください。
-
-上書きや固定を外したあとも、対象パッケージが修正版へ解決されることを確認してください。
-
-KestreLynxの検査は、TrivyによるPOMの解決を対象とします。
-採用条件は[Mavenの更新結果の検査](remediation-maven-logic.md#maven-update-validation)、ビルドや動作を含む未確認事項は[比較結果の解消](#verification-results)を参照してください。
-
-### GradleのPRとCIでの確認 {#gradle-pull-requests}
+### GradleのPR {#gradle-pull-requests}
 
 GradleのPRは、版の宣言と`gradle.lockfile`の更新を提案します。
+「確認したこと」には、次の情報が載ります。
 
-PR本文には、次の情報を載せます。
+- 「Gradle の更新」
+    - catalog・依存宣言・プロパティの編集とconstraintsの追記
+    - 作業用コンテナのGradleの版
+    - lockfileのエントリ削除・構成変更がないこと
+    - 各構成の対象が選んだ公開版以上で、追加・変更した版の`.pom`がMaven Centralにあること
+    - Spring Bootプラグインを修正版を含む版へ更新するときに、BOMのプロパティの上書きを外す案内
+    - 依存元が修正版を要求する版に上がったときに、constraintsを外す案内
+- 「同じ値で版が決まるパッケージ (Maven Central で確認済み)」
+    - 編集したプロパティやcatalogの値を共有し、Maven Centralで版を確かめたパッケージ（ある場合だけ載る）
+- 「あわせて lock された版が変わった、または追加されたパッケージ」
+    - 対象以外でlockされた版が変わった、または追加されたパッケージ（ある場合だけ載る）
+- 「マージ前に、CI で依存の一覧の表示と、gradle.lockfile をそのまま使うビルドとテストを実行してください」
+    - `./gradlew dependencies && ./gradlew build`というコマンドの例
+    - ビルドとテストの前に`--write-locks`・`--update-locks`を実行しない案内
+    - `--write-locks`・`--update-locks`は、KestreLynxが確かめた`gradle.lockfile`を置き換えること
 
-- 変更したファイルと、catalog・依存宣言・プロパティの変更や上書き・constraintsの追記の内容
-- 作業用コンテナのGradleの版と、作業用コンテナが更新して返した`gradle.lockfile`についての次の確認結果
-    - エントリが削除されていないこと
-    - lockする構成が更新前後で同じであること
-    - 更新対象が存在したすべての構成で、対象の版が選んだ公開版以上になっていること
-    - 追加・変更された版の`.pom`がMaven Centralにあること
-- 同じプロパティやcatalogの値で版が決まり、Maven Centralで確認したほかのパッケージ
-- 対象以外にlockされた版が変わったパッケージと、追加されたパッケージ
-- Trivyによる更新前後のスキャン結果と、マージ前のCIでの確認事項
+KestreLynxは更新後のlockfileの版と更新前後の所見を確かめますが、アプリケーションのビルド・テスト・動作は確かめていません。
+採用条件は[Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation)を参照してください。
 
-マージ前に、利用者がプロジェクトのCIで、依存一覧を表示し、`gradle.lockfile`をそのまま使ってビルドとテストを実行してください。
-実行するコマンドは次のとおりです。
+## 解消・残存・新規と、KestreLynxが確かめていないこと {#verification-results}
 
-```sh
-./gradlew dependencies && ./gradlew build
-```
-
-依存一覧では、PR本文にある更新対象のパッケージを、そのパッケージが更新前に存在した構成ごとに確認してください。
-各構成で解決された版がPRの`gradle.lockfile`に記録された版と一致し、修正版へ上がっていることを、ビルドとテストの成功に加えて確認してください。
-
-検査した`gradle.lockfile`が置き換わるため、上の確認より先に`--write-locks`・`--update-locks`を実行しないでください。
-
-Spring BootのBOMのプロパティの上書きは、消すまで残ります。
-Spring Bootプラグインを、BOMが対象パッケージの修正版を指定する版へ更新するときに、上書きを外してください。
-
-追記したconstraintsも、消すまで残ります。
-
-依存元を、更新対象の修正版を要求する版へ更新したら、追記したconstraintsを外してください。
-constraintsを外したあとも、更新対象が修正版へ解決されることを確認してください。
-
-KestreLynxの検査は、lockfileとスキャンの結果を対象とします。
-採用条件は[Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation)、ビルドや動作を含む未確認事項は[比較結果の解消](#verification-results)を参照してください。
-
-## 比較結果の解消 {#verification-results}
-
-PR本文とSlackの「解消」「残存」「新規」は、更新前後のスキャンを比較した結果を表します。
-
-表示の意味は次のとおりです。
+PR本文の「解消」「残存」「新規」とSlackの修正計画の解消件数は、次の表に示す更新前後のスキャンの比較結果です。
 
 | 表示 | 意味 |
 | --- | --- |
-| 解消・`Resolved` | 比較元では検出され、比較先では検出されなかった所見 |
-| 残存 | 比較先にも残っている所見 |
-| 新規 | 比較元では検出されず、比較先で検出された所見 |
+| 解消・`Resolved` | 更新前に検出され、更新後には検出されなかった所見 |
+| 残存・`Remaining` | 更新後にも残っている所見 |
+| 新規・`Introduced` | 更新前にはなく、更新後に検出された所見 |
 
-比較したものを確認できるよう、更新の種類ごとに比較元と比較先を示します。
+更新の種類によって、スキャンして比べるものが異なります。
 
-| 更新の種類 | 比較元 | 比較先 |
+| 更新の種類 | 更新前としてスキャンしたもの | 更新後としてスキャンしたもの |
 | --- | --- | --- |
 | 配布イメージ | 稼働イメージ | 候補のタグが指す、レジストリから取得したイメージ |
-| ベースイメージ（Dockerfileの`FROM`で指定するイメージ） | 現在の`FROM`のタグが指す、レジストリから取得したイメージ | 候補のタグが指す、レジストリから取得したベースイメージ |
+| ベースイメージ（Dockerfileの`FROM`） | 現在の`FROM`のタグが指す、レジストリから取得したイメージ | 候補のタグが指す、レジストリから取得したベースイメージ |
 | 言語パッケージ | リポジトリから取得した更新前の依存ファイル | PRで提案する更新後の依存ファイル |
 
-ベースイメージの比較では、現在の`FROM`のタグが指す内容のレイヤーと、稼働イメージの先頭のレイヤーが一致することを確認します。
-比較条件の詳細は[スキャンの比較条件](remediation-logic.md#comparison-conditions)を参照してください。
+比較方法は[スキャンの比較条件](remediation-logic.md#comparison-conditions)、DockerfileでNode.js・Python本体の所見を含める条件は[ランタイム本体の扱い](remediation-base-image-logic.md#base-runtime-findings)を参照してください。
 
-イメージタグとベースイメージの更新では、PR本文の所見を次の区分に分けます。
+「確認したこと」の所見の項目の例は、[PR本文の内容](#pr-body-and-checks)に載っています。
 
-| 区分 | 意味 | PR本文での表示 | Slack・Webhookの件数に入るか |
-| --- | --- | --- | --- |
-| 対象 | 修正版が報告されている、更新で解消を目指す所見 | 対象の解消と残存 | 解消・残存の件数に含む |
-| その他 | 修正版の報告がない所見など、更新対象に含まれない所見 | 対象とは別の一覧・件数 | 対象の解消・残存の件数に含めない |
-| 新規 | 比較元にはなく、候補で検出された所見 | 対象・その他とは別の一覧・件数 | 新規の件数に含む |
+Compose・Kubernetesマニフェスト・Kustomize・Helmのvaluesでは、「確認したこと」の所見が次の項目に分かれます。
+表の項目名では、括弧内の説明と件数を省略しています。
 
-Dockerfileのベースイメージ更新では、ベースのレイヤーに帰属する所見を対象にします。
-レイヤーが分からなくても、稼働イメージとベースイメージで版を示す環境変数が一致するNode.js・Pythonのランタイム本体の所見を含めます。
+| 本文の項目 | 書いてあること | 所見の一覧の見出し |
+| --- | --- | --- |
+| この更新が対象とする所見 | 更新で解消を目指す、修正版が報告されている所見の解消と残存 | 解消、対象の所見のうち残存 |
+| 稼働中のイメージのその他の所見 | 修正版の報告がないものなど、対象外の所見が候補で消える件数と残る件数 | 候補のイメージで検出されなくなるその他の所見、候補のイメージに残るその他の所見 |
+| 候補のイメージで新たに入る所見 | 更新前にはなく、候補で検出された所見 | 新規 |
 
-詳しくは[ランタイム本体の扱い](remediation-base-image-logic.md#base-runtime-findings)を参照してください。
+件数の後に所見の一覧が続き、「候補のイメージで検出されなくなるその他の所見」は該当する所見がある場合だけ載ります。
+Dockerfileでは「比較した両ベースイメージのその他の所見」に、候補のベースに残る件数と新たに入る件数が載ります。
 
-Compose・Kubernetesマニフェスト・Kustomize・HelmのvaluesのPRでは、その他の所見が候補で検出されなくなった件数も表示します。
-該当する所見がある場合だけ、検出されなくなったその他の所見の一覧を載せます。
+言語パッケージでは、依存ファイル内の全パッケージについて解消・残存・新規が載ります。
 
-KestreLynxが確かめていないことは次のとおりです。
+KestreLynxは、次の結果を確かめていません。
 
-- 変更後のDockerfileからビルドした完成イメージでの解消
-- 配置後の稼働中のコンテナでの解消
+- 変更後のDockerfileからビルドしたイメージでの所見の解消
+- 配置後の稼働中のコンテナでの所見の解消
 - 更新後の依存ファイルを使った実際の依存のインストール
 - アプリケーションのビルド・テストの成功や動作
 
-!!! note "解消の表示と稼働状態"
+配置後のスキャンで所見が解消と判定される条件は[解消の判定](diff-logic.md#resolved-findings)を参照してください。
 
-    PRやSlackの「解消」は比較結果です。
-    再ビルドした完成イメージや、配置後の稼働中のコンテナで解消したことを示すものではありません。
-
-更新の種類ごとの検査範囲と採用条件は[対象別の検証範囲](remediation-logic.md#verification-scope)を参照してください。
+検査範囲と採用条件は[対象別の検証範囲](remediation-logic.md#verification-scope)を参照してください。

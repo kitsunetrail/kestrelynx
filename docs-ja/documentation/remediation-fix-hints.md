@@ -268,7 +268,7 @@ example.com/old v1.4.0 の修正版は別のメジャー版（v2.1.0）にしか
 - ビルドしたGoが不明なまま、`go`または`toolchain`の行の版が変わる（`go_line_raised_too_far`）
 - 必要な版以上のGoを、KestreLynxが更新に使えるGoから選べない（`go_runtime_unavailable`）
 
-記録条件は[Goの更新結果の検査](remediation-go-logic.md#go-update-validation)と[Goの選定](remediation-go-logic.md#go-runtime-selection)、CIでの確認は[GoのPRとCIでの確認](remediation-pr-results.md#go-pull-requests)を参照してください。
+記録条件は[Goの更新結果の検査](remediation-go-logic.md#go-update-validation)と[Goの選定](remediation-go-logic.md#go-runtime-selection)、PR本文の記載は[GoのPR](remediation-pr-results.md#go-pull-requests)を参照してください。
 行の変更が制限を満たさない案内（`go_line_raised_too_far`）でビルドしたGoが不明な場合に限り、末尾に「・稼働中のバイナリをビルドした Go は不明）」と表示します。
 
 修正版が別のメジャー版にしかない場合、KestreLynxは依存を変更せずに案内のための追加情報を調べます（`fix_in_other_major_version`）。

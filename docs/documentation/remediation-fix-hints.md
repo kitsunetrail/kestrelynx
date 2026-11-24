@@ -268,7 +268,7 @@ When the module and version declaring the required Go are identified, the hint e
 - The version on the `go` or `toolchain` line changes while the build Go is unknown (`go_line_raised_too_far`)
 - KestreLynx cannot select a Go at or above the required version from those it can use for updates (`go_runtime_unavailable`)
 
-See [Go update validation](remediation-go-logic.md#go-update-validation) and [Go runtime selection](remediation-go-logic.md#go-runtime-selection) for recording conditions, and [Go pull requests and CI checks](remediation-pr-results.md#go-pull-requests) for CI verification.
+See [Go update validation](remediation-go-logic.md#go-update-validation) and [Go runtime selection](remediation-go-logic.md#go-runtime-selection) for recording conditions, and [Go pull requests](remediation-pr-results.md#go-pull-requests) for PR body contents.
 Only hints for a line change that exceeds the limits (`go_line_raised_too_far`) end with “; the Go the running binaries were built with is not known)” when the build Go is unknown.
 
 When fixes exist only in another major version, KestreLynx looks up additional information for the hint without changing dependencies (`fix_in_other_major_version`).

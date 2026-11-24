@@ -207,7 +207,7 @@ Go 1.26がサポート中の最小の系列である例で、作業用Goと版�
 `packages[].fix_hint.go_line`には、選んだモジュールとその版、必要なGoの版、既知のビルド版、更新で要求した対象の版を記録します。
 
 `toolchain`の行だけが原因の場合は、`fix_hint.go_line`を記録しません。
-案内の表示は[修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)、`go`の行の引き上げに伴うPR本文の記載は[GoのPRとCIでの確認](remediation-pr-results.md#go-pull-requests)を参照してください。
+案内の表示は[修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)、`go`の行の引き上げに伴うPR本文の記載は[GoのPR](remediation-pr-results.md#go-pull-requests)を参照してください。
 
 ### go.sumの照合と補完 {#go-sum-validation}
 
@@ -219,7 +219,7 @@ Go 1.26がサポート中の最小の系列である例で、作業用Goと版�
 - 元の行の削除やハッシュの変更を拒否する
 - 同じモジュール・版・ハッシュの種類で値が食い違う結果を拒否する
 
-補った行のPR本文への記載は、[GoのPRとCIでの確認](remediation-pr-results.md#go-pull-requests)を参照してください。
+補った行のPR本文への記載は、[GoのPR](remediation-pr-results.md#go-pull-requests)を参照してください。
 
 ### 付随するモジュールの更新 {#go-collateral-validation}
 
@@ -248,4 +248,4 @@ Go 1.26がサポート中の最小の系列である例で、作業用Goと版�
 スキャンするのは`go.mod`に書かれた版で、利用者のビルドはGoの既定の`-mod=readonly`を使うことを前提にします。
 `-mod=readonly`では書かれた版だけを使い、必要なモジュールがない場合や版が低い場合はビルドが止まります。
 
-マージ前のCIの実行例とPR本文の記載内容は、[GoのPRとCIでの確認](remediation-pr-results.md#go-pull-requests)を参照してください。
+PR本文の記載内容は、[GoのPR](remediation-pr-results.md#go-pull-requests)を参照してください。

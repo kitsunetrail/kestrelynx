@@ -79,7 +79,7 @@ nav:
           - Reading the results:
               - Notifications: documentation/remediation-results.md
               - Update results and guidance: documentation/remediation-update-results.md
-              - PR contents and pre-merge checks: documentation/remediation-pr-results.md
+              - PR contents: documentation/remediation-pr-results.md
               - Hints when a package cannot reach its fix: documentation/remediation-fix-hints.md
           - When no candidate or pull request appears: documentation/remediation-troubleshooting.md
           - How candidates and pull requests are decided:

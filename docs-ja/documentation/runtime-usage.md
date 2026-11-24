@@ -21,7 +21,7 @@ KestreLynxは観測結果をSlackとWebhookの通知に反映します。
 | `not_observed` | 観測期間に使用を確認できなかった状態です。使われていないことは意味しません。 |
 | `unavailable` | 証拠が足りず判定できない状態です。理由を付けて表示します。 |
 
-表のNode.js本体・Python本体は、KestreLynxがセキュリティ情報と照合するランタイム本体を指します（[Node.js本体の所見](scan-logic.md#node-runtime)・[Python本体の所見](scan-logic.md#python-runtime)）。
+表のNode.js本体・Python本体・Java本体は、KestreLynxがセキュリティ情報と照合するランタイム本体を指します（[Node.js本体の所見](scan-logic.md#node-runtime)・[Python本体の所見](scan-logic.md#python-runtime)・[Java本体の所見](scan-logic.md#java-runtime)）。
 パッケージの種類ごとに、使用中とみなす条件を次に示します。
 
 | パッケージの種類 | 使用中とみなす条件 |
@@ -29,7 +29,7 @@ KestreLynxは観測結果をSlackとWebhookの通知に反映します。
 | OSパッケージ | 稼働中のプロセスが、そのパッケージのファイルを実行した、またはライブラリとして読み込んだことを、サンプリングまたはeBPFによる短命なプロセスの実行・読み込みのイベントで確認した場合です。 |
 | Go・Rustなど実行ファイルに組み込まれる言語パッケージ | Trivyの検出対象（Target）の実行ファイルが、稼働中のプロセスとして動いている場合です。 |
 | Python・Node.js・Javaなど実行環境が読み込む言語パッケージ | そのコンテナで`python`・`node`・`java`など対応する実行環境のプロセスが動いている場合に、そのエコシステムのパッケージをすべて使用中とみなします。 |
-| Node.js本体・Python本体 | 本体の実行ファイルが稼働中のプロセスとして動いている場合です。 |
+| Node.js本体・Python本体・Java本体 | 本体の実行ファイルが稼働中のプロセスとして動いている場合です。 |
 
 実行環境のプロセスを根拠に同じエコシステムのパッケージをすべて使用中とみなすのは、個々の依存パッケージの利用を確認した結果ではなく、保守的に使用中として扱うKestreLynxの判定規則です。
 
@@ -41,7 +41,7 @@ Webhookのフィールドは[稼働時のフィールド](webhook-runtime-refere
 
 ### ランタイム本体の実行ファイル {#runtime-executables}
 
-次の実行ファイルのパスは、稼働時の使用状況が有効な場合に、Sensorが記録した実行の証拠からNode.js本体とPython本体が使用中かを判定するためだけに使います。
+次の実行ファイルのパスは、稼働時の使用状況が有効な場合に、Sensorが記録した実行の証拠からNode.js本体・Python本体・Java本体が使用中かを判定するためだけに使います。
 
 - Node.js本体の実行ファイルは、次のように扱う
     - 実行ファイルはNode.jsのインストール先にある`bin/node`で、公式`node`イメージではインストール先が`/usr/local`なので`/usr/local/bin/node`となる
@@ -51,6 +51,9 @@ Webhookのフィールドは[稼働時のフィールド](webhook-runtime-refere
     - 実行ファイルには、公式`python`イメージの`/usr/local/bin`に置かれた、バージョン番号付きのPython本体を使う
     - 環境変数`PYTHON_VERSION`が3.12系列なら、実行ファイルのパスは`/usr/local/bin/python3.12`となる
     - 公式イメージの`python3`はこの実行ファイルへのシンボリックリンクで、Sensorはリンクをたどった後のパスを記録する
+- Java本体の実行ファイルは、次のように扱う
+    - 実行ファイルは`JAVA_HOME`が示すディレクトリの`bin/java`で、公式`eclipse-temurin`イメージでは`/opt/java/openjdk/bin/java`となる
+    - `JAVA_HOME`が未設定か絶対パスでない場合も脆弱性を照合し、Sensorの使用判定の理由は「バイナリのパス不明」となる
 
 ## 動作要件
 

@@ -67,13 +67,15 @@ See the following pages for scan decision rules, limitations, and data download 
 
 - Node.js: [Node.js runtime findings](scan-logic.md#node-runtime), [Node.js advisory downloads](outbound-communication.md#node-runtime-download)
 - Python: [Python runtime findings](scan-logic.md#python-runtime), [Python advisory downloads](outbound-communication.md#python-runtime-download)
+- Java: [Java runtime findings](scan-logic.md#java-runtime), [Java advisory downloads](outbound-communication.md#java-runtime-download)
 - CVEs without severity: [Severity](scan-logic.md#severity), [CVE record downloads](outbound-communication.md#cve-record-download)
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `scan.severity` | `[HIGH, CRITICAL]` | Severities retained for analysis and notification, including Node.js and Python runtime findings. Allowed values are `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`. |
+| `scan.severity` | `[HIGH, CRITICAL]` | Severities retained for analysis and notification, including Node.js, Python, and Java runtime findings. Allowed values are `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`. |
 | `scan.node_runtime.enabled` | `true` | Download security advisories and check the Node.js version recorded in `NODE_VERSION` against them. `false` disables both downloads and checks. |
 | `scan.python_runtime.enabled` | `true` | Download security advisory data and check the CPython version recorded in `PYTHON_VERSION` against it. `false` disables both downloads and checks. |
+| `scan.java_runtime.enabled` | `true` | Enables both advisory downloads and checks against a Temurin-format `JAVA_VERSION`, with `false` disabling both. |
 | `scan.cve_record_severity.enabled` | `true` | Retrieve records for CVEs that Trivy reports as `UNKNOWN` and use their scoring to determine severity; `false` disables retrieval and severity replacement. |
 
 ## Prioritization {#triage}

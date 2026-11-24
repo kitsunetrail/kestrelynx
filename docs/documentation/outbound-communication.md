@@ -27,6 +27,7 @@ The table lists communication conditions based on enabled features and work need
 | [EPSS downloads](#epss-download) | [`triage.enabled`](configuration.md#triage) is enabled (default: enabled) | None |
 | [Node.js advisories](#node-runtime-download) | [`scan.node_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
 | [Python advisories](#python-runtime-download) | [`scan.python_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
+| [Java advisories](#java-runtime-download) | [`scan.java_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
 | [CVE record downloads](#cve-record-download) | Only when [`scan.cve_record_severity.enabled`](configuration.md#scan) is enabled (default: enabled) and Trivy reports CVEs with `UNKNOWN` severity during a scan | CVE IDs with UNKNOWN severity |
 | [Trivy downloads](#trivy-downloads) | [Every time a scan runs](configuration.md#schedule) | Names, tags, and digests of requested images |
 | [GitHub communication](#github-communication) | Reads require [remediation planning](configuration.md#remediation-basics); writes require both planning and PRs (each disabled by default) | Repository and source identifiers, PR contents |
@@ -91,6 +92,37 @@ Public datasets are retrieved in full and matched locally, and image information
 CVE IDs in record requests come from the PSF list, rather than being selected from image findings.
 
 See [Scanning settings](configuration.md#scan) to enable or disable checks, [Threat intelligence updates](scan-logic.md#intel-cache) for refresh rules, and [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable) for failure handling.
+
+### Java advisory downloads {#java-runtime-download}
+
+When Java runtime checks are enabled, KestreLynx retrieves the following public data from OpenJDK and Adoptium.
+
+| Program making the connection | Destination | Information retrieved |
+| --- | --- | --- |
+| KestreLynx | `openjdk.org` | OpenJDK Vulnerability Group advisory list and all advisory pages published since 2019 |
+| KestreLynx | `api.adoptium.net` | Temurin release list and Adoptium's list of release lines identifying the LTS lines and the latest line |
+
+KestreLynx caches the lists and individual pages in `java/` alongside the state file.
+It refreshes the advisory list, release list, and release-line list after 20 hours and uses a cached copy downloaded within the last 7 days if a refresh fails.
+It refreshes each advisory page on the same schedule for the first 180 days after publication and uses the cached copy once the page is at least 180 days old.
+If a page refresh fails, KestreLynx uses a readable cached copy regardless of when it was downloaded.
+If a page has no readable cached copy, KestreLynx attempts to download it regardless of when it was published.
+
+KestreLynx downloads the public datasets in full and matches them locally. It does not send image information or detected CVEs to the sources.
+
+KestreLynx keeps the previous cache and logs the reason if a download contains any of the following changes.
+
+- A previously listed date disappears from the advisory list.
+- A CVE disappears from an advisory, or the advisory no longer marks a previously affected line for a CVE.
+- The last affected version for a release line disappears or is lower than before.
+- A previously listed version disappears from the Temurin release list.
+- An LTS line disappears from the release-line list, or the latest line is older than before.
+
+In these cases, KestreLynx uses the previous cache if it is usable.
+To accept an upstream correction, delete the `java/` directory alongside the state file.
+KestreLynx rebuilds the Java cache on the next download.
+
+See [Scanning](configuration.md#scan) for settings, [Java runtime findings](scan-logic.md#java-runtime) for matching rules, and [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable) for how a scan handles unavailable data.
 
 ### CVE record downloads {#cve-record-download}
 

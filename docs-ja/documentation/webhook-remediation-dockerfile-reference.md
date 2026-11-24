@@ -444,6 +444,7 @@ PRを作成していない手動対応や保留などの処理結果も含みま
 | --- | --- |
 | `Node.js` | Node.js本体 |
 | `Python runtime` | Python本体 |
+| `Java runtime` | Java本体 |
 
 次のフィールドには補足があります。
 

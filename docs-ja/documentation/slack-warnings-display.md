@@ -15,7 +15,7 @@ title: Slackの警告の読み方
 
 ## スキャンの警告 {#scan-warnings}
 
-スキャンの警告は、イメージの脆弱性やNode.js・Python本体の脆弱性を確認できなかったことを知らせます。
+スキャンの警告は、イメージの脆弱性やNode.js・Python・Java本体の脆弱性を確認できなかったことを知らせます。
 スキャンできなかったイメージがある場合は、次のように表示します。
 
 ```text
@@ -49,7 +49,7 @@ title: Slackの警告の読み方
 
 本体を照合しなかった注記は、照合を見送った対象を次のように示します。
 
-- 名前は対象に応じて`Node.js`または`Python runtime`、両方なら`Node.js・Python runtime`
+- 照合を見送った本体だけをパッケージ名の昇順に並べ、3種類すべてなら`Java runtime・Node.js・Python runtime`と表示する
 - Nは照合しなかったイメージ名を重複なく数えた件数
 
 照合を見送る条件と前回の所見の扱いは、[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。

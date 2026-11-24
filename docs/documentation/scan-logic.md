@@ -246,12 +246,12 @@ EOL findings and ordinary findings are handled separately based on each CVE's fi
 
 ### Language runtime findings {#language-runtime}
 
-Trivy does not report vulnerabilities in the Node.js and Python runtimes themselves, so KestreLynx detects them by checking each runtime against its security advisories.
-The following sections, "Node.js runtime findings" and "Python runtime findings," explain how detection works.
+KestreLynx checks the Node.js, Python, and Java runtimes against their respective security advisories for vulnerabilities that Trivy does not report.
+The following sections, "Node.js runtime findings," "Python runtime findings," and "Java runtime findings," explain how detection works.
 
 These findings differ from Trivy findings in the following two ways.
 
-- Remediation plans treat runtime vulnerabilities as fixable by updating the base image when the running image uses an official `node` or `python` image as its base image and uses its runtime unchanged.
+- Remediation plans treat runtime vulnerabilities as fixable by updating the base image when the running image uses an official `node`, `python`, or `eclipse-temurin` image as its base image and uses its runtime unchanged.
     - For tags such as `node:22`, whose contents are updated under the same tag, the plan estimates how many vulnerabilities would be resolved by rebuilding with the base image that the tag currently points to.
     - [Base layer matching](remediation-base-image-logic.md#base-layer-matching) describes the conditions for treating vulnerabilities as fixable by updating the base image and the limitations of the estimate.
 - Notifications indicate that a runtime series must be upgraded when the series (such as Node.js 18) has reached end of life (EOL) and no fix will be released for it.
@@ -370,6 +370,45 @@ Python runtime checks have the following limitations.
 
 Settings are described in [Scanning](configuration.md#scan), and data sources in [Python advisory downloads](outbound-communication.md#python-runtime-download).
 
+#### Java runtime findings {#java-runtime}
+
+KestreLynx checks the Java runtime (JDK) when the `JAVA_VERSION` environment variable in the image configuration uses the Temurin format.
+This includes official `eclipse-temurin` images, official `maven` and `gradle` images based on them, and application images built on `eclipse-temurin`.
+
+| Item | Handling |
+| --- | --- |
+| Version | Read the version without the build number (`jdk-21.0.13.1+2` becomes `21.0.13.1` and `jdk8u512-b09` becomes `8u512`). |
+| Notification | The Slack package name is `Java runtime`, and the Webhook `ecosystem` is `java-runtime`. |
+| Severity | Use the advisory's CVSS 3.x base score and report only CVEs with a severity selected by `scan.severity`. |
+
+A CVE matches when the OpenJDK advisory marks the installed JDK's release line in the CVE row and the installed version is at or below the last affected version for that line.
+The fixed version is the first Temurin release in Adoptium's list for the same line after the last affected version.
+
+For CVEs that Temurin fixed in a different version than OpenJDK, KestreLynx uses the fixed version listed for that line in its exception list.
+For example, the fix for CVE-2026-114820 in the Java 21 line is `21.0.13`.
+
+| Fix status | Condition and displayed version |
+| --- | --- |
+| `fixed` | A fix is available in the installed release line, and the displayed version fixes all reported CVEs in the fixed group. |
+| `affected` | The line is supported and has no fixed version. |
+| `end_of_life` | The line has reached end of life and has no fixed version. |
+
+KestreLynx treats a non-LTS line older than the latest line in Adoptium's list as end of life.
+
+If the advisory has no column for that line, KestreLynx infers that a CVE affects it when both the nearest lower and higher lines are marked.
+If the advisory gives a last affected version for the missing line, the inference applies only up to that version.
+
+When an inference determines the `end_of_life` status, the description ends with the lines used to infer it, for example `(inferred for end-of-life Java 26 from 25 and 27)`.
+
+Java runtime checks have the following limitations.
+
+- Matching uses `JAVA_VERSION` even if it differs from the installed JDK version.
+- Trivy reports vulnerabilities in OpenJDK installed as an OS package.
+- Advisories omit the first affected version and CPU or platform requirements, so matches can include earlier versions or unaffected environments.
+- Inferred findings can include CVEs for features absent from the release line.
+
+Settings are described in [Scanning](configuration.md#scan), and data sources in [Java advisory downloads](outbound-communication.md#java-runtime-download).
+
 ## Exploitation-based priority {#triage}
 
 Triage uses exploitation intelligence to assign a priority to each CVE.
@@ -433,6 +472,14 @@ Python advisory data uses the following refresh and cache rules.
 | Failed retrieval | Use a usable cache no older than 7 days. |
 | Storage | `python/` in the same directory as the state file. |
 
+Java advisory data uses the following refresh and cache rules.
+
+| Java cache | Handling |
+| --- | --- |
+| Advisory list, Temurin release list, and release-line list | Refresh after 20 hours and use a cached copy no older than 7 days if the refresh fails. |
+| Individual advisory pages | Refresh after 20 hours for the first 180 days after publication and use a readable cached copy of any age once the page is 180 days old or if a refresh fails. |
+| Storage | `java/` in the same directory as the state file. |
+
 | CVE record scoring cache | Handling |
 | --- | --- |
 | Revalidation | Revalidate using ETags after 20 hours have passed since retrieval. |
@@ -460,18 +507,20 @@ See [Threat intelligence warnings](slack-warnings-display.md#intel-warnings) for
 
 Node.js runtime matching is skipped for a cycle if any of the four datasets—security-wg, the security blog, release dates, or the release schedule—is unavailable.
 Python runtime matching is skipped for a cycle if any required advisory list, CVE record, release list, or release-cycle data is unavailable.
+Java runtime matching is skipped for a cycle if the OpenJDK advisory list, any advisory page, the Temurin release list, or the Adoptium release-line list is unavailable.
 
-Node.js and Python are handled independently, so unavailable data for one does not prevent normal matching for the other.
+KestreLynx handles Node.js, Python, and Java independently, checking each runtime for which the required data is available.
 A failed download with no usable cache from the last 7 days leaves the corresponding data unavailable.
+The 7-day limit does not apply to [individual Java advisory pages](outbound-communication.md#java-runtime-download).
 
 | Situation | Handling |
 | --- | --- |
-| A runtime check is skipped for images with `NODE_VERSION` in `X.Y.Z` form or `PYTHON_VERSION` in `3.Y.Z` form | Include the annotation below, with `N` representing the number of unchecked images. |
+| A runtime check is skipped for images with `NODE_VERSION` in `X.Y.Z` form, `PYTHON_VERSION` in `3.Y.Z` form, or `JAVA_VERSION` in Temurin format | Include the annotation below, with `N` representing the number of unchecked images. |
 | No findings have changed | Send a notification when there are unchecked images. |
-| An unchecked image has saved records for the unchecked runtime, `Node.js` or `Python runtime` | Retain those records instead of treating them as resolved. |
-| Generic webhook | Include objects with `image` and `package` in the top-level `runtime_unchecked` array; `package` is `Node.js` or `Python runtime`, and the array is omitted when none apply. |
+| An unchecked image has saved records for the unchecked runtime (`Node.js`, `Python runtime`, or `Java runtime`) | Retain those records instead of treating them as resolved. |
+| Generic webhook | Include objects with `image` and `package` in the top-level `runtime_unchecked` array; `package` is `Node.js`, `Python runtime`, or `Java runtime`, and the array is omitted when none apply. |
 
-> Advisories for Node.js, Python runtime could not be fetched, so the runtime of N image(s) was not checked.
+> ℹ️ Advisories for Java runtime, Node.js, Python runtime could not be fetched, so the runtime of N image(s) was not checked.
 
 The annotation lists only the runtimes whose data is unavailable, and `N` counts distinct images.
 When only Node.js data is unavailable, the annotation is:

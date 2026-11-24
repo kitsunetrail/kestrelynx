@@ -444,6 +444,7 @@ Each element of `dockerfile_items[].rebuild_runtimes[]` has the following fields
 | --- | --- |
 | `Node.js` | Node.js runtime itself |
 | `Python runtime` | Python runtime itself |
+| `Java runtime` | Java runtime itself |
 
 The following fields have additional notes.
 

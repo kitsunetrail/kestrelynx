@@ -207,7 +207,7 @@ The images or files scanned for comparison depend on the update type.
 | Base image (Dockerfile `FROM`) | The image retrieved from the registry that the current `FROM` tag points to | The base image retrieved from the registry at the candidate tag |
 | Language package | Dependency files retrieved from the repository before the update | Updated dependency files proposed in the pull request |
 
-For comparison methods, see [Scan comparison conditions](remediation-logic.md#comparison-conditions); for when Dockerfile updates include Node.js and Python runtime findings, see [Handling language runtime findings](remediation-base-image-logic.md#base-runtime-findings).
+For comparison methods, see [Scan comparison conditions](remediation-logic.md#comparison-conditions); for when Dockerfile updates include Node.js, Python, and Java runtime findings, see [Handling language runtime findings](remediation-base-image-logic.md#base-runtime-findings).
 
 The example in [Pull request contents](#pr-body-and-checks) includes the finding entries from “Verification”.
 

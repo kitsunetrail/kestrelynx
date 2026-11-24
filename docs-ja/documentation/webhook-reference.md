@@ -356,7 +356,7 @@ JSON全体の例は、[ペイロードの全体像](#payload-overview)を参照�
 
 ### 未照合の言語ランタイム {#runtime-unchecked}
 
-`runtime_unchecked`は、Node.jsまたはPythonの本体を見つけたものの、セキュリティ情報を取得できず照合しなかった対象の一覧です。
+`runtime_unchecked`は、Node.js・Python・Javaのいずれかの本体を見つけたものの、セキュリティ情報を取得できず照合しなかった対象の一覧です。
 同じイメージ名と本体の組は1度だけ出力します。
 
 `runtime_unchecked[]`のフィールドは次のとおりです。
@@ -372,6 +372,7 @@ JSON全体の例は、[ペイロードの全体像](#payload-overview)を参照�
 | --- | --- |
 | `Node.js` | Node.js本体 |
 | `Python runtime` | Python本体 |
+| `Java runtime` | Java本体 |
 
 通知と履歴の扱いは、[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。
 
@@ -649,10 +650,10 @@ digestを確認できなかった要素には、同じイメージ名でdigest�
 次のフィールドには補足があります。
 
 - `class`
-    - KestreLynxが追加するNode.js・Python本体の所見は`lang`
+    - KestreLynxが追加するNode.js・Python・Java本体の所見は`lang`
 - `ecosystem`
     - Trivyが報告するパッケージの種類で、`debian`、`alpine`、`python-pkg`、`node-pkg`など
-    - KestreLynxが追加する本体の所見には`node-runtime`と`python-runtime`を使う
+    - KestreLynxが追加する本体の所見には`node-runtime`・`python-runtime`・`java-runtime`を使う
     - 認識できない種類は`""`
 - `fixed`
     - グループを作るときに最初に取り込んだ所見の修正版を出力

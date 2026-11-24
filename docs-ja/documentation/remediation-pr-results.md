@@ -207,7 +207,7 @@ PR本文の「解消」「残存」「新規」とSlackの修正計画の解消�
 | ベースイメージ（Dockerfileの`FROM`） | 現在の`FROM`のタグが指す、レジストリから取得したイメージ | 候補のタグが指す、レジストリから取得したベースイメージ |
 | 言語パッケージ | リポジトリから取得した更新前の依存ファイル | PRで提案する更新後の依存ファイル |
 
-比較方法は[スキャンの比較条件](remediation-logic.md#comparison-conditions)、DockerfileでNode.js・Python本体の所見を含める条件は[ランタイム本体の扱い](remediation-base-image-logic.md#base-runtime-findings)を参照してください。
+比較方法は[スキャンの比較条件](remediation-logic.md#comparison-conditions)、DockerfileでNode.js・Python・Java本体の所見を含める条件は[ランタイム本体の扱い](remediation-base-image-logic.md#base-runtime-findings)を参照してください。
 
 「確認したこと」の所見の項目の例は、[PR本文の内容](#pr-body-and-checks)に載っています。
 

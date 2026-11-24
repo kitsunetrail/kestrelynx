@@ -93,7 +93,7 @@ It treats findings according to the layers reported by the Trivy scanner.
 
 ### Handling language runtime findings {#base-runtime-findings}
 
-For findings in language runtimes themselves, such as Node.js and Python, KestreLynx also uses version environment variables to decide whether to treat them as coming from the base.
+For findings in the Node.js, Python, and Java runtimes themselves, KestreLynx also uses version environment variables to decide whether to treat them as coming from the base.
 This determines how findings are attributed to the base; it does not prove build provenance.
 
 For pinned tags, KestreLynx checks all of the following conditions.
@@ -101,8 +101,9 @@ For pinned tags, KestreLynx checks all of the following conditions.
 1. The current base's layer sequence matches the first layers of the running image
 2. Both the running image's configuration and the current base's configuration contain the runtime's version environment variable
 3. The environment variable has the same value in the running image and the current base
+4. For Java, `JAVA_HOME` is the same absolute path in the running image and the current base
 
-The variables are `NODE_VERSION` for Node.js and `PYTHON_VERSION` for Python.
+The version environment variables are `NODE_VERSION` for Node.js, `PYTHON_VERSION` for Python, and `JAVA_VERSION` for Java.
 If an environment variable occurs more than once, KestreLynx uses its last value.
 
 When all conditions are met, runtime findings that could not be assigned to a layer are included as base fix targets.
@@ -125,6 +126,7 @@ For language runtimes themselves, KestreLynx estimates the effect of rebuilding 
 
 1. The running image has findings in the language runtime itself
 2. The runtime version can be checked from the current base's image configuration
+3. For Java, `JAVA_HOME` is the same absolute path in the running image and the current base
 
 When these conditions are met, KestreLynx estimates how many findings would disappear if a rebuild inherited the base's version and records the result in `rebuild_runtimes`.
 It considers only CVEs currently detected in that runtime and does not count CVEs introduced by the new version.
@@ -140,6 +142,7 @@ The mismatching image retains its individual `rebuild_runtimes` record, but no e
 
     - If a later layer replaces only the `node` or `python` executable, KestreLynx cannot distinguish it when the version environment variable is unchanged
     - The rebuild estimate may be inaccurate if the Dockerfile reinstalls the runtime or overrides the version through `ENV`
+    - KestreLynx does not propose updates to pinned Temurin tags such as `21.0.13.1_2-jre`
 
 Scan preparation checks the comparison conditions and scan limits.
 
@@ -254,7 +257,7 @@ If the notification includes a PR number, the opening summary instead counts PRs
 Even when no rebuild line is shown, the webhook's `rebuild_check` records the matching results.
 
 A runtime estimate line appears only when the rebuild line is shown and the runtime has findings expected to disappear or remain.
-The Python runtime itself is displayed as `Python runtime`.
+The Python runtime itself is displayed as `Python runtime` and the Java runtime as `Java runtime`.
 
 Package lists use the following display rules.
 

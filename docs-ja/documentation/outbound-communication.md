@@ -27,6 +27,7 @@ EPSSは、脆弱性について今後30日以内に悪用活動が観測され�
 | [EPSSの取得](#epss-download) | [`triage.enabled`](configuration.md#triage)が有効（既定有効） | なし |
 | [Node.jsのセキュリティ情報](#node-runtime-download) | [`scan.node_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
 | [Pythonのセキュリティ情報](#python-runtime-download) | [`scan.python_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
+| [Javaのセキュリティ情報](#java-runtime-download) | [`scan.java_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
 | [CVEレコードの取得](#cve-record-download) | [`scan.cve_record_severity.enabled`](configuration.md#scan)が有効（既定有効）で、Trivyがスキャンで深刻度`UNKNOWN`のCVEを報告した場合のみ | 深刻度がUNKNOWNのCVE ID |
 | [Trivyの取得通信](#trivy-downloads) | [スキャンを実行するたび](configuration.md#schedule) | 取得するイメージの名前・タグ・digest |
 | [GitHubへの通信](#github-communication) | 読み取りは[修正計画](configuration.md#remediation-basics)が有効、書き込みは修正計画と修正PRの両方が有効（各既定無効） | リポジトリ・ソースの指定、PRの内容 |
@@ -91,6 +92,37 @@ Python本体の照合が有効な場合、Python Software Foundation（PSF）な
 CVEレコードの要求に含めるCVE IDはPSFの一覧で決まり、イメージの所見から選びません。
 
 有効・無効は[スキャンの設定](configuration.md#scan)、更新は[脅威情報の更新](scan-logic.md#intel-cache)、失敗時は[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。
+
+### Javaのセキュリティ情報の取得 {#java-runtime-download}
+
+Java本体の照合が有効な場合、OpenJDKとAdoptiumの公開データを次の取得先から取得します。
+
+| 通信するプログラム | 通信先 | 取得する情報 |
+| --- | --- | --- |
+| KestreLynx | `openjdk.org` | OpenJDK Vulnerability Groupのアドバイザリー一覧と2019年以降の全ページ |
+| KestreLynx | `api.adoptium.net` | Temurinのリリース一覧と、LTSの系列・最新の系列を示す系列一覧 |
+
+一覧と各ページのキャッシュは、stateファイルと同じディレクトリの`java/`配下に保存します。
+アドバイザリー一覧・リリース一覧・系列一覧は、前回の取得から20時間たつと取り直し、失敗時は取得から7日以内のキャッシュを使います。
+アドバイザリーの各ページは、公開から180日未満なら同じ間隔で取り直し、公開から180日以上ならそのページのキャッシュを使います。
+ページの再取得に失敗した場合は、取得からの日数にかかわらず、読み取れるキャッシュを使います。
+ページのキャッシュがないか読み取れない場合は、公開からの日数にかかわらず、そのページの取得を試みます。
+
+公開データは全件を取得してローカルで照合し、イメージの情報や検出したCVEは取得先へ送りません。
+
+次の変更を含むデータを取得した場合は、キャッシュの置き換えを見送り、理由をログに記録します。
+
+- アドバイザリーの一覧から以前の日付が消えた
+- アドバイザリーからCVEまたは影響する系列の印が消えた
+- ある系列の「影響を受ける最後の版」が消えたか、以前より低くなった
+- Temurinのリリース一覧から以前の版が消えた
+- 系列一覧からLTSの系列が消えたか、最新の系列が以前より古くなった
+
+この場合は、利用できる前回のキャッシュを使います。
+配布元の正式な訂正を取り込むには、stateファイルと同じディレクトリにある`java/`を削除してください。
+次回の取得でJavaのキャッシュを作り直します。
+
+設定は[スキャン](configuration.md#scan)、照合方法は[Java本体の所見](scan-logic.md#java-runtime)、データを利用できない回の扱いは[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。
 
 ### CVEレコードの取得 {#cve-record-download}
 

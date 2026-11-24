@@ -356,7 +356,7 @@ The following `summary` example has triage enabled.
 
 ### Unchecked language runtimes {#runtime-unchecked}
 
-`runtime_unchecked` lists targets where the Node.js or Python runtime itself was found but could not be checked because advisory data was unavailable.
+`runtime_unchecked` lists targets where the Node.js, Python, or Java runtime itself was found but could not be checked because advisory data was unavailable.
 Each combination of image name and runtime is included only once.
 
 The fields in `runtime_unchecked[]` are as follows.
@@ -372,6 +372,7 @@ The fields in `runtime_unchecked[]` are as follows.
 | --- | --- |
 | `Node.js` | The Node.js runtime itself |
 | `Python runtime` | The Python runtime itself |
+| `Java runtime` | The Java runtime itself |
 
 See [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable) for notification and history handling.
 
@@ -649,10 +650,10 @@ The values of `upgrade_risk` are listed below.
 The following fields have additional notes.
 
 - `class`
-    - `lang` for findings that KestreLynx adds for the Node.js and Python runtimes themselves
+    - `lang` for findings that KestreLynx adds for the Node.js, Python, and Java runtimes themselves
 - `ecosystem`
     - Package type reported by Trivy, such as `debian`, `alpine`, `python-pkg`, or `node-pkg`
-    - KestreLynx uses `node-runtime` and `python-runtime` for the runtime findings it adds
+    - KestreLynx uses `node-runtime`, `python-runtime`, and `java-runtime` for the runtime findings it adds
     - `""` for unrecognized types
 - `fixed`
     - Outputs the fixed version from the first finding incorporated when creating the group

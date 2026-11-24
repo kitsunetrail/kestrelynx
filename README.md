@@ -33,7 +33,7 @@
 ### Scanning and notifications
 
 - **Image scanning**: HIGH / CRITICAL detection by default for OS and language packages identified by [Trivy](https://github.com/aquasecurity/trivy) image scanning
-- **Node.js and Python runtime checks**: checks against each project's security information add findings for the runtimes in official `node` and `python` images that Trivy does not report
+- **Node.js, Python, and Java (Temurin) runtime checks**: checks the runtimes in official `node`, `python`, and `eclipse-temurin` images against each project's security advisories and adds findings for vulnerabilities that Trivy does not report
 - **Scan deduplication**: shared results for images confirmed to be identical
 - **Prioritization**: act now / watch / low, based on severity, CISA KEV, and EPSS
 - **Runtime usage (experimental)**: optional Docker Sensor marks findings for packages in use and puts them first within the same priority, without changing priority; see [Runtime usage](docs/documentation/runtime-usage.md)

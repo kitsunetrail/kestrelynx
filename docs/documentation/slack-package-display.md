@@ -110,7 +110,7 @@ Items without information are omitted.
 | EPSS | `EPSS 94%` | Score indicating the likelihood of exploitation |
 | KEV | `CISA KEV (exploited in the wild)` | Listed in CISA KEV as exploited in actual attacks |
 | Ransomware | `🧨 ransomware campaign` | Information indicates use in ransomware attacks |
-| Description | `openssl: buffer overread` | Trivy findings use Trivy's description; Node.js and Python runtime findings use the runtime's vulnerability information |
+| Description | `openssl: buffer overread` | Trivy findings use Trivy's description; Node.js, Python, and Java runtime findings use the runtime's vulnerability information |
 | Vendor information | `vendor advisory` | Link to vendor or CISA information from KEV notes |
 
 `EPSS n/a` on a detailed card means no score is available; very small values appear as `<0.1%`, and very large values as `>99%`.
@@ -424,13 +424,14 @@ The following table lists the bracketed labels and what they identify.
 | `[jar]` | Package included in a Java JAR file |
 | `[node-runtime]` | Findings for the Node.js runtime itself |
 | `[python-runtime]` | Findings for the Python runtime itself |
+| `[java-runtime]` | Findings for the Java runtime itself |
 | `[lang]` | Language package whose type cannot be identified |
 | No bracketed label | OS package |
 
 Language packages identified by Trivy can also display types not listed in this table.
-Node.js and Python runtime findings come from each runtime's vulnerability information.
+Node.js, Python, and Java runtime findings come from each runtime's vulnerability information.
 
-Labels for the Node.js and Python runtimes identify the package type and do not mean that use was observed in a running container.
+Labels for the Node.js, Python, and Java runtimes identify the package type and do not mean that use was observed in a running container.
 See [Usage labels](slack-runtime-display.md#usage-labels) for observed usage.
 
 ## Change labels {#change-labels}
@@ -558,7 +559,7 @@ Diff notifications use the following phrases for newly detected EOL findings, ad
 | `base OS no longer EOL` | That image name no longer has a base-OS EOL record |
 | `no longer end-of-life` | That package no longer has EOL findings, but ordinary findings remain |
 
-The N in `⛔ New: package end-of-life (N) — vendor reports these CVEs as out of support for this release` counts changed pairs of image name and package.
+The N in `⛔ New: package end-of-life (N) — no fix will be released for this release` counts changed pairs of image name and package.
 It includes escalations to Act now and added CVEs as well as newly detected EOL findings.
 
 The following rules determine what this heading counts.
@@ -569,13 +570,13 @@ The following rules determine what this heading counts.
 - When both the base OS and a package are newly detected as EOL, packages other than Act now are summarized on the base-OS line and excluded from this heading's count
 
 A card's fix guidance differs by package type and location as follows.
-“Ordinary EOL package” in the table means an EOL package other than the Node.js or Python runtime itself.
+“Ordinary EOL package” in the table means an EOL package other than the Node.js, Python, or Java runtime itself.
 
 | Card type and location | Fix display |
 | --- | --- |
 | Compact ordinary EOL package card (channel; thread pointer to Act now) | `Fixed in: none — end-of-life: no fix planned for this release` |
 | Detailed ordinary EOL package card (Act now in the channel; thread) | `Fixed in: none — end-of-life: no fix planned for this release, consider a supported version` |
-| Node.js or Python runtime card (channel; thread) | `Fixed in: none — end-of-life: no fix will be released for this series, so the series has to be upgraded (manual)` |
+| Node.js, Python, or Java runtime card (channel; thread) | `Fixed in: none — end-of-life: no fix will be released for this series, so the series has to be upgraded (manual)` |
 
 Vulnerabilities may remain as ordinary findings after EOL clears.
 See [Finding classification](scan-logic.md#finding-classification) for EOL meanings and [Resolution decisions](diff-logic.md#resolved-findings) for clearance rules.

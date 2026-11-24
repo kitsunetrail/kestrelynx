@@ -21,7 +21,7 @@ the Sensor and can be used with `runtime.enabled: false`.
 | `not_observed` | Use was not confirmed during the observation window. This does not mean unused. |
 | `unavailable` | Evidence is insufficient to assess usage. A reason is included. |
 
-The Node.js and Python runtimes in the table refer to the runtimes themselves that KestreLynx checks against security advisories (see [Node.js runtime findings](scan-logic.md#node-runtime) and [Python runtime findings](scan-logic.md#python-runtime)).
+The Node.js, Python, and Java runtimes in the table refer to the runtimes themselves that KestreLynx checks against security advisories (see [Node.js runtime findings](scan-logic.md#node-runtime), [Python runtime findings](scan-logic.md#python-runtime), and [Java runtime findings](scan-logic.md#java-runtime)).
 The following table lists the rules for marking each package type as in use.
 
 | Package type | Rule for marking it in use |
@@ -29,7 +29,7 @@ The following table lists the rules for marking each package type as in use.
 | OS package | A running process executed a file from the package or loaded it as a library, as seen by sampling or by eBPF execution and library-load events from short-lived processes. |
 | Language package compiled into a binary, such as Go or Rust | The executable identified by Trivy's Target is running as a process. |
 | Language package loaded by a runtime, such as Python, Node.js, or Java | All packages in the ecosystem are considered in use when a corresponding runtime process, such as `python`, `node`, or `java`, is running in the container. |
-| Node.js and Python runtimes | The runtime executable is running as a process. |
+| Node.js, Python, and Java runtimes | The runtime executable is running as a process. |
 
 Treating all packages in an ecosystem as in use because its runtime process is running is KestreLynx's conservative classification rule, rather than confirmation that each dependency is actually used.
 
@@ -41,7 +41,7 @@ Webhook fields are described in [Runtime fields](webhook-runtime-reference.md).
 
 ### Runtime executables {#runtime-executables}
 
-The executable paths described below are used only when runtime usage is enabled, to assess whether the Node.js and Python runtimes are in use based on Sensor evidence of the executables running.
+The executable paths described below are used only when runtime usage is enabled, to assess whether the Node.js, Python, and Java runtimes are in use based on Sensor evidence of the executables running.
 
 - The Node.js runtime executable is handled as follows.
     - The executable is `bin/node` under the Node.js installation directory, which is `/usr/local` in official `node` images, giving the path `/usr/local/bin/node`.
@@ -51,6 +51,9 @@ The executable paths described below are used only when runtime usage is enabled
     - The executable is the Python runtime with a version number in its filename, located in `/usr/local/bin` in official `python` images.
     - If the `PYTHON_VERSION` environment variable specifies a version in the 3.12 release line, the executable path is `/usr/local/bin/python3.12`.
     - In official images, `python3` is a symbolic link to this executable, and the Sensor records the path after following the link.
+- The Java runtime executable is handled as follows.
+    - The executable is `bin/java` under the directory specified by `JAVA_HOME`, giving the path `/opt/java/openjdk/bin/java` in official `eclipse-temurin` images.
+    - If `JAVA_HOME` is unset or is not an absolute path, KestreLynx still checks for vulnerabilities and reports the reason `binary path unknown` in the Sensor usage assessment.
 
 ## Requirements
 

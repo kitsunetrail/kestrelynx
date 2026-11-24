@@ -15,7 +15,7 @@ The following table lists their scope and location.
 
 ## Scan warnings {#scan-warnings}
 
-Scan warnings indicate that vulnerabilities in an image or its Node.js or Python runtime could not be checked.
+Scan warnings indicate that vulnerabilities in an image or its Node.js, Python, or Java runtime could not be checked.
 When an image could not be scanned, the notification includes a heading such as this.
 
 ```text
@@ -49,7 +49,7 @@ See [Failed scans](scan-logic.md#scan-failures) for how results are retained.
 
 The unchecked-runtime note identifies the skipped targets as follows.
 
-- The name is `Node.js` or `Python runtime` as applicable, or `Node.js, Python runtime` when both are affected
+- Only skipped runtimes are listed, sorted by package name in ascending order (`Java runtime, Node.js, Python runtime` when all three are skipped)
 - N counts distinct image names whose runtimes were not checked
 
 See [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable) for when matching is skipped and how previous findings are handled.

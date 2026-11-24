@@ -295,7 +295,7 @@ The following fields have additional notes.
     - A package type such as `python-pkg` or `node-pkg`
 - `instances[].target` and `instances[].pkg_path`
     - If the Trivy value begins with `/`, that single leading character is removed from the output
-    - For Node.js and Python runtime findings added by KestreLynx, both fields contain the runtime executable path determined by KestreLynx
+    - For Node.js, Python, and Java runtime findings added by KestreLynx, both fields contain the runtime executable path determined by KestreLynx
 
 The following example describes one container where a Python language package was assessed as in use.
 

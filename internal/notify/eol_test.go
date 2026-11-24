@@ -147,7 +147,7 @@ func TestChannel_EOLActNowInBothSections(t *testing.T) {
 	mustContainAll(t, out,
 		"*Priority:* ⛔ 2 EOL base · ⛔ 4 EOL package · 🚨 2 act now",
 		"*Image: legacy:1*\nStatus: base OS is EOL (no more security updates coming)\nincludes 2 end-of-life package(s)",
-		"*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*",
+		"*⛔ Package end-of-life (4) — no fix will be released for this release*",
 		"*◆ libxml2*\nInstalled: 2.9.7-16 · Fixed in: none — end-of-life: no fix planned for this release\nFindings: CRITICAL 0 / HIGH 1\nDetails: 🚨 see Act now",
 		"*◆ qt5-qtbase*\nInstalled: 5.15.3-1 · Fixed in: none — end-of-life: no fix planned for this release\nFindings: CRITICAL 0 / HIGH 1\nCVEs: <https://avd.example/CVE-2033-0002|CVE-2033-0002> (EPSS &lt;0.1%)",
 		"*🚨 Act now (2) — exploited or likely to be*",
@@ -172,7 +172,7 @@ func TestChannel_EOLWithoutTriage(t *testing.T) {
 	out := renderFull(r)
 	mustContainAll(t, out,
 		"*Priority:* ⛔ 2 EOL base · ⛔ 4 EOL package · 🔴 2 CRITICAL",
-		"*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*\n*Image: app:2.1*\n🔴 CRITICAL 1 / HIGH 3\n*◆ libwebkit2gtk*",
+		"*⛔ Package end-of-life (4) — no fix will be released for this release*\n*Image: app:2.1*\n🔴 CRITICAL 1 / HIGH 3\n*◆ libwebkit2gtk*",
 	)
 	if strings.Contains(out, "see Act now") {
 		t.Errorf("triage off has no Act now section to point at:\n%s", out)
@@ -192,7 +192,7 @@ func TestChannel_EOLChanges(t *testing.T) {
 	out := renderDiff(r, changed, false, false)
 	mustContainAll(t, out,
 		"*Image: old:3*\nStatus: base OS is EOL (no more security updates coming)\nincludes 1 newly end-of-life package(s)",
-		"*⛔ New: package end-of-life (5) — vendor reports these CVEs as out of support for this release*",
+		"*⛔ New: package end-of-life (5) — no fix will be released for this release*",
 		"*◆ libxml2*\nChange: ⬆️ escalated to ACT NOW\nInstalled: 2.9.7-16\nFixed in: none — end-of-life: no fix planned for this release, consider a supported version\nFindings: CRITICAL 0 / HIGH 1",
 		"CVEs:\n• <https://avd.example/CVE-2033-0003|CVE-2033-0003> · HIGH · EPSS 12% · CISA KEV (exploited in the wild)",
 		"*◆ zlib*\nChange: new CVEs: <https://avd.example/CVE-2033-0007|CVE-2033-0007>\nInstalled: 1.2.11",
@@ -278,7 +278,7 @@ func TestChannel_EOLActNowNewCVEs(t *testing.T) {
 	d, _ := state.Compute(st, r)
 	out := renderDiff(r, d, false, false)
 	mustContainAll(t, out,
-		"*⛔ New: package end-of-life (1) — vendor reports these CVEs as out of support for this release*\n*Image: app:1*",
+		"*⛔ New: package end-of-life (1) — no fix will be released for this release*\n*Image: app:1*",
 		"*◆ qt*\nChange: new CVEs: <https://avd.example/CVE-L|CVE-L>\nInstalled: 5.15\nFixed in: none — end-of-life: no fix planned for this release, consider a supported version\nFindings: CRITICAL 0 / HIGH 2",
 		"CVEs:\n• <https://avd.example/CVE-K|CVE-K> · HIGH · EPSS n/a · CISA KEV (exploited in the wild)\n• <https://avd.example/CVE-L|CVE-L> · HIGH · EPSS n/a",
 	)
@@ -378,7 +378,7 @@ func TestThread_EOLSection(t *testing.T) {
 	out := renderThread(r, ages)
 	mustContainAll(t, out,
 		"*⛔ EOL base images (2)*\n*Image: legacy:1*\nStatus: base OS is EOL (no more security updates coming)\nincludes 2 end-of-life package(s)",
-		"*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release*",
+		"*⛔ EOL packages (4) — no fix will be released for this release*",
 		"*◆ libxml2*\nInstalled: 2.9.7-16 · Fixed in: none — end-of-life: no fix planned for this release\nFindings: CRITICAL 0 / HIGH 1\nDetails: 🚨 see Act now",
 		"*🚨 ACT NOW (2) — exploited or likely to be*",
 		"Fixed in: none — end-of-life: no fix planned for this release, consider a supported version",
@@ -399,7 +399,7 @@ func TestThread_EOLSection(t *testing.T) {
 	checkMessageConstraints(t, "eol thread split", msgs, testSplitLimits)
 	cont := false
 	for _, m := range msgs {
-		if strings.Contains(allBlocksText([]SlackMessage{m}), "*⛔ EOL packages (4) — vendor reports these CVEs as out of support for this release* _(cont.)_") {
+		if strings.Contains(allBlocksText([]SlackMessage{m}), "*⛔ EOL packages (4) — no fix will be released for this release* _(cont.)_") {
 			cont = true
 		}
 	}
@@ -532,5 +532,16 @@ func TestBuildWebhookPayload_EOLArraysAlwaysPresent(t *testing.T) {
 		if !strings.Contains(string(data), key) {
 			t.Errorf("payload missing %s:\n%s", key, data)
 		}
+	}
+}
+
+// The heading's reason covers a CVE the vendor listed and one inferred for a
+// release past its support: neither gets a fix.
+func TestEOLSectionReasonText(t *testing.T) {
+	if got := messagesFor(LanguageEN).EOLSectionReason; got != "no fix will be released for this release" {
+		t.Errorf("en = %q", got)
+	}
+	if got := messagesFor(LanguageJA).EOLSectionReason; got != "このリリースには修正版が出ない" {
+		t.Errorf("ja = %q", got)
 	}
 }

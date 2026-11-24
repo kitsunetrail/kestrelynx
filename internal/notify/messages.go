@@ -126,7 +126,7 @@ type messages struct {
 	// --- end-of-life wording ---
 	EOLPackageText   string // "end-of-life: no fix planned for this release"
 	EOLRuntimeText   string // "end-of-life: no fix will be released for this series; upgrade the series (manual)" (a language runtime itself)
-	EOLSectionReason string // "vendor reports these CVEs as out of support for this release"
+	EOLSectionReason string // "no fix will be released for this release"
 
 	// --- triage headline / intel warnings ---
 	SegActNow            string // "🚨 %d act now" (the priority line only; the open-now line uses OpenNowActNow instead)
@@ -689,7 +689,7 @@ var enMessages = messages{
 
 	EOLPackageText:   "end-of-life: no fix planned for this release",
 	EOLRuntimeText:   "end-of-life: no fix will be released for this series, so the series has to be upgraded (manual)",
-	EOLSectionReason: "vendor reports these CVEs as out of support for this release",
+	EOLSectionReason: "no fix will be released for this release",
 
 	SegActNow:            "🚨 %d act now",
 	IntelDegradedWarning: "⚠️ Vulnerability intel (KEV/EPSS) unavailable — severity-only triage, nothing demoted to low\n",
@@ -1179,7 +1179,7 @@ var jaMessages = messages{
 
 	EOLPackageText:   "サポート終了(EOL): このリリースでは修正予定なし",
 	EOLRuntimeText:   "サポート終了(EOL): この系列には修正版が出ないため、系列を上げる必要がある(手動)",
-	EOLSectionReason: "ベンダーがこれらのCVEをこのリリースのサポート対象外と報告",
+	EOLSectionReason: "このリリースには修正版が出ない",
 
 	SegActNow:            "🚨 今すぐ対応%d件",
 	IntelDegradedWarning: "⚠️ 脅威情報 (KEV/EPSS) が利用できない — 深刻度のみで優先度を判定、低優先度への引き下げなし\n",

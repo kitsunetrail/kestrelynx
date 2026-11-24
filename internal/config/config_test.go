@@ -1194,6 +1194,57 @@ scan:
 	}
 }
 
+func TestParse_JavaRuntimeDefaults(t *testing.T) {
+	c, err := Parse([]byte(minimal))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if want := (JavaRuntimeConfig{Enabled: true}); c.Scan.JavaRuntime != want {
+		t.Errorf("default JavaRuntime = %+v, want %+v", c.Scan.JavaRuntime, want)
+	}
+}
+
+func TestParse_JavaRuntimeSettings(t *testing.T) {
+	c, err := Parse([]byte(`
+notify:
+  slack_webhook_url: "https://x.test"
+scan:
+  java_runtime:
+    enabled: false
+    advisories_url: " https://mirror.test/advisories/ "
+    releases_url: "http://mirror.test/releases?release_type=ga"
+    feature_releases_url: "https://mirror.test/available"
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want := JavaRuntimeConfig{
+		Enabled: false, AdvisoriesURL: "https://mirror.test/advisories/",
+		ReleasesURL: "http://mirror.test/releases?release_type=ga", FeatureReleasesURL: "https://mirror.test/available",
+	}
+	if c.Scan.JavaRuntime != want {
+		t.Errorf("JavaRuntime = %+v, want %+v", c.Scan.JavaRuntime, want)
+	}
+	if !c.Scan.PythonRuntime.Enabled || !c.Scan.NodeRuntime.Enabled {
+		t.Error("disabling java_runtime must not disable the other runtimes")
+	}
+}
+
+func TestParse_JavaRuntimeURLsAreChecked(t *testing.T) {
+	for _, key := range []string{"advisories_url", "releases_url", "feature_releases_url"} {
+		for _, bad := range []string{"mirror.test/x", "ftp://mirror.test/x", "https://", "/relative", "https://[::1"} {
+			data := "notify:\n  slack_webhook_url: \"https://x.test\"\nscan:\n  java_runtime:\n    " + key + ": \"" + bad + "\"\n"
+			if _, err := Parse([]byte(data)); err == nil {
+				t.Errorf("%s %q was accepted", key, bad)
+			}
+		}
+	}
+	data := "notify:\n  slack_webhook_url: \"https://x.test\"\nscan:\n  java_runtime:\n    advisory_url: \"https://m.test\"\n"
+	if _, err := Parse([]byte(data)); err == nil {
+		t.Error("an unknown java_runtime key was accepted")
+	}
+}
+
 func TestParse_CVERecordSeverity(t *testing.T) {
 	c, err := Parse([]byte(minimal))
 	if err != nil {
@@ -1243,5 +1294,26 @@ func TestParse_DiscussionLinksAcceptedAndUnused(t *testing.T) {
 	}
 	if len(c.Unused) != 0 {
 		t.Errorf("Unused = %v, want none when the key is absent", c.Unused)
+	}
+}
+
+func TestParse_SourceURLErrorsDoNotRepeatTheURL(t *testing.T) {
+	for _, bad := range []string{
+		"https://reader:secret@mirror.example:bad/adv/",
+		"htps://reader:secret@mirror.example/adv/",
+		"secret",
+	} {
+		data := "notify:\n  slack_webhook_url: \"https://x.test\"\nscan:\n  java_runtime:\n    advisories_url: \"" + bad + "\"\n"
+		_, err := Parse([]byte(data))
+		if err == nil {
+			t.Errorf("%q was accepted", bad)
+			continue
+		}
+		if strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "mirror.example") {
+			t.Errorf("the error repeats the URL: %v", err)
+		}
+		if !strings.Contains(err.Error(), "scan.java_runtime.advisories_url") {
+			t.Errorf("the error does not name the setting: %v", err)
+		}
 	}
 }

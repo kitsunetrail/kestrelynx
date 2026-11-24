@@ -76,6 +76,7 @@ type ScanConfig struct {
 	Severity          []string // Trivy severities to report, e.g. HIGH, CRITICAL
 	NodeRuntime       NodeRuntimeConfig
 	PythonRuntime     PythonRuntimeConfig
+	JavaRuntime       JavaRuntimeConfig
 	CVERecordSeverity CVERecordSeverityConfig
 }
 
@@ -98,6 +99,22 @@ type NodeRuntimeConfig struct {
 // Trivy does not report.
 type PythonRuntimeConfig struct {
 	Enabled bool
+}
+
+// JavaRuntimeConfig controls the check of the JDK of Temurin-based images
+// against the OpenJDK vulnerability advisories, which Trivy does not report.
+// An empty URL means the public site; a URL is set only to read the same data
+// from a mirror in a closed environment.
+type JavaRuntimeConfig struct {
+	Enabled bool
+	// AdvisoriesURL is the advisory list page; each advisory is the date
+	// appended to it.
+	AdvisoriesURL string
+	// ReleasesURL is the Temurin release list, to which the page number is
+	// added as a query parameter.
+	ReleasesURL string
+	// FeatureReleasesURL is the Temurin list of release series.
+	FeatureReleasesURL string
 }
 
 // Email TLS modes. Unencrypted SMTP is not accepted.
@@ -511,6 +528,12 @@ type rawConfig struct {
 		PythonRuntime struct {
 			Enabled *bool `yaml:"enabled"`
 		} `yaml:"python_runtime"`
+		JavaRuntime struct {
+			Enabled            *bool  `yaml:"enabled"`
+			AdvisoriesURL      string `yaml:"advisories_url"`
+			ReleasesURL        string `yaml:"releases_url"`
+			FeatureReleasesURL string `yaml:"feature_releases_url"`
+		} `yaml:"java_runtime"`
 		CVERecordSeverity struct {
 			Enabled *bool `yaml:"enabled"`
 		} `yaml:"cve_record_severity"`
@@ -816,6 +839,12 @@ func Parse(data []byte) (Config, error) {
 			PythonRuntime: PythonRuntimeConfig{
 				Enabled: boolOr(raw.Scan.PythonRuntime.Enabled, true),
 			},
+			JavaRuntime: JavaRuntimeConfig{
+				Enabled:            boolOr(raw.Scan.JavaRuntime.Enabled, true),
+				AdvisoriesURL:      strings.TrimSpace(raw.Scan.JavaRuntime.AdvisoriesURL),
+				ReleasesURL:        strings.TrimSpace(raw.Scan.JavaRuntime.ReleasesURL),
+				FeatureReleasesURL: strings.TrimSpace(raw.Scan.JavaRuntime.FeatureReleasesURL),
+			},
 			CVERecordSeverity: CVERecordSeverityConfig{
 				Enabled: boolOr(raw.Scan.CVERecordSeverity.Enabled, true),
 			},
@@ -939,6 +968,23 @@ var namespacePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`
 
 // validateEmail checks notify.email. An all-empty block is allowed (email
 // unset). Any set field requires a complete, TLS-only SMTP destination.
+// validateSourceURL accepts an empty URL (the default) or an absolute http or
+// https URL with a host. Its errors never repeat the URL, which may carry the
+// credentials of a mirror; the caller names the setting.
+func validateSourceURL(s string) error {
+	if s == "" {
+		return nil
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return errors.New("is not a valid URL")
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return errors.New("must be an absolute http or https URL")
+	}
+	return nil
+}
+
 func validateEmail(e *EmailConfig) error {
 	if e == nil || !e.Configured() {
 		return nil
@@ -1059,6 +1105,15 @@ func validate(c *Config) error {
 			return fmt.Errorf("config: invalid scan.severity %q (allowed: UNKNOWN, LOW, MEDIUM, HIGH, CRITICAL)", s)
 		}
 		c.Scan.Severity[i] = up
+	}
+	for key, u := range map[string]string{
+		"scan.java_runtime.advisories_url":       c.Scan.JavaRuntime.AdvisoriesURL,
+		"scan.java_runtime.releases_url":         c.Scan.JavaRuntime.ReleasesURL,
+		"scan.java_runtime.feature_releases_url": c.Scan.JavaRuntime.FeatureReleasesURL,
+	} {
+		if err := validateSourceURL(u); err != nil {
+			return fmt.Errorf("config: %s: %w", key, err)
+		}
 	}
 	// Empty daily_at is valid (interval mode). Only a non-empty, unparseable
 	// value is an error.

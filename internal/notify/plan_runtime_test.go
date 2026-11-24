@@ -100,7 +100,7 @@ func TestCard_RuntimeEndOfLifeNote(t *testing.T) {
 			for _, rt := range []struct {
 				eco  inventory.Ecosystem
 				name string
-			}{{inventory.EcosystemNodeRuntime, "Node.js"}, {inventory.EcosystemPythonRuntime, "Python runtime"}} {
+			}{{inventory.EcosystemNodeRuntime, "Node.js"}, {inventory.EcosystemPythonRuntime, "Python runtime"}, {inventory.EcosystemJavaRuntime, "Java runtime"}} {
 				if got := card(rt.eco, rt.name, inventory.ClassLang).FixNote; got != wantRuntime {
 					t.Errorf("%s notes=%v %s: note = %q, want %q", lang, notes, rt.name, got, wantRuntime)
 				}

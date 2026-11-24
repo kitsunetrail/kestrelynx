@@ -8,7 +8,7 @@
 • legacy:1 — base OS is EOL (no more security updates coming) · includes 2 end-of-life package(s)
 • old:3 — base OS is EOL (no more security updates coming) · includes 1 end-of-life package(s)
 
-*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*
+*⛔ Package end-of-life (4) — no fix will be released for this release*
 • app:2.1
    • libwebkit2gtk 2.38.5-1 (end-of-life: no fix planned for this release) (CRITICAL 1 / HIGH 0) — <https://nvd.nist.gov/vuln/detail/CVE-2033-0001|CVE-2033-0001> · EPSS 0.4%
    • curl 7.61.1-34 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-2033-0004|CVE-2033-0004> · EPSS <0.1%

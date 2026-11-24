@@ -21,6 +21,15 @@ func TestNormalizeContainerPath(t *testing.T) {
 	}
 }
 
+// The runtime binaries KestreLynx checks itself are judged by their path.
+func TestRuntimeEcosystemsAreEmbedded(t *testing.T) {
+	for _, e := range []inventory.Ecosystem{inventory.EcosystemNodeRuntime, inventory.EcosystemPythonRuntime, inventory.EcosystemJavaRuntime} {
+		if !IsEmbeddedEcosystem(e) || !EcosystemMapped(e) {
+			t.Errorf("%q: embedded %v, mapped %v; want both", e, IsEmbeddedEcosystem(e), EcosystemMapped(e))
+		}
+	}
+}
+
 func TestEcosystemMapped(t *testing.T) {
 	mapped := []inventory.Ecosystem{
 		inventory.EcosystemGoBinary, inventory.EcosystemRustBinary,

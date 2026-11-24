@@ -11,13 +11,14 @@ import (
 // embeddedEcosystems are the ecosystems whose packages are judged by
 // matching a Trivy Result.Target against an observed executable's path:
 // compiled languages, where the package is embedded directly into the
-// binary rather than loaded by a separate runtime, and the Node.js and
-// CPython runtime binaries themselves, whose Target is the executable.
+// binary rather than loaded by a separate runtime, and the Node.js, CPython
+// and Java runtime binaries themselves, whose Target is the executable.
 var embeddedEcosystems = map[inventory.Ecosystem]bool{
 	inventory.EcosystemGoBinary:      true,
 	inventory.EcosystemRustBinary:    true,
 	inventory.EcosystemNodeRuntime:   true,
 	inventory.EcosystemPythonRuntime: true,
+	inventory.EcosystemJavaRuntime:   true,
 }
 
 // runtimeRule is one ecosystem's runtime-executable-name condition: a set of

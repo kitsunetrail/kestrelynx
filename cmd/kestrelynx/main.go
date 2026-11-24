@@ -28,6 +28,7 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/github"
 	"github.com/kitsunetrail/kestrelynx/internal/intel"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
+	"github.com/kitsunetrail/kestrelynx/internal/javacore"
 	"github.com/kitsunetrail/kestrelynx/internal/kubernetes"
 	"github.com/kitsunetrail/kestrelynx/internal/nodecore"
 	"github.com/kitsunetrail/kestrelynx/internal/notify"
@@ -437,7 +438,7 @@ func buildPullRequestConfig(rc config.RemediationConfig, language string) *runne
 
 // buildRuntimes builds the advisor and the refresher of every language
 // runtime the config enables, in the order the refreshers are called (Node.js,
-// then CPython). Both slices are empty when none is enabled.
+// CPython, then Java). Both slices are empty when none is enabled.
 func buildRuntimes(cfg config.Config, log *slog.Logger) ([]scanner.RuntimeAdvisor, []runner.RuntimeRefresher) {
 	var advisors []scanner.RuntimeAdvisor
 	var refreshers []runner.RuntimeRefresher
@@ -448,6 +449,11 @@ func buildRuntimes(cfg config.Config, log *slog.Logger) ([]scanner.RuntimeAdviso
 	}
 	if cfg.Scan.PythonRuntime.Enabled {
 		advisor, refresher := buildPythonRuntime(cfg, log)
+		advisors = append(advisors, advisor)
+		refreshers = append(refreshers, refresher)
+	}
+	if cfg.Scan.JavaRuntime.Enabled {
+		advisor, refresher := buildJavaRuntime(cfg, log)
 		advisors = append(advisors, advisor)
 		refreshers = append(refreshers, refresher)
 	}
@@ -507,6 +513,24 @@ func buildPythonRuntime(cfg config.Config, log *slog.Logger) (*pycore.Advisor, p
 		Source: &pycore.Source{
 			CacheDir: filepath.Join(filepath.Dir(cfg.State.Path), "python"),
 			Log:      log,
+		},
+		Advisor: advisor,
+	}
+}
+
+// buildJavaRuntime builds the OpenJDK advisory data source and the advisor the
+// image scanners share. The data is cached in a java directory next to the
+// diff state, like the Node.js data.
+func buildJavaRuntime(cfg config.Config, log *slog.Logger) (*javacore.Advisor, javacore.Refresher) {
+	advisor := &javacore.Advisor{}
+	j := cfg.Scan.JavaRuntime
+	return advisor, javacore.Refresher{
+		Source: &javacore.Source{
+			CacheDir:           filepath.Join(filepath.Dir(cfg.State.Path), "java"),
+			AdvisoriesURL:      j.AdvisoriesURL,
+			ReleasesURL:        j.ReleasesURL,
+			FeatureReleasesURL: j.FeatureReleasesURL,
+			Log:                log,
 		},
 		Advisor: advisor,
 	}

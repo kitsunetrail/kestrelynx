@@ -121,6 +121,16 @@ const EcosystemPythonRuntime Ecosystem = "python-runtime"
 // distro package name can, so it never shares a key with either.
 const PythonRuntimePackage = "Python runtime"
 
+// EcosystemJavaRuntime is the JDK itself as unpacked from a tarball into an
+// image (the Temurin-based images keep it under JAVA_HOME). Like the other
+// runtimes, Trivy never reports it.
+const EcosystemJavaRuntime Ecosystem = "java-runtime"
+
+// JavaRuntimePackage is the package name of EcosystemJavaRuntime findings. It
+// contains a space and so cannot be a Maven coordinate or a distro package
+// name, and never shares a key with either.
+const JavaRuntimePackage = "Java runtime"
+
 // RuntimeVersionEnv returns the name of the image environment variable that
 // carries the version of the language runtime of ecosystem e, or "" when e is
 // not a language runtime KestreLynx checks itself.
@@ -130,6 +140,20 @@ func RuntimeVersionEnv(e Ecosystem) string {
 		return "NODE_VERSION"
 	case EcosystemPythonRuntime:
 		return "PYTHON_VERSION"
+	case EcosystemJavaRuntime:
+		return "JAVA_VERSION"
+	}
+	return ""
+}
+
+// RuntimeLocationEnv returns the name of the image environment variable that
+// says where the language runtime of ecosystem e is installed, or "" when the
+// runtime lives at a fixed place (Node.js and CPython) or e is not a runtime
+// KestreLynx checks itself. A runtime with a location variable is the same
+// runtime in two images only when the variable agrees as well as the version.
+func RuntimeLocationEnv(e Ecosystem) string {
+	if e == EcosystemJavaRuntime {
+		return "JAVA_HOME"
 	}
 	return ""
 }
@@ -201,6 +225,7 @@ var knownEcosystems = map[Ecosystem]bool{
 	EcosystemJulia:          true,
 	EcosystemNodeRuntime:    true,
 	EcosystemPythonRuntime:  true,
+	EcosystemJavaRuntime:    true,
 }
 
 // ParseEcosystem maps a raw Trivy Result.Type to an Ecosystem, falling back

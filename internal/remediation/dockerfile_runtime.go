@@ -1,6 +1,7 @@
 package remediation
 
 import (
+	"path"
 	"sort"
 	"strings"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
 )
 
-// The language runtimes KestreLynx checks itself (Node.js and CPython) are
+// The language runtimes KestreLynx checks itself (Node.js, CPython and Java) are
 // installed by the official images outside any package manager, so Trivy
 // attributes their findings to no layer. Their version comes from an
 // environment variable of the image config, which makes a base image's
@@ -49,10 +50,25 @@ func envValue(env []string, name string) (string, bool) {
 	return val, found
 }
 
+// sameRuntimeLocation reports whether the running image and the base install
+// the runtime of ecosystem type t in the same place. A runtime without a
+// location variable always does; with one, both images must set it to an
+// absolute path and the paths must be equal (unset, empty and relative never
+// match), so a runtime reinstalled elsewhere is not taken for the base's.
+func sameRuntimeLocation(t string, imageEnv, baseEnv []string) bool {
+	name := inventory.RuntimeLocationEnv(inventory.Ecosystem(t))
+	if name == "" {
+		return true
+	}
+	iv, iok := envValue(imageEnv, name)
+	bv, bok := envValue(baseEnv, name)
+	return iok && bok && path.IsAbs(iv) && path.IsAbs(bv) && iv == bv
+}
+
 // moveRuntimeFindings moves the runtime findings that could not be placed in a
 // layer into the base's group when the running image and the base declare the
-// same version of that runtime. The environment variable is the only evidence
-// the runtime came from the base.
+// same version of that runtime, installed in the same place. The environment
+// variables are the only evidence the runtime came from the base.
 func moveRuntimeFindings(cl *FindingsByLayer, imageEnv, baseEnv []string) {
 	var keep []scanner.Finding
 	for _, f := range cl.Unknown {
@@ -60,7 +76,7 @@ func moveRuntimeFindings(cl *FindingsByLayer, imageEnv, baseEnv []string) {
 		if name != "" {
 			iv, iok := envValue(imageEnv, name)
 			bv, bok := envValue(baseEnv, name)
-			if iok && bok && iv == bv {
+			if iok && bok && iv == bv && sameRuntimeLocation(f.Type, imageEnv, baseEnv) {
 				cl.Base = append(cl.Base, f)
 				continue
 			}
@@ -111,7 +127,8 @@ func (r *run) baseRuntimes(env []string, platform inventory.Platform) map[string
 
 // runtimeRebuilds compares the runtime findings of the running image with
 // those of the current base's runtimes. Only runtimes the running image has
-// findings for are listed, ordered by Type.
+// findings for, and installed in the same place as in the base, are listed,
+// ordered by Type.
 func (r *run) runtimeRebuilds(in ImageInput, baseEnv []string) []RuntimeRebuild {
 	running := map[string][]scanner.Finding{}
 	for _, f := range in.Scan.Findings {
@@ -125,7 +142,7 @@ func (r *run) runtimeRebuilds(in ImageInput, baseEnv []string) []RuntimeRebuild 
 	base := r.baseRuntimes(baseEnv, in.Scan.Platform)
 	var types []string
 	for t := range running {
-		if _, ok := base[t]; ok {
+		if _, ok := base[t]; ok && sameRuntimeLocation(t, in.Scan.ConfigEnv, baseEnv) {
 			types = append(types, t)
 		}
 	}

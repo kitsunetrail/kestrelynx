@@ -19,7 +19,7 @@ Status: base OS is EOL (no more security updates coming)
 includes 1 end-of-life package(s)
 --- divider ---
 --- section ---
-*⛔ Package end-of-life (4) — vendor reports these CVEs as out of support for this release*
+*⛔ Package end-of-life (4) — no fix will be released for this release*
 --- section ---
 *Image: app:2.1*
 *◆ libwebkit2gtk*

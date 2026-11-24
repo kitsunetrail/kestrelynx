@@ -1,0 +1,439 @@
+{
+    "versions": [
+        {
+            "build": 4,
+            "major": 27,
+            "minor": 0,
+            "openjdk_version": "27.0.1.1+4",
+            "patch": 1,
+            "security": 1,
+            "semver": "27.0.1+100000004"
+        },
+        {
+            "build": 1,
+            "major": 27,
+            "minor": 0,
+            "openjdk_version": "27.0.1.0.2+1",
+            "patch": 0,
+            "security": 1,
+            "semver": "27.0.1+1"
+        },
+        {
+            "build": 0,
+            "major": 27,
+            "minor": 0,
+            "openjdk_version": "27.0.1.0",
+            "patch": 0,
+            "security": 1,
+            "semver": "27.0.1+0"
+        },
+        {
+            "build": 35,
+            "major": 27,
+            "minor": 0,
+            "openjdk_version": "27+35",
+            "security": 0,
+            "semver": "27.0.0+35"
+        },
+        {
+            "build": 1,
+            "major": 26,
+            "minor": 0,
+            "openjdk_version": "26.0.2.1+1",
+            "patch": 1,
+            "security": 2,
+            "semver": "26.0.2+101"
+        },
+        {
+            "build": 10,
+            "major": 26,
+            "minor": 0,
+            "openjdk_version": "26.0.2+10",
+            "security": 2,
+            "semver": "26.0.2+10"
+        },
+        {
+            "build": 8,
+            "major": 26,
+            "minor": 0,
+            "openjdk_version": "26.0.1+8",
+            "security": 1,
+            "semver": "26.0.1+8"
+        },
+        {
+            "build": 35,
+            "major": 26,
+            "minor": 0,
+            "openjdk_version": "26+35",
+            "security": 0,
+            "semver": "26.0.0+35"
+        },
+        {
+            "build": 2,
+            "major": 25,
+            "minor": 0,
+            "openjdk_version": "25.0.5.1+2-LTS",
+            "optional": "LTS",
+            "patch": 1,
+            "security": 5,
+            "semver": "25.0.5+100000002.0.LTS"
+        },
+        {
+            "build": 8,
+            "major": 25,
+            "minor": 0,
+            "openjdk_version": "25.0.5+8-LTS",
+            "optional": "LTS",
+            "security": 5,
+            "semver": "25.0.5+8.0.LTS"
+        },
+        {
+            "build": 1,
+            "major": 25,
+            "minor": 0,
+            "openjdk_version": "25.0.4.1+1-LTS",
+            "optional": "LTS",
+            "patch": 1,
+            "security": 4,
+            "semver": "25.0.4+101.0.LTS"
+        },
+        {
+            "build": 7,
+            "major": 25,
+            "minor": 0,
+            "openjdk_version": "25.0.4+7-LTS",
+            "optional": "LTS",
+            "security": 4,
+            "semver": "25.0.4+7.0.LTS"
+        },
+        {
+            "build": 9,
+            "major": 25,
+            "minor": 0,
+            "openjdk_version": "25.0.3+9-LTS",
+            "optional": "LTS",
+            "security": 3,
+            "semver": "25.0.3+9.0.LTS"
+        },
+        {
+            "build": 10,
+            "major": 25,
+            "minor": 0,
+            "openjdk_version": "25.0.2+10-LTS",
+            "optional": "LTS",
+            "security": 2,
+            "semver": "25.0.2+10.0.LTS"
+        },
+        {
+            "build": 8,
+            "major": 25,
+            "minor": 0,
+            "openjdk_version": "25.0.1+8-LTS",
+            "optional": "LTS",
+            "security": 1,
+            "semver": "25.0.1+8.0.LTS"
+        },
+        {
+            "build": 36,
+            "major": 25,
+            "minor": 0,
+            "openjdk_version": "25+36-LTS",
+            "optional": "LTS",
+            "security": 0,
+            "semver": "25.0.0+36.0.LTS"
+        },
+        {
+            "build": 12,
+            "major": 24,
+            "minor": 0,
+            "openjdk_version": "24.0.2+12",
+            "security": 2,
+            "semver": "24.0.2+12"
+        },
+        {
+            "adopt_build_number": 1,
+            "build": 9,
+            "major": 24,
+            "minor": 0,
+            "openjdk_version": "24.0.1+9",
+            "security": 1,
+            "semver": "24.0.1+9.1"
+        },
+        {
+            "build": 9,
+            "major": 24,
+            "minor": 0,
+            "openjdk_version": "24.0.1+9",
+            "security": 1,
+            "semver": "24.0.1+9"
+        },
+        {
+            "build": 36,
+            "major": 24,
+            "minor": 0,
+            "openjdk_version": "24+36",
+            "security": 0,
+            "semver": "24.0.0+36"
+        },
+        {
+            "build": 7,
+            "major": 23,
+            "minor": 0,
+            "openjdk_version": "23.0.2+7",
+            "security": 2,
+            "semver": "23.0.2+7"
+        },
+        {
+            "build": 11,
+            "major": 23,
+            "minor": 0,
+            "openjdk_version": "23.0.1+11",
+            "security": 1,
+            "semver": "23.0.1+11"
+        },
+        {
+            "build": 37,
+            "major": 23,
+            "minor": 0,
+            "openjdk_version": "23+37",
+            "security": 0,
+            "semver": "23.0.0+37"
+        },
+        {
+            "build": 9,
+            "major": 22,
+            "minor": 0,
+            "openjdk_version": "22.0.2+9",
+            "security": 2,
+            "semver": "22.0.2+9"
+        },
+        {
+            "build": 8,
+            "major": 22,
+            "minor": 0,
+            "openjdk_version": "22.0.1+8",
+            "security": 1,
+            "semver": "22.0.1+8"
+        },
+        {
+            "build": 1,
+            "major": 22,
+            "minor": 0,
+            "openjdk_version": "22.0.1+1",
+            "security": 1,
+            "semver": "22.0.1+1"
+        },
+        {
+            "build": 36,
+            "major": 22,
+            "minor": 0,
+            "openjdk_version": "22+36",
+            "security": 0,
+            "semver": "22.0.0+36"
+        },
+        {
+            "build": 2,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.13.1+2-LTS",
+            "optional": "LTS",
+            "patch": 1,
+            "security": 13,
+            "semver": "21.0.13+100000002.0.LTS"
+        },
+        {
+            "build": 9,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.13+9-LTS",
+            "optional": "LTS",
+            "security": 13,
+            "semver": "21.0.13+9.0.LTS"
+        },
+        {
+            "build": 1,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.12.1+1-LTS",
+            "optional": "LTS",
+            "patch": 1,
+            "security": 12,
+            "semver": "21.0.12+101.0.LTS"
+        },
+        {
+            "build": 8,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.12+8-LTS",
+            "optional": "LTS",
+            "security": 12,
+            "semver": "21.0.12+8.0.LTS"
+        },
+        {
+            "build": 10,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.11+10-LTS",
+            "optional": "LTS",
+            "security": 11,
+            "semver": "21.0.11+10.0.LTS"
+        },
+        {
+            "build": 7,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.10+7-LTS",
+            "optional": "LTS",
+            "security": 10,
+            "semver": "21.0.10+7.0.LTS"
+        },
+        {
+            "build": 10,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.9+10-LTS",
+            "optional": "LTS",
+            "security": 9,
+            "semver": "21.0.9+10.0.LTS"
+        },
+        {
+            "build": 9,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.8+9-LTS",
+            "optional": "LTS",
+            "security": 8,
+            "semver": "21.0.8+9.0.LTS"
+        },
+        {
+            "build": 6,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.7+6-LTS",
+            "optional": "LTS",
+            "security": 7,
+            "semver": "21.0.7+6.0.LTS"
+        },
+        {
+            "build": 7,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.6+7-LTS",
+            "optional": "LTS",
+            "security": 6,
+            "semver": "21.0.6+7.0.LTS"
+        },
+        {
+            "build": 11,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.5+11-LTS",
+            "optional": "LTS",
+            "security": 5,
+            "semver": "21.0.5+11.0.LTS"
+        },
+        {
+            "build": 7,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.4+7-LTS",
+            "optional": "LTS",
+            "security": 4,
+            "semver": "21.0.4+7.0.LTS"
+        },
+        {
+            "build": 9,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.3+9-LTS",
+            "optional": "LTS",
+            "security": 3,
+            "semver": "21.0.3+9.0.LTS"
+        },
+        {
+            "build": 13,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.2+13-LTS",
+            "optional": "LTS",
+            "security": 2,
+            "semver": "21.0.2+13.0.LTS"
+        },
+        {
+            "adopt_build_number": 1,
+            "build": 12,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.1+12-LTS",
+            "optional": "LTS",
+            "security": 1,
+            "semver": "21.0.1+12.1.LTS"
+        },
+        {
+            "build": 12,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21.0.1+12-LTS",
+            "optional": "LTS",
+            "security": 1,
+            "semver": "21.0.1+12.0.LTS"
+        },
+        {
+            "build": 35,
+            "major": 21,
+            "minor": 0,
+            "openjdk_version": "21+35-LTS",
+            "optional": "LTS",
+            "security": 0,
+            "semver": "21.0.0+35.0.LTS"
+        },
+        {
+            "build": 9,
+            "major": 20,
+            "minor": 0,
+            "openjdk_version": "20.0.2+9",
+            "security": 2,
+            "semver": "20.0.2+9"
+        },
+        {
+            "build": 9,
+            "major": 20,
+            "minor": 0,
+            "openjdk_version": "20.0.1+9",
+            "security": 1,
+            "semver": "20.0.1+9"
+        },
+        {
+            "build": 36,
+            "major": 20,
+            "minor": 0,
+            "openjdk_version": "20+36",
+            "security": 0,
+            "semver": "20.0.0+36"
+        },
+        {
+            "build": 7,
+            "major": 19,
+            "minor": 0,
+            "openjdk_version": "19.0.2+7",
+            "security": 2,
+            "semver": "19.0.2+7"
+        },
+        {
+            "build": 10,
+            "major": 19,
+            "minor": 0,
+            "openjdk_version": "19.0.1+10",
+            "security": 1,
+            "semver": "19.0.1+10"
+        },
+        {
+            "build": 36,
+            "major": 19,
+            "minor": 0,
+            "openjdk_version": "19+36",
+            "security": 0,
+            "semver": "19.0.0+36"
+        }
+    ]
+}

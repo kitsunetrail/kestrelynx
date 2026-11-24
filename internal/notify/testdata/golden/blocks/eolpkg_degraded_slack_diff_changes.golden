@@ -15,7 +15,7 @@ Status: base OS is EOL (no more security updates coming)
 includes 1 newly end-of-life package(s)
 --- divider ---
 --- section ---
-*⛔ New: package end-of-life (4) — vendor reports these CVEs as out of support for this release*
+*⛔ New: package end-of-life (4) — no fix will be released for this release*
 *Image: legacy:1*
 --- section ---
 *◆ zlib*

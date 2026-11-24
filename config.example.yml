@@ -25,6 +25,13 @@ scan:
   # version ranges. Set enabled: false to opt out.
   python_runtime:
     enabled: true
+  # Also checks the JDK of Temurin-based images (eclipse-temurin and images
+  # built from it, such as the official maven and gradle images) against the
+  # OpenJDK vulnerability advisories (Trivy does not report it). Downloads
+  # public data from openjdk.org and api.adoptium.net and sends nothing about
+  # your images. Set enabled: false to opt out.
+  java_runtime:
+    enabled: true
   # Use the severity the CVE record states for vulnerabilities Trivy reports
   # as UNKNOWN: a CVE whose publisher has scored it and the sources Trivy
   # reads have not yet. Requests the records of those CVEs from

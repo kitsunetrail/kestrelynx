@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kitsunetrail/kestrelynx/internal/config"
+	"github.com/kitsunetrail/kestrelynx/internal/javacore"
 	"github.com/kitsunetrail/kestrelynx/internal/nodecore"
 	"github.com/kitsunetrail/kestrelynx/internal/pycore"
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
@@ -50,22 +51,52 @@ func TestBuildPythonRuntime_CacheDirNextToStateAndOfficialSources(t *testing.T) 
 	}
 }
 
+func TestBuildJavaRuntime_CacheDirNextToStateAndConfiguredSources(t *testing.T) {
+	cfg := config.Config{}
+	cfg.State.Path = "/var/lib/kestrelynx/state.json"
+	cfg.Scan.JavaRuntime = config.JavaRuntimeConfig{Enabled: true}
+
+	advisor, refresher := buildJavaRuntime(cfg, slog.Default())
+	if advisor == nil || refresher.Advisor != advisor {
+		t.Fatal("the refresher must load into the advisor the scanners share")
+	}
+	src := refresher.Source
+	if want := filepath.Join("/var/lib/kestrelynx", "java"); src.CacheDir != want {
+		t.Errorf("CacheDir = %q, want %q", src.CacheDir, want)
+	}
+	if src.AdvisoriesURL != "" || src.ReleasesURL != "" || src.FeatureReleasesURL != "" {
+		t.Errorf("the sources must default to the official ones: %+v", src)
+	}
+
+	cfg.Scan.JavaRuntime = config.JavaRuntimeConfig{
+		Enabled: true, AdvisoriesURL: "https://m.test/a/", ReleasesURL: "https://m.test/r?x=1", FeatureReleasesURL: "https://m.test/f",
+	}
+	_, refresher = buildJavaRuntime(cfg, slog.Default())
+	src = refresher.Source
+	if src.AdvisoriesURL != "https://m.test/a/" || src.ReleasesURL != "https://m.test/r?x=1" || src.FeatureReleasesURL != "https://m.test/f" {
+		t.Errorf("the configured sources were not passed on: %+v", src)
+	}
+}
+
 func TestBuildRuntimes(t *testing.T) {
 	cases := []struct {
-		name         string
-		node, python bool
-		want         []string // advisor types in order
+		name               string
+		node, python, java bool
+		want               []string // advisor types in order
 	}{
-		{"both", true, true, []string{"*nodecore.Advisor", "*pycore.Advisor"}},
-		{"node only", true, false, []string{"*nodecore.Advisor"}},
-		{"python only", false, true, []string{"*pycore.Advisor"}},
-		{"neither", false, false, nil},
+		{"all", true, true, true, []string{"*nodecore.Advisor", "*pycore.Advisor", "*javacore.Advisor"}},
+		{"node and python", true, true, false, []string{"*nodecore.Advisor", "*pycore.Advisor"}},
+		{"node only", true, false, false, []string{"*nodecore.Advisor"}},
+		{"python only", false, true, false, []string{"*pycore.Advisor"}},
+		{"java only", false, false, true, []string{"*javacore.Advisor"}},
+		{"neither", false, false, false, nil},
 	}
 	for _, c := range cases {
 		cfg := config.Config{}
 		cfg.State.Path = "/var/lib/kestrelynx/state.json"
 		cfg.Scan.NodeRuntime.Enabled = c.node
 		cfg.Scan.PythonRuntime.Enabled = c.python
+		cfg.Scan.JavaRuntime.Enabled = c.java
 
 		advisors, refreshers := buildRuntimes(cfg, slog.Default())
 		var got, gotRefreshers []string
@@ -101,6 +132,7 @@ func TestBuildRuntimes_RefreshersLoadIntoTheSharedAdvisors(t *testing.T) {
 	cfg.State.Path = "/var/lib/kestrelynx/state.json"
 	cfg.Scan.NodeRuntime.Enabled = true
 	cfg.Scan.PythonRuntime.Enabled = true
+	cfg.Scan.JavaRuntime.Enabled = true
 
 	advisors, refreshers := buildRuntimes(cfg, slog.Default())
 	if nr, ok := refreshers[0].(nodecore.Refresher); !ok || scanner.RuntimeAdvisor(nr.Advisor) != advisors[0] {
@@ -108,5 +140,8 @@ func TestBuildRuntimes_RefreshersLoadIntoTheSharedAdvisors(t *testing.T) {
 	}
 	if pr, ok := refreshers[1].(pycore.Refresher); !ok || scanner.RuntimeAdvisor(pr.Advisor) != advisors[1] {
 		t.Errorf("refresher 1 = %#v, want the CPython refresher of advisor 1", refreshers[1])
+	}
+	if jr, ok := refreshers[2].(javacore.Refresher); !ok || scanner.RuntimeAdvisor(jr.Advisor) != advisors[2] {
+		t.Errorf("refresher 2 = %#v, want the Java refresher of advisor 2", refreshers[2])
 	}
 }

@@ -28,6 +28,7 @@ func uncheckedReportOf(pkgs []string, refs ...string) analyze.Report {
 
 func TestRuntimeUncheckedNote(t *testing.T) {
 	both := []string{inventory.PythonRuntimePackage, inventory.NodeRuntimePackage}
+	all := []string{inventory.JavaRuntimePackage, inventory.PythonRuntimePackage, inventory.NodeRuntimePackage}
 	cases := []struct {
 		name string
 		lang Language
@@ -38,6 +39,8 @@ func TestRuntimeUncheckedNote(t *testing.T) {
 		{"one runtime", LanguageJA, uncheckedReport("a:1", "b:1"), "ℹ️ Node.js の脆弱性情報を取得できなかったため、2 件のイメージの本体を照合していません。"},
 		{"two runtimes", LanguageEN, uncheckedReportOf(both, "a:1", "b:1"), "ℹ️ Advisories for Node.js, Python runtime could not be fetched, so the runtime of 2 image(s) was not checked."},
 		{"two runtimes", LanguageJA, uncheckedReportOf(both, "a:1", "b:1"), "ℹ️ Node.js・Python runtime の脆弱性情報を取得できなかったため、2 件のイメージの本体を照合していません。"},
+		{"three runtimes", LanguageEN, uncheckedReportOf(all, "a:1", "b:1"), "ℹ️ Advisories for Java runtime, Node.js, Python runtime could not be fetched, so the runtime of 2 image(s) was not checked."},
+		{"three runtimes", LanguageJA, uncheckedReportOf(all, "a:1", "b:1"), "ℹ️ Java runtime・Node.js・Python runtime の脆弱性情報を取得できなかったため、2 件のイメージの本体を照合していません。"},
 		// One image with two runtimes counts once.
 		{"one image", LanguageEN, uncheckedReportOf(both, "a:1"), "Node.js, Python runtime could not be fetched, so the runtime of 1 image(s) was not checked."},
 		{"one image", LanguageJA, uncheckedReportOf(both, "a:1"), "Node.js・Python runtime の脆弱性情報を取得できなかったため、1 件のイメージの本体を照合していません。"},

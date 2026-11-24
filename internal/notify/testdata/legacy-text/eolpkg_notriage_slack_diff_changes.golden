@@ -5,7 +5,7 @@ _Changes since the last scan._
 *⛔ New: base OS end-of-life (top priority)*
 • old:3 — base OS is EOL (no more security updates coming) · includes 1 newly end-of-life package(s)
 
-*⛔ New: package end-of-life (4) — vendor reports these CVEs as out of support for this release*
+*⛔ New: package end-of-life (4) — no fix will be released for this release*
 🟠 app:2.1
    • curl 7.61.1-34 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-2033-0004|CVE-2033-0004> HIGH
    • qt5-qtbase 5.15.3-1 (end-of-life: no fix planned for this release) (CRITICAL 0 / HIGH 1) — <https://nvd.nist.gov/vuln/detail/CVE-2033-0002|CVE-2033-0002> HIGH

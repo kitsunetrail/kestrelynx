@@ -6,7 +6,7 @@ TEXT: KestreLynx 2026-06-24 09:00 Changes since the last scan — ⛔ 1 new EOL 
 _Changes since the last scan._
 --- divider ---
 --- section ---
-*⛔ New: package end-of-life (1) — vendor reports these CVEs as out of support for this release*
+*⛔ New: package end-of-life (1) — no fix will be released for this release*
 --- section ---
 *Image: web:1.0*
 *◆ curl*

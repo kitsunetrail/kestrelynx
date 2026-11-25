@@ -79,16 +79,21 @@ The first scan took about four and a half minutes. The second took 22 seconds be
 
 ### Elasticsearch 8.19.25 in the production environment
 
-For the bundled Oracle OpenJDK build 27.0.1.0.3, five CVEs match the default severity selection (`HIGH` and `CRITICAL`), from CVE-2026-114938 through CVE-2026-114942.
-All five have severity `HIGH` and a fixed version of 27.0.1.1.
-
-KestreLynx automatically created a remediation PR that updates the Dockerfile base image to Elasticsearch 8.19.26, which bundles JDK 27.0.1.1.
-Of the six findings from the base image, the update resolves the five JDK findings and leaves one guava finding.
+KestreLynx detected vulnerabilities that Trivy had not reported in the JDK bundled with Elasticsearch and automatically created a remediation PR.
+Five vulnerabilities in the bundled Oracle OpenJDK build 27.0.1.0.3 matched the default severity selection (`HIGH` and `CRITICAL`), from CVE-2026-114938 through CVE-2026-114942, all with severity `HIGH` and a fixed version of 27.0.1.1.
+After the PR updated the Dockerfile base image to Elasticsearch 8.19.26, which bundles JDK 27.0.1.1, a scan confirmed that all five JDK findings had been resolved and that only one guava finding remained from the base image.
 
 ### Kubernetes validation host
 
-For a Pod running a `maven` image (Java 21) pinned by digest, KestreLynx read the image layers from the registry, detected Temurin 21.0.12.1, and reported eight Java findings under the default severity selection.
+In a Kubernetes environment without Docker Engine, KestreLynx detected the JDK by reading image layers from the registry.
+For a Pod running a `maven` image (Java 21) pinned by digest, KestreLynx detected Temurin 21.0.12.1 and reported eight Java findings under the default severity selection.
 All reads succeeded, and no images were deferred to the next scan.
+
+### Temurin image with a floating tag
+
+Although the floating tag in the Dockerfile's `FROM eclipse-temurin:21-jre` prevented KestreLynx from creating a remediation PR, the remediation plan showed that a rebuild was expected to resolve the vulnerabilities.
+The image built from `eclipse-temurin:21.0.10_7-jre` and run on local Docker used Temurin 21.0.10 and had 69 Java findings across all severities.
+The first and second scans produced the same row in the remediation plan, showing that a rebuild was expected to update the JDK to 21.0.13.1, the version currently in `eclipse-temurin:21-jre`, and resolve all 69 findings.
 
 ## Known limitations
 
@@ -105,8 +110,6 @@ All reads succeeded, and no images were deferred to the next scan.
 
 ## Unverified areas and next steps
 
-- **Temurin images with floating tags**
-    - Verify in a deployed environment that the remediation plan includes a row showing that a rebuild is expected to resolve vulnerabilities.
 - **Default read limits**
     - Reassess the limits using the time spent reading layers and the amount of data read.
 
@@ -115,6 +118,7 @@ All reads succeeded, and no images were deferred to the next scan.
 ### November 25, 2026
 
 - Implemented and verified Java runtime vulnerability matching.
+- Verified the remediation plan for a Temurin image with a floating tag.
 
 ---
 

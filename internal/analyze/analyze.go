@@ -109,6 +109,24 @@ type Instance struct {
 	Type       string
 	Target     string
 	PkgPath    string
+	// AltTargets are the other executable paths of the same Java runtime,
+	// separated by NUL, which no path holds (a string so Instance stays
+	// comparable); "" for any other
+	// package. TargetsIncomplete is true when some executable path of the
+	// runtime could not be resolved.
+	AltTargets        string
+	TargetsIncomplete bool
+}
+
+// altTargetSep separates the paths of Instance.AltTargets.
+const altTargetSep = "\x00"
+
+// AltTargetList is the other executable paths of the same Java runtime.
+func (i Instance) AltTargetList() []string {
+	if i.AltTargets == "" {
+		return nil
+	}
+	return strings.Split(i.AltTargets, altTargetSep)
 }
 
 // sortInstances orders a group's Instances deterministically: Type, then
@@ -353,12 +371,22 @@ type Report struct {
 	UnconfirmedRefs []string
 	// RuntimeUnchecked is the set of (reference, runtime package) pairs whose
 	// language runtime (Node.js, Python runtime) was detected but not checked
-	// because its advisory data was unavailable, de-duplicated and sorted by
+	// because its advisory data was unavailable or reading it was put off or
+	// failed (RuntimeUncheckedReason), de-duplicated and sorted by
 	// reference, then package. Scans that failed are not included.
 	RuntimeUnchecked []RuntimeUncheckedRef
-	Triage           bool        // priorities were assigned (renderers use ByPriority)
-	Intel            IntelStatus // freshness of the intel behind the priorities
-	GeneratedAt      time.Time
+	// RuntimeUncheckedReason says, per RuntimeUnchecked entry, why the
+	// runtime was not checked: "advisories", "deferred" or "unreadable" (the
+	// scanner.Reason constants). Every entry of RuntimeUnchecked has one.
+	RuntimeUncheckedReason map[RuntimeUncheckedRef]string
+	// RuntimeRetired is the set of (reference, runtime package) pairs whose
+	// runtime was read to the end and found to be of kinds that are not
+	// checked, so its earlier findings no longer apply, de-duplicated and
+	// sorted like RuntimeUnchecked. Scans that failed are not included.
+	RuntimeRetired []RuntimeUncheckedRef
+	Triage         bool        // priorities were assigned (renderers use ByPriority)
+	Intel          IntelStatus // freshness of the intel behind the priorities
+	GeneratedAt    time.Time
 	// Environment identifies the runtime instance this cycle observed. Build
 	// never sets it (it has no scan-derived meaning to interpret); the caller
 	// copies it in from config/composition-root state.
@@ -496,6 +524,44 @@ type pkgAcc struct {
 	layers    map[string]bool
 }
 
+// groupKey is the identity of a package group within one image: the package's
+// identity, and for a Java runtime also the executable of the JDK, so that
+// the CVEs of one JDK are not grouped with those of another (a JDK that runs
+// and one that does not are judged apart).
+type groupKey struct {
+	ref    inventory.PackageRef
+	target string
+}
+
+func groupKeyOf(ref inventory.PackageRef, f scanner.Finding) groupKey {
+	if ref.Ecosystem == inventory.EcosystemJavaRuntime {
+		return groupKey{ref: ref, target: f.Target}
+	}
+	return groupKey{ref: ref}
+}
+
+// uncheckedReasonRank orders the reasons a runtime was not checked by how
+// long they last.
+func uncheckedReasonRank(reason string) int {
+	switch reason {
+	case scanner.ReasonUnreadable:
+		return 2
+	case scanner.ReasonDeferred:
+		return 1
+	}
+	return 0
+}
+
+func sortRuntimeRefs(refs []RuntimeUncheckedRef) {
+	sort.Slice(refs, func(i, j int) bool {
+		a, b := refs[i], refs[j]
+		if a.Image != b.Image {
+			return a.Image < b.Image
+		}
+		return a.Package < b.Package
+	})
+}
+
 // imgKey is the aggregation unit for findings: a running entity, identified
 // by its display reference plus the EntityKey the scan's Subject carried.
 // Subject.Key is used rather than the scanned entity: for an unresolved scan
@@ -542,10 +608,11 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 	r := Report{GeneratedAt: now, ImagesTotal: len(scans), Triage: tr.Enabled, Intel: tr.Intel}
 
 	// section status -> (ref, entity key) -> package identity -> accumulator
-	byStatus := map[scanner.Status]map[imgKey]map[inventory.PackageRef]*pkgAcc{}
+	byStatus := map[scanner.Status]map[imgKey]map[groupKey]*pkgAcc{}
 	obs := map[string]*obsAcc{}     // by ref, the inventory backing Report.Images
 	meta := map[imgKey]entityMeta{} // per-entity Subject/Pinned, for buildSection
 	uncheckedSeen := map[RuntimeUncheckedRef]bool{}
+	retiredSeen := map[RuntimeUncheckedRef]bool{}
 
 	for _, s := range scans {
 		a := obs[s.Image]
@@ -600,6 +667,25 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 				uncheckedSeen[ref] = true
 				r.RuntimeUnchecked = append(r.RuntimeUnchecked, ref)
 			}
+			reason := s.RuntimeUncheckedReason[pkg]
+			if reason == "" {
+				reason = scanner.ReasonAdvisories
+			}
+			if r.RuntimeUncheckedReason == nil {
+				r.RuntimeUncheckedReason = map[RuntimeUncheckedRef]string{}
+			}
+			// Two scans of one reference can differ; the reason that lasts
+			// longer wins, so the result does not depend on their order.
+			if old, ok := r.RuntimeUncheckedReason[ref]; !ok || uncheckedReasonRank(reason) > uncheckedReasonRank(old) {
+				r.RuntimeUncheckedReason[ref] = reason
+			}
+		}
+		for _, pkg := range s.RuntimeRetired {
+			ref := RuntimeUncheckedRef{Image: s.Image, Package: pkg}
+			if !retiredSeen[ref] {
+				retiredSeen[ref] = true
+				r.RuntimeRetired = append(r.RuntimeRetired, ref)
+			}
 		}
 
 		k := imgKey{ref: s.Image, key: s.Subject.Key}
@@ -611,16 +697,17 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 			}
 			images := byStatus[section]
 			if images == nil {
-				images = map[imgKey]map[inventory.PackageRef]*pkgAcc{}
+				images = map[imgKey]map[groupKey]*pkgAcc{}
 				byStatus[section] = images
 			}
 			pkgs := images[k]
 			if pkgs == nil {
-				pkgs = map[inventory.PackageRef]*pkgAcc{}
+				pkgs = map[groupKey]*pkgAcc{}
 				images[k] = pkgs
 			}
 			ref := find.PackageRef()
-			acc := pkgs[ref]
+			gk := groupKeyOf(ref, find)
+			acc := pkgs[gk]
 			if acc == nil {
 				acc = &pkgAcc{
 					group: PackageGroup{
@@ -636,9 +723,12 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 					instances: map[Instance]bool{},
 					layers:    map[string]bool{},
 				}
-				pkgs[ref] = acc
+				pkgs[gk] = acc
 			}
-			acc.instances[Instance{PackageRef: ref, Type: find.Type, Target: find.Target, PkgPath: find.PkgPath}] = true
+			acc.instances[Instance{
+				PackageRef: ref, Type: find.Type, Target: find.Target, PkgPath: find.PkgPath,
+				AltTargets: strings.Join(find.AltTargets, altTargetSep), TargetsIncomplete: find.TargetsIncomplete,
+			}] = true
 			acc.layers[find.LayerDiffID] = true
 			// The same CVE ID can appear on more than one Trivy result line (e.g.
 			// matched via more than one data source); prefer whichever line carries
@@ -657,13 +747,8 @@ func Build(scans []scanner.ImageScan, containers []inventory.Container, tr Triag
 	}
 
 	sort.Strings(r.EOSLImages)
-	sort.Slice(r.RuntimeUnchecked, func(i, j int) bool {
-		a, b := r.RuntimeUnchecked[i], r.RuntimeUnchecked[j]
-		if a.Image != b.Image {
-			return a.Image < b.Image
-		}
-		return a.Package < b.Package
-	})
+	sortRuntimeRefs(r.RuntimeUnchecked)
+	sortRuntimeRefs(r.RuntimeRetired)
 	byKey, byRef := indexContainers(containers)
 	r.Actionable = buildSection(byStatus[scanner.StatusFixed], tr, byKey, meta)
 	r.Watch = buildSection(byStatus[scanner.StatusAffected], tr, byKey, meta)
@@ -747,7 +832,7 @@ func buildInventory(obs map[string]*obsAcc, byRef map[string][]inventory.Contain
 }
 
 // buildSection finalizes one status bucket into sorted ImageFindings.
-func buildSection(images map[imgKey]map[inventory.PackageRef]*pkgAcc, tr Triage, byKey map[imgKey][]inventory.Container, meta map[imgKey]entityMeta) []ImageFindings {
+func buildSection(images map[imgKey]map[groupKey]*pkgAcc, tr Triage, byKey map[imgKey][]inventory.Container, meta map[imgKey]entityMeta) []ImageFindings {
 	if len(images) == 0 {
 		return nil
 	}
@@ -881,6 +966,15 @@ func severityTier(g PackageGroup) int {
 // unique: a same-named, same-version OS/language pair with an unrecognized
 // (empty) Type on both sides shares Ecosystem and Version too, and only
 // Class still tells them apart.
+// firstTarget is the Target of a group's first instance, which tells apart
+// the groups of two JDKs of one image that are otherwise alike.
+func firstTarget(g PackageGroup) string {
+	if len(g.Instances) == 0 {
+		return ""
+	}
+	return g.Instances[0].Target
+}
+
 func sortPackages(g []PackageGroup) {
 	sort.Slice(g, func(i, j int) bool {
 		if ti, tj := severityTier(g[i]), severityTier(g[j]); ti != tj {
@@ -898,7 +992,10 @@ func sortPackages(g []PackageGroup) {
 		if g[i].InstalledVer != g[j].InstalledVer {
 			return g[i].InstalledVer < g[j].InstalledVer
 		}
-		return g[i].Class < g[j].Class
+		if g[i].Class != g[j].Class {
+			return g[i].Class < g[j].Class
+		}
+		return firstTarget(g[i]) < firstTarget(g[j])
 	})
 }
 

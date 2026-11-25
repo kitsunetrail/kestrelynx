@@ -901,3 +901,60 @@ func channelText(m notify.Message) string {
 	}
 	return strings.Join(parts, "\n")
 }
+
+// budgetScanner is a scanner that, like the image reader, draws on a budget
+// that renews every cycle; what does not fit is left pending by digest.
+type budgetScanner struct {
+	cost    map[string]int // by ref
+	left    int
+	pending map[string]bool
+	done    map[string]bool
+	order   []string
+}
+
+func (b *budgetScanner) Scan(_ context.Context, target scanner.ScanTarget) scanner.ImageScan {
+	ref, digest := target.Subject.Ref, target.Subject.Key.Digest.String()
+	b.order = append(b.order, ref)
+	if c := b.cost[ref]; c <= b.left {
+		b.left -= c
+		delete(b.pending, digest)
+		b.done[ref] = true
+	} else {
+		b.pending[digest] = true
+	}
+	return pinnedScan(ref, digest, nil, nil)
+}
+
+// The image at the front of the list gets a new digest every cycle and uses
+// the cycle's budget; the one behind it is only read when the images that were
+// put off before are scanned first.
+func TestScanAll_PutOffImagesAreScannedFirst(t *testing.T) {
+	cfg := func(c rune) inventory.Digest {
+		d, ok := inventory.ParseDigest(inventory.DigestConfig, "sha256:"+strings.Repeat(string(c), 64))
+		if !ok {
+			t.Fatal("bad digest")
+		}
+		return d
+	}
+	for _, withFirst := range []bool{false, true} {
+		sc := &budgetScanner{cost: map[string]int{"a:1": 8, "b:1": 5}, pending: map[string]bool{}, done: map[string]bool{}}
+		r := Runner{Scanner: sc, Now: clock}
+		if withFirst {
+			r.ScanFirst = func(img inventory.RunningImage) bool { return sc.pending[img.ContentID()] }
+		}
+		for cycle, aDigest := range []rune{'1', '2', '3', '4'} {
+			sc.left, sc.order = 10, nil
+			images := []inventory.RunningImage{{Ref: "a:1", Config: cfg(aDigest)}, {Ref: "b:1", Config: cfg('b')}}
+			scans := r.scanAll(context.Background(), images)
+			if len(scans) != 2 || scans[0].Image != "a:1" || scans[1].Image != "b:1" {
+				t.Fatalf("cycle %d: the results lost the order of the images: %+v", cycle, scans)
+			}
+			if withFirst && cycle == 1 && sc.order[0] != "b:1" {
+				t.Errorf("cycle 2 scanned %v, want the put-off image first", sc.order)
+			}
+		}
+		if sc.done["b:1"] != withFirst {
+			t.Errorf("ScanFirst %v: b:1 done = %v", withFirst, sc.done["b:1"])
+		}
+	}
+}

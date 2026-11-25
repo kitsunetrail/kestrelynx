@@ -30,8 +30,9 @@ COPY --from=worker /out/ /worker/
 # The sha256 of each work program is linked in; the binary checks the files in
 # /usr/local/libexec/kestrelynx against them when it starts and again whenever
 # it places one into a container.
+ARG KESTRELYNX_VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -tags timetzdata \
-    -ldflags="-s -w \
+    -ldflags="-s -w -X main.version=${KESTRELYNX_VERSION} \
       -X github.com/kitsunetrail/kestrelynx/internal/worker.ProgramSHA256Amd64=$(cat /worker/kestrelynx-worker-amd64.sha256) \
       -X github.com/kitsunetrail/kestrelynx/internal/worker.ProgramSHA256Arm64=$(cat /worker/kestrelynx-worker-arm64.sha256)" \
     -o /out/kestrelynx ./cmd/kestrelynx

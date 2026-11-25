@@ -1199,7 +1199,7 @@ func TestParse_JavaRuntimeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if want := (JavaRuntimeConfig{Enabled: true}); c.Scan.JavaRuntime != want {
+	if want := (JavaRuntimeConfig{Enabled: true, ReadImages: true, RegistryBytesPerCycle: 2 << 30, DockerBytesPerCycle: 8 << 30}); c.Scan.JavaRuntime != want {
 		t.Errorf("default JavaRuntime = %+v, want %+v", c.Scan.JavaRuntime, want)
 	}
 }
@@ -1221,12 +1221,58 @@ scan:
 	want := JavaRuntimeConfig{
 		Enabled: false, AdvisoriesURL: "https://mirror.test/advisories/",
 		ReleasesURL: "http://mirror.test/releases?release_type=ga", FeatureReleasesURL: "https://mirror.test/available",
+		ReadImages: true, RegistryBytesPerCycle: 2 << 30, DockerBytesPerCycle: 8 << 30,
 	}
 	if c.Scan.JavaRuntime != want {
 		t.Errorf("JavaRuntime = %+v, want %+v", c.Scan.JavaRuntime, want)
 	}
 	if !c.Scan.PythonRuntime.Enabled || !c.Scan.NodeRuntime.Enabled {
 		t.Error("disabling java_runtime must not disable the other runtimes")
+	}
+}
+
+func TestParse_JavaRuntimeReadImages(t *testing.T) {
+	data := func(body string) []byte {
+		return []byte("notify:\n  slack_webhook_url: \"https://x.test\"\nscan:\n  java_runtime:\n" + body)
+	}
+	c, err := Parse(data("    read_images: false\n    read_limits:\n      registry_bytes_per_cycle: 512MiB\n      docker_bytes_per_cycle: 3GiB\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	j := c.Scan.JavaRuntime
+	if j.ReadImages || j.RegistryBytesPerCycle != 512<<20 || j.DockerBytesPerCycle != 3<<30 || !j.Enabled {
+		t.Errorf("JavaRuntime = %+v", j)
+	}
+	// One limit given leaves the other at its default; a plain number is bytes.
+	c, err = Parse(data("    read_limits:\n      docker_bytes_per_cycle: 1048576\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if j := c.Scan.JavaRuntime; !j.ReadImages || j.RegistryBytesPerCycle != 2<<30 || j.DockerBytesPerCycle != 1<<20 {
+		t.Errorf("JavaRuntime = %+v", j)
+	}
+}
+
+func TestParse_JavaRuntimeReadLimitsAreChecked(t *testing.T) {
+	for _, key := range []string{"registry_bytes_per_cycle", "docker_bytes_per_cycle"} {
+		for _, bad := range []string{"lots-secret-7", "0", "-5", "0GiB", "99999999999GiB", "1.5GiB"} {
+			data := "notify:\n  slack_webhook_url: \"https://x.test\"\nscan:\n  java_runtime:\n    read_limits:\n      " + key + ": " + bad + "\n"
+			_, err := Parse([]byte(data))
+			if err == nil {
+				t.Errorf("%s: %q was accepted", key, bad)
+				continue
+			}
+			if !strings.Contains(err.Error(), "scan.java_runtime.read_limits."+key) {
+				t.Errorf("%s: error %q does not name the key", key, err)
+			}
+			if strings.Contains(err.Error(), bad) && len(bad) > 3 {
+				t.Errorf("%s: error %q echoes the value", key, err)
+			}
+		}
+	}
+	data := "notify:\n  slack_webhook_url: \"https://x.test\"\nscan:\n  java_runtime:\n    read_limits:\n      other: 1GiB\n"
+	if _, err := Parse([]byte(data)); err == nil {
+		t.Error("an unknown read_limits key was accepted")
 	}
 }
 

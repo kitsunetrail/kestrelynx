@@ -137,7 +137,29 @@ type hit struct {
 // differently: a CVE marked on both the nearest lines below and above the
 // line is taken to affect it too, with no fix (end_of_life).
 func (sn *Snapshot) Match(vendor Vendor, v version) []Advisory {
+	return sn.match(vendor, v).advisories
+}
+
+// matchResult is what match finds besides the advisories.
+type matchResult struct {
+	advisories []Advisory
+	// components is the advisory component of each CVE shown.
+	components map[string]string
+	// suppressed are the CVEs a VendorUnknown JDK is not told about because
+	// the vendor exception table splits them by version, with their
+	// severity.
+	suppressed map[string]string
+}
+
+// match is Match with the component of each advisory and the CVEs suppressed
+// for a vendor-less JDK. VendorTemurin applies the exception table;
+// VendorOracleOpenJDK and VendorUnknown apply the upstream rules, and
+// VendorUnknown leaves out the CVEs whose conclusion depends on the vendor.
+func (sn *Snapshot) match(vendor Vendor, v version) matchResult {
 	line := v.series()
+	res := matchResult{components: map[string]string{}, suppressed: map[string]string{}}
+	suppressedPage := map[string]*page{}
+	suppressedScore := map[string]int{}
 	byCVE := map[string][]hit{}
 	for _, p := range sn.pages {
 		ceiling, hasCeiling := p.ceilings[line]
@@ -153,12 +175,20 @@ func (sn *Snapshot) Match(vendor Vendor, v version) []Advisory {
 				if fix, ok := sn.fixedAfter(line, ceiling); ok {
 					h.fixed, h.hasFix = fix, true
 				}
-				if vendor == VendorTemurin {
-					if exc, ok := sn.exceptions[r.cve][line]; ok {
+				if exc, ok := sn.exceptions[r.cve][line]; ok {
+					switch vendor {
+					case VendorTemurin:
 						if c, ok := v.compare(exc); ok && c >= 0 {
 							continue
 						}
 						h.fixed, h.hasFix = exc, true
+					case VendorUnknown:
+						if c, ok := v.compare(exc); ok && c >= 0 {
+							if old := suppressedPage[r.cve]; old == nil || p.date > old.date {
+								suppressedPage[r.cve], suppressedScore[r.cve] = p, r.score10
+							}
+							continue
+						}
 					}
 				}
 				byCVE[r.cve] = append(byCVE[r.cve], h)
@@ -189,10 +219,19 @@ func (sn *Snapshot) Match(vendor Vendor, v version) []Advisory {
 
 	var out []Advisory
 	for cve, hits := range byCVE {
-		out = append(out, sn.mergeHits(cve, line, hits))
+		adv, component := sn.mergeHits(cve, line, hits)
+		out = append(out, adv)
+		res.components[cve] = component
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].VulnID < out[j].VulnID })
-	return out
+	res.advisories = out
+	for cve, score := range suppressedScore {
+		// A CVE some other hit still reports is not suppressed.
+		if _, shown := byCVE[cve]; !shown {
+			res.suppressed[cve] = severityOf(score)
+		}
+	}
+	return res
 }
 
 // mergeHits combines the advisories' hits of one CVE. The status and the
@@ -202,7 +241,7 @@ func (sn *Snapshot) Match(vendor Vendor, v version) []Advisory {
 // that matched the installed version: the newest advisory gives the link and
 // the component, and the highest score among them the severity, so that a
 // newer advisory's higher score is not lost.
-func (sn *Snapshot) mergeHits(cve string, line int, hits []hit) Advisory {
+func (sn *Snapshot) mergeHits(cve string, line int, hits []hit) (Advisory, string) {
 	real := hits[:0:0]
 	for _, h := range hits {
 		if !h.inferred {
@@ -279,7 +318,7 @@ func (sn *Snapshot) mergeHits(cve string, line int, hits []hit) Advisory {
 	default:
 		adv.Status = scanner.StatusAffected
 	}
-	return adv
+	return adv, rep.r.component
 }
 
 // severityOf maps a CVSS base score (times ten) to a severity. A score of 0

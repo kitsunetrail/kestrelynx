@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
+	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
@@ -294,8 +295,15 @@ func (v *chView) unresolvedNotes(tail bool) {
 	if line := unconfirmedRefsLine(v.r, v.msg); line != "" {
 		v.l.note(v.rd.lim, unconfirmedNoteHead(v.msg), trimNL(line), tail)
 	}
-	if line := runtimeUncheckedLine(v.r, v.msg); line != "" {
-		v.l.note(v.rd.lim, "", trimNL(line), tail)
+	for _, line := range []string{
+		runtimeUncheckedLine(v.r, v.msg),
+		runtimeDeferredLine(v.r, v.msg),
+		runtimeUnreadableLine(v.r, v.msg),
+		runtimeRetiredLine(v.d, v.msg),
+	} {
+		if line != "" {
+			v.l.note(v.rd.lim, "", trimNL(line), tail)
+		}
 	}
 }
 
@@ -355,26 +363,41 @@ func (v *chView) newChangeCard(image string, g analyze.PackageGroup, o cardOpts)
 	if v.acts == nil {
 		return c
 	}
-	var hitImg analyze.ImageFindings
-	var hitGroup analyze.PackageGroup
-	n := 0
+	if hitImg, hitGroup, n := v.findReportGroup(image, g); n == 1 {
+		c.BaseWait, c.Action = v.acts.lookup(hitImg, hitGroup)
+	}
+	return c
+}
+
+// findReportGroup finds the group of a change again in the report by image
+// and package identity, and for a Java runtime also by its executable; n is
+// how many entries match.
+func (v *chView) findReportGroup(image string, g analyze.PackageGroup) (hitImg analyze.ImageFindings, hitGroup analyze.PackageGroup, n int) {
 	for _, sec := range [][]analyze.ImageFindings{v.r.Actionable, v.r.Watch, v.r.WontFix, v.r.EOLPackages} {
 		for _, img := range sec {
 			if img.Image != image {
 				continue
 			}
 			for _, rg := range img.Packages {
-				if rg.Package == g.Package && rg.Class == g.Class && rg.Ecosystem == g.Ecosystem && rg.InstalledVer == g.InstalledVer && rg.Status == g.Status {
+				if rg.Package == g.Package && rg.Class == g.Class && rg.Ecosystem == g.Ecosystem && rg.InstalledVer == g.InstalledVer && rg.Status == g.Status &&
+					sameJavaTarget(g, rg) {
 					hitImg, hitGroup = img, rg
 					n++
 				}
 			}
 		}
 	}
-	if n == 1 {
-		c.BaseWait, c.Action = v.acts.lookup(hitImg, hitGroup)
+	return hitImg, hitGroup, n
+}
+
+// sameJavaTarget tells the groups of two JDKs of one image apart: groups of
+// a Java runtime are alike only when the first executable of their instances
+// is the same. Other groups, and a group that has no instance, always match.
+func sameJavaTarget(a, b analyze.PackageGroup) bool {
+	if a.Ecosystem != inventory.EcosystemJavaRuntime || len(a.Instances) == 0 {
+		return true
 	}
-	return c
+	return len(b.Instances) > 0 && a.Instances[0].Target == b.Instances[0].Target
 }
 
 func (v *chView) detail(c pkgCard) cardView {

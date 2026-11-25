@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
@@ -148,6 +149,9 @@ type Runner struct {
 	// date here. They report nothing; a problem is logged by the function and
 	// the cycle goes on.
 	BeforeCycle []func(ctx context.Context)
+	// ScanFirst, when set, names the running images to scan before the
+	// others in a cycle.
+	ScanFirst func(inventory.RunningImage) bool
 
 	// RuntimeRefreshers load, once per cycle before any image is scanned and
 	// in this order, the data the scanners use to check the language
@@ -297,11 +301,24 @@ func (r Runner) scanAll(ctx context.Context, images []inventory.RunningImage) []
 func (r Runner) scanImages(ctx context.Context, sc ImageScanner, images []inventory.RunningImage) ([]scanner.ImageScan, []scanner.ScanTarget) {
 	log := r.log()
 	source := r.source()
-	scans := make([]scanner.ImageScan, 0, len(images))
-	targets := make([]scanner.ScanTarget, 0, len(images))
+	scans := make([]scanner.ImageScan, len(images))
+	targets := make([]scanner.ScanTarget, len(images))
 	byKey := map[inventory.EntityKey]scanner.ImageScan{}
 
-	for _, img := range images {
+	// The images are scanned in the order given, except that those ScanFirst
+	// names come first, so what an earlier cycle could not finish gets the
+	// cycle's read budget before the others. The results keep the order of
+	// images.
+	order := make([]int, len(images))
+	first := make([]bool, len(images))
+	for i := range images {
+		order[i] = i
+		first[i] = r.ScanFirst != nil && r.ScanFirst(images[i])
+	}
+	sort.SliceStable(order, func(a, b int) bool { return first[order[a]] && !first[order[b]] })
+
+	for _, idx := range order {
+		img := images[idx]
 		key, resolved := inventory.EntityKeyOf(img)
 		subject := inventory.ImageSubject{Ref: img.Ref, Key: key, Resolved: resolved}
 		target := scanner.ScanTarget{Subject: subject, Registry: img.Registry, Source: source}
@@ -313,8 +330,7 @@ func (r Runner) scanImages(ctx context.Context, sc ImageScanner, images []invent
 			} else {
 				log.Info("scanned image", "ref", img.Ref, "resolved", false)
 			}
-			scans = append(scans, result)
-			targets = append(targets, target)
+			scans[idx], targets[idx] = result, target
 			continue
 		}
 
@@ -331,8 +347,7 @@ func (r Runner) scanImages(ctx context.Context, sc ImageScanner, images []invent
 		if result.Err == nil {
 			log.Info("scanned image", "ref", img.Ref, "content_id", key.Digest.String(), "resolved", true)
 		}
-		scans = append(scans, retarget(result, img.Ref))
-		targets = append(targets, target)
+		scans[idx], targets[idx] = retarget(result, img.Ref), target
 	}
 	return scans, targets
 }

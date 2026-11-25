@@ -1,6 +1,8 @@
 package notify
 
 import (
+	"slices"
+
 	"github.com/kitsunetrail/kestrelynx/internal/analyze"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 	"github.com/kitsunetrail/kestrelynx/internal/remediation"
@@ -290,6 +292,21 @@ type rebuildPlaceKey struct {
 	class                          inventory.PkgClass
 }
 
+// runtimeRebuildCovers reports whether the record of a runtime rebuild covers
+// the group: a group of another executable (a second JDK of the same
+// version) is not covered. A record without targets covers every group.
+func runtimeRebuildCovers(rr remediation.RuntimeRebuild, g analyze.PackageGroup) bool {
+	if len(rr.Targets) == 0 {
+		return true
+	}
+	for _, in := range g.Instances {
+		if slices.Contains(rr.Targets, in.Target) {
+			return true
+		}
+	}
+	return false
+}
+
 // rebuildAction is the action of a group from the comparison of the running
 // image e with the current content of its base. Every fixed finding of the
 // group needs one verdict, the same in every place the group's package is
@@ -303,7 +320,7 @@ func rebuildAction(e *remediation.DockerfileEntity, g analyze.PackageGroup, vuln
 		// A language runtime is compared by the version the base declares.
 		var rr *remediation.RuntimeRebuild
 		for i := range e.RebuildRuntimes {
-			if r := &e.RebuildRuntimes[i]; r.Package == g.Package && r.Installed == g.InstalledVer {
+			if r := &e.RebuildRuntimes[i]; r.Package == g.Package && r.Installed == g.InstalledVer && runtimeRebuildCovers(*r, g) {
 				if rr != nil {
 					return nil
 				}

@@ -2,6 +2,7 @@ package nodecore
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -47,7 +48,7 @@ func TestAugmentFindings(t *testing.T) {
 		Title: "Node.js Brotli decoder out-of-bounds write permits remote code execution",
 		Type:  "node-runtime", Target: "usr/local/bin/node", PkgPath: "usr/local/bin/node",
 	}
-	if *f != want {
+	if !reflect.DeepEqual(*f, want) {
 		t.Errorf("finding =\n%+v\nwant\n%+v", *f, want)
 	}
 	for _, fd := range aug.Findings {

@@ -560,7 +560,7 @@ func (r *run) newerBaseCandidate(e DockerfileEntity, ref ImageRef, t newerTag) N
 	if out != nil {
 		return fail(NewerSeriesNotChecked, out.reason, out.detail)
 	}
-	cmp := r.compareBase(ref, t.tag, platform, curRes, e.Targets)
+	cmp := r.compareBase(ref, t.tag, platform, curRes, e.Targets, false)
 	c.Candidate = cmp.cand
 	c.BaselineScan, c.CandidateScan = cmp.baseScan, cmp.candScan
 	if cmp.out != nil {

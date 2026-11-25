@@ -240,6 +240,95 @@ func TestJudgeEmbeddedBinary(t *testing.T) {
 	})
 }
 
+func TestJudgeJavaRuntime(t *testing.T) {
+	exe := func(path string, kinds ...EvidenceKind) ExecutableEvidence {
+		m := map[EvidenceKind]KindObservation{}
+		for _, k := range kinds {
+			m[k] = KindObservation{Count: 1}
+		}
+		return ExecutableEvidence{Path: path, Kinds: m}
+	}
+	jdk := "opt/jdk/bin/java"
+	jre := "opt/jdk/jre/bin/java"
+
+	t.Run("the main launcher is observed", func(t *testing.T) {
+		gen := Generation{State: StateObserving, Executables: []ExecutableEvidence{exe("/"+jdk, KindExe)}}
+		v := JudgeJavaRuntime(gen, jdk, []string{jre}, false)
+		if v.Usage != UsageInUse || !reflect.DeepEqual(v.EvidenceKinds, []EvidenceKind{KindBinaryRunning}) {
+			t.Fatalf("got %+v", v)
+		}
+	})
+
+	t.Run("an alternative launcher is observed", func(t *testing.T) {
+		gen := Generation{State: StateObserving, Executables: []ExecutableEvidence{exe("/"+jre, KindExecEvent)}}
+		v := JudgeJavaRuntime(gen, jdk, []string{jre}, false)
+		if v.Usage != UsageInUse || !reflect.DeepEqual(v.EvidenceKinds, []EvidenceKind{KindBinaryExecuted}) {
+			t.Fatalf("got %+v", v)
+		}
+	})
+
+	t.Run("both launchers merge their kinds", func(t *testing.T) {
+		gen := Generation{State: StateObserving, Executables: []ExecutableEvidence{exe("/"+jre, KindExecEvent), exe("/"+jdk, KindExe)}}
+		v := JudgeJavaRuntime(gen, jdk, []string{jre}, false)
+		if v.Usage != UsageInUse || !reflect.DeepEqual(v.EvidenceKinds, []EvidenceKind{KindBinaryExecuted, KindBinaryRunning}) {
+			t.Fatalf("got %+v", v)
+		}
+	})
+
+	t.Run("an observed launcher counts even when the paths are incomplete", func(t *testing.T) {
+		gen := Generation{State: StateObserving, Executables: []ExecutableEvidence{exe("/"+jdk, KindExe)}}
+		if v := JudgeJavaRuntime(gen, jdk, nil, true); v.Usage != UsageInUse {
+			t.Fatalf("got %+v", v)
+		}
+		// With no known target at all, an observed alternative still counts.
+		gen = Generation{State: StateObserving, Executables: []ExecutableEvidence{exe("/"+jre, KindExe)}}
+		if v := JudgeJavaRuntime(gen, "", []string{jre}, true); v.Usage != UsageInUse {
+			t.Fatalf("got %+v", v)
+		}
+	})
+
+	t.Run("none observed and every path known is not observed", func(t *testing.T) {
+		gen := Generation{State: StateObserving, Executables: []ExecutableEvidence{exe("/other/java", KindExe)}}
+		v := JudgeJavaRuntime(gen, jdk, []string{jre}, false)
+		if v.Usage != UsageNotObserved {
+			t.Fatalf("got %+v", v)
+		}
+	})
+
+	t.Run("none observed and a path is incomplete is unavailable", func(t *testing.T) {
+		v := JudgeJavaRuntime(Generation{State: StateObserving}, jdk, nil, true)
+		if v.Usage != UsageUnavailable || v.Reason != ReasonBinaryPathUnknown {
+			t.Fatalf("got %+v", v)
+		}
+	})
+
+	t.Run("an empty target is unavailable", func(t *testing.T) {
+		v := JudgeJavaRuntime(Generation{State: StateObserving}, "", nil, false)
+		if v.Usage != UsageUnavailable || v.Reason != ReasonBinaryPathUnknown {
+			t.Fatalf("got %+v", v)
+		}
+	})
+
+	t.Run("not observed still needs an eligible generation", func(t *testing.T) {
+		v := JudgeJavaRuntime(Generation{State: StateDenied}, jdk, nil, false)
+		if v.Usage != UsageUnavailable || v.Reason != ReasonPermissionDenied {
+			t.Fatalf("got %+v", v)
+		}
+	})
+
+	t.Run("one target and no alternatives judges like an embedded binary", func(t *testing.T) {
+		for _, gen := range []Generation{
+			{State: StateObserving},
+			{State: StateObserving, Executables: []ExecutableEvidence{exe("/"+jdk, KindExe, KindExecEvent)}},
+			{State: StateDenied},
+		} {
+			if got, want := JudgeJavaRuntime(gen, jdk, nil, false), JudgeEmbeddedBinary(gen, jdk); !reflect.DeepEqual(got, want) {
+				t.Errorf("got %+v, want %+v", got, want)
+			}
+		}
+	})
+}
+
 func TestJudgeRuntimeLoaded(t *testing.T) {
 	t.Run("unmapped ecosystem", func(t *testing.T) {
 		v := JudgeRuntimeLoaded(Generation{State: StateObserving}, inventory.EcosystemBundler)

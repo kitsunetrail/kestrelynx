@@ -268,6 +268,48 @@ func JudgeEmbeddedBinary(gen Generation, target string) Verdict {
 	return Verdict{Usage: UsageNotObserved, EventsCoverage: gen.EventsCoverage}
 }
 
+// JudgeJavaRuntime returns one generation's verdict for a Java runtime that
+// has more than one executable path: in use when any of target and alts
+// matches an observed executable's path (the evidence kinds of every match
+// are merged, as in JudgeEmbeddedBinary). Otherwise the runtime was not
+// observed only when every one of its paths is known. An empty target, or
+// incomplete (some executable of the runtime could not be resolved to a
+// path), leaves the verdict unavailable with ReasonBinaryPathUnknown, since
+// the unresolved path may be the one that ran.
+// The not-observed verdict is subject to the generation's own eligibility.
+func JudgeJavaRuntime(gen Generation, target string, alts []string, incomplete bool) Verdict {
+	paths := make(map[string]bool, len(alts)+1)
+	if target != "" {
+		paths[normalizeContainerPath(target)] = true
+	}
+	for _, a := range alts {
+		if a != "" {
+			paths[normalizeContainerPath(a)] = true
+		}
+	}
+
+	var kinds []EvidenceKind
+	seen := map[EvidenceKind]bool{}
+	matched := false
+	for _, exe := range gen.Executables {
+		if !paths[normalizeContainerPath(exe.Path)] {
+			continue
+		}
+		matched = true
+		kinds = mergeKinds(kinds, seen, langKinds(exe.Kinds, true))
+	}
+	if matched {
+		return Verdict{Usage: UsageInUse, EvidenceKinds: kinds}
+	}
+	if target == "" || incomplete {
+		return Verdict{Usage: UsageUnavailable, Reason: ReasonBinaryPathUnknown}
+	}
+	if ok, reason := GenerationEligibleForNotObserved(gen, inventory.ClassLang); !ok {
+		return Verdict{Usage: UsageUnavailable, Reason: reason, EventsCoverage: gen.EventsCoverage}
+	}
+	return Verdict{Usage: UsageNotObserved, EventsCoverage: gen.EventsCoverage}
+}
+
 // JudgeRuntimeLoaded returns one generation's verdict for a language
 // package loaded by a runtime process (python-pkg, node-pkg, jar, ...): in
 // use when the ecosystem is mapped (see EcosystemMapped) and one or more

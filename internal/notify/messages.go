@@ -61,6 +61,11 @@ type messages struct {
 	// (runtime names joined with RuntimeNameSeparator, count of distinct images)
 	RuntimeUncheckedLine string
 	RuntimeNameSeparator string // ", " between the runtime names of RuntimeUncheckedLine
+	// The Java runtime notes of the image-reading check; each takes the count
+	// of distinct images.
+	RuntimeDeferredLine   string // reading was put off to the next scan
+	RuntimeUnreadableLine string // the runtime cannot be read
+	RuntimeRetiredLine    string // tracking ended: the distribution is not checked
 
 	// --- new/changed findings ---
 	NewSinceLastScanHeading string // "\n*🆕 New since last scan (%d)*\n"
@@ -629,9 +634,12 @@ var enMessages = messages{
 
 	RefChangeLine: "🔄 Image reference updated: %[1]s %[2]s → %[3]s (history carried over)\n",
 
-	UnconfirmedRefsLine:  "⏳ unconfirmed this cycle, holding previous findings — %s\n",
-	RuntimeUncheckedLine: "ℹ️ Advisories for %[1]s could not be fetched, so the runtime of %[2]d image(s) was not checked.\n",
-	RuntimeNameSeparator: ", ",
+	UnconfirmedRefsLine:   "⏳ unconfirmed this cycle, holding previous findings — %s\n",
+	RuntimeUncheckedLine:  "ℹ️ Advisories for %[1]s could not be fetched, so the runtime of %[2]d image(s) was not checked.\n",
+	RuntimeDeferredLine:   "ℹ️ Reading the Java runtime of %[1]d image(s) was postponed to the next scan.\n",
+	RuntimeUnreadableLine: "ℹ️ The Java runtime of %[1]d image(s) cannot be read.\n",
+	RuntimeRetiredLine:    "ℹ️ Stopped checking the Java runtime of %[1]d image(s) because it changed to a distribution that is not checked.\n",
+	RuntimeNameSeparator:  ", ",
 
 	NewSinceLastScanHeading: "\n*🆕 New since last scan (%d)*\n",
 	MoreCount:               " (+%d more)",
@@ -1119,9 +1127,12 @@ var jaMessages = messages{
 
 	RefChangeLine: "🔄 イメージ参照の更新: %[1]s %[2]s → %[3]s(検出履歴を引き継ぎ)\n",
 
-	UnconfirmedRefsLine:  "⏳ 今回は未確認、前回の所見を保持 — %s\n",
-	RuntimeUncheckedLine: "ℹ️ %[1]s の脆弱性情報を取得できなかったため、%[2]d 件のイメージの本体を照合していません。\n",
-	RuntimeNameSeparator: "・",
+	UnconfirmedRefsLine:   "⏳ 今回は未確認、前回の所見を保持 — %s\n",
+	RuntimeUncheckedLine:  "ℹ️ %[1]s の脆弱性情報を取得できなかったため、%[2]d 件のイメージの本体を照合していません。\n",
+	RuntimeDeferredLine:   "ℹ️ %[1]d 件のイメージで Java 本体の読み取りを次回に回しました。\n",
+	RuntimeUnreadableLine: "ℹ️ %[1]d 件のイメージで Java 本体を読み取れません。\n",
+	RuntimeRetiredLine:    "ℹ️ %[1]d 件のイメージで Java 本体が照合しない配布元に変わったため、照合をやめました。\n",
+	RuntimeNameSeparator:  "・",
 
 	NewSinceLastScanHeading: "\n*🆕 前回のスキャンからの新規検出 (%d件)*\n",
 	MoreCount:               " (ほか +%d件)",

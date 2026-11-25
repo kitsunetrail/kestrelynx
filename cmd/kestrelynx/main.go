@@ -131,6 +131,17 @@ func main() {
 	runtimeAdvisors, runtimeRefreshers := buildRuntimes(cfg, log)
 	r.RuntimeRefreshers = runtimeRefreshers
 	r.Scanner = withRuntimes(r.Scanner.(scanner.Trivy), runtimeAdvisors)
+	// One reader of the JDK files of image layers serves every image scan of
+	// the cycle, and the cycle starts with a new read budget. The scans of the
+	// running images come before those of the fix plan, so the plan's
+	// candidate and base images are read with what they leave.
+	imageReader := buildImageReader(cfg, log)
+	if imageReader != nil {
+		r.BeforeCycle = append(r.BeforeCycle, func(context.Context) { imageReader.NewCycle() })
+		// The images whose read was put off go first in the next cycle.
+		r.ScanFirst = imageReader.Priority
+	}
+	r.Scanner = withImageFiles(r.Scanner.(scanner.Trivy), imageReader)
 	// One source of CVE record severities serves every scan of the cycle,
 	// image and fs alike, and answers the same for all of them: the cycle
 	// starts by making it forget the answers of the one before.
@@ -166,8 +177,8 @@ func main() {
 		tables.Refresh(context.Background())
 		r.BeforeCycle = append(r.BeforeCycle, func(ctx context.Context) { tables.Refresh(ctx) })
 		r.Plan = buildPlanConfig(cfg)
-		r.Plan.Scanner = withUnscored(withRuntimes(r.Plan.Scanner.(scanner.Trivy), runtimeAdvisors), unscored)
-		r.Plan.RunningScanner = withUnscored(withRuntimes(r.Plan.RunningScanner.(scanner.Trivy), runtimeAdvisors), unscored)
+		r.Plan.Scanner = withImageFiles(withUnscored(withRuntimes(r.Plan.Scanner.(scanner.Trivy), runtimeAdvisors), unscored), imageReader)
+		r.Plan.RunningScanner = withImageFiles(withUnscored(withRuntimes(r.Plan.RunningScanner.(scanner.Trivy), runtimeAdvisors), unscored), imageReader)
 		if unscored != nil {
 			r.Plan.Unscored = unscored
 		}
@@ -522,7 +533,7 @@ func buildPythonRuntime(cfg config.Config, log *slog.Logger) (*pycore.Advisor, p
 // image scanners share. The data is cached in a java directory next to the
 // diff state, like the Node.js data.
 func buildJavaRuntime(cfg config.Config, log *slog.Logger) (*javacore.Advisor, javacore.Refresher) {
-	advisor := &javacore.Advisor{}
+	advisor := &javacore.Advisor{Log: log}
 	j := cfg.Scan.JavaRuntime
 	return advisor, javacore.Refresher{
 		Source: &javacore.Source{

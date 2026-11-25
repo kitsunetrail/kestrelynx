@@ -49,6 +49,8 @@ type Resolution struct {
 	// the config carries none.
 	RootFSType string
 	DiffIDs    []string
+	// Layers are the image manifest's layers, bottom first, as listed.
+	Layers []Layer
 	// OnBuild is true when the config's config.OnBuild lists any trigger
 	// instruction.
 	OnBuild bool
@@ -153,6 +155,12 @@ func (c *Client) Resolve(ctx context.Context, repo, tagOrDigest string, platform
 		Config struct {
 			Digest string `json:"digest"`
 		} `json:"config"`
+		Layers []struct {
+			MediaType string   `json:"mediaType"`
+			Digest    string   `json:"digest"`
+			Size      int64    `json:"size"`
+			URLs      []string `json:"urls"`
+		} `json:"layers"`
 	}
 	if err := json.Unmarshal(img.body, &m); err != nil {
 		return Resolution{}, fmt.Errorf("%w: manifest from %s is not JSON", ErrBadResponse, t.host)
@@ -163,6 +171,9 @@ func (c *Client) Resolve(ctx context.Context, repo, tagOrDigest string, platform
 	info, err := c.verifyConfig(ctx, t, m.Config.Digest, platform)
 	if err != nil {
 		return Resolution{}, err
+	}
+	for _, l := range m.Layers {
+		res.Layers = append(res.Layers, Layer{MediaType: l.MediaType, Digest: l.Digest, Size: l.Size, HasURLs: len(l.URLs) > 0})
 	}
 	res.ManifestDigest = img.digest
 	res.ConfigDigest = m.Config.Digest

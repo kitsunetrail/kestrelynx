@@ -55,6 +55,11 @@ type Trivy struct {
 	// scans alike. Every scan of a cycle must see the same answers, so the
 	// cycle's scanners share one source. nil leaves the scans unchanged.
 	Unscored SeveritySource
+	// ImageFiles reads the Java runtimes out of the layers of an image that
+	// shows a hint of Java, for the Java advisor. nil leaves the scans
+	// unchanged. The cycle's scanners share one, so they draw on the same
+	// read budget.
+	ImageFiles ImageFileReader
 }
 
 // New returns a Trivy with KestreLynx defaults (HIGH/CRITICAL, trivy on PATH).
@@ -365,7 +370,7 @@ func (t Trivy) Scan(ctx context.Context, target ScanTarget) (result ImageScan) {
 		}
 	}
 	scan.Findings = t.fillUnscored(ctx, scan.Findings)
-	return t.augment(reconcileTarget(scan, target))
+	return t.augment(t.readImageFiles(ctx, reconcileTarget(scan, target), target))
 }
 
 // augment adds t.Runtimes' findings and package lists to a successful scan.
@@ -377,19 +382,38 @@ func (t Trivy) augment(scan ImageScan) ImageScan {
 	}
 	severities := normalizeSeverities(strings.Split(t.severity(), ","))
 	base := scan
-	unchecked := map[string]bool{}
+	unchecked := map[string]string{}
+	retired := map[string]bool{}
 	for _, rt := range t.Runtimes {
 		a := rt.Augment(base, severities)
 		scan.Findings = append(scan.Findings, a.Findings...)
 		scan.Packages = append(scan.Packages, a.Packages...)
 		for _, p := range a.Unchecked {
-			unchecked[p] = true
+			reason := a.UncheckedReason[p]
+			if reason == "" {
+				reason = ReasonAdvisories
+			}
+			unchecked[p] = reason
+		}
+		for _, p := range a.Retired {
+			retired[p] = true
+		}
+		if a.JavaImage != nil {
+			scan.JavaImage = *a.JavaImage
 		}
 	}
-	scan.RuntimeUnchecked = nil
-	for p := range unchecked {
+	scan.RuntimeUnchecked, scan.RuntimeUncheckedReason, scan.RuntimeRetired = nil, nil, nil
+	for p, reason := range unchecked {
 		scan.RuntimeUnchecked = append(scan.RuntimeUnchecked, p)
+		if scan.RuntimeUncheckedReason == nil {
+			scan.RuntimeUncheckedReason = map[string]string{}
+		}
+		scan.RuntimeUncheckedReason[p] = reason
 	}
 	sort.Strings(scan.RuntimeUnchecked)
+	for p := range retired {
+		scan.RuntimeRetired = append(scan.RuntimeRetired, p)
+	}
+	sort.Strings(scan.RuntimeRetired)
 	return scan
 }

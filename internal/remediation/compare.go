@@ -135,6 +135,12 @@ type VerificationResult struct {
 
 	Verdicts   []VulnVerdict `json:"verdicts,omitempty"`
 	Introduced []VulnVerdict `json:"introduced,omitempty"`
+
+	// JavaHeld is true when the Java runtime of the baseline or the
+	// candidate could not be read or checked this cycle (see JavaStateHeld).
+	// The comparison is still shown, but Decide does not propose the
+	// candidate.
+	JavaHeld bool `json:"java_held,omitempty"`
 }
 
 // Counts tallies the verdicts by outcome.
@@ -354,7 +360,9 @@ func Compare(baseline, candidate ScanRecord) VerificationResult {
 	}
 	bm, cm := collect(baseline.Scan, rng), collect(candidate.Scan, rng)
 	candPkgs := packageVersions(candidate.Scan)
-	analysed := analysedKinds(candidate.Scan)
+	_, candJava := javaCoverage(baseline.Scan, candidate.Scan)
+	analysed := analysedKinds(candidate.Scan, candJava)
+	res.JavaHeld = JavaStateOf(baseline.Scan) == JavaStateHeld || JavaStateOf(candidate.Scan) == JavaStateHeld
 	for _, k := range sortedKeys(bm) {
 		v := VulnVerdict{VulnID: k.vuln, Package: k.coord, Severity: bm[k].severity, Before: bm[k].occ}
 		if c, ok := cm[k]; ok {
@@ -414,14 +422,22 @@ type kindKey struct {
 
 // analysedKinds lists the (result type, class) pairs the scan produced a
 // package list for. An OS result counts only when the scan also identified
-// the OS family.
-func analysedKinds(scan scanner.ImageScan) map[kindKey]bool {
+// the OS family. For the Java runtime the package list is not the evidence
+// when the Java analysis says otherwise: java is javaCoverYes (analysed even
+// with no package row) or javaCoverNo (not analysed even with one).
+func analysedKinds(scan scanner.ImageScan, java javaCover) map[kindKey]bool {
 	out := map[kindKey]bool{}
 	for _, rp := range scan.Packages {
 		if rp.Class == inventory.ClassOS && scan.OSFamily == "" {
 			continue
 		}
 		out[kindKey{rp.Type, rp.Class}] = true
+	}
+	switch java {
+	case javaCoverYes:
+		out[javaKind] = true
+	case javaCoverNo:
+		delete(out, javaKind)
 	}
 	return out
 }
@@ -450,7 +466,8 @@ func (r VerificationResult) ApplyCoverage(targets []Target, baseline, candidate 
 	if !r.Comparable {
 		return r
 	}
-	sides := []map[kindKey]bool{analysedKinds(baseline.Scan), analysedKinds(candidate.Scan)}
+	baseJava, candJava := javaCoverage(baseline.Scan, candidate.Scan)
+	sides := []map[kindKey]bool{analysedKinds(baseline.Scan, baseJava), analysedKinds(candidate.Scan, candJava)}
 	var gaps []Target
 	for _, t := range targets {
 	types:

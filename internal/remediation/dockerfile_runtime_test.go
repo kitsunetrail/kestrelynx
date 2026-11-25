@@ -3,6 +3,7 @@ package remediation
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -219,7 +220,7 @@ func TestDockerfileRuntimeRebuild(t *testing.T) {
 		return withRuntime(dfInput("my"+svc+":1", h, svc, layers,
 			runtimeFinding("CVE-R3", "3.12.3"), runtimeFinding("CVE-R1", "3.12.3"), runtimeFinding("CVE-R2", "3.12.3")), "3.12.3")
 	}
-	want := []RuntimeRebuild{{Package: pyRuntime, Installed: "3.12.3", BaseVersion: "3.12.9", Disappearing: []string{"CVE-R1", "CVE-R2"}, Remaining: []string{"CVE-R3"}}}
+	want := []RuntimeRebuild{{Package: pyRuntime, Installed: "3.12.3", BaseVersion: "3.12.9", Disappearing: []string{"CVE-R1", "CVE-R2"}, Remaining: []string{"CVE-R3"}, Targets: []string{"usr/local/bin/python3.12"}}}
 
 	t.Run("recorded on the entity and the item", func(t *testing.T) {
 		e := setup("PYTHON_VERSION=3.12.9")
@@ -291,6 +292,41 @@ func TestDockerfileRuntimeRebuild(t *testing.T) {
 			t.Errorf("item = %+v", it.RebuildRuntimes)
 		}
 	})
+}
+
+// minorPathRuntime is fakeRuntime whose findings sit at the path of the
+// interpreter of their own minor series, as a real scan's do.
+type minorPathRuntime struct{ fakeRuntime }
+
+func (m minorPathRuntime) Augment(scan scanner.ImageScan, severities []string) scanner.RuntimeAugment {
+	a := m.fakeRuntime.Augment(scan, severities)
+	for i := range a.Findings {
+		f := &a.Findings[i]
+		minor := strings.Join(strings.SplitN(f.InstalledVer, ".", 3)[:2], ".")
+		f.Target, f.PkgPath = "usr/local/bin/python"+minor, "usr/local/bin/python"+minor
+	}
+	return a
+}
+
+// A floating tag that moved to another minor series changes the path of the
+// interpreter, not the vulnerabilities it shares with the running image: a CVE
+// that both versions have remains, whatever the path.
+func TestDockerfileRuntimeRebuildAcrossAMinorSeries(t *testing.T) {
+	adv := []scanner.RuntimeAdvisor{minorPathRuntime{fakeRuntime{vulns: map[string][]string{
+		"3.12.3": {"CVE-R1", "CVE-R2", "CVE-R3"},
+		"3.13.1": {"CVE-R3", "CVE-R4"},
+	}}}}
+	e := newDFEnv()
+	e.gh.put("ex/app", ".", "Dockerfile", "FROM python:3-slim\nCOPY . /app\n")
+	e.base("3-slim", withBaseEnv(baseResolution('1', '2', '9', 'b'), "PYTHON_VERSION=3.13.1"), nil, pkgs("libc", "2"))
+	in := withRuntime(dfInput("myapp:1", 'a', "app", appLayers,
+		runtimeFinding("CVE-R1", "3.12.3"), runtimeFinding("CVE-R2", "3.12.3"), runtimeFinding("CVE-R3", "3.12.3")), "3.12.3")
+	it := onlyDockerfile(t, e.planRuntimes(t, prepared, adv, in))
+	want := []RuntimeRebuild{{Package: pyRuntime, Installed: "3.12.3", BaseVersion: "3.13.1",
+		Disappearing: []string{"CVE-R1", "CVE-R2"}, Remaining: []string{"CVE-R3"}, Targets: []string{"usr/local/bin/python3.12"}}}
+	if !reflect.DeepEqual(it.Entities[0].RebuildRuntimes, want) {
+		t.Errorf("entity = %+v\nwant %+v", it.Entities[0].RebuildRuntimes, want)
+	}
 }
 
 func TestMergeRuntimeRebuilds(t *testing.T) {

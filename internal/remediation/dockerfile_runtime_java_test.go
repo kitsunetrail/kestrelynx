@@ -195,7 +195,7 @@ func TestDockerfileJavaRuntimeRebuild(t *testing.T) {
 		e.base("3.12-slim", withBaseEnv(baseResolution('1', '2', '9', 'b'), baseEnv...), nil, pkgs("libc", "2"))
 		return onlyDockerfile(t, e.planRuntimes(t, prepared, adv, in))
 	}
-	want := []RuntimeRebuild{{Package: javaRuntime, Installed: "jdk-21.0.12+7", BaseVersion: "jdk-21.0.13+9", Disappearing: []string{"CVE-J1", "CVE-J2"}, Remaining: []string{"CVE-J3"}}}
+	want := []RuntimeRebuild{{Package: javaRuntime, Installed: "jdk-21.0.12+7", BaseVersion: "jdk-21.0.13+9", Disappearing: []string{"CVE-J1", "CVE-J2"}, Remaining: []string{"CVE-J3"}, Targets: []string{javaBin}}}
 	newer := "JAVA_VERSION=jdk-21.0.13+9"
 	older := "JAVA_VERSION=jdk-21.0.12+7"
 

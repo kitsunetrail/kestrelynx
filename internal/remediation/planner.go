@@ -855,6 +855,10 @@ func (r *run) compare(in ImageInput, ref ImageRef, platform inventory.Platform, 
 	case DecisionNewKEV:
 		set(it, CategoryManual, ReasonIntroducedKEV, fmt.Sprintf("the candidate introduces KEV-listed vulnerabilities: %v", dec.IntroducedKEV))
 	case DecisionAnalysisIncomplete:
+		if dec.Note == NoteJavaRuntimeHeld {
+			set(it, CategoryNotComparable, ReasonAnalysisIncomplete, "the Java runtime of the running image or the candidate was not checked this cycle, so the comparison is not used for a proposal")
+			break
+		}
 		set(it, CategoryNotComparable, ReasonAnalysisIncomplete, fmt.Sprintf("%d of %d targets could not be judged: the candidate scan did not cover their package type", dec.Unknown, dec.Targets))
 	case DecisionTargetsNotDetected:
 		set(it, CategoryNotComparable, ReasonTargetsNotDetected, fmt.Sprintf("none of the %d targets is shown by the baseline comparison scan", dec.Targets))

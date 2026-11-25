@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -247,6 +248,8 @@ func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
 		return fmt.Errorf("%w: redirect to a non-HTTPS URL", ErrBadResponse)
 	}
 	req.Header.Del("Authorization")
+	// The previous URL may carry a signed query; the next hop must not see it.
+	req.Header.Del("Referer")
 	return c.budget.take()
 }
 
@@ -292,6 +295,9 @@ type response struct {
 	// redirected is set when the response came from another URL than the
 	// one requested (a blob served from a CDN, for example).
 	redirected bool
+	// stream is the unread body of a successful streaming request; nil for
+	// every other response. The caller closes it.
+	stream io.ReadCloser
 }
 
 // once sends one GET (one budget unit), reads the body within limit and
@@ -322,7 +328,51 @@ func requestErr(parent, req context.Context, what string, err error) error {
 	if parent.Err() == nil && errors.Is(req.Err(), context.DeadlineExceeded) {
 		return fmt.Errorf("%w: %s", ErrTimeout, what)
 	}
-	return fmt.Errorf("registry: %s: %w", what, err)
+	return fmt.Errorf("registry: %s: %w", what, redactURLError(err))
+}
+
+// redactURLError returns err with the URL of a *url.Error cut down to scheme,
+// host and path: the query of a signed redirect target and any userinfo never
+// reach an error string or a log line. The cause stays wrapped.
+func redactURLError(err error) error {
+	var ue *url.Error
+	if !errors.As(err, &ue) {
+		return err
+	}
+	return &url.Error{Op: ue.Op, URL: redactURL(ue.URL), Err: &redactedCause{msg: safeMessage(ue.Err), cause: ue.Err}}
+}
+
+// redactedCause shows a safe text and keeps the real cause reachable through
+// Unwrap, for errors.Is and errors.As.
+type redactedCause struct {
+	msg   string
+	cause error
+}
+
+func (e *redactedCause) Error() string { return e.msg }
+func (e *redactedCause) Unwrap() error { return e.cause }
+
+var urlInTextRE = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://\S*`)
+
+// safeMessage is the text of err without any URL in it: the standard library
+// puts the whole Location of a redirect into the error when it cannot parse
+// it, and a signed Location carries its signature in the query.
+func safeMessage(err error) string {
+	msg := err.Error()
+	if strings.Contains(msg, "Location header") {
+		return "the redirect response has an unusable Location header"
+	}
+	return urlInTextRE.ReplaceAllString(msg, "(URL)")
+}
+
+// redactURL drops the userinfo, query and fragment of a URL string.
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "(unparsable URL)"
+	}
+	u.User, u.RawQuery, u.Fragment, u.RawFragment = nil, "", "", ""
+	return u.String()
 }
 
 // send performs one GET within timeout. authz is the complete Authorization
@@ -342,7 +392,7 @@ func (c *Client) send(parent context.Context, rawURL, accept, authz string, limi
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, requestErr(parent, ctx, "GET "+req.URL.Redacted(), err)
+		return nil, requestErr(parent, ctx, "GET "+redactURL(req.URL.String()), err)
 	}
 	defer resp.Body.Close()
 
@@ -356,7 +406,7 @@ func (c *Client) send(parent context.Context, rawURL, accept, authz string, limi
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
 	if err != nil {
-		return nil, requestErr(parent, ctx, "read "+req.URL.Redacted(), err)
+		return nil, requestErr(parent, ctx, "read "+redactURL(req.URL.String()), err)
 	}
 	if int64(len(body)) > max {
 		if ok {
@@ -425,6 +475,15 @@ func (c *Client) get(ctx context.Context, t target, rawURL, accept string, limit
 // is one. At most one challenge is answered per call. timeout bounds each
 // request for rawURL; a token request has the ordinary timeout.
 func (c *Client) getSent(ctx context.Context, t target, rawURL, accept string, limit int64, timeout time.Duration) (resp *response, sent bool, err error) {
+	return c.getWith(ctx, t, func(authz string) (*response, bool, error) {
+		return c.once(ctx, rawURL, accept, authz, limit, timeout)
+	})
+}
+
+// getWith runs the authentication flow of getSent around do, which sends one
+// request carrying the given Authorization value ("" for none) and reports
+// whether it sent anything. A successful response is returned as do made it.
+func (c *Client) getWith(ctx context.Context, t target, do func(authz string) (*response, bool, error)) (resp *response, sent bool, err error) {
 	cred, hasCred := c.opts.Auth.For(t.host)
 	if hasCred {
 		// Whatever goes wrong, the text that is kept holds no part of the login.
@@ -433,7 +492,7 @@ func (c *Client) getSent(ctx context.Context, t target, rawURL, accept string, l
 	authz := c.cachedAuthz(t, cred, hasCred)
 	fresh := false
 	for {
-		r, s, err := c.once(ctx, rawURL, accept, authz, limit, timeout)
+		r, s, err := do(authz)
 		sent = sent || s
 		if err != nil {
 			return nil, sent, err

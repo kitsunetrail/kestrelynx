@@ -11,6 +11,7 @@ package javacore
 
 import (
 	"context"
+	"log/slog"
 	"path"
 	"regexp"
 	"sort"
@@ -45,14 +46,34 @@ var (
 // safe for concurrent use.
 type Advisor struct {
 	snap atomic.Pointer[Snapshot]
+	// Log receives the reasons a JDK or an image was left unchecked; nil
+	// means slog.Default().
+	Log *slog.Logger
+}
+
+func (a *Advisor) log() *slog.Logger {
+	if a.Log != nil {
+		return a.Log
+	}
+	return slog.Default()
 }
 
 // Set fixes the snapshot every following Augment uses; nil means the
 // advisories are unavailable.
 func (a *Advisor) Set(s *Snapshot) { a.snap.Store(s) }
 
-// Augment implements scanner.RuntimeAdvisor.
+// Augment implements scanner.RuntimeAdvisor. An image whose layers were read
+// (scan.ImageFiles) is judged by the release files of its JDKs; any other is
+// judged by its environment variables alone.
 func (a *Advisor) Augment(scan scanner.ImageScan, severities []string) scanner.RuntimeAugment {
+	if scan.ImageFiles == nil {
+		return a.augmentEnv(scan, severities)
+	}
+	return a.augmentImage(scan, severities)
+}
+
+// augmentEnv checks the one JDK the image's environment variables describe.
+func (a *Advisor) augmentEnv(scan scanner.ImageScan, severities []string) scanner.RuntimeAugment {
 	ver, vendor, ok := detectVersion(scan.ConfigEnv)
 	if !ok {
 		return scanner.RuntimeAugment{}
@@ -63,23 +84,45 @@ func (a *Advisor) Augment(scan scanner.ImageScan, severities []string) scanner.R
 	}
 	bin := executablePath(scan.ConfigEnv)
 
-	want := make(map[string]bool, len(severities))
-	for _, s := range severities {
-		want[strings.ToUpper(strings.TrimSpace(s))] = true
+	var advs []Advisory
+	for _, adv := range snap.Match(vendor, ver) {
+		if severityWanted(adv.Severity, severities) {
+			advs = append(advs, adv)
+		}
 	}
+	findings := makeFindings(scan.Image, ver.String(), bin, advs)
+	for i := range findings {
+		findings[i].RuntimeSource = scanner.RuntimeSourceEnv
+	}
+	return scanner.RuntimeAugment{
+		Findings: findings,
+		Packages: []scanner.ResultPackages{runtimePackages(bin, ver.String())},
+	}
+}
 
+func severityWanted(sev string, severities []string) bool {
+	for _, s := range severities {
+		if strings.ToUpper(strings.TrimSpace(s)) == sev {
+			return true
+		}
+	}
+	return false
+}
+
+// makeFindings turns the advisories of one JDK, of the severities wanted,
+// into findings of the Java runtime. Every fixed finding carries the version
+// that fixes them all, the highest of the group; the findings are sorted by
+// CVE.
+func makeFindings(image, installed, bin string, advs []Advisory) []scanner.Finding {
 	var findings []scanner.Finding
 	var highest version
 	haveFixed := false
-	for _, adv := range snap.Match(vendor, ver) {
-		if !want[adv.Severity] {
-			continue
-		}
+	for _, adv := range advs {
 		f := scanner.Finding{
-			Image:        scan.Image,
+			Image:        image,
 			Class:        scanner.ClassLang,
 			Package:      inventory.JavaRuntimePackage,
-			InstalledVer: ver.String(),
+			InstalledVer: installed,
 			FixedVer:     adv.FixedVer,
 			Status:       adv.Status,
 			Severity:     scanner.Severity(adv.Severity),
@@ -101,8 +144,6 @@ func (a *Advisor) Augment(scan scanner.ImageScan, severities []string) scanner.R
 		}
 		findings = append(findings, f)
 	}
-	// The group's fixed version is the first finding's, so every fixed
-	// finding carries the version that fixes them all.
 	if haveFixed {
 		for i := range findings {
 			if findings[i].Status == scanner.StatusFixed {
@@ -111,18 +152,19 @@ func (a *Advisor) Augment(scan scanner.ImageScan, severities []string) scanner.R
 		}
 	}
 	sort.Slice(findings, func(i, j int) bool { return findings[i].VulnID < findings[j].VulnID })
+	return findings
+}
 
-	return scanner.RuntimeAugment{
-		Findings: findings,
-		Packages: []scanner.ResultPackages{{
-			Target: bin,
-			Class:  scanner.ClassLang,
-			Type:   string(inventory.EcosystemJavaRuntime),
-			Packages: []scanner.Package{{
-				Name:    inventory.JavaRuntimePackage,
-				Version: ver.String(),
-				PkgPath: bin,
-			}},
+// runtimePackages is the package list entry of one JDK.
+func runtimePackages(bin, installed string) scanner.ResultPackages {
+	return scanner.ResultPackages{
+		Target: bin,
+		Class:  scanner.ClassLang,
+		Type:   string(inventory.EcosystemJavaRuntime),
+		Packages: []scanner.Package{{
+			Name:    inventory.JavaRuntimePackage,
+			Version: installed,
+			PkgPath: bin,
 		}},
 	}
 }

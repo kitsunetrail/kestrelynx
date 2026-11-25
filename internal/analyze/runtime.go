@@ -635,6 +635,14 @@ func instanceVerdictAndSources(g PackageGroup, inst Instance, gen evidence.Gener
 		if v.Usage == evidence.UsageInUse {
 			sources = osPackageSources(gen, g.PackageRef())
 		}
+	case g.Ecosystem == inventory.EcosystemJavaRuntime:
+		// A JDK is run through any of its launchers (bin/java, jre/bin/java).
+		v = evidence.JudgeJavaRuntime(gen, inst.Target, inst.AltTargetList(), inst.TargetsIncomplete)
+		if v.Usage == evidence.UsageInUse {
+			for _, t := range append([]string{inst.Target}, inst.AltTargetList()...) {
+				sources = append(sources, executableSourcesForTarget(gen, t, true)...)
+			}
+		}
 	case evidence.IsEmbeddedEcosystem(g.Ecosystem):
 		v = evidence.JudgeEmbeddedBinary(gen, inst.Target)
 		if v.Usage == evidence.UsageInUse {

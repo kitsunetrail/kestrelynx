@@ -193,6 +193,11 @@ type Decision struct {
 	Note string `json:"note,omitempty"`
 }
 
+// NoteJavaRuntimeHeld is the Decision.Note of an analysis that is incomplete
+// because the Java runtime of the running image or the candidate was not
+// checked.
+const NoteJavaRuntimeHeld = "java_runtime_held"
+
 // Decide applies the adoption rule. The candidate is proposed when the
 // comparison is valid, at least one target is resolved, nothing is introduced
 // in the evaluated range, and no target is unknown (a target whose kind of
@@ -203,7 +208,9 @@ type Decision struct {
 // recorded but not proposed; introduced findings are not offset against
 // resolved ones, and a newly introduced KEV entry is called out for a person
 // to judge. A target the comparison did not report (for example one outside
-// the severity range) counts as undetected, never as resolved.
+// the severity range) counts as undetected, never as resolved. A comparison
+// in which the Java runtime of either side was not checked (JavaHeld) is
+// never proposed.
 func Decide(targets []Target, vr VerificationResult, intel IntelFunc) Decision {
 	d := Decision{Targets: len(targets)}
 	if !vr.Comparable {
@@ -252,6 +259,10 @@ func Decide(targets []Target, vr VerificationResult, intel IntelFunc) Decision {
 		d.Kind = DecisionIntroduced
 	case d.Targets == 0:
 		d.Kind = DecisionNotResolving
+	case vr.JavaHeld:
+		// The Java runtime of one side was not checked: nothing is proposed
+		// for this unit, whatever the other targets say.
+		d.Kind, d.Note = DecisionAnalysisIncomplete, NoteJavaRuntimeHeld
 	case d.Unknown > 0:
 		d.Kind = DecisionAnalysisIncomplete
 	case d.Resolved == 0 && d.Remaining == 0:

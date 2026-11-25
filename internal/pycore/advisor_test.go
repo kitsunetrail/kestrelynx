@@ -50,7 +50,7 @@ func TestAugmentFindings(t *testing.T) {
 		Title: `Python has added a denylist for known compromised certificates to the "ssl" module to ensure user safety even without certificate revocation configured.`,
 		Type:  "python-runtime", Target: "usr/local/bin/python3.12", PkgPath: "usr/local/bin/python3.12",
 	}
-	if *f != want {
+	if !reflect.DeepEqual(*f, want) {
 		t.Errorf("finding =\n%+v\nwant\n%+v", *f, want)
 	}
 	if f.URL != "https://mail.python.org/archives/list/security-announce@python.org/thread/FNAJMZV6XQYLVPABNINDMF3VF66AYLW4/" {

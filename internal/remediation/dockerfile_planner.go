@@ -695,7 +695,7 @@ func (r *run) dockerfileEntity(in ImageInput, base DockerfileBase, sel *dfSelect
 	if sel.out != nil {
 		return fromItem(*sel.out)
 	}
-	c := r.compareBase(ref, sel.tag, platform, curRes, targets)
+	c := r.compareBase(ref, sel.tag, platform, curRes, targets, JavaStateOf(in.Scan) == JavaStateHeld)
 	ent.CandidateBase = c.cand
 	ent.BaselineScan, ent.CandidateScan = c.baseScan, c.candScan
 	if c.out != nil {
@@ -714,6 +714,9 @@ func (r *run) dockerfileEntity(in ImageInput, base DockerfileBase, sel *dfSelect
 	case DecisionNewKEV:
 		return outcome(CategoryManual, ReasonIntroducedKEV, fmt.Sprintf("the candidate base introduces KEV-listed vulnerabilities: %v", dec.IntroducedKEV))
 	case DecisionAnalysisIncomplete:
+		if dec.Note == NoteJavaRuntimeHeld {
+			return outcome(CategoryNotComparable, ReasonAnalysisIncomplete, "the Java runtime of the running image or the candidate base was not checked this cycle, so the comparison is not used for a proposal")
+		}
 		return outcome(CategoryNotComparable, ReasonAnalysisIncomplete, fmt.Sprintf("%d of %d base findings could not be judged: the candidate scan did not cover their package type", dec.Unknown, dec.Targets))
 	case DecisionTargetsNotDetected:
 		return outcome(CategoryNotComparable, ReasonTargetsNotDetected, fmt.Sprintf("none of the %d base findings is shown by the scan of the current base", dec.Targets))
@@ -740,8 +743,10 @@ type baseComparison struct {
 // compareBase resolves tag as a candidate for the pinned base ref, which
 // resolved to curRes, and compares the two base images under the prepared
 // conditions. It writes nothing to an entity, so a candidate the entity does
-// not adopt is compared the same way.
-func (r *run) compareBase(ref ImageRef, tag string, platform inventory.Platform, curRes registry.Resolution, targets []Target) baseComparison {
+// not adopt is compared the same way. runningHeld says the Java runtime of
+// the running image itself was not checked this cycle: nothing is proposed
+// for the unit then, as when either base's was not.
+func (r *run) compareBase(ref ImageRef, tag string, platform inventory.Platform, curRes registry.Resolution, targets []Target, runningHeld bool) baseComparison {
 	var c baseComparison
 	fail := func(cat Category, reason Reason, detail string) baseComparison {
 		c.out = &planOutcome{cat, reason, detail}
@@ -797,6 +802,7 @@ func (r *run) compareBase(ref ImageRef, tag string, platform inventory.Platform,
 		return fail(CategoryDeferred, r.deadlineReason(), err.Error())
 	}
 	vr := Compare(baseScan.rec, candScan.rec).ApplyCoverage(targets, baseScan.rec, candScan.rec)
+	vr.JavaHeld = vr.JavaHeld || runningHeld
 	dec := Decide(targets, vr, r.intel())
 	c.vr, c.dec = &vr, &dec
 	return c

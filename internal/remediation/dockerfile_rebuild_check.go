@@ -254,6 +254,11 @@ func fixedFinding(f scanner.Finding) bool {
 // finding remains, also what it reports without a fix; a finding of the running
 // image counts only when it names a fix. Language runtimes are left to the
 // runtimes given, which were checked from the base's configuration.
+// judgedKey identifies one runtime finding for the rebuild check.
+func judgedKey(pkg, installed, target, vuln string) string {
+	return pkg + "\x00" + installed + "\x00" + target + "\x00" + vuln
+}
+
 func classifyRebuild(running, base scanner.ImageScan, severities []string, runtimes []RuntimeRebuild) *RebuildCheck {
 	rng := map[string]bool{}
 	for _, s := range severities {
@@ -299,14 +304,24 @@ func classifyRebuild(running, base scanner.ImageScan, severities []string, runti
 	}
 
 	// A runtime finding is judged when the runtime's own check names it, for
-	// the version it was found at: a rescan may report what that check did not.
+	// the version and the executable it was found at: a rescan may report
+	// what that check did not, and another JDK of the same version has the
+	// same CVEs at another path. A record without targets covers every path.
 	judged := map[string]bool{}
 	for _, rr := range runtimes {
 		for _, vulns := range [][]string{rr.Disappearing, rr.Remaining} {
 			for _, v := range vulns {
-				judged[rr.Package+"\x00"+rr.Installed+"\x00"+v] = true
+				if len(rr.Targets) == 0 {
+					judged[judgedKey(rr.Package, rr.Installed, "", v)] = true
+				}
+				for _, t := range rr.Targets {
+					judged[judgedKey(rr.Package, rr.Installed, t, v)] = true
+				}
 			}
 		}
+	}
+	isJudged := func(f scanner.Finding) bool {
+		return judged[judgedKey(f.Package, f.InstalledVer, f.Target, f.VulnID)] || judged[judgedKey(f.Package, f.InstalledVer, "", f.VulnID)]
 	}
 	gone, remaining, notInBase, onlyInBase, unsettled := rebuildBucket{}, rebuildBucket{}, rebuildBucket{}, rebuildBucket{}, rebuildBucket{}
 	other := map[rebuildPackageKey]bool{}
@@ -317,7 +332,7 @@ func classifyRebuild(running, base scanner.ImageScan, severities []string, runti
 			continue
 		}
 		if isRuntimeType(f.Type) {
-			if fixedFinding(f) && !judged[f.Package+"\x00"+f.InstalledVer+"\x00"+f.VulnID] {
+			if fixedFinding(f) && !isJudged(f) {
 				undetermined[f.VulnID+"\x00"+f.Package] = true
 			}
 			continue

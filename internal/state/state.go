@@ -392,7 +392,12 @@ type Diff struct {
 	ResolvedEOSL []string
 	Changes      []Change
 	Resolved     []Resolved
-	Replaced     []ImageReplacement
+	// Retired lists the (reference, runtime package) pairs whose previous
+	// record was dropped because the runtime is no longer checked (see
+	// analyze.Report.RuntimeRetired). It holds only pairs that had a record,
+	// and they are not in Resolved.
+	Retired  []Resolved
+	Replaced []ImageReplacement
 	// RefChanges lists the references whose history was carried over to a
 	// new reference of the same repository (see RefChange).
 	RefChanges []RefChange
@@ -434,7 +439,7 @@ type Diff struct {
 
 // HasChanges reports whether anything is new or resolved since the last scan.
 func (d Diff) HasChanges() bool {
-	return len(d.Changes) > 0 || len(d.Resolved) > 0 || len(d.NewEOSL) > 0 || len(d.ResolvedEOSL) > 0 || len(d.Replaced) > 0 || len(d.RefChanges) > 0 ||
+	return len(d.Changes) > 0 || len(d.Resolved) > 0 || len(d.Retired) > 0 || len(d.NewEOSL) > 0 || len(d.ResolvedEOSL) > 0 || len(d.Replaced) > 0 || len(d.RefChanges) > 0 ||
 		len(d.NewEOLPackages) > 0 || len(d.ResolvedEOLPackages) > 0
 }
 
@@ -514,6 +519,12 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 	for _, u := range r.RuntimeUnchecked {
 		runtimeUnchecked[u] = true
 	}
+	// runtimeRetired holds the pairs whose runtime is no longer checked: their
+	// previous records are dropped without counting as resolved.
+	runtimeRetired := map[analyze.RuntimeUncheckedRef]bool{}
+	for _, u := range r.RuntimeRetired {
+		runtimeRetired[u] = true
+	}
 	for _, o := range r.Images {
 		if o.ScanFailed {
 			fullyFailedRef[o.Ref] = true
@@ -527,6 +538,15 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 	}
 	next.Images = nextImages(prev.Images, r.Images, now)
 	d := Diff{Replaced: replacedImages(prev.Images, r.Images), RefChanges: refChanges}
+	retiredSeen := map[Resolved]bool{}
+	retire := func(ref, pkg string) {
+		x := Resolved{Image: ref, Package: pkg}
+		if retiredSeen[x] {
+			return
+		}
+		retiredSeen[x] = true
+		d.Retired = append(d.Retired, x)
+	}
 
 	// Report order: sections are already priority-sorted.
 	cur, order := mergeSections(r.Actionable, r.Watch, r.WontFix)
@@ -690,6 +710,11 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			carryMuted(next.Muted, prev.Muted, k)
 			heldKey[k] = true
 			continue
+		case runtimeRetired[analyze.RuntimeUncheckedRef{Image: ref, Package: keyPackage(k)}]:
+			// The runtime is no longer checked: the record ends without a
+			// resolution.
+			retire(ref, keyPackage(k))
+			continue
 		case runtimeUnchecked[analyze.RuntimeUncheckedRef{Image: ref, Package: keyPackage(k)}]:
 			// The scan succeeded but this language runtime was not checked:
 			// hold its record like a partially failed scan, other packages
@@ -726,6 +751,11 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 			next.EOLPackages[k] = e
 			continue
 		}
+		// A retired runtime's record ends without a resolution.
+		if runtimeRetired[analyze.RuntimeUncheckedRef{Image: ref, Package: keyPackage(k)}] {
+			retire(ref, keyPackage(k))
+			continue
+		}
 		// An unchecked language runtime is held the same way.
 		if runtimeUnchecked[analyze.RuntimeUncheckedRef{Image: ref, Package: keyPackage(k)}] {
 			next.EOLPackages[k] = e
@@ -735,6 +765,12 @@ func Compute(prev State, r analyze.Report) (Diff, State) {
 		}
 		d.ResolvedEOLPackages = append(d.ResolvedEOLPackages, ResolvedEOL{Image: ref, Package: keyPackage(k), StillOpen: cur[k] != nil})
 	}
+	sort.Slice(d.Retired, func(i, j int) bool {
+		if d.Retired[i].Image != d.Retired[j].Image {
+			return d.Retired[i].Image < d.Retired[j].Image
+		}
+		return d.Retired[i].Package < d.Retired[j].Package
+	})
 	sort.Slice(d.ResolvedEOLPackages, func(i, j int) bool {
 		if d.ResolvedEOLPackages[i].Image != d.ResolvedEOLPackages[j].Image {
 			return d.ResolvedEOLPackages[i].Image < d.ResolvedEOLPackages[j].Image

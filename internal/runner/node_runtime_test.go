@@ -10,6 +10,7 @@ import (
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 
 	"github.com/kitsunetrail/kestrelynx/internal/scanner"
+	"github.com/kitsunetrail/kestrelynx/internal/state"
 )
 
 // fakeNodeRuntime records when it was refreshed relative to scans. A name
@@ -141,6 +142,38 @@ func TestRunOnce_RuntimeUncheckedForcesNotification(t *testing.T) {
 		}
 		if got := notif.msg.Report.RuntimeUnchecked; len(got) != 1 || got[0] != (analyze.RuntimeUncheckedRef{Image: "node:22", Package: inventory.NodeRuntimePackage}) {
 			t.Errorf("diff=%v: Report.RuntimeUnchecked = %v", diff, got)
+		}
+	}
+}
+
+func TestRunOnce_RetiredRuntimeAloneForcesNotificationOnce(t *testing.T) {
+	const img = "app:1"
+	java := scanner.Finding{Image: img, Package: inventory.JavaRuntimePackage, VulnID: "CVE-1", Status: scanner.StatusFixed, Severity: "HIGH"}
+	_, prev := state.Compute(state.State{}, analyze.Build([]scanner.ImageScan{{Image: img, Findings: []scanner.Finding{java}}}, nil, analyze.Triage{}, clock()))
+
+	retiredScan := scanner.ImageScan{RuntimeRetired: []string{inventory.JavaRuntimePackage}}
+	store := &fakeStore{st: prev}
+	var events []string
+	for cycle := 1; cycle <= 2; cycle++ {
+		notif := &fakeNotifier{}
+		r := Runner{
+			Lister:        fakeLister{containers: refs(img)},
+			Scanner:       eventScanner{events: &events, scan: retiredScan},
+			Notifier:      notif,
+			Store:         store,
+			FullReportDay: NoFullReport,
+			Now:           clock,
+		}
+		if err := r.RunOnce(context.Background()); err != nil {
+			t.Fatalf("cycle %d: RunOnce: %v", cycle, err)
+		}
+		if cycle == 1 {
+			if !notif.called || notif.msg.Diff == nil || len(notif.msg.Diff.Retired) != 1 {
+				t.Fatalf("cycle 1: called = %v, diff = %+v, want one retirement", notif.called, notif.msg.Diff)
+			}
+			store.st = *store.saved
+		} else if notif.called {
+			t.Errorf("cycle 2: a repeated retirement sent a notification")
 		}
 	}
 }

@@ -30,6 +30,22 @@ type RuntimeRebuild struct {
 	// counted.
 	Disappearing []string `json:"disappearing,omitempty"`
 	Remaining    []string `json:"remaining,omitempty"`
+	// Targets are the executable paths of the running image's findings the
+	// record covers, sorted. A finding of the same version and CVE at another
+	// path, such as a second JDK, is not covered.
+	Targets []string `json:"targets,omitempty"`
+}
+
+// envDerived reports whether the version of a runtime finding is the one the
+// image's environment variables name: findings of Node.js and CPython, the
+// environment route of Java, and a JDK read from the image's files that is
+// the very runtime the environment names. A JDK that is only another one in
+// the image is not.
+func envDerived(f scanner.Finding) bool {
+	if f.RuntimeSource == scanner.RuntimeSourceRelease {
+		return f.RuntimeSameAsEnv
+	}
+	return true
 }
 
 // isRuntimeType reports whether a finding's Type is a language runtime
@@ -68,12 +84,15 @@ func sameRuntimeLocation(t string, imageEnv, baseEnv []string) bool {
 // moveRuntimeFindings moves the runtime findings that could not be placed in a
 // layer into the base's group when the running image and the base declare the
 // same version of that runtime, installed in the same place. The environment
-// variables are the only evidence the runtime came from the base.
+// variables are the only evidence the runtime came from the base. A finding
+// from the JDK files of the image (RuntimeSourceRelease) is placed by its
+// layer alone: an overwritten, mixed or unplaced JDK is not moved to the
+// base on the strength of the environment variables.
 func moveRuntimeFindings(cl *FindingsByLayer, imageEnv, baseEnv []string) {
 	var keep []scanner.Finding
 	for _, f := range cl.Unknown {
 		name := inventory.RuntimeVersionEnv(inventory.Ecosystem(f.Type))
-		if name != "" {
+		if name != "" && f.RuntimeSource != scanner.RuntimeSourceRelease {
 			iv, iok := envValue(imageEnv, name)
 			bv, bok := envValue(baseEnv, name)
 			if iok && bok && iv == bv && sameRuntimeLocation(f.Type, imageEnv, baseEnv) {
@@ -132,7 +151,7 @@ func (r *run) baseRuntimes(env []string, platform inventory.Platform) map[string
 func (r *run) runtimeRebuilds(in ImageInput, baseEnv []string) []RuntimeRebuild {
 	running := map[string][]scanner.Finding{}
 	for _, f := range in.Scan.Findings {
-		if isRuntimeType(f.Type) {
+		if isRuntimeType(f.Type) && envDerived(f) {
 			running[f.Type] = append(running[f.Type], f)
 		}
 	}
@@ -157,6 +176,11 @@ func (r *run) runtimeRebuilds(in ImageInput, baseEnv []string) []RuntimeRebuild 
 		rr := RuntimeRebuild{Package: b.Package, Installed: running[t][0].InstalledVer, BaseVersion: b.Version}
 		seen := map[string]bool{}
 		for _, f := range running[t] {
+			// The paths only say which findings of the report the record
+			// covers; whether a CVE disappears is decided by the CVE alone.
+			if !containsString(rr.Targets, f.Target) {
+				rr.Targets = append(rr.Targets, f.Target)
+			}
 			if seen[f.VulnID] {
 				continue
 			}
@@ -169,6 +193,7 @@ func (r *run) runtimeRebuilds(in ImageInput, baseEnv []string) []RuntimeRebuild 
 		}
 		sort.Strings(rr.Disappearing)
 		sort.Strings(rr.Remaining)
+		sort.Strings(rr.Targets)
 		out = append(out, rr)
 	}
 	return out
@@ -179,7 +204,7 @@ func (r *run) runtimeRebuilds(in ImageInput, baseEnv []string) []RuntimeRebuild 
 // still has is not counted as disappearing.
 func mergeRuntimeRebuilds(ents []DockerfileEntity) []RuntimeRebuild {
 	type key struct{ pkg, installed, base string }
-	type sets struct{ dis, rem map[string]bool }
+	type sets struct{ dis, rem, targets map[string]bool }
 	groups := map[key]*sets{}
 	var keys []key
 	for _, e := range ents {
@@ -187,7 +212,7 @@ func mergeRuntimeRebuilds(ents []DockerfileEntity) []RuntimeRebuild {
 			k := key{rr.Package, rr.Installed, rr.BaseVersion}
 			g := groups[k]
 			if g == nil {
-				g = &sets{dis: map[string]bool{}, rem: map[string]bool{}}
+				g = &sets{dis: map[string]bool{}, rem: map[string]bool{}, targets: map[string]bool{}}
 				groups[k] = g
 				keys = append(keys, k)
 			}
@@ -196,6 +221,9 @@ func mergeRuntimeRebuilds(ents []DockerfileEntity) []RuntimeRebuild {
 			}
 			for _, v := range rr.Remaining {
 				g.rem[v] = true
+			}
+			for _, v := range rr.Targets {
+				g.targets[v] = true
 			}
 		}
 	}
@@ -221,8 +249,12 @@ func mergeRuntimeRebuilds(ents []DockerfileEntity) []RuntimeRebuild {
 		for v := range g.rem {
 			rr.Remaining = append(rr.Remaining, v)
 		}
+		for v := range g.targets {
+			rr.Targets = append(rr.Targets, v)
+		}
 		sort.Strings(rr.Disappearing)
 		sort.Strings(rr.Remaining)
+		sort.Strings(rr.Targets)
 		out = append(out, rr)
 	}
 	return out

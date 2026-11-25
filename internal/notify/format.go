@@ -127,42 +127,110 @@ func unconfirmedRefsLine(r analyze.Report, msg messages) string {
 	return fmt.Sprintf(msg.UnconfirmedRefsLine, strings.Join(refs, ", "))
 }
 
-// runtimeUncheckedLine is the note that a language runtime of some images was
-// not checked ("" when every one was). It names the runtimes, sorted, and
-// counts the distinct images.
-func runtimeUncheckedLine(r analyze.Report, msg messages) string {
-	if len(r.RuntimeUnchecked) == 0 {
-		return ""
+// uncheckedReasonOf is why the runtime of ref was not checked; a pair without
+// a recorded reason means the advisory data was unavailable.
+func uncheckedReasonOf(r analyze.Report, u analyze.RuntimeUncheckedRef) string {
+	if reason := r.RuntimeUncheckedReason[u]; reason != "" {
+		return reason
 	}
+	return scanner.ReasonAdvisories
+}
+
+// runtimeUncheckedLine is the note that a language runtime of some images was
+// not checked for lack of advisory data ("" when every one was). It names the
+// runtimes, sorted, and counts the distinct images.
+func runtimeUncheckedLine(r analyze.Report, msg messages) string {
 	images := map[string]bool{}
 	seen := map[string]bool{}
 	var names []string
 	for _, u := range r.RuntimeUnchecked {
+		if uncheckedReasonOf(r, u) != scanner.ReasonAdvisories {
+			continue
+		}
 		images[u.Image] = true
 		if !seen[u.Package] {
 			seen[u.Package] = true
 			names = append(names, u.Package)
 		}
 	}
+	if len(images) == 0 {
+		return ""
+	}
 	sort.Strings(names)
 	return fmt.Sprintf(msg.RuntimeUncheckedLine, strings.Join(names, msg.RuntimeNameSeparator), len(images))
 }
 
-// runtimeUncheckedPayload is one entry of the webhook's runtime_unchecked.
+// runtimeReasonLine is the note, one per reason other than missing advisory
+// data, that the runtime of some images was not read this cycle ("" when none
+// was). format takes the count of distinct images.
+func runtimeReasonLine(r analyze.Report, reason, format string) string {
+	images := map[string]bool{}
+	for _, u := range r.RuntimeUnchecked {
+		if uncheckedReasonOf(r, u) == reason {
+			images[u.Image] = true
+		}
+	}
+	if len(images) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(format, len(images))
+}
+
+// runtimeDeferredLine is the note that reading the runtime of some images was
+// put off to the next cycle.
+func runtimeDeferredLine(r analyze.Report, msg messages) string {
+	return runtimeReasonLine(r, scanner.ReasonDeferred, msg.RuntimeDeferredLine)
+}
+
+// runtimeUnreadableLine is the note that the runtime of some images cannot be
+// read.
+func runtimeUnreadableLine(r analyze.Report, msg messages) string {
+	return runtimeReasonLine(r, scanner.ReasonUnreadable, msg.RuntimeUnreadableLine)
+}
+
+// runtimeRetiredLine is the note that tracking of the runtime of some images
+// ended this cycle; it comes from the diff, so it is shown once ("" without
+// one).
+func runtimeRetiredLine(d *state.Diff, msg messages) string {
+	if d == nil || len(d.Retired) == 0 {
+		return ""
+	}
+	images := map[string]bool{}
+	for _, x := range d.Retired {
+		images[x.Image] = true
+	}
+	return fmt.Sprintf(msg.RuntimeRetiredLine, len(images))
+}
+
+// runtimeUncheckedPayload is one entry of the webhook's runtime_unchecked, or
+// of runtime_retired (which carries no reason).
 type runtimeUncheckedPayload struct {
 	Image   string `json:"image"`
 	Package string `json:"package"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 // runtimeUncheckedPayloads converts the report's pairs (nil when none, so the
-// field is omitted).
-func runtimeUncheckedPayloads(refs []analyze.RuntimeUncheckedRef) []runtimeUncheckedPayload {
-	if len(refs) == 0 {
+// field is omitted), each with the reason it was not checked.
+func runtimeUncheckedPayloads(r analyze.Report) []runtimeUncheckedPayload {
+	if len(r.RuntimeUnchecked) == 0 {
 		return nil
 	}
-	out := make([]runtimeUncheckedPayload, len(refs))
-	for i, u := range refs {
-		out[i] = runtimeUncheckedPayload{Image: u.Image, Package: u.Package}
+	out := make([]runtimeUncheckedPayload, len(r.RuntimeUnchecked))
+	for i, u := range r.RuntimeUnchecked {
+		out[i] = runtimeUncheckedPayload{Image: u.Image, Package: u.Package, Reason: uncheckedReasonOf(r, u)}
+	}
+	return out
+}
+
+// runtimeRetiredPayloads converts the diff's retired pairs (nil when none).
+func runtimeRetiredPayloads(d *state.Diff) []runtimeUncheckedPayload {
+	if d == nil || len(d.Retired) == 0 {
+		return nil
+	}
+	out := make([]runtimeUncheckedPayload, len(d.Retired))
+	for i, x := range d.Retired {
+		out[i] = runtimeUncheckedPayload{Image: x.Image, Package: x.Package}
 	}
 	return out
 }
@@ -476,9 +544,12 @@ type webhookPayload struct {
 	EOLPackages []imagePayload      `json:"eol_packages"` // every end-of-life package group, folded and act_now ones included
 	ScanErrors  []errorPayload      `json:"scan_errors"`
 	// RuntimeUnchecked lists the language runtimes of images that were not
-	// checked because their advisory data was unavailable; absent when none.
+	// checked, with the reason (advisories, deferred or unreadable); absent when none.
 	RuntimeUnchecked []runtimeUncheckedPayload `json:"runtime_unchecked,omitempty"`
-	Diff             *diffPayload              `json:"diff,omitempty"`
+	// RuntimeRetired lists the runtimes whose tracking ended this cycle
+	// (diff mode only); absent when none.
+	RuntimeRetired []runtimeUncheckedPayload `json:"runtime_retired,omitempty"`
+	Diff           *diffPayload              `json:"diff,omitempty"`
 	// Runtime is the Sensor-wide runtime status, present only when
 	// runtime.enabled is true (analyze.Report.Runtime != nil).
 	Runtime *runtimePayload `json:"runtime,omitempty"`
@@ -848,7 +919,8 @@ func BuildWebhookPayloadWithPlan(r analyze.Report, d *state.Diff, plan *PlanInfo
 		EOLPackages: imagePayloads(r.EOLPackages, byRef),
 		ScanErrors:  errorPayloads(r.ScanErrors),
 
-		RuntimeUnchecked: runtimeUncheckedPayloads(r.RuntimeUnchecked),
+		RuntimeUnchecked: runtimeUncheckedPayloads(r),
+		RuntimeRetired:   runtimeRetiredPayloads(d),
 	}
 	if r.Triage {
 		pv := r.ByPriority()

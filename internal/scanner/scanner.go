@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/kitsunetrail/kestrelynx/internal/imagefs"
 	"github.com/kitsunetrail/kestrelynx/internal/inventory"
 )
 
@@ -93,6 +94,22 @@ type Finding struct {
 	// didn't report one (typically OS packages, and any language package
 	// resolved without a distinct file path).
 	PkgPath string
+	// RuntimeSource says where a runtime finding's version came from: "" for
+	// Trivy's own findings, RuntimeSourceEnv for the image's environment
+	// variables and RuntimeSourceRelease for the JDK's release file read from
+	// the image's layers.
+	RuntimeSource string
+	// RuntimeSameAsEnv is set on RuntimeSourceRelease findings only: the JDK
+	// is the one the environment variables describe (its directory is
+	// JAVA_HOME resolved in the image, JAVA_VERSION has the Temurin form, and
+	// the JDK does not come from mixed layers).
+	RuntimeSameAsEnv bool
+	// AltTargets are the other executable paths of the same runtime (for
+	// example jre/bin/java next to bin/java), normalized like Target.
+	AltTargets []string
+	// TargetsIncomplete is true when some executable path of the runtime
+	// could not be resolved, so Target and AltTargets may not list them all.
+	TargetsIncomplete bool
 	// LayerDiffID and LayerDigest are Trivy's Layer.DiffID and Layer.Digest of
 	// the layer the vulnerable package was attributed to, verbatim. Either is
 	// empty when the report carried none (Trivy attributes a package to a
@@ -206,6 +223,74 @@ type ImageScan struct {
 	// their findings says nothing. nil when every detected runtime was
 	// checked.
 	RuntimeUnchecked []string
+	// RuntimeUncheckedReason says, per package name of RuntimeUnchecked, why
+	// it was not checked: ReasonAdvisories, ReasonDeferred or
+	// ReasonUnreadable. nil when RuntimeUnchecked is empty.
+	RuntimeUncheckedReason map[string]string
+	// RuntimeRetired lists, sorted and without duplicates, the package names
+	// of the runtimes whose earlier findings no longer apply because the
+	// image now holds only runtimes that are not checked. nil when none.
+	RuntimeRetired []string
+
+	// JavaImage is what reading the image's JDK files came to.
+	JavaImage JavaImageState
+	// ImageFiles is the outcome of reading the image's layers for its Java
+	// runtimes, handed to the Java advisor. nil when the image was not read.
+	// It is working data of one scan and is never persisted.
+	ImageFiles *imagefs.Outcome
+
+	// ConfigEnvTruncated is true when an entry of the image's environment was
+	// dropped from ConfigEnv for its count or its length.
+	ConfigEnvTruncated bool
+	// HasJarResult is true when the report held a Result of Type "jar".
+	HasJarResult bool
+}
+
+// Why a runtime of RuntimeUnchecked was not checked.
+const (
+	// ReasonAdvisories: the advisory data was unavailable.
+	ReasonAdvisories = "advisories"
+	// ReasonDeferred: reading the image was put off to the next cycle.
+	ReasonDeferred = "deferred"
+	// ReasonUnreadable: the image cannot be read and nothing else says what
+	// runtime it holds.
+	ReasonUnreadable = "unreadable"
+)
+
+// Values of Finding.RuntimeSource.
+const (
+	RuntimeSourceEnv     = "env"
+	RuntimeSourceRelease = "release"
+)
+
+// Values of JavaImageState.Kind.
+const (
+	// JavaImageComplete: the image's JDKs were read.
+	JavaImageComplete = "complete"
+	// JavaImageDeferred: reading was put off to the next cycle.
+	JavaImageDeferred = "deferred"
+	// JavaImagePermanent: the image cannot be read.
+	JavaImagePermanent = "permanent"
+)
+
+// JavaImageState is what reading an image's JDK files came to; the zero value
+// means it was not attempted (no hint of Java, or reading is off).
+type JavaImageState struct {
+	// Kind is "" (not attempted), JavaImageComplete, JavaImageDeferred or
+	// JavaImagePermanent.
+	Kind string
+	// HasJDK: the read found a JDK. HasExcluded: one of them is of a vendor
+	// that is not checked.
+	HasJDK      bool
+	HasExcluded bool
+	// Suppressed: a CVE was left out because the vendor's fix cannot be told
+	// from the version.
+	Suppressed bool
+	// UsedEnvFallback: the image could not be read and the environment
+	// variables gave the runtime instead.
+	UsedEnvFallback bool
+	// Reason says why the read was deferred or permanent.
+	Reason string
 }
 
 // Bounds on ImageScan.ConfigEnv, so a hostile report cannot make the parser
@@ -232,8 +317,16 @@ type RuntimeAugment struct {
 	// counts as present in the image even when it has no findings.
 	Packages []ResultPackages
 	// Unchecked lists the package names of the runtimes that were detected
-	// but whose advisories were unavailable.
+	// but could not be checked.
 	Unchecked []string
+	// UncheckedReason gives the reason of an Unchecked package (the Reason
+	// constants); a package without an entry means ReasonAdvisories.
+	UncheckedReason map[string]string
+	// Retired lists the package names of the runtimes that are no longer
+	// tracked: the image holds only runtimes that are not checked.
+	Retired []string
+	// JavaImage, when set, is what the advisor made of the image's JDK files.
+	JavaImage *JavaImageState
 }
 
 // maxRetainedPackages bounds how many packages ParseReport keeps per scan, so
@@ -385,10 +478,13 @@ func ParseReport(data []byte) (ImageScan, error) {
 	}
 	for _, e := range r.Metadata.ImageConfig.Config.Env {
 		if len(scan.ConfigEnv) >= maxConfigEnv {
+			scan.ConfigEnvTruncated = true
 			break
 		}
 		if len(e) <= maxConfigEnvLen {
 			scan.ConfigEnv = append(scan.ConfigEnv, e)
+		} else {
+			scan.ConfigEnvTruncated = true
 		}
 	}
 	// A Metadata.ImageID that fails the boundary check is never normalized
@@ -402,6 +498,9 @@ func ParseReport(data []byte) (ImageScan, error) {
 	for _, res := range r.Results {
 		class := classOf(res.Class)
 		target := trimLeadingSlash(res.Target)
+		if res.Type == "jar" && len(res.Packages) > 0 {
+			scan.HasJarResult = true
+		}
 		if len(res.Packages) > 0 {
 			rp := ResultPackages{Target: target, Class: class, Type: res.Type}
 			for _, p := range res.Packages {

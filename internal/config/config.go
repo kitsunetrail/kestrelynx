@@ -115,7 +115,22 @@ type JavaRuntimeConfig struct {
 	ReleasesURL string
 	// FeatureReleasesURL is the Temurin list of release series.
 	FeatureReleasesURL string
+	// ReadImages turns on reading the JDK's release file out of the image
+	// layers of the images that show a hint of Java; off, only the image's
+	// environment variables are used.
+	ReadImages bool
+	// RegistryBytesPerCycle and DockerBytesPerCycle bound what one cycle
+	// reads for it: compressed bytes from registries, bytes of the Docker
+	// export stream.
+	RegistryBytesPerCycle int64
+	DockerBytesPerCycle   int64
 }
+
+// Defaults of the Java image read limits.
+const (
+	defaultJavaRegistryBytesPerCycle = 2 << 30
+	defaultJavaDockerBytesPerCycle   = 8 << 30
+)
 
 // Email TLS modes. Unencrypted SMTP is not accepted.
 const (
@@ -533,6 +548,11 @@ type rawConfig struct {
 			AdvisoriesURL      string `yaml:"advisories_url"`
 			ReleasesURL        string `yaml:"releases_url"`
 			FeatureReleasesURL string `yaml:"feature_releases_url"`
+			ReadImages         *bool  `yaml:"read_images"`
+			ReadLimits         struct {
+				RegistryBytesPerCycle *string `yaml:"registry_bytes_per_cycle"`
+				DockerBytesPerCycle   *string `yaml:"docker_bytes_per_cycle"`
+			} `yaml:"read_limits"`
 		} `yaml:"java_runtime"`
 		CVERecordSeverity struct {
 			Enabled *bool `yaml:"enabled"`
@@ -799,6 +819,15 @@ func Parse(data []byte) (Config, error) {
 		wk.ToolVersions.CacheMaxSize = n
 	}
 
+	javaRegistryBytes, err := readLimitOr(raw.Scan.JavaRuntime.ReadLimits.RegistryBytesPerCycle, defaultJavaRegistryBytesPerCycle, "scan.java_runtime.read_limits.registry_bytes_per_cycle")
+	if err != nil {
+		return Config{}, err
+	}
+	javaDockerBytes, err := readLimitOr(raw.Scan.JavaRuntime.ReadLimits.DockerBytesPerCycle, defaultJavaDockerBytesPerCycle, "scan.java_runtime.read_limits.docker_bytes_per_cycle")
+	if err != nil {
+		return Config{}, err
+	}
+
 	var registries []RegistryLogin
 	for i := range raw.Registries {
 		rr := &raw.Registries[i]
@@ -844,6 +873,10 @@ func Parse(data []byte) (Config, error) {
 				AdvisoriesURL:      strings.TrimSpace(raw.Scan.JavaRuntime.AdvisoriesURL),
 				ReleasesURL:        strings.TrimSpace(raw.Scan.JavaRuntime.ReleasesURL),
 				FeatureReleasesURL: strings.TrimSpace(raw.Scan.JavaRuntime.FeatureReleasesURL),
+				ReadImages:         boolOr(raw.Scan.JavaRuntime.ReadImages, true),
+
+				RegistryBytesPerCycle: javaRegistryBytes,
+				DockerBytesPerCycle:   javaDockerBytes,
 			},
 			CVERecordSeverity: CVERecordSeverityConfig{
 				Enabled: boolOr(raw.Scan.CVERecordSeverity.Enabled, true),
@@ -1316,6 +1349,19 @@ func validateWorker(w RemediationWorkerConfig, kubernetes bool) error {
 		return fmt.Errorf("config: remediation.worker.tool_versions.cache_max_size must be at least 128MiB, got %d bytes", w.ToolVersions.CacheMaxSize)
 	}
 	return nil
+}
+
+// readLimitOr reads the size a read-limit key holds, def when it is unset.
+// The error names the key and never the value.
+func readLimitOr(p *string, def int64, key string) (int64, error) {
+	if p == nil {
+		return def, nil
+	}
+	n, err := parseByteSize(*p)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("config: %s must be a size above zero such as 2GiB, 512MiB or a number of bytes", key)
+	}
+	return n, nil
 }
 
 // parseByteSize reads a size such as "1GiB", "512MiB" or a plain number of

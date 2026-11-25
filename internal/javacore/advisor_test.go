@@ -2,6 +2,7 @@ package javacore
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -48,8 +49,9 @@ func TestAugment_FindingShape(t *testing.T) {
 		VulnID: "CVE-2026-91403", Title: "OpenJDK: security-libs/java.security",
 		URL:  "https://openjdk.org/groups/vulnerability/advisories/2026-10-21",
 		Type: "java-runtime", Target: "opt/java/openjdk/bin/java", PkgPath: "opt/java/openjdk/bin/java",
+		RuntimeSource: scanner.RuntimeSourceEnv,
 	}
-	if f != want {
+	if !reflect.DeepEqual(f, want) {
 		t.Errorf("finding =\n%+v\nwant\n%+v", f, want)
 	}
 	for i := 1; i < len(aug.Findings); i++ {

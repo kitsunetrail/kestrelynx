@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/config"
 	"github.com/kitsunetrail/kestrelynx/internal/imagefs"
@@ -175,5 +176,63 @@ func TestImageReader_DockerPriorityIgnoresThePlatform(t *testing.T) {
 	}
 	if !buildImageReader(cfg, slog.Default()).Priority(running) {
 		t.Error("the Docker entry did not survive a restart")
+	}
+}
+
+// A read that fetched something is logged with its bytes, its time and the
+// cycle's total so far; a cached read is not, and a new cycle starts the
+// totals again.
+func TestImageReader_LogsWhatReadsCost(t *testing.T) {
+	cfg := imageReaderConfig(t)
+	var logs strings.Builder
+	r := buildImageReader(cfg, slog.New(slog.NewTextHandler(&logs, nil)))
+	if !strings.Contains(logs.String(), "registry_bytes_per_cycle=128974848 docker_bytes_per_cycle=478150656") {
+		t.Errorf("no line with the limits, log:\n%s", logs.String())
+	}
+	plat := inventory.Platform{OS: "linux", Architecture: "amd64"}
+	reg := imagefs.RegistryTarget("example.test/app", "sha256:"+strings.Repeat("a", 64), plat, nil)
+	dock := imagefs.DockerTarget("sha256:"+strings.Repeat("c", 64), plat, nil)
+	lines := func() []string {
+		var out []string
+		for _, l := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+			if strings.Contains(l, "image layers read") {
+				out = append(out, l)
+			}
+		}
+		return out
+	}
+
+	r.logRead(reg, imagefs.Outcome{Kind: imagefs.Complete, Stats: imagefs.Stats{ImageCached: true}}, time.Second)
+	r.logRead(reg, imagefs.Outcome{Kind: imagefs.Complete, Stats: imagefs.Stats{LayersCached: 3}}, time.Second)
+	r.logRead(dock, imagefs.Outcome{Kind: imagefs.Deferred, Stats: imagefs.Stats{ExportCalled: true}}, time.Second)
+	if got := lines(); len(got) != 0 {
+		t.Fatalf("a read that read nothing was logged: %q", got)
+	}
+	r.logRead(reg, imagefs.Outcome{Kind: imagefs.Complete, Stats: imagefs.Stats{LayersRead: 2, LayersCached: 1, RegistryBytes: 100}}, 1500*time.Millisecond)
+	r.logRead(reg, imagefs.Outcome{Kind: imagefs.Deferred, Reason: imagefs.ReasonBudget, Stats: imagefs.Stats{LayersRead: 1, RegistryBytes: 200}}, time.Second)
+	r.logRead(dock, imagefs.Outcome{Kind: imagefs.Complete, Stats: imagefs.Stats{ExportCalled: true, DockerBytes: 700}}, time.Second)
+	got := lines()
+	if len(got) != 3 {
+		t.Fatalf("want 3 lines, got %q", got)
+	}
+	for i, want := range [][]string{
+		{"route=registry", "image=example.test/app@sha256:aaaa", "outcome=" + imagefs.Complete.String() + " ", "layers_read=2", "layers_cached=1", "duration=1.5s", "registry_bytes=100 ", "registry_bytes_cycle=100"},
+		{"outcome=" + imagefs.Deferred.String() + " ", "reason=" + string(imagefs.ReasonBudget), "registry_bytes=200 ", "registry_bytes_cycle=300"},
+		{"route=docker", "image=sha256:cccc", "docker_bytes=700 ", "docker_bytes_cycle=700"},
+	} {
+		for _, w := range want {
+			if !strings.Contains(got[i]+" ", w) {
+				t.Errorf("line %d has no %q: %s", i, w, got[i])
+			}
+		}
+	}
+	if strings.Contains(got[0], "reason=") || strings.Contains(got[0], "docker_bytes") || strings.Contains(got[2], "registry_bytes") {
+		t.Errorf("lines carry fields of another route or an empty reason: %q", got)
+	}
+
+	r.NewCycle()
+	r.logRead(reg, imagefs.Outcome{Kind: imagefs.Complete, Stats: imagefs.Stats{LayersRead: 1, RegistryBytes: 50}}, time.Second)
+	if last := lines()[3]; !strings.Contains(last, "registry_bytes_cycle=50") {
+		t.Errorf("a new cycle did not start the total again: %s", last)
 	}
 }

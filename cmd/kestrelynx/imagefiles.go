@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/kitsunetrail/kestrelynx/internal/config"
 	"github.com/kitsunetrail/kestrelynx/internal/docker"
@@ -49,12 +50,15 @@ type cycleImageReader struct {
 
 	mu     sync.Mutex
 	budget *imagefs.Budget
+	// registryRead and dockerRead are the bytes the cycle has read so far.
+	registryRead, dockerRead int64
 }
 
 // NewCycle gives the reader a full budget.
 func (c *cycleImageReader) NewCycle() {
 	c.mu.Lock()
 	c.budget = imagefs.NewBudget(c.base.Limits)
+	c.registryRead, c.dockerRead = 0, 0
 	c.mu.Unlock()
 }
 
@@ -64,11 +68,49 @@ func (c *cycleImageReader) Read(ctx context.Context, t imagefs.Target) imagefs.O
 	r := c.base
 	r.Budget = c.budget
 	c.mu.Unlock()
+	start := time.Now()
 	out := r.Read(ctx, t)
+	c.logRead(t, out, time.Since(start))
 	if c.pending != nil {
 		c.pending.set(pendingID(t), out.Kind == imagefs.Deferred)
 	}
 	return out
+}
+
+// logRead logs a read that read layers or part of an export, with what it
+// read, how long it took and what the cycle has read so far, so the per-cycle
+// limits can be set from what the images really need. A read answered from
+// the cache, or one that read nothing (an export the Docker Engine refused),
+// is not logged.
+func (c *cycleImageReader) logRead(t imagefs.Target, out imagefs.Outcome, took time.Duration) {
+	st := out.Stats
+	if st.LayersRead == 0 && st.RegistryBytes == 0 && st.DockerBytes == 0 {
+		return
+	}
+	c.mu.Lock()
+	c.registryRead += st.RegistryBytes
+	c.dockerRead += st.DockerBytes
+	regCycle, dockerCycle := c.registryRead, c.dockerRead
+	c.mu.Unlock()
+	image := t.Repository + "@" + t.ManifestDigest
+	if t.Route == imagefs.RouteDocker {
+		image = t.FetchID
+	}
+	attrs := []any{"route", string(t.Route), "image", image, "outcome", out.Kind.String(),
+		"layers_read", st.LayersRead, "layers_cached", st.LayersCached, "duration", took.Round(time.Millisecond)}
+	if out.Reason != "" {
+		attrs = append(attrs, "reason", string(out.Reason))
+	}
+	if t.Route == imagefs.RouteDocker {
+		attrs = append(attrs, "docker_bytes", st.DockerBytes, "docker_bytes_cycle", dockerCycle)
+	} else {
+		attrs = append(attrs, "registry_bytes", st.RegistryBytes, "registry_bytes_cycle", regCycle)
+	}
+	log := c.base.Log
+	if log == nil {
+		log = slog.Default()
+	}
+	log.Info("Java runtime: image layers read", attrs...)
 }
 
 // pendingKey names one read in the pending set: the route and what it
@@ -143,6 +185,7 @@ func buildImageReader(cfg config.Config, log *slog.Logger) *cycleImageReader {
 		dc.Log = log
 		c.base.Docker = dc
 	}
+	log.Info("Java runtime: image reading enabled", "registry_bytes_per_cycle", limits.RegistryBytesPerCycle, "docker_bytes_per_cycle", limits.DockerBytesPerCycle)
 	c.NewCycle()
 	return c
 }

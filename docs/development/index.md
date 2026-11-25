@@ -9,6 +9,21 @@ For instructions on currently available features, see [Documentation](../documen
 
 <div class="kl-log__item" markdown>
 
+November 24, 2026
+{ .kl-log__date }
+
+[Development of Java runtime vulnerability matching](java-runtime-advisories.md)
+{ .kl-log__title }
+
+Reading the JDK version from environment variables and the `release` file in the image and matching it against OpenJDK advisories
+
+**Status** Implemented (bundled JDK detection and automatic remediation PR creation verified in the production environment, and layer reading verified on Kubernetes)
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
 November 18, 2026
 { .kl-log__date }
 

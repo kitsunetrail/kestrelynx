@@ -8,6 +8,21 @@
 
 <div class="kl-log__item" markdown>
 
+2026年11月24日
+{ .kl-log__date }
+
+[Java 本体の脆弱性照合の開発](java-runtime-advisories.md)
+{ .kl-log__title }
+
+環境変数とイメージ内の `release` ファイルから JDK の版を読み、OpenJDK のアドバイザリと照合する
+
+**状態** 実装済み、本番運用環境で同梱 JDK の検出と修正 PR の自動作成、Kubernetes での層の読み取りを確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
 2026年11月18日
 { .kl-log__date }
 

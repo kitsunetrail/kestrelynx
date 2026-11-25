@@ -106,6 +106,7 @@ Node.js matching proceeds normally in the same cycle.
     - Both approaches require a decision on how to check whether the node binary has been replaced
 - **Other languages and older CVEs**
     - Official images for other languages such as PHP, Ruby, and Java, together with NVD for older CVEs, remain future considerations
+    - For Java, see [Development of Java runtime vulnerability matching](java-runtime-advisories.md).
 
 ## Update history
 

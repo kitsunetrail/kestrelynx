@@ -28,6 +28,7 @@ EPSSは、脆弱性について今後30日以内に悪用活動が観測され�
 | [Node.jsのセキュリティ情報](#node-runtime-download) | [`scan.node_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
 | [Pythonのセキュリティ情報](#python-runtime-download) | [`scan.python_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
 | [Javaのセキュリティ情報](#java-runtime-download) | [`scan.java_runtime.enabled`](configuration.md#scan)が有効（既定有効） | なし |
+| [Java本体の照合に使うイメージ層の取得](#java-runtime-download) | Java本体の照合と[`scan.java_runtime.read_images`](configuration.md#scan)が有効（既定有効）で、層の取得が必要な場合 | レジストリにはイメージのリポジトリ名とdigest、Docker EngineにはイメージID |
 | [CVEレコードの取得](#cve-record-download) | [`scan.cve_record_severity.enabled`](configuration.md#scan)が有効（既定有効）で、Trivyがスキャンで深刻度`UNKNOWN`のCVEを報告した場合のみ | 深刻度がUNKNOWNのCVE ID |
 | [Trivyの取得通信](#trivy-downloads) | [スキャンを実行するたび](configuration.md#schedule) | 取得するイメージの名前・タグ・digest |
 | [GitHubへの通信](#github-communication) | 読み取りは[修正計画](configuration.md#remediation-basics)が有効、書き込みは修正計画と修正PRの両方が有効（各既定無効） | リポジトリ・ソースの指定、PRの内容 |
@@ -121,6 +122,15 @@ Java本体の照合が有効な場合、OpenJDKとAdoptiumの公開データを�
 この場合は、利用できる前回のキャッシュを使います。
 配布元の正式な訂正を取り込むには、stateファイルと同じディレクトリにある`java/`を削除してください。
 次回の取得でJavaのキャッシュを作り直します。
+
+JDKの`release`ファイルを読むため、KestreLynx自身が次の取得先からイメージの層を取得します。
+
+| イメージ | 取得先 |
+| --- | --- |
+| Kubernetesの稼働イメージ・修正計画の候補 | Trivyと同じレジストリ（`registries`のログインを使用） |
+| Dockerの稼働イメージ | Docker Engine |
+
+取得した層はローカルで読み取り、JDKに関わる情報だけをキャッシュします。
 
 設定は[スキャン](configuration.md#scan)、照合方法は[Java本体の所見](scan-logic.md#java-runtime)、データを利用できない回の扱いは[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。
 

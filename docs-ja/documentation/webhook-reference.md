@@ -62,6 +62,7 @@ Slackと併用できますが、DiscordやTeams専用のメッセージ形式に
 │               └── instances[]
 ├── scan_errors[]
 ├── runtime_unchecked[]
+├── runtime_retired[]
 ├── diff
 ├── runtime
 └── remediation
@@ -284,6 +285,7 @@ Slackと併用できますが、DiscordやTeams専用のメッセージ形式に
 | `eol_packages` | objectの配列 | 修正状態が`end_of_life`のパッケージグループを持つイメージ | `[]` |
 | `scan_errors` | objectの配列 | [スキャン失敗](#scan-errors)の一覧 | `[]` |
 | `runtime_unchecked` | objectの配列 | [未照合の言語ランタイム](#runtime-unchecked)の一覧 | 省略 |
+| `runtime_retired` | objectの配列 | [照合をやめたJava本体](#runtime-unchecked)の一覧 | 省略 |
 | `diff` | object | [差分](webhook-diff-reference.md) | `full`モードなら省略 |
 | `runtime` | object | [Sensorの情報と使用状況の件数](webhook-runtime-reference.md) | 稼働時の使用状況が無効なら省略 |
 | `remediation` | object | [修正計画とPR処理の結果](webhook-remediation-reference.md#remediation-fields) | 修正計画が無効なら省略 |
@@ -356,7 +358,7 @@ JSON全体の例は、[ペイロードの全体像](#payload-overview)を参照�
 
 ### 未照合の言語ランタイム {#runtime-unchecked}
 
-`runtime_unchecked`は、Node.js・Python・Javaのいずれかの本体を見つけたものの、セキュリティ情報を取得できず照合しなかった対象の一覧です。
+`runtime_unchecked`は、その回にNode.js・Python・Java本体を照合できなかったイメージと理由の一覧です。
 同じイメージ名と本体の組は1度だけ出力します。
 
 `runtime_unchecked[]`のフィールドは次のとおりです。
@@ -365,6 +367,13 @@ JSON全体の例は、[ペイロードの全体像](#payload-overview)を参照�
 | --- | --- | --- | --- |
 | `image` | string | 本体を照合しなかったイメージ名 | — |
 | `package` | string | 照合しなかった本体のパッケージ名 | — |
+| `reason` | string | 本体を照合しなかった理由 | — |
+
+| `reason`の値 | 意味 |
+| --- | --- |
+| `advisories` | 本体のセキュリティ情報を利用できない |
+| `deferred` | Java本体の読み取りを次回に回した |
+| `unreadable` | イメージを読み取れず、`JAVA_VERSION`からもJava本体を検出できない |
 
 `package`の値は次のとおりです。
 
@@ -373,6 +382,9 @@ JSON全体の例は、[ペイロードの全体像](#payload-overview)を参照�
 | `Node.js` | Node.js本体 |
 | `Python runtime` | Python本体 |
 | `Java runtime` | Java本体 |
+
+照合しない配布元のJDKだけになり、差分モードで前回の記録を外した回だけ、トップレベルの`runtime_retired`配列を出力します。
+各要素の`image`はイメージ名、`package`は`Java runtime`です。
 
 通知と履歴の扱いは、[言語ランタイムのセキュリティ情報の利用不能時の扱い](scan-logic.md#node-runtime-unavailable)を参照してください。
 

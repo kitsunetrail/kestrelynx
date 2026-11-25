@@ -62,6 +62,7 @@ Payload
 │               └── instances[]
 ├── scan_errors[]
 ├── runtime_unchecked[]
+├── runtime_retired[]
 ├── diff
 ├── runtime
 └── remediation
@@ -284,6 +285,7 @@ The top-level fields are as follows.
 | `eol_packages` | array of objects | Images with package groups whose fix status is `end_of_life` | `[]` |
 | `scan_errors` | array of objects | List of [scan failures](#scan-errors) | `[]` |
 | `runtime_unchecked` | array of objects | List of [unchecked language runtimes](#runtime-unchecked) | omitted |
+| `runtime_retired` | array of objects | List of [Java runtimes that KestreLynx stopped checking](#runtime-unchecked) | omitted |
 | `diff` | object | [Changes](webhook-diff-reference.md) | omitted in `full` mode |
 | `runtime` | object | [Sensor information and usage counts](webhook-runtime-reference.md) | omitted when runtime usage is disabled |
 | `remediation` | object | [Remediation plans and PR processing results](webhook-remediation-reference.md#remediation-fields) | omitted when remediation planning is disabled |
@@ -356,7 +358,7 @@ The following `summary` example has triage enabled.
 
 ### Unchecked language runtimes {#runtime-unchecked}
 
-`runtime_unchecked` lists targets where the Node.js, Python, or Java runtime itself was found but could not be checked because advisory data was unavailable.
+`runtime_unchecked` lists images whose Node.js, Python, or Java runtime could not be checked in this scan and gives the reason for each.
 Each combination of image name and runtime is included only once.
 
 The fields in `runtime_unchecked[]` are as follows.
@@ -365,6 +367,13 @@ The fields in `runtime_unchecked[]` are as follows.
 | --- | --- | --- | --- |
 | `image` | string | Image name whose runtime was not checked | — |
 | `package` | string | Package name of the runtime that was not checked | — |
+| `reason` | string | Reason the runtime was not checked | — |
+
+| `reason` value | Meaning |
+| --- | --- |
+| `advisories` | Advisory data for the runtime is unavailable |
+| `deferred` | Reading the Java runtime was postponed to the next scan |
+| `unreadable` | KestreLynx cannot read the image or detect the Java runtime from `JAVA_VERSION` |
 
 `package` uses the following values.
 
@@ -373,6 +382,9 @@ The fields in `runtime_unchecked[]` are as follows.
 | `Node.js` | The Node.js runtime itself |
 | `Python runtime` | The Python runtime itself |
 | `Java runtime` | The Java runtime itself |
+
+The top-level `runtime_retired` array appears only on the scan in diff mode that removes previous records because an image now contains only JDKs from distributions that KestreLynx skips.
+Each entry contains the image name in `image` and `Java runtime` in `package`.
 
 See [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable) for notification and history handling.
 

@@ -52,8 +52,10 @@ The executable paths described below are used only when runtime usage is enabled
     - If the `PYTHON_VERSION` environment variable specifies a version in the 3.12 release line, the executable path is `/usr/local/bin/python3.12`.
     - In official images, `python3` is a symbolic link to this executable, and the Sensor records the path after following the link.
 - The Java runtime executable is handled as follows.
-    - The executable is `bin/java` under the directory specified by `JAVA_HOME`, giving the path `/opt/java/openjdk/bin/java` in official `eclipse-temurin` images.
-    - If `JAVA_HOME` is unset or is not an absolute path, KestreLynx still checks for vulnerabilities and reports the reason `binary path unknown` in the Sensor usage assessment.
+    - When KestreLynx reads the `release` file, it marks that JDK as in use if `bin/java` under its directory is running
+    - If the same Java 8 JDK also has `jre/bin/java`, a process running either executable marks the JDK as in use
+    - When the check uses the environment variable instead of a `release` file, the executable is `bin/java` under `JAVA_HOME`
+    - For an environment-based check, the Sensor usage assessment reports `binary path unknown` if `JAVA_HOME` is unset or is not an absolute path
 
 ## Requirements
 

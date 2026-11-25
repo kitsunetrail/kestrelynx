@@ -372,8 +372,22 @@ Settings are described in [Scanning](configuration.md#scan), and data sources in
 
 #### Java runtime findings {#java-runtime}
 
-KestreLynx checks the Java runtime (JDK) when the `JAVA_VERSION` environment variable in the image configuration uses the Temurin format.
-This includes official `eclipse-temurin` images, official `maven` and `gradle` images based on them, and application images built on `eclipse-temurin`.
+KestreLynx reads the JDK distribution and version from the `release` file inside the image.
+If KestreLynx skips image reading or cannot read the image, it checks the version in the image's `JAVA_VERSION` environment variable when the value uses the Temurin format.
+
+KestreLynx reads image contents only when there are signs of Java, such as the following.
+
+- The image sets `JAVA_HOME` or `JAVA_VERSION`
+- A `PATH` entry contains `java`, `jdk`, `jre`, or `jvm`
+- Trivy reports a `jar` package
+
+| JDK in the image | Handling |
+| --- | --- |
+| Temurin (`IMPLEMENTOR` is `Eclipse Adoptium`) | Checked |
+| Oracle OpenJDK builds, including those bundled with Elasticsearch | Checked |
+| JDKs with no listed vendor and no vendor name in the directory path, such as runtimes built with `jlink` | Checked for release lines 9 and later |
+| Corretto, Zulu, SapMachine, Microsoft, Liberica, Semeru, and commercial Oracle JDK builds | Skipped |
+| JDK packages from an OS distribution | Trivy reports their vulnerabilities |
 
 | Item | Handling |
 | --- | --- |
@@ -382,10 +396,17 @@ This includes official `eclipse-temurin` images, official `maven` and `gradle` i
 | Severity | Use the advisory's CVSS 3.x base score and report only CVEs with a severity selected by `scan.severity`. |
 
 A CVE matches when the OpenJDK advisory marks the installed JDK's release line in the CVE row and the installed version is at or below the last affected version for that line.
+
 The fixed version is the first Temurin release in Adoptium's list for the same line after the last affected version.
+KestreLynx uses this list for other JDKs as well, so the displayed version can be later than the first upstream release with the fix.
 
 For CVEs that Temurin fixed in a different version than OpenJDK, KestreLynx uses the fixed version listed for that line in its exception list.
 For example, the fix for CVE-2026-114820 in the Java 21 line is `21.0.13`.
+
+For a JDK with no listed vendor, KestreLynx reports CVEs that affect the installed version under the upstream OpenJDK rules.
+However, it omits a CVE on the exception list if the installed version is at or above the fixed version listed for that release line.
+Temurin includes the fix at that version, but without knowing the vendor, KestreLynx cannot determine whether the installed JDK also includes it.
+For a runtime reduced with `jlink`, KestreLynx omits a CVE when the module list in `release` shows that the affected module is absent.
 
 | Fix status | Condition and displayed version |
 | --- | --- |
@@ -402,8 +423,8 @@ When an inference determines the `end_of_life` status, the description ends with
 
 Java runtime checks have the following limitations.
 
-- Matching uses `JAVA_VERSION` even if it differs from the installed JDK version.
-- Trivy reports vulnerabilities in OpenJDK installed as an OS package.
+- Environment-based checks use `JAVA_VERSION` even if it differs from the installed JDK version
+- KestreLynx misses JDKs in images with no signs of Java, such as a runtime built with `jlink` and installed in a custom directory outside `PATH`
 - Advisories omit the first affected version and CPU or platform requirements, so matches can include earlier versions or unaffected environments.
 - Inferred findings can include CVEs for features absent from the release line.
 
@@ -478,7 +499,8 @@ Java advisory data uses the following refresh and cache rules.
 | --- | --- |
 | Advisory list, Temurin release list, and release-line list | Refresh after 20 hours and use a cached copy no older than 7 days if the refresh fails. |
 | Individual advisory pages | Refresh after 20 hours for the first 180 days after publication and use a readable cached copy of any age once the page is 180 days old or if a refresh fails. |
-| Storage | `java/` in the same directory as the state file. |
+| Advisory data storage | `java/` in the same directory as the state file. |
+| Image read results | Results are stored by layer in `java/image-cache/` alongside the state file so the same cached layer can be reused without reading it again. |
 
 | CVE record scoring cache | Handling |
 | --- | --- |
@@ -515,10 +537,10 @@ The 7-day limit does not apply to [individual Java advisory pages](outbound-comm
 
 | Situation | Handling |
 | --- | --- |
-| A runtime check is skipped for images with `NODE_VERSION` in `X.Y.Z` form, `PYTHON_VERSION` in `3.Y.Z` form, or `JAVA_VERSION` in Temurin format | Include the annotation below, with `N` representing the number of unchecked images. |
+| KestreLynx detects `NODE_VERSION` in `X.Y.Z` form, `PYTHON_VERSION` in `3.Y.Z` form, or a JDK eligible for matching, but advisory data is unavailable | Include the annotation below, with `N` representing the number of unchecked images. |
 | No findings have changed | Send a notification when there are unchecked images. |
 | An unchecked image has saved records for the unchecked runtime (`Node.js`, `Python runtime`, or `Java runtime`) | Retain those records instead of treating them as resolved. |
-| Generic webhook | Include objects with `image` and `package` in the top-level `runtime_unchecked` array; `package` is `Node.js`, `Python runtime`, or `Java runtime`, and the array is omitted when none apply. |
+| Generic webhook | Include `image`, `package`, and `reason` for each unchecked runtime in the top-level `runtime_unchecked` array and omit the array when none apply. |
 
 > ℹ️ Advisories for Java runtime, Node.js, Python runtime could not be fetched, so the runtime of N image(s) was not checked.
 
@@ -527,7 +549,16 @@ When only Node.js data is unavailable, the annotation is:
 
 > Advisories for Node.js could not be fetched, so the runtime of N image(s) was not checked.
 
-The JSON field is described in [Webhook report fields](webhook-reference.md#top-level).
+For Java, the outcome of reading the image determines how KestreLynx handles previous records.
+
+| Situation | Previous records | Notification |
+| --- | --- | --- |
+| The scan reaches its read limit or the image is temporarily unavailable | Keep the records and retry the read on the next scan. | ℹ️ Reading the Java runtime of N image(s) was postponed to the next scan. |
+| KestreLynx cannot read the image, for example because of an unsupported compression format, and cannot detect the JDK from `JAVA_VERSION` | Keep the records without marking them as resolved. | ℹ️ The Java runtime of N image(s) cannot be read. |
+| The image now contains only JDKs from distributions that KestreLynx skips | Remove the records without reporting them as resolved. | ℹ️ Stopped checking the Java runtime of N image(s) because it changed to a distribution that is not checked. |
+
+The note about ending checks appears once in diff mode, on the scan that removes the previous records.
+The JSON fields are described in [Webhook report fields](webhook-reference.md#top-level).
 
 ### Decisions with triage disabled {#triage-disabled}
 

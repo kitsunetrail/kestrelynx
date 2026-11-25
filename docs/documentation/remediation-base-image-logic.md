@@ -93,10 +93,12 @@ It treats findings according to the layers reported by the Trivy scanner.
 
 ### Handling language runtime findings {#base-runtime-findings}
 
-For findings in the Node.js, Python, and Java runtimes themselves, KestreLynx also uses version environment variables to decide whether to treat them as coming from the base.
+For findings from a JDK `release` file, KestreLynx determines whether they come from the base solely by matching layers, as it does for Trivy findings.
+
+For Node.js, Python, and Java runtime findings based on an environment variable, KestreLynx also uses the version environment variable to determine whether they come from the base.
 This determines how findings are attributed to the base; it does not prove build provenance.
 
-For pinned tags, KestreLynx checks all of the following conditions.
+For pinned tags, KestreLynx checks all of the following conditions when using environment variables to attribute findings to the base.
 
 1. The current base's layer sequence matches the first layers of the running image
 2. Both the running image's configuration and the current base's configuration contain the runtime's version environment variable
@@ -127,6 +129,7 @@ For language runtimes themselves, KestreLynx estimates the effect of rebuilding 
 1. The running image has findings in the language runtime itself
 2. The runtime version can be checked from the current base's image configuration
 3. For Java, `JAVA_HOME` is the same absolute path in the running image and the current base
+4. For findings from a `release` file, the estimate includes only findings for the JDK that `JAVA_HOME` points to in the running image
 
 When these conditions are met, KestreLynx estimates how many findings would disappear if a rebuild inherited the base's version and records the result in `rebuild_runtimes`.
 It considers only CVEs currently detected in that runtime and does not count CVEs introduced by the new version.

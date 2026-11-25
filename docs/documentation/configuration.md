@@ -75,7 +75,10 @@ See the following pages for scan decision rules, limitations, and data download 
 | `scan.severity` | `[HIGH, CRITICAL]` | Severities retained for analysis and notification, including Node.js, Python, and Java runtime findings. Allowed values are `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`. |
 | `scan.node_runtime.enabled` | `true` | Download security advisories and check the Node.js version recorded in `NODE_VERSION` against them. `false` disables both downloads and checks. |
 | `scan.python_runtime.enabled` | `true` | Download security advisory data and check the CPython version recorded in `PYTHON_VERSION` against it. `false` disables both downloads and checks. |
-| `scan.java_runtime.enabled` | `true` | Enables both advisory downloads and checks against a Temurin-format `JAVA_VERSION`, with `false` disabling both. |
+| `scan.java_runtime.enabled` | `true` | Enables Java runtime checks, with `false` disabling advisory downloads, JDK `release` file reads, and version checks. |
+| `scan.java_runtime.read_images` | `true` | Setting this to `false` disables only `release` file reads and keeps checks based on a Temurin-format `JAVA_VERSION` environment variable. |
+| `scan.java_runtime.read_limits.registry_bytes_per_cycle` | `2GiB` | Maximum compressed data read from registries per scan, in bytes as a positive integer or as a positive integer followed by `B`, `KiB`, `MiB`, or `GiB`. |
+| `scan.java_runtime.read_limits.docker_bytes_per_cycle` | `8GiB` | Maximum data read from Docker Engine per scan, in bytes as a positive integer or as a positive integer followed by `B`, `KiB`, `MiB`, or `GiB`. |
 | `scan.cve_record_severity.enabled` | `true` | Retrieve records for CVEs that Trivy reports as `UNKNOWN` and use their scoring to determine severity; `false` disables retrieval and severity replacement. |
 
 ## Prioritization {#triage}

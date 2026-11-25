@@ -434,7 +434,7 @@ remediation
 | `not_resolving` | 解消する対象がない |
 | `introduced` | 新しい所見がある |
 | `new_kev` | 新たに検出された脆弱性にKEV掲載のものがある |
-| `analysis_incomplete` | 対象を判断するための解析が不足している |
+| `analysis_incomplete` | 対象を判断するための解析が不足している（稼働イメージか候補のJava本体をその回に照合できなかった場合を含む） |
 | `targets_not_detected` | 比較元で対象を検出できず、解消を判断できない |
 | `not_comparable` | 比較できない |
 

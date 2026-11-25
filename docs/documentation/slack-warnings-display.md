@@ -29,6 +29,9 @@ The following table explains each display.
 | `⚠️ N image(s) could not be scanned (vulnerabilities not checked)` | Scanning or image identity verification failed |
 | `⏳ unconfirmed this cycle, holding previous findings — image name list` | The running image could not be confirmed, so previous findings are retained |
 | `ℹ️ Advisories for Node.js could not be fetched, so the runtime of N image(s) was not checked.` | Runtime matching was skipped because vulnerability information was unavailable |
+| `ℹ️ Reading the Java runtime of N image(s) was postponed to the next scan.` | Previous records are kept because the scan reached its read limit or the image was temporarily unavailable |
+| `ℹ️ The Java runtime of N image(s) cannot be read.` | Previous records are kept because the image cannot be read and `JAVA_VERSION` does not identify the runtime |
+| `ℹ️ Stopped checking the Java runtime of N image(s) because it changed to a distribution that is not checked.` | Shown once in diff mode, on the scan that removes previous records without reporting them as resolved |
 
 The count and details for images that could not be scanned follow these rules.
 
@@ -47,7 +50,7 @@ The following rules apply to this retention note.
 An image absent from this list may still have previous findings retained because its scan failed.
 See [Failed scans](scan-logic.md#scan-failures) for how results are retained.
 
-The unchecked-runtime note identifies the skipped targets as follows.
+The note about unavailable advisories identifies the skipped targets as follows.
 
 - Only skipped runtimes are listed, sorted by package name in ascending order (`Java runtime, Node.js, Python runtime` when all three are skipped)
 - N counts distinct image names whose runtimes were not checked

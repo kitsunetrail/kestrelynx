@@ -54,7 +54,7 @@ These codes describe information needed for baseline and candidate scans and rea
 | `unknown_package_type` | The baseline or candidate findings, or the candidate package list, contain an unsupported package type | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 | `type_not_analysed` | The candidate scan did not analyse the target package type | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 | `targets_not_detected_on_baseline` | Target findings selected from the original scan were not detected in the comparison scan of the running image or current base image | [Comparison conditions](remediation-logic.md#comparison-conditions) |
-| `analysis_incomplete` | The image analysis was incomplete | [Comparison conditions](remediation-logic.md#comparison-conditions) |
+| `analysis_incomplete` | Image analysis was incomplete, including when the Java runtime of the running image or candidate could not be checked that cycle | [Comparison conditions](remediation-logic.md#comparison-conditions) |
 
 The baseline can use the original scan if its conditions match the candidate scan, or a rescan performed for comparison.
 

@@ -54,7 +54,7 @@ Kustomize・Helmのvaluesでも使うファイル取得・イメージ名照合�
 | `unknown_package_type` | 比較元や候補の所見、または候補のパッケージ一覧に、サポートしていない種類のパッケージがある | [比較条件](remediation-logic.md#comparison-conditions) |
 | `type_not_analysed` | 候補のスキャンが対象の種類のパッケージを解析していない | [比較条件](remediation-logic.md#comparison-conditions) |
 | `targets_not_detected_on_baseline` | 当初のスキャンから選んだ修正対象の所見が、比較用の稼働イメージまたは現在のベースイメージのスキャンでは検出されなかった | [比較条件](remediation-logic.md#comparison-conditions) |
-| `analysis_incomplete` | イメージの解析が不完全だった | [比較条件](remediation-logic.md#comparison-conditions) |
+| `analysis_incomplete` | イメージの解析が不完全だった（稼働イメージか候補のJava本体をその回に照合できなかった場合を含む） | [比較条件](remediation-logic.md#comparison-conditions) |
 
 比較元には、候補と同じ条件を満たす当初のスキャンを使う場合と、比較のために再スキャンする場合があります。
 

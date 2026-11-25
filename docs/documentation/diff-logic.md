@@ -87,6 +87,7 @@ A previously detected package is classified as resolved when the same combinatio
 
 However, if scanning that image name fails, including failures affecting only some digests, the previous records are kept and the packages are not classified as resolved because their absence may simply mean they could not be checked.
 If the Node.js, Python, or Java runtime itself could not be checked for vulnerabilities, its records are treated the same way (see [Retained history](#retained-findings)).
+If the image now contains only JDKs from distributions that KestreLynx skips, it removes the previous Java runtime records without reporting them as resolved (see [Runtime checks](scan-logic.md#node-runtime-unavailable)).
 
 The following table shows the decision for each combination of saved history and latest scan results.
 

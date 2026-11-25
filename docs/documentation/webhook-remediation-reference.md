@@ -434,7 +434,7 @@ The values of `decision` are as follows.
 | `not_resolving` | No targets are resolved |
 | `introduced` | New findings are present |
 | `new_kev` | Newly detected vulnerabilities include a KEV-listed vulnerability |
-| `analysis_incomplete` | Analysis is insufficient to judge the targets |
+| `analysis_incomplete` | Analysis is insufficient to judge the targets, including when the Java runtime of the running image or candidate could not be checked that cycle |
 | `targets_not_detected` | Targets were not detected in the baseline, so resolution cannot be judged |
 | `not_comparable` | Comparison is not possible |
 

@@ -75,7 +75,10 @@ Trivyが使う環境変数と`token_hosts`の制限の例外、および送付�
 | `scan.severity` | `[HIGH, CRITICAL]` | Node.js・Python・Java本体の所見を含め、分析と通知の対象にする深刻度です。`UNKNOWN`・`LOW`・`MEDIUM`・`HIGH`・`CRITICAL`を指定できます。 |
 | `scan.node_runtime.enabled` | `true` | セキュリティ情報を取得し、`NODE_VERSION`に記録されたNode.jsの版と照合します。`false`では取得と照合の両方を停止します。 |
 | `scan.python_runtime.enabled` | `true` | セキュリティ情報を取得し、`PYTHON_VERSION`に記録されたCPythonの版と照合します。`false`では取得と照合の両方を停止します。 |
-| `scan.java_runtime.enabled` | `true` | セキュリティ情報を取得してTemurin形式の`JAVA_VERSION`の版と照合し、`false`では取得と照合の両方を停止します。 |
+| `scan.java_runtime.enabled` | `true` | Java本体の照合を有効にし、`false`ではセキュリティ情報の取得、JDKの`release`ファイルの読み取り、版の照合を停止します。 |
+| `scan.java_runtime.read_images` | `true` | `false`では`release`ファイルの読み取りだけを停止し、Temurin形式の環境変数`JAVA_VERSION`による照合を続けます。 |
+| `scan.java_runtime.read_limits.registry_bytes_per_cycle` | `2GiB` | 1回のスキャンでレジストリから読む圧縮後のデータ量の上限を、正の整数のバイト数、または正の整数に`B`・`KiB`・`MiB`・`GiB`を付けて指定します。 |
+| `scan.java_runtime.read_limits.docker_bytes_per_cycle` | `8GiB` | 1回のスキャンでDocker Engineから読むデータ量の上限を、正の整数のバイト数、または正の整数に`B`・`KiB`・`MiB`・`GiB`を付けて指定します。 |
 | `scan.cve_record_severity.enabled` | `true` | Trivyが`UNKNOWN`と報告したCVEのレコードを取得して採点を深刻度に使い、`false`では取得も深刻度の差し替えも行いません。 |
 
 ## 優先順位付け {#triage}

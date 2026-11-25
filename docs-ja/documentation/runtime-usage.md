@@ -52,8 +52,10 @@ Webhookのフィールドは[稼働時のフィールド](webhook-runtime-refere
     - 環境変数`PYTHON_VERSION`が3.12系列なら、実行ファイルのパスは`/usr/local/bin/python3.12`となる
     - 公式イメージの`python3`はこの実行ファイルへのシンボリックリンクで、Sensorはリンクをたどった後のパスを記録する
 - Java本体の実行ファイルは、次のように扱う
-    - 実行ファイルは`JAVA_HOME`が示すディレクトリの`bin/java`で、公式`eclipse-temurin`イメージでは`/opt/java/openjdk/bin/java`となる
-    - `JAVA_HOME`が未設定か絶対パスでない場合も脆弱性を照合し、Sensorの使用判定の理由は「バイナリのパス不明」となる
+    - `release`ファイルを読めた場合は、そのJDKのディレクトリの`bin/java`が動いていれば使用中と判定する
+    - Java 8で同じJDKに`jre/bin/java`もある場合は、どちらかが動いていれば使用中と判定する
+    - `release`ファイルを使わず環境変数で照合した場合は、`JAVA_HOME`が示すディレクトリの`bin/java`を使う
+    - 環境変数で照合した場合に`JAVA_HOME`が未設定か絶対パスでなければ、Sensorの使用判定の理由は「バイナリのパス不明」となる
 
 ## 動作要件
 

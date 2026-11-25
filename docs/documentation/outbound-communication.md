@@ -28,6 +28,7 @@ The table lists communication conditions based on enabled features and work need
 | [Node.js advisories](#node-runtime-download) | [`scan.node_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
 | [Python advisories](#python-runtime-download) | [`scan.python_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
 | [Java advisories](#java-runtime-download) | [`scan.java_runtime.enabled`](configuration.md#scan) is enabled (default: enabled) | None |
+| [Image layers for Java runtime checks](#java-runtime-download) | Java runtime checks and [`scan.java_runtime.read_images`](configuration.md#scan) are enabled (both enabled by default) and layers need to be fetched | Image repository name and digests to the registry, or image ID to Docker Engine |
 | [CVE record downloads](#cve-record-download) | Only when [`scan.cve_record_severity.enabled`](configuration.md#scan) is enabled (default: enabled) and Trivy reports CVEs with `UNKNOWN` severity during a scan | CVE IDs with UNKNOWN severity |
 | [Trivy downloads](#trivy-downloads) | [Every time a scan runs](configuration.md#schedule) | Names, tags, and digests of requested images |
 | [GitHub communication](#github-communication) | Reads require [remediation planning](configuration.md#remediation-basics); writes require both planning and PRs (each disabled by default) | Repository and source identifiers, PR contents |
@@ -121,6 +122,15 @@ KestreLynx keeps the previous cache and logs the reason if a download contains a
 In these cases, KestreLynx uses the previous cache if it is usable.
 To accept an upstream correction, delete the `java/` directory alongside the state file.
 KestreLynx rebuilds the Java cache on the next download.
+
+KestreLynx itself fetches image layers from the following sources to read JDK `release` files.
+
+| Image | Source |
+| --- | --- |
+| Running Kubernetes images and remediation plan candidates | The same registry that Trivy uses, with the credentials in `registries` |
+| Running Docker images | Docker Engine |
+
+KestreLynx reads the fetched layers locally and caches only information needed to identify and check JDKs.
 
 See [Scanning](configuration.md#scan) for settings, [Java runtime findings](scan-logic.md#java-runtime) for matching rules, and [Unavailable language runtime advisory data](scan-logic.md#node-runtime-unavailable) for how a scan handles unavailable data.
 

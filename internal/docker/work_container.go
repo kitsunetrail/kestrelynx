@@ -1,10 +1,12 @@
 package docker
 
 import (
+	"archive/tar"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"sort"
@@ -92,7 +94,10 @@ type createBody struct {
 	// Healthcheck turns off the health check an image may declare; a check
 	// would run commands in the container on a schedule.
 	Healthcheck healthcheck `json:"Healthcheck"`
-	Host        hostConfig  `json:"HostConfig"`
+	// Volumes are the anonymous volumes the container is made with: /work when
+	// the root filesystem is read only, and none otherwise.
+	Volumes map[string]struct{} `json:"Volumes,omitempty"`
+	Host    hostConfig          `json:"HostConfig"`
 }
 
 type healthcheck struct {
@@ -162,8 +167,13 @@ func (c *WorkClient) buildCreateBody(jobID string, r Resources) createBody {
 	for _, p := range c.cfg.CoverPaths {
 		tmpfs[p] = tmpfsOpts(coveredTmpfsBytes, "mode=0755")
 	}
+	var volumes map[string]struct{}
+	if c.cfg.ReadOnlyRoot {
+		volumes = map[string]struct{}{workDir: {}}
+	}
 	return createBody{
 		Image:      c.cfg.Image,
+		Volumes:    volumes,
 		Entrypoint: append([]string(nil), c.cfg.Entrypoint...),
 		User:       workUser,
 		WorkingDir: workDir,
@@ -176,6 +186,7 @@ func (c *WorkClient) buildCreateBody(jobID string, r Resources) createBody {
 		},
 		Healthcheck: healthcheck{Test: append([]string(nil), healthcheckNone...)},
 		Host: hostConfig{
+			ReadonlyRootfs: c.cfg.ReadOnlyRoot,
 			// The job may write only into these size-limited tmpfs. /tmp stays
 			// noexec (the daemon's default); only the directory the package
 			// manager is unpacked into allows execution. /var/tmp and
@@ -258,6 +269,18 @@ type workInspect struct {
 	} `json:"State"`
 }
 
+// isWorkVolume reports whether a mount of the inspect is the writable
+// anonymous volume at /work.
+func isWorkVolume(m any) bool {
+	mm, ok := m.(map[string]any)
+	if !ok {
+		return false
+	}
+	name, _ := mm["Name"].(string)
+	rw, hasRW := mm["RW"].(bool)
+	return mm["Type"] == "volume" && mm["Destination"] == workDir && name != "" && (!hasRW || rw)
+}
+
 func sameSet(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -323,10 +346,20 @@ func verifyInspect(want createBody, got workInspect) []string {
 	chk(len(h.Binds) == 0 && len(h.Mounts) == 0 && len(h.Devices) == 0, "Binds/Mounts/Devices")
 	// A volume the image declares is acceptable only where a tmpfs of the
 	// container takes its place; the daemon then makes no volume for it.
-	chk(len(got.Mounts) == 0, "Mounts")
+	// With a read-only root the one mount is the anonymous volume at /work.
+	if len(want.Volumes) == 0 {
+		chk(len(got.Mounts) == 0, "Mounts")
+	} else {
+		chk(len(got.Mounts) == 1 && isWorkVolume(got.Mounts[0]), "Mounts")
+	}
 	for v := range got.Config.Volumes {
 		_, covered := w.Tmpfs[v]
-		chk(covered, "Volumes "+v)
+		_, own := want.Volumes[v]
+		chk(covered || own, "Volumes "+v)
+	}
+	for v := range want.Volumes {
+		_, there := got.Config.Volumes[v]
+		chk(there, "Volumes "+v)
 	}
 	chk(got.Config.Healthcheck != nil && slices.Equal(got.Config.Healthcheck.Test, healthcheckNone), "Healthcheck")
 	chk(h.NetworkMode == w.NetworkMode, "NetworkMode")
@@ -405,7 +438,45 @@ func (c *WorkClient) createContainer(ctx context.Context, jobID string, r Resour
 	if bad := verifyInspect(body, ins); len(bad) > 0 {
 		return fail(fmt.Errorf("work container configuration differs from the request: %s", strings.Join(bad, ", ")))
 	}
+	if c.cfg.ReadOnlyRoot {
+		// The volume starts with whatever the image has at /work; the input is
+		// put into an empty directory.
+		octx, cancel = c.withTimeout(ctx, c.cfg.OpTimeout)
+		err = c.checkWorkEmpty(octx, cr.ID)
+		cancel()
+		if err != nil {
+			return fail(err)
+		}
+	}
 	return cr.ID, nil
+}
+
+// checkWorkEmpty requires /work of a created container to hold nothing.
+func (c *WorkClient) checkWorkEmpty(ctx context.Context, id string) error {
+	resp, err := c.do(ctx, archiveOp(id, workDir))
+	if err != nil {
+		return fmt.Errorf("read /work of the work container: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("read /work of the work container: status %d", resp.StatusCode)
+	}
+	tr := tar.NewReader(io.LimitReader(resp.Body, 1<<20))
+	n := 0
+	for {
+		_, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("read /work of the work container: %w", err)
+		}
+		n++
+	}
+	if n != 1 {
+		return fmt.Errorf("work image %s has files in /work, which the volume would be filled with", c.cfg.Image)
+	}
+	return nil
 }
 
 // recoverByName handles a create whose outcome is unknown. It inspects the

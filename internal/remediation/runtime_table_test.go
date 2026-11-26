@@ -69,8 +69,8 @@ func checkDefaultManagers(t *testing.T) {
 			managers = []toolfetch.Manager{toolfetch.ManagerNpm, toolfetch.ManagerPnpm}
 		case worker.KindPython:
 			managers = []toolfetch.Manager{toolfetch.ManagerUv}
-		case worker.KindGolang, worker.KindGradle:
-			// The go command and gradle come with the image.
+		case worker.KindGolang, worker.KindGradle, worker.KindRust:
+			// The go command, gradle and cargo come with the image.
 		default:
 			t.Errorf("%s is of the kind %q, which has no managers listed here", r.ID, r.Kind)
 		}

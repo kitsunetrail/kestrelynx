@@ -18,6 +18,9 @@ var inputNames = map[Manager][]string{
 	// A Gradle job needs the lockfile it rewrites; the rest of the project it
 	// reads is optional (see optionalInputNames).
 	ManagerGradle: {"gradle.lockfile"},
+	// A Cargo job names its files at any relative path (see
+	// ValidCargoInputPath); these two are the ones every job has, at the root.
+	ManagerCargo: {"Cargo.lock", "Cargo.toml"},
 }
 
 // optionalInputNames are the files a job may carry besides the required ones.
@@ -55,6 +58,7 @@ var opManager = map[Op]Manager{
 	OpGoGet:          ManagerGo,
 
 	OpGradleUpdateLocks: ManagerGradle,
+	OpCargoUpdate:       ManagerCargo,
 }
 
 // RequiredInputNames returns the file names a job for m must carry.
@@ -78,6 +82,10 @@ func InputNames(m Manager) []string {
 // Gradle job may collect every input file: the lockfile is the one it may
 // change, and the others come back as they were after the run, for the caller
 // to compare.
+//
+// A Cargo job names its inputs at any relative path, so the names here are only
+// the two files every job has; Job.Validate accepts any declared input as an
+// output of a Cargo job.
 func OutputNames(m Manager) []string {
 	out := RequiredInputNames(m)
 	switch m {
@@ -242,6 +250,12 @@ func (j *Job) Validate() error {
 		return fmt.Errorf("no outputs")
 	}
 	allowed := OutputNames(j.Manager)
+	if j.Manager == ManagerCargo {
+		allowed = nil
+		for _, in := range j.Inputs {
+			allowed = append(allowed, in.Path)
+		}
+	}
 	outSeen := map[string]bool{}
 	for _, o := range j.Outputs {
 		if !contains(allowed, o) {
@@ -251,6 +265,11 @@ func (j *Job) Validate() error {
 			return fmt.Errorf("duplicate output %q", o)
 		}
 		outSeen[o] = true
+	}
+	if j.Manager == ManagerCargo {
+		if err := j.validateCargoResult(); err != nil {
+			return err
+		}
 	}
 	if j.DeadlineSeconds < 1 || j.DeadlineSeconds > MaxDeadlineSeconds {
 		return fmt.Errorf("deadline_seconds %d is outside 1..%d", j.DeadlineSeconds, MaxDeadlineSeconds)
@@ -315,8 +334,10 @@ func (j *Job) validateRuntime() error {
 }
 
 // RunsFromImage reports whether the manager is the one the runtime image
-// carries, so that a job for it brings no tool: pip, the go command and gradle.
-func RunsFromImage(m Manager) bool { return m == ManagerPip || m == ManagerGo || m == ManagerGradle }
+// carries, so that a job for it brings no tool: pip, the go command, gradle and cargo.
+func RunsFromImage(m Manager) bool {
+	return m == ManagerPip || m == ManagerGo || m == ManagerGradle || m == ManagerCargo
+}
 
 // validateTool requires the tool a manager needs, and none for pip and go, with
 // every field in its form.
@@ -389,6 +410,9 @@ func ValidEntry(p string) error {
 }
 
 func (j *Job) validateInputs() error {
+	if j.Manager == ManagerCargo {
+		return j.validateCargoInputs()
+	}
 	if len(j.Inputs) > MaxInputs {
 		return fmt.Errorf("%d inputs exceed %d", len(j.Inputs), MaxInputs)
 	}
@@ -398,6 +422,9 @@ func (j *Job) validateInputs() error {
 	for _, in := range j.Inputs {
 		if !contains(allowed, in.Path) {
 			return fmt.Errorf("input %q is not an input of %s", in.Path, j.Manager)
+		}
+		if in.Role != "" {
+			return fmt.Errorf("input %q has a role, which only a %s job uses", in.Path, ManagerCargo)
 		}
 		if seen[in.Path] {
 			return fmt.Errorf("duplicate input %q", in.Path)
@@ -513,12 +540,21 @@ func (s *Step) Validate(m Manager) error {
 	if len(s.Packages) > MaxPackages {
 		return fmt.Errorf("%d packages exceed %d", len(s.Packages), MaxPackages)
 	}
-	needPkgs := s.Op == OpUvUpgrade || s.Op == OpUvUpgradeChain || s.Op == OpGoGet || s.Op == OpGradleUpdateLocks
+	needPkgs := s.Op == OpUvUpgrade || s.Op == OpUvUpgradeChain || s.Op == OpGoGet || s.Op == OpGradleUpdateLocks || s.Op == OpCargoUpdate
 	if needPkgs != (len(s.Packages) > 0) {
 		if needPkgs {
 			return fmt.Errorf("%s needs packages", s.Op)
 		}
 		return fmt.Errorf("%s takes no packages", s.Op)
+	}
+	if s.Op == OpCargoUpdate {
+		// One crate to one version, in a step that changes the working tree.
+		if len(s.Packages) != 1 {
+			return fmt.Errorf("%s takes exactly one package, not %d", s.Op, len(s.Packages))
+		}
+		if s.Scratch {
+			return fmt.Errorf("%s changes the working tree and is not a scratch step", s.Op)
+		}
 	}
 	if (s.RequireHashes || s.Target != nil) && s.Op != OpPipDryRun {
 		return fmt.Errorf("require_hashes and target are only for %s", OpPipDryRun)
@@ -539,15 +575,21 @@ func (s *Step) Validate(m Manager) error {
 	return nil
 }
 
-// validatePackage checks a package of a uv.upgrade, uv.upgrade_chain, go.get or
-// gradle.update_locks step. For gradle.update_locks it is a group:artifact name
+// validatePackage checks a package of a uv.upgrade, uv.upgrade_chain, go.get,
+// gradle.update_locks or cargo.update step. For gradle.update_locks it is a group:artifact name
 // alone. For go.get it is a module path and an exact version. For uv it is a
 // Python project name and normalized versions. uv.upgrade needs a version and
 // takes no lowest version; uv.upgrade_chain takes a version, a lowest version
 // or neither, and not both.
 func validatePackage(op Op, p Package) error {
-	if strings.HasPrefix(p.Name, "-") || strings.HasPrefix(p.Version, "-") || strings.HasPrefix(p.AtLeast, "-") {
+	if strings.HasPrefix(p.Name, "-") || strings.HasPrefix(p.Version, "-") || strings.HasPrefix(p.AtLeast, "-") || strings.HasPrefix(p.From, "-") {
 		return fmt.Errorf("value starting with '-' is refused")
+	}
+	if p.From != "" && op != OpCargoUpdate {
+		return fmt.Errorf("%s takes no current version", op)
+	}
+	if op == OpCargoUpdate {
+		return validateCargoPackage(p)
 	}
 	if op == OpGradleUpdateLocks {
 		if !ValidGradleDependency(p.Name) {

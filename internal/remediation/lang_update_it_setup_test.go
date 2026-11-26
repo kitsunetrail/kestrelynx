@@ -104,7 +104,7 @@ func itSetup(t *testing.T) *itEnv {
 	}
 	instance := hex.EncodeToString(idb[:])
 	limits := docker.TransferLimits{
-		MaxInputBytes: 8 << 20, MaxInputTarBytes: 128 << 20, MaxInputFiles: 16, MaxInputPathBytes: 256,
+		MaxInputBytes: 8 << 20, MaxInputTarBytes: 128 << 20, MaxInputFiles: worker.MaxCargoInputs + 4, MaxInputPathBytes: worker.MaxInputPathBytes,
 		MaxToolBytes: worker.MaxToolArchiveBytes, MaxProgramBytes: 16 << 20,
 		LogMaxBytes: 8 << 20, MaxStdoutBytes: 8 << 20,
 	}
@@ -120,7 +120,10 @@ func itSetup(t *testing.T) *itEnv {
 		}
 		wc, err := docker.NewWork(sock, docker.WorkConfig{
 			Image: spec.ImageRef(), Platform: platform,
-			ExpectEnv:      map[string]string{spec.VersionEnv(): spec.Version},
+			ExpectEnv: map[string]string{spec.VersionEnv(): spec.Version},
+			// The Rust image leaves its toolchain directories writable by
+			// everyone, which only a read-only root keeps a job from changing.
+			ReadOnlyRoot:   spec.Kind == worker.KindRust,
 			Entrypoint:     []string{worker.ProgramPath, "run", worker.JobFile},
 			Env:            []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME=" + worker.HomeDir},
 			AllowedEnvKeys: []string{"PATH", "HOME"},
@@ -222,6 +225,9 @@ func (e *itEnv) config(cfg LangUpdateConfig) LangUpdateConfig {
 	}
 	if cfg.Go == nil {
 		cfg.Go = &GoClient{}
+	}
+	if cfg.Cargo == nil {
+		cfg.Cargo = &CargoIndexClient{}
 	}
 	return cfg
 }

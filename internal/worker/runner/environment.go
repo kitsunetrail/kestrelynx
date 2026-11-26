@@ -103,14 +103,17 @@ func KubernetesEnvironment() *EnvironmentConfig {
 	}
 }
 
-func (e *EnvironmentConfig) selfCheck() error {
+// selfCheck checks the container and says whether its root filesystem is read
+// only (in a Docker container; a Kubernetes one is never reported so).
+func (e *EnvironmentConfig) selfCheck() (readOnlyRoot bool, err error) {
 	if e.SkipSelfCheck {
-		return nil
+		return false, nil
 	}
-	if err := e.SelfCheck.selfCheck(); err != nil {
-		return &environmentError{err}
+	ro, err := e.SelfCheck.selfCheckMode()
+	if err != nil {
+		return false, &environmentError{err}
 	}
-	return nil
+	return ro, nil
 }
 
 func (e *EnvironmentConfig) interpreter(spec worker.RuntimeSpec) string {
@@ -130,11 +133,19 @@ func (c *Config) prepareEnvironment(job *worker.Job) error {
 	if !ok {
 		return &environmentError{fmt.Errorf("unknown runtime %q", job.Runtime.ID)}
 	}
-	interp := env.interpreter(spec)
 	timeout := env.VersionTimeout
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
+	if spec.Kind == worker.KindRust {
+		// cargo and rustc are run by the absolute paths of the toolchain; there
+		// is nothing to link into the directory of the tools.
+		if err := c.checkRust(spec, job, timeout); err != nil {
+			return &environmentError{err}
+		}
+		return nil
+	}
+	interp := env.interpreter(spec)
 	if err := c.checkRuntime(spec, job, interp, timeout); err != nil {
 		return &environmentError{err}
 	}
@@ -239,6 +250,28 @@ func (c *Config) checkGradle(spec worker.RuntimeSpec, job *worker.Job, interp st
 	jvm := gradleJVMRE.FindStringSubmatch(pr.stdout)
 	if jvm == nil || jvm[1] != spec.JDK {
 		return fmt.Errorf("%s runs on another JDK than %s", spec.Label(), spec.JDK)
+	}
+	return nil
+}
+
+// checkRust requires the cargo and the rustc of the toolchain to be there and
+// to report exactly the version of the job.
+func (c *Config) checkRust(spec worker.RuntimeSpec, job *worker.Job, timeout time.Duration) error {
+	for _, name := range []string{"cargo", "rustc"} {
+		exe := filepath.Join(c.rustBin, name)
+		if st, err := os.Stat(exe); err != nil || !st.Mode().IsRegular() {
+			return fmt.Errorf("the %s executable %s is not there", spec.Label(), exe)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		pr := runExe(ctx, c, job.Manager, exe, []string{name, "--version"}, c.TmpDir, 0)
+		cancel()
+		if pr.err != nil || pr.timedOut || pr.exitCode != 0 {
+			return fmt.Errorf("%s --version did not report its version (exit %d)", name, pr.exitCode)
+		}
+		out := strings.TrimSpace(pr.stdout)
+		if f := strings.Fields(out); len(f) < 2 || f[0] != name || f[1] != job.Runtime.Version {
+			return fmt.Errorf("%s reports %q, the job asks for Rust %s", name, clipVersion(out), job.Runtime.Version)
+		}
 	}
 	return nil
 }

@@ -54,8 +54,8 @@ func workTransferLimits() docker.TransferLimits {
 	return docker.TransferLimits{
 		MaxInputBytes:     worker.MaxInputTotalBytes,
 		MaxInputTarBytes:  worker.MaxInputTotalBytes + worker.MaxToolArchiveBytes + maxProgramBytes + 1<<20,
-		MaxInputFiles:     worker.MaxInputs + 4,
-		MaxInputPathBytes: 256,
+		MaxInputFiles:     worker.MaxCargoInputs + 4,
+		MaxInputPathBytes: worker.MaxInputPathBytes,
 		MaxToolBytes:      worker.MaxToolArchiveBytes,
 		MaxProgramBytes:   maxProgramBytes,
 		LogMaxBytes:       logMax,
@@ -274,7 +274,10 @@ func newDockerWorkClient(cfg config.Config, spec worker.RuntimeSpec, platform, i
 	wc := docker.WorkConfig{
 		Image: workImageRef(spec, cfg.Remediation.Worker.Registry), Platform: platform,
 		ExpectEnv: expect, CoverPaths: dockerCoverPaths(spec),
-		Entrypoint: workEntrypoint, Env: workEnv, AllowedEnvKeys: workEnvKeys,
+		// The Rust image leaves its toolchain directories writable by everyone,
+		// which only a read-only root keeps the job from changing.
+		ReadOnlyRoot: spec.Kind == worker.KindRust,
+		Entrypoint:   workEntrypoint, Env: workEnv, AllowedEnvKeys: workEnvKeys,
 		InstanceID: instance, Limits: workTransferLimits(), Log: log,
 	}
 	if pulls != nil {
@@ -331,6 +334,7 @@ func newLanguageUpdater(cfg config.Config, tools toolSupply, work remediation.Wo
 		Npm:      &remediation.NpmClient{},
 		Go:       &remediation.GoClient{},
 		Maven:    &remediation.MavenClient{},
+		Cargo:    &remediation.CargoIndexClient{},
 		GitHub:   in.GitHub,
 		Prepared: in.Prepared,
 		Images:   in.Images,

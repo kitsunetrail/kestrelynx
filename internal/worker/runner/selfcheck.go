@@ -139,6 +139,20 @@ func unescapeMount(s string) (string, error) {
 	return b.String(), nil
 }
 
+// WorkVolumePath is where a container whose root filesystem is read only has
+// its volume for the input.
+const WorkVolumePath = "/work"
+
+// rootReadOnly reports whether the mount at root is read only.
+func rootReadOnly(mounts []mountEntry, root string) bool {
+	for _, m := range mounts {
+		if m.point == root {
+			return hasOpt(m.options, "ro")
+		}
+	}
+	return false
+}
+
 func hasOpt(opts []string, want string) bool {
 	for _, o := range opts {
 		if o == want {
@@ -166,9 +180,17 @@ func (c *SelfCheckConfig) checkMounts(mounts []mountEntry) (map[string]bool, err
 		allowed[t.Path] = t
 	}
 	skip := map[string]bool{}
+	readOnly := rootReadOnly(mounts, c.Root)
 	for _, m := range mounts {
 		switch {
 		case m.point == c.Root:
+		case readOnly && c.Kubernetes == nil && m.point == WorkVolumePath:
+			// The volume the input is placed in, in a container whose root is
+			// read only. It is walked like the rest: nothing in it may be
+			// writable by the job user.
+			if m.fstype == "tmpfs" || !hasOpt(m.options, "rw") {
+				return nil, fmt.Errorf("the mount at %s is not a writable volume", m.point)
+			}
 		case underPrefixAny(m.point, systemMountPrefixes):
 		case containsString(systemFileMounts, m.point):
 		default:
@@ -212,22 +234,28 @@ func containsString(list []string, s string) bool {
 	return false
 }
 
-// selfCheck verifies the container before the job is read: no mount other
+// selfCheck is selfCheckMode without the answer about the root.
+func (c *SelfCheckConfig) selfCheck() error {
+	_, err := c.selfCheckMode()
+	return err
+}
+
+// selfCheckMode verifies the container before the job is read: no mount other
 // than the allowed ones, and outside the allowed tmpfs mounts and the
 // engine's own mounts nothing the job user owns or can write. The job may
 // therefore write only into size-limited tmpfs.
-func (c *SelfCheckConfig) selfCheck() error {
+func (c *SelfCheckConfig) selfCheckMode() (readOnlyRoot bool, err error) {
 	fsys := c.FS
 	if fsys == nil {
 		fsys = osFS{}
 	}
 	data, err := os.ReadFile(c.MountInfo)
 	if err != nil {
-		return fmt.Errorf("read the mounts of the container: %w", err)
+		return false, fmt.Errorf("read the mounts of the container: %w", err)
 	}
 	mounts, err := parseMountInfo(string(data))
 	if err != nil {
-		return err
+		return false, err
 	}
 	check := c.checkMounts
 	if c.Kubernetes != nil {
@@ -235,16 +263,28 @@ func (c *SelfCheckConfig) selfCheck() error {
 	}
 	skip, err := check(mounts)
 	if err != nil {
-		return err
+		return false, err
 	}
 	w := &walker{c: c, fs: fsys, skip: skip, deadline: time.Now().Add(c.MaxTime)}
 	if err := w.walk(c.Root); err != nil {
-		return err
+		return false, err
 	}
 	if c.Kubernetes != nil {
-		return c.Kubernetes.activeChecks(fsys)
+		return false, c.Kubernetes.activeChecks(fsys)
 	}
-	return nil
+	// A Docker container whose root is read only: the volume for the input
+	// must be there (checkMounts allowed it only then).
+	readOnlyRoot = rootReadOnly(mounts, c.Root)
+	if readOnlyRoot {
+		found := false
+		for _, m := range mounts {
+			found = found || m.point == WorkVolumePath
+		}
+		if !found {
+			return false, fmt.Errorf("the root is read only and there is no volume at %s", WorkVolumePath)
+		}
+	}
+	return readOnlyRoot, nil
 }
 
 type walker struct {

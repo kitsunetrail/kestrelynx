@@ -43,6 +43,15 @@ func buildInputTar(inputs []InputFile, lim TransferLimits) ([]byte, error) {
 	return workexec.BuildInputTar(inputs, lim, "work")
 }
 
+// buildInputTarFor is the archive of a client: for a read-only root the files
+// are put into /work, the volume, so their names are relative to it.
+func (c *WorkClient) buildInputTarFor(inputs []InputFile) ([]byte, error) {
+	if c.cfg.ReadOnlyRoot {
+		return workexec.BuildInputTar(inputs, c.cfg.Limits, "")
+	}
+	return buildInputTar(inputs, c.cfg.Limits)
+}
+
 // readLogs strictly decodes the multiplexed log stream of a container
 // without a TTY: frames of an 8-byte header (stream type, three zero bytes,
 // big-endian payload length) and the payload. Only stdout frames are
@@ -111,7 +120,7 @@ func (c *WorkClient) RunJob(ctx context.Context, spec JobSpec) (res JobResult, e
 	if err := validateResources(spec.Resources); err != nil {
 		return JobResult{}, err
 	}
-	input, err := buildInputTar(spec.Inputs, c.cfg.Limits)
+	input, err := c.buildInputTarFor(spec.Inputs)
 	if err != nil {
 		return JobResult{}, err
 	}
@@ -187,13 +196,22 @@ func (c *WorkClient) runCreated(ctx context.Context, id string, input []byte) (J
 	return JobResult{ExitCode: wr.StatusCode, Stdout: stdout}, nil
 }
 
+// putPath is where the input archive is extracted: the root, which holds a
+// work/ directory, or the volume at /work when the root is read only.
+func (c *WorkClient) putPath() string {
+	if c.cfg.ReadOnlyRoot {
+		return workDir
+	}
+	return "/"
+}
+
 func (c *WorkClient) putInput(ctx context.Context, id string, input []byte) error {
 	if err := c.stateIs(id, stateCreated); err != nil {
 		return err
 	}
 	octx, cancel := c.withTimeout(ctx, c.cfg.TransferTimeout)
 	defer cancel()
-	if err := c.call(octx, putArchiveOp(id, input), nil, http.StatusOK); err != nil {
+	if err := c.call(octx, putArchiveOp(id, c.putPath(), input), nil, http.StatusOK); err != nil {
 		return fmt.Errorf("put work input: %w", err)
 	}
 	return nil

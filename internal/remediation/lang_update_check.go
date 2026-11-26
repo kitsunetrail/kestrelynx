@@ -12,6 +12,7 @@ import (
 // sourceScanTypes is the scanner result type of each manager's lockfile.
 var sourceScanTypes = map[DependencyManager]string{
 	ManagerNpm: "npm", ManagerPnpm: "pnpm", ManagerUv: "uv", ManagerPip: "pip", ManagerGo: typeGoModule, ManagerMaven: "pom", ManagerGradle: "gradle",
+	ManagerCargo: typeCargo,
 }
 
 // sourceCheck scans the dependency files before and after the update under
@@ -105,6 +106,16 @@ func (r *updateRun) evaluateSourceCheck(sc *SourceCheck, before, after scanner.I
 			}
 		}
 	}
+	if m == ManagerCargo {
+		// Trivy reads a lockfile without saying when it leaves a crate out; every
+		// crate of crates.io this program read must be in its result.
+		for i, s := range []scanner.ImageScan{before, after} {
+			if why := cargoScanGap(r.cargoLocks[i], s, typ); why != "" {
+				return &updateFailure{category: CategoryNotComparable, reason: ReasonSourceScanIncomplete,
+					detail: fmt.Sprintf("the scan of the %s files does not list %s", [2]string{"original", "updated"}[i], why)}
+			}
+		}
+	}
 	key := func(n string) string {
 		if m.scheme() == schemePEP440 {
 			return normalizePyName(n)
@@ -155,7 +166,10 @@ func (r *updateRun) evaluateSourceCheck(sc *SourceCheck, before, after scanner.I
 			if vs[i].Package != vs[j].Package {
 				return vs[i].Package < vs[j].Package
 			}
-			return vs[i].VulnID < vs[j].VulnID
+			if vs[i].VulnID != vs[j].VulnID {
+				return vs[i].VulnID < vs[j].VulnID
+			}
+			return vs[i].Version < vs[j].Version
 		})
 		return vs
 	}
@@ -167,8 +181,19 @@ func (r *updateRun) evaluateSourceCheck(sc *SourceCheck, before, after scanner.I
 		}
 	}
 	for p, f := range fa {
-		if _, was := fb[p]; !was {
+		if _, was := fb[p]; !was && m != ManagerCargo {
 			sc.Introduced = append(sc.Introduced, vuln(p, f))
+		}
+	}
+	if m == ManagerCargo {
+		// A crate the update brought in at another version of a name the file
+		// already had would hide among that name's findings, so a finding is
+		// new when its package, version and vulnerability together are.
+		was := cargoFindings(before, typ)
+		for k, f := range cargoFindings(after, typ) {
+			if _, ok := was[k]; !ok {
+				sc.Introduced = append(sc.Introduced, vuln(srcPair{f.Package, f.VulnID}, f))
+			}
 		}
 	}
 	sorted(sc.Resolved)
@@ -249,6 +274,43 @@ func gradleScanGap(l *gradleLock, s scanner.ImageScan, typ string) string {
 	for _, e := range l.entries {
 		if !have[e.name+"@"+e.version] {
 			return e.name + " at " + e.version
+		}
+	}
+	return ""
+}
+
+// cargoFindingKey identifies a finding of a Cargo.lock by the crate, its
+// version and the vulnerability.
+type cargoFindingKey struct{ pkg, version, vuln string }
+
+// cargoFindings are the findings of the scan's Cargo.lock result.
+func cargoFindings(s scanner.ImageScan, typ string) map[cargoFindingKey]scanner.Finding {
+	out := map[cargoFindingKey]scanner.Finding{}
+	for _, f := range s.Findings {
+		if f.Type == typ {
+			out[cargoFindingKey{f.Package, f.InstalledVer, f.VulnID}] = f
+		}
+	}
+	return out
+}
+
+// cargoScanGap names a crate of crates.io in the lockfile the scan does not
+// list at its version, "" when it lists them all.
+func cargoScanGap(l *cargoLock, s scanner.ImageScan, typ string) string {
+	if l == nil {
+		return ""
+	}
+	have := map[string]bool{}
+	for _, rp := range s.Packages {
+		if rp.Type == typ {
+			for _, p := range rp.Packages {
+				have[p.Name+"@"+p.Version] = true
+			}
+		}
+	}
+	for _, c := range l.crates {
+		if c.registry() && !have[c.name+"@"+c.version] {
+			return c.name + " at " + c.version
 		}
 	}
 	return ""

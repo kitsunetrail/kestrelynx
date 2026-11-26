@@ -132,6 +132,8 @@ func lookupFailure(ctx context.Context, err error, what string) *updateFailure {
 	case errors.Is(err, errRegistryBudget):
 		return &updateFailure{category: CategoryDeferred, reason: ReasonRegistryCheckLimit,
 			detail: fmt.Sprintf("the update needs more than the %d registry lookups one update may make (at %s)", maxRegistryChecks, what)}
+	case errors.Is(err, errCargoIndexBudget):
+		return manualFailure(ReasonRegistryCheckLimit, "the crates.io index files the update reads come to more than the %d bytes one update may read (at %s)", int64(maxCargoIndexTotalBytes), what)
 	case errors.Is(err, ErrReleaseNotFound):
 		return manualFailure(ReasonDistributionMismatch, "%s is not published", what)
 	case ctx.Err() != nil:

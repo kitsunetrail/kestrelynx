@@ -66,6 +66,14 @@ func runProc(ctx context.Context, cfg *Config, m worker.Manager, argv []string, 
 // runProcKeeping is runProc that also keeps the first keep bytes of the
 // child's standard output (none when keep is 0), in procResult.head.
 func runProcKeeping(ctx context.Context, cfg *Config, m worker.Manager, argv []string, dir string, keep int) procResult {
+	if m == worker.ManagerCargo {
+		// A Cargo job names the cargo of the toolchain by its absolute path;
+		// nothing of the tools directory is involved.
+		if !filepath.IsAbs(argv[0]) {
+			return procResult{exitCode: -1, err: fmt.Errorf("the program %q of a Cargo job is not an absolute path", argv[0])}
+		}
+		return runExe(ctx, cfg, m, argv[0], argv, dir, keep)
+	}
 	exe, err := lookPath(cfg.BinDir, argv[0])
 	if err != nil {
 		return procResult{exitCode: -1, err: err}

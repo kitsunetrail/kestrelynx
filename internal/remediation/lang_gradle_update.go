@@ -217,9 +217,9 @@ func (p *gradleProject) rel(repoPath string) string {
 	return strings.TrimPrefix(repoPath, p.dir+"/")
 }
 
-// readGradleSources reads again every file the plan recorded, requires the
+// readRecordedSources reads again every file the plan recorded, requires the
 // blobs it recorded and the places it found empty to be empty still.
-func (r *updateRun) readGradleSources(ctx context.Context) (map[string][]byte, map[string]string, *updateFailure) {
+func (r *updateRun) readRecordedSources(ctx context.Context) (map[string][]byte, map[string]string, *updateFailure) {
 	src := r.it.Source
 	if src.CommitSHA == "" {
 		return nil, nil, failedFailure(ReasonUpdateInputInvalid, "the plan recorded no commit")
@@ -304,7 +304,7 @@ func (r *updateRun) runGradle(ctx context.Context) *updateFailure {
 	}
 	r.noPartial = true
 	r.mavenPOMs, r.mavenVersions = map[string]*mavenPOM{}, map[string][]string{}
-	content, mode, fail := r.readGradleSources(ctx)
+	content, mode, fail := r.readRecordedSources(ctx)
 	if fail != nil {
 		return fail
 	}

@@ -217,6 +217,9 @@ type LanguageUpdate struct {
 	Maven *MavenUpdate `json:"maven,omitempty"`
 	// Gradle records the edits of a Gradle update and what moved with them.
 	Gradle *GradleUpdate `json:"gradle,omitempty"`
+	// Cargo records what a Cargo update did to Cargo.lock besides moving its
+	// targets.
+	Cargo *CargoLockChange `json:"cargo,omitempty"`
 }
 
 // Outcomes of ChainUpdate.

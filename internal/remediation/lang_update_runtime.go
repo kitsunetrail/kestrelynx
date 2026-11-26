@@ -67,6 +67,28 @@ func DefaultRuntimeIDs() []string {
 	return ids
 }
 
+// cargoRuntime is the row of the runtime table a Cargo update runs in: the
+// newest Rust that has an image and has been run by an integration test on the
+// platform of the jobs. A row nobody ran there is not trusted.
+func (u *LangUpdater) cargoRuntime() (worker.RuntimeSpec, bool) {
+	var best worker.RuntimeSpec
+	var bestV semver
+	found := false
+	for _, rt := range worker.Runtimes() {
+		if rt.Kind != worker.KindRust || !rt.HasImage() || !rt.IsTestedOn(u.cfg.Platform) {
+			continue
+		}
+		v, ok := parseCargoVersion(rt.Version)
+		if !ok {
+			continue
+		}
+		if !found || v.compare(bestV) > 0 {
+			best, bestV, found = rt, v, true
+		}
+	}
+	return best, found
+}
+
 // runtimeIDFor is the runtime a manager's jobs run in when nothing chooses
 // another, at the time now. Go has none: its runtime is chosen from the
 // versions an update moves to. "" is not a runtime of the table.

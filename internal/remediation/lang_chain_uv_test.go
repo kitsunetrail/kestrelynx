@@ -210,7 +210,7 @@ func TestUvChainJobMovesThePackagesThatRequireTheHeldBackOne(t *testing.T) {
 	if len(job.Steps) != 2 || job.Steps[0].Op != worker.OpUvUpgradeChain || job.Steps[1].Op != worker.OpUvCheck || !job.Steps[1].Scratch {
 		t.Fatalf("steps = %+v: the update and the check, and no check of the original", job.Steps)
 	}
-	if got := fmt.Sprint(job.Steps[0].Packages); got != "[{t  1.2.0} {a  }]" {
+	if got := fmt.Sprint(job.Steps[0].Packages); got != "[{t  1.2.0 } {a   }]" {
 		t.Errorf("packages = %s: t from its lowest fixed version, a free", got)
 	}
 	tp := packageOf(t, it, "t")
@@ -357,7 +357,7 @@ func TestChainUpgradePackages(t *testing.T) {
 		Names: map[string]bool{"a": true, "mid": true, "t": true},
 	}
 	got := fmt.Sprint(r.chainUpgradePackages(scope))
-	if got != "[{T  1.2.0} {u 3.0 } {a  } {mid  }]" {
+	if got != "[{T  1.2.0 } {u 3.0  } {a   } {mid   }]" {
 		t.Errorf("packages = %s", got)
 	}
 }

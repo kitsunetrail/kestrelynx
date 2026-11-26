@@ -22,18 +22,21 @@ const (
 	// KindGradle is one version of Gradle on one JDK, in the official gradle
 	// image of that pair.
 	KindGradle RuntimeKind = "gradle"
+	// KindRust is the official rust image: one row for the newest stable
+	// release of Rust.
+	KindRust RuntimeKind = "rust"
 )
 
 // RuntimeSpec is one row of the runtime table.
 type RuntimeSpec struct {
 	// ID names the runtime in a job ("node24", "python3.13", "golang1.26",
-	// "gradle9.8.2-jdk21").
+	// "gradle9.8.2-jdk21", "rust1.100").
 	ID   string      `json:"id"`
 	Kind RuntimeKind `json:"kind"`
-	// Series is the major version of Node.js and Gradle or the X.Y of Python
-	// and Go.
+	// Series is the major version of Node.js and Gradle or the X.Y of Python,
+	// Go and Rust.
 	Series string `json:"series"`
-	// Version is the exact Node.js, Python, Go or Gradle version of the pinned
+	// Version is the exact Node.js, Python, Go, Rust or Gradle version of the pinned
 	// image, and Pip the version of the pip it carries (Python only). Both are
 	// empty for a runtime that has no image.
 	Version string `json:"version,omitempty"`
@@ -167,7 +170,7 @@ type runtimeTableFile struct {
 // runtimeImages is the repository of the official image of each kind on Docker
 // Hub. A row that pins an image names exactly this one.
 var runtimeImages = map[RuntimeKind]string{
-	KindNode: "node", KindPython: "python", KindGolang: "golang", KindGradle: "gradle",
+	KindNode: "node", KindPython: "python", KindGolang: "golang", KindGradle: "gradle", KindRust: "rust",
 }
 
 // imageCoverPaths are the paths of an official image that a work container may
@@ -406,12 +409,16 @@ func (r RuntimeSpec) VersionEnv() string {
 		return "GOLANG_VERSION"
 	case KindGradle:
 		return "GRADLE_VERSION"
+	case KindRust:
+		return "RUST_VERSION"
 	}
 	return ""
 }
 
 // Interpreter is the absolute path of the node, python or go executable the
-// official image provides. It is empty for a kind the table does not have.
+// official image provides. It is empty for a kind the table does not have, and
+// for Rust, whose cargo and rustc are in a directory that depends on the exact
+// version and the architecture (CargoToolchainBin).
 func (r RuntimeSpec) Interpreter() string {
 	switch r.Kind {
 	case KindNode:
@@ -438,6 +445,8 @@ func (r RuntimeSpec) InterpreterName() string {
 		return "go"
 	case KindGradle:
 		return "gradle"
+	case KindRust:
+		return "cargo"
 	}
 	return ""
 }
@@ -533,6 +542,8 @@ func (r RuntimeSpec) Label() string {
 		return "Go " + r.Series
 	case KindGradle:
 		return "Gradle " + r.Version + " on JDK " + r.JDK
+	case KindRust:
+		return "Rust " + r.Series
 	}
 	return string(r.Kind) + " " + r.Series
 }
@@ -554,6 +565,8 @@ func KindFor(m Manager) RuntimeKind {
 		return KindGolang
 	case ManagerGradle:
 		return KindGradle
+	case ManagerCargo:
+		return KindRust
 	}
 	return ""
 }

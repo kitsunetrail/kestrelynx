@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-11-23T13:20:07Z",
+  "updated": "2026-11-26T00:00:00Z",
   "runtimes": [
     {
       "id": "node20",
@@ -305,6 +305,33 @@
       "checked": "2026-11-23",
       "tested": {
         "linux/amd64": "sha256:2cd7e1ebf475c6208122d2b9cefc638d98fcc8dfd8554c8872c9dd0c21f4ac61"
+      }
+    },
+    {
+      "id": "rust1.100",
+      "kind": "rust",
+      "series": "1.100",
+      "version": "1.100.0",
+      "image": "rust",
+      "tag": "1.100-slim-trixie",
+      "exact_tag": "1.100.0-slim-trixie",
+      "index_digest": "sha256:3b199fd6db7d709274df56565b8f4003f9e30d7bfcff9d53148c86053b7855e2",
+      "platforms": {
+        "linux/amd64": "sha256:6014030547c3168bb80e700b7aaf653fbb92e5ac1e2712c49a1c9ec1beea49d8",
+        "linux/arm64": "sha256:a4a93336fc1d0e50059899e760e2d214ce8efc1beec7b38f634c4217c94dc8ec"
+      },
+      "covered_paths": [
+        "/tmp",
+        "/var/tmp",
+        "/run/lock"
+      ],
+      "volumes_empty": true,
+      "healthcheck": false,
+      "support": "supported",
+      "eol": "2026-12-24",
+      "checked": "2026-11-26",
+      "tested": {
+        "linux/amd64": "sha256:6014030547c3168bb80e700b7aaf653fbb92e5ac1e2712c49a1c9ec1beea49d8"
       }
     },
     {

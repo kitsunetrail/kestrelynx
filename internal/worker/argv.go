@@ -32,7 +32,9 @@ func PnpmFixedConfig(version string) ([]string, error) {
 // alone, so the program that runs a step and the process that checks the
 // recorded command line of the result build the same one. The first element is
 // the name of the program, found only in the directory of the tools; the
-// interpreter that uv and pip use is named by its absolute path. Names and
+// interpreter that uv and pip use, and the cargo of a Cargo job, are named by
+// their absolute paths (the cargo's depends on the architecture the program
+// runs on). Names and
 // versions are separate arguments, never joined into a shell string, and a
 // value that starts with '-' is refused by Step.Validate before it gets here.
 func Argv(j Job, s Step) ([]string, error) {
@@ -108,6 +110,16 @@ func Argv(j Job, s Step) ([]string, error) {
 		}
 		a = []string{"gradle", "--no-daemon", "--no-build-cache", "-q", "-Porg.gradle.java.installations.auto-download=false",
 			"dependencies", "--update-locks", strings.Join(deps, ",")}
+	case OpCargoUpdate:
+		// The cargo of the toolchain, by its absolute path, never the one of
+		// rustup. The crate is named with the version it has now, because the
+		// lockfile may hold more than one version of it.
+		bin, err := cargoBinDir(j.Runtime.Version)
+		if err != nil {
+			return nil, err
+		}
+		p := s.Packages[0]
+		a = []string{bin + "/cargo", "update", "--manifest-path", "Cargo.toml", "-p", p.Name + "@" + p.From, "--precise", p.Version}
 	case OpPipDryRun:
 		a = []string{spec.InterpreterName(), "-m", "pip", "--isolated", "install", "--dry-run", "--ignore-installed",
 			"--only-binary=:all:", "--disable-pip-version-check", "--no-input",

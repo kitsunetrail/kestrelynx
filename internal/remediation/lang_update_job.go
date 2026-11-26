@@ -22,6 +22,13 @@ const (
 	stepCheck    = "check"    // the updated input checked again
 )
 
+// isUpdateStep reports whether a step id is the one of an update step: a job
+// with several update steps (one cargo update for each crate) numbers them
+// after the first.
+func isUpdateStep(id string) bool {
+	return id == stepUpdate || strings.HasPrefix(id, stepUpdate+"-")
+}
+
 // jobOutput is a finished job whose result passed the structural checks: the
 // files are exactly the declared ones, and the steps are the job's steps.
 type jobOutput struct {
@@ -45,16 +52,22 @@ func (o *jobOutput) finalFile(name string) ([]byte, bool) {
 // The deadline leaves the client time to collect the result before its own
 // limit.
 func (u *LangUpdater) newJob(m worker.Manager, env *jobEnvironment, inputs map[string][]byte, steps []worker.Step) worker.Job {
-	return u.newJobWithin(m, env, inputs, steps, u.cfg.JobTimeout)
+	return u.newJobWithin(m, env, inputs, nil, steps, u.cfg.JobTimeout)
 }
 
 // newJobWithin is newJob for a container that may take timeout.
-func (u *LangUpdater) newJobWithin(m worker.Manager, env *jobEnvironment, inputs map[string][]byte, steps []worker.Step, timeout time.Duration) worker.Job {
+func (u *LangUpdater) newJobWithin(m worker.Manager, env *jobEnvironment, inputs map[string][]byte, roles map[string]string, steps []worker.Step, timeout time.Duration) worker.Job {
 	deadline := jobDeadlineSeconds(timeout)
 	job := worker.Job{
 		Protocol: worker.ProtocolVersion, Manager: m, Runtime: env.runtime, Tool: env.tool, Steps: steps,
 		Outputs:         worker.OutputNames(m),
 		DeadlineSeconds: deadline, StepTimeoutSeconds: deadline,
+	}
+	if m == worker.ManagerCargo {
+		// A Cargo job names its files by path, each with its role (see
+		// cargoJobFiles), and returns every one of them.
+		job.Inputs, job.Outputs = cargoJobFiles(inputs, roles)
+		return job
 	}
 	for _, name := range worker.InputNames(m) {
 		content, ok := inputs[name]
@@ -64,6 +77,61 @@ func (u *LangUpdater) newJobWithin(m worker.Manager, env *jobEnvironment, inputs
 		job.Inputs = append(job.Inputs, worker.Input{Path: name, Size: int64(len(content)), SHA256: sha256Hex(content)})
 	}
 	return job
+}
+
+// cargoFile is a file of a Cargo job: its path relative to the workspace
+// root, what it is to the job (a worker.Role value) and its content.
+type cargoFile struct {
+	path, role string
+	content    []byte
+}
+
+// cargoInputs checks the files of a Cargo job against the limits and the form
+// of the job format before the job is made, so that a workspace that cannot go
+// in one job is not started, and returns the contents by path.
+func cargoInputs(files []cargoFile) (map[string][]byte, *updateFailure) {
+	if len(files) > worker.MaxCargoInputs {
+		return nil, manualFailure(ReasonUpdateInputLimit, "the job would carry %d files, more than the %d one job takes", len(files), worker.MaxCargoInputs)
+	}
+	paths := make([]string, 0, len(files))
+	inputs := make(map[string][]byte, len(files))
+	var total int64
+	for _, f := range files {
+		if err := worker.ValidCargoInputPath(f.path); err != nil {
+			return nil, manualFailure(ReasonWorkspaceUnsupported, "the job cannot carry %s: %v", f.path, err)
+		}
+		if len(worker.SrcDirName)+1+len(f.path) > worker.MaxInputPathBytes {
+			return nil, manualFailure(ReasonUpdateInputLimit, "the path %s is too long for the job to carry", f.path)
+		}
+		if int64(len(f.content)) > worker.MaxInputFileBytes {
+			return nil, manualFailure(ReasonUpdateInputLimit, "%s is %d bytes, more than the %d one job takes", f.path, len(f.content), worker.MaxInputFileBytes)
+		}
+		total += int64(len(f.content))
+		paths = append(paths, f.path)
+		inputs[f.path] = f.content
+	}
+	if total > worker.MaxInputTotalBytes {
+		return nil, manualFailure(ReasonUpdateInputLimit, "the files are %d bytes together, more than the %d one job takes", total, worker.MaxInputTotalBytes)
+	}
+	if err := worker.CheckCargoInputPaths(paths); err != nil {
+		return nil, manualFailure(ReasonWorkspaceUnsupported, "the job cannot carry the files of the workspace: %v", err)
+	}
+	return inputs, nil
+}
+
+// cargoJobFiles are the inputs of a Cargo job, by path, and its outputs: every
+// input.
+func cargoJobFiles(inputs map[string][]byte, roles map[string]string) ([]worker.Input, []string) {
+	names := make([]string, 0, len(inputs))
+	for name := range inputs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	list := make([]worker.Input, 0, len(names))
+	for _, name := range names {
+		list = append(list, worker.Input{Path: name, Size: int64(len(inputs[name])), SHA256: sha256Hex(inputs[name]), Role: roles[name]})
+	}
+	return list, names
 }
 
 // execute runs a job in a work container and checks its result. Everything
@@ -183,8 +251,12 @@ func jobLimitFailure(job worker.Job, inputs, replacements map[string][]byte) *up
 			}
 		}
 	}
-	if len(inputs)+len(replacements) > worker.MaxInputs {
-		return deferred(ReasonUpdateInputLimit, "the job has %d input files, more than the %d one job takes", len(inputs)+len(replacements), worker.MaxInputs)
+	maxInputs := worker.MaxInputs
+	if job.Manager == worker.ManagerCargo {
+		maxInputs = worker.MaxCargoInputs
+	}
+	if len(inputs)+len(replacements) > maxInputs {
+		return deferred(ReasonUpdateInputLimit, "the job has %d input files, more than the %d one job takes", len(inputs)+len(replacements), maxInputs)
 	}
 	if total > worker.MaxInputTotalBytes {
 		return deferred(ReasonUpdateInputLimit, "the inputs are %d bytes, more than the %d one job takes", total, worker.MaxInputTotalBytes)
@@ -286,10 +358,11 @@ func stepSucceeded(s worker.StepResult) bool {
 // expectedOutputs are the files a successful step of the job returns: the
 // manager's own files, and the install report of a pip step. A Gradle step
 // returns every input file the job carried: the lockfile it may change and
-// the others, which come back to be compared with what was sent.
+// the others, which come back to be compared with what was sent; so does a
+// Cargo step.
 func expectedOutputs(job worker.Job, op worker.Op) []string {
 	out := worker.RequiredInputNames(job.Manager)
-	if job.Manager == worker.ManagerGradle {
+	if job.Manager == worker.ManagerGradle || job.Manager == worker.ManagerCargo {
 		out = out[:0]
 		for _, in := range job.Inputs {
 			out = append(out, in.Path)
@@ -406,10 +479,10 @@ func jobStatusFailure(res worker.Result) *updateFailure {
 	case s.Reason == worker.ReasonReleaseAgeViolation:
 		return manualFailure(ReasonReleaseAgeViolation, "%s", detail)
 	}
-	switch s.ID {
-	case stepBaseline:
+	switch {
+	case s.ID == stepBaseline:
 		return manualFailure(ReasonLockfileInconsistent, "the original input does not pass %s: %s", s.Op, detail)
-	case stepUpdate:
+	case isUpdateStep(s.ID):
 		f := manualFailure(ReasonUpdateStepFailed, "%s", detail)
 		f.unsatisfiable = (s.Op == worker.OpUvUpgrade || s.Op == worker.OpUvUpgradeChain) && uvUnsatisfiable(s.Stderr)
 		return f
@@ -693,10 +766,28 @@ const (
 // outputSizeFailure refuses a returned file that is larger than its bound:
 // the manager's own files by the size of the file of that name that was sent,
 // the pip report by the number of lines of the requirements. The absolute
-// bound of the job format applies to all of them.
+// bound of the job format applies to all of them, and the copies the steps
+// and the final tree hold together may not be more than the job format lets
+// the program collect (the bound on the result as a whole also leaves room
+// for result.json).
 func outputSizeFailure(job worker.Job, inputs map[string][]byte, files map[string][]byte) *updateFailure {
+	var total int64
+	for _, content := range files {
+		total += int64(len(content))
+	}
+	if total > worker.MaxOutTotalBytes {
+		return manualFailure(ReasonOutputFilesInvalid, "the files the job returned come to %d bytes, over the %d bytes of copies a job collects", total, int64(worker.MaxOutTotalBytes))
+	}
 	for path, content := range files {
 		name := path[strings.LastIndex(path, "/")+1:]
+		if job.Manager == worker.ManagerCargo {
+			// A Cargo job's files are named by their paths inside the copy a
+			// step or the final tree holds.
+			name = strings.TrimPrefix(strings.TrimPrefix(path, worker.FinalDir+"/"), worker.StepsDir+"/")
+			if i := strings.Index(name, "/"); i >= 0 && strings.HasPrefix(path, worker.StepsDir+"/") {
+				name = name[i+1:]
+			}
+		}
 		limit := int64(worker.MaxOutputFileBytes)
 		switch in, isInput := inputs[name]; {
 		case isInput:

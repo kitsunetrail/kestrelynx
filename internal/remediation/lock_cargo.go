@@ -39,12 +39,15 @@ type cargoLock struct {
 	version int // the format version, 3 or 4
 	crates  []cargoCrate
 	byName  map[string][]int
+	// byVersion holds the crates of a name at a version, by name and version
+	// joined with a NUL: one from crates.io and one of the workspace at most.
+	byVersion map[string][]int
 }
 
 // find returns the index of the crate with the name, version and source, or
 // -1.
 func (l *cargoLock) find(name, version, source string) int {
-	for _, i := range l.byName[name] {
+	for _, i := range l.byVersion[name+"\x00"+version] {
 		if c := l.crates[i]; c.version == version && c.source == source {
 			return i
 		}
@@ -104,7 +107,7 @@ func parseCargoLock(data []byte) (*cargoLock, error) {
 	if ver != 3 && ver != 4 {
 		return nil, unsupported(ReasonUnsupportedLockfile, "Cargo.lock is of version %d; only versions 3 and 4 are handled", ver)
 	}
-	l := &cargoLock{version: int(ver), byName: map[string][]int{}}
+	l := &cargoLock{version: int(ver), byName: map[string][]int{}, byVersion: map[string][]int{}}
 	var rawDeps [][]string
 	var pkgs []any
 	if v, present := doc["package"]; present {
@@ -188,6 +191,7 @@ func parseCargoLock(data []byte) (*cargoLock, error) {
 			}
 		}
 		l.byName[c.name] = append(l.byName[c.name], len(l.crates))
+		l.byVersion[c.name+"\x00"+c.version] = append(l.byVersion[c.name+"\x00"+c.version], len(l.crates))
 		l.crates = append(l.crates, c)
 		rawDeps = append(rawDeps, deps)
 	}
@@ -222,7 +226,9 @@ func parseCargoLock(data []byte) (*cargoLock, error) {
 
 // resolve finds the one crate a dependencies entry names. An entry is "name",
 // "name version" or "name version (source)"; the parts it gives narrow the
-// crates of that name down.
+// crates of that name down. It looks at no more than the two crates of a name
+// and version, so that a file with many versions of one crate is not read in
+// time that grows with their number for each dependency.
 func (l *cargoLock) resolve(entry string) (int, error) {
 	parts := strings.Split(entry, " ")
 	if len(parts) > 3 {
@@ -245,13 +251,18 @@ func (l *cargoLock) resolve(entry string) (int, error) {
 		}
 		source, hasSource = s[1:len(s)-1], true
 	}
-	var hits []int
-	for _, i := range l.byName[name] {
-		c := l.crates[i]
-		if version != "" && c.version != version {
-			continue
+	if version == "" {
+		switch hits := l.byName[name]; len(hits) {
+		case 0:
+			return 0, fmt.Errorf("the dependency %q is not a crate of the file", entry)
+		case 1:
+			return hits[0], nil
 		}
-		if hasSource && c.source != source {
+		return 0, fmt.Errorf("the dependency %q names more than one crate of the file", entry)
+	}
+	var hits []int
+	for _, i := range l.byVersion[name+"\x00"+version] {
+		if hasSource && l.crates[i].source != source {
 			continue
 		}
 		hits = append(hits, i)

@@ -219,6 +219,11 @@ func replaceFiles(dir, tree string, replacements []worker.Input) error {
 // size or hash. A file that cannot be read is an error.
 func changedSettings(tree string, job *worker.Job) (string, error) {
 	outputs := worker.OutputNames(job.Manager)
+	if job.Manager == worker.ManagerCargo {
+		// The files a Cargo job returns are the ones it names, and the program
+		// leaves the main process to compare them with what it sent.
+		outputs = job.Outputs
+	}
 	for _, in := range job.Inputs {
 		if contains(outputs, in.Path) {
 			continue

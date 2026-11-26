@@ -415,6 +415,18 @@ func TestIntegrationLangUpdate(t *testing.T) {
 			}
 		})
 	}
+	// Cargo: one cargo update of a single crate, in each Rust runtime of the
+	// table that is in support, with the real crates.io index.
+	for _, r := range worker.Runtimes() {
+		if r.Kind != worker.KindRust || !r.HasImage() || r.EndOfLife(now) {
+			continue
+		}
+		t.Run("cargo_"+r.ID, func(t *testing.T) {
+			if got := itCargoUpdate(t, e); !t.Failed() {
+				ran[got.Update.Runtime.ID] = true
+			}
+		})
+	}
 	// Every runtime of the table that is in support and has an image has to
 	// have run and passed here; one that did not fails the test (and so the
 	// table update), whatever the reason.

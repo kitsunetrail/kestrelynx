@@ -10,7 +10,7 @@ package worker
 // ProtocolVersion is the version of the job and result formats. The program
 // that runs in the container is shipped with the main process that starts it,
 // built from the same source, and checks the version of every job and result.
-const ProtocolVersion = 4
+const ProtocolVersion = 5
 
 // Paths inside the work container. The program only reads /work.
 const (
@@ -63,6 +63,9 @@ const (
 	// ManagerGradle updates the dependency locks of a Gradle project with the
 	// gradle command of the image the job runs in.
 	ManagerGradle Manager = "gradle"
+	// ManagerCargo updates Cargo.lock with the cargo of the image the job runs
+	// in.
+	ManagerCargo Manager = "cargo"
 )
 
 // Op is one fixed operation. The program turns it into a command line itself;
@@ -87,6 +90,9 @@ const (
 	// the dependencies of the step, each named group:artifact. The versions
 	// they move to come from the project's own declarations.
 	OpGradleUpdateLocks Op = "gradle.update_locks"
+	// OpCargoUpdate is one cargo update of a single crate to an exact version,
+	// which rewrites Cargo.lock and nothing else.
+	OpCargoUpdate Op = "cargo.update"
 )
 
 // PipReportName is the file pip.dry_run writes its install report to, in the
@@ -114,8 +120,18 @@ func StepReports(op Op) []string {
 
 // Limits on the size of the job and of what it carries.
 const (
-	MaxJobBytes        = 1 << 20
-	MaxInputs          = 8
+	MaxJobBytes = 1 << 20
+	MaxInputs   = 8
+	// MaxCargoInputs is the most files a Cargo job carries: its manifests and
+	// the empty files that stand for the build targets, at any relative path.
+	// The other managers take MaxInputs.
+	MaxCargoInputs = 512
+	// MaxCargoPathElements is the most elements a path of a Cargo job's input
+	// has.
+	MaxCargoPathElements = 8
+	// MaxInputPathBytes bounds a path in the archive of the input, which
+	// starts with the directory of the inputs.
+	MaxInputPathBytes  = 256
 	MaxInputFileBytes  = 32 << 20
 	MaxInputTotalBytes = 64 << 20
 	MaxSteps           = 64
@@ -200,7 +216,8 @@ type Job struct {
 	Replacements []Input `json:"replacements,omitempty"`
 	Steps        []Step  `json:"steps"`
 	// Outputs names the files copied after each step and into final/. Only
-	// names the manager may produce are accepted.
+	// names the manager may produce are accepted; for Cargo, any of the
+	// declared inputs.
 	Outputs []string `json:"outputs"`
 	// DeadlineSeconds is the limit for the whole job and StepTimeoutSeconds
 	// for one step (0 means the whole-job limit only).
@@ -208,11 +225,28 @@ type Job struct {
 	StepTimeoutSeconds int `json:"step_timeout_seconds,omitempty"`
 }
 
+// Roles of the input files of a Cargo job.
+const (
+	// RoleLockfile is Cargo.lock at the root, the one file a step changes.
+	RoleLockfile = "lockfile"
+	// RoleManifest is a Cargo.toml, at the root or of a workspace member.
+	RoleManifest = "manifest"
+	// RoleEmpty is a file of no content that stands for a build target (a
+	// manifest without one is not read).
+	RoleEmpty = "empty"
+)
+
+// EmptySHA256 is the SHA-256 of a file of no content.
+const EmptySHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
 // Input is one declared input file.
 type Input struct {
 	Path   string `json:"path"`
 	Size   int64  `json:"size"`
 	SHA256 string `json:"sha256"`
+	// Role says what the file is to a Cargo job (the Role constants) and is
+	// empty for the other managers.
+	Role string `json:"role,omitempty"`
 }
 
 // Step is one operation. Scratch steps run in a copy of the current working
@@ -224,7 +258,9 @@ type Step struct {
 	Scratch bool   `json:"scratch,omitempty"`
 	// Packages are the update targets of uv.upgrade and uv.upgrade_chain, each
 	// a name and a version (uv.upgrade_chain: a version, a lowest version or
-	// neither), and the modules of go.get, each a module path and a version.
+	// neither), the modules of go.get, each a module path and a version, and
+	// the one crate of cargo.update, with the version it has and the one it
+	// moves to.
 	Packages []Package `json:"packages,omitempty"`
 	// RequireHashes and Target are for pip.dry_run.
 	RequireHashes bool    `json:"require_hashes,omitempty"`
@@ -238,6 +274,10 @@ type Package struct {
 	// AtLeast is a lowest version, for uv.upgrade_chain: the package may be
 	// moved to any version from it up.
 	AtLeast string `json:"at_least,omitempty"`
+	// From is the version of the crate Cargo.lock has now, for cargo.update,
+	// which names the crate as name@from because the lockfile may hold more
+	// than one version of it.
+	From string `json:"from,omitempty"`
 }
 
 // Target is the environment pip resolves for.

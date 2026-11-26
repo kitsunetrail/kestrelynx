@@ -188,28 +188,32 @@ func TestCargoIndexClient(t *testing.T) {
 	c := &CargoIndexClient{BaseURL: srv.URL + "/", HTTP: srv.Client()}
 	ctx := context.Background()
 
-	rs, err := c.Versions(ctx, "tokio")
-	if err != nil || len(rs) != 1 || rs[0].Version != "1.0.0" {
-		t.Fatalf("tokio: %v %+v", err, rs)
+	rs, n, err := c.Versions(ctx, "tokio", 0)
+	if err != nil || len(rs) != 1 || rs[0].Version != "1.0.0" || n == 0 {
+		t.Fatalf("tokio: %v %+v %d", err, rs, n)
 	}
-	if _, err := c.Versions(ctx, "missing"); !errors.Is(err, ErrReleaseNotFound) {
+	// A limit below the file stops the read.
+	if _, n, err := c.Versions(ctx, "tokio", 10); !errors.Is(err, errCargoIndexOverLimit) || n != 11 {
+		t.Errorf("tokio within 10 bytes: %v %d", err, n)
+	}
+	if _, _, err := c.Versions(ctx, "missing", 0); !errors.Is(err, ErrReleaseNotFound) {
 		t.Errorf("missing crate: %v", err)
 	}
-	if _, err := c.Versions(ctx, "abcd"); err == nil || errors.Is(err, ErrReleaseNotFound) {
+	if _, _, err := c.Versions(ctx, "abcd", 0); err == nil || errors.Is(err, ErrReleaseNotFound) {
 		t.Errorf("server error: %v", err)
 	}
-	if _, err := c.Versions(ctx, "other"); err == nil {
+	if _, _, err := c.Versions(ctx, "other", 0); err == nil {
 		t.Error("an answer for another crate was accepted")
 	}
-	if _, err := c.Versions(ctx, "big-crate"); err == nil || !strings.Contains(err.Error(), "more than") {
+	if _, _, err := c.Versions(ctx, "big-crate", 0); err == nil || !strings.Contains(err.Error(), "more than") {
 		t.Errorf("oversized answer: %v", err)
 	}
-	if _, err := c.Versions(ctx, "redirect"); err == nil || !strings.Contains(err.Error(), "refused") {
+	if _, _, err := c.Versions(ctx, "redirect", 0); err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Errorf("redirect to another host: %v", err)
 	}
 	before := len(paths)
 	for _, bad := range []string{"", "../etc", "a/b", "a b"} {
-		if _, err := c.Versions(ctx, bad); err == nil {
+		if _, _, err := c.Versions(ctx, bad, 0); err == nil {
 			t.Errorf("%q was looked up", bad)
 		}
 	}

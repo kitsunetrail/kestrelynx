@@ -63,6 +63,8 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"rust_binary_not_from_source":        {"the Rust binary of the image does not match this Cargo.lock and the packages of its workspace", "イメージの Rust のバイナリが、この Cargo.lock とワークスペースのパッケージと一致しない"},
 	"cargo_manifest_unsupported":         {"a Cargo.toml is written in a form that is not handled", "Cargo.toml に、対応していない書き方がある"},
 	"cargo_release_not_found":            {"crates.io lists no release the update can take", "更新で使える版が crates.io にない"},
+	"cargo_runtime_unavailable":          {"no Rust runtime of the runtime table has been run on the platform the update runs on", "更新を実行する環境で動作を確かめた Rust の実行環境が、実行環境の一覧にない"},
+	"cargo_rust_version_too_new":         {"the index gives a crate of the update a rust-version above the one the project declares", "更新する crate について索引が示す rust-version が、プロジェクトの rust-version より新しい"},
 	"newer_series_tag_list_incomplete":   {"the whole tag list, which newer series are chosen from, could not be read to the end", "新しい系列を選ぶためのタグ一覧の全体を最後まで取得できなかった"},
 	"newer_series_reserved":              {"checking newer series stopped to leave time and registry requests to pull requests", "PR の処理の分の時間とレジストリへの要求を残すため、新しい系列の確認を止めた"},
 	"candidate_scan_limit":               {"the limit on candidate scans of a run was reached", "1回の実行でスキャンできる候補数の上限に達した"},

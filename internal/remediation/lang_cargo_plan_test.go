@@ -1091,21 +1091,20 @@ func TestLanguagePlan_CargoFindingsLeaveOtherPlansAlone(t *testing.T) {
 	}
 }
 
-func TestLangUpdater_CargoUnitsAreNotUpdated(t *testing.T) {
+func TestLangUpdater_CargoUnitsAreJobsOfThePass(t *testing.T) {
 	cargo := LanguageItem{Key: "k#cargo", Manager: ManagerCargo, Category: CategoryDependencyUpdateCandidate, Reason: ReasonUpdateCandidateInSource,
 		Packages: []LanguagePackage{{Name: "tokio", Installed: "1.18.0", Action: ActionUpdate, SelectionLowerBound: "1.18.4"}}}
 	maven := LanguageItem{Key: "k#maven", Manager: ManagerMaven, Category: CategoryDependencyUpdateCandidate, Reason: ReasonUpdateCandidateInSource}
 	plan := Plan{LanguageItems: []LanguageItem{cargo, maven}}
-	// An updater that may run no job defers what it would update; a Cargo
-	// unit is not one of those, and stays a candidate that nothing was run for.
+	// An updater that may run no job defers what it would update, a Cargo unit
+	// as any other.
 	use := (&LangUpdater{}).Run(context.Background(), &plan)
 	if use.Jobs != 0 {
 		t.Errorf("jobs = %d", use.Jobs)
 	}
-	if got := plan.LanguageItems[0]; got.Category != CategoryDependencyUpdateCandidate || got.Reason != ReasonUpdateCandidateInSource || got.UpdateExecuted {
-		t.Errorf("cargo item = %s %s executed=%v", got.Category, got.Reason, got.UpdateExecuted)
-	}
-	if got := plan.LanguageItems[1]; got.Category != CategoryDeferred || got.Reason != ReasonUpdateJobLimit {
-		t.Errorf("maven item = %s %s", got.Category, got.Reason)
+	for _, got := range plan.LanguageItems {
+		if got.Category != CategoryDeferred || got.Reason != ReasonUpdateJobLimit || got.UpdateExecuted {
+			t.Errorf("%s = %s %s executed=%v", got.Key, got.Category, got.Reason, got.UpdateExecuted)
+		}
 	}
 }

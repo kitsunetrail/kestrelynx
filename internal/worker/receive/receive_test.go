@@ -8,8 +8,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/kitsunetrail/kestrelynx/internal/worker"
+	"github.com/kitsunetrail/kestrelynx/internal/workexec"
 )
 
 type entry struct {
@@ -164,5 +168,29 @@ func TestRefusesWhenTheTerminationFileCanBeOpened(t *testing.T) {
 	c.TerminationPath = filepath.Join(t.TempDir(), "absent", "receive")
 	if err := Run(bytes.NewReader(makeTar(t)), c); err != nil {
 		t.Errorf("unreachable: %v", err)
+	}
+}
+
+// The largest input a Cargo job has: the most files, each in directories of its
+// own all the way down, is within the entries the receiver takes.
+func TestTakesTheLargestCargoInput(t *testing.T) {
+	var files []workexec.InputFile
+	for i := 0; i < worker.MaxCargoInputs; i++ {
+		p := worker.SrcDirName
+		for d := 0; d < worker.MaxCargoPathElements-1; d++ {
+			p += "/d" + strconv.Itoa(i)
+		}
+		files = append(files, workexec.InputFile{Path: p + "/f.rs", Content: []byte{}})
+	}
+	files = append(files, workexec.InputFile{Path: "job.json", Content: []byte("{}")})
+	lim := workexec.TransferLimits{MaxInputBytes: 1 << 20, MaxInputTarBytes: 64 << 20, MaxInputFiles: worker.MaxCargoInputs + 4, MaxInputPathBytes: worker.MaxInputPathBytes}
+	data, err := workexec.BuildInputTar(files, lim, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.Dest, cfg.TerminationPath = t.TempDir(), ""
+	if err := Run(bytes.NewReader(data), cfg); err != nil {
+		t.Fatalf("the largest Cargo input: %v", err)
 	}
 }

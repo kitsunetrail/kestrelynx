@@ -46,8 +46,11 @@ func DefaultLimits() Limits {
 		MaxTarBytes:   total + 1<<20,
 		MaxFileBytes:  worker.MaxToolArchiveBytes,
 		MaxTotalBytes: total,
-		MaxEntries:    4 * (worker.MaxInputs + 8),
-		MaxPathBytes:  256,
+		// The files of a job and the directories on the way to them: a Cargo
+		// job has the most files, and a directory for every element of a path
+		// in the worst case.
+		MaxEntries:   4*(worker.MaxInputs+8) + worker.MaxCargoInputs*worker.MaxCargoPathElements,
+		MaxPathBytes: worker.MaxInputPathBytes,
 	}
 }
 

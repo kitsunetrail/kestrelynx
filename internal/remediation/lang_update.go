@@ -35,7 +35,9 @@ type LangUpdateConfig struct {
 	// fails without it.
 	Go GoModuleRegistry
 	// Maven reads Maven Central; a Maven or Gradle item fails without it.
-	Maven  MavenRegistry
+	Maven MavenRegistry
+	// Cargo reads the crates.io index; a Cargo item fails without it.
+	Cargo  CargoIndex
 	GitHub GitHubReader
 	// Prepared are the cycle's scan conditions (Plan.Conditions). The stage's
 	// scans are valid only under them.
@@ -167,10 +169,6 @@ func (u *LangUpdater) Run(ctx context.Context, plan *Plan) LangUpdateUsage {
 		it := &plan.LanguageItems[i]
 		if it.Category != CategoryDependencyUpdateCandidate {
 			u.packageHints(ctx, it)
-			continue
-		}
-		if it.Manager == ManagerCargo {
-			// Cargo units are planned only: their update is not made yet.
 			continue
 		}
 		switch {
@@ -711,6 +709,8 @@ type updateRun struct {
 	npmDocs map[string]NpmDist
 	pyDocs  map[string]PyPIRelease
 	lookups int
+	// cargoIndex is what a Cargo update has read of the crates.io index.
+	cargoIndex cargoIndexBudget
 	// declMarkers is the budget (and token cache) for the markers judged
 	// against the project's requires-python, and falseThrough the answers.
 	declMarkers  *markerBudget
@@ -732,6 +732,12 @@ type updateRun struct {
 	gradleArtifacts []ArtifactFile
 	// gradleLocks are the lockfiles before and after, as this program read them.
 	gradleLocks [2]*gradleLock
+	// cargoLocks are the Cargo.lock files before and after, cargoRoles the role
+	// of each file the job carries, by path, and cargoArtifacts the file a
+	// Cargo update changed.
+	cargoLocks     [2]*cargoLock
+	cargoRoles     map[string]string
+	cargoArtifacts []ArtifactFile
 	// recheck is a lockfile a chain run judges by the chain's rules in place of
 	// making one: the first update's, which its difference check refused.
 	recheck []byte
@@ -776,6 +782,10 @@ func (r *updateRun) succeed() {
 	case ManagerGradle:
 		// A Gradle update changes the files its edits are in and gradle.lockfile.
 		it.Artifacts = r.gradleArtifacts
+		return
+	case ManagerCargo:
+		// A Cargo update changes Cargo.lock and nothing else.
+		it.Artifacts = r.cargoArtifacts
 		return
 	}
 	it.Artifacts = []ArtifactFile{{

@@ -111,6 +111,8 @@ func testRuntime(m Manager) Runtime {
 		id = "golang1.26"
 	case KindGradle:
 		id = "gradle9.8.2-jdk21"
+	case KindRust:
+		id = "rust1.100"
 	}
 	spec, ok := LookupRuntime(id)
 	if !ok {

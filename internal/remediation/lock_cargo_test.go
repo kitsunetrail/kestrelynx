@@ -3,6 +3,7 @@ package remediation
 import (
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -126,6 +127,48 @@ func TestParseCargoLock_DependencyForms(t *testing.T) {
 		if got := l.crates[d].id(); got != want[i] {
 			t.Errorf("dependency %d = %s, want %s", i, got, want[i])
 		}
+	}
+}
+
+// A package of the workspace and a crate of crates.io of one name and version
+// are told apart by the source, and a file with many versions of one crate is
+// resolved by name and version.
+func TestParseCargoLock_ManyVersions(t *testing.T) {
+	var deps []string
+	blocks := []string{}
+	for i := 1; i <= 2000; i++ {
+		v := "0." + strconv.Itoa(i) + ".0"
+		deps = append(deps, "x "+v)
+		blocks = append(blocks, cratesBlock("x", v, cksumA))
+	}
+	blocks = append(blocks, ownBlock("app", "0.1.0", deps...))
+	l, err := parseCargoLock([]byte(cargoLockText(4, blocks...)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := l.find("app", "0.1.0", "")
+	if len(l.crates[app].deps) != 2000 || l.crates[l.crates[app].deps[1999]].version != "0.2000.0" {
+		t.Fatalf("deps %d", len(l.crates[app].deps))
+	}
+
+	text := cargoLockText(4,
+		ownBlock("app", "0.1.0", "same 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)", "same 1.0.0"),
+		ownBlock("same", "1.0.0"),
+		cratesBlock("same", "1.0.0", cksumA),
+	)
+	if _, err := parseCargoLock([]byte(text)); err == nil || !strings.Contains(err.Error(), "names more than one crate") {
+		t.Fatalf("got %v", err)
+	}
+	text = cargoLockText(4,
+		ownBlock("app", "0.1.0", "same 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)", "same"),
+		cratesBlock("same", "1.0.0", cksumA),
+	)
+	l, err = parseCargoLock([]byte(text))
+	if err == nil {
+		t.Fatalf("one crate listed twice by its two forms was accepted: %+v", l.crates)
+	}
+	if _, err := parseCargoLock([]byte(cargoLockText(4, ownBlock("app", "0.1.0", "same 2.0.0"), cratesBlock("same", "1.0.0", cksumA)))); err == nil || !strings.Contains(err.Error(), "is not a crate of the file") {
+		t.Fatalf("got %v", err)
 	}
 }
 

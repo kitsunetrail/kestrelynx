@@ -78,6 +78,12 @@ type WorkConfig struct {
 	// written below it and no anonymous volume is created for a declared
 	// volume. The paths are absolute, clean and distinct.
 	CoverPaths []string
+	// ReadOnlyRoot makes the root filesystem of the container read only and
+	// puts an anonymous volume at /work, where the input is placed. It is for
+	// an image that leaves directories writable by everyone that no tmpfs can
+	// cover, because they hold the programs it runs. The volume is deleted
+	// with the container, and the image must have no /work of its own.
+	ReadOnlyRoot bool
 	// Env is the complete environment of the container ("KEY=value"); the
 	// host process environment is never inherited.
 	Env []string
@@ -334,9 +340,9 @@ func startOp(id string) workOp {
 	return workOp{method: http.MethodPost, path: containerPath(id, "/start")}
 }
 
-func putArchiveOp(id string, tarBytes []byte) workOp {
+func putArchiveOp(id, dir string, tarBytes []byte) workOp {
 	return workOp{method: http.MethodPut, path: containerPath(id, "/archive"),
-		query: url.Values{"path": {"/"}}, contentType: "application/x-tar", body: tarBytes}
+		query: url.Values{"path": {dir}}, contentType: "application/x-tar", body: tarBytes}
 }
 
 func waitOp(id string) workOp {
@@ -365,6 +371,11 @@ func imageDeleteOp(ref string) workOp {
 	// ref is validated against imageRefRE by the caller, so it is kept
 	// unescaped: the daemon routes "/images/{name:.*}" on the raw path.
 	return workOp{method: http.MethodDelete, path: "/images/" + ref}
+}
+
+// archiveOp reads a path of the container as a tar.
+func archiveOp(id, p string) workOp {
+	return workOp{method: http.MethodGet, path: containerPath(id, "/archive"), query: url.Values{"path": {p}}}
 }
 
 func containerInspectOp(id string) workOp {

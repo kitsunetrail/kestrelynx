@@ -15,8 +15,49 @@ import (
 // CargoIndex is what the remediation reads from the crates.io sparse index.
 type CargoIndex interface {
 	// Versions returns every release the index lists for the crate, in file
-	// order. ErrReleaseNotFound means the index has no such crate.
-	Versions(ctx context.Context, name string) ([]CargoRelease, error)
+	// order, and the bytes of the index file it read. ErrReleaseNotFound means
+	// the index has no such crate; a file of more than limit bytes is not read
+	// to its end, and the error then wraps errCargoIndexOverLimit.
+	Versions(ctx context.Context, name string, limit int64) ([]CargoRelease, int64, error)
+}
+
+// errCargoIndexOverLimit is an index file larger than the bytes it was asked
+// within.
+var errCargoIndexOverLimit = errors.New("the index file is over the limit")
+
+// errCargoIndexBudget is the index files of an update coming to more than
+// maxCargoIndexTotalBytes.
+var errCargoIndexBudget = errors.New("the crates.io index files the update reads come to more than its limit")
+
+// maxCargoIndexTotalBytes bounds the index files one update reads, to choose
+// the releases and to check the Cargo.lock that comes back, together. The
+// releases read are held until the check ends, so this bounds what they take
+// up as well. An update that touches the largest files (web-sys's 4.5 MB,
+// the cloud SDKs' 1.5 MB) along with a few dozen ordinary ones comes well
+// under it.
+const maxCargoIndexTotalBytes = 64 << 20
+
+// cargoIndexBudget is what one update has read of the index.
+type cargoIndexBudget struct{ used int64 }
+
+// versions asks the index for the releases of a crate within what is left of
+// the budget. A file that does not fit in what is left is errCargoIndexBudget;
+// one over the bound of a single file is the error of the index.
+func (b *cargoIndexBudget) versions(ctx context.Context, idx CargoIndex, name string) ([]CargoRelease, error) {
+	limit := int64(maxCargoIndexBytes)
+	left := maxCargoIndexTotalBytes - b.used
+	if left <= 0 {
+		return nil, errCargoIndexBudget
+	}
+	if left < limit {
+		limit = left
+	}
+	rels, n, err := idx.Versions(ctx, name, limit)
+	b.used += n
+	if errors.Is(err, errCargoIndexOverLimit) && limit < maxCargoIndexBytes {
+		return nil, errCargoIndexBudget
+	}
+	return rels, err
 }
 
 // CargoRelease is one line of the index: a release of a crate.
@@ -88,37 +129,44 @@ func cargoIndexPath(name string) (string, bool) {
 }
 
 // Versions implements CargoIndex with GET <base>/<index path of the name>.
-func (c *CargoIndexClient) Versions(ctx context.Context, name string) ([]CargoRelease, error) {
+// The bytes read are bounded by limit and by maxCargoIndexBytes, whichever is
+// lower.
+func (c *CargoIndexClient) Versions(ctx context.Context, name string, limit int64) ([]CargoRelease, int64, error) {
+	if limit <= 0 || limit > maxCargoIndexBytes {
+		limit = maxCargoIndexBytes
+	}
 	p, ok := cargoIndexPath(name)
 	if !ok {
-		return nil, fmt.Errorf("%q is not a crate name this client looks up", name)
+		return nil, 0, fmt.Errorf("%q is not a crate name this client looks up", name)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base()+"/"+p, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("User-Agent", "kestrelynx")
 	hc := *boundedClient(c.HTTP)
 	hc.CheckRedirect = sameHostRedirect
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("crates.io index request: %w", err)
+		return nil, 0, fmt.Errorf("crates.io index request: %w", err)
 	}
 	defer resp.Body.Close()
 	switch {
 	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
-		return nil, ErrReleaseNotFound
+		return nil, 0, ErrReleaseNotFound
 	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("%s answered %s", req.URL.Host, resp.Status)
+		return nil, 0, fmt.Errorf("%s answered %s", req.URL.Host, resp.Status)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxCargoIndexBytes+1))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	n := int64(len(body))
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", req.URL.Host, err)
+		return nil, n, fmt.Errorf("read %s: %w", req.URL.Host, err)
 	}
-	if len(body) > maxCargoIndexBytes {
-		return nil, fmt.Errorf("%s sent more than %d bytes", req.URL.Host, maxCargoIndexBytes)
+	if n > limit {
+		return nil, n, fmt.Errorf("%s sent more than %d bytes: %w", req.URL.Host, limit, errCargoIndexOverLimit)
 	}
-	return parseCargoIndex(body, name)
+	rels, err := parseCargoIndex(body, name)
+	return rels, n, err
 }
 
 // maxCargoIndexLines bounds the lines of one index file.

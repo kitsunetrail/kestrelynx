@@ -14,11 +14,13 @@ import (
 //	node<major>                  node24
 //	python3.<minor>              python3.13
 //	golang1.<minor>              golang1.26
+//	rust1.<minor>                rust1.100
 //	gradle<version>-jdk<major>   gradle9.8.2-jdk21
 var (
 	nodeIDRe   = regexp.MustCompile(`^node([1-9][0-9]{0,2})$`)
 	pythonIDRe = regexp.MustCompile(`^python(3\.(?:0|[1-9][0-9]?))$`)
 	golangIDRe = regexp.MustCompile(`^golang(1\.(?:0|[1-9][0-9]{0,2}))$`)
+	rustIDRe   = regexp.MustCompile(`^rust(1\.(?:0|[1-9][0-9]{0,2}))$`)
 )
 
 // RuntimeFromID reads the kind, the series and, for Gradle, the version and
@@ -37,6 +39,9 @@ func RuntimeFromID(id string) (RuntimeSpec, bool) {
 	}
 	if m := golangIDRe.FindStringSubmatch(id); m != nil {
 		return RuntimeSpec{ID: id, Kind: KindGolang, Series: m[1]}, true
+	}
+	if m := rustIDRe.FindStringSubmatch(id); m != nil {
+		return RuntimeSpec{ID: id, Kind: KindRust, Series: m[1]}, true
 	}
 	if rest, ok := strings.CutPrefix(id, "gradle"); ok {
 		version, jdk, ok := strings.Cut(rest, "-jdk")

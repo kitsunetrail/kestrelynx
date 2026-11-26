@@ -3,6 +3,8 @@
 package runner
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,6 +32,51 @@ const (
 // cacheDir is where the children keep caches, stores and configuration. It is
 // under TmpDir, so it lives and dies with the container's tmpfs.
 func (c *Config) cacheDir() string { return filepath.Join(c.TmpDir, "kestrelynx-cache") }
+
+// cargoHome is the CARGO_HOME of a Cargo job: a directory of its own in the
+// tmpfs of the home, empty when the job starts.
+func (c *Config) cargoHome() string { return filepath.Join(c.HomeDir, "cargo-home") }
+
+// prepareCargoHome creates the empty CARGO_HOME. A directory that is already
+// there must be empty.
+func (c *Config) prepareCargoHome() error {
+	dir := c.cargoHome()
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("create CARGO_HOME: %w", err)
+		}
+		li, lerr := os.Lstat(dir)
+		entries, rerr := os.ReadDir(dir)
+		if lerr != nil || !li.IsDir() || rerr != nil || len(entries) != 0 {
+			return fmt.Errorf("CARGO_HOME %s is not an empty directory", dir)
+		}
+	}
+	return nil
+}
+
+// checkCargoConfigs requires that cargo finds no configuration file: it reads
+// .cargo/config.toml and .cargo/config in the working directory and every
+// directory above it, and in its home. Whatever is there, of any type, or
+// cannot be told to be absent, makes the container one the job does not run in.
+func (c *Config) checkCargoConfigs(tree string) error {
+	var dirs []string
+	for d := filepath.Clean(tree); ; d = filepath.Dir(d) {
+		dirs = append(dirs, filepath.Join(d, ".cargo"))
+		if d == filepath.Dir(d) {
+			break
+		}
+	}
+	dirs = append(dirs, c.cargoHome())
+	for _, dir := range dirs {
+		for _, name := range []string{"config.toml", "config"} {
+			p := filepath.Join(dir, name)
+			if _, err := os.Lstat(p); !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("cargo would read the configuration file %s", p)
+			}
+		}
+	}
+	return nil
+}
 
 // prepareCache creates the cache directory and the empty npm configuration
 // files the environment points at.
@@ -114,6 +161,17 @@ func (c *Config) childEnv(m worker.Manager) []string {
 		// JAVA_OPTS or proxy setting.
 		env["JAVA_HOME"] = worker.GradleJavaHome
 		env["GRADLE_USER_HOME"] = filepath.Join(cache, "gradle")
+	case worker.ManagerCargo:
+		// cargo and rustc of the toolchain are named by their absolute paths,
+		// so rustup's proxies, which read a toolchain file and fetch
+		// toolchains, are not involved. The home is an empty directory, the
+		// registry is the index of crates.io, and no wrapper, registry login
+		// or proxy setting reaches the command.
+		env["PATH"] = c.rustBin + ":/usr/bin:/bin"
+		env["CARGO_HOME"] = c.cargoHome()
+		env["RUSTC"] = filepath.Join(c.rustBin, "rustc")
+		env["CARGO_REGISTRIES_CRATES_IO_PROTOCOL"] = "sparse"
+		env["CARGO_TERM_COLOR"] = "never"
 	case worker.ManagerGo:
 		// Only these go settings reach the command: modules come from the
 		// public proxy and are checked against the public checksum database,

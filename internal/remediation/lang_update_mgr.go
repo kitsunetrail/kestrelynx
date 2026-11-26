@@ -28,6 +28,13 @@ func (r *updateRun) run(ctx context.Context) *updateFailure {
 		r.upd.Notes = uniqueSorted(r.upd.Notes)
 		return out
 	}
+	if r.it.Manager == ManagerCargo {
+		// A Cargo workspace is read again from the files the plan recorded, and
+		// a work container only updates its Cargo.lock.
+		out := r.runCargo(ctx)
+		r.upd.Notes = uniqueSorted(r.upd.Notes)
+		return out
+	}
 	src, fail := r.u.readSources(ctx, r.it)
 	if fail != nil {
 		return fail
@@ -126,7 +133,7 @@ func (r *updateRun) execReplacing(ctx context.Context, m worker.Manager, inputs,
 			return nil, budgetFailure(err)
 		}
 	}
-	job := r.u.newJobWithin(m, env, inputs, steps, timeout)
+	job := r.u.newJobWithin(m, env, inputs, r.cargoRoles, steps, timeout)
 	for _, name := range worker.InputNames(m) {
 		if content, ok := replacements[name]; ok {
 			job.Replacements = append(job.Replacements, worker.Input{Path: name, Size: int64(len(content)), SHA256: sha256Hex(content)})
@@ -135,7 +142,7 @@ func (r *updateRun) execReplacing(ctx context.Context, m worker.Manager, inputs,
 	out, fail := r.u.execute(ctx, job, env, inputs, replacements, r.u.jobID(r.n, role), r.upd, timeout)
 	if out != nil {
 		for _, s := range out.result.Steps {
-			if s.ID == stepUpdate && s.ExitCode == 0 && !s.TimedOut && s.Error == "" {
+			if isUpdateStep(s.ID) && s.ExitCode == 0 && !s.TimedOut && s.Error == "" {
 				r.it.UpdateExecuted = true
 			}
 		}

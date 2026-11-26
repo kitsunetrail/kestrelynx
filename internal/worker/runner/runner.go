@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -43,6 +44,9 @@ type Config struct {
 	// prepare the runtime and the tool before it runs a job. Without it the
 	// caller has put the programs in BinDir itself.
 	Environment *EnvironmentConfig
+	// rustBin is the directory of the cargo and the rustc a Cargo job runs
+	// (worker.CargoToolchainBin). Run sets it from the job.
+	rustBin string
 	// FileSizeLimit is RLIMIT_FSIZE for the children, in bytes (0 leaves it
 	// and the core file limit alone); core files are turned off with it. It is lowered for this process too, hard limit included, so a
 	// child cannot raise it again; this program itself never writes a larger
@@ -104,10 +108,13 @@ func Run(cfg Config, jobPath string) error {
 	}
 
 	// The container is checked before anything the job names is read.
+	readOnlyRoot := false
 	if cfg.Environment != nil {
-		if err := cfg.Environment.selfCheck(); err != nil {
+		ro, err := cfg.Environment.selfCheck()
+		if err != nil {
 			return finish(&worker.Result{Status: worker.StatusEnvironmentRejected, Error: sanitize(err.Error())})
 		}
+		readOnlyRoot = ro
 	}
 
 	job, err := readJob(jobPath)
@@ -129,6 +136,24 @@ func Run(cfg Config, jobPath string) error {
 	}
 	if err := checkReplacements(filepath.Join(cfg.WorkDir, worker.ReplaceDirName), job.Replacements); err != nil {
 		return reject("%v", err)
+	}
+	if cfg.Environment != nil && !cfg.Environment.SkipSelfCheck && cfg.Environment.SelfCheck.Kubernetes == nil {
+		// In a Docker container the Rust image runs with a read-only root, and
+		// only it: the toolchain directories of that image are writable by
+		// everyone, and the volume for the input exists only in that layout.
+		if (job.Manager == worker.ManagerCargo) != readOnlyRoot {
+			return finish(&worker.Result{Status: worker.StatusEnvironmentRejected,
+				Error: sanitize(fmt.Sprintf("a %s job and a container with a read-only root (%v) do not go together", job.Manager, readOnlyRoot))})
+		}
+	}
+	if job.Manager == worker.ManagerCargo {
+		// The toolchain is found by an absolute path that depends on the
+		// architecture this program runs on.
+		bin, err := worker.CargoToolchainBin(job.Runtime.Version, runtime.GOARCH)
+		if err != nil {
+			return finish(&worker.Result{Status: worker.StatusEnvironmentRejected, Error: sanitize(err.Error())})
+		}
+		cfg.rustBin = bin
 	}
 	if cfg.Environment != nil {
 		if err := cfg.prepareEnvironment(job); err != nil {
@@ -237,6 +262,17 @@ func execute(cfg Config, job *worker.Job, base string, files map[string][]byte, 
 	}
 	if err := cfg.prepareCache(); err != nil {
 		return fail(worker.StatusStepFailed, "prepare cache: %v", err)
+	}
+	if job.Manager == worker.ManagerCargo {
+		// cargo reads the settings of the directories above its working
+		// directory and of its home; none may exist, and the home it gets is
+		// empty.
+		if err := cfg.prepareCargoHome(); err != nil {
+			return fail(worker.StatusEnvironmentRejected, "%v", err)
+		}
+		if err := cfg.checkCargoConfigs(filepath.Join(base, "main")); err != nil {
+			return fail(worker.StatusEnvironmentRejected, "%v", err)
+		}
 	}
 	// The working tree holds the job's outputs, the inputs it declared and
 	// nothing else: a settings file the job did not carry is not allowed to

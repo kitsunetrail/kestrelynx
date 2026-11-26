@@ -58,6 +58,12 @@ func TestRuntimeTableIsConsistent(t *testing.T) {
 			if !slices.Contains(r.Volumes, "/home/gradle/.gradle") || !slices.Contains(r.CoveredPaths, "/home/gradle") {
 				t.Errorf("%s: volumes %v, covered %v", r.ID, r.Volumes, r.CoveredPaths)
 			}
+		case KindRust:
+			if r.VersionEnv() != "RUST_VERSION" || r.Interpreter() != "" || r.InterpreterName() != "cargo" || r.Pip != "" ||
+				r.Image != "rust" || r.Label() != "Rust "+r.Series || r.Tag != r.Series+"-slim-trixie" || r.ExactTag != r.Version+"-slim-trixie" ||
+				!r.VolumesEmpty || len(r.Volumes) != 0 {
+				t.Errorf("%s: %+v", r.ID, r)
+			}
 		default:
 			t.Errorf("%s: unexpected kind %q", r.ID, r.Kind)
 		}
@@ -279,6 +285,7 @@ func TestLongTermSupportAndTheDefaultNodeRuntime(t *testing.T) {
 func TestManagerKinds(t *testing.T) {
 	for m, want := range map[Manager]RuntimeKind{
 		ManagerNpm: KindNode, ManagerPnpm: KindNode, ManagerUv: KindPython, ManagerPip: KindPython, ManagerGo: KindGolang,
+		ManagerGradle: KindGradle, ManagerCargo: KindRust,
 	} {
 		if got := KindFor(m); got != want {
 			t.Errorf("KindFor(%s) = %q, want %q", m, got, want)
@@ -289,7 +296,7 @@ func TestManagerKinds(t *testing.T) {
 	}
 	// A manager the protocol does not have is no kind at all, and no row of
 	// the table is of that kind.
-	for _, m := range []Manager{"", "cargo", "yarn", "Go", "GO"} {
+	for _, m := range []Manager{"", "bundler", "yarn", "Go", "GO", "Cargo"} {
 		if k := KindFor(m); k != "" {
 			t.Errorf("KindFor(%q) = %q", m, k)
 		}

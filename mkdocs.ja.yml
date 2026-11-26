@@ -110,6 +110,7 @@ nav:
       - イメージ識別モデル: development/image-identity-model.md
   - 技術記事:
       - 概要: articles/index.md
+      - Trivyの検出結果が多すぎるときの対応候補の選び方: articles/trivy-too-many-vulnerabilities-kev-epss-ja.md
       - procfsのパッケージ紐づけの流れを追う動く図解: articles/procfs-package-mapping-interactive-ja.md
       - bpftraceの計測プログラムの流れを追う動く図解: articles/bpftrace-event-observation-interactive-ja.md
       - Trivyで検出した言語パッケージを実行時のファイル情報に紐づける: articles/trivy-language-packages-runtime-mapping-ja.md

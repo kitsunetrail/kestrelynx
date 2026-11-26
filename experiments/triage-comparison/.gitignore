@@ -1,0 +1,4 @@
+raw/
+# Committed as findings.tsv.gz; compare.py writes the uncompressed file.
+records/findings.tsv
+records/*/findings.tsv

@@ -8,6 +8,18 @@ This section covers foundational knowledge, operational practices, and related s
 
 <div class="kl-log__item" markdown>
 
+November 26, 2026
+{ .kl-log__date }
+
+[How to Choose Remediation Candidates When Trivy Reports Too Many Findings](trivy-too-many-vulnerabilities-kev-epss.md)
+{ .kl-log__title }
+
+Criteria for choosing remediation candidates using KEV and EPSS and the source of those criteria, comparison with severity alone across nine public images, and differences in candidate counts and composition
+
+</div>
+
+<div class="kl-log__item" markdown>
+
 October 5, 2026
 { .kl-log__date }
 

@@ -1,0 +1,174 @@
+{
+  "trivy": {
+    "Version": "0.71.2",
+    "VulnerabilityDB": {
+      "Version": 2,
+      "NextUpdate": "2026-11-25T07:08:30.893544124Z",
+      "UpdatedAt": "2026-11-24T07:08:30.893544587Z",
+      "DownloadedAt": "2026-11-24T10:35:56.774209747Z"
+    },
+    "JavaDB": {
+      "Version": 1,
+      "NextUpdate": "2026-11-28T00:58:20.123767444Z",
+      "UpdatedAt": "2026-11-25T00:58:20.123767945Z",
+      "DownloadedAt": "2026-11-25T06:37:14.809325508Z"
+    }
+  },
+  "scan_options": "--scanners vuln --image-src remote --platform linux/amd64 --skip-db-update --skip-java-db-update",
+  "kev": {
+    "catalog_version": "2026.11.24",
+    "date_released": "2026-11-24T17:47:46.199Z",
+    "entries": 1795,
+    "sha256": "17dfaace755c075c10757f20687eaa588181ed9663de80e82936a08ba08e8a1f"
+  },
+  "epss": {
+    "sha256": "cb462a38ca3321282a72caaf4cad4ee8414bee0d0aeefb7b63344fd57c1c48d0",
+    "model_version": "v2026.06.15",
+    "score_date": "2026-11-24T12:00:20Z",
+    "entries": 411908
+  },
+  "sources": [
+    "CISA Known Exploited Vulnerabilities Catalog, https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
+    "EPSS, maintained by the FIRST EPSS SIG, https://www.first.org/epss/; scores downloaded from https://epss.empiricalsecurity.com/"
+  ],
+  "thresholds": {
+    "act_now_epss": 0.1,
+    "watch_epss": 0.01
+  },
+  "excluded_packages": {
+    "linux-libc-dev": 19345
+  },
+  "images": [
+    {
+      "image": "nginx:1.21.0",
+      "repo_digests": [
+        "nginx@sha256:47ae43cdfc7064d28800bc42e79a429540c7c80168e8c8952778c0d5af1c09db"
+      ],
+      "image_id": "sha256:4f380adfc10f4cd34f775ae57a17d2835385efd5251d6dfe0f246b0018fb0399",
+      "os": {
+        "Family": "debian",
+        "Name": "10.10",
+        "EOSL": true
+      },
+      "report_created_at": "2026-11-25T15:51:29.320355133+09:00",
+      "report_trivy_version": "0.71.2",
+      "report_sha256": "71748892533b72f16657b7f89e6851866c0ee59f1c3446a511adddd9c0dd1158"
+    },
+    {
+      "image": "postgres:15.3",
+      "repo_digests": [
+        "postgres@sha256:8775adb39f0db45cf4cdb3601380312ee5e9c4f53af0f89b7dc5cd4c9a78e4e8"
+      ],
+      "image_id": "sha256:8769343ac885ab5fe04ba515dc06f92e6959e75357b328303f15849acf9ccd0d",
+      "os": {
+        "Family": "debian",
+        "Name": "12.1"
+      },
+      "report_created_at": "2026-11-25T15:51:31.035930747+09:00",
+      "report_trivy_version": "0.71.2",
+      "report_sha256": "f64187982c6c2c04ba5b7ed64170414e8bd4eaec3670a160d22486d66a19ce55"
+    },
+    {
+      "image": "redis:7.0.11",
+      "repo_digests": [
+        "redis@sha256:1008c73f08e9f913868e2fa2e843212b62ea5bf3c66435d87bc7a6207bc0f1b4"
+      ],
+      "image_id": "sha256:4695a05c473aa2db2dff0384abb06c2174832183ca0783d0a2720a922792add6",
+      "os": {
+        "Family": "debian",
+        "Name": "12.0"
+      },
+      "report_created_at": "2026-11-25T15:51:32.907690833+09:00",
+      "report_trivy_version": "0.71.2",
+      "report_sha256": "783d936109fc9d36b2935e4e698c49a5f35ff4049ebec9d747d1d03080551d6d"
+    },
+    {
+      "image": "mysql:8.0.33",
+      "repo_digests": [
+        "mysql@sha256:ea68e51ffe9b96fef6076f1218af11301aeaf13c6201e0ec9aaef5791d5ddc5d"
+      ],
+      "image_id": "sha256:f6360852d65467a8252391f24826648079893ea03e52d4d8ee5f07fcdeb6d25e",
+      "os": {
+        "Family": "oracle",
+        "Name": "8.8"
+      },
+      "report_created_at": "2026-11-25T15:51:35.082513904+09:00",
+      "report_trivy_version": "0.71.2",
+      "report_sha256": "d02b7939dfc76706b557215d0199c8b04315b75b80f00a15a5b65bd49b6e94ab"
+    },
+    {
+      "image": "node:20.11.0",
+      "repo_digests": [
+        "node@sha256:7bf4a586b423aac858176b3f683e35f08575c84500fbcfd1d433ad8568972ec6"
+      ],
+      "image_id": "sha256:683cfa47c0acd2d225a2567d85722ad70824da3ca1c31a4fb0c5746b2a8639a2",
+      "os": {
+        "Family": "debian",
+        "Name": "12.5"
+      },
+      "report_created_at": "2026-11-25T15:51:37.121284815+09:00",
+      "report_trivy_version": "0.71.2",
+      "report_sha256": "fcc55e656a7ca381b68cecf7c9664b4c1bcac5323f85d497456516eca9b704e9"
+    },
+    {
+      "image": "grafana/grafana:10.0.0",
+      "repo_digests": [
+        "grafana/grafana@sha256:4d5308c296c49ec57b6e73854b041c731edab19571f41fa1c588dbd7288eba38"
+      ],
+      "image_id": "sha256:0b1fee9f5ac03d58242237d5132592c9033a2dc58cdef8582a7ede53f0020a8b",
+      "os": {
+        "Family": "alpine",
+        "Name": "3.17.4",
+        "EOSL": true
+      },
+      "report_created_at": "2026-11-25T15:51:39.467314955+09:00",
+      "report_trivy_version": "0.71.2",
+      "report_sha256": "c92ada0ba94504cd661f281205d6c04a426880315bcf4f12bc9002b96bfae43b"
+    },
+    {
+      "image": "elasticsearch:8.8.0",
+      "repo_digests": [
+        "elasticsearch@sha256:5c28849be5e91610761fcd4a49c2561dfae72be9ac0a3e7b5c42c9576aa9157b"
+      ],
+      "image_id": "sha256:c3f4505a1c221306684530aa32fc7af22efd65483c960f9e5b5bb9531d5f6dda",
+      "os": {
+        "Family": "ubuntu",
+        "Name": "20.04",
+        "EOSL": true
+      },
+      "report_created_at": "2026-11-25T15:51:41.101101967+09:00",
+      "report_trivy_version": "0.71.2",
+      "report_sha256": "0b23c47b43a47268f027e395d3fccf550e739a1a3facdd7251bee5ff49f839cc"
+    },
+    {
+      "image": "ghost:5.51.0",
+      "repo_digests": [
+        "ghost@sha256:a206b6dc3b11a5814f47534f20bd9d5152fe3b1af595e6a607efd8df9b0318f6"
+      ],
+      "image_id": "sha256:4edb480fbaef6096380c3d63977348a7a67214eaccf4213a4edb09ff96514b61",
+      "os": {
+        "Family": "debian",
+        "Name": "11.7",
+        "EOSL": true
+      },
+      "report_created_at": "2026-11-25T15:51:42.8505336+09:00",
+      "report_trivy_version": "0.71.2",
+      "report_sha256": "25cd110e659445add1b1a50c55c182430a7b252f4465a4b79637e416cdf936ab"
+    },
+    {
+      "image": "apache/airflow:2.6.1",
+      "repo_digests": [
+        "apache/airflow@sha256:213aa1ed99052d9db4006c6813b3ffdbd0b529557f2081e26cba768d57fe0e06"
+      ],
+      "image_id": "sha256:707c2144f3e21fed87f63a7b5d33c8a6847308342fc85c30c2dd2d4110f3d0d8",
+      "os": {
+        "Family": "debian",
+        "Name": "11.7",
+        "EOSL": true
+      },
+      "report_created_at": "2026-11-25T15:51:44.598778596+09:00",
+      "report_trivy_version": "0.71.2",
+      "report_sha256": "6b8d6fb89dd73a29deb74bf9ec248a22d79960e96a39dbcca2a60eef61429e4b"
+    }
+  ]
+}

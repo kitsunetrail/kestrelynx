@@ -1,0 +1,13 @@
+# Public images scanned for the comparison, one reference per line.
+# Old tags are chosen on purpose: the input stands for images that have not
+# been updated for a long time. The digests actually scanned are written to
+# records/conditions.json.
+nginx:1.21.0
+postgres:15.3
+redis:7.0.11
+mysql:8.0.33
+node:20.11.0
+grafana/grafana:10.0.0
+elasticsearch:8.8.0
+ghost:5.51.0
+apache/airflow:2.6.1

@@ -135,6 +135,7 @@ nav:
       - Image identity model: development/image-identity-model.md
   - Articles:
       - Overview: articles/index.md
+      - How to Choose Remediation Candidates When Trivy Reports Too Many Findings: articles/trivy-too-many-vulnerabilities-kev-epss.md
       - Interactive Guide to the procfs Package Mapping Workflow: articles/procfs-package-mapping-interactive.md
       - Interactive Guide to the bpftrace Measurement Workflow: articles/bpftrace-event-observation-interactive.md
       - Mapping Language Packages Detected by Trivy to Runtime Files: articles/trivy-language-packages-runtime-mapping.md

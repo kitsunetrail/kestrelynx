@@ -1,0 +1,130 @@
+image	target	class	type	package	path	installed	fixed	status	severity	id	kev	ransomware	epss	percentile
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	liblz4-1		1.8.3-1+deb10u1		will_not_fix	LOW	CVE-2019-17543	false	false	0.10451	0.95825
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	curl		7.64.0-4+deb10u2	7.64.0-4+deb10u3	fixed	MEDIUM	CVE-2022-32206	false	false	0.36348	0.9851
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	libcurl4		7.64.0-4+deb10u2	7.64.0-4+deb10u3	fixed	MEDIUM	CVE-2022-32206	false	false	0.36348	0.9851
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	libssl1.1		1.1.1d-0+deb10u6	1.1.1n-0+deb10u4	fixed	MEDIUM	CVE-2022-4304	false	false	0.23509	0.97836
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	openssl		1.1.1d-0+deb10u6	1.1.1n-0+deb10u4	fixed	MEDIUM	CVE-2022-4304	false	false	0.23509	0.97836
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	libssl1.1		1.1.1d-0+deb10u6	1.1.1n-0+deb10u5	fixed	MEDIUM	CVE-2023-2650	false	false	0.75358	0.9952
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	openssl		1.1.1d-0+deb10u6	1.1.1n-0+deb10u5	fixed	MEDIUM	CVE-2023-2650	false	false	0.75358	0.9952
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	curl		7.64.0-4+deb10u2		fix_deferred	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	libcurl4		7.64.0-4+deb10u2		fix_deferred	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	libssl1.1		1.1.1d-0+deb10u6		fix_deferred	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	openssl		1.1.1d-0+deb10u6		fix_deferred	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+nginx:1.21.0	nginx:1.21.0 (debian 10.10)	os-pkgs	debian	libnghttp2-14		1.36.0-2+deb10u1	1.36.0-2+deb10u3	fixed	MEDIUM	CVE-2024-28182	false	false	0.81994	0.99658
+postgres:15.3	postgres:15.3 (debian 12.1)	os-pkgs	debian	libgnutls30		3.7.9-2		affected	LOW	CVE-2011-3389	false	false	0.73327	0.99467
+postgres:15.3	postgres:15.3 (debian 12.1)	os-pkgs	debian	libssl3		3.0.9-1	3.0.14-1~deb12u1	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+postgres:15.3	postgres:15.3 (debian 12.1)	os-pkgs	debian	openssl		3.0.9-1	3.0.14-1~deb12u1	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+postgres:15.3	postgres:15.3 (debian 12.1)	os-pkgs	debian	libssl3		3.0.9-1	3.0.15-1~deb12u1	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+postgres:15.3	postgres:15.3 (debian 12.1)	os-pkgs	debian	openssl		3.0.9-1	3.0.15-1~deb12u1	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1		affected	LOW	CVE-2004-0230	false	false	0.80286	0.99624
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1		affected	LOW	CVE-2008-4609	false	false	0.32353	0.98353
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	libgnutls30		3.7.9-2		affected	LOW	CVE-2011-3389	false	false	0.73327	0.99467
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.52-1	fixed	MEDIUM	CVE-2023-20588	false	false	0.11151	0.96015
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.37-1	fixed	MEDIUM	CVE-2023-3866	false	false	0.21453	0.97656
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.55-1	fixed	MEDIUM	CVE-2023-52442	false	false	0.29644	0.98222
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	libssl3		3.0.9-1	3.0.14-1~deb12u1	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.119-1	fixed	MEDIUM	CVE-2024-50302	true	false	0.00811	0.57691
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	libssl3		3.0.9-1	3.0.15-1~deb12u1	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.129-1	fixed	MEDIUM	CVE-2025-21758	false	false	0.1693	0.97116
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.129-1	fixed	MEDIUM	CVE-2025-21760	false	false	0.37997	0.98576
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.192-1	fixed	MEDIUM	CVE-2025-22037	false	false	0.69416	0.99369
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.147-1	fixed	MEDIUM	CVE-2025-38352	true	false	0.01357	0.72239
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.148-1	fixed	MEDIUM	CVE-2025-38562	false	false	0.2475	0.97932
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.158-1	fixed	MEDIUM	CVE-2025-39946	false	false	0.11009	0.95976
+redis:7.0.11	redis:7.0.11 (debian 12.0)	os-pkgs	debian	linux-libc-dev		6.1.27-1	6.1.158-1	fixed	MEDIUM	CVE-2025-39964	true	false	0.01607	0.76395
+mysql:8.0.33	mysql:8.0.33 (oracle 8.8)	os-pkgs	oracle	python39		3.9.16-1.module+el8.8.0+21116+ee8c18cf.1	3.9.18-1.module+el8.9.0+90071+8dc52a4f	fixed	MEDIUM	CVE-2007-4559	false	false	0.27095	0.98078
+mysql:8.0.33	mysql:8.0.33 (oracle 8.8)	os-pkgs	oracle	python39-libs		3.9.16-1.module+el8.8.0+21116+ee8c18cf.1	3.9.18-1.module+el8.9.0+90071+8dc52a4f	fixed	MEDIUM	CVE-2007-4559	false	false	0.27095	0.98078
+mysql:8.0.33	mysql:8.0.33 (oracle 8.8)	os-pkgs	oracle	lz4-libs		1.8.3-3.el8_4	1.8.3-5.el8_10	fixed	MEDIUM	CVE-2019-17543	false	false	0.10451	0.95825
+mysql:8.0.33	mysql:8.0.33 (oracle 8.8)	os-pkgs	oracle	libgcc		8.5.0-18.0.2.el8	8.5.0-23.0.1.el8_10	fixed	MEDIUM	CVE-2020-11023	true	false	0.84887	0.99715
+mysql:8.0.33	mysql:8.0.33 (oracle 8.8)	os-pkgs	oracle	libstdc++		8.5.0-18.0.2.el8	8.5.0-23.0.1.el8_10	fixed	MEDIUM	CVE-2020-11023	true	false	0.84887	0.99715
+mysql:8.0.33	mysql:8.0.33 (oracle 8.8)	os-pkgs	oracle	libssh		0.9.6-10.el8_8	0.9.6-13.el8_9	fixed	MEDIUM	CVE-2023-48795	false	false	0.93547	0.99841
+mysql:8.0.33	Python	lang-pkgs	python-pkg	paramiko	usr/lib/mysqlsh/lib/python3.9/site-packages/paramiko-2.11.0.dist-info/METADATA	2.11.0	3.4.0	fixed	MEDIUM	CVE-2023-48795	false	false	0.93547	0.99841
+mysql:8.0.33	mysql:8.0.33 (oracle 8.8)	os-pkgs	oracle	curl		7.61.1-30.el8_8.2	7.61.1-34.el8_10.2	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+mysql:8.0.33	mysql:8.0.33 (oracle 8.8)	os-pkgs	oracle	libcurl		7.61.1-30.el8_8.2	7.61.1-34.el8_10.2	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+mysql:8.0.33	mysql:8.0.33 (oracle 8.8)	os-pkgs	oracle	libnghttp2		1.33.0-3.el8_2.1	1.33.0-6.el8_10.1	fixed	MEDIUM	CVE-2024-28182	false	false	0.81994	0.99658
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1		affected	LOW	CVE-2004-0230	false	false	0.80286	0.99624
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1		affected	LOW	CVE-2008-4609	false	false	0.32353	0.98353
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libwmf-0.2-7		0.2.12-5.1		affected	LOW	CVE-2009-3546	false	false	0.10247	0.95761
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libwmf-dev		0.2.12-5.1		affected	LOW	CVE-2009-3546	false	false	0.10247	0.95761
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libwmflite-0.2-7		0.2.12-5.1		affected	LOW	CVE-2009-3546	false	false	0.10247	0.95761
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libgnutls30		3.7.9-2+deb12u2		affected	LOW	CVE-2011-3389	false	false	0.73327	0.99467
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	openssh-client		1:9.2p1-2+deb12u2		affected	LOW	CVE-2019-6110	false	false	0.24901	0.97944
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	openssh-client		1:9.2p1-2+deb12u2		affected	LOW	CVE-2020-15778	false	false	0.13675	0.96556
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	curl		7.88.1-10+deb12u5	7.88.1-10+deb12u6	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libcurl3-gnutls		7.88.1-10+deb12u5	7.88.1-10+deb12u6	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libcurl4		7.88.1-10+deb12u5	7.88.1-10+deb12u6	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libcurl4-openssl-dev		7.88.1-10+deb12u5	7.88.1-10+deb12u6	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libssl-dev		3.0.11-1~deb12u2	3.0.14-1~deb12u1	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libssl3		3.0.11-1~deb12u2	3.0.14-1~deb12u1	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	openssl		3.0.11-1~deb12u2	3.0.14-1~deb12u1	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libnghttp2-14		1.52.0-1+deb12u1	1.52.0-1+deb12u2	fixed	MEDIUM	CVE-2024-28182	false	false	0.81994	0.99658
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1	6.1.119-1	fixed	MEDIUM	CVE-2024-50302	true	false	0.00811	0.57691
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	curl		7.88.1-10+deb12u5	7.88.1-10+deb12u7	fixed	MEDIUM	CVE-2024-7264	false	false	0.20217	0.97512
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libcurl3-gnutls		7.88.1-10+deb12u5	7.88.1-10+deb12u7	fixed	MEDIUM	CVE-2024-7264	false	false	0.20217	0.97512
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libcurl4		7.88.1-10+deb12u5	7.88.1-10+deb12u7	fixed	MEDIUM	CVE-2024-7264	false	false	0.20217	0.97512
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libcurl4-openssl-dev		7.88.1-10+deb12u5	7.88.1-10+deb12u7	fixed	MEDIUM	CVE-2024-7264	false	false	0.20217	0.97512
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libssl-dev		3.0.11-1~deb12u2	3.0.15-1~deb12u1	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	libssl3		3.0.11-1~deb12u2	3.0.15-1~deb12u1	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	openssl		3.0.11-1~deb12u2	3.0.15-1~deb12u1	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1	6.1.129-1	fixed	MEDIUM	CVE-2025-21758	false	false	0.1693	0.97116
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1	6.1.129-1	fixed	MEDIUM	CVE-2025-21760	false	false	0.37997	0.98576
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1	6.1.192-1	fixed	MEDIUM	CVE-2025-22037	false	false	0.69416	0.99369
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	openssh-client		1:9.2p1-2+deb12u2	1:9.2p1-2+deb12u5	fixed	MEDIUM	CVE-2025-26465	false	false	0.10128	0.95726
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1	6.1.147-1	fixed	MEDIUM	CVE-2025-38352	true	false	0.01357	0.72239
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1	6.1.148-1	fixed	MEDIUM	CVE-2025-38562	false	false	0.2475	0.97932
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1	6.1.158-1	fixed	MEDIUM	CVE-2025-39946	false	false	0.11009	0.95976
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	linux-libc-dev		6.1.76-1	6.1.158-1	fixed	MEDIUM	CVE-2025-39964	true	false	0.01607	0.76395
+node:20.11.0	node:20.11.0 (debian 12.5)	os-pkgs	debian	openssh-client		1:9.2p1-2+deb12u2		affected	LOW	CVE-2026-123158	true	false	0.95538	0.99868
+grafana/grafana:10.0.0	usr/share/grafana/bin/grafana	lang-pkgs	gobinary	golang.org/x/crypto		v0.7.0	0.17.0	fixed	MEDIUM	CVE-2023-48795	false	false	0.93547	0.99841
+grafana/grafana:10.0.0	grafana/grafana:10.0.0 (alpine 3.17.4)	os-pkgs	alpine	curl		8.2.0-r1	8.7.1-r0	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+grafana/grafana:10.0.0	grafana/grafana:10.0.0 (alpine 3.17.4)	os-pkgs	alpine	libcurl		8.2.0-r1	8.7.1-r0	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+grafana/grafana:10.0.0	grafana/grafana:10.0.0 (alpine 3.17.4)	os-pkgs	alpine	libcrypto3		3.0.9-r1	3.0.12-r5	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+grafana/grafana:10.0.0	grafana/grafana:10.0.0 (alpine 3.17.4)	os-pkgs	alpine	libssl3		3.0.9-r1	3.0.12-r5	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+grafana/grafana:10.0.0	grafana/grafana:10.0.0 (alpine 3.17.4)	os-pkgs	alpine	libcrypto3		3.0.9-r1	3.0.15-r1	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+grafana/grafana:10.0.0	grafana/grafana:10.0.0 (alpine 3.17.4)	os-pkgs	alpine	libssl3		3.0.9-r1	3.0.15-r1	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+elasticsearch:8.8.0	Java	lang-pkgs	jar	commons-io:commons-io	usr/share/elasticsearch/lib/tools/security-cli/commons-io-2.5.jar	2.5	2.7	fixed	MEDIUM	CVE-2021-29425	false	false	0.10549	0.95852
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libssl1.1		1.1.1f-1ubuntu2.18	1.1.1f-1ubuntu2.19	fixed	MEDIUM	CVE-2023-2650	false	false	0.75358	0.9952
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	openssl		1.1.1f-1ubuntu2.18	1.1.1f-1ubuntu2.19	fixed	MEDIUM	CVE-2023-2650	false	false	0.75358	0.9952
+elasticsearch:8.8.0	Java	lang-pkgs	jar	org.elasticsearch:elasticsearch	usr/share/elasticsearch/lib/elasticsearch-8.8.0.jar	8.8.0	7.17.13, 8.9.1	fixed	MEDIUM	CVE-2023-31419	false	false	0.75175	0.99516
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libssh-4		0.9.3-2ubuntu2.2	0.9.3-2ubuntu2.4	fixed	MEDIUM	CVE-2023-48795	false	false	0.93547	0.99841
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	curl		7.68.0-1ubuntu2.18	7.68.0-1ubuntu2.22	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libcurl4		7.68.0-1ubuntu2.18	7.68.0-1ubuntu2.22	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libssl1.1		1.1.1f-1ubuntu2.18	1.1.1f-1ubuntu2.23	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	openssl		1.1.1f-1ubuntu2.18	1.1.1f-1ubuntu2.23	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libnghttp2-14		1.40.0-1build1	1.40.0-1ubuntu0.3	fixed	MEDIUM	CVE-2024-28182	false	false	0.81994	0.99658
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libc-bin		2.31-0ubuntu9.9	2.31-0ubuntu9.15	fixed	MEDIUM	CVE-2024-2961	false	false	0.8833	0.99771
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libc6		2.31-0ubuntu9.9	2.31-0ubuntu9.15	fixed	MEDIUM	CVE-2024-2961	false	false	0.8833	0.99771
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libgssapi-krb5-2		1.17-6ubuntu4.3	1.17-6ubuntu4.8	fixed	MEDIUM	CVE-2024-3596	false	false	0.14859	0.96757
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libk5crypto3		1.17-6ubuntu4.3	1.17-6ubuntu4.8	fixed	MEDIUM	CVE-2024-3596	false	false	0.14859	0.96757
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libkrb5-3		1.17-6ubuntu4.3	1.17-6ubuntu4.8	fixed	MEDIUM	CVE-2024-3596	false	false	0.14859	0.96757
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libkrb5support0		1.17-6ubuntu4.3	1.17-6ubuntu4.8	fixed	MEDIUM	CVE-2024-3596	false	false	0.14859	0.96757
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	curl		7.68.0-1ubuntu2.18	7.68.0-1ubuntu2.23	fixed	MEDIUM	CVE-2024-7264	false	false	0.20217	0.97512
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libcurl4		7.68.0-1ubuntu2.18	7.68.0-1ubuntu2.23	fixed	MEDIUM	CVE-2024-7264	false	false	0.20217	0.97512
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	libssl1.1		1.1.1f-1ubuntu2.18	1.1.1f-1ubuntu2.24	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+elasticsearch:8.8.0	elasticsearch:8.8.0 (ubuntu 20.04)	os-pkgs	ubuntu	openssl		1.1.1f-1ubuntu2.18	1.1.1f-1ubuntu2.24	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+ghost:5.51.0	ghost:5.51.0 (debian 11.7)	os-pkgs	debian	libgnutls30		3.7.1-5+deb11u3		affected	LOW	CVE-2011-3389	false	false	0.73327	0.99467
+ghost:5.51.0	Node.js	lang-pkgs	node-pkg	ghost	var/lib/ghost/versions/5.51.0/package.json	5.51.0	5.59.1	fixed	MEDIUM	CVE-2023-40028	false	false	0.65734	0.99278
+ghost:5.51.0	ghost:5.51.0 (debian 11.7)	os-pkgs	debian	libssl1.1		1.1.1n-0+deb11u5	1.1.1w-0+deb11u2	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+ghost:5.51.0	ghost:5.51.0 (debian 11.7)	os-pkgs	debian	libssl1.1		1.1.1n-0+deb11u5	1.1.1w-0+deb11u2	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	libgnutls30		3.7.1-5+deb11u3		affected	LOW	CVE-2011-3389	false	false	0.73327	0.99467
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	libexpat1		2.2.10-2+deb11u5		affected	LOW	CVE-2013-0340	false	false	0.19433	0.97413
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	openssh-client		1:8.4p1-5+deb11u1		affected	LOW	CVE-2019-6110	false	false	0.24901	0.97944
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	openssh-client		1:8.4p1-5+deb11u1		affected	LOW	CVE-2020-15778	false	false	0.13675	0.96556
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	libsqlite3-0		3.34.1-3		affected	LOW	CVE-2022-35737	false	false	0.23575	0.97842
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	sqlite3		3.34.1-3		affected	LOW	CVE-2022-35737	false	false	0.23575	0.97842
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	libssl1.1		1.1.1n-0+deb11u4	1.1.1n-0+deb11u5	fixed	MEDIUM	CVE-2023-2650	false	false	0.75358	0.9952
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	openssl		1.1.1n-0+deb11u4	1.1.1n-0+deb11u5	fixed	MEDIUM	CVE-2023-2650	false	false	0.75358	0.9952
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	openssh-client		1:8.4p1-5+deb11u1	1:8.4p1-5+deb11u3	fixed	MEDIUM	CVE-2023-48795	false	false	0.93547	0.99841
+apache/airflow:2.6.1	Python	lang-pkgs	python-pkg	paramiko	home/airflow/.local/lib/python3.7/site-packages/paramiko-3.1.0.dist-info/METADATA	3.1.0	3.4.0	fixed	MEDIUM	CVE-2023-48795	false	false	0.93547	0.99841
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	openssh-client		1:8.4p1-5+deb11u1	1:8.4p1-5+deb11u3	fixed	MEDIUM	CVE-2023-51385	false	false	0.19753	0.97453
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	curl		7.74.0-1.3+deb11u7	7.74.0-1.3+deb11u12	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	libcurl4		7.74.0-1.3+deb11u7	7.74.0-1.3+deb11u12	fixed	MEDIUM	CVE-2024-2398	false	false	0.36081	0.985
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	libssl1.1		1.1.1n-0+deb11u4	1.1.1w-0+deb11u2	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	openssl		1.1.1n-0+deb11u4	1.1.1w-0+deb11u2	fixed	LOW	CVE-2024-2511	false	false	0.59304	0.99134
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	libnghttp2-14		1.43.0-1	1.43.0-1+deb11u2	fixed	MEDIUM	CVE-2024-28182	false	false	0.81994	0.99658
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	curl		7.74.0-1.3+deb11u7	7.74.0-1.3+deb11u13	fixed	MEDIUM	CVE-2024-7264	false	false	0.20217	0.97512
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	libcurl4		7.74.0-1.3+deb11u7	7.74.0-1.3+deb11u13	fixed	MEDIUM	CVE-2024-7264	false	false	0.20217	0.97512
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	libssl1.1		1.1.1n-0+deb11u4	1.1.1w-0+deb11u2	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	openssl		1.1.1n-0+deb11u4	1.1.1w-0+deb11u2	fixed	LOW	CVE-2024-9143	false	false	0.12484	0.96294
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	openssh-client		1:8.4p1-5+deb11u1	1:8.4p1-5+deb11u4	fixed	MEDIUM	CVE-2025-26465	false	false	0.10128	0.95726
+apache/airflow:2.6.1	apache/airflow:2.6.1 (debian 11.7)	os-pkgs	debian	openssh-client		1:8.4p1-5+deb11u1		affected	LOW	CVE-2026-123158	true	false	0.95538	0.99868

@@ -8,6 +8,18 @@ description: "CVE・KEV・EPSS・CVSSの基礎からTrivyのスキャン結果�
 
 <div class="kl-log__item" markdown>
 
+2026年11月26日
+{ .kl-log__date }
+
+[Trivyの検出結果が多すぎるときの対応候補の選び方](trivy-too-many-vulnerabilities-kev-epss-ja.md)
+{ .kl-log__title }
+
+KEVとEPSSで対応候補を選ぶ条件とその出どころ、公開イメージ9種類で深刻度だけを基準に選んだ場合との比較、候補の件数と内訳の違い
+
+</div>
+
+<div class="kl-log__item" markdown>
+
 2026年10月5日
 { .kl-log__date }
 

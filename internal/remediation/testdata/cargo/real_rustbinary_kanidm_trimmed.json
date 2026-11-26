@@ -1,0 +1,116 @@
+{
+ "SchemaVersion": 2,
+ "ArtifactName": "kanidm/server:latest",
+ "ArtifactType": "container_image",
+ "Metadata": {
+  "OS": {},
+  "ImageID": "sha256:095f6a69c3404038754d8f5127981e5367dc5483ae645653a8b2f8cc5f484a06",
+  "RepoDigests": [
+   "kanidm/server@sha256:77198131f28116203e105d2e42214203757d113a694f35de545669e75db5c96f"
+  ]
+ },
+ "Results": [
+  {
+   "Target": "sbin/kanidmd",
+   "Class": "lang-pkgs",
+   "Type": "rustbinary",
+   "Packages": [
+    {
+     "ID": "daemon@1.12.1",
+     "Name": "daemon",
+     "Version": "1.12.1",
+     "Relationship": "root",
+     "DependsOn": [
+      "clap@4.6.7",
+      "futures@0.3.34",
+      "kanidm_lib_file_permissions@1.12.1",
+      "kanidm_proto@1.12.1",
+      "kanidm_utils_users@1.12.1",
+      "kanidmd_core@1.12.1",
+      "prctl@1.0.0",
+      "reqwest@0.13.5",
+      "sd-notify@0.5.0",
+      "serde@1.0.229",
+      "serde_json@1.0.154",
+      "sketching@1.12.1",
+      "tokio@1.54.1",
+      "tokio-util@0.7.20",
+      "tracing@0.1.44"
+     ]
+    },
+    {
+     "ID": "adler2@2.0.1",
+     "Name": "adler2",
+     "Version": "2.0.1"
+    },
+    {
+     "ID": "aead@0.6.1",
+     "Name": "aead",
+     "Version": "0.6.1",
+     "DependsOn": [
+      "crypto-common@0.2.2",
+      "inout@0.2.6"
+     ]
+    },
+    {
+     "ID": "aes@0.9.4",
+     "Name": "aes",
+     "Version": "0.9.4",
+     "DependsOn": [
+      "cipher@0.5.2",
+      "cpubits@0.1.1",
+      "cpufeatures@0.3.1"
+     ]
+    },
+    {
+     "ID": "aes-gcm@0.11.1",
+     "Name": "aes-gcm",
+     "Version": "0.11.1",
+     "DependsOn": [
+      "aead@0.6.1",
+      "aes@0.9.4",
+      "cipher@0.5.2",
+      "ctr@0.10.1",
+      "ctutils@0.4.8",
+      "ghash@0.6.0"
+     ]
+    },
+    {
+     "ID": "aes-kw@0.3.1",
+     "Name": "aes-kw",
+     "Version": "0.3.1",
+     "DependsOn": [
+      "aes@0.9.4",
+      "const-oid@0.10.3"
+     ]
+    },
+    {
+     "ID": "aho-corasick@1.1.5",
+     "Name": "aho-corasick",
+     "Version": "1.1.5",
+     "DependsOn": [
+      "memchr@2.8.3"
+     ]
+    },
+    {
+     "ID": "allocator-api2@0.2.21",
+     "Name": "allocator-api2",
+     "Version": "0.2.21"
+    },
+    {
+     "ID": "anstream@1.0.0",
+     "Name": "anstream",
+     "Version": "1.0.0",
+     "DependsOn": [
+      "anstyle@1.0.14",
+      "anstyle-parse@1.0.0",
+      "anstyle-query@1.1.5",
+      "colorchoice@1.0.5",
+      "is_terminal_polyfill@1.70.2",
+      "utf8parse@0.2.2"
+     ]
+    }
+   ]
+  }
+ ]
+}

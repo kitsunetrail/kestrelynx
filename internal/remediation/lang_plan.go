@@ -92,6 +92,10 @@ const (
 	// ManagerGradle is Gradle: gradle.lockfile lists the versions the build
 	// resolves, and the build files say how they are decided.
 	ManagerGradle DependencyManager = "gradle"
+	// ManagerCargo is Rust's Cargo: Cargo.lock lists the crates the build
+	// resolves, and the Cargo.toml files of the workspace say what is asked
+	// for.
+	ManagerCargo DependencyManager = "cargo"
 )
 
 // LockfileName is the file whose entries the unit's packages are matched
@@ -112,6 +116,8 @@ func (m DependencyManager) LockfileName() string {
 		return "pom.xml"
 	case ManagerGradle:
 		return "gradle.lockfile"
+	case ManagerCargo:
+		return "Cargo.lock"
 	}
 	return ""
 }
@@ -125,6 +131,9 @@ func (m DependencyManager) scheme() scheme {
 		return schemeGo
 	case ManagerMaven, ManagerGradle:
 		return schemeMaven
+	case ManagerCargo:
+		// Cargo orders versions as semver does; build metadata takes no part.
+		return schemeSemver
 	}
 	return schemeSemver
 }
@@ -367,6 +376,9 @@ type LanguageItem struct {
 	// Gradle is what the plan read of a Gradle project that the later stages
 	// go on from.
 	Gradle *GradleRecord `json:"gradle,omitempty"`
+	// Cargo is what the plan read of a Rust workspace that the later stages
+	// go on from.
+	Cargo *CargoRecord `json:"cargo,omitempty"`
 
 	Source   SourceRecord      `json:"source"`
 	Packages []LanguagePackage `json:"packages,omitempty"`

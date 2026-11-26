@@ -1,0 +1,78 @@
+{
+ "SchemaVersion": 2,
+ "ArtifactName": "rustexp:auditable",
+ "ArtifactType": "container_image",
+ "Metadata": {
+  "OS": {
+   "Family": "debian",
+   "Name": "13.8"
+  },
+  "ImageID": "sha256:a4e64c61a64c156863871d7c1a7e1c2d214ee1a6dcd44a6886b89736a15cddc6",
+  "RepoDigests": [
+   "rustexp@sha256:a4e64c61a64c156863871d7c1a7e1c2d214ee1a6dcd44a6886b89736a15cddc6"
+  ]
+ },
+ "Results": [
+  {
+   "Target": "usr/local/bin/exp2-auditable",
+   "Class": "lang-pkgs",
+   "Type": "rustbinary",
+   "Packages": [
+    {
+     "ID": "exp2@0.1.0",
+     "Name": "exp2",
+     "Version": "0.1.0",
+     "Relationship": "root",
+     "DependsOn": [
+      "tokio@1.18.0"
+     ]
+    },
+    {
+     "ID": "once_cell@1.21.4",
+     "Name": "once_cell",
+     "Version": "1.21.4"
+    },
+    {
+     "ID": "pin-project-lite@0.2.18",
+     "Name": "pin-project-lite",
+     "Version": "0.2.18"
+    },
+    {
+     "ID": "tokio@1.18.0",
+     "Name": "tokio",
+     "Version": "1.18.0",
+     "DependsOn": [
+      "once_cell@1.21.4",
+      "pin-project-lite@0.2.18"
+     ]
+    }
+   ],
+   "Vulnerabilities": [
+    {
+     "VulnerabilityID": "CVE-2023-22466",
+     "PkgName": "tokio",
+     "InstalledVersion": "1.18.0",
+     "FixedVersion": "1.18.4, 1.20.3, 1.23.1",
+     "Status": "fixed",
+     "Severity": "MEDIUM"
+    },
+    {
+     "VulnerabilityID": "GHSA-4q83-7cq4-p6wg",
+     "PkgName": "tokio",
+     "InstalledVersion": "1.18.0",
+     "FixedVersion": "1.24.2, 1.20.4, 1.18.5",
+     "Status": "fixed",
+     "Severity": "LOW"
+    },
+    {
+     "VulnerabilityID": "GHSA-rr8g-9fpq-6wmg",
+     "PkgName": "tokio",
+     "InstalledVersion": "1.18.0",
+     "FixedVersion": "1.44.2, 1.38.2, 1.43.1",
+     "Status": "fixed",
+     "Severity": "LOW"
+    }
+   ]
+  }
+ ]
+}

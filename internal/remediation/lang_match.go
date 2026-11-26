@@ -104,17 +104,24 @@ func groupLanguageFindings(fs []srcFinding, intel IntelFunc) []*findingGroup {
 		if f.Status != scanner.StatusFixed || f.FixedVer == "" || f.Package == "" || f.InstalledVer == "" {
 			continue
 		}
-		if f.Type != typeNodePkg && f.Type != typePythonPkg && f.Type != typeGoBinary && f.Type != typeJar {
+		if f.Type != typeNodePkg && f.Type != typePythonPkg && f.Type != typeGoBinary && f.Type != typeJar && !isRustType(f.Type) {
 			continue
 		}
 		name := f.Package
 		if f.Type == typePythonPkg {
 			name = normalizePyName(name)
 		}
-		k := gk{f.Type, name, f.InstalledVer}
+		// A crate found in a binary and in a Cargo.lock is one package: the
+		// group is of the lockfile's type, and the origins keep where each
+		// finding was seen.
+		typ := f.Type
+		if typ == typeRustBinary {
+			typ = typeCargo
+		}
+		k := gk{typ, name, f.InstalledVer}
 		g := idx[k]
 		if g == nil {
-			g = &findingGroup{Type: f.Type, Name: f.Package, Installed: f.InstalledVer, rank: lf.rank}
+			g = &findingGroup{Type: typ, Name: f.Package, Installed: f.InstalledVer, rank: lf.rank}
 			idx[k] = g
 			vulns[k] = map[string]*CVERef{}
 			order = append(order, k)

@@ -1,0 +1,12 @@
+[package]
+name = "exp4"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.60"
+[[bin]]
+name = "exp4"
+[dependencies]
+tokio = { version = "1", features = ["rt"] }
+smallvec = "1"
+syn1 = { package = "syn", version = "1" }
+syn2 = { package = "syn", version = "2" }

@@ -169,6 +169,10 @@ func (u *LangUpdater) Run(ctx context.Context, plan *Plan) LangUpdateUsage {
 			u.packageHints(ctx, it)
 			continue
 		}
+		if it.Manager == ManagerCargo {
+			// Cargo units are planned only: their update is not made yet.
+			continue
+		}
 		switch {
 		case ctx.Err() != nil:
 			deferItem(it, ReasonCycleDeadline, ctx.Err().Error())

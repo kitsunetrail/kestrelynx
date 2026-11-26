@@ -39,6 +39,13 @@ type depUnit struct {
 	// and jarScansUnpinned are the archives of each scan.
 	jarPinned, jarUnpinned     []srcFinding
 	jarScans, jarScansUnpinned map[int]*jarScan
+	// The Rust findings (a cargo-auditable binary's crates, or a Cargo.lock in
+	// the image) are kept per running image and binary until Cargo.toml names
+	// the packages they must come from (see rustSelect): rustPinned and
+	// rustUnpinned are those of verified and other scans, rustBins and
+	// rustBinsUnpinned the binaries of those scans by entity and target.
+	rustPinned, rustUnpinned   []srcFinding
+	rustBins, rustBinsUnpinned map[string]*rustBinary
 }
 
 // dependencyPair is a manager's manifest and lockfile; lock is the file the
@@ -79,6 +86,9 @@ func unitsOf(ms []DependencyMapping) []*depUnit {
 				goBinsUnpinned:   map[string]*goBinary{},
 				jarScans:         map[int]*jarScan{},
 				jarScansUnpinned: map[int]*jarScan{},
+
+				rustBins:         map[string]*rustBinary{},
+				rustBinsUnpinned: map[string]*rustBinary{},
 			}
 			idx[k] = u
 			out = append(out, u)
@@ -127,9 +137,11 @@ func (r *run) languagePart(inputs []ImageInput) {
 			if verified {
 				goBinariesOf(rank, in.Scan, u.goBins)
 				jarPackagesOf(rank, in.Scan, u.jarScans)
+				rustBinariesOf(rank, in.Scan, u.rustBins)
 			} else {
 				goBinariesOf(rank, in.Scan, u.goBinsUnpinned)
 				jarPackagesOf(rank, in.Scan, u.jarScansUnpinned)
+				rustBinariesOf(rank, in.Scan, u.rustBinsUnpinned)
 			}
 			for _, f := range in.Scan.Findings {
 				lf := srcFinding{f: f, entity: entity, workloads: ws, rank: rank}
@@ -142,6 +154,10 @@ func (r *run) languagePart(inputs []ImageInput) {
 					u.jarPinned = append(u.jarPinned, lf)
 				case f.Type == typeJar:
 					u.jarUnpinned = append(u.jarUnpinned, lf)
+				case isRustType(f.Type) && verified:
+					u.rustPinned = append(u.rustPinned, lf)
+				case isRustType(f.Type):
+					u.rustUnpinned = append(u.rustUnpinned, lf)
 				case verified && globalNodeFinding(f):
 					global = append(global, lf)
 				case verified:
@@ -154,9 +170,9 @@ func (r *run) languagePart(inputs []ImageInput) {
 		u.groups = groupLanguageFindings(pinned, cfg.Intel)
 		u.global = groupLanguageFindings(global, cfg.Intel)
 		u.unpinned = groupLanguageFindings(unpinned, cfg.Intel)
-		// The Go and jar findings are grouped as they are only to place the
-		// unit among the others.
-		goAll := groupLanguageFindings(append(append(append(append([]srcFinding(nil), u.goPinned...), u.goUnpinned...), u.jarPinned...), u.jarUnpinned...), cfg.Intel)
+		// The Go, jar and Rust findings are grouped as they are only to place
+		// the unit among the others.
+		goAll := groupLanguageFindings(append(append(append(append(append(append([]srcFinding(nil), u.goPinned...), u.goUnpinned...), u.jarPinned...), u.jarUnpinned...), u.rustPinned...), u.rustUnpinned...), cfg.Intel)
 		if len(u.groups) == 0 && len(u.global) == 0 && len(u.unpinned) == 0 && len(goAll) == 0 {
 			continue
 		}
@@ -228,11 +244,12 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 	}
 	hasGo := len(u.goPinned) > 0 || len(u.goUnpinned) > 0
 	hasJar := len(u.jarPinned) > 0 || len(u.jarUnpinned) > 0
+	hasRust := len(u.rustPinned) > 0 || len(u.rustUnpinned) > 0
 
 	var sha string
 	var entries []github.Entry
 	var srcErr error
-	if (len(subs) > 0 || hasGo || hasJar) && r.stopReason() == nil {
+	if (len(subs) > 0 || hasGo || hasJar || hasRust) && r.stopReason() == nil {
 		gh := r.p.cfg.GitHub
 		if sha, srcErr = gh.ResolveBranch(r.ctx, u.repo, u.branch); srcErr == nil {
 			entries, srcErr = gh.ListDirectory(r.ctx, u.repo, sha, u.dir)
@@ -323,6 +340,20 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 		out = append(out, it)
 	}
 
+	// Cargo is planned after the other ecosystems have read what they need,
+	// with what is left of the budgets. A Rust finding belongs to this source only if the directory has a
+	// Cargo.toml, and then only those of the binaries built from the packages
+	// of its workspace (see rustSelect); a Cargo.lock in the image is matched
+	// by name and version.
+	var rustMembers map[string]bool
+	if _, isRust := byName(entries, "Cargo.toml"); hasRust && srcErr == nil && isRust && r.stopReason() == nil {
+		it := newItem(typeCargo)
+		var keep bool
+		if rustMembers, keep = r.analyseCargoUnit(&it, u, entries); keep {
+			out = append(out, it)
+		}
+	}
+
 	unpinned := u.unpinned
 	if goModule != "" && len(u.goUnpinned) > 0 {
 		// The unverified scans' Go findings are those of binaries built from
@@ -340,6 +371,13 @@ func (r *run) languageUnits(u *depUnit) []LanguageItem {
 		// The unverified scans' jar findings are listed, not matched against
 		// the lockfile.
 		unpinned = append(append([]*findingGroup(nil), unpinned...), groupLanguageFindings(u.jarUnpinned, r.p.cfg.Intel)...)
+	}
+	if rustMembers != nil && len(u.rustUnpinned) > 0 {
+		// The unverified scans' Rust findings are those of binaries built from
+		// the workspace's packages and of Cargo.lock files; they are listed, not
+		// matched against Cargo.lock.
+		kept, _, _ := rustSelect(u.rustUnpinned, u.rustBinsUnpinned, rustMembers)
+		unpinned = append(append([]*findingGroup(nil), unpinned...), groupLanguageFindings(kept, r.p.cfg.Intel)...)
 	}
 	if len(unpinned) > 0 {
 		it := newItem("unverified")

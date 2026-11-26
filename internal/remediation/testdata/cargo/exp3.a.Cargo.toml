@@ -1,0 +1,10 @@
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+[[bin]]
+name = "a"
+path = "src/main.rs"
+[dependencies]
+b = { path = "../b" }
+tokio = { version = "1", features = ["rt"] }

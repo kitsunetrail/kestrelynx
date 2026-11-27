@@ -203,7 +203,7 @@ See [Image registry authentication](configuration.md#registries) for authenticat
 
 ### Runtime table downloads {#runtime-table-download}
 
-The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, and Gradle series used for language package updates.
+The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, Gradle, and Rust series used for language package updates.
 When remediation planning and fetching the runtime table are enabled, KestreLynx fetches the table at startup and at the start of each scan cycle.
 
 | Program making the connection | Destination | Information retrieved |
@@ -230,7 +230,7 @@ Requests include work image names and digests.
 
 | Program making the connection | Destination | Image retrieved |
 | --- | --- | --- |
-| Docker or the Kubernetes node's container runtime | Docker Hub or the configured mirror | Official Node.js, Python, Go (`golang`), and Gradle (`gradle`) images |
+| Docker or the Kubernetes node's container runtime | Docker Hub or the configured mirror | Official Node.js, Python, Go (`golang`), Gradle (`gradle`), and Rust (`rust`) images |
 | Kubernetes node's container runtime | Registry specified by the KestreLynx image name | Image for the container receiving input files in the work Pod |
 
 See [Pinning official images](remediation-worker-logic.md#worker-images) for pinning and handling unavailable images.
@@ -269,6 +269,7 @@ KestreLynx retrieves the following information to check versions and dependencie
 | Go | `sum.golang.org` | Hashes of module zip files and `go.mod` | Verify update results and complete `go.sum` |
 | Maven | `repo.maven.apache.org` | Published version lists and parent, BOM, and dependency POMs | Check version sources, dependency requirements, and resolution results before and after updates |
 | Gradle | `repo.maven.apache.org` | Published version lists and POMs | Check published versions, BOM properties, and identifiers of added or changed packages |
+| Rust | `index.crates.io` | Published versions, yank status, checksums, dependency requirements, and required Rust versions | Select target versions and verify update results |
 
 The following details explain retrieval conditions and how the information is used.
 
@@ -300,6 +301,7 @@ Work containers make the following connections to resolve dependencies, generate
 | Go | `storage.googleapis.com` | Module zip files | The Go proxy redirects a distribution download |
 | Gradle | Maven Central (`repo.maven.apache.org`) | Metadata and distributions needed for dependency resolution and lockfile updates | Gradle dependency updates run |
 | Gradle plugins | `plugins.gradle.org`, `plugins-artifacts.gradle.org`, and `repo.maven.apache.org` | Metadata and distributions for allowed plugins and their dependencies | Build scripts apply plugins |
+| Rust | `index.crates.io` | crates.io index used to resolve dependency versions | `cargo update` updates `Cargo.lock` |
 
 Gradle connects to the [download destination for `mavenCentral()`](https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.dsl.RepositoryHandler.html).
 Gradle Plugin Portal distributions are retrieved through [redirects to `plugins-artifacts.gradle.org`](https://plugins.gradle.org/docs/mirroring).

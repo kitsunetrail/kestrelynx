@@ -69,6 +69,7 @@ nav:
                   - Go: documentation/remediation-go-logic.md
                   - Maven: documentation/remediation-maven-logic.md
                   - Gradle: documentation/remediation-gradle-logic.md
+                  - Rust: documentation/remediation-cargo-logic.md
                   - 修正版に上げられないときの案内: documentation/remediation-fix-hints-logic.md
                   - 作業用コンテナ: documentation/remediation-worker-logic.md
               - PRの管理と記録: documentation/remediation-pr-logic.md

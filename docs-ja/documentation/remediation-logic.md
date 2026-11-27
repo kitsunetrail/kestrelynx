@@ -7,7 +7,7 @@ title: 修正計画と修正PRの処理の流れ
 KestreLynxが修正計画を作り、更新結果を検査し、修正PRを管理して通知する順序を説明します。
 検査で確かめる範囲と、利用者が確認する範囲は[確かめる範囲](#checked-scope)にまとめています。
 
-Kubernetesでは、修正PRを有効にしてnpm・pnpm・pip・uv・Go・Gradleの言語パッケージを更新する場合に、[作業用Pod](remediation-worker-logic.md#kubernetes-work-pods)を使います。
+Kubernetesでは、修正PRを有効にしてnpm・pnpm・pip・uv・Go・Gradle・Rustの言語パッケージを更新する場合に、[作業用Pod](remediation-worker-logic.md#kubernetes-work-pods)を使います。
 
 対象ごとの詳しい規則は、次のページで説明します。
 
@@ -22,6 +22,7 @@ Kubernetesでは、修正PRを有効にしてnpm・pnpm・pip・uv・Go・Gradle
 | Goの更新と検査 | [Goの候補選定](remediation-go-logic.md#go-package-selection) |
 | Mavenの更新と検査 | [Maven](remediation-maven-logic.md) |
 | Gradleの更新と検査 | [Gradle](remediation-gradle-logic.md) |
+| Rustの更新と検査 | [Rust](remediation-cargo-logic.md) |
 | パッケージマネージャーを実行する環境 | [作業用コンテナの実行](remediation-worker-logic.md#worker-execution) |
 | PRの管理と記録 | [PRの管理](remediation-pr-logic.md#pr-management) |
 
@@ -101,6 +102,7 @@ KestreLynxの検査は、読み取ったソース、比較するイメージ、�
 - 設定したブランチが指すコミットを確定し、そのコミットからソースを読む
 - PR作成時にベースブランチが進んでいれば、更新に使ったファイルや確認対象の設定ファイルの状態を再確認する
 - 言語パッケージとDockerfileの更新では、計画時に確かめたファイルの変更を検出すると、PRの作成を保留する
+- Rustでは、計画後にベースブランチでルートやメンバーの`Cargo.toml`、`Cargo.lock`、または`*`でメンバーを集めたディレクトリの内容が変わると、PRを作らず次回に回す
 - Compose・Kubernetesマニフェスト・Kustomize・Helmのvaluesのタグ更新では、ファイルのイメージ名が稼働イメージ名と一致しないと手動対応にする
 
 保留した更新については、PR用のコミットやブランチも作成しません。

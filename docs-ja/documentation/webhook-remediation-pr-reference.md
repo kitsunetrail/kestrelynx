@@ -203,6 +203,7 @@ PRを識別するときは、`repo`と`number`を組み合わせます。
 | Go | `go.mod` |
 | Maven | ルートの`pom.xml` |
 | Gradle | `gradle.lockfile` |
+| Rust | `Cargo.lock` |
 
 言語パッケージのPRでは、`path`以外の依存ファイルも変更する場合があります。
 
@@ -365,6 +366,7 @@ Webhookを受け取るプログラムでは、見えているフィールドが�
 | `go` | Go modules |
 | `maven` | Maven |
 | `gradle` | Gradle |
+| `cargo` | RustのCargo |
 
 `root`がリポジトリのルートを指す場合は、`.`です。
 対応する依存ファイルの形式は、[対応する入力形式](remediation-reference.md#supported-inputs)を参照してください。

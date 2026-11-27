@@ -14,6 +14,7 @@ title: 言語パッケージの更新の共通の規則
 | Goの更新 | [Goの候補選定](remediation-go-logic.md#go-package-selection) |
 | Mavenの更新 | [Mavenの候補選定](remediation-maven-logic.md#maven-package-selection) |
 | Gradleの更新 | [Gradleの候補選定](remediation-gradle-logic.md#gradle-package-selection) |
+| Rustの更新 | [Rustの候補選定](remediation-cargo-logic.md#cargo-package-selection) |
 | パッケージマネージャーを動かす環境 | [作業用コンテナの実行](remediation-worker-logic.md#worker-execution) |
 
 完成イメージのビルド・動作確認・配置に関する検証範囲は、[対象別の検証範囲](remediation-logic.md#verification-scope)を参照してください。
@@ -46,6 +47,8 @@ Trivyの所見ごとの修正版情報を使い、KestreLynxが複数の所見�
 | --- | --- |
 | 各脆弱性 | 稼働版より新しい修正版のうち、最小の版を選ぶ |
 | 同じパッケージの稼働版 | 各脆弱性について選んだ版の最大値を更新目標にする |
+
+Rustで下限を選ぶ範囲は[稼働版と互換な系列](remediation-cargo-logic.md#cargo-target-versions)に限ります。
 
 次は、稼働版が`1.2.0`の1つのパッケージに、脆弱性AとBがある例です。
 各脆弱性で選ぶ最小の修正版と、最後に決まる更新目標を比べてください。
@@ -103,7 +106,7 @@ majorが`0`の場合は、同じmajor・minorの修正版がなければ、表�
 
 ## 実行環境の選定 {#runtime-and-tool-versions}
 
-実行環境の選定では、更新を実行するNode.js・Python・Go、またはGradleとJDKの版を決めます。
+実行環境の選定では、更新を実行するNode.js・Python・Go・Rust、またはGradleとJDKの版を決めます。
 
 Node.js・Python・Goは、KestreLynxが使用している実行環境の一覧にある、サポート中の系列（Node.js 22やPython 3.13のような版のまとまり）を使います。
 対応する系列、実行版、サポート期限は[対応する実行環境](remediation-reference.md#supported-runtimes)を参照してください。
@@ -117,6 +120,7 @@ Node.js・Python・Goは、KestreLynxが使用している実行環境の一覧�
 | pip | [pipの検証環境](remediation-node-python-logic.md#pip-target-environment) |
 | Go | [Goの選定](remediation-go-logic.md#go-runtime-selection) |
 | Gradle | [Gradleの実行設定](remediation-gradle-logic.md#gradle-worker-settings) |
+| Rust | [作業用のRust](remediation-cargo-logic.md#cargo-runtime-selection) |
 | Maven | KestreLynxが`pom.xml`を書き換えるため、更新用の実行環境は不要 |
 
 ## 更新結果の採用 {#update-method-and-partial-pull-requests}
@@ -139,6 +143,7 @@ Node.js・Python・Goは、KestreLynxが使用している実行環境の一覧�
 | [Go](remediation-go-logic.md) | 全対象を1回の`go get <module>@<version> ...`で更新し、`go mod tidy`は実行しない | `go.mod`の差分、`go.sum`、依存の要求、更新前後のスキャン結果を確認する（[Goの更新結果の検査](remediation-go-logic.md#go-update-validation)） |
 | Maven | KestreLynxが`pom.xml`の版・プロパティ・依存の管理宣言を書き換える | [Trivyで更新前後の依存を解決し、スキャンする](remediation-maven-logic.md#maven-scan-validation) |
 | Gradle | KestreLynxが版の宣言を書き換え、作業用コンテナで`dependencies --update-locks`を実行する | 返されたファイルとlockfileを検査し、更新前後のlockfileをTrivyでスキャンする（[Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation)） |
+| Rust | 対象ごとに`cargo update --precise`で`Cargo.lock`を更新する | [依存の変更範囲、チェックサム、更新前後の所見を検査する](remediation-cargo-logic.md#cargo-update-validation) |
 
 npmの更新前の確認では、元の入力から再生成したlockfileを元のlockfileと比べます。
 比較するのは、記録の位置、パッケージ名、版、取得先、ハッシュ、リンク指定です。
@@ -157,6 +162,7 @@ pnpm 12では、取り除いた記録を解決し直す`--fix-lockfile`も指定
 | Go | 一部を外して残りを更新する分割はしない | [Goの更新結果の検査](remediation-go-logic.md#go-update-validation) |
 | Maven | 書き換え前に対象を外し、更新後の依存の検査による再実行は1回だけにする | [Mavenで対象を外す条件](remediation-maven-logic.md#maven-update-exclusions) |
 | Gradle | 書き換え前に対象を外し、更新後の目標未達による再実行はしない | [Gradleで対象を外す条件](remediation-gradle-logic.md#gradle-update-exclusions) |
+| Rust | 更新を実行した対象を分割して再試行しない | [Rustの更新結果の検査](remediation-cargo-logic.md#cargo-update-validation) |
 
 npm・pnpm・uvでは、[依存元からの再解決](remediation-reresolution-logic.md#dependent-reresolution)の条件を満たす場合、その結果を確認してから通常更新の部分PRを判断します。
 下限に届かなかった対象がある初回の更新結果について、部分PRの判定を次の図に示します。

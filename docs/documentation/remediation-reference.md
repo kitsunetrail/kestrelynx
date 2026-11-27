@@ -29,7 +29,7 @@ The table lists operating requirements and requirements for work containers.
 | --- | --- |
 | Container environment | Plans and PR creation supported in Docker and Kubernetes modes |
 | Source host | GitHub |
-| Work container architecture | Linux `amd64` and `arm64` (see the [Supported runtimes](#supported-runtimes) for Gradle restrictions) |
+| Work container architecture | Linux `amd64` and `arm64` (see the [Supported runtimes](#supported-runtimes) for Gradle and Rust restrictions) |
 | Runtime for language updates | Versions in [Supported runtimes](#supported-runtimes) |
 | Sensor | Not required |
 
@@ -57,7 +57,7 @@ The table shows Kubernetes plan contents, files a PR can update, and whether a w
 | Dockerfile base image | Update candidates | Dockerfile `FROM` | No |
 | Re-pulling a floating tag | Re-pull guidance | No PR | No |
 | Maven dependencies | Update candidates | `pom.xml` | No |
-| npm, pnpm, pip, uv, Go, and Gradle dependencies | Update candidates | Dependency files for each tool | Yes |
+| npm, pnpm, pip, uv, Go, Gradle, and Rust dependencies | Update candidates | Dependency files for each tool | Yes |
 
 For updates that require a work Pod, see [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates).
 
@@ -97,6 +97,7 @@ The table shows where each update target is obtained and when a source mapping b
 | Go dependency modules | Dependency directory | Public Go module proxy (`proxy.golang.org`) and `sum.golang.org` | Required for plans |
 | Maven dependencies | `pom.xml` | Maven Central | Required for plans |
 | Gradle dependencies | `gradle.lockfile` | Maven Central | Required for plans |
+| Rust dependencies | `Cargo.lock` | crates.io | Required for plans |
 
 Published image comparison results do not require a mapping, but PRs require a mapping to Compose, Kubernetes manifests, Kustomize, or Helm values.
 Base image plans require a Dockerfile or Compose mapping, and dependency plans require a dependency directory mapping.
@@ -122,13 +123,14 @@ The table links each file type to the section describing supported syntax and up
 | `go.mod` and `go.sum` | [Go dependency files](remediation-dependency-formats.md#go-inputs) |
 | `pom.xml` | [Maven dependency files](remediation-dependency-formats.md#maven-inputs) |
 | `gradle.lockfile`, build scripts, and related files | [Gradle dependency files](remediation-dependency-formats.md#gradle-inputs) |
+| `Cargo.toml` and `Cargo.lock` | [Rust dependency files](remediation-dependency-formats.md#cargo-inputs) |
 | `.nvmrc`, `.node-version`, and `package.json` | [Node.js version declarations](remediation-dependency-formats.md#node-declarations) |
 | `.python-version` and `pyproject.toml` | [Python version declarations](remediation-dependency-formats.md#python-declarations) |
 | `package.json` and `pyproject.toml` | [Tool version declarations](remediation-dependency-formats.md#tool-declarations) |
 
 ## Supported runtimes {#supported-runtimes}
 
-The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, and Gradle series used for language package updates.
+The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, Gradle, and Rust series used for language package updates.
 The table below shows the supported release lines, execution versions, and end-of-support dates in the runtime table as of this page's last update.
 
 The runtime table is supplied with KestreLynx and [replaced by newer published tables](remediation-worker-logic.md#runtime-table-updates).
@@ -148,6 +150,7 @@ The Node.js, Python, and Go runtimes used to update dependencies are selected fr
 | Go 1.27 | `1.27.4` | 2027-08-19 | `linux/amd64` and `linux/arm64` |
 | Gradle 8 / JDK 21 | `8.14.6` | No end date configured | `linux/amd64` |
 | Gradle 9 / JDK 17 and 21 | `9.8.2` | No end date configured | `linux/amd64` |
+| Rust 1.100 | `1.100.0` | 2026-12-24 | `linux/amd64` |
 
 For the current values in the table, see [`internal/worker/runtimes.json`](https://github.com/kitsunetrail/kestrelynx/blob/main/internal/worker/runtimes.json) in the KestreLynx repository.
 Gradle uses only execution version and JDK combinations recorded in the table in use as having passed integration tests on the execution platform.
@@ -164,6 +167,7 @@ The table shows the default runtime for each purpose and when declarations deter
 | uv updates | Selected from Python declarations |
 | Go updates | See [Go runtime selection](remediation-go-logic.md#go-runtime-selection) |
 | Gradle updates | Same Gradle version as the wrapper, with the JDK specified by the toolchain (21 if undeclared) |
+| Rust updates | See [Rust runtime selection](remediation-cargo-logic.md#cargo-runtime-selection) |
 
 Without a Node.js declaration, the current first candidate is Node.js 26, which entered LTS on 2026-10-28.
 If it does not meet the package manager's compatibility requirements, other supported release lines are checked from newest to oldest.

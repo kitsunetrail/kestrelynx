@@ -4,7 +4,7 @@ title: Work container execution
 
 # Work container execution
 
-KestreLynx uses work containers for npm, pnpm, pip, uv, Go, and Gradle updates, running them as work Pods on Kubernetes.
+KestreLynx uses work containers for npm, pnpm, pip, uv, Go, Gradle, and Rust updates, running them as work Pods on Kubernetes.
 
 Maven updates do not use a work container.
 See [Maven package selection](remediation-maven-logic.md#maven-package-selection) for Maven processing.
@@ -27,8 +27,8 @@ See [Work Pod execution](#kubernetes-work-pods) for the Kubernetes checks before
 
 ### Pinning official images {#worker-images}
 
-Work containers use the official Node.js, Python, Go (`golang`), and Gradle (`gradle`) images.
-The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, and Gradle series used for language package updates.
+Work containers use the official Node.js, Python, Go (`golang`), Gradle (`gradle`), and Rust (`rust`) images.
+The runtime table records the execution version, official image pinned by digest, and end-of-support date for each Node.js, Python, Go, Gradle, and Rust series used for language package updates.
 
 The image contents are pinned by digest (a value identifying image contents), as recorded in the runtime table.
 
@@ -42,6 +42,7 @@ The following conditions apply to fetching and using images.
 - Docker itself or software such as containerd on Kubernetes nodes fetches the required images
 - A mirror must provide the contents with the same digest as recorded in the runtime table
 - Gradle images are pinned by digest for each Gradle version and JDK combination, and only combinations that passed integration tests on the execution platform are used
+- Rust uses an official `rust` image that passed integration tests on the execution platform
 
 If an image cannot be fetched, the language package update is deferred (`deferred`) to a later cycle.
 A fetch failure does not cause the package manager to run inside KestreLynx's own container instead.
@@ -54,7 +55,7 @@ When remediation planning and fetching the runtime table are enabled, KestreLynx
 Fetching the table is enabled by default.
 
 1. At startup and at the start of each scan cycle, fetch the table from tag `1` of `ghcr.io/kitsunetrail/kestrelynx-runtimes`
-2. Check size and count limits, that images are the official Docker Hub `node`, `python`, `golang`, and `gradle` images, digest and version formats, consistency between series and versions, and the update time
+2. Check size and count limits, that images are the official Docker Hub `node`, `python`, `golang`, `gradle`, and `rust` images, digest and version formats, consistency between series and versions, and the update time
 3. Save a table that passes the checks and has a newer update time than the table in use to `runtimes/table-1.json` under `remediation.storage_dir`
 4. Replace the entire table with the successfully saved table, without mixing it with the table supplied with KestreLynx
 
@@ -91,7 +92,7 @@ The following changes are delivered through table updates or require a KestreLyn
 | Execution versions and pinned digests for existing series | Yes | No |
 | pip versions | Yes | No |
 | Dates such as end-of-support dates | Yes | No |
-| New Node.js, Python, and Go series whose version formats the KestreLynx in use supports | Yes | No |
+| New Node.js, Python, Go, and Rust series whose version formats the KestreLynx in use supports | Yes | No |
 | New Gradle version and JDK combinations whose version formats the KestreLynx in use supports | Yes | No |
 | Row removal | Yes | No |
 | Support for additional Gradle plugins, such as Spring Boot | No | Yes |
@@ -135,6 +136,7 @@ Representative dependency and configuration files passed to each manager are lis
 | uv | `pyproject.toml`, `uv.lock` |
 | Go | `go.mod`, `go.sum` |
 | Gradle | `gradle.lockfile`, `build.gradle` or `build.gradle.kts`, `settings.gradle` or `settings.gradle.kts`, and `gradle.properties`, among others |
+| Rust | `Cargo.lock`, the root and member `Cargo.toml` files, and empty files at the build target paths |
 
 See [Gradle dependency files](remediation-dependency-formats.md#gradle-inputs) for the input list and conditions, including catalog and wrapper configuration.
 
@@ -166,7 +168,8 @@ Docker and Kubernetes restrict the root filesystem and process count differently
 
 | Restriction | Docker | Kubernetes |
 | --- | --- | --- |
-| Root filesystem | Restrict non-root writes through ownership, permissions, and temporary mounts without setting the root filesystem itself to read-only | Set it to read-only |
+| Root filesystem except for Rust | Restrict non-root writes through ownership, permissions, and temporary mounts without setting the root filesystem itself to read-only | Set it to read-only |
+| Root filesystem for Rust | Set it to read-only | Set it to read-only |
 | Process count | Enforce the container PID limit | Enforce the node-side PID limit |
 
 The operations executed during an update differ by manager.
@@ -176,6 +179,7 @@ The operations executed during an update differ by manager.
 | npm, pnpm, pip, uv | Update dependencies with package scripts and source builds disabled |
 | Go | Update dependencies with the official image's `go` command |
 | Gradle | Execute the project's build scripts and permitted plugin code, updating the lockfile with `dependencies --update-locks` |
+| Rust | Update each target dependency in turn with Cargo from the official image ([Rust execution settings](remediation-cargo-logic.md#cargo-worker-settings)) |
 
 Executed build scripts must stay within the scope described in [Build script syntax](remediation-dependency-formats.md#gradle-build-forms).
 
@@ -205,6 +209,7 @@ For npm, pnpm, uv, and Go, it collects the dependency files listed in [Container
 For pip, it collects `requirements.txt` and the dependency resolution report.
 
 See [Gradle worker settings](remediation-gradle-logic.md#gradle-worker-settings) for the files collected from Gradle.
+For Rust, KestreLynx collects all input files after each operation and again at the end.
 
 The following checks precede the acceptance decision.
 

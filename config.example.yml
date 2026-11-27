@@ -188,7 +188,7 @@ runtime:
 # and language-package candidates.
 #
 # Both plans and pull requests are disabled by default. Plans select candidates
-# for published images, Dockerfile base images and npm/pnpm/pip/uv packages.
+# for published images, Dockerfile base images and npm/pnpm/pip/uv/Go/Maven/Gradle/Cargo packages.
 #
 # Image scans are compared under the same databases and settings; results
 # appear in a separate Slack message and the generic webhook's remediation object.
@@ -208,8 +208,8 @@ runtime:
 # KestreLynx uses HTTPS to public or configured private image registries and
 # GitHub for mapped sources; Trivy downloads databases and comparison images.
 #
-# Language updates use public npm and PyPI; Docker or Kubernetes nodes fetch official Node.js
-# and Python images from Docker Hub or the configured mirror.
+# Language updates use public npm, PyPI, the Go module proxy and checksum database, Maven Central and the crates.io index.
+# Docker or Kubernetes nodes fetch official Node.js, Python, Go, Gradle and Rust images from Docker Hub or the configured mirror.
 #
 # With remediation disabled, scans and notifications are unchanged.
 #
@@ -413,8 +413,9 @@ runtime:
 #   # and suggests rebuilding with `docker compose build --pull` for Compose or
 #   # `docker build --pull` for container/ mappings, showing both when shared.
 #   #
-#   # A dependencies mapping selects npm, pnpm, pip or uv files in one source
+#   # A dependencies mapping selects npm, pnpm, pip, uv, Go, Maven, Gradle or Cargo files in one source
 #   # directory.
+#   # Cargo updates only Cargo.lock in the mapped workspace root.
 #   #
 #   # 1. Select findings with scan status fixed and reported fixed versions
 #   # 2. For each finding, take the lowest reported fix newer than the installed version
@@ -441,7 +442,7 @@ runtime:
 #   # Only the version part is edited; transitive updates must stay within
 #   # existing dependency constraints.
 #   #
-#   # - Workspaces, Git/URL/local dependencies and source builds need manual handling
+#   # - For npm, pnpm, pip and uv, workspaces, Git/URL/local dependencies and source builds need manual handling
 #   # - npm packages with bundled dependencies or shrinkwrap and their nested packages are restricted
 #   # - pnpm 12 releases before 12.10.0 need manual handling
 #   #
@@ -534,11 +535,11 @@ runtime:
 #     # job's deadline for startup and reporting (internal maximum: 60m).
 #     dependency_jobs_per_cycle: 3
 #     job_timeout: 6m
-#   # Language updates use official Docker Hub Node.js and Python images,
+#   # Language updates use official Docker Hub Node.js, Python, Go, Gradle and Rust images,
 #   # pinned by digest in a table bundled with KestreLynx.
 #   #
-#   # Supported series in that table are Node.js 22, 24 and 26 and Python
-#   # 3.11 through 3.15; end-of-life series require manual handling.
+#   # The table lists supported series for Node.js, Python, Go, Gradle and Rust.
+#   # End-of-life series require manual handling.
 #   #
 #   # KestreLynx fetches npm, pnpm and uv from public registries, checks them
 #   # and caches them under storage_dir; pip comes with the Python image.
@@ -578,7 +579,7 @@ runtime:
 #   #   # Optional Docker Hub mirror: lowercase host[:port][/path], with no
 #   #   # scheme, tag or digest; empty uses Docker Hub.
 #   #   registry: registry.example.com:5000/dockerhub
-#   #   # The mirror serves library/node and library/python under this path,
+#   #   # The mirror serves library/node, library/python, library/golang, library/gradle and library/rust under this path,
 #   #   # with the same digests; a mirror that changes an image is refused.
 #   #   runtime_table:
 #   #     # Fetch the published runtime table at startup and before each scan

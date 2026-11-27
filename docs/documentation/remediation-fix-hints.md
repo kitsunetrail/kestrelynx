@@ -55,6 +55,7 @@ Use the wording in your “Needs a decision” line and the package manager you 
 | `has its fixes only in another major version (…)` | Maven and Gradle | [Fixes available only in another major version](#fix-hints-maven-other-major) |
 | `the version is decided by the parent pom …`, `the version is decided by the BOM …`, or `the version is decided by the BOM of Spring Boot …` | Maven and Gradle | [When a parent pom or BOM decides the version](#fix-hints-version-source) |
 | `the dependent … uses …` or `… declares … directly` | Maven and Gradle | [Dependent package blockers](#fix-hints-held-by) |
+| `tokio 1.18.0 has its fixes only in a series not compatible with it (2.0.1)` | Rust | [Rust](#fix-hints-cargo) |
 | `the cause could not be determined` | All | [Packages left out of a PR](remediation-update-results.md#partial-pull-requests) |
 
 ## npm, pnpm, uv, and pip {#fix-hints-dependents}
@@ -328,6 +329,21 @@ Needs a decision: org.example:lib 2.5.0 has its fixes only in another major vers
 KestreLynx does not update to a fix listed as available only in another major version.
 You decide whether to move to the other major version.
 
+## Rust {#fix-hints-cargo}
+
+When fixed versions exist only in series incompatible with the running version, an automatic `Cargo.lock` update cannot apply the fix.
+In this example, the hint identifies `2.0.1` as a candidate that fixes all target vulnerabilities.
+
+```text
+tokio 1.18.0 has its fixes only in a series not compatible with it (2.0.1)
+```
+
+When KestreLynx cannot select a common fixed version, the hint pairs each advisory with its fix.
+
+```text
+ml-dsa 0.0.4 has its fixes only in series not compatible with it, and no one release is known to fix every advisory (CVE-2026-22705 0.1.0-rc.3, CVE-2026-24850 0.1.0-rc.4, GHSA-h37v-hp6w-2pp8 0.1.0-rc.5)
+```
+
 ## What the hints do not check {#fix-hints-scope}
 
 The hints give results only for the releases shown.
@@ -368,4 +384,4 @@ The following fields contain the release information for each package manager.
 | Managers | Field | Field description |
 | --- | --- | --- |
 | npm, pnpm, and uv | `language_items[].update.chain.hints` | [Published release information for dependents](webhook-remediation-language-reference.md#language-fix-hint-releases) |
-| pip, Go, Maven, and Gradle | `language_items[].packages[].fix_hint` | [Hints when a package cannot reach its fix](webhook-remediation-language-reference.md#language-fix-hint) |
+| pip, Go, Maven, Gradle, and Rust | `language_items[].packages[].fix_hint` | [Hints when a package cannot reach its fix](webhook-remediation-language-reference.md#language-fix-hint) |

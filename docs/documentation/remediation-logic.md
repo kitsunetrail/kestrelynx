@@ -7,7 +7,7 @@ title: Remediation processing flow
 This page explains how KestreLynx creates remediation plans, checks update results, manages remediation PRs, and sends notifications.
 [Checked scope](#checked-scope) summarizes what KestreLynx checks and what users need to verify.
 
-On Kubernetes, [work Pods](remediation-worker-logic.md#kubernetes-work-pods) are used when remediation PRs are enabled to update npm, pnpm, pip, uv, Go, or Gradle language packages.
+On Kubernetes, [work Pods](remediation-worker-logic.md#kubernetes-work-pods) are used when remediation PRs are enabled to update npm, pnpm, pip, uv, Go, Gradle, or Rust language packages.
 
 The following pages explain the rules for each target.
 
@@ -22,6 +22,7 @@ The following pages explain the rules for each target.
 | Go updates and checks | [Go package selection](remediation-go-logic.md#go-package-selection) |
 | Maven updates and checks | [Maven](remediation-maven-logic.md) |
 | Gradle updates and checks | [Gradle](remediation-gradle-logic.md) |
+| Rust updates and checks | [Rust](remediation-cargo-logic.md) |
 | Environments for running package managers | [Work container execution](remediation-worker-logic.md#worker-execution) |
 | Managing PRs and their records | [PR management](remediation-pr-logic.md#pr-management) |
 
@@ -101,6 +102,7 @@ KestreLynx makes the following checks when reading sources and creating PRs.
 - Resolve the configured branch to a commit and read sources from that commit
 - If the base branch has advanced before PR creation, recheck the files used for the update and the relevant configuration files
 - For language package and Dockerfile updates, defer PR creation if a change is detected in a file checked during planning
+- For Rust, defer the PR until the next cycle if the root or a member’s `Cargo.toml`, `Cargo.lock`, or the contents of a directory whose members were matched with `*` change on the base branch after planning
 - For tag updates in Compose files, Kubernetes manifests, Kustomize, and Helm values, use manual handling if the image reference in the file does not match the running image reference
 
 For a deferred update, no commit or branch is created for its PR either.

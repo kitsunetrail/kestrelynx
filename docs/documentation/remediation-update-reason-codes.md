@@ -18,6 +18,7 @@ Choose a subsection for the target or processing stage you want to check.
 | [Candidate selection](#update-selection-reasons) |
 | [Go](#update-go-reasons) |
 | [Maven and Gradle](#update-java-reasons) |
+| [Rust](#update-cargo-reasons) |
 | [Update execution](#update-execution-reasons) |
 | [Post-update validation](#update-validation-reasons) |
 | [Scan comparison](#update-scan-reasons) |
@@ -51,6 +52,7 @@ The following codes distinguish version-declaration and execution-environment re
 | `go_runtime_unavailable` | The Go version required for the update cannot be read, or no supported Go release is new enough | [Go runtime selection](remediation-go-logic.md#go-runtime-selection) · [Overview of the hints](remediation-fix-hints.md#fix-hints) |
 | `gradle_version_unsupported` | The build uses an unsupported Gradle version | [Gradle dependency files](remediation-dependency-formats.md#gradle-inputs) |
 | `gradle_toolchain_unsupported` | The build requests an unsupported Java toolchain | [Gradle worker settings](remediation-gradle-logic.md#gradle-worker-settings) |
+| `cargo_runtime_unavailable` | No Rust image verified on the execution platform can be selected | [Rust runtime selection](remediation-cargo-logic.md#cargo-runtime-selection) |
 | `runtime_eol` | The runtime selected for updates from project declarations or other inputs, or the running image's Python checked by pip, is past end of support | [Runtime selection](remediation-package-logic.md#runtime-and-tool-versions) |
 | `runtime_engines_mismatch` | An updated dependency does not support the minimum Node.js version declared by the project, or its support cannot be read | [Node.js compatibility](remediation-node-python-logic.md#node-compatibility) |
 | `requires_python_unsupported` | Required Python version conditions cannot be met, are missing, or cannot be parsed | [Python selection for uv](remediation-node-python-logic.md#uv-python-selection) |
@@ -157,6 +159,14 @@ These codes describe Maven and Gradle version sources, update targets, and lockf
 | `gradle_lock_entry_removed` | The update removed an entry from `gradle.lockfile` | [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) |
 | `gradle_lock_configurations_changed` | The update changed the configurations locked by `gradle.lockfile` | [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) |
 | `gradle_lock_version_unsupported` | The updated `gradle.lockfile` contains a snapshot version | [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) |
+
+### Rust {#update-cargo-reasons}
+
+| Code | Meaning | Details |
+| --- | --- | --- |
+| `cargo_fix_in_other_series` | An advisory lists fixes only in a series incompatible with the running version | [Rust hints](remediation-fix-hints.md#fix-hints-cargo) |
+| `cargo_release_not_found` | No published crates.io release can be selected for the update in the current series | [Target crate versions](remediation-cargo-logic.md#cargo-target-versions) |
+| `cargo_rust_version_too_new` | A newly introduced crate version requires a newer Rust version than the project declares | [Rust runtime selection](remediation-cargo-logic.md#cargo-runtime-selection) |
 
 ### Update execution {#update-execution-reasons}
 

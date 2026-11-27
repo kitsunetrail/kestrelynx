@@ -50,7 +50,7 @@ The following terms help you read the configuration, processing, and results of 
 | Manual handling | An update left to your judgment without automatic changes by KestreLynx (value: `manual`; Slack: “Needs a decision”) |
 | Deferred | Processing postponed to a later cycle because of limits, waiting periods, or similar conditions (value: `deferred`; Slack: “Deferred”) |
 | Work container (work Pod) | A disposable container created by KestreLynx to run a package manager (a work Pod on Kubernetes) |
-| Runtime table | Execution versions, official images pinned by digest, and end-of-support dates for each Node.js, Python, Go, and Gradle series used for language package updates |
+| Runtime table | Execution versions, official images pinned by digest, and end-of-support dates for each Node.js, Python, Go, Gradle, and Rust series used for language package updates |
 
 KestreLynx is under active development.
 Unless otherwise noted, this documentation describes the latest container image and the current `main` branch.

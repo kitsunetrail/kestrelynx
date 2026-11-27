@@ -286,7 +286,9 @@ valuesのイメージ指定を編集できるかと、変更の影響を受け�
 | `gradle_build_unsupported` | 複数プロジェクト構成や`apply from`・動的な版指定などの未対応の文・引数があり、依存宣言や実行する設定を読み取れない | [ビルドスクリプトの書き方](remediation-dependency-formats.md#gradle-build-forms) |
 | `gradle_locking_unenforced` | lockfileのとおりにビルドする設定（lockModeの`STRICT`と全構成のlock）になっていない | [Gradleの依存ファイル](remediation-dependency-formats.md#gradle-inputs) |
 | `gradle_plugin_unsupported` | 許可していないプラグインか版を使っている | [プラグインの許可](remediation-dependency-formats.md#gradle-plugins) |
-| `workspace_unsupported` | npm・pnpm・uvの未対応のworkspace構成、またはGoの`go.work`・`vendor`がある | [npmの依存ファイル](remediation-dependency-formats.md#npm-inputs)・[pnpmの依存ファイル](remediation-dependency-formats.md#pnpm-inputs)・[uvの依存ファイル](remediation-dependency-formats.md#uv-inputs)・[Goの依存ファイル](remediation-dependency-formats.md#go-inputs) |
+| `rust_binary_not_from_source` | バイナリのパッケージ一覧を照合できないか、組み込まれたcrateを対応するメンバーからたどれない | [Rustの候補選定](remediation-cargo-logic.md#cargo-package-selection) |
+| `cargo_manifest_unsupported` | `Cargo.toml`に対応していない書き方がある | [Rustの依存ファイル](remediation-dependency-formats.md#cargo-inputs) |
+| `workspace_unsupported` | npm・pnpm・uv・Rustの未対応のworkspace構成、またはGoの`go.work`・`vendor`がある | [npmの依存ファイル](remediation-dependency-formats.md#npm-inputs)・[pnpmの依存ファイル](remediation-dependency-formats.md#pnpm-inputs)・[uvの依存ファイル](remediation-dependency-formats.md#uv-inputs)・[Goの依存ファイル](remediation-dependency-formats.md#go-inputs)・[Rustの依存ファイル](remediation-dependency-formats.md#cargo-inputs) |
 | `workspace_settings_unsupported` | workspace設定ファイルの内容をサポートしていない | — |
 | `dynamic_metadata` | `pyproject.toml`に`[project]`がないか、プロジェクトのメタデータが動的に決まる | — |
 | `unsupported_requirements` | requirementsの書き方をサポートしていない | — |

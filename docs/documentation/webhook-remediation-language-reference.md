@@ -106,6 +106,7 @@ The values of `manager` are listed below.
 | `go` | Go modules |
 | `maven` | Maven |
 | `gradle` | Gradle |
+| `cargo` | Cargo for Rust |
 
 The following fields have additional notes.
 
@@ -138,6 +139,7 @@ The `key` suffixes and the findings included in each item are listed below.
 | `#uv`, `#pip` | Findings for Python packages |
 | `#go` | Findings for modules or the standard library included in Go binaries |
 | `#maven`, `#gradle` | Findings for packages included in Java archives |
+| `#cargo` | Findings for packages in Rust binaries or in an image’s `Cargo.lock` |
 | `#node-pkg` | Findings for Node.js packages whose package manager could not be identified |
 | `#python-pkg` | Findings for Python packages whose package manager could not be identified |
 | `#go-stdlib` | Findings for the Go standard library |
@@ -145,7 +147,7 @@ The `key` suffixes and the findings included in each item are listed below.
 
 The following suffixes have additional notes.
 
-- `#npm`, `#pnpm`, `#uv`, `#pip`, `#go`, `#maven`, `#gradle`
+- `#npm`, `#pnpm`, `#uv`, `#pip`, `#go`, `#maven`, `#gradle`, `#cargo`
     - The suffix has the same value as `manager`
 - `#node-pkg`, `#python-pkg`
     - Output when processing stops before the manager is identified, or when the dependency file pair cannot be identified
@@ -173,6 +175,7 @@ The fields in `language_items[].source` are listed below.
 | `commit_sha` | string | Commit SHA recorded as the source | omitted |
 | `files` | array of objects | List of [Retrieved files](#language-source-file-fields) | omitted |
 | `absent` | array of strings | Repository paths of files that were looked for when checking inputs but did not exist | omitted |
+| `trees` | array of objects | Path (`path`) and Git tree SHA at planning time (`sha`) for each directory where `*` matched Rust workspace members | omitted |
 | `origin` | string | Origin of the source configuration | `""` |
 | `confidence` | string | Basis for mapping the running image to the source | `""` |
 
@@ -330,6 +333,7 @@ The values of `ecosystem` are listed below.
 | `python-pkg` | Python packages |
 | `gobinary` | Modules or the standard library included in Go binaries |
 | `jar` | Packages included in Java archives |
+| `cargo` | Rust findings, including crates.io crates, grouped by package name and version |
 
 The values of `relation` are listed below.
 
@@ -408,6 +412,7 @@ The following fields have additional notes.
     - For uv, the package name and version in `name==version` format
     - For pip and Go, a filename and line number relative to `source.directory`, such as `requirements.txt:3` or `go.mod:5`
     - For Maven, a `pom.xml` path, and for Gradle, a `gradle.lockfile` path, relative to the repository root
+    - For Rust, the path to `Cargo.lock` relative to the repository root
 - `version`
     - Retains the version from the dependency files before the update; use `installed` for the running image version and `adopted_version` for the version adopted after the update
     - Omitted for unpinned requirements or declarations whose version cannot be read from the dependency files alone
@@ -455,8 +460,10 @@ The fields in each element of `language_items[].packages[].origins[]` are listed
 `entity` is a string containing the digest kind and value, such as `config:sha256:…`, with a platform such as `@linux/amd64` appended when known.
 It is `unconfirmed` when a valid digest is unavailable.
 
-The values of `ecosystem` are the same as in [Package results](#language-package-fields).
+Except for Rust, the values of `ecosystem` are the same as in [Package results](#language-package-fields).
 For Python, `name` retains its spelling before normalization, so finding origins for the same package may contain different spellings.
+
+Rust finding origins use Trivy’s `rustbinary` or `cargo`, which are grouped under `cargo` in package results.
 
 The values of `class` are listed below.
 
@@ -540,7 +547,8 @@ The fields in `language_items[].packages[].fix_hint` are listed below.
 | `held_by` | array of objects | [Dependents requiring the target](#language-fix-holder-fields) that block its update or require it | omitted |
 | `releases` | array of objects | [Published release information for dependents](#language-fix-hint-releases) or POMs deciding the version | omitted |
 | `go_line` | object | [Go version required for the update](#language-go-line-fields) and the module requiring it | omitted |
-| `fix` | object | Information about a [Fixed release in another major version](#language-fix-release-fields) | omitted |
+| `fix` | object | Information about a [fixed release in another major version or an incompatible series](#language-fix-release-fields) | omitted |
+| `advisories` | array of objects | Each advisory’s ID (`vuln_id`) and fixed version (`version`) when no common fixed version can be selected for Rust | omitted |
 | `direct` | boolean | `true` when the project's own direct requirement for the target package was confirmed | omitted |
 | `decided_by` | object | External [POM deciding the target version](#language-fix-decider-fields) | omitted |
 | `configuration` | string | Gradle configuration where the target remained below its target version | omitted |
@@ -557,6 +565,7 @@ The `reason` values eligible for `fix_hint` are listed below.
 | `gradle_version_source_unsupported` | The place in the project's files that determines the version cannot be rewritten automatically |
 | `maven_release_not_found` | Maven Central has no release the update can use |
 | `maven_fix_in_other_major` | The fix is only in another major version |
+| `cargo_fix_in_other_series` | Fixes are available only in a series incompatible with the running version |
 | `target_not_updated` | The package did not reach the target version after the update |
 
 `target_not_updated` is eligible for `fix_hint` only for Maven and Gradle.
@@ -615,7 +624,7 @@ The following fields have additional notes.
 - `to`
     - The update target version, which may differ from the `version` of the module declaring the required Go version
 
-#### Fixed release in another major version {#language-fix-release-fields}
+#### Fixed release in another major version or an incompatible series {#language-fix-release-fields}
 
 The fields in `language_items[].packages[].fix_hint.fix` are listed below.
 
@@ -630,6 +639,7 @@ The interpretation of `version` depends on the package's `reason`.
 | `fix_in_other_major_version` for Go | Fixed version in another major version reported by vulnerability information |
 | `maven_fix_in_other_major` for Maven and Gradle | Stable fixed release in a different major version from the running version, reported by vulnerability information |
 | `maven_release_not_found` for Maven and Gradle | Stable fixed release published on Maven Central at or above the target version and in a different major version from the running version |
+| `cargo_fix_in_other_series` for Rust | Advisory-listed fixed version in a series incompatible with the running version |
 
 For Maven and Gradle `maven_release_not_found`, the version must have the same variant as the running version.
 For `maven_fix_in_other_major`, the version may have the same variant as the running version or no variant.

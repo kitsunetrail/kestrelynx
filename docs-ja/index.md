@@ -99,7 +99,7 @@ KestreLynxは、稼働中のコンテナが使うイメージの脆弱性を通�
 <dt>ベースイメージのタグ</dt>
 <dd markdown="span">Dockerfile</dd>
 <dt>依存ファイル</dt>
-<dd markdown="span">npm · pnpm · pip · uv · Go · Maven (`pom.xml`) · Gradle (`gradle.lockfile`)</dd>
+<dd markdown="span">npm · pnpm · pip · uv · Go · Maven (`pom.xml`) · Gradle (`gradle.lockfile`) · Rust (`Cargo.lock`)</dd>
 </dl>
 
 </div>

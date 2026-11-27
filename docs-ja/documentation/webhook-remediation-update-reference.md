@@ -30,6 +30,7 @@ title: Webhookの修正計画の更新の記録のフィールド
 | `go` | object | [Goの更新の記録](#language-go-update) | 省略 |
 | `maven` | object | [Mavenの更新の記録](#language-maven-update) | 省略 |
 | `gradle` | object | [Gradleの更新の記録](#language-gradle-update) | 省略 |
+| `cargo` | object | [Rustの更新の記録](#language-cargo-update) | 省略 |
 
 次のフィールドには補足があります。
 
@@ -87,6 +88,7 @@ title: Webhookの修正計画の更新の記録のフィールド
 | --- | --- |
 | `baseline` | 更新前の依存ファイルの確認 |
 | `update` | 依存ファイルの更新 |
+| `update-<番号>` | Rustで2つ目以降のcrateを更新する操作（`update-2`から順に付番） |
 | `check` | 更新後の依存ファイルの再確認 |
 
 `op`の値は次のとおりです。
@@ -102,6 +104,7 @@ title: Webhookの修正計画の更新の記録のフィールド
 | `pip.dry_run` | pipによるインストールを伴わない依存解決の確認 |
 | `go.get` | Goによる対象モジュールの更新 |
 | `gradle.update_locks` | Gradleによる対象パッケージのlockfile更新 |
+| `cargo.update` | Cargoによる1つのcrateの目標版への更新 |
 
 同じ段階を再実行する場合があるため、`id`を配列内で一意なキーとして扱わないでください。
 各操作の範囲は[マネージャー別の更新処理](remediation-package-logic.md#manager-update-methods)を参照してください。
@@ -171,7 +174,7 @@ title: Webhookの修正計画の更新の記録のフィールド
     - 差分の検査途中で不採用になった場合は、切り詰める前の一覧が記録されることがあるため、受信側で100件を固定の最大長としない
 
 この差分は、npm・pnpm・uvでは更新前後のlockfile、pipでは更新前後のインストールレポートを対象とします。
-Go・Maven・Gradleの変更は、それぞれの更新の記録を参照してください。
+Go・Maven・Gradle・Rustの変更は、それぞれの更新の記録を参照してください。
 
 ### 依存先の版だけが変わった項目 {#language-update-followed}
 
@@ -238,7 +241,7 @@ Aを更新する前と後の版は次のとおりです。
 | フィールド名 | 型 | 意味 | 値がないとき |
 | --- | --- | --- | --- |
 | `id` | string | 選定した実行環境の識別子 | — |
-| `version` | string | 実行環境に含まれるNode.js・Python・Go・Gradleの版 | — |
+| `version` | string | 実行環境に含まれるNode.js・Python・Go・Gradle・Rustの版 | — |
 | `pip` | string | Pythonイメージに含まれるpipの版 | 省略 |
 | `image` | string | リポジトリ名とイメージインデックスのdigestで固定した作業用イメージの参照 | 省略 |
 | `platform` | string | 作業用イメージの実行プラットフォーム | 省略 |
@@ -258,6 +261,7 @@ Aを更新する前と後の版は次のとおりです。
 | `python<メジャー版>.<マイナー版>` | `python3.13`のようなPythonの系列 |
 | `golang<メジャー版>.<マイナー版>` | `golang1.26`のようなGoの系列 |
 | `gradle<版>-jdk<JDKのメジャー版>` | `gradle9.8.2-jdk17`のようなGradleとJDKの組み合わせ |
+| `rust<メジャー版>.<マイナー版>` | `rust1.100`のようなRustの系列 |
 
 使用できる系列とGradle・JDKの組み合わせは[対応する実行環境](remediation-reference.md#supported-runtimes)を参照してください。
 
@@ -276,7 +280,7 @@ Aを更新する前と後の版は次のとおりです。
 | `maintenance` | Node.jsの保守期間 |
 | `security` | Pythonのセキュリティ修正期間 |
 | `bugfix` | Pythonのバグ修正期間 |
-| `supported` | Goのサポート期間 |
+| `supported` | Go・Rustのサポート期間 |
 
 `basis`の値は次のとおりです。
 
@@ -396,7 +400,7 @@ Aを更新する前と後の版は次のとおりです。
 - `spec_hash`
     - `sha512.<16進数>`のようにアルゴリズム名とハッシュ値を`.`でつないだ形式を使う
 
-pip・Go・Gradleは作業用イメージに含まれるツールを使うため、このオブジェクトを出力しません。
+pip・Go・Gradle・Rustは作業用イメージに含まれるツールを使うため、このオブジェクトを出力しません。
 Mavenの更新も、このオブジェクトを出力しません。
 
 選定方法は[ツール版の選定](remediation-node-python-logic.md#tool-version-selection)、照合方法は[ツールの取得と照合](remediation-node-python-logic.md#tool-verification)を参照してください。
@@ -666,3 +670,19 @@ lockfileからパッケージがなくなる更新は採用しないため、生
 
 `companions`には、共有する変更後の版がMaven Centralに存在することを確認したパッケージを記録します。
 変更方法は[Gradleの版の宣言と書き換え](remediation-gradle-logic.md#gradle-version-sources)、採用条件は[Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation)を参照してください。
+
+## Rustの更新の記録 {#language-cargo-update}
+
+`language_items[].update.cargo`は、更新前後の`Cargo.lock`の差分を表します。
+
+| フィールド名 | 型 | 意味 | 値がないとき |
+| --- | --- | --- | --- |
+| `targets` | objectの配列 | 更新対象のcrateの名前（`name`）、旧版（`from`）、新版（`to`） | — |
+| `others` | objectの配列 | 付随して変わったcrateの`name`・`from`・`to`（追加では`from`、削除では`to`を省略） | 省略 |
+| `lock_version_from` | integer | 更新前の`Cargo.lock`の形式番号 | — |
+| `lock_version_to` | integer | 更新後の`Cargo.lock`の形式番号 | — |
+| `moved` | objectの配列 | 更新後に初めて現れたcrates.ioのcrateの名前（`name`）と版（`version`） | — |
+| `max_rust_version` | string | `moved`の版について索引から読み取れたRustの要求の最大値 | 省略 |
+| `no_rust_version` | integer | `moved`のうちRustの要求を読み取れなかった件数 | 0件なら省略 |
+
+採用条件は[Rustの更新結果の検査](remediation-cargo-logic.md#cargo-update-validation)を参照してください。

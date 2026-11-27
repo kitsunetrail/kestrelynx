@@ -6,7 +6,7 @@ title: Kubernetesの言語パッケージ更新の準備
 
 ## 作業用Podの準備 {#kubernetes-language-updates}
 
-npm・pnpm・pip・uv・Go・Gradleの更新は、利用者が用意した作業用namespaceにKestreLynxが作る使い捨ての作業用Podで実行します。
+npm・pnpm・pip・uv・Go・Gradle・Rustの更新は、利用者が用意した作業用namespaceにKestreLynxが作る使い捨ての作業用Podで実行します。
 
 Mavenの更新はKestreLynxによる`pom.xml`の編集とTrivyの検査で行うため、作業用Podの準備は不要です。
 
@@ -105,7 +105,7 @@ KestreLynxは作業用Podを作る前に、`kestrelynx-work`という名前のPo
 | 合わせる値 | キー | 配布時の値 |
 | --- | --- | --- |
 | 入力ファイル受信用のKestreLynxイメージのリポジトリ | `data.receiverRepository` | `ghcr.io/kitsunetrail/kestrelynx` |
-| 作業用イメージのリポジトリ | `data.workRepositories` | `docker.io/library/`の`node`・`python`・`golang`・`gradle` |
+| 作業用イメージのリポジトリ | `data.workRepositories` | `docker.io/library/`の`node`・`python`・`golang`・`gradle`・`rust` |
 | KestreLynxのPodと実行ノードのアーキテクチャ | `data.arch` | `amd64` |
 
 `workRepositories`には、作業用Podに使ってよいイメージのリポジトリ名の一覧を、空白を入れずカンマで区切った1つの文字列として指定します。
@@ -120,6 +120,7 @@ KestreLynxは作業用Podを作る前に、`kestrelynx-work`という名前のPo
 | pip・uv | `docker.io/library/python` |
 | Go | `docker.io/library/golang` |
 | Gradle | `docker.io/library/gradle` |
+| Rust | `docker.io/library/rust` |
 
 `remediation.worker.registry`でミラーを設定している場合は、`workRepositories`に書くリポジトリをすべてミラーの取得先に合わせます。
 

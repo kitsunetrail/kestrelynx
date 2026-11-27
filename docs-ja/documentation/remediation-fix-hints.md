@@ -55,6 +55,7 @@ Slackには、`starlette`を上げられない原因と、`fastapi`の公開版�
 | `修正版は別のメジャー版（…）にしかない` | Maven・Gradle | [修正版が別のメジャー版にしかない場合](#fix-hints-maven-other-major) |
 | `版は親 pom の … が決めている`・`版は BOM の … が決めている`・`版は Spring Boot … の BOM が決めている` | Maven・Gradle | [版を決める親pom・BOMが原因の場合](#fix-hints-version-source) |
 | `依存元の … が … を使っている`・`… で … を直接指定している` | Maven・Gradle | [依存元が原因の場合](#fix-hints-held-by) |
+| `tokio 1.18.0 の修正版は互換でない系列（2.0.1）にしかない` | Rust | [Rustの場合](#fix-hints-cargo) |
 | `原因は確かめられなかった` | すべて | [PRに入らなかったパッケージ](remediation-update-results.md#partial-pull-requests) |
 
 ## npm・pnpm・uv・pipの場合 {#fix-hints-dependents}
@@ -328,6 +329,21 @@ Maven・Gradleで別のメジャー版の修正版を案内する場合、通知
 KestreLynxは、「別のメジャー版にしかない」と表示した修正版への更新を行いません。
 別のメジャー版へ上げるかは利用者が判断します。
 
+## Rustの場合 {#fix-hints-cargo}
+
+稼働版と互換でない系列にしか修正版がない場合は、`Cargo.lock`の自動更新では修正できません。
+次の表示例では、すべての対象脆弱性を直す候補として案内された版が`2.0.1`です。
+
+```text
+tokio 1.18.0 の修正版は互換でない系列（2.0.1）にしかない
+```
+
+共通の修正版を選べない場合は、勧告と修正版の組を表示します。
+
+```text
+ml-dsa 0.0.4 の修正版は互換でない系列にしかなく、すべての勧告を直す版は分からない（CVE-2026-22705 0.1.0-rc.3、CVE-2026-24850 0.1.0-rc.4、GHSA-h37v-hp6w-2pp8 0.1.0-rc.5）
+```
+
 ## 案内で確かめていないこと {#fix-hints-scope}
 
 案内が示すのは、表示した公開版についての結果だけです。
@@ -368,4 +384,4 @@ Goの依存元が現在のモジュールパスに要求する版と、Maven・G
 | マネージャー | フィールド | フィールドの説明 |
 | --- | --- | --- |
 | npm・pnpm・uv | `language_items[].update.chain.hints` | [依存元の公開版の情報](webhook-remediation-language-reference.md#language-fix-hint-releases) |
-| pip・Go・Maven・Gradle | `language_items[].packages[].fix_hint` | [修正版に上げられないときの案内](webhook-remediation-language-reference.md#language-fix-hint) |
+| pip・Go・Maven・Gradle・Rust | `language_items[].packages[].fix_hint` | [修正版に上げられないときの案内](webhook-remediation-language-reference.md#language-fix-hint) |

@@ -18,6 +18,7 @@ KEVは、悪用が確認された脆弱性を収録するCISAのKnown Exploited 
 | [候補の選定](#update-selection-reasons) |
 | [Go](#update-go-reasons) |
 | [Maven・Gradle](#update-java-reasons) |
+| [Rust](#update-cargo-reasons) |
 | [更新の実行](#update-execution-reasons) |
 | [更新後の検査](#update-validation-reasons) |
 | [スキャンの比較](#update-scan-reasons) |
@@ -51,6 +52,7 @@ KEVは、悪用が確認された脆弱性を収録するCISAのKnown Exploited 
 | `go_runtime_unavailable` | 更新に必要なGo版を読み取れないか、その版以上のサポート中のGoがない | [Goの選定](remediation-go-logic.md#go-runtime-selection)・[案内の概要](remediation-fix-hints.md#fix-hints) |
 | `gradle_version_unsupported` | サポートしていないGradleの版を使っている | [Gradleの依存ファイル](remediation-dependency-formats.md#gradle-inputs) |
 | `gradle_toolchain_unsupported` | サポートしていないJavaのtoolchainを指定している | [Gradleの実行設定](remediation-gradle-logic.md#gradle-worker-settings) |
+| `cargo_runtime_unavailable` | 実行するプラットフォームで動作を確認したRustのイメージを選べない | [作業用のRust](remediation-cargo-logic.md#cargo-runtime-selection) |
 | `runtime_eol` | プロジェクトの宣言などから更新用に選ぶランタイム、またはpipで検証する稼働イメージのPythonがサポート終了している | [実行環境の選定](remediation-package-logic.md#runtime-and-tool-versions) |
 | `runtime_engines_mismatch` | 更新した依存が、プロジェクトの宣言する最小Node.js版をサポートしていないか、サポート状況を読み取れない | [Node.jsの互換条件](remediation-node-python-logic.md#node-compatibility) |
 | `requires_python_unsupported` | 必要なPython版の条件を満たせない、または条件がない・解釈できない | [uv用Pythonの選定](remediation-node-python-logic.md#uv-python-selection) |
@@ -157,6 +159,14 @@ Maven・Gradleの版の出所、更新先、lockfileの検査結果を示しま�
 | `gradle_lock_entry_removed` | 更新で`gradle.lockfile`のエントリが削除された | [Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation) |
 | `gradle_lock_configurations_changed` | 更新で`gradle.lockfile`がlockする構成が変わった | [Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation) |
 | `gradle_lock_version_unsupported` | 更新後の`gradle.lockfile`にスナップショット版が含まれる | [Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation) |
+
+### Rust {#update-cargo-reasons}
+
+| コード | 意味 | 詳しい説明 |
+| --- | --- | --- |
+| `cargo_fix_in_other_series` | 勧告の修正版が稼働版と互換でない系列にしかない | [Rustの案内](remediation-fix-hints.md#fix-hints-cargo) |
+| `cargo_release_not_found` | 現在の系列で更新に使えるcrates.ioの公開版を選べない | [crateの目標版](remediation-cargo-logic.md#cargo-target-versions) |
+| `cargo_rust_version_too_new` | 新しく入ったcrateの版が、プロジェクトの宣言より新しいRustを要求する | [作業用のRust](remediation-cargo-logic.md#cargo-runtime-selection) |
 
 ### 更新の実行 {#update-execution-reasons}
 

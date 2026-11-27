@@ -203,6 +203,7 @@ When `kind` is `language`, `path` identifies the following dependency file.
 | Go | `go.mod` |
 | Maven | Root `pom.xml` |
 | Gradle | `gradle.lockfile` |
+| Rust | `Cargo.lock` |
 
 Language package PRs may also change dependency files other than `path`.
 
@@ -365,6 +366,7 @@ Its fields are as follows.
 | `go` | Go modules |
 | `maven` | Maven |
 | `gradle` | Gradle |
+| `cargo` | Cargo for Rust |
 
 `root` is `.` when it refers to the repository root.
 See [Supported input formats](remediation-reference.md#supported-inputs) for supported dependency file formats.

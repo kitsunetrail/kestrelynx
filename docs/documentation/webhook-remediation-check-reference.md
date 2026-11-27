@@ -40,6 +40,7 @@ The following fields have additional notes.
 
 - `counts`
     - Each package name and vulnerability ID pair counts as one, even if it occurs at multiple versions or locations
+    - For Rust, each newly detected combination of crate name, version, and vulnerability ID counts as one
     - Python package names are matched after converting them to lowercase and replacing consecutive `-`, `_`, and `.` characters with a single `-`
     - Counts include vulnerabilities detected in dependency files for the relevant package manager, not just those in packages targeted for updating
     - Counts are reported before lists are truncated at the item limit
@@ -181,6 +182,7 @@ The following fields have additional notes.
     - `resolved[]` uses the version from detection before the update, while `remaining[]` and `introduced[]` use the version from detection after the update
     - When the same package name and vulnerability ID are detected at multiple versions, the finding whose version comes first in lexicographical order is output as the representative
     - The representative version is not necessarily the oldest when compared as version numbers
+    - For Rust, `introduced[]` contains an entry for each newly detected version
 - `fixed_ver`
     - The string reported by the scan is output as-is, so it is not necessarily a single version number
 - `kev`

@@ -189,6 +189,23 @@ GradleのPRは、版の宣言と`gradle.lockfile`の更新を提案します。
 KestreLynxは更新後のlockfileの版と更新前後の所見を確かめますが、アプリケーションのビルド・テスト・動作は確かめていません。
 採用条件は[Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation)を参照してください。
 
+### RustのPR {#cargo-pull-requests}
+
+RustのPRは、`Cargo.lock`の更新を提案します。
+「確認したこと」には次の内容が載ります。
+
+- 作業用のRustの版、公式イメージ、対象ごとに実行した`cargo.update`の終了コード
+- ビルド対象を空のファイルで渡し、ビルドせずに`cargo update`だけを実行したこと
+- 各`Cargo.toml`とメンバーが変わらず、すべての対象が目標版になったこと
+- 新しく入った版について、crates.ioの索引で公開・チェックサム・取り下げの有無を確認したこと
+- 形式が変わる場合の`Cargo.lock`の新旧の形式番号
+- 新しく入った版について読み取れた`rust-version`の最大値と、読み取れないものがある場合の件数
+- 対象のcrateの新旧の版と、付随して版が変わった・追加された・削除されたcrateの一覧
+- 更新前後の`Cargo.lock`のスキャンで解消・残存・新規となった所見
+
+マージ前に、CIで`cargo build --locked && cargo test --locked`を実行してください。
+採用条件は[Rustの更新結果の検査](remediation-cargo-logic.md#cargo-update-validation)を参照してください。
+
 ## 解消・残存・新規と、KestreLynxが確かめていないこと {#verification-results}
 
 PR本文の「解消」「残存」「新規」とSlackの修正計画の解消件数は、次の表に示す更新前後のスキャンの比較結果です。

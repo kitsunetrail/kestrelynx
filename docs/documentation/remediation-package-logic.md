@@ -14,6 +14,7 @@ See the following pages for the complete process for each manager.
 | Go updates | [Go candidate selection](remediation-go-logic.md#go-package-selection) |
 | Maven updates | [Maven candidate selection](remediation-maven-logic.md#maven-package-selection) |
 | Gradle updates | [Gradle candidate selection](remediation-gradle-logic.md#gradle-package-selection) |
+| Rust updates | [Rust candidate selection](remediation-cargo-logic.md#cargo-package-selection) |
 | Environments for running package managers | [Work container execution](remediation-worker-logic.md#worker-execution) |
 
 For verification coverage concerning building the final image, application behavior, and deployment, see [Verification scope by target](remediation-logic.md#verification-scope).
@@ -46,6 +47,8 @@ The lower bound combines the version selected for each vulnerability, separately
 | --- | --- |
 | Each vulnerability | Select the lowest reported fixed version newer than the installed version |
 | Each installed version of the same package | Use the highest version selected across its vulnerabilities as the update target |
+
+For Rust, the lower bound is selected within the [series compatible with the running version](remediation-cargo-logic.md#cargo-target-versions).
 
 The following example has vulnerabilities A and B in one package installed at `1.2.0`.
 Compare the lowest fixed version selected for each vulnerability with the resulting update target.
@@ -103,7 +106,7 @@ Reaching the lower bound alone is insufficient: the checks in [Accepting update 
 
 ## Runtime selection {#runtime-and-tool-versions}
 
-Runtime selection determines the version of Node.js, Python, Go, or Gradle and the JDK used to execute an update.
+Runtime selection determines the version of Node.js, Python, Go, Rust, or Gradle and the JDK used to execute an update.
 
 Node.js, Python, and Go use supported series (groups of versions such as Node.js 22 or Python 3.13) from the runtime table KestreLynx is using.
 For supported series, execution versions, and support end dates, see [Supported runtimes](remediation-reference.md#supported-runtimes).
@@ -117,6 +120,7 @@ The following sections describe selection for each manager.
 | pip | [pip verification environment](remediation-node-python-logic.md#pip-target-environment) |
 | Go | [Go selection](remediation-go-logic.md#go-runtime-selection) |
 | Gradle | [Gradle execution settings](remediation-gradle-logic.md#gradle-worker-settings) |
+| Rust | [Rust runtime selection](remediation-cargo-logic.md#cargo-runtime-selection) |
 | Maven | No update runtime required because KestreLynx rewrites `pom.xml` |
 
 ## Accepting update results {#update-method-and-partial-pull-requests}
@@ -139,6 +143,7 @@ Links on manager names lead to the complete process, while links in the checks c
 | [Go](remediation-go-logic.md) | Update all targets in one `go get <module>@<version> ...` invocation without running `go mod tidy` | Check the `go.mod` diff, `go.sum`, dependency requirements, and scans before and after the update ([Go update validation](remediation-go-logic.md#go-update-validation)) |
 | Maven | Have KestreLynx rewrite versions, properties, and dependency management declarations in `pom.xml` | [Resolve and scan dependencies with Trivy before and after the update](remediation-maven-logic.md#maven-scan-validation) |
 | Gradle | Have KestreLynx rewrite version declarations and run `dependencies --update-locks` in a work container | Validate returned files and the lockfile, and scan the lockfile with Trivy before and after the update ([Gradle update validation](remediation-gradle-logic.md#gradle-update-validation)) |
+| Rust | Update `Cargo.lock` with `cargo update --precise` for each target | [Check the scope of dependency changes, checksums, and findings before and after the update](remediation-cargo-logic.md#cargo-update-validation) |
 
 The npm pre-update check compares a lockfile regenerated from the original inputs with the original lockfile.
 It compares record locations, package names, versions, download locations, hashes, and link flags.
@@ -157,6 +162,7 @@ The stage at which packages can be excluded and whether the remaining update is 
 | Go | Do not split the update to exclude some targets | [Go update validation](remediation-go-logic.md#go-update-validation) |
 | Maven | Exclude targets before rewriting and allow only one rerun based on post-update dependency checks | [Maven exclusion conditions](remediation-maven-logic.md#maven-update-exclusions) |
 | Gradle | Exclude targets before rewriting and do not rerun for targets missed after the update | [Gradle exclusion conditions](remediation-gradle-logic.md#gradle-update-exclusions) |
+| Rust | Do not split targets into smaller groups and retry after running the update | [Rust update validation](remediation-cargo-logic.md#cargo-update-validation) |
 
 For npm, pnpm, and uv, when [Re-resolution through dependent packages](remediation-reresolution-logic.md#dependent-reresolution) is applicable, its result is checked before deciding on a partial PR from the ordinary update.
 The following diagram shows partial PR selection for an initial update result with targets that missed their lower bounds.

@@ -22,7 +22,9 @@
 | 配布イメージの固定タグ | `nginx:1.27.0` | タグの更新候補とスキャンの比較結果 | Compose・Kubernetesマニフェスト・Kustomize・Helmのvaluesのタグ変更 |
 | 配布イメージの浮動タグ | `latest` | 同じタグの新しい内容を再取得する案内 | 作成なし |
 | Dockerfileのベースイメージ | `FROM python:3.12.3-slim` | ベースイメージの更新候補とスキャンの比較結果 | Dockerfileの`FROM`の固定タグ変更 |
-| 言語パッケージ（npm・pnpm・pip・uv・Go・Maven・Gradle） | `pnpm-lock.yaml`・`pom.xml` | パッケージの更新候補 | 依存ファイルの変更 |
+| 言語パッケージ（npm・pnpm・pip・uv・Go・Maven・Gradle・Rust） | `pnpm-lock.yaml`・`pom.xml`・`Cargo.lock` | パッケージの更新候補 | 依存ファイルの変更 |
+
+通常の`cargo build`で作ったバイナリだけを含むイメージではTrivyが依存を検出できないため、cargo-auditableの`cargo auditable build`でビルドしてください。
 
 `docker run`で起動したコンテナには、Dockerfileと依存パッケージの更新PRを作成できます。
 起動時のイメージタグを変更するPRは作成しません。
@@ -96,6 +98,7 @@ Pull Request: #12 (今回作成)
 | Goモジュールの更新候補と検査 | [Go](remediation-go-logic.md) |
 | Mavenの更新候補と検査 | [Maven](remediation-maven-logic.md) |
 | Gradleの更新候補と検査 | [Gradle](remediation-gradle-logic.md) |
+| Rustの更新候補と検査 | [Rust](remediation-cargo-logic.md) |
 | 案内を出す条件と公開版の確認方法 | [修正版に上げられないときの案内の仕組み](remediation-fix-hints-logic.md) |
 | パッケージマネージャーを実行する使い捨てコンテナの動作 | [作業用コンテナ](remediation-worker-logic.md) |
 | 既存PRの扱いとPR処理の記録 | [PRの管理と記録](remediation-pr-logic.md) |

@@ -94,6 +94,7 @@ nav:
                   - Go: documentation/remediation-go-logic.md
                   - Maven: documentation/remediation-maven-logic.md
                   - Gradle: documentation/remediation-gradle-logic.md
+                  - Rust: documentation/remediation-cargo-logic.md
                   - Hints when a package cannot reach its fix: documentation/remediation-fix-hints-logic.md
                   - Work containers: documentation/remediation-worker-logic.md
               - PR management and records: documentation/remediation-pr-logic.md

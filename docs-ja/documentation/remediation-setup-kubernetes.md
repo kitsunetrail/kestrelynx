@@ -88,7 +88,7 @@ Kubernetesで動かしているKestreLynxで、修正計画を確認してから
 [修正計画の起動確認](#kubernetes-verify-plans)を終えてから、次の順に進めてください。
 
 1. このページの各節で、更新したいものの対応付けを設定する
-2. npm・pnpm・pip・uv・Go・Gradleの言語パッケージを更新する場合は、[作業用Podの準備](remediation-setup-work-pods.md#kubernetes-language-updates)で作業用namespaceと対応付けの設定まで済ませ、このページへ戻る（Mavenだけなら不要）
+2. npm・pnpm・pip・uv・Go・Gradle・Rustの言語パッケージを更新する場合は、[作業用Podの準備](remediation-setup-work-pods.md#kubernetes-language-updates)で作業用namespaceと対応付けの設定まで済ませ、このページへ戻る（Mavenだけなら不要）
 3. [PR作成の有効化と反映](#kubernetes-enable-pr-creation)を行い、起動と処理結果を確認する
 
 更新したいものから、設定するキーと手順を選びます。

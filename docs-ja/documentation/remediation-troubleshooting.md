@@ -78,6 +78,7 @@ kubectl -n kestrelynx logs deployment/kestrelynx -c kestrelynx > kestrelynx.log 
 | `compose_file_not_found`：「設定したパスに Compose ファイルがない」 | 対応付けの`compose.path`を実際のComposeファイルのパスに直す | [ソースの対応付け](configuration.md#remediation-mappings) |
 | `manifest_file_not_found`：「設定したパスにマニフェストがない」 | 対応付けの`manifest.path`・`kustomize.path`・`helm_values.path`のうち設定したパスを直す | [ソースの対応付け](configuration.md#remediation-mappings) |
 | `dependency_files_not_found`：「依存関係ファイルが見つからない」 | `dependencies.directory`を直すか、詳細に示された足りない依存ファイルを対象ブランチに足す | [ソースの対応付け](configuration.md#remediation-mappings) |
+| Rustバイナリだけのイメージで依存の所見がない | cargo-auditableでビルドしてイメージを配置し直す | [Rustの候補選定](remediation-cargo-logic.md#cargo-package-selection) |
 | `ambiguous_dependency_files`：「依存関係ファイルの候補が複数ある」 | 対象ブランチの`dependencies.directory`で指定したディレクトリから使っていないlockfileを取り除く | [ソースの対応付け](configuration.md#remediation-mappings) |
 | `auth_required`：「レジストリへのログインが必要である」 | 最上位の`registries`の`host`・`username`・`password`・`token_hosts`を取得先に合わせて直す | [イメージレジストリの認証](configuration.md#registries) |
 | Webhookの`reason`が`locally_built`で、イメージの更新候補が出ない（Slackには表示されない） | 対応付けに`dockerfile.path`や`dependencies.directory`を設定する | [ソースの対応付け](configuration.md#remediation-mappings) |

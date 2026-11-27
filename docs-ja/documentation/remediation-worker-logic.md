@@ -4,7 +4,7 @@ title: 作業用コンテナの実行
 
 # 作業用コンテナの実行
 
-KestreLynxは、npm・pnpm・pip・uv・Go・Gradleの更新に作業用コンテナを使い、Kubernetesでは作業用Podとして実行します。
+KestreLynxは、npm・pnpm・pip・uv・Go・Gradle・Rustの更新に作業用コンテナを使い、Kubernetesでは作業用Podとして実行します。
 
 Mavenの更新では作業用コンテナを使いません。
 Mavenの処理は[Mavenの候補選定](remediation-maven-logic.md#maven-package-selection)を参照してください。
@@ -27,8 +27,8 @@ Kubernetes固有の作成前後の確認は[作業用Podの実行](#kubernetes-w
 
 ### 公式イメージの固定 {#worker-images}
 
-作業用コンテナには、公式Node.js・Python・Go（`golang`）・Gradle（`gradle`）イメージを使います。
-実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradleの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
+作業用コンテナには、公式Node.js・Python・Go（`golang`）・Gradle（`gradle`）・Rust（`rust`）イメージを使います。
+実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradle・Rustの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
 
 使用する内容は、実行環境の一覧に記載されたdigest（イメージの内容を識別する値）で固定します。
 
@@ -42,6 +42,7 @@ Kubernetes固有の作成前後の確認は[作業用Podの実行](#kubernetes-w
 - 必要なイメージはDocker本体や、Kubernetesノードのcontainerdなどが取得する
 - ミラーを使う場合も、実行環境の一覧と同じdigestの内容を取得する
 - GradleはGradleの版とJDKの組み合わせごとにdigestで固定し、実行するplatformで統合テストを通った組み合わせだけを使う
+- Rustは実行するplatformで統合テストを通った公式`rust`イメージを使う
 
 イメージを取得できない場合は言語パッケージの更新を保留（`deferred`）にし、後のサイクルへ回します。
 取得に失敗しても、KestreLynx自身のコンテナ内で代わりにパッケージマネージャーを実行しません。
@@ -54,7 +55,7 @@ Kubernetes固有の作成前後の確認は[作業用Podの実行](#kubernetes-w
 一覧の取得は既定で有効です。
 
 1. 起動時と各スキャンサイクルの開始時に、`ghcr.io/kitsunetrail/kestrelynx-runtimes`のタグ`1`から一覧を取得する
-2. 大きさと件数の上限、イメージがDocker Hubの公式の`node`・`python`・`golang`・`gradle`であること、digestと版の形、系列と版の整合、更新時刻を検査する
+2. 大きさと件数の上限、イメージがDocker Hubの公式の`node`・`python`・`golang`・`gradle`・`rust`であること、digestと版の形、系列と版の整合、更新時刻を検査する
 3. 今使っている一覧より更新時刻が新しく、検査を通った一覧を、`remediation.storage_dir`の下の`runtimes/table-1.json`に保存する
 4. 保存に成功した一覧で全体を置き換え、同梱の一覧とは混ぜずに使う
 
@@ -91,7 +92,7 @@ Kubernetes固有の作成前後の確認は[作業用Podの実行](#kubernetes-w
 | 既存の系列の実行版と固定先（digest） | はい | いいえ |
 | pipの版 | はい | いいえ |
 | サポート終了日などの日付 | はい | いいえ |
-| 新しいNode.js・Python・Goの系列（使用中のKestreLynxが版の形式を扱えるもの） | はい | いいえ |
+| 新しいNode.js・Python・Go・Rustの系列（使用中のKestreLynxが版の形式を扱えるもの） | はい | いいえ |
 | 新しいGradleの版とJDKの組（使用中のKestreLynxが版の形式を扱えるもの） | はい | いいえ |
 | 行の削除 | はい | いいえ |
 | Gradleのプラグイン（Spring Bootなど）の対応の追加 | いいえ | はい |
@@ -135,6 +136,7 @@ Kubernetesでは削除せず、ノードのコンテナランタイムの管理�
 | uv | `pyproject.toml`・`uv.lock` |
 | Go | `go.mod`・`go.sum` |
 | Gradle | `gradle.lockfile`・`build.gradle`または`build.gradle.kts`・`settings.gradle`または`settings.gradle.kts`・`gradle.properties`など |
+| Rust | `Cargo.lock`・ルートと各メンバーの`Cargo.toml`・ビルド対象のパスに置く空のファイル |
 
 catalogやwrapperの設定を含む入力一覧と条件は[Gradleの依存ファイル](remediation-dependency-formats.md#gradle-inputs)を参照してください。
 
@@ -166,7 +168,8 @@ root filesystem（コンテナのルートファイルシステム）とプロ�
 
 | 制限対象 | Docker | Kubernetes |
 | --- | --- | --- |
-| root filesystem | 設定自体は読み取り専用にせず、所有者・権限と一時領域のマウントで非rootの書き込み先を制限する | 読み取り専用にする |
+| root filesystem（Rust以外） | 設定自体は読み取り専用にせず、所有者・権限と一時領域のマウントで非rootの書き込み先を制限する | 読み取り専用にする |
+| Rustのroot filesystem | 読み取り専用にする | 読み取り専用にする |
 | プロセス数 | コンテナのPID上限で制限する | ノード側のPID上限で制限する |
 
 マネージャーごとに、更新時に実行する内容が異なります。
@@ -176,6 +179,7 @@ root filesystem（コンテナのルートファイルシステム）とプロ�
 | npm・pnpm・pip・uv | パッケージのスクリプトとソースのビルドを無効にして依存を更新する |
 | Go | 公式イメージの`go`コマンドで依存を更新する |
 | Gradle | プロジェクトのビルドスクリプトと許可したプラグインのコードを実行し、`dependencies --update-locks`でlockfileを更新する |
+| Rust | 公式イメージのCargoで対象の依存を順に更新する（[Rustの実行設定](remediation-cargo-logic.md#cargo-worker-settings)） |
 
 実行するビルドスクリプトは、[ビルドスクリプトの書き方](remediation-dependency-formats.md#gradle-build-forms)で示す範囲に限ります。
 
@@ -205,6 +209,7 @@ npm・pnpm・uv・Goでは[コンテナへの入力](#worker-inputs)にある依
 pipでは`requirements.txt`と依存解決のレポートを回収します。
 
 Gradleの回収対象は[Gradleの実行設定](remediation-gradle-logic.md#gradle-worker-settings)を参照してください。
+Rustでは各操作の後と最後にすべての入力ファイルを回収します。
 
 採用判定の前に、次の点を確認します。
 

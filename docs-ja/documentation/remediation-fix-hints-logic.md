@@ -64,6 +64,11 @@ pomはMavenの依存や設定を記述するファイルで、プロジェクト
 `target_not_updated`では古い版を持ち込む依存元が分かれば依存元を示し、Gradleで依存元がなく構成（用途別の依存のまとまり）が直接指定していれば構成名を示します。
 指定元の記録条件は[Mavenの版の出所と書き換え](remediation-maven-logic.md#maven-version-sources)と[Gradleの版の宣言と書き換え](remediation-gradle-logic.md#gradle-version-sources)、更新後の記録条件は[Mavenの更新結果の検査](remediation-maven-logic.md#maven-update-validation)と[Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation)を参照してください。
 
+### Rust
+
+`cargo_fix_in_other_series`では、稼働イメージの勧告が挙げる修正版を比較し、共通の版を案内できるかを計画時に判定します。
+案内のためにcrates.ioの公開版を追加で問い合わせることはありません（[crateの目標版](remediation-cargo-logic.md#cargo-target-versions)）。
+
 ## npm・pnpm・uv・pipで確認する公開版と判定 {#fix-hints-dependent-lookup}
 
 依存元の正式版（ベータ版などのプレリリースでない公開版）のうち、現在使っている依存元の版以上のものを確認します。

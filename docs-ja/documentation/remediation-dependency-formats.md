@@ -20,6 +20,7 @@ title: 依存ファイルと版宣言の対応形式
 | Gradle | `gradle.lockfile`・ビルドスクリプト | [Gradleの依存ファイル](#gradle-inputs) |
 | Gradleのビルド設定 | `build.gradle`・`build.gradle.kts`・settings・catalog | [ビルドスクリプトの書き方](#gradle-build-forms) |
 | Gradleのプラグイン | ビルドスクリプト・settingsのプラグイン宣言 | [プラグインの許可](#gradle-plugins) |
+| Rust | `Cargo.toml`・`Cargo.lock` | [Rustの依存ファイル](#cargo-inputs) |
 | Node.js | `.nvmrc`・`.node-version`・`package.json` | [Node.jsの版宣言](#node-declarations) |
 | Python | `.python-version`・`requires-python` | [Pythonの版宣言](#python-declarations) |
 | パッケージマネージャーの版 | `packageManager`・`tool.uv.required-version` | [ツールの版宣言](#tool-declarations) |
@@ -422,6 +423,34 @@ catalogは`gradle/libs.versions.toml`から読み取ります。
 
 Gradleの更新には作業用コンテナ・Podを使い、ビルドスクリプトと許可したプラグインのコードをその中で実行します。
 候補と編集方法は[Gradleの候補選定](remediation-gradle-logic.md#gradle-package-selection)、採用条件は[Gradleの更新結果の検査](remediation-gradle-logic.md#gradle-update-validation)を参照してください。
+
+## Rustの依存ファイル {#cargo-inputs}
+
+`dependencies.directory`には、単独のパッケージまたはワークスペースのルートを指定します。
+ルートの`Cargo.toml`と`Cargo.lock`、ワークスペースに属する各パッケージ（メンバー）の`Cargo.toml`が必要です。
+
+| 入力 | 対応する書き方 |
+| --- | --- |
+| `Cargo.lock` | 形式3・4で、取得元はcrates.ioまたはワークスペース内のパッケージ |
+| `workspace.members` | ルート配下のパスの直書き、または`crates/*`のように末尾の1要素だけが`*`の指定 |
+| `workspace.exclude`・`workspace.default-members` | 除外するパス、または既定のメンバーのパスの直書き |
+| パス依存 | ワークスペース内で除外されていないパッケージを暗黙のメンバーとして含める |
+| 継承 | メンバーの`workspace = true`による依存宣言と、`[workspace.package]`からの版・`rust-version`の継承 |
+
+次の入力は手動対応になります。
+
+| 条件 | 理由コード |
+| --- | --- |
+| 通常・開発用・ビルド用・ターゲット別・ワークスペースの依存にGitや別レジストリの指定がある | `unsupported_source_settings` |
+| `[patch]`・`[replace]`・`cargo-features`、またはルートとその祖先のいずれかに`.cargo/config.toml`・`.cargo/config`がある | `unsupported_source_settings` |
+| 祖先の`Cargo.toml`に`[workspace]`があるか、`package.workspace`で別のルートを指定する | `workspace_unsupported` |
+| ワークスペース外や除外先へのパス依存、または`[workspace]`のないパッケージのパス依存がある | `workspace_unsupported` |
+| メンバーとcrates.ioのcrateに同じ名前・版がある | `dependency_file_unusable` |
+| `Cargo.lock`に同じ名前・取得元・互換系列の版が複数ある | `unparsable_source` |
+| メンバーの指定に`**`など未対応のパターンがあるか、メンバーが64パッケージを超える | `workspace_unsupported` |
+| `[dev_dependencies]`・`[build_dependencies]`など古い表記や、読み取れない依存宣言がある | `cargo_manifest_unsupported` |
+
+更新するのは`Cargo.lock`だけです。選定と検査は[Rustの更新](remediation-cargo-logic.md)を参照してください。
 
 ## Node.jsの版宣言 {#node-declarations}
 

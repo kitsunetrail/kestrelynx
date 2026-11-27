@@ -351,7 +351,7 @@ For images with a dependency-file mapping, the following lines describe language
 | `Action: updating pnpm-lock.yaml cannot fix it (the dependency files do not list the package at the running version)` | Updating the dependency files does not reach this package | Review the reason in parentheses |
 
 - When PR creation is disabled, the parenthetical text is omitted from candidate lines
-- The filename in the line is `package-lock.json`, `pnpm-lock.yaml`, `uv.lock`, `requirements.txt`, `go.mod`, `pom.xml`, or `gradle.lockfile`, depending on the mapped package manager
+- The filename in the line is `package-lock.json`, `pnpm-lock.yaml`, `uv.lock`, `requirements.txt`, `go.mod`, `pom.xml`, `gradle.lockfile`, or `Cargo.lock`, depending on the mapped package manager
 - See [Update and PR processing reason codes](remediation-update-reason-codes.md) for the list of reasons shown in parentheses
 
 #### Global node_modules {#action-global-node-modules}
@@ -422,6 +422,8 @@ The following table lists the bracketed labels and what they identify.
 | `[node-pkg]` | Node.js package |
 | `[gobinary]` | Package included in a Go binary |
 | `[jar]` | Package included in a Java JAR file |
+| `[rustbinary]` | Package in a Rust binary built with cargo-auditable |
+| `[cargo]` | Rust package detected in a Cargo dependency file or similar input |
 | `[node-runtime]` | Findings for the Node.js runtime itself |
 | `[python-runtime]` | Findings for the Python runtime itself |
 | `[java-runtime]` | Findings for the Java runtime itself |

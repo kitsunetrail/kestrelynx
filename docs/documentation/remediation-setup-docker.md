@@ -170,7 +170,7 @@ After [verifying plans](#verify-fix-plans) and reviewing the shared [PR creation
 
 4. In the next cycle’s notification, check the “Pull request” and “Update” lines against [Displayed fields](remediation-results.md#slack-fields) to verify the PR status and update contents
 
-For npm, pnpm, pip, uv, Go, and Gradle updates, KestreLynx uses the Docker API to create, start, and remove work containers.
+For npm, pnpm, pip, uv, Go, Gradle, and Rust updates, KestreLynx uses the Docker API to create, start, and remove work containers.
 Maven updates do not use work containers.
 
 The Docker socket's `:ro` mount does not restrict API operations, so the supplied Compose configuration does not need to change to `:rw`.

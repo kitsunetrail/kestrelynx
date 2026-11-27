@@ -64,6 +64,11 @@ The following conditions and reason codes determine which hint is eligible.
 For `target_not_updated`, the hint names an identified dependent that brings in the older version. If a Gradle configuration (a group of dependencies for a particular use) declares it directly and no dependent is found, the hint names the configuration.
 For recording version sources, see [Maven version sources and edits](remediation-maven-logic.md#maven-version-sources) and [Gradle version declarations and edits](remediation-gradle-logic.md#gradle-version-sources). For recording the result after an update, see [Maven update validation](remediation-maven-logic.md#maven-update-validation) and [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation).
 
+### Rust
+
+For `cargo_fix_in_other_series`, KestreLynx compares the fixed versions listed by the advisories for the running image during planning to determine whether one version fixes them all.
+It makes no additional queries to crates.io for the hint. See [Target crate versions](remediation-cargo-logic.md#cargo-target-versions).
+
 ## Releases and requirements checked for npm, pnpm, uv, and pip {#fix-hints-dependent-lookup}
 
 KestreLynx checks stable releases of the dependent at or above its current version. A stable release is a published version other than a prerelease such as a beta.

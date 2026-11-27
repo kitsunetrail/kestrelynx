@@ -30,6 +30,7 @@ The fields in `language_items[].update` are listed below.
 | `go` | object | [Go update records](#language-go-update). | omitted |
 | `maven` | object | [Maven update records](#language-maven-update). | omitted |
 | `gradle` | object | [Gradle update records](#language-gradle-update). | omitted |
+| `cargo` | object | [Rust update records](#language-cargo-update). | omitted |
 
 The following fields have additional notes.
 
@@ -87,6 +88,7 @@ The values of `id` are listed below.
 | --- | --- |
 | `baseline` | Check of the dependency files before the update. |
 | `update` | Update of the dependency files. |
+| `update-<number>` | Rust operation for the second and subsequent crates, numbered from `update-2`. |
 | `check` | Recheck of the dependency files after the update. |
 
 The values of `op` are listed below.
@@ -102,6 +104,7 @@ The values of `op` are listed below.
 | `pip.dry_run` | Dependency resolution check by pip without installation. |
 | `go.get` | Update of target modules by Go. |
 | `gradle.update_locks` | Lockfile update for target packages by Gradle. |
+| `cargo.update` | Update of one crate to its target version with Cargo. |
 
 Do not treat `id` as a unique key within the array, because a stage may run again.
 See [Update methods by package manager](remediation-package-logic.md#manager-update-methods) for the scope of each operation.
@@ -171,7 +174,7 @@ The following fields have additional notes.
     - If an update is rejected during diff validation, lists may be recorded before truncation, so receivers must not assume a fixed maximum length of 100
 
 This diff compares lockfiles before and after the update for npm, pnpm, and uv, and installation reports before and after the update for pip.
-See the respective update records for Go, Maven, and Gradle changes.
+See the respective update records for Go, Maven, Gradle, and Rust changes.
 
 ### Entries with changes only to dependency versions {#language-update-followed}
 
@@ -238,7 +241,7 @@ The fields in `language_items[].update.runtime` are listed below.
 | Field | Type | Meaning | When there is no value |
 | --- | --- | --- | --- |
 | `id` | string | Identifier of the selected runtime. | — |
-| `version` | string | Node.js, Python, Go, or Gradle version included in the runtime. | — |
+| `version` | string | Node.js, Python, Go, Gradle, or Rust version included in the runtime. | — |
 | `pip` | string | pip version included in the Python image. | omitted |
 | `image` | string | Work image reference pinned by repository name and image index digest. | omitted |
 | `platform` | string | Execution platform of the work image. | omitted |
@@ -258,6 +261,7 @@ The formats of `id` values are listed below.
 | `python<major>.<minor>` | Python series, such as `python3.13`. |
 | `golang<major>.<minor>` | Go series, such as `golang1.26`. |
 | `gradle<version>-jdk<JDK-major>` | Gradle and JDK combination, such as `gradle9.8.2-jdk17`. |
+| `rust<major>.<minor>` | Rust series, such as `rust1.100`. |
 
 See [Supported runtimes](remediation-reference.md#supported-runtimes) for available series and Gradle/JDK combinations.
 
@@ -276,7 +280,7 @@ The values of `support` are listed below.
 | `maintenance` | Node.js maintenance period. |
 | `security` | Python security-fix period. |
 | `bugfix` | Python bug-fix period. |
-| `supported` | Go support period. |
+| `supported` | Go and Rust support period. |
 
 The values of `basis` are listed below.
 
@@ -396,7 +400,7 @@ The following fields have additional notes.
 - `spec_hash`
     - Uses the algorithm name and hash value joined by `.`, such as `sha512.<hexadecimal>`
 
-pip, Go, and Gradle use tools included in the work image, so they do not emit this object.
+pip, Go, Gradle, and Rust use tools included in the work image, so they do not emit this object.
 Maven updates do not emit this object either.
 
 See [Tool version selection](remediation-node-python-logic.md#tool-version-selection) for the selection method and [Tool retrieval and verification](remediation-node-python-logic.md#tool-verification) for verification.
@@ -666,3 +670,19 @@ The following fields have additional notes.
 
 `companions` records packages confirmed to exist on Maven Central at the shared version after the change.
 See [Version declarations and edits](remediation-gradle-logic.md#gradle-version-sources) for the change methods and [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) for adoption conditions.
+
+## Rust update records {#language-cargo-update}
+
+`language_items[].update.cargo` records the differences between the original and updated `Cargo.lock`.
+
+| Field | Type | Meaning | When there is no value |
+| --- | --- | --- | --- |
+| `targets` | array of objects | Name (`name`), old version (`from`), and new version (`to`) of each target crate. | — |
+| `others` | array of objects | `name`, `from`, and `to` for collateral crate changes, omitting `from` for additions and `to` for removals. | omitted |
+| `lock_version_from` | integer | Format number of `Cargo.lock` before the update. | — |
+| `lock_version_to` | integer | Format number of `Cargo.lock` after the update. | — |
+| `moved` | array of objects | Name (`name`) and version (`version`) of each crates.io crate at a version absent before the update. | — |
+| `max_rust_version` | string | Highest Rust version requirement readable from the index for the versions in `moved`. | omitted |
+| `no_rust_version` | integer | Number of entries in `moved` without a readable Rust version requirement. | omitted when zero |
+
+For acceptance conditions, see [Rust update validation](remediation-cargo-logic.md#cargo-update-validation).

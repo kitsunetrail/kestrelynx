@@ -170,7 +170,7 @@ KestreLynxは指定したリポジトリからコンテナが作られたこと�
 
 4. 次のサイクルの通知で、「Pull Request」と「更新」の行を[表示項目](remediation-results.md#slack-fields)と照らし合わせ、PRの状態と更新内容を確認する
 
-npm・pnpm・pip・uv・Go・Gradleの更新では、KestreLynxがDocker APIで作業用コンテナを作成・起動・削除します。
+npm・pnpm・pip・uv・Go・Gradle・Rustの更新では、KestreLynxがDocker APIで作業用コンテナを作成・起動・削除します。
 Mavenの更新では作業用コンテナを使いません。
 
 Docker socketの`:ro`はAPI操作を制限しないため、配布のCompose構成を`:rw`へ変更する必要はありません。

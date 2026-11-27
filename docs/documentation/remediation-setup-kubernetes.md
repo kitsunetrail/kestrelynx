@@ -88,7 +88,7 @@ Specify the files that remediation pull requests will update.
 Complete [remediation plan startup verification](#kubernetes-verify-plans), then follow these steps.
 
 1. Configure mappings for what you want to update using the sections on this page
-2. For npm, pnpm, pip, uv, Go, or Gradle package updates, follow [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) through configuring the work namespace and mappings, then return to this page (not needed for Maven alone)
+2. For npm, pnpm, pip, uv, Go, Gradle, or Rust package updates, follow [Preparing work Pods](remediation-setup-work-pods.md#kubernetes-language-updates) through configuring the work namespace and mappings, then return to this page (not needed for Maven alone)
 3. [Enable and apply PR creation](#kubernetes-enable-pr-creation), then verify startup and processing results
 
 Use the update target to choose the configuration key and procedure.

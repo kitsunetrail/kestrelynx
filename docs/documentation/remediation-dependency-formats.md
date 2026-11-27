@@ -20,6 +20,7 @@ Find the section for the files your project uses.
 | Gradle | `gradle.lockfile` and build scripts | [Gradle dependency files](#gradle-inputs) |
 | Gradle build settings | `build.gradle`, `build.gradle.kts`, settings, and catalogs | [Build script syntax](#gradle-build-forms) |
 | Gradle plugins | Plugin declarations in build and settings scripts | [Plugin allowlist](#gradle-plugins) |
+| Rust | `Cargo.toml` and `Cargo.lock` | [Rust dependency files](#cargo-inputs) |
 | Node.js | `.nvmrc`, `.node-version`, and `package.json` | [Node.js version declarations](#node-declarations) |
 | Python | `.python-version` and `requires-python` | [Python version declarations](#python-declarations) |
 | Package manager versions | `packageManager` and `tool.uv.required-version` | [Tool version declarations](#tool-declarations) |
@@ -422,6 +423,34 @@ A version string that does not match exactly, or a combination outside the table
 
 Gradle updates use work containers or Pods, where the build script and allowed plugin code execute.
 See [Gradle package selection](remediation-gradle-logic.md#gradle-package-selection) for candidates and editing methods, and [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation) for acceptance conditions.
+
+## Rust dependency files {#cargo-inputs}
+
+Set `dependencies.directory` to the root of a standalone package or workspace.
+The root must contain `Cargo.toml` and `Cargo.lock`, and each package in the workspace (member) must have a `Cargo.toml`.
+
+| Input | Supported form |
+| --- | --- |
+| `Cargo.lock` | Format 3 or 4, with packages from crates.io or the workspace |
+| `workspace.members` | Literal paths below the root or paths with only the last component set to `*`, such as `crates/*` |
+| `workspace.exclude` and `workspace.default-members` | Literal paths to exclude or use as default members |
+| Path dependencies | Packages within the workspace that are not excluded become implicit members |
+| Inheritance | Members can inherit dependency declarations with `workspace = true` and the version and `rust-version` from `[workspace.package]` |
+
+The following inputs require manual handling.
+
+| Condition | Reason code |
+| --- | --- |
+| A normal, development, build, target-specific, or workspace dependency specifies Git or an alternative registry | `unsupported_source_settings` |
+| A manifest uses `[patch]`, `[replace]`, or `cargo-features`, or the root or any ancestor contains `.cargo/config.toml` or `.cargo/config` | `unsupported_source_settings` |
+| An ancestor’s `Cargo.toml` contains `[workspace]`, or `package.workspace` specifies a different root | `workspace_unsupported` |
+| A path dependency points outside the workspace or to an excluded path, or a package without a workspace has a path dependency | `workspace_unsupported` |
+| A member and a crates.io crate have the same name and version | `dependency_file_unusable` |
+| `Cargo.lock` contains multiple versions with the same name, source, and compatible series | `unparsable_source` |
+| A member pattern is unsupported, such as `**`, or there are more than 64 member packages | `workspace_unsupported` |
+| A manifest uses legacy syntax such as `[dev_dependencies]` or `[build_dependencies]`, or a dependency declaration cannot be read | `cargo_manifest_unsupported` |
+
+Only `Cargo.lock` is updated. For selection and validation, see [Rust updates](remediation-cargo-logic.md).
 
 ## Node.js version declarations {#node-declarations}
 

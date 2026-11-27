@@ -351,7 +351,7 @@ Dockerfileの対応付けがあるイメージで、元イメージに`node:24-a
 | `対応: pnpm-lock.yaml の更新では直せない（依存関係ファイルに稼働中の版のパッケージが載っていない）` | 依存ファイルを更新しても、このパッケージには届かない | かっこ内の理由を確認する |
 
 - PR作成が無効な場合は、候補の行にかっこ内が付かない
-- 行に出るファイル名は、対応付けたパッケージマネージャーに応じて`package-lock.json`・`pnpm-lock.yaml`・`uv.lock`・`requirements.txt`・`go.mod`・`pom.xml`・`gradle.lockfile`になる
+- 行に出るファイル名は、対応付けたパッケージマネージャーに応じて`package-lock.json`・`pnpm-lock.yaml`・`uv.lock`・`requirements.txt`・`go.mod`・`pom.xml`・`gradle.lockfile`・`Cargo.lock`になる
 - かっこ内の理由の一覧は[更新とPR処理の理由コード](remediation-update-reason-codes.md)を参照する
 
 #### グローバルな node_modules {#action-global-node-modules}
@@ -422,6 +422,8 @@ npmの場合は、ファイル名が`package-lock.json`になります。
 | `[node-pkg]` | Node.jsのパッケージ |
 | `[gobinary]` | Goバイナリに含まれるパッケージ |
 | `[jar]` | JavaのJARファイルに含まれるパッケージ |
+| `[rustbinary]` | cargo-auditableでビルドしたRustバイナリのパッケージ |
+| `[cargo]` | Cargoの依存ファイルなどで検出したRustのパッケージ |
 | `[node-runtime]` | Node.js本体の所見 |
 | `[python-runtime]` | Python本体の所見 |
 | `[java-runtime]` | Java本体の所見 |

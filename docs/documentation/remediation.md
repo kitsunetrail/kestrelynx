@@ -22,7 +22,9 @@ The table shows what each plan proposes and which files a fix PR can change when
 | Published image with a pinned tag | `nginx:1.27.0` | Candidate tags and scan comparisons | Tag changes in Compose files, Kubernetes manifests, Kustomize files, or Helm values |
 | Published image with a floating tag | `latest` | Guidance on pulling new content for the same tag | No PR |
 | Dockerfile base image | `FROM python:3.12.3-slim` | Base image candidates and scan comparisons | Pinned tag changes in the Dockerfile’s `FROM` |
-| Language packages (npm, pnpm, pip, uv, Go, Maven, Gradle) | `pnpm-lock.yaml`, `pom.xml` | Package update candidates | Dependency file changes |
+| Language packages (npm, pnpm, pip, uv, Go, Maven, Gradle, Rust) | `pnpm-lock.yaml`, `pom.xml`, `Cargo.lock` | Package update candidates | Dependency file changes |
+
+If an image contains only a binary built with ordinary `cargo build`, Trivy cannot detect its dependencies. Build it with `cargo auditable build` from cargo-auditable.
 
 For containers started with `docker run`, fix PRs can update Dockerfiles and dependencies.
 They do not change the image tag used to start the container.
@@ -96,6 +98,7 @@ Use the following pages when you need details of candidate selection and PR proc
 | Go module update candidates and checks | [Go](remediation-go-logic.md) |
 | Maven update candidates and checks | [Maven](remediation-maven-logic.md) |
 | Gradle update candidates and checks | [Gradle](remediation-gradle-logic.md) |
+| Rust update candidates and checks | [Rust](remediation-cargo-logic.md) |
 | Conditions for showing hints and checks on published releases | [How hints work when a package cannot reach its fix](remediation-fix-hints-logic.md) |
 | How disposable containers run package managers | [Work containers](remediation-worker-logic.md) |
 | Handling existing PRs and recording PR processing | [PR management and records](remediation-pr-logic.md) |

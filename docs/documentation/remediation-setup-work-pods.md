@@ -6,7 +6,7 @@ title: Preparing Kubernetes language-package updates
 
 ## Preparing work Pods {#kubernetes-language-updates}
 
-KestreLynx runs npm, pnpm, pip, uv, Go, and Gradle updates in disposable work Pods that it creates in a namespace you prepare.
+KestreLynx runs npm, pnpm, pip, uv, Go, Gradle, and Rust updates in disposable work Pods that it creates in a namespace you prepare.
 
 Maven updates use KestreLynx to edit `pom.xml` and Trivy to scan it, so they do not require work Pod setup.
 
@@ -105,7 +105,7 @@ In `52-policy-params.yaml`, align the image repositories and architecture with y
 | Value to align | Keys | Value in supplied manifests |
 | --- | --- | --- |
 | KestreLynx image repository for receiving input files | `data.receiverRepository` | `ghcr.io/kitsunetrail/kestrelynx` |
-| Work image repositories | `data.workRepositories` | `node`, `python`, `golang`, and `gradle` under `docker.io/library/` |
+| Work image repositories | `data.workRepositories` | `node`, `python`, `golang`, `gradle`, and `rust` under `docker.io/library/` |
 | Architecture of the KestreLynx Pod and execution nodes | `data.arch` | `amd64` |
 
 Set `workRepositories` to a list of image repository names allowed for work Pods, specified as a single string separated by commas without spaces.
@@ -120,6 +120,7 @@ The following table lists the language packages to update and the required repos
 | pip and uv | `docker.io/library/python` |
 | Go | `docker.io/library/golang` |
 | Gradle | `docker.io/library/gradle` |
+| Rust | `docker.io/library/rust` |
 
 If you configure a mirror with `remediation.worker.registry`, align all repositories listed in `workRepositories` with their download locations in the mirror.
 

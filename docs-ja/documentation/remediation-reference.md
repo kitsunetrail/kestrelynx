@@ -29,7 +29,7 @@ title: 修正計画と修正PRの対応範囲
 | --- | --- |
 | コンテナ環境 | Docker・Kubernetesモードで計画とPR作成をサポート |
 | ソースホスト | GitHub |
-| 作業用コンテナのアーキテクチャ | Linuxの`amd64`・`arm64`（Gradleの制限は[対応する実行環境](#supported-runtimes)を参照） |
+| 作業用コンテナのアーキテクチャ | Linuxの`amd64`・`arm64`（Gradle・Rustの制限は[対応する実行環境](#supported-runtimes)を参照） |
 | 言語更新の実行環境 | [対応する実行環境](#supported-runtimes)に記載した版 |
 | Sensor | 不要 |
 
@@ -57,7 +57,7 @@ Kubernetesで計画に出る内容、PRで更新できるファイル、作業�
 | Dockerfileのベースイメージ | 更新候補 | Dockerfileの`FROM` | 不要 |
 | 浮動タグの再取得 | 再取得の案内 | 作成なし | 不要 |
 | Mavenの依存パッケージ | 更新候補 | `pom.xml` | 不要 |
-| npm・pnpm・pip・uv・Go・Gradleの依存パッケージ | 更新候補 | 各ツールの依存ファイル | 必要 |
+| npm・pnpm・pip・uv・Go・Gradle・Rustの依存パッケージ | 更新候補 | 各ツールの依存ファイル | 必要 |
 
 作業用Podが必要な更新は、[作業用Podの準備](remediation-setup-work-pods.md#kubernetes-language-updates)を参照してください。
 
@@ -97,6 +97,7 @@ containerdのイメージストアで古いイメージが消えた場合は、�
 | Goの依存モジュール | 依存ディレクトリ | 公開のGo module proxy（`proxy.golang.org`）・`sum.golang.org` | 計画に必要 |
 | Mavenの依存パッケージ | `pom.xml` | Maven Central | 計画に必要 |
 | Gradleの依存パッケージ | `gradle.lockfile` | Maven Central | 計画に必要 |
+| Rustの依存パッケージ | `Cargo.lock` | crates.io | 計画に必要 |
 
 配布イメージの比較結果は対応付けなしで表示でき、PRにはCompose・Kubernetesマニフェスト・Kustomize・Helmのvaluesの対応付けが必要です。
 ベースイメージの計画にはDockerfileまたはCompose、依存パッケージの計画には依存ディレクトリを対応付けます。
@@ -122,13 +123,14 @@ containerdのイメージストアで古いイメージが消えた場合は、�
 | `go.mod`・`go.sum` | [Goの依存ファイル](remediation-dependency-formats.md#go-inputs) |
 | `pom.xml` | [Mavenの依存ファイル](remediation-dependency-formats.md#maven-inputs) |
 | `gradle.lockfile`・ビルドスクリプトなど | [Gradleの依存ファイル](remediation-dependency-formats.md#gradle-inputs) |
+| `Cargo.toml`・`Cargo.lock` | [Rustの依存ファイル](remediation-dependency-formats.md#cargo-inputs) |
 | `.nvmrc`・`.node-version`・`package.json` | [Node.jsの版宣言](remediation-dependency-formats.md#node-declarations) |
 | `.python-version`・`pyproject.toml` | [Pythonの版宣言](remediation-dependency-formats.md#python-declarations) |
 | `package.json`・`pyproject.toml` | [ツールの版宣言](remediation-dependency-formats.md#tool-declarations) |
 
 ## 対応する実行環境 {#supported-runtimes}
 
-実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradleの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
+実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradle・Rustの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
 この表は、ページを更新した時点の一覧にある、サポート中の系列と実行版、サポート終了日を示します。
 
 実行環境の一覧はKestreLynxに同梱され、[公開された新しい一覧で置き換わります](remediation-worker-logic.md#runtime-table-updates)。
@@ -148,6 +150,7 @@ containerdのイメージストアで古いイメージが消えた場合は、�
 | Go 1.27 | `1.27.4` | 2027-08-19 | `linux/amd64`・`linux/arm64` |
 | Gradle 8 / JDK 21 | `8.14.6` | 終了日の設定なし | `linux/amd64` |
 | Gradle 9 / JDK 17・21 | `9.8.2` | 終了日の設定なし | `linux/amd64` |
+| Rust 1.100 | `1.100.0` | 2026-12-24 | `linux/amd64` |
 
 現在の一覧の値は、KestreLynxのリポジトリの[`internal/worker/runtimes.json`](https://github.com/kitsunetrail/kestrelynx/blob/main/internal/worker/runtimes.json)で確認できます。
 Gradleは、使用する一覧で実行するplatformの統合テストを通った実行版とJDKの組み合わせだけを使います。
@@ -164,6 +167,7 @@ Gradleは、使用する一覧で実行するplatformの統合テストを通っ
 | uv更新 | Pythonの宣言に従って選定 |
 | Go更新 | [Goの選定](remediation-go-logic.md#go-runtime-selection)を参照 |
 | Gradle更新 | wrapperと同じGradleの版と、toolchainで指定したJDK（宣言がなければ21） |
+| Rust更新 | [作業用のRust](remediation-cargo-logic.md#cargo-runtime-selection)を参照 |
 
 Node.jsの宣言がない場合、2026-10-28にLTSに入ったNode.js 26が現在の最初の候補です。
 パッケージマネージャーとの互換条件を満たさない場合は、ほかのサポート中の系列を新しい順に調べます。

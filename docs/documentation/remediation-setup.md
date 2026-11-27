@@ -121,12 +121,13 @@ To prepare for writing `remediation.mappings` on the environment-specific pages,
 Both `path` and `directory` are relative to the GitHub repository root.
 For example, `path: compose.yml` refers to `compose.yml` at the repository root.
 
-For Maven or Gradle, set `dependencies.directory` to the following directory.
+For Maven, Gradle, or Rust, set `dependencies.directory` to the following directory.
 
 | Package manager | Directory to specify in `dependencies.directory` |
 | --- | --- |
 | Maven | The directory containing `pom.xml` |
 | Gradle | The directory containing `gradle.lockfile`, the build script, and settings |
+| Rust | [The directory containing the root `Cargo.toml` and `Cargo.lock`](remediation-dependency-formats.md#cargo-inputs) |
 
 For a Maven multi-module project, specify the directory of the root `pom.xml` whose `modules` entries lead to each module.
 If `pom.xml` is at the repository root, specify `.`.

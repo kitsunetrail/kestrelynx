@@ -9,7 +9,7 @@ title: Re-resolution through dependent packages
 Re-resolution through dependent packages fixes vulnerabilities blocked by a dependent package's requirement for an older version by updating that dependent package.
 
 Dependent packages move to newer versions within the ranges declared by the project.
-This mechanism applies to npm, pnpm, and uv; it is not used for pip, Go, Maven, or Gradle.
+This mechanism applies to npm, pnpm, and uv; it is not used for pip, Go, Maven, Gradle, or Rust.
 
 For terminology used on this page, see [Terms](index.md#terms).
 

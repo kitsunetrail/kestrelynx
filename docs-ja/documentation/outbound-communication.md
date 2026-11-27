@@ -203,7 +203,7 @@ Docker Hubの場合は`registry-1.docker.io`へ接続します。
 
 ### 実行環境の一覧の取得 {#runtime-table-download}
 
-実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradleの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
+実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradle・Rustの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
 修正計画と実行環境の一覧の取得が有効な場合、KestreLynxが起動時と各スキャンサイクルの開始時に一覧を取得します。
 
 | 通信するプログラム | 通信先 | 取得する情報 |
@@ -230,7 +230,7 @@ Docker Hubの場合は`registry-1.docker.io`へ接続します。
 
 | 通信するプログラム | 通信先 | 取得するイメージ |
 | --- | --- | --- |
-| DockerまたはKubernetesノードのコンテナランタイム | Docker Hubまたは設定したミラー | 公式Node.js・Python・Go（`golang`）・Gradle（`gradle`）イメージ |
+| DockerまたはKubernetesノードのコンテナランタイム | Docker Hubまたは設定したミラー | 公式Node.js・Python・Go（`golang`）・Gradle（`gradle`）・Rust（`rust`）イメージ |
 | Kubernetesノードのコンテナランタイム | KestreLynxイメージ名のレジストリ | 作業用Podで入力ファイルを受け取るコンテナのイメージ |
 
 イメージの固定と取得不能時の扱いは[公式イメージの固定](remediation-worker-logic.md#worker-images)を参照してください。
@@ -269,6 +269,7 @@ KestreLynxは、更新に必要な版や依存関係、更新結果を確認す�
 | Go | `sum.golang.org` | モジュールのzipと`go.mod`のハッシュ | 更新結果を照合し、`go.sum`を補完 |
 | Maven | `repo.maven.apache.org` | 公開版一覧、親・BOM・依存のPOM | 版の出所、依存の要求、更新前後の解決結果を確認 |
 | Gradle | `repo.maven.apache.org` | 公開版一覧とPOM | 公開版、BOMのプロパティ、追加・変更したパッケージの識別情報を確認 |
+| Rust | `index.crates.io` | 公開版、取り下げの有無、チェックサム、依存の要求、必要なRustの版 | 目標版の選定と更新結果の照合 |
 
 取得条件と、取得した情報の用途には次の補足があります。
 
@@ -300,6 +301,7 @@ Mavenの親・BOMやSpring BootのBOMについて、公開版が指定する対�
 | Go | `storage.googleapis.com` | モジュールのzip | Goのproxyが配布物の取得先を転送する場合 |
 | Gradle | Maven Central（`repo.maven.apache.org`） | 依存解決とlockfile更新に必要なメタデータ・配布物 | Gradleの依存更新を実行する場合 |
 | Gradleのプラグイン | `plugins.gradle.org`・`plugins-artifacts.gradle.org`・`repo.maven.apache.org` | 許可されたプラグインと、その依存のメタデータ・配布物 | ビルドスクリプトでプラグインを適用する場合 |
+| Rust | `index.crates.io` | 依存の版を決めるためのcrates.ioの索引 | `cargo update`で`Cargo.lock`を更新する場合 |
 
 Gradleは[`mavenCentral()`の取得先](https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.dsl.RepositoryHandler.html)へ接続します。
 Gradle Plugin Portalの配布物は[`plugins-artifacts.gradle.org`へのリダイレクト](https://plugins.gradle.org/docs/mirroring)で取得します。

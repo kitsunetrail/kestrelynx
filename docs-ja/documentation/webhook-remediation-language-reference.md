@@ -106,6 +106,7 @@ title: Webhookの修正計画の言語パッケージのフィールド
 | `go` | Go modules |
 | `maven` | Maven |
 | `gradle` | Gradle |
+| `cargo` | RustのCargo |
 
 次のフィールドには補足があります。
 
@@ -138,6 +139,7 @@ title: Webhookの修正計画の言語パッケージのフィールド
 | `#uv`・`#pip` | Pythonのパッケージの所見 |
 | `#go` | Goバイナリに含まれるモジュールや標準ライブラリの所見 |
 | `#maven`・`#gradle` | Javaアーカイブに含まれるパッケージの所見 |
+| `#cargo` | Rustバイナリやイメージ内の`Cargo.lock`に含まれるパッケージの所見 |
 | `#node-pkg` | パッケージマネージャーを特定できなかったNode.jsのパッケージの所見 |
 | `#python-pkg` | パッケージマネージャーを特定できなかったPythonのパッケージの所見 |
 | `#go-stdlib` | Goの標準ライブラリの所見 |
@@ -145,7 +147,7 @@ title: Webhookの修正計画の言語パッケージのフィールド
 
 次の末尾には補足があります。
 
-- `#npm`・`#pnpm`・`#uv`・`#pip`・`#go`・`#maven`・`#gradle`
+- `#npm`・`#pnpm`・`#uv`・`#pip`・`#go`・`#maven`・`#gradle`・`#cargo`
     - 末尾は`manager`と同じ値になる
 - `#node-pkg`・`#python-pkg`
     - マネージャーを特定する前に処理が止まった場合、または依存ファイルの組を特定できなかった場合に出力する
@@ -173,6 +175,7 @@ title: Webhookの修正計画の言語パッケージのフィールド
 | `commit_sha` | string | 取得元として記録したコミットのSHA | 省略 |
 | `files` | objectの配列 | [取得したファイル](#language-source-file-fields)の一覧 | 省略 |
 | `absent` | stringの配列 | 入力の確認時に探したものの、存在しなかったファイルのリポジトリ内パス | 省略 |
+| `trees` | objectの配列 | Rustのメンバーを`*`で集めたディレクトリのパス（`path`）と計画時のGitツリーのSHA（`sha`） | 省略 |
 | `origin` | string | 取得元の設定の由来 | `""` |
 | `confidence` | string | 稼働イメージと取得元の対応付けの根拠 | `""` |
 
@@ -330,6 +333,7 @@ Webhookを受け取るプログラムでは、種類・名前・版が同じ要�
 | `python-pkg` | Pythonのパッケージ |
 | `gobinary` | Goバイナリに含まれるモジュールや標準ライブラリ |
 | `jar` | Javaアーカイブに含まれるパッケージ |
+| `cargo` | crates.ioのcrateなど、Rustの所見を名前と版でまとめたパッケージ |
 
 `relation`の値は次のとおりです。
 
@@ -408,6 +412,7 @@ PRがある場合の「更新」は、PRに記録された採用版を表示し�
     - uvではパッケージ名と版を`名前==版`で表す
     - pipとGoでは、`source.directory`を基準とする`requirements.txt:3`や`go.mod:5`のようなファイル名と行番号を表す
     - Mavenでは`pom.xml`のパス、Gradleでは`gradle.lockfile`のパスを、リポジトリのルートを基準に表す
+    - Rustではリポジトリのルートを基準とする`Cargo.lock`のパスを表す
 - `version`
     - 更新前の依存ファイルの版を保持し、稼働イメージの版は`installed`、更新後に採用した版は`adopted_version`で確認する
     - 版を固定していない要求や、依存ファイルだけでは版を読み取れない記述では省略する
@@ -455,8 +460,10 @@ PRがある場合の「更新」は、PRに記録された採用版を表示し�
 `entity`は、`config:sha256:…`のようなdigestの種類と値に、判明している場合は`@linux/amd64`のようなプラットフォームを付けた文字列です。
 有効なdigestを取得できない場合は`unconfirmed`になります。
 
-`ecosystem`の値は[パッケージの結果](#language-package-fields)と同じです。
+Rust以外の`ecosystem`の値は[パッケージの結果](#language-package-fields)と同じです。
 Pythonでは、`name`に正規化前の表記を保持するため、同じパッケージの検出元に異なる表記が入る場合があります。
+
+Rustの検出元にはTrivyの`rustbinary`または`cargo`が入り、パッケージの結果では`cargo`にまとめます。
 
 `class`の値は次のとおりです。
 
@@ -540,7 +547,8 @@ Pythonでは、`name`に正規化前の表記を保持するため、同じパ�
 | `held_by` | objectの配列 | 対象の更新を妨げる、または対象を要求する[依存元](#language-fix-holder-fields)の一覧 | 省略 |
 | `releases` | objectの配列 | 依存元や版を決めるPOMの[公開版の情報](#language-fix-hint-releases) | 省略 |
 | `go_line` | object | 更新に必要な[Goの版と、その版を要求するモジュール](#language-go-line-fields) | 省略 |
-| `fix` | object | [別のメジャー版の修正版](#language-fix-release-fields)の情報 | 省略 |
+| `fix` | object | [別のメジャー版や互換でない系列の修正版](#language-fix-release-fields)の情報 | 省略 |
+| `advisories` | objectの配列 | Rustで共通の修正版を選べない場合の勧告ごとの識別子（`vuln_id`）と修正版（`version`） | 省略 |
 | `direct` | boolean | プロジェクト自身による対象パッケージの直接の要求を確認した場合に`true`になる | 省略 |
 | `decided_by` | object | 対象の版を決める[プロジェクト外のPOM](#language-fix-decider-fields) | 省略 |
 | `configuration` | string | Gradleで対象が目標版より低い版に残った構成名 | 省略 |
@@ -557,6 +565,7 @@ Pythonでは、`name`に正規化前の表記を保持するため、同じパ�
 | `gradle_version_source_unsupported` | プロジェクトのファイルで版を決めている箇所を、自動では書き換えられない |
 | `maven_release_not_found` | 更新に使える版がMaven Centralにない |
 | `maven_fix_in_other_major` | 修正版が別のメジャー版にしかない |
+| `cargo_fix_in_other_series` | 稼働版と互換でない系列にしか修正版がない |
 | `target_not_updated` | 更新しても目標の版に上がらなかった |
 
 `target_not_updated`に`fix_hint`を付けるのは、MavenとGradleの場合だけです。
@@ -615,7 +624,7 @@ Maven・Gradleの`held_by`は最大5件で、pip・Goにはこの5件の制限�
 - `to`
     - 更新対象の版であり、必要なGoの版を宣言したモジュールの`version`とは異なる場合がある
 
-#### 別のメジャー版の修正版 {#language-fix-release-fields}
+#### 別のメジャー版や互換でない系列の修正版 {#language-fix-release-fields}
 
 `language_items[].packages[].fix_hint.fix`のフィールドは次のとおりです。
 
@@ -630,6 +639,7 @@ Maven・Gradleの`held_by`は最大5件で、pip・Goにはこの5件の制限�
 | Goの`fix_in_other_major_version` | 脆弱性情報が示す、別のメジャー版の修正版 |
 | Maven・Gradleの`maven_fix_in_other_major` | 脆弱性情報が示す、稼働版と異なるメジャー版の正式な修正版 |
 | Maven・Gradleの`maven_release_not_found` | Maven Centralの公開版のうち、目標版以上で、稼働版と異なるメジャー版の正式な修正版 |
+| Rustの`cargo_fix_in_other_series` | 勧告が示す、稼働版と互換でない系列の修正版 |
 
 Maven・Gradleの`maven_release_not_found`では、稼働版と同じ系統の版を使います。
 `maven_fix_in_other_major`では、稼働版と同じ系統、または系統の指定がない版を使います。

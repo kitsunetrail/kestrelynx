@@ -189,6 +189,23 @@ Gradle pull requests propose updates to version declarations and `gradle.lockfil
 KestreLynx checks versions in the updated lockfile and findings before and after the update, but does not verify application builds, tests, or operation.
 For acceptance conditions, see [Gradle update validation](remediation-gradle-logic.md#gradle-update-validation).
 
+### Rust pull requests {#cargo-pull-requests}
+
+Rust pull requests propose updates to `Cargo.lock`.
+The “Verification” section lists the following details.
+
+- The Rust version, official image, and exit code of the `cargo.update` operation for each target
+- Empty files supplied as build targets so that only `cargo update` ran, without building
+- Confirmation that all `Cargo.toml` files and workspace members stayed the same and every target reached its selected version
+- Publication, checksum, and yank checks against the crates.io index for each newly introduced version
+- The old and new `Cargo.lock` format numbers if the format changed
+- The highest readable `rust-version` for newly introduced versions and the count of versions without a readable requirement, if any
+- The old and new versions of target crates and a list of other crates that changed version, were added, or were removed
+- Resolved, remaining, and introduced findings from scans of `Cargo.lock` before and after the update
+
+Before merging, run `cargo build --locked && cargo test --locked` in CI.
+For acceptance conditions, see [Rust update validation](remediation-cargo-logic.md#cargo-update-validation).
+
 ## Resolved, remaining, and introduced findings, and what KestreLynx has not verified {#verification-results}
 
 Resolved, Remaining, and Introduced in pull request bodies, and resolution counts in Slack remediation plans, describe scan comparisons as shown in the following table.

@@ -99,7 +99,7 @@ After you merge a PR and deploy the new image, the next scan carries history for
 <dt>Base image tags</dt>
 <dd markdown="span">Dockerfile</dd>
 <dt>Dependency files</dt>
-<dd markdown="span">npm · pnpm · pip · uv · Go · Maven (`pom.xml`) · Gradle (`gradle.lockfile`)</dd>
+<dd markdown="span">npm · pnpm · pip · uv · Go · Maven (`pom.xml`) · Gradle (`gradle.lockfile`) · Rust (`Cargo.lock`)</dd>
 </dl>
 
 </div>

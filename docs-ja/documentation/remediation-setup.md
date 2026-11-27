@@ -121,12 +121,13 @@ PR作成が無効で、所有者ごとのtokenも既定のtokenもない場合�
 `path`と`directory`は、GitHubリポジトリのルートからのパスです。
 たとえば`path: compose.yml`は、リポジトリのルートにある`compose.yml`を指します。
 
-Maven・Gradleを使う場合は、次のディレクトリを`dependencies.directory`に指定してください。
+Maven・Gradle・Rustを使う場合は、次のディレクトリを`dependencies.directory`に指定してください。
 
 | パッケージマネージャー | `dependencies.directory`に指定するディレクトリ |
 | --- | --- |
 | Maven | `pom.xml`のあるディレクトリ |
 | Gradle | `gradle.lockfile`・ビルドスクリプト・settingsのあるディレクトリ |
+| Rust | [ルートの`Cargo.toml`と`Cargo.lock`があるディレクトリ](remediation-dependency-formats.md#cargo-inputs) |
 
 Mavenのマルチモジュールでは、`modules`で各モジュールをたどれるルートの`pom.xml`のディレクトリを指定してください。
 `pom.xml`がリポジトリのルートにある場合は、`.`を指定します。

@@ -318,8 +318,8 @@ remediation:
 
 ### 作業用コンテナ {#remediation-worker}
 
-作業用コンテナは、修正PRで言語パッケージを更新する際に、npm・pnpm・pip・uv・Go・Gradleによる依存の更新（lockfileの更新など）をKestreLynx本体とは別に実行するための使い捨てのコンテナです。
-実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradleの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
+作業用コンテナは、修正PRで言語パッケージを更新する際に、npm・pnpm・pip・uv・Go・Gradle・Rustによる依存の更新（lockfileの更新など）をKestreLynx本体とは別に実行するための使い捨てのコンテナです。
+実行環境の一覧は、言語パッケージの更新に使うNode.js・Python・Go・Gradle・Rustの系列ごとに、実行版、digestで固定した公式イメージ、サポート終了日をまとめたものです。
 
 作業用イメージの固定と取得不能時の扱いは[公式イメージの固定](remediation-worker-logic.md#worker-images)、系列は[対応する実行環境](remediation-reference.md#supported-runtimes)、通信先は[作業用イメージの取得](outbound-communication.md#worker-image-downloads)を参照してください。
 
@@ -329,7 +329,7 @@ remediation:
 
 | 設定項目 | 既定値 | 説明 |
 | --- | --- | --- |
-| `remediation.worker.registry` | 空 | Docker Hubミラーの`host[:port][/path]`を小文字で指定します。空の場合はDocker Hubを使います。scheme・タグ・digest・`//`・`..`を含めず、パスには小文字英数字と区切りの`.`・`_`・`-`を使います。ミラーには指定したホストとパスの下に、公式イメージと同じ内容の`library/node`・`library/python`・`library/golang`・`library/gradle`を配置します。 |
+| `remediation.worker.registry` | 空 | Docker Hubミラーの`host[:port][/path]`を小文字で指定します。空の場合はDocker Hubを使います。scheme・タグ・digest・`//`・`..`を含めず、パスには小文字英数字と区切りの`.`・`_`・`-`を使います。ミラーには指定したホストとパスの下に、公式イメージと同じ内容の`library/node`・`library/python`・`library/golang`・`library/gradle`・`library/rust`を配置します。 |
 | `remediation.worker.runtime_table.update` | `true` | [実行環境の一覧の更新](remediation-worker-logic.md#runtime-table-updates)を有効にし、`false`の場合は取得せず保存した一覧も使わずに同梱の一覧を使います。 |
 | `remediation.worker.runtime_table.repository` | `ghcr.io/kitsunetrail/kestrelynx-runtimes` | [実行環境の一覧の取得元](remediation-worker-logic.md#runtime-table-updates)をミラーへ変更するためのリポジトリを指定します。 |
 | `remediation.worker.tool_versions.min_release_age` | `72h` | npm・pnpm・uvの公開から使用までの最小待機時間で、`72h`や`30m`のような正の期間です。`0`や負の値は指定できません。 |

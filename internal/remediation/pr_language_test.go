@@ -39,6 +39,12 @@ func pyPackage(name, from, to, cve string, pos string) LanguagePackage {
 	return p
 }
 
+func cargoPackage(name, from, to, cve string, pos string) LanguagePackage {
+	p := npmPackage(name, from, to, cve, pos)
+	p.Ecosystem = "cargo"
+	return p
+}
+
 // langFixtures has one update per manager, each in its own directory layout.
 func langFixtures() map[string]langFixture {
 	return map[string]langFixture{
@@ -59,6 +65,12 @@ func langFixtures() map[string]langFixture {
 			files:   map[string]string{"pyproject.toml": "[project]\nname = \"app\"\n", "uv.lock": "version = 1\n# a\n"},
 			updated: map[string]string{"uv.lock": "version = 1\n# b\n"},
 			pkgs:    []LanguagePackage{pyPackage("urllib3", "1.26.4", "1.26.17", "CVE-2023-43804", "urllib3")},
+		},
+		"cargo": {
+			manager: ManagerCargo, root: "svc",
+			files:   map[string]string{"svc/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\n", "svc/Cargo.lock": "version = 4\n# a\n"},
+			updated: map[string]string{"svc/Cargo.lock": "version = 4\n# b\n"},
+			pkgs:    []LanguagePackage{cargoPackage("tokio", "1.18.0", "1.18.4", "CVE-2023-22466", "svc/Cargo.lock")},
 		},
 		"pip": {
 			manager: ManagerPip, root: "py",

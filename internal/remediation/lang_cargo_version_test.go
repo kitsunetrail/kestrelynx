@@ -81,11 +81,11 @@ func TestCargoTarget(t *testing.T) {
 		},
 		"0.x: a fix of the next minor version is of another series": {
 			installed: "0.2.18", cves: []CVERef{cargoCVE("A", "0.3.1")},
-			reason: ReasonFixInOtherMajor, detail: "A is fixed in 0.3.1 only",
+			reason: ReasonCargoFixInOtherSeries, detail: "A is fixed in 0.3.1 only",
 		},
 		"0.0.x: the version is the series": {
 			installed: "0.0.3", cves: []CVERef{cargoCVE("A", "0.0.4, 0.1.0")},
-			reason: ReasonFixInOtherMajor, detail: "0.0.4, 0.1.0",
+			reason: ReasonCargoFixInOtherSeries, detail: "0.0.4, 0.1.0",
 		},
 		"0.0.x: a later fix of the same version never is": {
 			installed: "0.0.3", cves: []CVERef{cargoCVE("A", "0.0.3")},
@@ -93,11 +93,11 @@ func TestCargoTarget(t *testing.T) {
 		},
 		"only another major version fixes it": {
 			installed: "1.5.0", cves: []CVERef{cargoCVE("A", "2.0.1")},
-			reason: ReasonFixInOtherMajor, detail: "2.0.1",
+			reason: ReasonCargoFixInOtherSeries, detail: "2.0.1",
 		},
 		"one vulnerability is fixed only in another series": {
 			installed: "1.5.0", cves: []CVERef{cargoCVE("A", "1.6.0"), cargoCVE("B", "2.0.1")},
-			reason: ReasonFixInOtherMajor, detail: "B is fixed in 2.0.1",
+			reason: ReasonCargoFixInOtherSeries, detail: "B is fixed in 2.0.1",
 		},
 		"no fix above the installed version": {
 			installed: "1.5.0", cves: []CVERef{cargoCVE("A", "1.4.0")}, reason: ReasonNoFixedVersion,

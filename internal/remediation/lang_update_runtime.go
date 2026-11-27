@@ -71,6 +71,10 @@ func DefaultRuntimeIDs() []string {
 // newest Rust that has an image and has been run by an integration test on the
 // platform of the jobs. A row nobody ran there is not trusted.
 func (u *LangUpdater) cargoRuntime() (worker.RuntimeSpec, bool) {
+	if id := u.cfg.cargoRuntimeID; id != "" {
+		rt, ok := worker.LookupRuntime(id)
+		return rt, ok && rt.Kind == worker.KindRust && rt.HasImage()
+	}
 	var best worker.RuntimeSpec
 	var bestV semver
 	found := false

@@ -147,7 +147,7 @@ func TestCargoUpdate_RealPackagePassesToPRCandidate(t *testing.T) {
 		t.Fatalf("jobs = %d", len(f.work.jobs))
 	}
 	job := f.work.jobs[0]
-	if job.Manager != worker.ManagerCargo || job.Runtime.ID != "rust1.100" || job.Tool != nil {
+	if job.Manager != worker.ManagerCargo || job.Runtime.ID != rustRowID(t) || job.Tool != nil {
 		t.Errorf("job = %+v", job)
 	}
 	if len(job.Steps) != 1 || job.Steps[0].ID != stepUpdate || job.Steps[0].Op != worker.OpCargoUpdate ||
@@ -175,7 +175,7 @@ func TestCargoUpdate_RealPackagePassesToPRCandidate(t *testing.T) {
 	if c := it.Update.Cargo; c == nil || len(c.Targets) != 1 || c.Targets[0] != (CargoCrateChange{"tokio", "1.18.0", "1.18.4"}) {
 		t.Errorf("cargo change = %+v", it.Update.Cargo)
 	}
-	if rt := it.Update.Runtime; rt == nil || rt.ID != "rust1.100" || rt.Digest == "" {
+	if rt := it.Update.Runtime; rt == nil || rt.ID != rustRowID(t) || rt.Digest == "" {
 		t.Errorf("runtime = %+v", rt)
 	}
 	if len(it.Artifacts) != 1 || it.Artifacts[0].Path != "svc/Cargo.lock" || string(it.Artifacts[0].Content) != cargoFixture(t, "check_tokio_1_18_4.Cargo.lock") {
@@ -486,16 +486,31 @@ func TestCargoUpdate_Environment(t *testing.T) {
 	f.cfg.Cargo = nil
 	wantCargoOutcome(t, f.run(), CategoryFailed, ReasonUpdateInputInvalid, "crates.io index")
 
+	// A platform the table has no image for has never been run on.
 	f = newTokioFlow(t)
-	f.cfg.Platform = "linux/arm64"
-	wantCargoOutcome(t, f.run(), CategoryManual, ReasonCargoRuntimeUnavailable, "linux/arm64")
+	f.cfg.Platform = "linux/riscv64"
+	wantCargoOutcome(t, f.run(), CategoryManual, ReasonCargoRuntimeUnavailable, "linux/riscv64")
 	if len(f.work.jobs) != 0 {
 		t.Error("a job was run")
 	}
 
+	// The integration test that records a row as tested names the row it
+	// runs in, before the row is recorded.
+	f = newTokioFlow(t)
+	f.cfg.Platform = "linux/riscv64"
+	f.cfg.cargoRuntimeID = rustRowID(t)
+	f.run()
+	if len(f.work.jobs) != 1 || f.work.jobs[0].Runtime.ID != rustRowID(t) {
+		t.Errorf("jobs %+v", f.work.jobs)
+	}
+	f = newTokioFlow(t)
+	f.cfg.cargoRuntimeID = "golang1.26"
+	wantCargoOutcome(t, f.run(), CategoryManual, ReasonCargoRuntimeUnavailable, "")
+
 	// A runtime past the end of its support is not used.
 	f = newTokioFlow(t)
-	f.cfg.Now = func() time.Time { return time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC) }
+	rust, _ := worker.LookupRuntime(rustRowID(t))
+	f.cfg.Now = func() time.Time { return rust.EOLDate().Add(48 * time.Hour) }
 	wantCargoOutcome(t, f.run(), CategoryManual, ReasonRuntimeEndOfLife, "")
 }
 
@@ -670,4 +685,17 @@ func TestCargoUpdate_RecordIsKept(t *testing.T) {
 	if it.Cargo == nil || it.Cargo.LockVersion != 4 || len(it.Cargo.Members) != 1 {
 		t.Fatalf("record = %+v", it.Cargo)
 	}
+}
+
+// rustRowID is the Rust row of the table: there is one, of the newest stable
+// release, which the weekly update replaces.
+func rustRowID(t *testing.T) string {
+	t.Helper()
+	for _, r := range worker.Runtimes() {
+		if r.Kind == worker.KindRust && r.HasImage() {
+			return r.ID
+		}
+	}
+	t.Fatal("no Rust row in the table")
+	return ""
 }

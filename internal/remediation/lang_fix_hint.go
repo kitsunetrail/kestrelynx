@@ -56,6 +56,11 @@ type FixHint struct {
 	// package, Range the version each asks for.
 	Fix    *FixRelease `json:"fix,omitempty"`
 	Direct bool        `json:"direct,omitempty"`
+	// Advisories are, for a Cargo crate whose fixes are all of series the
+	// version in use is not compatible with and of which no one release is
+	// known to fix every advisory (a fix named only as a pre-release, for
+	// instance), the lowest such fix each advisory names. Fix is then nil.
+	Advisories []AdvisoryFix `json:"advisories,omitempty"`
 	// DecidedBy is, for a Maven or Gradle package whose version a pom
 	// outside the project decides, that pom; Releases then say what two of
 	// its releases set the package to (InSpec the newest in its minor
@@ -70,6 +75,12 @@ type FixHint struct {
 
 // FixRelease is a release of a package that fixes it.
 type FixRelease struct {
+	Version string `json:"version"`
+}
+
+// AdvisoryFix is a fix one advisory names.
+type AdvisoryFix struct {
+	VulnID  string `json:"vuln_id"`
 	Version string `json:"version"`
 }
 
@@ -97,7 +108,7 @@ type FixHolder struct {
 var fixHintReasons = map[Reason]bool{
 	ReasonDependentsHoldBack: true, ReasonGoLineRaised: true, ReasonGoRuntimeUnavailable: true, ReasonFixInOtherMajor: true,
 	ReasonMavenVersionSourceUnsupported: true, ReasonGradleVersionSourceUnsupported: true, ReasonMavenReleaseNotFound: true,
-	ReasonMavenFixInOtherMajor: true, ReasonTargetNotUpdated: true,
+	ReasonMavenFixInOtherMajor: true, ReasonTargetNotUpdated: true, ReasonCargoFixInOtherSeries: true,
 }
 
 // The hints are looked up after the item is settled, within limits of their

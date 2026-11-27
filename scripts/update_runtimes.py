@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Update internal/worker/runtimes.json from the official Node.js, Python, Go and Gradle images.
+"""Update internal/worker/runtimes.json from the official Node.js, Python, Go, Gradle and Rust images.
 
 The update containers run in the official images the table pins by digest. This
 script moves the pins forward and checks that the new images are still safe to
@@ -19,6 +19,9 @@ use. It needs the docker CLI (with buildx); Trivy runs from its container image.
                tags, digests and image configuration from the registry's API.
                A row whose tag still has the digest it was resolved to is left
                as it is.
+               The Rust row is made the same way: it is the newest stable
+               release, which static.rust-lang.org names, and it is replaced
+               when a newer one is out and its official image has both tags.
   mark-tested  record the manifest digest of a platform for the runtimes named
                with --only, the ones whose fixtures passed on it; no other row
                is recorded
@@ -37,6 +40,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import tomllib
 import urllib.error
 import urllib.request
 
@@ -45,6 +49,7 @@ JOB_UID = 10001
 PLATFORMS = ("linux/amd64", "linux/arm64")
 TRIVY_IMAGE = "aquasec/trivy:0.71.2"
 EOL_API = "https://endoflife.date/api/%s.json"
+RUST_CHANNEL = "https://static.rust-lang.org/dist/channel-rust-stable.toml"
 HUB_TAG = "https://hub.docker.com/v2/repositories/library/%s/tags/%s"
 # Per kind: the endoflife.date product, the official image and the tag of a series.
 KINDS = {
@@ -313,8 +318,9 @@ def support_state(kind, entry, today):
     """The maintenance state of a cycle on the date today (ISO date)."""
     if is_date(entry.get("eol")) and entry["eol"] < today:
         return "end_of_life"
-    if kind == "golang":
-        # Go supports a series until two newer ones are released.
+    if kind in ("golang", "rust"):
+        # Go supports a series until two newer ones are released, and Rust
+        # supports the newest release only.
         return "supported"
     if kind == "node":
         in_support = is_date(entry.get("support")) and today < entry["support"]
@@ -349,11 +355,15 @@ def with_estimated_eol(kind, entry):
     (false), because it ends when the second newer series is released. The end
     is then taken to be one year after the release, the interval of two
     six-monthly releases; it is replaced by the published date when there is
-    one."""
+    one. A Rust release is supported until the next one, which comes six weeks
+    after it, and the newest has no end date either; its end is taken to be
+    six weeks after the release."""
     released = entry.get("releaseDate")
-    if kind != "golang" or entry.get("eol") is not False or not is_date(released):
+    if kind not in ("golang", "rust") or entry.get("eol") is not False or not is_date(released):
         return entry
     d = datetime.date.fromisoformat(released)
+    if kind == "rust":
+        return dict(entry, eol=(d + datetime.timedelta(weeks=RUST_RELEASE_WEEKS)).isoformat())
     try:
         end = d.replace(year=d.year + 1)
     except ValueError:
@@ -611,11 +621,15 @@ class Registry:
 
 
 def gradle_image(registry, tag):
+    return official_image(registry, GRADLE_IMAGE, tag)
+
+
+def official_image(registry, repo, tag):
     """Return (index digest, {platform: manifest digest}, {platform: image
-    config}) of gradle:tag, or None when the tag does not exist. The image
-    needs both platforms. The configuration of each is read from its config
-    blob."""
-    status, _, raw = registry.get(GRADLE_IMAGE, "manifests", tag)
+    config}) of the official image repo:tag, or None when the tag does not
+    exist. The image needs both platforms. The configuration of each is read
+    from its config blob."""
+    status, _, raw = registry.get(repo, "manifests", tag)
     if status == 404:
         return None
     index = json.loads(raw)
@@ -626,30 +640,30 @@ def gradle_image(registry, tag):
         plat = "%s/%s" % (p.get("os"), p.get("architecture"))
         if plat in PLATFORMS and "vnd.docker.reference.type" not in m.get("annotations", {}):
             if plat in found:
-                raise Failure("gradle:%s lists %s twice" % (tag, plat))
+                raise Failure("%s:%s lists %s twice" % (repo, tag, plat))
             if not DIGEST_RE.match(m.get("digest", "")):
-                raise Failure("gradle:%s lists %s with the digest %r" % (tag, plat, m.get("digest")))
+                raise Failure("%s:%s lists %s with the digest %r" % (repo, tag, plat, m.get("digest")))
             found[plat] = m["digest"]
     if set(found) != set(PLATFORMS):
         # A tag of one platform only is not a row: both are needed.
         return None
     configs = {}
     for plat, d in found.items():
-        status, _, body = registry.get(GRADLE_IMAGE, "manifests", d)
+        status, _, body = registry.get(repo, "manifests", d)
         if status != 200:
-            raise Failure("gradle:%s: the manifest %s of %s is not served (%d)" % (tag, d, plat, status))
+            raise Failure("%s:%s: the manifest %s of %s is not served (%d)" % (repo, tag, d, plat, status))
         if "sha256:" + hashlib.sha256(body).hexdigest() != d:
-            raise Failure("gradle:%s: the manifest of %s does not match its digest %s" % (tag, plat, d))
+            raise Failure("%s:%s: the manifest of %s does not match its digest %s" % (repo, tag, plat, d))
         cfg_digest = json.loads(body).get("config", {}).get("digest", "")
         if not DIGEST_RE.match(cfg_digest):
-            raise Failure("gradle:%s: the manifest of %s has no config digest" % (tag, plat))
-        status, _, blob = registry.get(GRADLE_IMAGE, "blobs", cfg_digest)
+            raise Failure("%s:%s: the manifest of %s has no config digest" % (repo, tag, plat))
+        status, _, blob = registry.get(repo, "blobs", cfg_digest)
         if status != 200 or "sha256:" + hashlib.sha256(blob).hexdigest() != cfg_digest:
-            raise Failure("gradle:%s: the configuration of %s cannot be read or does not match its digest" % (tag, plat))
+            raise Failure("%s:%s: the configuration of %s cannot be read or does not match its digest" % (repo, tag, plat))
         cfg = json.loads(blob)
         got = "%s/%s" % (cfg.get("os"), cfg.get("architecture"))
         if got != plat:
-            raise Failure("gradle:%s: the configuration of %s is of %s" % (tag, plat, got))
+            raise Failure("%s:%s: the configuration of %s is of %s" % (repo, tag, plat, got))
         configs[plat] = cfg.get("config") or {}
     return digest, found, configs
 
@@ -744,6 +758,145 @@ def cmd_resolve_gradle(table, only, today, report, registry=None, versions=None)
     return changed
 
 
+# ---- Rust image ----
+#
+# One row, for the newest stable release of Rust, which is the only one Rust
+# supports. Like the Gradle rows it is made without pulling a layer. The paths
+# the job user could write are not scanned: the table records the three the
+# official images leave writable by everyone, and the toolchain directories the
+# Rust image also leaves writable are kept from the job by a read-only root
+# filesystem, which the work program requires of a Rust container.
+
+RUST_IMAGE = "rust"
+RUST_TAG = "%s-slim-trixie"
+RUST_RELEASE_WEEKS = 6
+RUST_VERSION_RE = re.compile(r"^1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+# The toolchain directories the work program finds cargo and rustc in; the
+# absolute paths are made from them, so the image has to keep them there.
+RUST_HOMES = {"RUSTUP_HOME": "/usr/local/rustup", "CARGO_HOME": "/usr/local/cargo"}
+
+
+def rust_stable():
+    """The version (1.100.0) static.rust-lang.org gives as the stable release."""
+    try:
+        with urllib.request.urlopen(RUST_CHANNEL, timeout=30) as r:
+            version = tomllib.load(r)["pkg"]["rust"]["version"]
+    except Exception as e:
+        raise Failure("the stable release of Rust cannot be read from %s: %s" % (RUST_CHANNEL, e))
+    v = version.split(" ")[0] if isinstance(version, str) else ""
+    if not RUST_VERSION_RE.match(v):
+        raise Failure("%s gives %r as the stable version of Rust" % (RUST_CHANNEL, version))
+    return v
+
+
+def rust_series(version):
+    return ".".join(version.split(".")[:2])
+
+
+def rust_facts(version, today):
+    """The end of support and the state of the release series of version, from
+    endoflife.date."""
+    series = rust_series(version)
+    try:
+        entry = next((c for c in fetch_json(EOL_API % "rust") if str(c.get("cycle")) == series), None)
+    except Exception as e:
+        raise Failure("endoflife.date cannot be read for Rust %s: %s" % (series, e))
+    if entry is None:
+        raise Failure("endoflife.date lists no Rust %s" % series)
+    return support_facts("rust", entry, today)
+
+
+def rust_skeleton(version, facts, today):
+    series = rust_series(version)
+    tag = RUST_TAG % series
+    row = {"id": "rust" + series, "kind": "rust", "series": series, "version": version, "image": RUST_IMAGE, "tag": tag,
+           "exact_tag": RUST_TAG % version, "covered_paths": list(STANDARD_COVERED_PATHS), "volumes_empty": True, "healthcheck": False,
+           "checked": today, "tested": {}}
+    row.update(facts)
+    return row
+
+
+def check_rust_config(row, plat, cfg):
+    """A Rust image is a row only when its configuration says what the work
+    program relies on: the Rust version, the toolchain directories, no volume
+    and no health check."""
+    rid = row["id"]
+    env = dict(e.split("=", 1) for e in cfg.get("Env") or [])
+    if env.get("RUST_VERSION") != row["version"]:
+        raise Failure("%s %s: RUST_VERSION is %r, the row is for %s" % (rid, plat, env.get("RUST_VERSION"), row["version"]))
+    for k, want in RUST_HOMES.items():
+        if env.get(k) != want:
+            raise Failure("%s %s: %s is %r, not %s" % (rid, plat, k, env.get(k), want))
+    if cfg.get("Volumes"):
+        raise Failure("%s %s declares volumes: %s" % (rid, plat, sorted(cfg["Volumes"])))
+    if cfg.get("Healthcheck"):
+        raise Failure("%s %s declares a health check" % (rid, plat))
+
+
+def cmd_resolve_rust(table, only, today, report, registry=None, stable=None, facts_of=None):
+    """Make the Rust row the newest stable release: a newer release replaces
+    the row, and a row whose tag still has its digest is left as it is. Nothing
+    changes while the official image lacks the tags of the release. Returns
+    whether the table changed."""
+    # A run named to other rows does not ask the Rust channel, which could
+    # otherwise stop it.
+    if only is not None and not any(i.startswith("rust") for i in only):
+        return False
+    registry = registry or Registry()
+    version = (stable or rust_stable)()
+    rows = table["runtimes"]
+    olds = [r for r in rows if r.get("kind") == "rust"]
+    if len(olds) > 1:
+        raise Failure("the table has %d Rust rows, not one" % len(olds))
+    old = olds[0] if olds else None
+    rid = "rust" + rust_series(version)
+    if only is not None and rid not in only and not (old and old["id"] in only):
+        return False
+    if old and version_key(old["version"]) > version_key(version):
+        raise Failure("the table has Rust %s, newer than the stable release %s" % (old["version"], version))
+    row = rust_skeleton(version, {}, today)
+    # The image is the release only when both its tags have the same index.
+    exact, series = registry.head(RUST_IMAGE, row["exact_tag"]), registry.head(RUST_IMAGE, row["tag"])
+    if exact is None or exact != series:
+        report.append("- %s: Rust %s is stable but the image has not both of its tags yet%s" % (rid, version, "; the row stays" if old else ""))
+        return False
+    try:
+        facts = (facts_of or rust_facts)(version, today)
+    except Failure as e:
+        if old is None or old["id"] != rid:
+            raise
+        print("support dates of %s skipped: %s" % (rid, e), file=sys.stderr)
+        facts = {k: old[k] for k in ("eol", "support")}
+    if facts["support"] != "supported":
+        raise Failure("%s is not the supported release: %s" % (rid, facts))
+    row.update(facts)
+    if old and old["id"] == rid and old.get("index_digest") == exact:
+        new = dict(old, checked=today)
+        new.update(facts)
+    else:
+        found = official_image(registry, RUST_IMAGE, row["exact_tag"])
+        if found is None:
+            raise Failure("rust:%s has not both platforms" % row["exact_tag"])
+        index, manifests, configs = found
+        if index != exact:
+            raise Failure("rust:%s changed while it was read" % row["exact_tag"])
+        for plat, cfg in configs.items():
+            check_rust_config(row, plat, cfg)
+        new = dict(row, index_digest=index, platforms=manifests)
+        if old and (old["id"], old.get("index_digest"), old.get("platforms")) == (rid, index, manifests):
+            new["tested"] = old.get("tested", {})
+        report.append("- %s: %s %s, %s" % (rid, version, "added" if old is None else "replaces %s" % old["version"], index[:19]))
+    new = ordered(new)
+    if old is not None:
+        changed = {k: v for k, v in new.items() if k != "checked"} != {k: v for k, v in old.items() if k != "checked"}
+        old.clear()
+        old.update(new)
+        return changed
+    after = max((i for i, r in enumerate(rows) if r.get("kind") != "gradle"), default=-1)
+    rows.insert(after + 1, new)
+    return True
+
+
 # ---- the commands ----
 
 IMAGE_FIELDS = ("version", "pip", "exact_tag", "index_digest", "platforms")
@@ -836,7 +989,7 @@ def cmd_resolve(args):
     changed = add_new_series(table, args.only, today, report)
     for row in table["runtimes"]:
         rid = row["id"]
-        if row.get("kind") == "gradle":
+        if row.get("kind") in ("gradle", "rust"):
             continue
         if args.only and rid not in args.only:
             continue
@@ -850,6 +1003,8 @@ def cmd_resolve(args):
             changed = True
         row.clear()
         row.update(ordered(new))
+    if cmd_resolve_rust(table, args.only or None, today, report):
+        changed = True
     if cmd_resolve_gradle(table, args.only or None, today, report):
         changed = True
         table["runtimes"].sort(key=lambda r: (1, version_key(r["version"]), int(r["jdk"])) if r["kind"] == "gradle" else (0, (), 0))

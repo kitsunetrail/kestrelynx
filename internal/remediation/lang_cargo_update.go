@@ -45,6 +45,14 @@ func (c cargoReplay) ListDirectory(ctx context.Context, repo, sha, dir string) (
 	return c.gh.ListDirectory(ctx, repo, sha, dir)
 }
 
+// RootTree gives the tree of a commit's root when the reader under it can.
+func (c cargoReplay) RootTree(ctx context.Context, repo, sha string) (string, error) {
+	if rt, ok := c.gh.(rootTreeReader); ok {
+		return rt.RootTree(ctx, repo, sha)
+	}
+	return "", errNoRootTree
+}
+
 func (c cargoReplay) ReadFile(_ context.Context, _, _, p string) (github.File, error) {
 	content, ok := c.files[p]
 	if !ok {
@@ -80,6 +88,11 @@ func (r *updateRun) cargoWorkspace(ctx context.Context, content map[string][]byt
 		}
 		return nil, &updateFailure{category: scratch.Category, reason: scratch.Reason, detail: scratch.Detail}
 	}
+	// The directories the members were found in are the ones the plan listed,
+	// with the trees it saw.
+	if !sameTrees(scratch.Source.Trees, src.Trees) {
+		return nil, manualFailure(ReasonSourceChanged, "the directories the workspace members were found in are not the ones the plan was made from (%s, now %s)", cargoTreeList(src.Trees), cargoTreeList(scratch.Source.Trees))
+	}
 	rec := r.it.Cargo
 	var now []CargoMember
 	for _, m := range ws.members {
@@ -90,6 +103,15 @@ func (r *updateRun) cargoWorkspace(ctx context.Context, content map[string][]byt
 		return nil, manualFailure(ReasonSourceChanged, "the packages of the workspace are not the ones the plan was made from (%s, now %s)", cargoMemberList(rec.Members), cargoMemberList(now))
 	}
 	return ws, nil
+}
+
+func cargoTreeList(ts []SourceTree) string {
+	var s []string
+	for _, t := range ts {
+		s = append(s, t.Path+" "+t.SHA)
+	}
+	sort.Strings(s)
+	return strings.Join(s, ", ")
 }
 
 func sameCargoMembers(a, b []CargoMember) bool {

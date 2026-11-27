@@ -90,6 +90,9 @@ type prHarness struct {
 	helm       []HelmValuesMapping
 	management []WorkloadChains
 	clock      time.Time
+	// source, when set, is what the stage reads the base branch with in place
+	// of the fake GitHub itself.
+	source PRSource
 }
 
 func newPRHarness(t *testing.T) *prHarness {
@@ -107,7 +110,11 @@ func (h *prHarness) run(plan Plan) PRStageResult {
 	h.t.Helper()
 	h.clock = h.clock.Add(24 * time.Hour)
 	now := h.clock
-	stage, err := NewPRStage(PRStageConfig{GitHub: h.gh, Source: h.gh, Resolver: h.gh, Store: h.store, Limits: h.limits, Now: func() time.Time { return now }})
+	var src PRSource = h.gh
+	if h.source != nil {
+		src = h.source
+	}
+	stage, err := NewPRStage(PRStageConfig{GitHub: h.gh, Source: src, Resolver: h.gh, Store: h.store, Limits: h.limits, Now: func() time.Time { return now }})
 	if err != nil {
 		h.t.Fatal(err)
 	}

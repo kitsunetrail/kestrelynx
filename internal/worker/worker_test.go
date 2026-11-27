@@ -112,7 +112,13 @@ func testRuntime(m Manager) Runtime {
 	case KindGradle:
 		id = "gradle9.8.2-jdk21"
 	case KindRust:
-		id = "rust1.100"
+		// The table holds one Rust row, of the newest stable release, which
+		// the weekly update replaces.
+		for _, r := range Runtimes() {
+			if r.Kind == KindRust {
+				id = r.ID
+			}
+		}
 	}
 	spec, ok := LookupRuntime(id)
 	if !ok {

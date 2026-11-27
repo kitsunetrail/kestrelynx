@@ -1,7 +1,7 @@
 name: Runtime table
 
 # Moves the pins of internal/worker/runtimes.json (the official Node.js, Python,
-# Go and Gradle images the update containers run in) to the images the series tags
+# Go, Gradle and Rust images the update containers run in) to the images the series tags
 # point at now, and opens a pull request when something changed. The pull
 # request is made only after the new images pass every check:
 #   - the tags are resolved to image index digests, and both platforms are run
@@ -23,6 +23,11 @@ name: Runtime table
 #     both platforms, a row whose tag still has its digest is left as it is, and
 #     a pull limit of Docker Hub stops the run on the rows done so far; a row
 #     counts as tested only after the update test has run the image
+#   - the Rust row is the newest stable release (static.rust-lang.org names it)
+#     and is made the same way, without pulling a layer and without a Trivy
+#     scan: it is replaced when a newer release is out and the official image
+#     has both of its tags, and its image configuration has to give the Rust
+#     version and the toolchain directories the work program relies on
 # After the pull request is merged, runtimes-publish.yml publishes the table to
 # GHCR and running instances fetch it; the container image carries it from its
 # next build on.
@@ -92,6 +97,15 @@ jobs:
           KESTRELYNX_DOCKER_IT: "1"
           KESTRELYNX_IT_TESTED_RUNTIMES: ${{ runner.temp }}/tested-runtimes.txt
         run: go test ./internal/docker -run 'TestIntegrationGradleUpdateLocks$' -count=1 -timeout 30m
+
+      # The Rust image is run by its own test, which adds the runtime it ran and
+      # passed to the same file.
+      - name: Cargo update test against the new image
+        if: steps.changed.outputs.changed == 'true'
+        env:
+          KESTRELYNX_DOCKER_IT: "1"
+          KESTRELYNX_IT_TESTED_RUNTIMES: ${{ runner.temp }}/tested-runtimes.txt
+        run: go test ./internal/docker -run 'TestIntegrationCargoUpdate$' -count=1 -timeout 30m
 
       # The test writes the runtimes its cases ran in and passed; a row no case
       # ran in (a series just added, for instance) is checked by the steps above

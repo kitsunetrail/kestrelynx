@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+// ReasonCargoFixInOtherSeries: every fix of a crate is in a series the version
+// in use is not compatible with (another major version, or for 0.x another
+// minor version), which an update of Cargo.lock does not move to.
+const ReasonCargoFixInOtherSeries Reason = "cargo_fix_in_other_series"
+
 // parseCargoVersion reads a version as Cargo does: a semantic version whose
 // major, minor and patch numbers each fit in 64 bits.
 func parseCargoVersion(s string) (semver, bool) {
@@ -79,7 +84,7 @@ func cargoTarget(installed string, cves []CVERef) (string, Reason, string) {
 		}
 		if lowStr == "" {
 			if len(other) > 0 {
-				return "", ReasonFixInOtherMajor, fmt.Sprintf("%s is fixed in %s only, which is not in the series of %s that a lockfile update stays in", c.VulnID, strings.Join(other, ", "), installed)
+				return "", ReasonCargoFixInOtherSeries, fmt.Sprintf("%s is fixed in %s only, which is not in the series of %s that a lockfile update stays in", c.VulnID, strings.Join(other, ", "), installed)
 			}
 			return "", ReasonNoFixedVersion, fmt.Sprintf("%s reports no fixed version above %s", c.VulnID, installed)
 		}

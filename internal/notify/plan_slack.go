@@ -536,14 +536,29 @@ func (b *planBuilder) heldLine(x pkgLine) string {
 // naming the fix.
 func (b *planBuilder) otherMajorLine(x pkgLine) string {
 	switch x.reason {
-	case remediation.ReasonFixInOtherMajor, remediation.ReasonMavenFixInOtherMajor, remediation.ReasonMavenReleaseNotFound:
+	case remediation.ReasonFixInOtherMajor, remediation.ReasonMavenFixInOtherMajor, remediation.ReasonMavenReleaseNotFound, remediation.ReasonCargoFixInOtherSeries:
 	default:
 		return ""
 	}
-	if x.hint == nil || x.hint.Fix == nil {
+	if x.hint == nil {
+		return ""
+	}
+	if x.reason == remediation.ReasonCargoFixInOtherSeries && x.hint.Fix == nil && len(x.hint.Advisories) > 0 {
+		var each []string
+		for _, a := range x.hint.Advisories {
+			each = append(each, litMrkdwn(a.VulnID)+" "+litMrkdwn(a.Version))
+		}
+		return fmt.Sprintf(b.msg.PlanOtherSeriesEach, litMrkdwn(x.name), litMrkdwn(x.from), b.cut(each))
+	}
+	if x.hint.Fix == nil {
 		return ""
 	}
 	name, from, fix := litMrkdwn(x.name), litMrkdwn(x.from), litMrkdwn(x.hint.Fix.Version)
+	if x.reason == remediation.ReasonCargoFixInOtherSeries {
+		// A series of Cargo is not always a major version: for 0.x it is the
+		// minor version.
+		return fmt.Sprintf(b.msg.PlanOtherSeries, name, from, fix)
+	}
 	if x.hint.Direct {
 		return fmt.Sprintf(b.msg.PlanOtherMajorDirect, name, from, fix)
 	}

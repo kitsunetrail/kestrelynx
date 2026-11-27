@@ -13,7 +13,7 @@ import (
 // it has a client made when the work containers are set up, whether or not an
 // integration test has recorded it, and the official image names it.
 func TestRustRowIsRunInLikeTheOtherLanguages(t *testing.T) {
-	spec, ok := worker.LookupRuntime("rust1.100")
+	spec, ok := rustRow()
 	if !ok || !spec.HasImage() {
 		t.Fatal("no Rust runtime with an image")
 	}
@@ -42,7 +42,7 @@ func TestRustRowIsRunInLikeTheOtherLanguages(t *testing.T) {
 }
 
 func TestKubernetesFindsTheImageOfTheRustRow(t *testing.T) {
-	spec, _ := worker.LookupRuntime("rust1.100")
+	spec, _ := rustRow()
 	imageFor := kubernetesImageFor("", "linux/amd64")
 	if got, ok := imageFor(spec.ID); !ok || got != "docker.io/library/rust@"+spec.IndexDigest {
 		t.Errorf("image of %s = %q, %v", spec.ID, got, ok)
@@ -65,4 +65,15 @@ func TestWorkTransferLimitsTakeTheFilesOfACargoJob(t *testing.T) {
 	if l.MaxInputFiles < worker.MaxCargoInputs || l.MaxInputPathBytes != worker.MaxInputPathBytes {
 		t.Errorf("limits %+v", l)
 	}
+}
+
+// rustRow is the Rust row of the table: there is one, of the newest stable
+// release, which the weekly update replaces.
+func rustRow() (worker.RuntimeSpec, bool) {
+	for _, r := range worker.Runtimes() {
+		if r.Kind == worker.KindRust && r.HasImage() {
+			return r, true
+		}
+	}
+	return worker.RuntimeSpec{}, false
 }

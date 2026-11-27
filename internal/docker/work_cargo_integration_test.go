@@ -50,9 +50,18 @@ func TestIntegrationCargoUpdate(t *testing.T) {
 	}
 	instance := hex.EncodeToString(b[:])
 
-	spec, ok := worker.LookupRuntime("rust1.100")
-	if !ok || !spec.HasImage() {
-		t.Fatal("no runtime rust1.100")
+	// The table holds one Rust row, the newest stable release.
+	var spec worker.RuntimeSpec
+	for _, r := range worker.Runtimes() {
+		if r.Kind == worker.KindRust && r.HasImage() {
+			if spec.ID != "" {
+				t.Fatalf("two Rust runtimes in the table: %s and %s", spec.ID, r.ID)
+			}
+			spec = r
+		}
+	}
+	if spec.ID == "" {
+		t.Fatal("no Rust runtime in the table")
 	}
 	var cover []string
 	for _, p := range spec.CoveredPaths {

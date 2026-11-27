@@ -130,6 +130,13 @@ func (r *prRun) languageFiles(c *unitCtx, base string) (files []editedFile, inpu
 		}
 	}
 
+	// A directory whose listing decided which files the plan read must still
+	// hold what it held: a file added to or taken out of it would have changed
+	// what the plan read.
+	if moved && !r.treesUnchanged(c, base) {
+		return nil, "", false
+	}
+
 	for _, p := range paths {
 		a := ld.artifacts[p]
 		blob := gitBlobSHA(a.Content)
@@ -167,6 +174,42 @@ func (r *prRun) languageFiles(c *unitCtx, base string) (files []editedFile, inpu
 		inputs = append(inputs, ld.sources[p])
 	}
 	return files, inputSetSHA(inputs), true
+}
+
+// treesUnchanged checks that each directory the plan listed to decide what to
+// read has the tree it had at the commit of the plan, on the base branch at
+// base. A tree that differs, or a directory that is gone or is no longer a
+// directory, defers the unit with ReasonSourceChanged. ok is false after the
+// unit's status was set.
+func (r *prRun) treesUnchanged(c *unitCtx, base string) bool {
+	ld := c.u.lang
+	trees := ld.item.Source.Trees
+	if len(trees) == 0 {
+		return true
+	}
+	lister, can := r.s.cfg.Source.(directoryLister)
+	if !can {
+		c.set(PRStatusFailed, ReasonGitHubError, "the source cannot list a directory, so the directories the plan listed cannot be checked")
+		return false
+	}
+	for _, t := range trees {
+		sha, err := dirTreeSHA(r.ctx, lister, c.rs.name, base, t.Path)
+		switch {
+		case errors.Is(err, github.ErrNotFound), errors.Is(err, github.ErrNotDirectory):
+			c.set(PRStatusDeferred, ReasonSourceChanged, fmt.Sprintf("%s is not a directory on %s now, and the plan listed it when it moved from %s to %s", t.Path, c.u.baseBranch, ld.item.Source.CommitSHA, base))
+			return false
+		case errors.Is(err, errNoRootTree):
+			c.set(PRStatusFailed, ReasonGitHubError, "the source cannot give the tree of the repository root, so the directories the plan listed cannot be checked")
+			return false
+		case err != nil:
+			r.readFailure(c, "list "+t.Path, err)
+			return false
+		case sha != t.SHA:
+			c.set(PRStatusDeferred, ReasonSourceChanged, fmt.Sprintf("%s changed since the plan: %s moved from %s to %s and the directory was listed to decide what to read", t.Path, c.u.baseBranch, ld.item.Source.CommitSHA, base))
+			return false
+		}
+	}
+	return true
 }
 
 func sum256(b []byte) []byte {

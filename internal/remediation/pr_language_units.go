@@ -126,6 +126,11 @@ func buildLanguageUnit(it *LanguageItem, order int) *composeUnit {
 		ld.artifacts[a.Path] = a
 	}
 
+	if it.Manager == ManagerCargo && (len(it.Artifacts) != 1 || it.Artifacts[0].Path != ld.lockPath) {
+		// A Cargo update changes Cargo.lock and nothing else.
+		return manual(ReasonArtifactsUnusable, "a Cargo update changes %s only, and the item lists %d file(s)", ld.lockPath, len(it.Artifacts))
+	}
+
 	rec := LangRecord{Manager: string(it.Manager), InputFingerprint: LanguageInputFingerprint(*it)}
 	seen := map[string]bool{}
 	for _, p := range it.Packages {

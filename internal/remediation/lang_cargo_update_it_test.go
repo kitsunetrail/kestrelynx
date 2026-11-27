@@ -11,8 +11,10 @@ import (
 // container of the Rust image, against the real crates.io index and a real
 // Trivy, and requires it to be a pull request candidate that takes tokio to
 // 1.18.4 or above. The vulnerability the crate has there (CVE-2023-22466) is of
-// medium severity, so the scans of this case include that severity.
-func itCargoUpdate(t *testing.T, e *itEnv) LanguageItem {
+// medium severity, so the scans of this case include that severity. The update
+// runs in the Rust row runtimeID, which a new image has not yet been recorded
+// as tested in: this test is what records it.
+func itCargoUpdate(t *testing.T, e *itEnv, runtimeID string) LanguageItem {
 	t.Helper()
 	files := map[string]string{
 		"Cargo.toml": cargoFixture(t, "exp1.Cargo.toml"),
@@ -35,6 +37,7 @@ func itCargoUpdate(t *testing.T, e *itEnv) LanguageItem {
 	}
 	cfg := e.config(LangUpdateConfig{GitHub: gh, MaxJobs: 4, JobIDPrefix: "it"})
 	cfg.Scanner, cfg.Prepared = tr, prepared
+	cfg.cargoRuntimeID = runtimeID
 	up, err := NewLangUpdater(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +60,7 @@ func itCargoUpdate(t *testing.T, e *itEnv) LanguageItem {
 	if c, ok := compareVersions(schemeSemver, p.AdoptedVersion, "1.18.4"); !ok || c < 0 || !strings.HasPrefix(p.AdoptedVersion, "1.") {
 		t.Errorf("adopted = %q, want 1.18.4 or above", p.AdoptedVersion)
 	}
-	if rt := got.Update.Runtime; rt == nil || rt.Digest == "" || !strings.HasPrefix(rt.ID, "rust") {
+	if rt := got.Update.Runtime; rt == nil || rt.Digest == "" || rt.ID != runtimeID {
 		t.Errorf("runtime = %+v", got.Update.Runtime)
 	}
 	if sc := got.SourceCheck; sc == nil || !sc.Passed || len(sc.Resolved) == 0 || sc.Resolved[0].VulnID != "CVE-2023-22466" {

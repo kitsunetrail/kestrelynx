@@ -30,6 +30,14 @@ func LanguageInputFingerprint(it LanguageItem) string {
 	sort.Strings(files)
 	absent := append([]string{}, it.Source.Absent...)
 	sort.Strings(absent)
+	// A directory whose listing decided what the plan read is part of what the
+	// update was made from. A plan with none leaves the field out, so the
+	// fingerprint of every other plan is the one it had without the field.
+	var trees []string
+	for _, tr := range it.Source.Trees {
+		trees = append(trees, tr.Path+"\x00"+tr.SHA)
+	}
+	sort.Strings(trees)
 	pkgs := []pkg{}
 	for _, p := range it.Packages {
 		// A package left out of the update was part of what the update was
@@ -46,9 +54,10 @@ func LanguageInputFingerprint(it LanguageItem) string {
 		Key         string   `json:"key"`
 		Files       []string `json:"files"`
 		Absent      []string `json:"absent,omitempty"`
+		Trees       []string `json:"trees,omitempty"`
 		Packages    []pkg    `json:"packages"`
 		GoBuiltWith string   `json:"go_built_with,omitempty"`
-	}{it.Key, files, absent, pkgs, it.GoBuiltWith})
+	}{it.Key, files, absent, trees, pkgs, it.GoBuiltWith})
 }
 
 // languageLockPath is the lockfile a language item updates, "" when the files

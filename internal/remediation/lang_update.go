@@ -66,6 +66,10 @@ type LangUpdateConfig struct {
 	Tools              ToolProvider
 	DefaultToolVersion func(m DependencyManager, runtimeID string) string
 	Platform           string
+	// cargoRuntimeID, when set, is the Rust row a Cargo update runs in
+	// whether or not it has been recorded as tested: the integration test
+	// that does the recording runs a row before it is.
+	cargoRuntimeID string
 	// Program returns the bytes of the work program for Platform, checked
 	// against the hash this build was released with. It is called whenever a
 	// job is made, so the bytes that are sent are the ones that were checked.

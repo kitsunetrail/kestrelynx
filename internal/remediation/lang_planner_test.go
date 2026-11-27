@@ -61,6 +61,12 @@ func (f *fakeGitHub) ListDirectory(_ context.Context, repo, sha, dir string) ([]
 	return f.dirs[repo+"/"+dir], nil
 }
 
+// RootTree is a stand-in tree SHA of the root of the commit.
+func (f *fakeGitHub) RootTree(_ context.Context, repo, sha string) (string, error) {
+	f.calls = append(f.calls, "roottree:"+repo+"@"+sha)
+	return fakeTreeSHA(repo, "."), nil
+}
+
 func (f *fakeGitHub) ReadFile(_ context.Context, repo, sha, p string) (github.File, error) {
 	f.calls = append(f.calls, "read:"+repo+"/"+p+"@"+sha)
 	if err := f.readErr[repo+"/"+p]; err != nil {

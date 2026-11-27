@@ -48,9 +48,9 @@ func cargoFixture(t *testing.T, extra string) (*cargoEnv, *worker.Job) {
 	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
 		t.Skip("no Rust toolchain for this architecture")
 	}
-	spec, ok := worker.LookupRuntime("rust1.100")
+	spec, ok := rustRow()
 	if !ok {
-		t.Fatal("no rust1.100 in the table")
+		t.Fatal("no Rust row in the table")
 	}
 	e := newEnv(t)
 	old := worker.CargoToolchainsDir
@@ -71,7 +71,7 @@ func cargoFixture(t *testing.T, extra string) (*cargoEnv, *worker.Job) {
 		t.Fatal(err)
 	}
 	job := &worker.Job{
-		Protocol: worker.ProtocolVersion, Manager: worker.ManagerCargo, Runtime: testRuntime("rust1.100"),
+		Protocol: worker.ProtocolVersion, Manager: worker.ManagerCargo, Runtime: testRuntime(spec.ID),
 		Steps:           []worker.Step{{ID: "update", Op: worker.OpCargoUpdate, Packages: []worker.Package{{Name: "tokio", From: "1.18.0", Version: "1.18.4"}}}},
 		DeadlineSeconds: 30,
 	}
@@ -498,4 +498,15 @@ func TestCargoJobAndReadOnlyRootGoTogether(t *testing.T) {
 			t.Errorf("%s: %+v", name, res)
 		}
 	}
+}
+
+// rustRow is the Rust row of the table: there is one, of the newest stable
+// release, which the weekly update replaces.
+func rustRow() (worker.RuntimeSpec, bool) {
+	for _, r := range worker.Runtimes() {
+		if r.Kind == worker.KindRust && r.HasImage() {
+			return r, true
+		}
+	}
+	return worker.RuntimeSpec{}, false
 }

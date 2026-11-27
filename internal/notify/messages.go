@@ -552,6 +552,8 @@ type messages struct {
 	PlanOtherMajor               string // "%[1]s %[2]s has its fixes only in another major version (%[3]s)" (name, installed, the lowest fix)
 	PlanOtherMajorDirect         string // PlanOtherMajor when go.mod requires the package itself
 	PlanOtherMajorHeld           string // PlanOtherMajor with "(the dependent %[4]s uses it)" (..., the modules with their versions)
+	PlanOtherSeries              string // "%[1]s %[2]s has its fixes only in a series not compatible with it (%[3]s)" (name, installed, the lowest fix), for Cargo
+	PlanOtherSeriesEach          string // PlanOtherSeries when no one release is known to fix every advisory (name, installed, each advisory with its fix)
 	PlanGoLineRaised             string // "%[1]s %[2]s cannot be raised to the fixed %[3]s without raising the go line of go.mod to %[4]s (the go.mod of %[5]s %[6]s declares go %[4]s; ... Go %[7]s)" (name, installed, target, go line, module, version, build Go)
 	PlanGoLineRaisedUnknown      string // PlanGoLineRaised when the build Go is not known (no %[7]s)
 	PlanGoRuntimeMissing         string // "%[1]s %[2]s needs Go %[4]s to be raised to the fixed %[3]s (the go.mod of %[5]s %[6]s declares it ...)" (name, installed, target, go line, module, version)
@@ -1050,6 +1052,8 @@ var enMessages = messages{
 	PlanOtherMajor:               "%[1]s %[2]s has its fixes only in another major version (%[3]s)",
 	PlanOtherMajorDirect:         "%[1]s %[2]s has its fixes only in another major version (%[3]s) (go.mod requires it directly, so the imports need rewriting)",
 	PlanOtherMajorHeld:           "%[1]s %[2]s has its fixes only in another major version (%[3]s) (the dependent %[4]s uses it)",
+	PlanOtherSeries:              "%[1]s %[2]s has its fixes only in a series not compatible with it (%[3]s)",
+	PlanOtherSeriesEach:          "%[1]s %[2]s has its fixes only in series not compatible with it, and no one release is known to fix every advisory (%[3]s)",
 	PlanGoLineRaised:             "%[1]s %[2]s cannot be raised to the fixed %[3]s without raising the go line of go.mod to %[4]s (the go.mod of %[5]s %[6]s declares go %[4]s; the running binaries were built with Go %[7]s)",
 	PlanGoLineRaisedUnknown:      "%[1]s %[2]s cannot be raised to the fixed %[3]s without raising the go line of go.mod to %[4]s (the go.mod of %[5]s %[6]s declares go %[4]s; the Go the running binaries were built with is not known)",
 	PlanGoRuntimeMissing:         "%[1]s %[2]s needs Go %[4]s to be raised to the fixed %[3]s (the go.mod of %[5]s %[6]s declares it, and no supported Go is that new)",
@@ -1544,6 +1548,8 @@ var jaMessages = messages{
 	PlanOtherMajor:               "%[1]s %[2]s の修正版は別のメジャー版（%[3]s）にしかない",
 	PlanOtherMajorDirect:         "%[1]s %[2]s の修正版は別のメジャー版（%[3]s）にしかない（go.mod で直接指定・import の書き換えが必要）",
 	PlanOtherMajorHeld:           "%[1]s %[2]s の修正版は別のメジャー版（%[3]s）にしかない（依存元の %[4]s が使っている）",
+	PlanOtherSeries:              "%[1]s %[2]s の修正版は互換でない系列（%[3]s）にしかない",
+	PlanOtherSeriesEach:          "%[1]s %[2]s の修正版は互換でない系列にしかなく、すべての勧告を直す版は分からない（%[3]s）",
 	PlanGoLineRaised:             "%[1]s %[2]s を修正版の %[3]s に上げると、go.mod の go の行が %[4]s に上がる（%[5]s %[6]s の go.mod が go %[4]s を指定・稼働中のバイナリは Go %[7]s でビルド）",
 	PlanGoLineRaisedUnknown:      "%[1]s %[2]s を修正版の %[3]s に上げると、go.mod の go の行が %[4]s に上がる（%[5]s %[6]s の go.mod が go %[4]s を指定・稼働中のバイナリをビルドした Go は不明）",
 	PlanGoRuntimeMissing:         "%[1]s %[2]s を修正版の %[3]s に上げるには Go %[4]s が必要（%[5]s %[6]s の go.mod が指定・サポート中の Go にない）",

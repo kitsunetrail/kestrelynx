@@ -3,6 +3,7 @@ package remediation
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -36,12 +37,15 @@ func registryName(t *prText, m DependencyManager) string {
 		return t.RegistryGo
 	case ManagerMaven, ManagerGradle:
 		return t.RegistryMaven
+	case ManagerCargo:
+		return t.RegistryCrates
 	}
 	return string(m)
 }
 
 // installCheck is an example of a CI step that installs from the changed
-// files; for Go, one that builds and tests with go.mod as it is.
+// files; for Go and Cargo, one that builds and tests with go.mod or Cargo.lock
+// as it is.
 func installCheck(m DependencyManager) string {
 	switch m {
 	case ManagerNpm:
@@ -58,6 +62,8 @@ func installCheck(m DependencyManager) string {
 		return "mvn -B dependency:tree && mvn -B verify"
 	case ManagerGradle:
 		return "./gradlew dependencies && ./gradlew build"
+	case ManagerCargo:
+		return "cargo build --locked && cargo test --locked"
 	}
 	return ""
 }
@@ -267,6 +273,9 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 		if g := up.Gradle; g != nil {
 			writeGradleUpdate(t, &b, g, up)
 		}
+		if c := up.Cargo; c != nil {
+			writeCargoUpdate(t, &b, c, registryName(t, it.Manager))
+		}
 		for _, n := range up.Notes {
 			fmt.Fprintf(&b, t.LNote, mdCode(n))
 		}
@@ -311,8 +320,12 @@ func buildLanguagePRBody(in languageBodyInput) (string, error) {
 		fmt.Fprintf(&b, t.LMavenBuildCheck, mdCode(installCheck(it.Manager)))
 	case ManagerGradle:
 		fmt.Fprintf(&b, t.LGradleBuildCheck, mdCode(installCheck(it.Manager)))
-	default:
+	case ManagerCargo:
+		fmt.Fprintf(&b, t.LCargoBuildCheck, mdCode(installCheck(it.Manager)))
+	case ManagerNpm, ManagerPnpm, ManagerUv, ManagerPip:
 		fmt.Fprintf(&b, t.LInstallCheck, mdCode(installCheck(it.Manager)))
+	default:
+		return "", fmt.Errorf("no CI check is worded for the manager %q", it.Manager)
 	}
 
 	return assembleBodyKeeping(b.String(), in.Marker, t.CutNote, keep)
@@ -505,6 +518,8 @@ func manifestFileName(m DependencyManager) string {
 		return "pom.xml"
 	case ManagerGradle:
 		return "build.gradle"
+	case ManagerCargo:
+		return "Cargo.toml"
 	}
 	return ""
 }
@@ -693,6 +708,55 @@ func writeGradleUpdate(t *prText, b *strings.Builder, g *GradleUpdate, up *Langu
 				break
 			}
 			fmt.Fprintf(b, t.LGradleMove, mdCode(mv.Name), list(mv.From), list(mv.To))
+		}
+	}
+}
+
+// writeCargoUpdate describes what ran in the work container for a Cargo
+// update, what was checked of the Cargo.lock it returned, and what the file
+// changed besides the targets: the format version, the other crates that
+// moved, were added or were removed, and the Rust versions the new crates
+// declare.
+func writeCargoUpdate(t *prText, b *strings.Builder, c *CargoLockChange, registry string) {
+	b.WriteString(t.LCargoHead)
+	b.WriteString(t.LCargoRan)
+	fmt.Fprintf(b, t.LCargoChecked, registry)
+	if c.LockVersionFrom != c.LockVersionTo {
+		fmt.Fprintf(b, t.LCargoLockVersion, mdCode(strconv.Itoa(c.LockVersionFrom)), mdCode(strconv.Itoa(c.LockVersionTo)))
+	}
+	if c.MaxRustVersion != "" {
+		fmt.Fprintf(b, t.LCargoRustMax, registry, mdCode(c.MaxRustVersion))
+	}
+	if len(c.Moved) > 0 {
+		// The count is given when it is 0 too, so that the highest version
+		// above is read as covering every crate it could.
+		fmt.Fprintf(b, t.LCargoRustNone, c.NoRustVersion, len(c.Moved), registry)
+	}
+	if len(c.Targets) > 0 {
+		fmt.Fprintf(b, "\n**%s (%d)**\n\n", t.LCargoTargetsTitle, len(c.Targets))
+		for i, x := range c.Targets {
+			if i == maxListedEntries {
+				fmt.Fprintf(b, t.LineMore, len(c.Targets)-maxListedEntries)
+				break
+			}
+			fmt.Fprintf(b, t.LCargoTarget, mdCode(x.Name), mdCode(x.From), mdCode(x.To))
+		}
+	}
+	if len(c.Others) > 0 {
+		fmt.Fprintf(b, "\n**%s (%d)**\n\n", t.LCargoOthersTitle, len(c.Others))
+		for i, x := range c.Others {
+			if i == maxListedEntries {
+				fmt.Fprintf(b, t.LineMore, len(c.Others)-maxListedEntries)
+				break
+			}
+			switch {
+			case x.From == "":
+				fmt.Fprintf(b, t.LCargoAdded, mdCode(x.Name), mdCode(x.To))
+			case x.To == "":
+				fmt.Fprintf(b, t.LCargoRemoved, mdCode(x.Name), mdCode(x.From))
+			default:
+				fmt.Fprintf(b, t.LCargoChanged, mdCode(x.Name), mdCode(x.From), mdCode(x.To))
+			}
 		}
 	}
 }

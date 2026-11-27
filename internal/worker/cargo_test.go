@@ -271,7 +271,7 @@ func TestArgvCargo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bin, _ := CargoToolchainBin("1.100.0", runtime.GOARCH)
+	bin, _ := CargoToolchainBin(j.Runtime.Version, runtime.GOARCH)
 	want := []string{bin + "/cargo", "update", "--manifest-path", "Cargo.toml", "-p", "tokio@1.18.0", "--precise", "1.18.4"}
 	if !slices.Equal(a, want) {
 		t.Errorf("argv %q", a)

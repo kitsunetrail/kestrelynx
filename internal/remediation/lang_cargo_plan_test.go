@@ -39,6 +39,9 @@ func rustBinaryPackages(target, rootName, rootVersion string, deps ...string) sc
 	return rp
 }
 
+// fakeTreeSHA is a stand-in tree SHA for a directory, stable for its path.
+func fakeTreeSHA(repo, dir string) string { return fakeSHA("tree", repo, dir) }
+
 // cargoPut adds a file at a repository path, and the directories above it to
 // the listings of their parents.
 func cargoPut(gh *fakeGitHub, repo, p, content string) {
@@ -47,7 +50,7 @@ func cargoPut(gh *fakeGitHub, repo, p, content string) {
 	for dir != "." {
 		parent := path.Dir(dir)
 		if _, ok := byName(gh.dirs[repo+"/"+parent], path.Base(dir)); !ok {
-			gh.putEntry(repo, parent, github.Entry{Name: path.Base(dir), Type: github.EntryDir})
+			gh.putEntry(repo, parent, github.Entry{Name: path.Base(dir), Type: github.EntryDir, SHA: fakeTreeSHA(repo, dir)})
 		}
 		dir = parent
 	}
@@ -951,8 +954,8 @@ func TestLanguagePlan_CargoMatching(t *testing.T) {
 		"two versions of the crate": {
 			dep(`"1"`), tokioLock("1.18.0", cratesBlock("tokio", "0.2.25", cksumB)), tokio("1.18.0", "1.18.4"), ActionManual, ReasonMultipleVersions, "", "", "0.2.25, 1.18.0",
 		},
-		"the fix is in another major version": {dep(`"1"`), tokioLock("1.18.0"), tokio("1.18.0", "2.0.1"), ActionManual, ReasonFixInOtherMajor, "", RelationDirect, "2.0.1"},
-		"a 0.x fix of another minor version":  {dep(`"0.3"`), tokioLock("0.3.1"), tokio("0.3.1", "0.4.0"), ActionManual, ReasonFixInOtherMajor, "", RelationDirect, "0.4.0"},
+		"the fix is in another major version": {dep(`"1"`), tokioLock("1.18.0"), tokio("1.18.0", "2.0.1"), ActionManual, ReasonCargoFixInOtherSeries, "", RelationDirect, "2.0.1"},
+		"a 0.x fix of another minor version":  {dep(`"0.3"`), tokioLock("0.3.1"), tokio("0.3.1", "0.4.0"), ActionManual, ReasonCargoFixInOtherSeries, "", RelationDirect, "0.4.0"},
 		"no fix above":                        {dep(`"1"`), tokioLock("1.18.0"), tokio("1.18.0", "1.17.0"), ActionManual, ReasonNoFixedVersion, "", RelationDirect, ""},
 		"requirement excludes the fix": {dep(`"=1.18.0"`), tokioLock("1.18.0"), tokio("1.18.0", "1.18.4"), ActionManual, ReasonRangeExcludesFix, "1.18.4", RelationDirect,
 			`svc/Cargo.toml (package app) requires tokio "=1.18.0", which does not allow 1.18.4`},
@@ -1055,7 +1058,7 @@ func TestLanguagePlan_CargoRealPlatformDependencies(t *testing.T) {
 		t.Errorf("windows-sys = %+v", ws)
 	}
 	// 0.48.5 is of another series than 0.42.2.
-	if m := got["windows_x86_64_msvc@0.42.2"]; m.Action != ActionManual || m.Reason != ReasonFixInOtherMajor {
+	if m := got["windows_x86_64_msvc@0.42.2"]; m.Action != ActionManual || m.Reason != ReasonCargoFixInOtherSeries {
 		t.Errorf("windows_x86_64_msvc = %+v", m)
 	}
 }

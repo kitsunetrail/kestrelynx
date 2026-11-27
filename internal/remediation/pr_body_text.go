@@ -133,7 +133,11 @@ type prText struct {
 	LGradleEditProperty, LGradleEditOverride, LGradleEditConstraint, LGradleChecked, LGradleOverrideNote         string
 	LGradleConstraintNote, LGradleMovesTitle, LGradleMove, LGradleMoveNone, LGradleCompanionsTitle               string
 	LGradleCompanion                                                                                             string
-	RelDirect, RelTransitive, RelMixed, RelUnknown                                                               string
+	// Cargo bodies.
+	RegistryCrates, LCargoBuildCheck, LCargoHead, LCargoRan, LCargoChecked, LCargoLockVersion      string
+	LCargoTargetsTitle, LCargoTarget, LCargoOthersTitle, LCargoChanged, LCargoAdded, LCargoRemoved string
+	LCargoRustMax, LCargoRustNone                                                                  string
+	RelDirect, RelTransitive, RelMixed, RelUnknown                                                 string
 }
 
 // textFor returns the wording of l; any unknown value falls back to English,
@@ -364,6 +368,20 @@ var enPRText = prText{
 	LGradleMoveNone:           "not locked",
 	LGradleCompanionsTitle:    "Packages whose version the same value sets, confirmed on Maven Central",
 	LGradleCompanion:          "- %[1]s at %[2]s: %[3]s\n",
+	RegistryCrates:            "crates.io",
+	LCargoBuildCheck:          "- Before merging, run a CI job that builds and tests with Cargo.lock as it is\n  - For example: %s\n  - --locked makes cargo stop when Cargo.lock would have to change\n",
+	LCargoHead:                "\n**Cargo update**\n\n",
+	LCargoRan:                 "- Only cargo update was run, in a work container\n  - Nothing was built\n  - The source files were not sent\n  - The build targets were sent as empty files\n",
+	LCargoChecked:             "- KestreLynx checked what came back\n  - Only Cargo.lock changed\n  - The Cargo.toml files are as they were sent\n  - The packages of the workspace are the same\n  - Every target is at its release\n  - Every crate at a version Cargo.lock did not have before is a release the %[1]s index lists, not yanked, with the checksum Cargo.lock gives\n",
+	LCargoLockVersion:         "- The version of the Cargo.lock format goes from %[1]s to %[2]s\n",
+	LCargoTargetsTitle:        "Crates the update was asked to move",
+	LCargoTarget:              "- %[1]s: %[2]s to %[3]s\n",
+	LCargoOthersTitle:         "Other crates whose version changed, or that were added or removed",
+	LCargoChanged:             "- %[1]s: %[2]s to %[3]s\n",
+	LCargoAdded:               "- %[1]s: added at %[2]s\n",
+	LCargoRemoved:             "- %[1]s: %[2]s removed\n",
+	LCargoRustMax:             "- Of the crates at a version Cargo.lock did not have before, the highest rust-version the %[1]s index declares is %[2]s\n",
+	LCargoRustNone:            "- Of the %[2]d crates at a version Cargo.lock did not have before, %[1]d have no rust-version in the %[3]s index that could be read\n",
 	RelDirect:                 "direct dependency",
 	RelTransitive:             "transitive dependency",
 	RelMixed:                  "direct and transitive dependency",
@@ -589,6 +607,20 @@ var jaPRText = prText{
 	LGradleMoveNone:           "lock なし",
 	LGradleCompanionsTitle:    "同じ値で版が決まるパッケージ (Maven Central で確認済み)",
 	LGradleCompanion:          "- %[1]s を %[2]s に: %[3]s\n",
+	RegistryCrates:            "crates.io",
+	LCargoBuildCheck:          "- マージ前に、CI で Cargo.lock をそのまま使うビルドとテストを実行してください\n  - 例: %s\n  - --locked を付けると、Cargo.lock の変更が必要になった時点で cargo が止まります\n",
+	LCargoHead:                "\n**Cargo の更新**\n\n",
+	LCargoRan:                 "- 作業用コンテナで実行したのは cargo update だけです\n  - ビルドはしていません\n  - ソースファイルは渡していません\n  - ビルド対象は空のファイルにして渡しました\n",
+	LCargoChecked:             "- 返ってきた結果を KestreLynx が次のとおり検査しました\n  - 変わったのは Cargo.lock だけ\n  - Cargo.toml は渡したまま\n  - ワークスペースのパッケージは同じ\n  - 対象はすべて目標の版\n  - 更新前の Cargo.lock になかった版の crate はすべて、%[1]s の索引にある版で、yank されておらず、チェックサムが Cargo.lock のものと一致する\n",
+	LCargoLockVersion:         "- Cargo.lock の形式の版を %[1]s から %[2]s に変えます\n",
+	LCargoTargetsTitle:        "更新の対象にした crate",
+	LCargoTarget:              "- %[1]s: %[2]s から %[3]s へ\n",
+	LCargoOthersTitle:         "あわせて版が変わった、追加された、または削除された crate",
+	LCargoChanged:             "- %[1]s: %[2]s から %[3]s へ\n",
+	LCargoAdded:               "- %[1]s: %[2]s で追加\n",
+	LCargoRemoved:             "- %[1]s: %[2]s を削除\n",
+	LCargoRustMax:             "- 更新前の Cargo.lock になかった版の crate について、%[1]s の索引が示す rust-version のうち最も高いのは %[2]s です\n",
+	LCargoRustNone:            "- 更新前の Cargo.lock になかった版の crate %[2]d 個のうち、%[3]s の索引に読み取れる rust-version がないのは %[1]d 個です\n",
 	RelDirect:                 "直接依存",
 	RelTransitive:             "間接依存",
 	RelMixed:                  "直接依存かつ間接依存",

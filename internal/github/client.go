@@ -580,6 +580,20 @@ func (c *Client) dirTree(ctx context.Context, rp Repo, commit, dir string) (stri
 	return cur, nil
 }
 
+// RootTree returns the SHA of the git tree of the repository root at the
+// commit sha of repo (owner/name). It changes whenever any file of the commit
+// does.
+func (c *Client) RootTree(ctx context.Context, repo, sha string) (string, error) {
+	rp, err := ParseRepo(repo)
+	if err != nil {
+		return "", err
+	}
+	if !validSHA(sha) {
+		return "", fmt.Errorf("%w: commit %q is not a 40-hex SHA", ErrInvalidInput, sha)
+	}
+	return c.rootTree(ctx, rp, sha)
+}
+
 // ListDirectory lists the directory dir ("." for the root) of repo
 // (owner/name) at the commit sha. Entries are classified by their git mode.
 func (c *Client) ListDirectory(ctx context.Context, repo, sha, dir string) ([]Entry, error) {

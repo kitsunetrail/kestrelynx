@@ -422,7 +422,7 @@ func TestIntegrationLangUpdate(t *testing.T) {
 			continue
 		}
 		t.Run("cargo_"+r.ID, func(t *testing.T) {
-			if got := itCargoUpdate(t, e); !t.Failed() {
+			if got := itCargoUpdate(t, e, r.ID); !t.Failed() {
 				ran[got.Update.Runtime.ID] = true
 			}
 		})

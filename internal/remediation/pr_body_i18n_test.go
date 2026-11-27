@@ -213,6 +213,43 @@ func bodyFixtures(t *testing.T, lang BodyLanguage) map[string]string {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	cargo := languageBodyFixture(lang, marker, true)
+	cargo.Item.Manager = ManagerCargo
+	cargo.LockPath = "svc/Cargo.lock"
+	cargo.Files = []FileChange{{Path: "svc/Cargo.lock"}}
+	cargo.Record.Manager = "cargo"
+	cargo.Record.Chain, cargo.Record.ManifestEdits, cargo.Record.Tool = nil, nil, nil
+	cargo.Record.Runtime = &RuntimeRecord{ID: "rust1.100", Version: "1.100.0", Image: "rust@sha256:" + hex64('c')}
+	cargo.Item.Packages = []LanguagePackage{
+		{Name: "tokio", Ecosystem: "cargo", Installed: "1.18.0", AdoptedVersion: "1.18.4", Relation: RelationDirect, Action: ActionUpdate,
+			CVEs: []CVERef{{VulnID: "CVE-2026-1111", Severity: scanner.SeverityCritical, KEV: true, Priority: PriorityActNow}}},
+		{Name: "mio", Ecosystem: "cargo", Installed: "0.8.0", AdoptedVersion: "0.8.11", Relation: RelationTransitive, Action: ActionUpdate,
+			CVEs: []CVERef{{VulnID: "CVE-2026-2222", Severity: scanner.SeverityHigh}}},
+		{Name: "time", Ecosystem: "cargo", Installed: "0.1.45", Relation: RelationTransitive, Action: ActionManual, Reason: ReasonCargoFixInOtherSeries},
+	}
+	cargo.Record.Packages = []LangKeyEntry{{Ecosystem: "cargo", Name: "mio", Adopted: "0.8.11"}, {Ecosystem: "cargo", Name: "tokio", Adopted: "1.18.4"}}
+	cargo.Item.Update.Runtime = cargo.Record.Runtime
+	cargo.Item.Update.Diff, cargo.Item.Update.Notes = nil, nil
+	cargo.Item.Update.Steps = []UpdateStep{{ID: "update", Op: "cargo.update"}, {ID: "update-2", Op: "cargo.update"}}
+	cargo.Record.DeprecatedNotes, cargo.Record.DeprecatedChanged, cargo.Record.Followed = nil, 0, nil
+	cargo.Item.SourceCheck.Before = []HashedFile{{Path: "svc/Cargo.lock", SHA256: hex64('a')}}
+	cargo.Item.SourceCheck.After = []HashedFile{{Path: "svc/Cargo.lock", SHA256: hex64('b')}}
+	cargo.Item.SourceCheck.Resolved = []SourceVuln{{Package: "tokio", Version: "1.18.0", VulnID: "CVE-2026-1111", Severity: scanner.SeverityCritical, FixedVer: "1.18.4", KEV: true}, {Package: "mio", Version: "0.8.0", VulnID: "CVE-2026-2222"}}
+	cargo.Item.SourceCheck.Remaining = []SourceVuln{{Package: "time", Version: "0.1.45", VulnID: "CVE-2026-3333", Severity: scanner.SeverityHigh}}
+	cargo.Item.Update.Cargo = &CargoLockChange{
+		Targets: []CargoCrateChange{{Name: "mio", From: "0.8.0", To: "0.8.11"}, {Name: "tokio", From: "1.18.0", To: "1.18.4"}},
+		Others: []CargoCrateChange{
+			{Name: "bytes", From: "1.5.0", To: "1.6.1"}, {Name: "once_cell", From: "1.21.4"}, {Name: "windows-sys", To: "0.48.0"},
+		},
+		LockVersionFrom: 3, LockVersionTo: 4,
+		Moved:          []CargoCrateRef{{Name: "bytes", Version: "1.6.1"}, {Name: "mio", Version: "0.8.11"}, {Name: "tokio", Version: "1.18.4"}, {Name: "windows-sys", Version: "0.48.0"}},
+		MaxRustVersion: "1.70.0", NoRustVersion: 1,
+	}
+	out["language_cargo"], err = buildLanguagePRBody(cargo)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return out
 }
 

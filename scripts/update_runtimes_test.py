@@ -389,13 +389,14 @@ class NewSeriesTest(unittest.TestCase):
         self.assertEqual(keys, [k for k in u.FIELD_ORDER if k in keys])
 
     def test_resolve_adds_the_row_after_the_last_of_its_kind_and_runs_the_checks(self):
-        saved = (u.cycles_of, u.tag_exists, u.resolve_row, u.support_dates, u.cmd_resolve_gradle)
+        saved = (u.cycles_of, u.tag_exists, u.resolve_row, u.support_dates, u.cmd_resolve_gradle, u.cmd_resolve_rust)
         checked = []
         try:
             u.cycles_of = lambda kind: NODE_CYCLES if kind == "node" else PYTHON_CYCLES
             u.tag_exists = lambda kind, series: True
             u.support_dates = lambda today: {}
             u.cmd_resolve_gradle = lambda *a, **k: False
+            u.cmd_resolve_rust = lambda *a, **k: False
 
             def fake_resolve(row, facts, today, report):
                 checked.append(row["id"])
@@ -416,7 +417,7 @@ class NewSeriesTest(unittest.TestCase):
                 with open(rep) as f:
                     self.assertIn("node26: added", f.read())
         finally:
-            u.cycles_of, u.tag_exists, u.resolve_row, u.support_dates, u.cmd_resolve_gradle = saved
+            u.cycles_of, u.tag_exists, u.resolve_row, u.support_dates, u.cmd_resolve_gradle, u.cmd_resolve_rust = saved
         self.assertEqual([r["id"] for r in got["runtimes"]], ["node24", "node26", "python3.14"])
         self.assertEqual(checked, ["node26"])
         self.assertEqual(got["runtimes"][1]["tested"], {})
@@ -601,7 +602,7 @@ class DateTest(unittest.TestCase):
         self.assertEqual([s for s, _ in u.new_series(table, "node", cycles, later, exists=lambda k, s: True)], ["26"])
 
     def test_resolve_uses_the_utc_date(self):
-        saved = (u.now_utc, u.cycles_of, u.support_dates, u.resolve_row, u.cmd_resolve_gradle)
+        saved = (u.now_utc, u.cycles_of, u.support_dates, u.resolve_row, u.cmd_resolve_gradle, u.cmd_resolve_rust)
         seen = []
         jst = datetime.timezone(datetime.timedelta(hours=9))
         try:
@@ -610,6 +611,7 @@ class DateTest(unittest.TestCase):
             u.support_dates = lambda today: seen.append(today) or {}
             u.resolve_row = lambda row, facts, today, report: seen.append(today) or dict(row)
             u.cmd_resolve_gradle = lambda table, only, today, report: seen.append(today) or False
+            u.cmd_resolve_rust = lambda table, only, today, report: seen.append(today) or False
             table = table_of({"id": "node24", "kind": "node", "series": "24", "image": "node", "eol": "2028-04-30"})
             with tempfile.TemporaryDirectory() as d:
                 p = os.path.join(d, "t.json")
@@ -617,8 +619,8 @@ class DateTest(unittest.TestCase):
                 with contextlib.redirect_stdout(io.StringIO()):
                     u.cmd_resolve(type("A", (), {"table": p, "report": os.path.join(d, "r.md"), "only": None})())
         finally:
-            u.now_utc, u.cycles_of, u.support_dates, u.resolve_row, u.cmd_resolve_gradle = saved
-        self.assertEqual(seen, ["2026-10-13", "2026-10-13", "2026-10-13"])
+            u.now_utc, u.cycles_of, u.support_dates, u.resolve_row, u.cmd_resolve_gradle, u.cmd_resolve_rust = saved
+        self.assertEqual(seen, ["2026-10-13"] * 4)
 
 
 class TrivyTest(unittest.TestCase):
@@ -870,15 +872,16 @@ class GradleTableTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "t.json")
             u.save(p, table)
-            saved = u.cmd_resolve_gradle, u.support_dates, u.add_new_series
+            saved = u.cmd_resolve_gradle, u.cmd_resolve_rust, u.support_dates, u.add_new_series
             u.cmd_resolve_gradle = lambda *a, **k: False
+            u.cmd_resolve_rust = lambda *a, **k: False
             u.support_dates = lambda today: {}
             u.add_new_series = lambda *a, **k: False
             try:
                 args = type("A", (), {"table": p, "report": os.path.join(d, "r.md"), "only": None})()
                 self.assertEqual(u.cmd_resolve(args), 0)  # no docker command ran for the Gradle row
             finally:
-                u.cmd_resolve_gradle, u.support_dates, u.add_new_series = saved
+                u.cmd_resolve_gradle, u.cmd_resolve_rust, u.support_dates, u.add_new_series = saved
 
     def test_mark_tested_records_a_gradle_row_like_any_other(self):
         table = {"schema": 1, "runtimes": [{"id": "gradle9.8.2-jdk21", "kind": "gradle", "image": "gradle", "platforms": {"linux/amd64": "sha256:a"}, "tested": {}}]}
@@ -892,6 +895,208 @@ class GradleTableTest(unittest.TestCase):
         row = u.ordered(u.gradle_skeleton("9.8.2", "21", "2026-11-02"))
         self.assertEqual(list(row)[:6], ["id", "kind", "series", "version", "jdk", "image"])
         self.assertLess(list(row).index("volumes"), list(row).index("healthcheck"))
+
+
+RUST_CYCLES = [
+    {"cycle": "1.100", "releaseDate": "2026-11-12", "eol": False, "latest": "1.100.0"},
+    {"cycle": "1.99", "releaseDate": "2026-10-01", "eol": "2026-11-12", "latest": "1.99.1"},
+]
+RUST_ENV = ["RUST_VERSION=1.100.0", "RUSTUP_HOME=/usr/local/rustup", "CARGO_HOME=/usr/local/cargo"]
+
+
+def rust_registry(version="1.100.0", env=None, **kw):
+    """A registry that has the two tags of the Rust image of a version."""
+    reg = FakeRegistry(env=env or ["RUST_VERSION=" + version, "RUSTUP_HOME=/usr/local/rustup", "CARGO_HOME=/usr/local/cargo"],
+                       volumes=kw.pop("volumes", {}), **kw)
+    index, per = reg.add(version + "-slim-trixie", version, "0")
+    reg.tags["-".join([".".join(version.split(".")[:2]), "slim-trixie"])] = reg.tags[version + "-slim-trixie"]
+    return reg, index, per
+
+
+def facts_100(version, today):
+    return {"eol": "2026-12-24", "support": "supported"}
+
+
+class RustTest(unittest.TestCase):
+    def resolve(self, table, reg, version="1.100.0", only=None, facts=facts_100):
+        report = []
+        changed = u.cmd_resolve_rust(table, only, "2026-11-26", report, registry=reg, stable=lambda: version, facts_of=facts)
+        return changed, report
+
+    def old_row(self, version="1.99.1", **over):
+        row = u.rust_skeleton(version, {"eol": "2026-11-12", "support": "supported"}, "2026-11-20")
+        row.update(index_digest="sha256:" + "0" * 64, platforms={"linux/amd64": "sha256:" + "1" * 64, "linux/arm64": "sha256:" + "2" * 64},
+                   tested={"linux/amd64": "sha256:" + "1" * 64})
+        row.update(over)
+        return row
+
+    def test_the_stable_version_is_read_from_the_channel(self):
+        toml = b'manifest-version = "2"\ndate = "2026-11-12"\n\n[pkg.cargo]\nversion = "0.101.0 (3acc79c0c 2026-11-05)"\n\n[pkg.rust]\nversion = "1.100.0 (0ef1bc386 2026-11-12)"\n'
+        saved = urllib.request.urlopen
+        urllib.request.urlopen = lambda url, timeout=None: io.BytesIO(toml)
+        try:
+            self.assertEqual(u.rust_stable(), "1.100.0")
+            urllib.request.urlopen = lambda url, timeout=None: io.BytesIO(toml.replace(b"1.100.0 (", b"nightly ("))
+            with self.assertRaises(u.Failure):
+                u.rust_stable()
+            urllib.request.urlopen = lambda url, timeout=None: io.BytesIO(b"not toml [")
+            with self.assertRaises(u.Failure):
+                u.rust_stable()
+        finally:
+            urllib.request.urlopen = saved
+
+    def test_the_support_facts_end_six_weeks_after_the_release(self):
+        saved = u.fetch_json
+        u.fetch_json = lambda url: RUST_CYCLES
+        try:
+            self.assertEqual(u.rust_facts("1.100.0", "2026-11-26"), {"eol": "2026-12-24", "support": "supported"})
+            self.assertEqual(u.rust_facts("1.100.3", "2026-11-26")["eol"], "2026-12-24")
+            # A release that endoflife.date has ended is not the supported one.
+            self.assertEqual(u.rust_facts("1.99.1", "2026-11-26"), {"eol": "2026-11-12", "support": "end_of_life"})
+            with self.assertRaises(u.Failure):
+                u.rust_facts("1.101.0", "2026-11-26")
+        finally:
+            u.fetch_json = saved
+
+    def test_a_new_row_is_added_after_the_other_languages_and_before_gradle(self):
+        reg, index, per = rust_registry()
+        table = table_of({"id": "node24", "kind": "node"}, {"id": "gradle9.8.2-jdk21", "kind": "gradle"})
+        changed, report = self.resolve(table, reg)
+        self.assertTrue(changed)
+        self.assertEqual([r["id"] for r in table["runtimes"]], ["node24", "rust1.100", "gradle9.8.2-jdk21"])
+        row = table["runtimes"][1]
+        self.assertEqual((row["version"], row["series"], row["tag"], row["exact_tag"], row["image"]),
+                         ("1.100.0", "1.100", "1.100-slim-trixie", "1.100.0-slim-trixie", "rust"))
+        self.assertEqual((row["index_digest"], row["platforms"], row["tested"]), (index, per, {}))
+        self.assertEqual((row["covered_paths"], row["volumes_empty"], row["healthcheck"], row["support"], row["eol"], row["checked"]),
+                         (["/tmp", "/var/tmp", "/run/lock"], True, False, "supported", "2026-12-24", "2026-11-26"))
+        self.assertEqual(list(row)[:4], ["id", "kind", "series", "version"])
+        self.assertEqual(report, ["- rust1.100: 1.100.0 added, " + index[:19]])
+
+    def test_a_newer_release_replaces_the_row_and_its_test_record(self):
+        reg, index, per = rust_registry("1.100.0")
+        table = table_of({"id": "node24", "kind": "node"}, self.old_row(), {"id": "gradle9.8.2-jdk21", "kind": "gradle"})
+        changed, report = self.resolve(table, reg)
+        self.assertTrue(changed)
+        self.assertEqual([r["id"] for r in table["runtimes"]], ["node24", "rust1.100", "gradle9.8.2-jdk21"])
+        self.assertEqual((table["runtimes"][1]["tested"], table["runtimes"][1]["eol"]), ({}, "2026-12-24"))
+        self.assertIn("1.100.0 replaces 1.99.1", report[0])
+
+    def test_a_patch_release_keeps_the_id_and_resets_the_test_record(self):
+        reg, index, per = rust_registry("1.100.1")
+        old = self.old_row("1.100.0", id="rust1.100", series="1.100", tag="1.100-slim-trixie", exact_tag="1.100.0-slim-trixie")
+        table = table_of(old)
+        changed, _ = self.resolve(table, reg, version="1.100.1")
+        self.assertTrue(changed)
+        self.assertEqual((table["runtimes"][0]["id"], table["runtimes"][0]["version"], table["runtimes"][0]["tested"]), ("rust1.100", "1.100.1", {}))
+
+    def test_a_row_whose_tags_still_have_its_digest_costs_no_pull_and_keeps_the_record(self):
+        reg, index, per = rust_registry()
+        old = dict(u.rust_skeleton("1.100.0", {"eol": "2026-12-24", "support": "supported"}, "2026-11-20"), index_digest=index, platforms=per,
+                   tested={"linux/amd64": per["linux/amd64"]})
+        table = table_of(old)
+        changed, report = self.resolve(table, reg)
+        self.assertFalse(changed)
+        self.assertEqual((reg.gets, report), ([], []))
+        self.assertEqual((table["runtimes"][0]["checked"], table["runtimes"][0]["tested"]), ("2026-11-26", old["tested"]))
+
+    def test_unreadable_support_dates_leave_an_unchanged_row_as_it_is(self):
+        reg, index, per = rust_registry()
+        old = dict(u.rust_skeleton("1.100.0", {"eol": "2026-12-24", "support": "supported"}, "2026-11-20"), index_digest=index, platforms=per)
+
+        def broken(version, today):
+            raise u.Failure("endoflife.date is down")
+        table = table_of(old)
+        with contextlib.redirect_stderr(io.StringIO()):
+            changed, _ = self.resolve(table, reg, facts=broken)
+        self.assertFalse(changed)
+        # A row that has to be made has no dates to keep.
+        with self.assertRaises(u.Failure):
+            self.resolve(table_of(), reg, facts=broken)
+
+    def test_nothing_changes_while_the_image_lacks_the_tags(self):
+        reg, index, per = rust_registry()
+        del reg.tags["1.100-slim-trixie"]
+        table = table_of(self.old_row())
+        before = json.dumps(table)
+        changed, report = self.resolve(table, reg)
+        self.assertFalse(changed)
+        self.assertEqual(json.dumps(table), before)
+        self.assertIn("the row stays", report[0])
+        # The series tag still on the earlier release is the same case.
+        reg2, _, _ = rust_registry()
+        reg2.tags["1.100-slim-trixie"] = b'{"manifests": []}'
+        self.assertFalse(self.resolve(table_of(self.old_row()), reg2)[0])
+
+    def test_the_configuration_has_to_say_what_the_work_program_relies_on(self):
+        for name, kw in {
+            "version": dict(env=["RUST_VERSION=1.99.1", "RUSTUP_HOME=/usr/local/rustup", "CARGO_HOME=/usr/local/cargo"]),
+            "rustup home": dict(env=["RUST_VERSION=1.100.0", "RUSTUP_HOME=/opt/rustup", "CARGO_HOME=/usr/local/cargo"]),
+            "cargo home": dict(env=["RUST_VERSION=1.100.0", "RUSTUP_HOME=/usr/local/rustup", "CARGO_HOME=/home/x/.cargo"]),
+            "no cargo home": dict(env=["RUST_VERSION=1.100.0", "RUSTUP_HOME=/usr/local/rustup"]),
+            "volume": dict(volumes={"/data": {}}),
+            "health check": dict(healthcheck={"Test": ["CMD", "true"]}),
+        }.items():
+            reg, _, _ = rust_registry(**kw)
+            table = table_of(self.old_row())
+            before = json.dumps(table)
+            with self.assertRaises(u.Failure, msg=name):
+                self.resolve(table, reg)
+            self.assertEqual(json.dumps(table), before, name)
+
+    def test_an_image_without_both_platforms_is_a_failure(self):
+        reg, _, _ = rust_registry(platforms=("linux/amd64",))
+        with self.assertRaises(u.Failure):
+            self.resolve(table_of(), reg)
+
+    def test_a_platform_of_another_architecture_is_a_failure(self):
+        reg = FakeRegistry(env=RUST_ENV, volumes={})
+        reg.add("1.100.0-slim-trixie", "1.100.0", "0", architecture="s390x")
+        reg.tags["1.100-slim-trixie"] = reg.tags["1.100.0-slim-trixie"]
+        with self.assertRaises(u.Failure):
+            self.resolve(table_of(), reg)
+
+    def test_only_names_the_row_to_look_at(self):
+        reg, _, _ = rust_registry()
+        table = table_of({"id": "node24", "kind": "node"})
+        self.assertFalse(self.resolve(table, reg, only=["node24"])[0])
+        self.assertEqual(reg.heads, [])
+        # The channel is not asked when no Rust row is named.
+        def unreachable():
+            raise u.Failure("static.rust-lang.org did not answer")
+        self.assertFalse(u.cmd_resolve_rust(table, ["node24"], "2026-11-26", [], registry=reg, stable=unreachable, facts_of=facts_100))
+        self.assertTrue(self.resolve(table, reg, only=["rust1.100"])[0])
+
+    def test_a_table_with_two_rust_rows_or_a_newer_one_than_stable_is_refused(self):
+        reg, _, _ = rust_registry()
+        with self.assertRaises(u.Failure):
+            self.resolve(table_of(self.old_row(), self.old_row("1.98.0", id="rust1.98", series="1.98")), reg)
+        with self.assertRaises(u.Failure):
+            self.resolve(table_of(self.old_row("1.101.0", id="rust1.101", series="1.101")), reg)
+
+    def test_a_release_that_is_not_the_supported_one_is_refused(self):
+        reg, _, _ = rust_registry()
+        with self.assertRaises(u.Failure):
+            self.resolve(table_of(), reg, facts=lambda v, t: {"eol": "2026-11-12", "support": "end_of_life"})
+
+    def test_mark_tested_records_the_rust_row_and_resolve_leaves_it_to_its_own_path(self):
+        row = dict(self.old_row(), platforms={"linux/amd64": "sha256:a"}, tested={})
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.json")
+            u.save(p, table_of(row))
+            u.cmd_mark_tested(type("A", (), {"table": p, "platform": "linux/amd64", "only": [row["id"]]})())
+            self.assertEqual(u.load(p)["runtimes"][0]["tested"], {"linux/amd64": "sha256:a"})
+            saved = u.cmd_resolve_rust, u.support_dates, u.add_new_series, u.cmd_resolve_gradle
+            u.cmd_resolve_rust = lambda *a, **k: False
+            u.cmd_resolve_gradle = lambda *a, **k: False
+            u.support_dates = lambda today: {}
+            u.add_new_series = lambda *a, **k: False
+            try:
+                args = type("A", (), {"table": p, "report": os.path.join(d, "r.md"), "only": None})()
+                self.assertEqual(u.cmd_resolve(args), 0)  # no docker command ran for the Rust row
+            finally:
+                u.cmd_resolve_rust, u.support_dates, u.add_new_series, u.cmd_resolve_gradle = saved
+
 
 
 if __name__ == "__main__":

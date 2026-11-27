@@ -102,6 +102,20 @@ func TestKubernetesImagesFollowTheRuntimeTable(t *testing.T) {
 	if img, ok := imageFor("node24"); !ok || img != "docker.io/library/node@"+node.IndexDigest {
 		t.Fatalf("node24: %q, %v", img, ok)
 	}
+	// The Rust row, whatever its release, is looked up like any other.
+	rustRows := 0
+	for _, r := range worker.Runtimes() {
+		if r.Kind != worker.KindRust || !r.HasImage() {
+			continue
+		}
+		rustRows++
+		if img, ok := imageFor(r.ID); !ok || img != "docker.io/library/rust@"+r.IndexDigest {
+			t.Errorf("%s: %q, %v", r.ID, img, ok)
+		}
+	}
+	if rustRows != 1 {
+		t.Errorf("the table has %d Rust rows, want 1", rustRows)
+	}
 	// A Gradle row no test has run is in the table and has no image to run.
 	untested := ""
 	for _, r := range worker.Runtimes() {
@@ -129,7 +143,7 @@ func TestKubernetesImagesFollowTheRuntimeTable(t *testing.T) {
 		}
 		repos[repo] = true
 	}
-	for _, want := range []string{"docker.io/library/node", "docker.io/library/python", "docker.io/library/golang", "docker.io/library/gradle"} {
+	for _, want := range []string{"docker.io/library/node", "docker.io/library/python", "docker.io/library/golang", "docker.io/library/gradle", "docker.io/library/rust"} {
 		if !repos[want] {
 			t.Errorf("no probe image of %s in %v", want, probes)
 		}

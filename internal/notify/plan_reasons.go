@@ -46,6 +46,7 @@ var planReasonTexts = map[string]struct{ en, ja string }{
 	"maven_model_unsupported":            {"the pom files use a form whose resolution the check of the update does not reproduce", "pom ファイルが、更新の確認で解決を再現できない書き方をしている"},
 	"maven_parent_mismatch":              {"a pom file where the parent is looked for does not match the declared parent", "親を探す場所にある pom ファイルが、宣言された親と一致しない"},
 	"maven_reactor_unsupported":          {"the modules of the project cannot be read as one build", "プロジェクトのモジュールを、1つのビルドとして読めない"},
+	"cargo_fix_in_other_series":          {"the fix is only in a series the version in use is not compatible with", "修正版が、今の版と互換でない系列にしかない"},
 	"maven_fix_in_other_major":           {"the fix is only in another major version", "修正版が別のメジャー版にしかない"},
 	"maven_version_source_unsupported":   {"the place in the pom files that decides the version cannot be rewritten automatically", "pom ファイルで版を決めている箇所を、自動では書き換えられない"},
 	"maven_release_not_found":            {"Maven Central lists no release the update can take", "更新で使える版が Maven Central にない"},

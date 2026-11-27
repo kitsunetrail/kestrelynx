@@ -189,9 +189,21 @@ type SourceRecord struct {
 	// their presence would change the unit's inputs (a pnpm-workspace.yaml
 	// added later is a setting nothing here has seen). They are repository
 	// paths, like Files.
-	Absent     []string   `json:"absent,omitempty"`
-	Origin     OriginKind `json:"origin"`
-	Confidence Confidence `json:"confidence"`
+	Absent []string `json:"absent,omitempty"`
+	// Trees are the directories whose listing the plan used to decide which
+	// files to read (the members a "dir/*" entry takes in), each with the
+	// SHA of its tree at CommitSHA. A file added to or taken out of such a
+	// directory later changes the tree and so what the plan would have read;
+	// the file blobs alone do not show it.
+	Trees      []SourceTree `json:"trees,omitempty"`
+	Origin     OriginKind   `json:"origin"`
+	Confidence Confidence   `json:"confidence"`
+}
+
+// SourceTree is a directory of the repository with the SHA of its git tree.
+type SourceTree struct {
+	Path string `json:"path"`
+	SHA  string `json:"sha"`
 }
 
 // Relation says how a package is required: by the project itself (direct),

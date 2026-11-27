@@ -323,6 +323,33 @@ func (c *cargoUnit) list(dir string) ([]github.Entry, bool) {
 	return es, true
 }
 
+// recordTree notes the SHA of the git tree of a directory whose listing
+// decided which members the workspace has, so that a member added or taken out
+// later is seen as a change of what the plan read (the blobs of the files read
+// do not show it). A directory already noted is not noted again.
+func (c *cargoUnit) recordTree(dir string) bool {
+	for _, t := range c.it.Source.Trees {
+		if t.Path == dir {
+			return true
+		}
+	}
+	if h := c.r.stopReason(); h != nil {
+		c.r.deferUnit(c.it, c.groups, h.reason, h.detail)
+		return false
+	}
+	sha, err := dirTreeSHA(c.r.ctx, c.r.p.cfg.GitHub, c.u.repo, c.sha, dir)
+	switch {
+	case errors.Is(err, errNoRootTree):
+		c.manual(ReasonWorkspaceUnsupported, "workspace.members takes in the directories of the repository root, whose tree this source cannot give")
+		return false
+	case err != nil:
+		c.r.sourceFailure(c.it, c.groups, err, false)
+		return false
+	}
+	c.it.Source.Trees = append(c.it.Source.Trees, SourceTree{Path: dir, SHA: sha})
+	return true
+}
+
 // cargoWorkspaceInfo is the workspace a unit's directory is the root of.
 type cargoWorkspaceInfo struct {
 	root     *cargoManifest
@@ -443,6 +470,9 @@ func (c *cargoUnit) loadWorkspace(data []byte) (*cargoWorkspaceInfo, bool) {
 					return nil, false
 				}
 				info.globDirs = append(info.globDirs, parent)
+				if !c.recordTree(parent) {
+					return nil, false
+				}
 				for _, ent := range es {
 					child := pathIn(parent, ent.Name)
 					// Cargo skips a file the pattern matches, and stops on a
@@ -857,6 +887,13 @@ func cargoMatch(lock *cargoLock, memberIdx []int, reqs map[string][]cargoRequire
 	target, reason, detail := cargoTarget(g.Installed, g.cves)
 	if reason != "" {
 		manualPackage(&p, reason, detail)
+		if reason == ReasonCargoFixInOtherSeries {
+			if v, each := cargoOtherSeriesFix(g.Installed, g.cves); v != "" {
+				p.FixHint = &FixHint{Fix: &FixRelease{Version: v}}
+			} else if len(each) > 0 {
+				p.FixHint = &FixHint{Advisories: each}
+			}
+		}
 		return p
 	}
 	p.SelectionLowerBound = target
@@ -874,6 +911,52 @@ func cargoMatch(lock *cargoLock, memberIdx []int, reqs map[string][]cargoRequire
 	}
 	p.Action, p.Reason = ActionUpdate, ReasonUpdateCandidateInSource
 	return p
+}
+
+// cargoOtherSeriesFix is the lowest version that the advisories of a crate
+// name as a fix, that is of a series the installed version is not compatible
+// with, and that fixes every one of them; "" when none does. A version of the
+// installed series is never given: an advisory with a fix there would have
+// let the lockfile update move to it. When there is no such version, each is
+// the lowest fix of that kind each advisory names, nil when one names none.
+func cargoOtherSeriesFix(installed string, cves []CVERef) (string, []AdvisoryFix) {
+	inst, ok := parseCargoVersion(installed)
+	if !ok {
+		return "", nil
+	}
+	best, bestV := "", semver{}
+	for _, c := range cves {
+		for _, alt := range c.FixedVers {
+			for _, one := range splitFixed(alt) {
+				v, ok := parseCargoVersion(one)
+				if !ok || v.compare(inst) <= 0 || cargoCompatible(inst, v) || (best != "" && v.compare(bestV) >= 0) || !fixedAt(schemeSemver, one, cves) {
+					continue
+				}
+				best, bestV = one, v
+			}
+		}
+	}
+	if best != "" {
+		return best, nil
+	}
+	var each []AdvisoryFix
+	for _, c := range cves {
+		low, lowV := "", semver{}
+		for _, alt := range c.FixedVers {
+			for _, one := range splitFixed(alt) {
+				v, ok := parseCargoVersion(one)
+				if !ok || v.compare(inst) <= 0 || cargoCompatible(inst, v) || (low != "" && v.compare(lowV) >= 0) {
+					continue
+				}
+				low, lowV = one, v
+			}
+		}
+		if low == "" {
+			return "", nil
+		}
+		each = append(each, AdvisoryFix{VulnID: c.VulnID, Version: low})
+	}
+	return "", each
 }
 
 // cargoLockMismatch says why a Cargo.lock does not fit the packages of the

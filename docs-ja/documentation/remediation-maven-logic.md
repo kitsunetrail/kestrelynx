@@ -74,7 +74,7 @@ Mavenの候補選定では、稼働イメージの`jar`の所見をプロジェ�
 
 どちらの場合も、条件を満たす候補がなければ案内しません。
 
-案内する版の修正判定と表示は[修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)を参照してください。
+案内する版の修正判定は[Maven・Gradleの修正の判定](remediation-fix-hints-logic.md#fix-hints-maven-judgement)、表示は[修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)を参照してください。
 
 ### 版の出所と書き換え {#maven-version-sources}
 

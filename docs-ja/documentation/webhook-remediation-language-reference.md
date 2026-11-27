@@ -734,4 +734,4 @@ Maven・Gradleの`in_spec`には、現在使っている`parent_version`と同�
     - 別の依存経路から対象パッケージが入る可能性は残る
 
 公開版の情報がないことは、修正可能な公開版が存在しないことを意味しません。
-情報の読み方と調査の上限は[修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)を参照してください。
+情報の読み方は[修正版に上げられないときの案内](remediation-fix-hints.md#fix-hints)、調査の上限は[公開版情報の読み込み時期と上限](remediation-fix-hints-logic.md#fix-hints-lookup-limits)を参照してください。

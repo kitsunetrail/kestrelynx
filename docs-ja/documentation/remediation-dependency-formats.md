@@ -201,7 +201,7 @@ Mavenでは、ルートの`pom.xml`から`modules`でたどる子モジュール
 | 依存ディレクトリに`vendor`がある | 依存ファイル全体 | `workspace_unsupported` |
 | 修正版が別のメジャー版のモジュールパスにしかない | 対象パッケージ | `fix_in_other_major_version` |
 
-別のメジャー版での修正は、確認できた最小の修正版と、直接指定か依存元による要求かを[案内の概要](remediation-fix-hints.md#fix-hints)に表示します。
+[修正版が別のメジャー版にしかない場合](remediation-fix-hints.md#fix-hints-other-major)は、確認できた最小の修正版を表示し、プロジェクトの直接指定または対象モジュールを使う依存元を特定できた場合は、その情報も表示します。
 標準ライブラリの`stdlib`についてはPRを作らず、ビルドに使うGoの版を上げる案内を修正計画に表示します。
 
 候補と標準ライブラリの扱いは[Goの候補選定](remediation-go-logic.md#go-package-selection)、採用条件は[Goの更新結果の検査](remediation-go-logic.md#go-update-validation)を参照してください。

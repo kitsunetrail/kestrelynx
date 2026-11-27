@@ -96,6 +96,7 @@ Use the following pages when you need details of candidate selection and PR proc
 | Go module update candidates and checks | [Go](remediation-go-logic.md) |
 | Maven update candidates and checks | [Maven](remediation-maven-logic.md) |
 | Gradle update candidates and checks | [Gradle](remediation-gradle-logic.md) |
+| Conditions for showing hints and checks on published releases | [How hints work when a package cannot reach its fix](remediation-fix-hints-logic.md) |
 | How disposable containers run package managers | [Work containers](remediation-worker-logic.md) |
 | Handling existing PRs and recording PR processing | [PR management and records](remediation-pr-logic.md) |
 

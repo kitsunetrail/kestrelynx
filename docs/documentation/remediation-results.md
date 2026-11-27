@@ -44,7 +44,7 @@ Read the changes included in each PR and the remaining work as follows.
 | `Needs a decision: package-b …` | The update of `package-b` is not included in PR #12 and still needs attention |
 | `Pull request: #13 (open)` and the following `Update` | PR #13, which raises the base image to `3.12.4-slim`, is open |
 
-See [Overview of the hints](remediation-fix-hints.md#fix-hints) for how to investigate when “the cause could not be determined” is displayed.
+See [Packages left out of a PR](remediation-update-results.md#partial-pull-requests) for how to investigate when “the cause could not be determined” is displayed.
 
 ### Displayed fields {#slack-fields}
 

@@ -734,4 +734,4 @@ The following fields have additional notes.
     - The target package may still be brought in through another dependency path
 
 The absence of published release information does not mean that no release capable of fixing the package exists.
-See [Hints when a package cannot reach its fix](remediation-fix-hints.md#fix-hints) for interpreting the information and for lookup limits.
+For help interpreting the information, see [Hints when a package cannot reach its fix](remediation-fix-hints.md#fix-hints). For lookup limits, see [Timing and limits for reading published release information](remediation-fix-hints-logic.md#fix-hints-lookup-limits).

@@ -96,6 +96,7 @@ Pull Request: #12 (今回作成)
 | Goモジュールの更新候補と検査 | [Go](remediation-go-logic.md) |
 | Mavenの更新候補と検査 | [Maven](remediation-maven-logic.md) |
 | Gradleの更新候補と検査 | [Gradle](remediation-gradle-logic.md) |
+| 案内を出す条件と公開版の確認方法 | [修正版に上げられないときの案内の仕組み](remediation-fix-hints-logic.md) |
 | パッケージマネージャーを実行する使い捨てコンテナの動作 | [作業用コンテナ](remediation-worker-logic.md) |
 | 既存PRの扱いとPR処理の記録 | [PRの管理と記録](remediation-pr-logic.md) |
 

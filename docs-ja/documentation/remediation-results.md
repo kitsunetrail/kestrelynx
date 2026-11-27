@@ -44,7 +44,7 @@ PRに含まれる変更と残る対応は、次のように読み分けます。
 | `要判断: package-b …` | `package-b`の更新はPR #12に含まれず、別途対応が残る |
 | `Pull Request: #13 (オープン中)`と直後の`更新` | ベースイメージを`3.12.4-slim`に上げるPR #13が開いている |
 
-「原因は確かめられなかった」と表示された場合の確認の進め方は、[案内の概要](remediation-fix-hints.md#fix-hints)を参照してください。
+「原因は確かめられなかった」と表示された場合の確認の進め方は、[PRに入らなかったパッケージ](remediation-update-results.md#partial-pull-requests)を参照してください。
 
 ### 表示項目 {#slack-fields}
 

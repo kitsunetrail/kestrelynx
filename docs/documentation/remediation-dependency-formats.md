@@ -201,7 +201,7 @@ The following conditions prevent automatic updates.
 | `vendor` exists in the dependency directory | All dependency files | `workspace_unsupported` |
 | Fixes exist only at the module path of another major version | Affected package | `fix_in_other_major_version` |
 
-For fixes in another major version, [Overview of the hints](remediation-fix-hints.md#fix-hints) shows the lowest confirmed fixed version and whether the requirement is direct or comes from a dependent.
+[Fixes available only in another major version](remediation-fix-hints.md#fix-hints-other-major) shows the lowest confirmed fixed version and, when KestreLynx confirms that the project requires the module directly or identifies a dependent that uses it, also shows that information.
 For the standard library's `stdlib`, KestreLynx creates no PR and instead shows guidance in the fix plan to raise the Go version used for the build.
 
 See [Go candidate selection](remediation-go-logic.md#go-package-selection) for candidates and standard library handling, and [Go update validation](remediation-go-logic.md#go-update-validation) for acceptance conditions.

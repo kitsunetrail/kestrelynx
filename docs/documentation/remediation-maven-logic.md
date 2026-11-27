@@ -74,7 +74,7 @@ The suggested version is the lowest candidate meeting the following conditions.
 
 In either case, no guidance is shown if no qualifying candidate exists.
 
-See [Guidance when a fixed version cannot be reached](remediation-fix-hints.md#fix-hints) for how suggested versions are assessed and displayed.
+For how suggested versions are assessed, see [Fix checks in Maven and Gradle](remediation-fix-hints-logic.md#fix-hints-maven-judgement). For the wording shown, see [Hints when a package cannot reach its fix](remediation-fix-hints.md#fix-hints).
 
 ### Version sources and edits {#maven-version-sources}
 

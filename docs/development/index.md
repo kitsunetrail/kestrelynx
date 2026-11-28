@@ -9,6 +9,21 @@ For instructions on currently available features, see [Documentation](../documen
 
 <div class="kl-log__item" markdown>
 
+November 25, 2026
+{ .kl-log__date }
+
+[Rust remediation pull request development](rust-remediation.md)
+{ .kl-log__title }
+
+Use official cargo to update only `Cargo.lock` for crate findings in running images and compare Trivy scans before and after the update
+
+**Status** Implemented (PR creation verified in a validation repository)
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
 November 24, 2026
 { .kl-log__date }
 

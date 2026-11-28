@@ -84,6 +84,7 @@ nav:
           - 稼働時の使用状況: documentation/runtime-usage.md
   - 開発ログ:
       - 概要: development/index.md
+      - Rust の修正 PR の開発: development/rust-remediation.md
       - Java 本体の脆弱性照合の開発: development/java-runtime-advisories.md
       - 実行環境の一覧を KestreLynx のイメージから切り離す開発: development/runtime-table-updates.md
       - Go・親 pom・BOM などで修正版に上げられないパッケージの通知と更新の開発: development/version-source-fix-hints.md

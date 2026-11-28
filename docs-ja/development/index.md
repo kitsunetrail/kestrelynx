@@ -8,6 +8,21 @@
 
 <div class="kl-log__item" markdown>
 
+2026年11月25日
+{ .kl-log__date }
+
+[Rust の修正 PR の開発](rust-remediation.md)
+{ .kl-log__title }
+
+稼働イメージの crate の所見から、公式の cargo で `Cargo.lock` だけを更新し、更新前後を Trivy で比べる
+
+**状態** 実装済み、検証用のリポジトリで PR の作成を確認
+{ .kl-log__status }
+
+</div>
+
+<div class="kl-log__item" markdown>
+
 2026年11月24日
 { .kl-log__date }
 
